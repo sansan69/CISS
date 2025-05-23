@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import axios from 'axios';
 
 // IMPORTANT: Replace this with your actual deployed Cloud Function URL
-const CLOUD_FUNCTION_URL = 'YOUR_CLOUD_FUNCTION_URL_HERE/processEmployeeCSV';
+const CLOUD_FUNCTION_URL = 'YOUR_CLOUD_FUNCTION_URL_HERE/processEmployeeCSV'; // Example: 'https://us-central1-your-project-id.cloudfunctions.net/processEmployeeCSV'
 
 export default function BulkImportPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -32,7 +32,7 @@ export default function BulkImportPage() {
       const file = event.target.files[0];
       if (file.type === "text/csv") {
         setSelectedFile(file);
-        setStatusMessage(`Selected file: ${file.name}`);
+        setStatusMessage(\`Selected file: \${file.name}\`);
       } else {
         toast({
           variant: "destructive",
@@ -60,7 +60,7 @@ export default function BulkImportPage() {
           description: "Cloud Function URL is not configured in the frontend. Please update it.",
           duration: 7000,
         });
-        setErrorMessage("Frontend configuration error: Cloud Function URL is not set.");
+        setErrorMessage("Frontend configuration error: Cloud Function URL is not set. Admin needs to deploy the backend function and update this page.");
         return;
     }
 
@@ -71,7 +71,7 @@ export default function BulkImportPage() {
     setStatusMessage('Preparing upload...');
 
     const formData = new FormData();
-    formData.append('csvFile', selectedFile);
+    formData.append('csvFile', selectedFile); // The Cloud Function will look for 'csvFile'
 
     try {
       setStatusMessage('Uploading file...');
@@ -83,40 +83,41 @@ export default function BulkImportPage() {
           if (progressEvent.total) {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
             setUploadProgress(percentCompleted);
-            setStatusMessage(`Uploading ${percentCompleted}%...`);
+            setStatusMessage(\`Uploading \${percentCompleted}%...\`);
           }
         },
       });
 
       setStatusMessage('Processing data, please wait...'); // Cloud function handles processing
-      // The actual processing status will come from the cloud function's response.
-      // For long-running tasks, you might need a polling mechanism or WebSockets,
-      // but for now, we'll rely on the function's final response.
-
+      
       if (response.data.success) {
-        setSuccessMessage(response.data.message || `Import successful! ${response.data.recordsProcessed || 'Some'} records processed.`);
-        toast({ title: "Import Complete", description: response.data.message });
-        setSelectedFile(null);
+        setSuccessMessage(response.data.message || \`Import successful! \${response.data.recordsProcessed || 'Some'} records processed.\`);
+        toast({ title: "Import Complete", description: response.data.message, duration: 7000 });
+        setSelectedFile(null); // Clear selection on success
         setStatusMessage('Import completed successfully.');
       } else {
-        throw new Error(response.data.message || "Unknown error during processing.");
+        // Use the message from the Cloud Function's error response
+        throw new Error(response.data.message || "Unknown error during processing by the Cloud Function.");
       }
     } catch (error: any) {
       console.error("Upload or processing error:", error);
       let specificError = "An unexpected error occurred.";
       if (error.response) {
-        specificError = error.response.data?.message || error.response.statusText || `Server error: ${error.response.status}`;
+        // Error from Cloud Function (e.g., 400, 500 status with JSON body)
+        specificError = error.response.data?.message || error.response.statusText || \`Server error: \${error.response.status}\`;
       } else if (error.request) {
-        specificError = "No response from server. Check network connection or Cloud Function status.";
+        // Request was made but no response received (network issue, Cloud Function not reachable)
+        specificError = "No response from server. Check network connection or Cloud Function status and URL.";
       } else {
+        // Error setting up the request
         specificError = error.message || "Error setting up the request.";
       }
-      setErrorMessage(`Import failed: ${specificError}`);
-      toast({ variant: "destructive", title: "Import Failed", description: specificError, duration: 7000 });
+      setErrorMessage(\`Import failed: \${specificError}\`);
+      toast({ variant: "destructive", title: "Import Failed", description: specificError, duration: 9000 });
       setStatusMessage('Import failed. See error message.');
     } finally {
       setIsUploading(false);
-      setUploadProgress(100); // Show full progress even on error for visual completeness of upload attempt
+      // setUploadProgress(100); // Show full progress even on error for visual completeness of upload attempt
     }
   };
 
@@ -130,14 +131,14 @@ export default function BulkImportPage() {
         <AlertDescription>
           <ul className="list-disc list-inside space-y-1">
             <li>Ensure your CSV file follows the provided template format. The first row must be headers.</li>
-            <li>Required headers: (Define your essential headers here, e.g., FirstName, LastName, PhoneNumber, EmailAddress, PhotoBlob)</li>
-            <li>'PhotoBlob' column should contain Data URIs for images (e.g., <code>data:image/jpeg;base64,...</code>).</li>
+            <li>Essential headers: <code>FirstName</code>, <code>LastName</code>, <code>PhoneNumber</code>, <code>EmailAddress</code>, <code>ClientName</code>, <code>JoiningDate (YYYY-MM-DD)</code>, <code>DateOfBirth (YYYY-MM-DD)</code>, <code>Gender</code>, <code>FatherName</code>, <code>MotherName</code>, <code>MaritalStatus</code>, <code>District</code>, <code>IDProofType</code>, <code>IDProofNumber</code>, <code>BankAccountNumber</code>, <code>IFSCCode</code>, <code>BankName</code>, <code>FullAddress</code>. (Optional: <code>SpouseName</code>, <code>PANNumber</code>, <code>EPFUANNumber</code>, <code>ESICNumber</code>, <code>ResourceIDNumber</code>)</li>
+            <li><code>PhotoBlob</code> column (optional): Should contain Data URIs for images (e.g., <code>data:image/jpeg;base64,...</code>).</li>
             <li>Supported file format: .csv.</li>
-            <li>Maximum file size: 200MB (Cloud Function limits apply).</li>
+            <li>Maximum file size: 200MB (Cloud Function and server limits apply).</li>
             <li>Processing large files can take several minutes. Please be patient.</li>
           </ul>
           <Button variant="link" className="p-0 h-auto mt-2" asChild>
-            {/* Replace with an actual path to your CSV template */}
+            {/* You'll need to create this template and place it in public/templates/ */}
             <a href="/templates/employee_import_template.csv" download data-ai-hint="download template">
               <Download className="mr-2 h-4 w-4" /> Download CSV Template
             </a>
@@ -160,7 +161,7 @@ export default function BulkImportPage() {
             <Label>Status</Label>
             <div className="p-3 border rounded-md bg-muted/30 min-h-[60px] flex flex-col justify-center">
               <p className="text-sm text-muted-foreground">{statusMessage}</p>
-              {isUploading && <Progress value={uploadProgress} className="w-full mt-2" />}
+              {isUploading && uploadProgress < 100 && <Progress value={uploadProgress} className="w-full mt-2" />}
             </div>
           </div>
           
@@ -180,7 +181,7 @@ export default function BulkImportPage() {
               <AlertTitle>Import Error</AlertTitle>
               <AlertDescription>
                 {errorMessage}
-                <p className="mt-2">Please check the file or server logs and try again.</p>
+                <p className="mt-2">Please check the file, console logs, or server logs (Cloud Function) and try again.</p>
               </AlertDescription>
             </Alert>
           )}
@@ -204,7 +205,7 @@ export default function BulkImportPage() {
 
       <Card>
         <CardHeader>
-            <CardTitle>Import History</CardTitle>
+            <CardTitle>Import History (Placeholder)</CardTitle>
             <CardDescription>View logs of previous bulk import attempts.</CardDescription>
         </CardHeader>
         <CardContent>
