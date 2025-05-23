@@ -79,10 +79,9 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground relative">
       <div className="absolute top-4 right-4">
-        <Button variant="outline" asChild size="sm">
+        <Button variant="outline" asChild size="icon" title="Go to Home">
           <Link href="/">
-            <HomeIcon className="mr-2 h-4 w-4" />
-            Home
+            <HomeIcon className="h-5 w-5" />
           </Link>
         </Button>
       </div>
