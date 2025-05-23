@@ -62,6 +62,7 @@ const enrollmentFormSchema = z.object({
   dateOfBirth: z.date({ required_error: "Date of birth is required." }),
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
   maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed", "Unmarried"], { required_error: "Marital status is required." }),
+  spouseName: z.string().optional(),
 
   // Location & Identification
   district: z.string({ required_error: "District is required." }).min(1, {message: "District is required."}),
@@ -88,6 +89,13 @@ const enrollmentFormSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Resource ID number is required for TCS client.",
       path: ["resourceIdNumber"],
+    });
+  }
+  if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Spouse name is required if marital status is Married.",
+      path: ["spouseName"],
     });
   }
 });
@@ -140,6 +148,7 @@ export default function EnrollEmployeePage() {
         motherName: '',
         gender: undefined,
         maritalStatus: undefined,
+        spouseName: '',
         district: '',
         panNumber: '',
         idProofType: undefined,
@@ -156,6 +165,7 @@ export default function EnrollEmployeePage() {
   });
 
   const watchClientName = form.watch("clientName");
+  const watchMaritalStatus = form.watch("maritalStatus");
 
   useEffect(() => {
     if (initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery)) {
@@ -369,7 +379,7 @@ export default function EnrollEmployeePage() {
       
       Object.keys(employeeDataForFirestore).forEach(keyStr => {
         const key = keyStr as keyof typeof employeeDataForFirestore;
-        if (employeeDataForFirestore[key] === undefined) { 
+        if (employeeDataForFirestore[key] === undefined || employeeDataForFirestore[key] === '') { 
             delete employeeDataForFirestore[key];
         }
       });
@@ -400,9 +410,9 @@ export default function EnrollEmployeePage() {
   
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
   const currentYear = new Date().getFullYear();
-  const fromYear = currentYear - 70; // Approx 70 years ago
+  const fromYear = currentYear - 70; 
   const toYear = currentYear;
-  const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25)); // Default to 25 years ago
+  const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25)); 
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -601,6 +611,20 @@ export default function EnrollEmployeePage() {
                       </FormItem>
                     )}
                   />
+                  {watchMaritalStatus === "Married" && (
+                     <FormField
+                        control={form.control}
+                        name="spouseName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel>
+                            <FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl>
+                            <FormDescription>Your spouse's full name</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                  )}
                 </div>
               </section>
               
