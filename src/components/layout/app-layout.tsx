@@ -44,7 +44,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { auth } from '@/lib/firebase'; // Import Firebase auth instance
+import { onAuthStateChanged, User, signOut } from 'firebase/auth'; // Import onAuthStateChanged and User
 
 interface NavItem {
   href: string;
@@ -136,9 +138,36 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter(); 
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const handleLogout = () => {
-    router.push('/admin-login');
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAuthUser(user);
+      } else {
+        setAuthUser(null);
+        // If not authenticated and trying to access an authenticated page, redirect to login.
+        // This check might be more robustly handled by route guards or middleware in a larger app.
+        if (router.pathname !== '/admin-login') { // Avoid redirect loop if already on login
+           // router.push('/admin-login'); // Let's comment this for now to avoid potential loops if user lands directly on protected route
+        }
+      }
+      setIsLoadingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/admin-login');
+    } catch (error) {
+      console.error("Error signing out: ", error);
+      // Handle logout error (e.g., show a toast)
+    }
   };
 
   return (
@@ -168,23 +197,29 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="w-full justify-start gap-2 p-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/40x40.png" alt="User" data-ai-hint="user avatar" />
-                  <AvatarFallback>AD</AvatarFallback>
+                  <AvatarImage src={authUser?.photoURL || "https://placehold.co/40x40.png"} alt="User" data-ai-hint="user avatar" />
+                  <AvatarFallback>
+                    {isLoadingAuth ? 'L' : authUser?.email?.[0]?.toUpperCase() || 'A'}
+                  </AvatarFallback>
                 </Avatar>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-sidebar-foreground">Admin User</p>
-                  <p className="text-xs text-sidebar-foreground/70">admin@ciss.com</p>
+                <div className="text-left truncate">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    {isLoadingAuth ? "Loading..." : authUser?.displayName || authUser?.email?.split('@')[0] || 'Admin User'}
+                  </p>
+                  <p className="text-xs text-sidebar-foreground/70 truncate">
+                    {isLoadingAuth ? "..." : authUser?.email || 'admin@example.com'}
+                  </p>
                 </div>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem disabled>
                 <UserPlus className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem disabled>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>
