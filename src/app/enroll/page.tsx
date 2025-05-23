@@ -33,12 +33,12 @@ import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { db, storage } from "@/lib/firebase"; 
+import { db, storage } from "@/lib/firebase";
 import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot } from "firebase/firestore";
-import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog"; // Added DialogDescription
+import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -108,8 +108,8 @@ interface ClientOption {
 }
 
 const keralaDistricts = [
-  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
-  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
+  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
+  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
@@ -117,8 +117,34 @@ const maritalStatuses = ["Married", "Unmarried"];
 
 type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
 
+// Helper Functions
+const getCurrentFinancialYear = (): string => {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  if (currentMonth >= 4) { // April or later
+    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+  } else { // Jan, Feb, March
+    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+  }
+};
+
+const generateEmployeeId = (clientName: string): string => {
+  const financialYear = getCurrentFinancialYear();
+  const randomNumber = Math.floor(Math.random() * 1001); // 0-1000
+  const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() || "CLIENT";
+  return `${sanitizedClientName}/${financialYear}/${randomNumber.toString().padStart(3, '0')}`;
+};
+
+const generateQrCodeUrl = (employeeId: string, fullName: string, phoneNumber: string): string => {
+  const data = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data)}`;
+};
+
+
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialPhoneNumberFromQuery = searchParams.get('phone');
 
@@ -142,7 +168,7 @@ export default function EnrollEmployeePage() {
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
-    defaultValues: { 
+    defaultValues: {
         clientName: '',
         resourceIdNumber: '',
         firstName: '',
@@ -210,7 +236,7 @@ export default function EnrollEmployeePage() {
   const openCamera = async (fieldName: CameraField) => {
     setActiveCameraField(fieldName);
     setCameraError(null);
-    setIsCameraDialogOpen(true); 
+    setIsCameraDialogOpen(true);
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
@@ -220,7 +246,7 @@ export default function EnrollEmployeePage() {
         console.error("Error accessing camera:", err);
         setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
         toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
-        setIsCameraDialogOpen(false); 
+        setIsCameraDialogOpen(false);
         setCameraStream(null);
       }
     } else {
@@ -247,19 +273,19 @@ export default function EnrollEmployeePage() {
       canvas.height = videoRef.current.videoHeight;
       const context = canvas.getContext('2d');
       context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
       try {
         const fileName = `${activeCameraField}_capture_${Date.now()}.jpg`;
         const capturedFile = await dataURLtoFile(dataUrl, fileName);
-        
+
         form.setValue(activeCameraField, capturedFile, { shouldValidate: true });
 
         const previewUrl = URL.createObjectURL(capturedFile);
         if (activeCameraField === "profilePicture") setProfilePicPreview(previewUrl);
         else if (activeCameraField === "idProofDocument") setIdProofPreview(previewUrl);
         else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
-        
+
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
       } catch (error) {
         console.error("Error converting data URL to file:", error);
@@ -271,8 +297,8 @@ export default function EnrollEmployeePage() {
   };
 
   const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>, 
-    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocument" | "bankPassbookStatement">, 
+    event: React.ChangeEvent<HTMLInputElement>,
+    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocument" | "bankPassbookStatement">,
     setPreview: React.Dispatch<React.SetStateAction<string | null>>
   ) => {
     if (event.target.files && event.target.files[0]) {
@@ -280,7 +306,7 @@ export default function EnrollEmployeePage() {
       if (file.size > MAX_FILE_SIZE_BYTES) {
         form.setError(fieldName, { type: "manual", message: `File is too large. Max ${MAX_FILE_SIZE_MB}MB.` });
         setPreview(null);
-        if (event.target) event.target.value = ""; 
+        if (event.target) event.target.value = "";
         return;
       }
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
@@ -288,21 +314,21 @@ export default function EnrollEmployeePage() {
          if (file.type.startsWith("image/")) {
             setPreview(URL.createObjectURL(file));
          } else if (file.type === "application/pdf") {
-             setPreview("/pdf-icon.png"); 
+             setPreview("/pdf-icon.png");
          }
       } else {
         form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP or PDF." });
         setPreview(null);
       }
     } else {
-      form.setValue(fieldName, undefined as any, { shouldValidate: true }); 
+      form.setValue(fieldName, undefined as any, { shouldValidate: true });
       setPreview(null);
     }
     if (event.target) {
-        event.target.value = ""; 
+        event.target.value = "";
     }
   };
-  
+
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait. Initializing submission..." });
@@ -313,7 +339,11 @@ export default function EnrollEmployeePage() {
 
     try {
       const uploadPromises = [];
-      const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
+      const phoneNumber = data.phoneNumber.replace(/\D/g, "");
+      const fullName = `${data.firstName} ${data.lastName}`;
+
+      const newEmployeeId = generateEmployeeId(data.clientName);
+      const newQrCodeUrl = generateQrCodeUrl(newEmployeeId, fullName, data.phoneNumber);
 
       toast({ title: "File Processing", description: "Preparing files for upload..." });
 
@@ -328,9 +358,9 @@ export default function EnrollEmployeePage() {
               return uploadFileToStorage(blob, storagePath);
             })
             .then(url => { profilePictureUrl = url; toast({ title: "Profile Picture", description: "Upload complete." }); })
-            .catch(err => { 
-              console.error("Profile picture processing/upload error:", err); 
-              throw new Error(`Profile picture processing failed: ${err.message}`); 
+            .catch(err => {
+              console.error("Profile picture processing/upload error:", err);
+              throw new Error(`Profile picture processing failed: ${err.message}`);
             })
         );
       }
@@ -340,8 +370,8 @@ export default function EnrollEmployeePage() {
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
         const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof.${file.type.startsWith("image/") ? 'jpg' : ext}`;
         toast({ title: "ID Proof", description: `Preparing ID proof (${file.type})...` });
-        
-        const processAndUpload = file.type.startsWith("image/") 
+
+        const processAndUpload = file.type.startsWith("image/")
           ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' })
               .then(blob => {
                 toast({ title: "ID Proof", description: "Uploading ID proof image..." });
@@ -355,13 +385,13 @@ export default function EnrollEmployeePage() {
         uploadPromises.push(
           processAndUpload
             .then(url => { idProofDocumentUrl = url; toast({ title: "ID Proof", description: "Upload complete." });})
-            .catch(err => { 
-              console.error("ID proof processing/upload error:", err); 
-              throw new Error(`ID proof processing failed: ${err.message}`); 
+            .catch(err => {
+              console.error("ID proof processing/upload error:", err);
+              throw new Error(`ID proof processing failed: ${err.message}`);
             })
         );
       }
-      
+
       if (data.bankPassbookStatement) {
         const file = data.bankPassbookStatement;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
@@ -382,9 +412,9 @@ export default function EnrollEmployeePage() {
         uploadPromises.push(
           processAndUpload
             .then(url => { bankPassbookStatementUrl = url; toast({ title: "Bank Document", description: "Upload complete." });})
-            .catch(err => { 
-              console.error("Bank document processing/upload error:", err); 
-              throw new Error(`Bank document processing failed: ${err.message}`); 
+            .catch(err => {
+              console.error("Bank document processing/upload error:", err);
+              throw new Error(`Bank document processing failed: ${err.message}`);
             })
         );
       }
@@ -394,24 +424,30 @@ export default function EnrollEmployeePage() {
         await Promise.all(uploadPromises);
         toast({ title: "All Files Uploaded", description: "File uploads completed successfully. Proceeding to save data."});
       } else {
-        toast({ title: "No Files to Upload", description: "Skipping file upload step. Note: File fields are currently required."});
-        if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
-            throw new Error("Required document files are missing.");
-        }
+         toast({ title: "No Files to Upload", description: "Skipping file upload step as no files were provided or required."});
+         if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
+             // This path should ideally not be hit if fileSchema marks them as required.
+             // But as a safeguard for development if schema changes:
+             console.warn("Required document files are missing based on schema, but proceeding without them based on current logic path.");
+         }
       }
-      
+
       toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
 
-      if (!profilePictureUrl || !idProofDocumentUrl || !bankPassbookStatementUrl) {
-          console.error("One or more file URLs are null after upload attempts. Profile:", profilePictureUrl, "ID:", idProofDocumentUrl, "Bank:", bankPassbookStatementUrl);
-          throw new Error("A required document failed to upload or its URL was not retrieved. Cannot save record.");
-      }
+      // Ensure required URLs are present, especially if files were mandatory.
+      if (!profilePictureUrl) throw new Error("Profile picture failed to upload or its URL was not retrieved.");
+      if (!idProofDocumentUrl) throw new Error("ID proof document failed to upload or its URL was not retrieved.");
+      if (!bankPassbookStatementUrl) throw new Error("Bank passbook document failed to upload or its URL was not retrieved.");
+
 
       const employeeDataForFirestore = {
+        employeeId: newEmployeeId,
+        qrCodeUrl: newQrCodeUrl,
         clientName: data.clientName,
         resourceIdNumber: data.resourceIdNumber,
         firstName: data.firstName,
         lastName: data.lastName,
+        fullName: fullName, // Store combined name
         fatherName: data.fatherName,
         motherName: data.motherName,
         joiningDate: Timestamp.fromDate(data.joiningDate),
@@ -431,40 +467,43 @@ export default function EnrollEmployeePage() {
         fullAddress: data.fullAddress,
         emailAddress: data.emailAddress,
         phoneNumber: data.phoneNumber,
-        profilePictureUrl, 
-        idProofDocumentUrl,  
-        bankPassbookStatementUrl, 
-        status: 'Active', 
+        profilePictureUrl,
+        idProofDocumentUrl,
+        bankPassbookStatementUrl,
+        status: 'Active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
-      
+
       const finalDataForFirestore: any = {};
       const optionalStringFields = ['resourceIdNumber', 'spouseName', 'panNumber', 'epfUanNumber', 'esicNumber'];
 
       for (const key in employeeDataForFirestore) {
         const value = (employeeDataForFirestore as any)[key];
-        if (value !== undefined) { 
+        if (value !== undefined) {
           if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
             continue;
           }
           finalDataForFirestore[key] = value;
         }
       }
-      
+
       toast({ title: "Finalizing Data...", description: "Saving to database..." });
       console.log("Data being sent to Firestore:", finalDataForFirestore);
       const docRef = await addDoc(collection(db, "employees"), finalDataForFirestore);
-      
+
       toast({
         title: "Registration Successful!",
-        description: `${data.firstName} ${data.lastName}'s registration (ID: ${docRef.id}) has been saved.`,
+        description: `${data.firstName} ${data.lastName}'s registration (ID: ${docRef.id}) has been saved. Employee ID: ${newEmployeeId}`,
         action: <Check className="h-5 w-5 text-green-500" />,
+        duration: 7000,
       });
       form.reset();
       setProfilePicPreview(null);
       setIdProofPreview(null);
       setBankPassbookPreview(null);
+
+      router.push(`/employees/${docRef.id}`); // Redirect to profile page
 
     } catch (error: any) {
       console.error("Detailed Registration or Upload Error: ", error, error.stack);
@@ -475,7 +514,7 @@ export default function EnrollEmployeePage() {
         description = error;
       } else {
         try {
-          description = JSON.stringify(error); 
+          description = JSON.stringify(error);
         } catch (e) {
            description = "An unknown error occurred during submission. Check console for details."
         }
@@ -484,18 +523,18 @@ export default function EnrollEmployeePage() {
         variant: "destructive",
         title: "Registration Failed",
         description: description,
-        duration: 9000, 
+        duration: 9000,
       });
     } finally {
       setIsLoading(false);
     }
   }
-  
+
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
   const currentYear = new Date().getFullYear();
-  const fromYear = currentYear - 70; 
+  const fromYear = currentYear - 70;
   const toYear = currentYear;
-  const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25)); 
+  const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25));
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -513,7 +552,7 @@ export default function EnrollEmployeePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              
+
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -533,15 +572,15 @@ export default function EnrollEmployeePage() {
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar 
-                              mode="single" 
-                              selected={field.value} 
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
                               onSelect={(date) => {
                                 field.onChange(date);
                                 setIsJoiningDatePopoverOpen(false);
-                              }} 
-                              initialFocus 
-                              disabled={(date) => date > new Date()} 
+                              }}
+                              initialFocus
+                              disabled={(date) => date > new Date()}
                             />
                           </PopoverContent>
                         </Popover>
@@ -574,9 +613,9 @@ export default function EnrollEmployeePage() {
                     )}
                   />
                   {watchClientName === "TCS" && (
-                    <FormField 
-                      control={form.control} 
-                      name="resourceIdNumber" 
+                    <FormField
+                      control={form.control}
+                      name="resourceIdNumber"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
                           <FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel>
@@ -584,7 +623,7 @@ export default function EnrollEmployeePage() {
                           <FormDescription>Required if client is TCS. E.g., TCS12345</FormDescription>
                           <FormMessage />
                         </FormItem>
-                      )} 
+                      )}
                     />
                   )}
                 </div>
@@ -595,7 +634,7 @@ export default function EnrollEmployeePage() {
                 <FormField
                   control={form.control}
                   name="profilePicture"
-                  render={({ field }) => ( 
+                  render={({ field }) => (
                     <FormItem className="mb-6 text-center">
                       <FormLabel className="block mb-2 text-sm font-medium">Profile Picture <span className="text-destructive">*</span></FormLabel>
                        <div className="flex flex-col items-center gap-4">
@@ -615,11 +654,11 @@ export default function EnrollEmployeePage() {
                           </Button>
                         </div>
                         <FormControl>
-                           <Input 
+                           <Input
                             id="profilePictureInput"
-                            type="file" 
-                            className="hidden" 
-                            accept="image/jpeg,image/png,image/webp" 
+                            type="file"
+                            className="hidden"
+                            accept="image/jpeg,image/png,image/webp"
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
@@ -650,9 +689,9 @@ export default function EnrollEmployeePage() {
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar 
-                              mode="single" 
-                              selected={field.value} 
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
                               onSelect={(date) => {
                                 field.onChange(date);
                                 setIsDobPopoverOpen(false);
@@ -722,7 +761,7 @@ export default function EnrollEmployeePage() {
                   )}
                 </div>
               </section>
-              
+
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Location & Identification</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -736,11 +775,11 @@ export default function EnrollEmployeePage() {
                  <FormField
                     control={form.control}
                     name="idProofDocument"
-                    render={({ field }) => ( 
+                    render={({ field }) => (
                       <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
                         {idProofPreview && (
-                            idProofPreview === "/pdf-icon.png" ? 
+                            idProofPreview === "/pdf-icon.png" ?
                             <Image src={idProofPreview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
                             <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
                         )}
@@ -763,7 +802,7 @@ export default function EnrollEmployeePage() {
                     )}
                   />
               </section>
-              
+
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -774,7 +813,7 @@ export default function EnrollEmployeePage() {
                  <FormField
                     control={form.control}
                     name="bankPassbookStatement"
-                    render={({ field }) => ( 
+                    render={({ field }) => (
                        <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         {bankPassbookPreview && (
@@ -864,4 +903,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-    
