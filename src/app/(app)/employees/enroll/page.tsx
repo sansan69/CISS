@@ -26,13 +26,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2 } from "lucide-react";
+import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { db } from "../../../lib/firebase"; // Corrected path
+import { collection, addDoc, Timestamp, serverTimestamp } from "firebase/firestore";
 
 const enrollmentFormSchema = z.object({
   // Client Information
@@ -41,7 +43,7 @@ const enrollmentFormSchema = z.object({
   resourceIdNumber: z.string().optional(), // Optional by default
 
   // Personal Information
-  profilePicture: z.any().optional().refine(file => file?.name, "Profile picture is required."),
+  profilePicture: z.any().optional().refine(file => file instanceof File || file === null || file === undefined || file?.name, "Profile picture is required."),
   firstName: z.string().min(1, { message: "First name is required." }),
   lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
@@ -55,7 +57,7 @@ const enrollmentFormSchema = z.object({
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
-  idProofDocument: z.any().optional().refine(file => file?.name, "ID proof document is required."),
+  idProofDocument: z.any().optional().refine(file => file instanceof File || file === null || file === undefined || file?.name, "ID proof document is required."),
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -63,7 +65,7 @@ const enrollmentFormSchema = z.object({
   bankAccountNumber: z.string().min(5, { message: "Bank account number is required." }),
   ifscCode: z.string().length(11, { message: "IFSC code must be 11 characters." }),
   bankName: z.string().min(2, { message: "Bank name is required." }),
-  bankPassbookStatement: z.any().optional().refine(file => file?.name, "Bank passbook/statement is required."),
+  bankPassbookStatement: z.any().optional().refine(file => file instanceof File || file === null || file === undefined || file?.name, "Bank passbook/statement is required."),
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
@@ -96,6 +98,7 @@ export default function EnrollEmployeePage() {
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
   const [idProofPreview, setIdProofPreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
@@ -128,26 +131,62 @@ export default function EnrollEmployeePage() {
 
   const watchClientName = form.watch("clientName");
 
-  function onSubmit(data: EnrollmentFormValues) {
-    console.log(data);
-    toast({
-      title: "Registration Submitted",
-      description: `${data.firstName} ${data.lastName}'s registration has been submitted.`,
-      action: <Check className="h-5 w-5 text-green-500" />,
-    });
-    form.reset();
-    setProfilePicPreview(null);
-    setIdProofPreview(null);
-    setBankPassbookPreview(null);
+  async function onSubmit(data: EnrollmentFormValues) {
+    setIsLoading(true);
+    try {
+      const employeeData = {
+        ...data,
+        joiningDate: Timestamp.fromDate(data.joiningDate),
+        dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
+        profilePictureUrl: data.profilePicture?.name || null, // Placeholder: store filename
+        idProofDocumentUrl: data.idProofDocument?.name || null, // Placeholder: store filename
+        bankPassbookStatementUrl: data.bankPassbookStatement?.name || null, // Placeholder: store filename
+        // Remove original file objects if they exist, as they can't be directly stored in Firestore
+        profilePicture: undefined,
+        idProofDocument: undefined,
+        bankPassbookStatement: undefined,
+        status: 'Active', // Default status
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      // Remove undefined file fields explicitly to avoid Firestore errors with 'undefined'
+      if (employeeData.profilePicture === undefined) delete employeeData.profilePicture;
+      if (employeeData.idProofDocument === undefined) delete employeeData.idProofDocument;
+      if (employeeData.bankPassbookStatement === undefined) delete employeeData.bankPassbookStatement;
+
+
+      const docRef = await addDoc(collection(db, "employees"), employeeData);
+      console.log("Document written with ID: ", docRef.id);
+      
+      toast({
+        title: "Registration Successful",
+        description: `${data.firstName} ${data.lastName}'s registration has been saved.`,
+        action: <Check className="h-5 w-5 text-green-500" />,
+      });
+      form.reset();
+      setProfilePicPreview(null);
+      setIdProofPreview(null);
+      setBankPassbookPreview(null);
+    } catch (error) {
+      console.error("Error adding document: ", error);
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: "Could not save employee data. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: keyof EnrollmentFormValues, setPreview: React.Dispatch<React.SetStateAction<string | null>>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      form.setValue(fieldName, file); // Store the File object
+      form.setValue(fieldName, file as any); // Store the File object, type assertion for safety
       setPreview(URL.createObjectURL(file));
     } else {
-      form.setValue(fieldName, null);
+      form.setValue(fieldName, null as any); // Type assertion for safety
       setPreview(null);
     }
   };
@@ -237,12 +276,12 @@ export default function EnrollEmployeePage() {
                 <FormField
                   control={form.control}
                   name="profilePicture"
-                  render={({ field }) => ( // field is passed but not directly used for value, onChange for file input is custom
+                  render={({ field }) => ( 
                     <FormItem className="mb-6 text-center">
                       <FormLabel className="block mb-2 text-sm font-medium">Profile Picture <span className="text-destructive">*</span></FormLabel>
                        <div className="flex flex-col items-center gap-4">
                         {profilePicPreview ? (
-                          <Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border" data-ai-hint="profile photo" />
+                          <Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border" data-ai-hint="profile photo"/>
                         ) : (
                           <div className="flex items-center justify-center h-32 w-32 rounded-full bg-muted border">
                             <UserCircle2 className="h-20 w-20 text-muted-foreground" />
@@ -464,8 +503,12 @@ export default function EnrollEmployeePage() {
               </section>
 
               <div className="flex justify-end pt-6">
-                <Button type="submit" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 text-base" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Submitting..." : "Complete Registration"}
+                <Button type="submit" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 text-base" disabled={isLoading || form.formState.isSubmitting}>
+                  {isLoading || form.formState.isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
+                    </>
+                  ) : "Complete Registration"}
                 </Button>
               </div>
             </form>
