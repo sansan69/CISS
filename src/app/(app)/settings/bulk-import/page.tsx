@@ -32,7 +32,7 @@ export default function BulkImportPage() {
       const file = event.target.files[0];
       if (file.type === "text/csv") {
         setSelectedFile(file);
-        setStatusMessage(\`Selected file: \${file.name}\`);
+        setStatusMessage(`Selected file: ${file.name}`);
       } else {
         toast({
           variant: "destructive",
@@ -83,7 +83,7 @@ export default function BulkImportPage() {
           if (progressEvent.total) {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
             setUploadProgress(percentCompleted);
-            setStatusMessage(\`Uploading \${percentCompleted}%...\`);
+            setStatusMessage(`Uploading ${percentCompleted}%...`);
           }
         },
       });
@@ -91,7 +91,7 @@ export default function BulkImportPage() {
       setStatusMessage('Processing data, please wait...'); // Cloud function handles processing
       
       if (response.data.success) {
-        setSuccessMessage(response.data.message || \`Import successful! \${response.data.recordsProcessed || 'Some'} records processed.\`);
+        setSuccessMessage(response.data.message || `Import successful! ${response.data.recordsProcessed || 'Some'} records processed.`);
         toast({ title: "Import Complete", description: response.data.message, duration: 7000 });
         setSelectedFile(null); // Clear selection on success
         setStatusMessage('Import completed successfully.');
@@ -104,7 +104,7 @@ export default function BulkImportPage() {
       let specificError = "An unexpected error occurred.";
       if (error.response) {
         // Error from Cloud Function (e.g., 400, 500 status with JSON body)
-        specificError = error.response.data?.message || error.response.statusText || \`Server error: \${error.response.status}\`;
+        specificError = error.response.data?.message || error.response.statusText || `Server error: ${error.response.status}`;
       } else if (error.request) {
         // Request was made but no response received (network issue, Cloud Function not reachable)
         specificError = "No response from server. Check network connection or Cloud Function status and URL.";
@@ -112,7 +112,7 @@ export default function BulkImportPage() {
         // Error setting up the request
         specificError = error.message || "Error setting up the request.";
       }
-      setErrorMessage(\`Import failed: \${specificError}\`);
+      setErrorMessage(`Import failed: ${specificError}`);
       toast({ variant: "destructive", title: "Import Failed", description: specificError, duration: 9000 });
       setStatusMessage('Import failed. See error message.');
     } finally {
@@ -131,7 +131,7 @@ export default function BulkImportPage() {
         <AlertDescription>
           <ul className="list-disc list-inside space-y-1">
             <li>Ensure your CSV file follows the provided template format. The first row must be headers.</li>
-            <li>Essential headers: <code>FirstName</code>, <code>LastName</code>, <code>PhoneNumber</code>, <code>EmailAddress</code>, <code>ClientName</code>, <code>JoiningDate (YYYY-MM-DD)</code>, <code>DateOfBirth (YYYY-MM-DD)</code>, <code>Gender</code>, <code>FatherName</code>, <code>MotherName</code>, <code>MaritalStatus</code>, <code>District</code>, <code>IDProofType</code>, <code>IDProofNumber</code>, <code>BankAccountNumber</code>, <code>IFSCCode</code>, <code>BankName</code>, <code>FullAddress</code>. (Optional: <code>SpouseName</code>, <code>PANNumber</code>, <code>EPFUANNumber</code>, <code>ESICNumber</code>, <code>ResourceIDNumber</code>)</li>
+            <li>Essential headers: <code>FirstName</code>, <code>LastName</code>, <code>PhoneNumber</code>, <code>EmailAddress</code>, <code>ClientName</code>, <code>JoiningDate (YYYY-MM-DD)</code>, <code>DateOfBirth (YYYY-MM-DD)</code>, <code>Gender</code>, <code>FatherName</code>, <code>MotherName</code>, <code>MaritalStatus</code>, <code>District</code>, <code>IDProofType</code>, <code>IDProofNumber</code>, <code>BankAccountNumber</code>, <code>IFSCCode</code>, <code>BankName</code>, <code>FullAddress</code>. (Optional: <code>SpouseName</code>, <code>PANNumber</code>, <code>EPFUANNumber</code>, <code>ESICNumber</code>, <code>ResourceIDNumber</code>, <code>PhotoBlob</code>, <code>Status</code>, <code>IDProofDocumentURL</code>, <code>BankPassbookStatementURL</code>)</li>
             <li><code>PhotoBlob</code> column (optional): Should contain Data URIs for images (e.g., <code>data:image/jpeg;base64,...</code>).</li>
             <li>Supported file format: .csv.</li>
             <li>Maximum file size: 200MB (Cloud Function and server limits apply).</li>
