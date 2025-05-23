@@ -4,57 +4,58 @@
 
 @layer base {
   :root {
-    --background: 220 29% 95%; /* Light Gray #F0F2F5 */
-    --foreground: 231 15% 18%; /* Dark Blueish Gray for text */
+    --background: 258 34% 21%; /* Dark Purple */
+    --foreground: 220 20% 90%; /* Light Gray */
 
-    --muted: 220 20% 88%;
-    --muted-foreground: 231 10% 45%;
+    --muted: 258 30% 35%;
+    --muted-foreground: 220 20% 70%;
 
-    --popover: 220 29% 95%;
-    --popover-foreground: 231 15% 18%;
+    --popover: 258 34% 18%;
+    --popover-foreground: var(--foreground);
 
-    --card: 220 29% 98%; /* Slightly lighter than background for cards */
-    --card-foreground: 231 15% 18%;
+    --card: 258 30% 28%; /* Slightly Lighter Purple for card */
+    --card-foreground: var(--foreground);
 
-    --border: 220 15% 85%;
-    --input: 220 15% 88%;
+    --border: 258 25% 40%;
+    --input: 258 25% 38%; /* Input background/border */
 
-    --primary: 231 48% 48%; /* Deep Blue #3F51B5 */
-    --primary-foreground: 0 0% 98%; /* White/Light Gray */
+    --primary: 40 65% 55%; /* Gold/Ochre for Continue button */
+    --primary-foreground: 258 34% 15%; /* Dark text for Gold button */
 
-    --secondary: 232 30% 75%; /* Lighter Indigo */
-    --secondary-foreground: 231 15% 18%;
+    --secondary: 258 40% 50%; /* Medium Purple for other elements */
+    --secondary-foreground: var(--foreground);
 
-    --accent: 232 38% 62%; /* Soft Indigo #5C6BC0 */
-    --accent-foreground: 0 0% 98%; /* White/Light Gray */
+    --accent: 258 40% 55%; /* Medium Purple for other buttons */
+    --accent-foreground: var(--foreground);
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 231 48% 48%; /* Primary color for rings */
+    --ring: 40 65% 60%; /* Gold for rings */
 
     --radius: 0.5rem;
 
-    /* Sidebar specific theme */
-    --sidebar-background: 231 30% 25%; /* Darker blue for sidebar */
-    --sidebar-foreground: 220 20% 90%; /* Light gray/white text for sidebar */
-    --sidebar-primary: 0 0% 98%; /* White for active/primary elements in sidebar */
-    --sidebar-primary-foreground: 231 30% 25%; /* Darker blue for text on sidebar primary */
-    --sidebar-accent: 232 38% 50%; /* Slightly darker indigo for sidebar accents */
+    /* Sidebar specific theme (can remain or be adjusted if needed) */
+    --sidebar-background: 231 30% 25%; 
+    --sidebar-foreground: 220 20% 90%; 
+    --sidebar-primary: 0 0% 98%; 
+    --sidebar-primary-foreground: 231 30% 25%; 
+    --sidebar-accent: 232 38% 50%; 
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 231 30% 35%;
     --sidebar-ring: 232 38% 62%;
 
-    --chart-1: 231 48% 48%;
-    --chart-2: 232 38% 62%;
-    --chart-3: 231 40% 55%;
-    --chart-4: 232 30% 70%;
+    --chart-1: 40 65% 55%; /* Gold */
+    --chart-2: 258 40% 60%; /* Purple */
+    --chart-3: 258 30% 70%; /* Lighter Purple */
+    --chart-4: 220 20% 80%; /* Light Gray */
     --chart-5: 220 29% 80%;
   }
 
   .dark {
-    --background: 231 15% 18%; /* Dark Blueish Gray */
-    --foreground: 220 29% 95%; /* Light Gray */
+    /* Dark theme can be a variation, e.g., even darker or different accent */
+    --background: 231 15% 18%; 
+    --foreground: 220 29% 95%; 
 
     --muted: 231 15% 25%;
     --muted-foreground: 220 20% 75%;
@@ -68,13 +69,13 @@
     --border: 231 15% 30%;
     --input: 231 15% 30%;
 
-    --primary: 231 48% 55%; /* Slightly lighter Deep Blue */
+    --primary: 231 48% 55%; 
     --primary-foreground: 0 0% 98%;
 
     --secondary: 232 38% 50%;
     --secondary-foreground: 0 0% 98%;
 
-    --accent: 232 38% 70%; /* Lighter Soft Indigo */
+    --accent: 232 38% 70%; 
     --accent-foreground: 231 15% 18%;
 
     --destructive: 0 63% 45%;
@@ -83,7 +84,7 @@
     --ring: 231 48% 55%;
 
     /* Dark Sidebar specific theme */
-    --sidebar-background: 231 20% 12%; /* Very dark blue */
+    --sidebar-background: 231 20% 12%; 
     --sidebar-foreground: 220 20% 85%;
     --sidebar-primary: 0 0% 98%;
     --sidebar-primary-foreground: 231 20% 12%;
@@ -106,6 +107,5 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* Removed font-family: Arial, Helvetica, sans-serif; to allow Next/Font to work */
   }
 }
