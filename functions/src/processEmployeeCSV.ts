@@ -7,7 +7,7 @@ import * as Busboy from 'busboy';
 import { v4 as uuidv4 } from 'uuid';
 import * as corsLib from 'cors';
 import { Timestamp } from 'firebase-admin/firestore';
-import * as QRCode from 'qrcode'; // Import qrcode
+import * as QRCode from 'qrcode'; // For server-side QR code data URL generation
 
 // Initialize Firebase Admin SDK (do this once)
 if (admin.apps.length === 0) {
@@ -60,6 +60,46 @@ const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phone
       return `ERROR_GENERATING_QR_FOR:${encodeURIComponent(dataString)}`;
     }
 };
+
+// Helper function to process and upload a Base64 image
+async function processAndUploadBase64Image(
+    base64String: string,
+    baseFolderPath: string, // e.g., 'employee_profile_pictures', 'employee_id_proofs'
+    employeeIdentifier: string // e.g., phone number or uuid for path organization
+  ): Promise<string | null> {
+    if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:image/')) {
+      console.warn(`Invalid or missing Base64 string for ${baseFolderPath}`);
+      return null;
+    }
+  
+    const matches = base64String.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
+    if (!matches || matches.length !== 3) {
+      console.warn(`Invalid Data URI format for ${baseFolderPath}`);
+      return null;
+    }
+  
+    const base64Data = matches[2];
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+    const imageName = `${uuidv4()}.jpg`; // Compress to JPEG
+    const filePath = `${baseFolderPath}/${employeeIdentifier}/${imageName}`;
+  
+    try {
+      const compressedImageBuffer = await sharp(imageBuffer)
+        .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 75 })
+        .toBuffer();
+  
+      const file = bucket.file(filePath);
+      await file.save(compressedImageBuffer, { metadata: { contentType: 'image/jpeg' } });
+      const [url] = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' }); // Long-lived URL
+      console.log(`Uploaded image to ${filePath}`);
+      return url;
+    } catch (error) {
+      console.error(`Error processing/uploading image for ${baseFolderPath} to ${filePath}:`, error);
+      return null;
+    }
+}
+
 
 export const processEmployeeCSV = functions
   .runWith(runtimeOpts)
@@ -155,34 +195,32 @@ export const processEmployeeCSV = functions
             employeeData.esicNumber = emp.ESICNumber || '';
             employeeData.resourceIdNumber = emp.ResourceIDNumber || '';
 
-            if (emp.PhotoBlob && typeof emp.PhotoBlob === 'string' && emp.PhotoBlob.startsWith('data:image/')) {
-              const matches = emp.PhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
-              if (matches && matches.length === 3) {
-                const base64Data = matches[2];
-                const imageBuffer = Buffer.from(base64Data, 'base64');
-                const imageName = `${uuidv4()}.jpg`; 
-                const filePath = `employee_photos/${employeeData.phoneNumber || uuidv4()}/${imageName}`;
-                
-                const compressedImageBuffer = await sharp(imageBuffer)
-                  .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
-                  .jpeg({ quality: 75 })
-                  .toBuffer();
+            const safeIdentifier = employeeData.phoneNumber || uuidv4(); // Use phone number or fallback to UUID for path
 
-                const file = bucket.file(filePath);
-                await file.save(compressedImageBuffer, { metadata: { contentType: 'image/jpeg' } });
-                const [url] = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' }); 
-                employeeData.profilePictureUrl = url;
-                console.log(`Uploaded photo for ${employeeData.fullName} to ${filePath}`);
-              } else {
-                console.warn(`Invalid Data URI format for PhotoBlob for employee: ${employeeData.fullName}`);
-                employeeData.profilePictureUrl = null;
-              }
+            if (emp.PhotoBlob) {
+                employeeData.profilePictureUrl = await processAndUploadBase64Image(emp.PhotoBlob, 'employee_photos', safeIdentifier);
             } else {
                 employeeData.profilePictureUrl = null;
             }
+            
+            if (emp.IDProofPhotoBlob) {
+                employeeData.idProofDocumentUrl = await processAndUploadBase64Image(emp.IDProofPhotoBlob, 'employee_id_proofs', safeIdentifier);
+            } else {
+                // If you might have direct URLs in CSV for ID proof sometimes
+                employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
+            }
 
-            employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
-            employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
+            if (emp.BankPassbookPhotoBlob) {
+                employeeData.bankPassbookStatementUrl = await processAndUploadBase64Image(emp.BankPassbookPhotoBlob, 'employee_bank_documents', safeIdentifier);
+            } else {
+                 // If you might have direct URLs in CSV for bank passbook sometimes
+                employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
+            }
+            
+            // Remove blob fields after processing
+            delete employeeData.PhotoBlob;
+            delete employeeData.IDProofPhotoBlob;
+            delete employeeData.BankPassbookPhotoBlob;
 
             employeeData.employeeId = generateEmployeeId(employeeData.clientName);
             employeeData.qrCodeUrl = await generateQrCodeDataUrl(employeeData.employeeId, employeeData.fullName, employeeData.phoneNumber);
