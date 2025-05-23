@@ -35,15 +35,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { db } from "../../../lib/firebase"; // Corrected path
 import { collection, addDoc, Timestamp, serverTimestamp } from "firebase/firestore";
+import { compressImage, uploadFileToStorage } from "@/lib/storageUtils"; // Import new utils
 
 const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
   clientName: z.string({ required_error: "Client name is required." }),
-  resourceIdNumber: z.string().optional(), // Optional by default
+  resourceIdNumber: z.string().optional(),
 
   // Personal Information
-  profilePicture: z.any().optional().refine(file => file instanceof File || file === null || file === undefined || file?.name, "Profile picture is required."),
+  profilePicture: z.instanceof(File, { message: "Profile picture is required." }).refine(file => file.size <= 5 * 1024 * 1024, "Max 5MB"),
   firstName: z.string().min(1, { message: "First name is required." }),
   lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
@@ -57,7 +58,7 @@ const enrollmentFormSchema = z.object({
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
-  idProofDocument: z.any().optional().refine(file => file instanceof File || file === null || file === undefined || file?.name, "ID proof document is required."),
+  idProofDocument: z.instanceof(File, { message: "ID proof document is required." }).refine(file => file.size <= 5 * 1024 * 1024, "Max 5MB"),
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -65,7 +66,7 @@ const enrollmentFormSchema = z.object({
   bankAccountNumber: z.string().min(5, { message: "Bank account number is required." }),
   ifscCode: z.string().length(11, { message: "IFSC code must be 11 characters." }),
   bankName: z.string().min(2, { message: "Bank name is required." }),
-  bankPassbookStatement: z.any().optional().refine(file => file instanceof File || file === null || file === undefined || file?.name, "Bank passbook/statement is required."),
+  bankPassbookStatement: z.instanceof(File, { message: "Bank passbook/statement is required." }).refine(file => file.size <= 5 * 1024 * 1024, "Max 5MB"),
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
@@ -83,7 +84,6 @@ const enrollmentFormSchema = z.object({
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 
-// In a real application, this list would be dynamic and managed by an admin.
 const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"];
 const keralaDistricts = [
   "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
@@ -123,9 +123,9 @@ export default function EnrollEmployeePage() {
       fullAddress: "",
       emailAddress: "",
       phoneNumber: "",
-      profilePicture: null,
-      idProofDocument: null,
-      bankPassbookStatement: null,
+      profilePicture: undefined, // Will be File object
+      idProofDocument: undefined, // Will be File object
+      bankPassbookStatement: undefined, // Will be File object
     },
   });
 
@@ -133,61 +133,163 @@ export default function EnrollEmployeePage() {
 
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
+    toast({ title: "Processing Registration...", description: "Please wait." });
+
+    let profilePictureUrl: string | null = null;
+    let idProofDocumentUrl: string | null = null;
+    let bankPassbookStatementUrl: string | null = null;
+
     try {
+      const uploadPromises = [];
+
+      // Profile Picture Upload
+      if (data.profilePicture) {
+        const file = data.profilePicture;
+        const cleanFileName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
+        const storagePath = `employees/${data.phoneNumber}/profilePictures/${Date.now()}_${cleanFileName}.jpg`;
+        uploadPromises.push(
+          compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8 })
+            .then(blob => uploadFileToStorage(blob, storagePath))
+            .then(url => { profilePictureUrl = url; })
+            .catch(err => { throw new Error(`Profile picture upload failed: ${err.message}`); })
+        );
+      }
+
+      // ID Proof Document Upload
+      if (data.idProofDocument) {
+        const file = data.idProofDocument;
+        const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
+        let storagePath = `employees/${data.phoneNumber}/idProofs/${Date.now()}_${cleanFileName}`;
+        
+        if (file.type.startsWith("image/")) {
+          storagePath += ".jpg";
+          uploadPromises.push(
+            compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+              .then(blob => uploadFileToStorage(blob, storagePath))
+              .then(url => { idProofDocumentUrl = url; })
+              .catch(err => { throw new Error(`ID proof (image) upload failed: ${err.message}`); })
+          );
+        } else if (file.type === "application/pdf") {
+          storagePath += ".pdf";
+          uploadPromises.push(
+            uploadFileToStorage(file, storagePath)
+              .then(url => { idProofDocumentUrl = url; })
+              .catch(err => { throw new Error(`ID proof (PDF) upload failed: ${err.message}`); })
+          );
+        } else {
+          // Optionally handle unsupported file types more gracefully or let Zod validation catch it earlier
+          form.setError("idProofDocument", { type: "manual", message: "Unsupported file type for ID proof. Please use JPG, PNG, or PDF." });
+          throw new Error("Unsupported file type for ID proof.");
+        }
+      }
+      
+      // Bank Passbook/Statement Upload
+      if (data.bankPassbookStatement) {
+        const file = data.bankPassbookStatement;
+        const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
+        let storagePath = `employees/${data.phoneNumber}/bankDocuments/${Date.now()}_${cleanFileName}`;
+
+        if (file.type.startsWith("image/")) {
+          storagePath += ".jpg";
+          uploadPromises.push(
+            compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+              .then(blob => uploadFileToStorage(blob, storagePath))
+              .then(url => { bankPassbookStatementUrl = url; })
+              .catch(err => { throw new Error(`Bank document (image) upload failed: ${err.message}`); })
+          );
+        } else if (file.type === "application/pdf") {
+          storagePath += ".pdf";
+           uploadPromises.push(
+            uploadFileToStorage(file, storagePath)
+              .then(url => { bankPassbookStatementUrl = url; })
+              .catch(err => { throw new Error(`Bank document (PDF) upload failed: ${err.message}`); })
+          );
+        } else {
+           form.setError("bankPassbookStatement", { type: "manual", message: "Unsupported file type for bank document. Please use JPG, PNG, or PDF." });
+           throw new Error("Unsupported file type for bank document.");
+        }
+      }
+
+      if (uploadPromises.length > 0) {
+        toast({ title: "Uploading Files...", description: "This may take a moment."});
+        await Promise.all(uploadPromises);
+      }
+      
+      toast({ title: "Saving Employee Data...", description: "Almost done."});
+
       const employeeData = {
-        ...data,
+        ...data, // Spread validated form data
         joiningDate: Timestamp.fromDate(data.joiningDate),
         dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
-        profilePictureUrl: data.profilePicture?.name || null, // Placeholder: store filename
-        idProofDocumentUrl: data.idProofDocument?.name || null, // Placeholder: store filename
-        bankPassbookStatementUrl: data.bankPassbookStatement?.name || null, // Placeholder: store filename
-        // Remove original file objects if they exist, as they can't be directly stored in Firestore
-        profilePicture: undefined,
-        idProofDocument: undefined,
-        bankPassbookStatement: undefined,
-        status: 'Active', // Default status
+        profilePictureUrl,
+        idProofDocumentUrl,
+        bankPassbookStatementUrl,
+        profilePicture: undefined, // Remove File object before Firestore save
+        idProofDocument: undefined, // Remove File object
+        bankPassbookStatement: undefined, // Remove File object
+        status: 'Active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
-
-      // Remove undefined file fields explicitly to avoid Firestore errors with 'undefined'
-      if (employeeData.profilePicture === undefined) delete employeeData.profilePicture;
-      if (employeeData.idProofDocument === undefined) delete employeeData.idProofDocument;
-      if (employeeData.bankPassbookStatement === undefined) delete employeeData.bankPassbookStatement;
-
+      
+      // Ensure no undefined top-level fields are sent to Firestore
+      Object.keys(employeeData).forEach(key => {
+        if (employeeData[key as keyof typeof employeeData] === undefined) {
+          delete employeeData[key as keyof typeof employeeData];
+        }
+      });
 
       const docRef = await addDoc(collection(db, "employees"), employeeData);
-      console.log("Document written with ID: ", docRef.id);
       
       toast({
-        title: "Registration Successful",
-        description: `${data.firstName} ${data.lastName}'s registration has been saved.`,
+        title: "Registration Successful!",
+        description: `${data.firstName} ${data.lastName}'s registration (ID: ${docRef.id}) has been saved.`,
         action: <Check className="h-5 w-5 text-green-500" />,
       });
       form.reset();
       setProfilePicPreview(null);
       setIdProofPreview(null);
       setBankPassbookPreview(null);
-    } catch (error) {
-      console.error("Error adding document: ", error);
+
+    } catch (error: any) {
+      console.error("Registration or Upload Error: ", error);
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: "Could not save employee data. Please try again.",
+        description: error.message || "Could not save employee data or upload files. Please check details and try again.",
       });
     } finally {
       setIsLoading(false);
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: keyof EnrollmentFormValues, setPreview: React.Dispatch<React.SetStateAction<string | null>>) => {
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>, 
+    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocument" | "bankPassbookStatement">, 
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>
+  ) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      form.setValue(fieldName, file as any); // Store the File object, type assertion for safety
-      setPreview(URL.createObjectURL(file));
+      // Validate file type for previews (optional, Zod handles submission validation)
+      if (file.type.startsWith("image/") || file.type === "application/pdf") {
+         form.setValue(fieldName, file, { shouldValidate: true });
+         if (file.type.startsWith("image/")) {
+            setPreview(URL.createObjectURL(file));
+         } else if (file.type === "application/pdf") {
+             setPreview("/pdf-icon.png"); // Placeholder for PDF icon, ensure this exists or use a generic one
+         }
+      } else {
+        form.setValue(fieldName, undefined, { shouldValidate: true }); // Or null if schema allows
+        setPreview(null);
+        toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image (JPG, PNG) or PDF file." });
+      }
     } else {
-      form.setValue(fieldName, null as any); // Type assertion for safety
+      form.setValue(fieldName, undefined, { shouldValidate: true }); // Or null
       setPreview(null);
+    }
+    // Manually clear the input value to allow re-selecting the same file if needed
+    if (event.target) {
+        event.target.value = "";
     }
   };
   
@@ -291,20 +393,18 @@ export default function EnrollEmployeePage() {
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}>
                             <Upload className="mr-2 h-4 w-4" /> Upload Photo
                           </Button>
-                          <Button type="button" variant="outline" size="sm" onClick={() => alert("Camera functionality to be implemented.")}>
-                            <Camera className="mr-2 h-4 w-4" /> Take Photo
-                          </Button>
+                          {/* Camera functionality can be added here */}
                         </div>
                         <FormControl>
                            <Input 
                             id="profilePictureInput"
                             type="file" 
                             className="hidden" 
-                            accept="image/*" 
+                            accept="image/jpeg,image/png,image/webp" 
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
-                         <FormDescription>Upload a clear passport-sized photo (will be resized to 500x500px)</FormDescription>
+                         <FormDescription>Upload a clear passport-sized photo (JPG, PNG, WEBP. Max 5MB).</FormDescription>
                         <FormMessage />
                        </div>
                     </FormItem>
@@ -412,33 +512,36 @@ export default function EnrollEmployeePage() {
                             {idProofTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                        <FormDescription>Type of identity document you're providing</FormDescription>
+                        <FormDescription>Type of identity document</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your selected identity document</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your ID document</FormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>Employees' State Insurance Number (optional)</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                   <FormField
                     control={form.control}
                     name="idProofDocument"
                     render={({ field }) => ( 
                       <FormItem className="md:col-span-2 text-center">
                         <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
-                        {idProofPreview && <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>}
+                        {idProofPreview && (
+                            idProofPreview === "/pdf-icon.png" ? 
+                            <Image src={idProofPreview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
+                            <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
+                        )}
+                        {!idProofPreview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+
                         <div className="flex justify-center gap-2">
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentInput')?.click()}>
                             <Upload className="mr-2 h-4 w-4" /> Upload ID Proof
                           </Button>
-                          <Button type="button" variant="outline" size="sm" onClick={() => alert("Camera functionality to be implemented.")}>
-                            <Camera className="mr-2 h-4 w-4" /> Take Photo of ID
-                          </Button>
                         </div>
                         <FormControl>
-                          <Input id="idProofDocumentInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, "idProofDocument", setIdProofPreview)} />
+                          <Input id="idProofDocumentInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocument", setIdProofPreview)} />
                         </FormControl>
-                         <FormDescription>Upload a clear photo of your ID document (will be resized to 800x600px)</FormDescription>
+                         <FormDescription>Upload ID (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -450,28 +553,30 @@ export default function EnrollEmployeePage() {
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter your bank account number" {...field} /></FormControl><FormDescription>The account where your salary will be deposited</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character code that uniquely identifies your bank branch</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Full name of your bank (e.g., State Bank of India)" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
                    <FormField
                     control={form.control}
                     name="bankPassbookStatement"
                     render={({ field }) => ( 
                        <FormItem className="md:col-span-2 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
-                        {bankPassbookPreview && <Image src={bankPassbookPreview} alt="Bank Passbook Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="bank document"/>}
+                        {bankPassbookPreview && (
+                            bankPassbookPreview === "/pdf-icon.png" ?
+                            <Image src={bankPassbookPreview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
+                            <Image src={bankPassbookPreview} alt="Bank Passbook Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="bank document"/>
+                        )}
+                        {!bankPassbookPreview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div>}
                          <div className="flex justify-center gap-2">
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('bankPassbookStatementInput')?.click()}>
                             <Upload className="mr-2 h-4 w-4" /> Upload Document
                           </Button>
-                          <Button type="button" variant="outline" size="sm" onClick={() => alert("Camera functionality to be implemented.")}>
-                            <Camera className="mr-2 h-4 w-4" /> Take Photo
-                          </Button>
                         </div>
                         <FormControl>
-                          <Input id="bankPassbookStatementInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, "bankPassbookStatement", setBankPassbookPreview)} />
+                          <Input id="bankPassbookStatementInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "bankPassbookStatement", setBankPassbookPreview)} />
                         </FormControl>
-                        <FormDescription>Upload a clear photo of your bank passbook or statement (will be compressed)</FormDescription>
+                        <FormDescription>Upload bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -490,15 +595,15 @@ export default function EnrollEmployeePage() {
                       <FormItem>
                         <FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
                         <FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl>
-                        <FormDescription>Include apartment/house number, street, area, and PIN code</FormDescription>
+                        <FormDescription>Include house number, street, area, PIN code</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>Your email for official communications and alerts</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="+910123456787" {...field} /></FormControl><FormDescription>Your registered phone number for official communications</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormDescription>Your primary contact number</FormDescription><FormMessage /></FormItem>)} />
                 </div>
               </section>
 
@@ -518,5 +623,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
-    
