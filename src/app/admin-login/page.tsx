@@ -11,35 +11,65 @@ import { LogIn } from 'lucide-react';
 import Link from 'next/link'; 
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase'; // Import Firebase auth instance
+import { signInWithEmailAndPassword, FirebaseError } from 'firebase/auth';
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState(''); // Changed from username to email
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call / authentication
-    setTimeout(() => {
-      if (username === 'admin' && password === 'admin123') {
-        toast({
-          title: 'Login Successful',
-          description: 'Welcome, Super Admin!',
-        });
-        router.push('/dashboard');
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Login Failed',
-          description: 'Invalid username or password. Please try again.',
-        });
-      }
+    if (!email || !password) {
+      toast({
+        variant: 'destructive',
+        title: 'Login Failed',
+        description: 'Email and password are required.',
+      });
       setIsLoading(false);
-    }, 1000); // Simulate network delay
+      return;
+    }
+
+    try {
+      // Use the email "admin@example.com" and password "admin123" 
+      // (or whatever you set in Firebase Auth console)
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({
+        title: 'Login Successful',
+        description: 'Welcome, Super Admin!',
+      });
+      router.push('/dashboard'); // Redirect to dashboard on successful login
+    } catch (error) {
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      if (error instanceof FirebaseError) {
+        switch (error.code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            errorMessage = 'Invalid email or password. Please try again.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Invalid email format.';
+            break;
+          default:
+            errorMessage = `Login failed: ${error.message}`;
+            break;
+        }
+      }
+      toast({
+        variant: 'destructive',
+        title: 'Login Failed',
+        description: errorMessage,
+      });
+      console.error("Firebase Auth Error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -51,9 +81,8 @@ export default function AdminLoginPage() {
             width={80}
             height={80}
             data-ai-hint="company logo"
-            unoptimized={true}
-            className="mx-auto"
-            style={{ border: '1px solid red', color: 'red', display: password === 'debug' ? 'none' : 'block' }} // Temporary debug style
+            unoptimized={true} 
+            style={{ border: '1px solid red', color: 'red', display: password === 'debug' ? 'none' : 'block' }}
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Admin Portal</p>
@@ -63,22 +92,21 @@ export default function AdminLoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl text-center text-card-foreground">Admin Login</CardTitle>
           <CardDescription className="text-center text-muted-foreground">
-            Enter your credentials to access the admin dashboard.
-            Super Admin: admin / admin123
+            Enter your admin credentials to access the dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="username">Username / Email</Label>
+              <Label htmlFor="email">Email</Label>
               <Input 
-                id="username" 
-                type="text" 
-                placeholder="admin" 
+                id="email" 
+                type="email" 
+                placeholder="admin@example.com" 
                 required 
                 className="text-base"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
               />
             </div>
