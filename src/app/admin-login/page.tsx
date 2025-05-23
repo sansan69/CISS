@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LogIn } from 'lucide-react'; 
+import { LogIn, HomeIcon } from 'lucide-react'; 
 import Link from 'next/link'; 
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -42,13 +42,13 @@ export default function AdminLoginPage() {
         description: 'Welcome, Super Admin!',
       });
       router.push('/dashboard'); 
-    } catch (error: any) { // Catch error as any to inspect its properties
+    } catch (error: any) { 
       let errorMessage = 'An unexpected error occurred. Please try again.';
-      if (error && error.code) { // Check if error object and error.code exist
+      if (error && error.code) { 
         switch (error.code) {
           case 'auth/user-not-found':
           case 'auth/wrong-password':
-          case 'auth/invalid-credential': // Common error for wrong email/password
+          case 'auth/invalid-credential': 
             errorMessage = 'Invalid email or password. Please try again.';
             break;
           case 'auth/invalid-email':
@@ -86,7 +86,7 @@ export default function AdminLoginPage() {
             height={80}
             data-ai-hint="company logo"
             unoptimized={true} 
-            style={{ border: '1px solid red', color: 'red', display: password === 'debug' ? 'none' : 'block' }}
+            className="mx-auto"
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Admin Portal</p>
@@ -146,9 +146,14 @@ export default function AdminLoginPage() {
           </form>
         </CardContent>
       </Card>
-       <footer className="mt-12 text-center text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-primary">Back to Employee Login</Link><br/>
-        &copy; {new Date().getFullYear()} CISS Workforce. All rights reserved.
+       <footer className="mt-8 text-center text-sm text-muted-foreground space-y-3">
+        <Button variant="outline" asChild>
+          <Link href="/">
+            <HomeIcon className="mr-2 h-4 w-4" />
+            Home
+          </Link>
+        </Button>
+        <div>&copy; {new Date().getFullYear()} CISS Workforce. All rights reserved.</div>
       </footer>
     </div>
   );
