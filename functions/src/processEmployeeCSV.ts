@@ -118,8 +118,8 @@ export const processEmployeeCSV = functions
         console.log(`Processing file: ${MimeType.filename}, MimeType: ${MimeType.mimeType}`);
         fileStream
           .pipe(csvParser({
-            mapHeaders: ({ header }) => header.trim(),
-            mapValues: ({ value }) => typeof value === 'string' ? value.trim() : value
+            mapHeaders: ({ header }) => header.trim(), // Trim header whitespace
+            mapValues: ({ value }) => typeof value === 'string' ? value.trim() : value // Trim value whitespace
           }))
           .on('data', (row: any) => {
             employeesToProcess.push(row);
@@ -157,52 +157,56 @@ export const processEmployeeCSV = functions
           try {
             const employeeData: any = {};
             
-            employeeData.firstName = emp.FirstName || '';
-            employeeData.lastName = emp.LastName || '';
+            // Map CSV headers to Firestore fields
+            employeeData.firstName = emp.first_name || '';
+            employeeData.lastName = emp.last_name || '';
             employeeData.fullName = `${employeeData.firstName} ${employeeData.lastName}`.trim();
-            employeeData.phoneNumber = (emp.PhoneNumber || '').replace(/\D/g, '');
-            employeeData.emailAddress = emp.EmailAddress || '';
-            employeeData.clientName = emp.ClientName || 'Unassigned';
+            employeeData.phoneNumber = (emp.phone_number || '').replace(/\D/g, '');
+            employeeData.emailAddress = emp.email || '';
+            employeeData.clientName = emp.client_name || 'Unassigned';
             
-            if (emp.JoiningDate && !isNaN(new Date(emp.JoiningDate).getTime())) {
-                employeeData.joiningDate = Timestamp.fromDate(new Date(emp.JoiningDate));
+            if (emp.joining_date && !isNaN(new Date(emp.joining_date).getTime())) {
+                employeeData.joiningDate = Timestamp.fromDate(new Date(emp.joining_date));
             } else {
-                console.warn(`Invalid or missing JoiningDate for ${employeeData.fullName || emp.PhoneNumber}, using current date as fallback.`);
+                console.warn(`Invalid or missing JoiningDate for ${employeeData.fullName || emp.phone_number}, using current date as fallback.`);
                 employeeData.joiningDate = Timestamp.now(); 
             }
-            if (emp.DateOfBirth && !isNaN(new Date(emp.DateOfBirth).getTime())) {
-                employeeData.dateOfBirth = Timestamp.fromDate(new Date(emp.DateOfBirth));
+            if (emp.date_of_birth && !isNaN(new Date(emp.date_of_birth).getTime())) {
+                employeeData.dateOfBirth = Timestamp.fromDate(new Date(emp.date_of_birth));
             } else {
-                console.warn(`Invalid or missing DateOfBirth for ${employeeData.fullName || emp.PhoneNumber}`);
+                console.warn(`Invalid or missing DateOfBirth for ${employeeData.fullName || emp.phone_number}`);
                 employeeData.dateOfBirth = null; 
             }
 
-            employeeData.gender = emp.Gender || 'Other';
-            employeeData.fatherName = emp.FatherName || '';
-            employeeData.motherName = emp.MotherName || '';
-            employeeData.maritalStatus = emp.MaritalStatus || 'Unmarried';
-            employeeData.spouseName = emp.SpouseName || ''; 
-            employeeData.district = emp.District || '';
-            employeeData.idProofType = emp.IDProofType || '';
-            employeeData.idProofNumber = emp.IDProofNumber || '';
-            employeeData.bankAccountNumber = emp.BankAccountNumber || '';
-            employeeData.ifscCode = emp.IFSCCode || '';
-            employeeData.bankName = emp.BankName || '';
-            employeeData.fullAddress = emp.FullAddress || '';
+            employeeData.gender = emp.gender || 'Other';
+            employeeData.fatherName = emp.father_name || '';
+            employeeData.motherName = emp.mother_name || '';
+            employeeData.maritalStatus = emp.marital_status || 'Unmarried';
+            employeeData.spouseName = emp.spouse_name || ''; 
+            employeeData.district = emp.district || '';
+            employeeData.idProofType = emp.id_proof_type || '';
+            employeeData.idProofNumber = emp.id_proof_number || '';
+            employeeData.bankAccountNumber = emp.bank_account_number || '';
+            employeeData.ifscCode = emp.bank_ifsc_code || '';
+            employeeData.bankName = emp.bank_name || '';
+            employeeData.fullAddress = emp.full_address || '';
             
-            employeeData.panNumber = emp.PANNumber || '';
-            employeeData.epfUanNumber = emp.EPFUANNumber || '';
-            employeeData.esicNumber = emp.ESICNumber || '';
-            employeeData.resourceIdNumber = emp.ResourceIDNumber || '';
+            employeeData.panNumber = emp.pan_card_number || '';
+            employeeData.epfUanNumber = emp.epf_uan_number || '';
+            employeeData.esicNumber = emp.esic_number || '';
+            employeeData.resourceIdNumber = emp.resource_id_number || '';
 
-            const safeIdentifier = employeeData.phoneNumber || uuidv4(); // Use phone number or fallback to UUID for path
+            // Use a safe identifier for storage paths, phone number or fallback to UUID
+            const safeIdentifier = employeeData.phoneNumber || uuidv4();
 
+            // Profile Picture from PhotoBlob
             if (emp.PhotoBlob) {
                 employeeData.profilePictureUrl = await processAndUploadBase64Image(emp.PhotoBlob, 'employee_photos', safeIdentifier);
             } else {
                 employeeData.profilePictureUrl = null;
             }
             
+            // ID Proof from IDProofPhotoBlob
             if (emp.IDProofPhotoBlob) {
                 employeeData.idProofDocumentUrl = await processAndUploadBase64Image(emp.IDProofPhotoBlob, 'employee_id_proofs', safeIdentifier);
             } else {
@@ -210,6 +214,7 @@ export const processEmployeeCSV = functions
                 employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
             }
 
+            // Bank Passbook from BankPassbookPhotoBlob
             if (emp.BankPassbookPhotoBlob) {
                 employeeData.bankPassbookStatementUrl = await processAndUploadBase64Image(emp.BankPassbookPhotoBlob, 'employee_bank_documents', safeIdentifier);
             } else {
@@ -217,19 +222,21 @@ export const processEmployeeCSV = functions
                 employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
             }
             
-            // Remove blob fields after processing
+            // Remove blob fields after processing if they existed
             delete employeeData.PhotoBlob;
             delete employeeData.IDProofPhotoBlob;
             delete employeeData.BankPassbookPhotoBlob;
 
+            // Generate Employee ID and QR Code
             employeeData.employeeId = generateEmployeeId(employeeData.clientName);
             employeeData.qrCodeUrl = await generateQrCodeDataUrl(employeeData.employeeId, employeeData.fullName, employeeData.phoneNumber);
 
 
             employeeData.createdAt = admin.firestore.FieldValue.serverTimestamp();
             employeeData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
-            employeeData.status = emp.Status || 'Active';
+            employeeData.status = emp.Status || 'Active'; // Assuming Status might be a column, else default to Active
 
+            // Basic validation: ensure essential data is present
             if (employeeData.fullName && employeeData.phoneNumber) {
                  processedEmployeesForFirestore.push(employeeData);
             } else {
