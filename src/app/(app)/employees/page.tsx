@@ -12,8 +12,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { db } from '@/lib/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, QueryDocumentSnapshot, DocumentData, deleteField } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase'; // Import storage
+import { ref, deleteObject } from "firebase/storage"; // Import storage functions
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, QueryDocumentSnapshot, DocumentData, deleteField, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -57,11 +58,15 @@ export default function EmployeeDirectoryPage() {
   const [exitDate, setExitDate] = useState<Date | undefined>(undefined);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
 
   const fetchClients = useCallback(async () => {
     try {
       const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
-      const fetchedClients = clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+      const fetchedClients = clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string }));
       setClients([{ id: 'all', name: 'All Clients' }, ...fetchedClients]);
     } catch (err) {
       console.error("Error fetching clients:", err);
@@ -80,11 +85,11 @@ export default function EmployeeDirectoryPage() {
     }
     
     if (searchTerm.trim() !== '') {
-       // Simple prefix search on employeeId. For broader search, consider a keywords array or dedicated search service.
-      q = query(q, where('employeeId', '>=', searchTerm.trim()), where('employeeId', '<=', searchTerm.trim() + '\uf8ff'));
+      q = query(q, where('employeeId', '>=', searchTerm.trim().toUpperCase()), where('employeeId', '<=', searchTerm.trim().toUpperCase() + '\uf8ff'));
     }
     
     if (!forCount) {
+        q = query(q, orderBy('employeeId', 'asc')); // Default order by employeeId if no search term, or order by search term's field
         q = query(q, orderBy('createdAt', 'desc')); 
 
         if (direction === 'next' && lastVisibleDoc) {
@@ -129,20 +134,23 @@ export default function EmployeeDirectoryPage() {
         setFirstVisibleDoc(documentSnapshots.docs[0]);
         setLastVisibleDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
       } else {
-        if (direction !== 'next') { // if fetching first page or prev and no results
+        if (direction !== 'next') { 
             setFirstVisibleDoc(null);
             setLastVisibleDoc(null);
         }
       }
       
-      // Check if there are more pages
       if (direction !== 'prev') {
-        const nextQuery = query(buildQuery(false, 'next'), limit(1)); // Check if there's at least one more item for 'next'
+        const nextQuery = query(buildQuery(false, 'next'), limit(1));
         const nextSnapshot = await getDocs(nextQuery);
         setHasMoreNext(!nextSnapshot.empty);
+      } else {
+        // When going previous, assume next is available unless we're at the end
+        setHasMoreNext(true);
       }
 
-      setHasMorePrev(currentPage > 1 && (direction === 'prev' || firstVisibleDoc !== null));
+
+      setHasMorePrev(currentPage > 1);
 
 
     } catch (err: any) {
@@ -154,21 +162,20 @@ export default function EmployeeDirectoryPage() {
       setIsFetchingNext(false);
       setIsFetchingPrev(false);
     }
-  }, [toast, buildQuery, currentPage, firstVisibleDoc]); // Added firstVisibleDoc to dependency array
+  }, [toast, buildQuery, currentPage]); 
 
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
   
   useEffect(() => {
-    // This useEffect handles initial load and re-fetch on filter/search changes.
-    // Reset pagination states before fetching.
     setCurrentPage(1);
     setLastVisibleDoc(null);
     setFirstVisibleDoc(null);
-    setHasMorePrev(false); // Can't go prev from page 1
+    setHasMorePrev(false); 
     fetchEmployees();
-  }, [searchTerm, filterClient, filterStatus, fetchClients]); // Removed fetchEmployees from here to avoid loops if it's not stable. Added fetchClients
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterClient, filterStatus]);
 
   const handleNextPage = () => {
     if (hasMoreNext) {
@@ -185,7 +192,7 @@ export default function EmployeeDirectoryPage() {
   };
 
 
-  const getStatusBadgeVariant = (status: Employee['status']) => {
+  const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
       case 'Active': return 'default';
       case 'Inactive': return 'secondary';
@@ -231,8 +238,6 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      // Refresh employees list by calling fetchEmployees without arguments
-      // It will use the current filters and reset pagination to the current page, effectively refreshing it.
       fetchEmployees(); 
       
       setIsStatusModalOpen(false);
@@ -245,6 +250,61 @@ export default function EmployeeDirectoryPage() {
       toast({ variant: "destructive", title: "Error", description: "Could not update employee status." });
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const openDeleteDialog = (employee: Employee) => {
+    setEmployeeToDelete(employee);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!employeeToDelete) return;
+    setIsDeleting(true);
+    try {
+      // Delete Firestore document
+      await deleteDoc(doc(db, "employees", employeeToDelete.id));
+      toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
+
+      // Attempt to delete associated files from Firebase Storage
+      const filesToDelete = [
+        employeeToDelete.profilePictureUrl,
+        employeeToDelete.idProofDocumentUrl,
+        employeeToDelete.bankPassbookStatementUrl,
+      ];
+
+      for (const fileUrl of filesToDelete) {
+        if (fileUrl) {
+          try {
+            // Firebase Storage URLs need to be parsed to get the storage path
+            // This is a simplified approach; a robust solution might store paths directly or use a helper
+            if (fileUrl.startsWith("https://firebasestorage.googleapis.com/")) {
+                const storageRef = ref(storage, fileUrl);
+                await deleteObject(storageRef);
+                console.log(`Successfully deleted file: ${fileUrl}`);
+            } else {
+                console.warn(`Skipping deletion for non-Firebase Storage URL: ${fileUrl}`);
+            }
+          } catch (fileError: any) {
+            // Log file deletion errors but don't block the overall success
+            console.error(`Failed to delete file ${fileUrl}:`, fileError);
+            toast({
+              variant: "destructive",
+              title: "File Deletion Warning",
+              description: `Could not delete file ${fileUrl.split('/').pop()?.split('?')[0]}. You may need to remove it manually from Firebase Storage.`,
+              duration: 7000,
+            });
+          }
+        }
+      }
+      fetchEmployees(); // Refresh the list
+      setIsDeleteDialogOpen(false);
+      setEmployeeToDelete(null);
+    } catch (err) {
+      console.error("Error deleting employee:", err);
+      toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
+    } finally {
+      setIsDeleting(false);
     }
   };
   
@@ -378,7 +438,7 @@ export default function EmployeeDirectoryPage() {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link href={`/employees/${emp.id}?edit=true`}> {/* Or a dedicated edit page like /employees/${emp.id}/edit */}
+                          <Link href={`/employees/${emp.id}?edit=true`}> 
                             <Edit className="mr-2 h-4 w-4" /> Edit
                           </Link>
                         </DropdownMenuItem>
@@ -388,7 +448,7 @@ export default function EmployeeDirectoryPage() {
                             <UserCheck className="mr-2 h-4 w-4" /> Set Active
                           </DropdownMenuItem>
                         )}
-                        {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( // Don't show inactive if already exited
+                        {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
                           <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
                             <UserX className="mr-2 h-4 w-4" /> Set Inactive
                           </DropdownMenuItem>
@@ -399,8 +459,8 @@ export default function EmployeeDirectoryPage() {
                           </DropdownMenuItem>
                         )}
                          <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" disabled>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete (soon)
+                        <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -420,7 +480,7 @@ export default function EmployeeDirectoryPage() {
                 variant="outline"
                 size="sm"
                 onClick={handlePreviousPage}
-                disabled={isFetchingPrev || currentPage === 1}
+                disabled={isFetchingPrev || !hasMorePrev}
               >
                 {isFetchingPrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                 Previous
@@ -484,9 +544,29 @@ export default function EmployeeDirectoryPage() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {employeeToDelete && (
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Are you sure you want to delete the employee "{employeeToDelete.fullName}" (ID: {employeeToDelete.employeeId})?
+                        This action will permanently remove their record and attempt to delete associated files. This cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting} onClick={() => setEmployeeToDelete(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className={buttonVariants({ variant: "destructive" })}>
+                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Confirm Delete
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
-
 
     
