@@ -100,10 +100,13 @@ export default function EmployeeProfilePage() {
           const formattedData: Employee = {
             ...data,
             id: employeeDocSnap.id,
-            joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
-            dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            // Ensure date fields that might be Timestamps are converted to ISO strings for consistency if needed,
+            // or directly to Date objects if DetailItem handles them.
+            // For DetailItem, passing Firestore Timestamp directly is fine.
+            joiningDate: data.joiningDate, // Keep as Timestamp or convert based on DetailItem
+            dateOfBirth: data.dateOfBirth, // Keep as Timestamp or convert
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
           } as Employee;
           setEmployee(formattedData);
         } else {
@@ -282,14 +285,22 @@ export default function EmployeeProfilePage() {
                         <Button variant="outline" className="mt-4" disabled>
                             <QrCode className="mr-2 h-4 w-4" /> Regenerate QR (soon)
                         </Button>
-                        {employee.qrCodeUrl && <p className="text-xs text-muted-foreground mt-2">QR Value: {decodeURIComponent(employee.qrCodeUrl.split('data=')[1] || '')}</p>}
+                        {/* Displaying the actual data of the QR code can be long.
+                            Consider removing this or making it toggleable if it clutters the UI.
+                            It's good for debugging, less so for user display.
+                        */}
+                        {employee.qrCodeUrl && employee.qrCodeUrl.startsWith('data:image/png;base64,') && (
+                           <p className="text-xs text-muted-foreground mt-2 truncate w-full text-center" title={decodeURIComponent(employee.qrCodeUrl.split('data=')[1] || '')}>
+                                QR Data URL (truncated)
+                           </p>
+                        )}
                     </div>
                 </div>
                 <div>
                     <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                     <div className="space-y-3">
                         <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                        <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType} />
+                        <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
                         <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
                         <div className="pt-4">
                              <Label htmlFor="new-doc" className="text-sm font-medium">Upload New Document (Placeholder)</Label>
@@ -325,3 +336,4 @@ export default function EmployeeProfilePage() {
     </div>
   );
 }
+

@@ -39,6 +39,7 @@ import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storage
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSearchParams, useRouter } from 'next/navigation';
+import QRCode from 'qrcode';
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -136,9 +137,21 @@ const generateEmployeeId = (clientName: string): string => {
   return `${sanitizedClientName}/${financialYear}/${randomNumber.toString().padStart(3, '0')}`;
 };
 
-const generateQrCodeUrl = (employeeId: string, fullName: string, phoneNumber: string): string => {
-  const data = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data)}`;
+const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
+  const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+  try {
+    const dataUrl = await QRCode.toDataURL(dataString, {
+      errorCorrectionLevel: 'H',
+      type: 'image/png',
+      quality: 0.92, // For PNG, quality is more about compression options if library supports, often ignored.
+      margin: 1,
+      width: 256, // Specify width for the QR code image
+    });
+    return dataUrl;
+  } catch (err) {
+    console.error('QR code generation failed:', err);
+    throw new Error('Failed to generate QR code.'); // Propagate error
+  }
 };
 
 
@@ -343,7 +356,10 @@ export default function EnrollEmployeePage() {
       const fullName = `${data.firstName} ${data.lastName}`;
 
       const newEmployeeId = generateEmployeeId(data.clientName);
-      const newQrCodeUrl = generateQrCodeUrl(newEmployeeId, fullName, data.phoneNumber);
+      toast({ title: "Generating QR Code...", description: "Creating QR code for the employee." });
+      const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
+      toast({ title: "QR Code Generated", description: "QR code created successfully." });
+
 
       toast({ title: "File Processing", description: "Preparing files for upload..." });
 
@@ -426,15 +442,12 @@ export default function EnrollEmployeePage() {
       } else {
          toast({ title: "No Files to Upload", description: "Skipping file upload step as no files were provided or required."});
          if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
-             // This path should ideally not be hit if fileSchema marks them as required.
-             // But as a safeguard for development if schema changes:
              console.warn("Required document files are missing based on schema, but proceeding without them based on current logic path.");
          }
       }
 
       toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
 
-      // Ensure required URLs are present, especially if files were mandatory.
       if (!profilePictureUrl) throw new Error("Profile picture failed to upload or its URL was not retrieved.");
       if (!idProofDocumentUrl) throw new Error("ID proof document failed to upload or its URL was not retrieved.");
       if (!bankPassbookStatementUrl) throw new Error("Bank passbook document failed to upload or its URL was not retrieved.");
@@ -447,7 +460,7 @@ export default function EnrollEmployeePage() {
         resourceIdNumber: data.resourceIdNumber,
         firstName: data.firstName,
         lastName: data.lastName,
-        fullName: fullName, // Store combined name
+        fullName: fullName, 
         fatherName: data.fatherName,
         motherName: data.motherName,
         joiningDate: Timestamp.fromDate(data.joiningDate),
@@ -482,7 +495,7 @@ export default function EnrollEmployeePage() {
         const value = (employeeDataForFirestore as any)[key];
         if (value !== undefined) {
           if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
-            continue;
+            continue; 
           }
           finalDataForFirestore[key] = value;
         }
@@ -503,7 +516,7 @@ export default function EnrollEmployeePage() {
       setIdProofPreview(null);
       setBankPassbookPreview(null);
 
-      router.push(`/employees/${docRef.id}`); // Redirect to profile page
+      router.push(`/employees/${docRef.id}`); 
 
     } catch (error: any) {
       console.error("Detailed Registration or Upload Error: ", error, error.stack);
@@ -868,7 +881,7 @@ export default function EnrollEmployeePage() {
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
             <ShadDialogDescription className="sr-only">
-              Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field.
+              Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
             </ShadDialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -903,3 +916,4 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
+
