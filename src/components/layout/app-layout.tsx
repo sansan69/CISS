@@ -66,7 +66,7 @@ const navItems: NavItem[] = [
     icon: Users,
     subItems: [
       { href: '/employees', label: 'Directory', icon: Users },
-      { href: '/enroll', label: 'Enroll New', icon: UserPlus }, // Updated path
+      { href: '/enroll', label: 'Enroll New', icon: UserPlus },
     ],
   },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
@@ -151,8 +151,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         setAuthUser(user);
       } else {
         setAuthUser(null);
-        const publicPaths = ['/admin-login', '/', '/enroll']; // Added /enroll
-        if (!publicPaths.includes(router.pathname) && !router.pathname.startsWith('/enroll')) { // Check /enroll explicitly
+        const publicPaths = ['/admin-login', '/', '/enroll']; 
+        if (router.pathname && 
+            !publicPaths.includes(router.pathname) && 
+            !router.pathname.startsWith('/enroll')) { 
              router.push('/admin-login'); 
         }
       }
@@ -169,6 +171,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       router.push('/admin-login');
     } catch (error) {
       console.error("Error signing out: ", error);
+      // Optionally, show a toast message to the user
     }
   };
 
@@ -185,6 +188,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             data-ai-hint="company logo"
             unoptimized={true}
           />
+          <SheetTitle className="sr-only">CISS Workforce Sidebar Menu</SheetTitle>
           <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>
         <SidebarContent>
@@ -199,7 +203,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="w-full justify-start gap-2 p-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={authUser?.photoURL || "https://placehold.co/40x40.png"} alt="User" data-ai-hint="user avatar" />
+                  <AvatarImage src={authUser?.photoURL || undefined} alt={authUser?.displayName || authUser?.email || "User avatar"} data-ai-hint="user avatar" />
                   <AvatarFallback>
                     {isLoadingAuth ? 'L' : authUser?.email?.[0]?.toUpperCase() || 'A'}
                   </AvatarFallback>
