@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase } from "lucide-react"; // Added Briefcase for Client Management
 import Link from "next/link";
 
 const settingsOptions = [
@@ -27,6 +27,13 @@ const settingsOptions = [
     icon: BarChart3,
     href: "/settings/reports",
     aiHint: "report generation"
+  },
+  {
+    title: "Client Management",
+    description: "Add, remove, or update client company names.",
+    icon: Briefcase,
+    href: "/settings/client-management",
+    aiHint: "client companies"
   },
 ];
 

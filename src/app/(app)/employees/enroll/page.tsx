@@ -30,12 +30,12 @@ import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserC
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React from "react";
+import React, { useEffect, useState } from "react"; // Added useEffect, useState
 import Link from "next/link";
 import Image from "next/image";
-import { db, storage } from "@/lib/firebase"; // Corrected import path
-import { collection, addDoc, Timestamp, serverTimestamp } from "firebase/firestore";
-import { compressImage, uploadFileToStorage } from "@/lib/storageUtils"; // Import new utils
+import { db, storage } from "@/lib/firebase"; 
+import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs } from "firebase/firestore"; // Added query, orderBy, onSnapshot, getDocs
+import { compressImage, uploadFileToStorage } from "@/lib/storageUtils"; 
 
 const enrollmentFormSchema = z.object({
   // Client Information
@@ -84,7 +84,12 @@ const enrollmentFormSchema = z.object({
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 
-const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"]; // Admin should manage this list
+// const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"]; // Removed hardcoded list
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
 const keralaDistricts = [
   "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
@@ -99,6 +104,8 @@ export default function EnrollEmployeePage() {
   const [idProofPreview, setIdProofPreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(true);
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
@@ -131,6 +138,29 @@ export default function EnrollEmployeePage() {
 
   const watchClientName = form.watch("clientName");
 
+  useEffect(() => {
+    setIsLoadingClients(true);
+    const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(clientsQuery, (snapshot) => {
+      const fetchedClients = snapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name as string,
+      }));
+      setAvailableClients(fetchedClients);
+      setIsLoadingClients(false);
+    }, (error) => {
+      console.error("Error fetching clients for enrollment form: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error Loading Clients",
+        description: "Could not load client list. Please try again or contact admin.",
+      });
+      setIsLoadingClients(false);
+    });
+    return () => unsubscribe();
+  }, [toast]);
+
+
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait." });
@@ -142,10 +172,9 @@ export default function EnrollEmployeePage() {
     try {
       const uploadPromises = [];
 
-      // Profile Picture Upload
       if (data.profilePicture) {
         const file = data.profilePicture;
-        const cleanFileName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
+        const cleanFileName = file.name.replace(/\.[^/.]+$/, ""); 
         const storagePath = `employees/${data.phoneNumber}/profilePictures/${Date.now()}_${cleanFileName}.jpg`;
         uploadPromises.push(
           compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8 })
@@ -155,7 +184,6 @@ export default function EnrollEmployeePage() {
         );
       }
 
-      // ID Proof Document Upload
       if (data.idProofDocument) {
         const file = data.idProofDocument;
         const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
@@ -182,7 +210,6 @@ export default function EnrollEmployeePage() {
         }
       }
       
-      // Bank Passbook/Statement Upload
       if (data.bankPassbookStatement) {
         const file = data.bankPassbookStatement;
         const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
@@ -273,7 +300,7 @@ export default function EnrollEmployeePage() {
          if (file.type.startsWith("image/")) {
             setPreview(URL.createObjectURL(file));
          } else if (file.type === "application/pdf") {
-             setPreview("/pdf-icon.png"); // Ensure you have a pdf-icon.png in your public folder
+             setPreview("/pdf-icon.png"); 
          }
       } else {
         form.setValue(fieldName, undefined, { shouldValidate: true }); 
@@ -284,7 +311,6 @@ export default function EnrollEmployeePage() {
       form.setValue(fieldName, undefined, { shouldValidate: true }); 
       setPreview(null);
     }
-    // Reset the input value to allow re-selection of the same file if needed
     if (event.target) {
         event.target.value = "";
     }
@@ -307,7 +333,6 @@ export default function EnrollEmployeePage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               
-              {/* Client Information */}
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -341,13 +366,19 @@ export default function EnrollEmployeePage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger></FormControl>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}>
+                          <FormControl><SelectTrigger><SelectValue placeholder={isLoadingClients ? "Loading clients..." : "Select client"} /></SelectTrigger></FormControl>
                           <SelectContent>
-                            {clientNames.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                            {isLoadingClients ? (
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : availableClients.length === 0 ? (
+                               <SelectItem value="no-clients" disabled>No clients available</SelectItem>
+                            ) : (
+                              availableClients.map(client => <SelectItem key={client.id} value={client.name}>{client.name}</SelectItem>)
+                            )}
                           </SelectContent>
                         </Select>
-                        <FormDescription>Client you are deployed with. (Admin can manage this list)</FormDescription>
+                        <FormDescription>Client you are deployed with. (Managed by Admin)</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -369,7 +400,6 @@ export default function EnrollEmployeePage() {
                 </div>
               </section>
 
-              {/* Personal Information */}
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Personal Information</h2>
                 <FormField
@@ -474,7 +504,6 @@ export default function EnrollEmployeePage() {
                 </div>
               </section>
 
-              {/* Location & Identification */}
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Location & Identification</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -545,7 +574,6 @@ export default function EnrollEmployeePage() {
                 </div>
               </section>
               
-              {/* Bank Account Details */}
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -580,7 +608,6 @@ export default function EnrollEmployeePage() {
                 </div>
               </section>
 
-              {/* Contact Information */}
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Contact Information</h2>
                 <div className="grid grid-cols-1 gap-6">
@@ -619,4 +646,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
