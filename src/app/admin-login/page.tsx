@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Briefcase, LogIn } from 'lucide-react'; // Added LogIn icon
+import Link from 'next/link'; // Added import for Link
 
 export default function AdminLoginPage() {
   const router = useRouter();
