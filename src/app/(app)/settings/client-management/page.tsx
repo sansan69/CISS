@@ -151,7 +151,7 @@ export default function ClientManagementPage() {
               />
             </div>
             <Button onClick={handleAddClient} disabled={isSubmitting || !newClientName.trim()} className="w-full sm:w-auto">
-              {isSubmitting && !clients.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
               Add Client
             </Button>
           </div>
