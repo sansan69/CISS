@@ -53,16 +53,15 @@ export default function LandingPage() {
       </div>
 
       <header className="text-center mb-8">
-        <div className="mb-4">
-          <Image
+        <Image
             src="/ciss-logo.png"
             alt="CISS Workforce Logo"
             width={80}
             height={80}
             data-ai-hint="company logo"
-          />
-        </div>
-        <h1 className="text-4xl font-bold text-foreground">CISS Workforce</h1>
+            unoptimized={true}
+        />
+        <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Employee Management System</p>
       </header>
 

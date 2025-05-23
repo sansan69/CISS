@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import Image from 'next/image'; // Added Image import
+import Image from 'next/image'; 
 import { usePathname, useRouter } from 'next/navigation'; 
 import {
   SidebarProvider,
@@ -144,14 +144,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider defaultOpen>
       <Sidebar className="border-r">
-        <SidebarHeader className="p-4 flex items-center gap-3"> {/* Increased gap slightly */}
+        <SidebarHeader className="p-4 flex items-center gap-3">
           <Image 
             src="/ciss-logo.png" 
             alt="CISS Workforce Logo" 
-            width={32}  // Adjusted size for sidebar
+            width={32}
             height={32}
-            className="shrink-0" // Prevents image from shrinking too much
+            className="shrink-0"
             data-ai-hint="company logo"
+            unoptimized={true}
           />
           <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>

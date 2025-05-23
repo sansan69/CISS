@@ -25,16 +25,15 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
       <header className="text-center mb-8">
-         <div className="mb-4" data-ai-hint="company logo">
-            <Image
-                src="/ciss-logo.png"
-                alt="CISS Workforce Logo"
-                width={80}
-                height={80}
-                priority
-            />
-        </div>
-        <h1 className="text-4xl font-bold text-foreground">CISS Workforce</h1>
+         <Image
+            src="/ciss-logo.png"
+            alt="CISS Workforce Logo"
+            width={80}
+            height={80}
+            data-ai-hint="company logo"
+            unoptimized={true}
+        />
+        <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Admin Portal</p>
       </header>
 
