@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
 import {
   SidebarProvider,
   Sidebar,
@@ -82,8 +82,8 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
   const { open: sidebarOpen } = useSidebar();
   const [isSubMenuOpen, setIsSubMenuOpen] = React.useState(pathname.startsWith(item.href) && item.href !== '/');
 
-  const isActive = item.subItems 
-    ? pathname.startsWith(item.href) 
+  const isActive = item.subItems
+    ? pathname.startsWith(item.href)
     : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href) && pathname.split('/').length === item.href.split('/').length);
 
   const toggleSubMenu = () => setIsSubMenuOpen(!isSubMenuOpen);
@@ -135,6 +135,12 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const router = useRouter(); // Initialize router
+
+  const handleLogout = () => {
+    router.push('/admin-login');
+  };
+
   return (
     <SidebarProvider defaultOpen>
       <Sidebar className="border-r">
@@ -175,7 +181,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout}> {/* Added onClick handler */}
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>
