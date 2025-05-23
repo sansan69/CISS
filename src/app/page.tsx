@@ -10,7 +10,7 @@ import { Phone, CalendarDays, QrCode, ChevronRight, Sun } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/types/employee';
 import Link from 'next/link';
-import Image from 'next/image';
+// Removed next/image import as we are using standard <img> for diagnostics
 
 export default function LandingPage() {
   const router = useRouter();
@@ -53,14 +53,14 @@ export default function LandingPage() {
       </div>
 
       <header className="text-center mb-8">
-        <Image
+        {/* Standard HTML img tag for diagnostics */}
+        <img
             src="/ciss-logo.png"
             alt="CISS Workforce Logo - If broken, check public/ciss-logo.png"
             width={80}
             height={80}
             data-ai-hint="company logo"
-            unoptimized={true}
-            className="border-2 border-red-500 text-red-500 text-xs"
+            className="border-2 border-red-500 text-red-500 text-xs mx-auto" // Added mx-auto for centering
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Employee Management System</p>
