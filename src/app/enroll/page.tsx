@@ -30,7 +30,7 @@ import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserC
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React, { Suspense, useEffect, useState, useRef } from "react"; // Added Suspense
+import React, { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase";
@@ -154,11 +154,13 @@ const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phone
   }
 };
 
-function EnrollmentFormContent() {
+interface ActualEnrollmentFormProps {
+  initialPhoneNumberFromQuery?: string | null;
+}
+
+function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentFormProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const initialPhoneNumberFromQuery = searchParams.get('phone');
 
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
   const [idProofPreview, setIdProofPreview] = React.useState<string | null>(null);
@@ -201,7 +203,7 @@ function EnrollmentFormContent() {
         bankName: '',
         fullAddress: '',
         emailAddress: '',
-        phoneNumber: '', // Initialize as empty, will be set by useEffect
+        phoneNumber: '', 
      },
   });
 
@@ -441,10 +443,6 @@ function EnrollmentFormContent() {
       } else {
          toast({ title: "No Files to Upload", description: "Skipping file upload step as no files were provided or required."});
          if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
-             // This condition is too strict since fields are mandatory by schema
-             // A better check would be if any of the data.fieldName is null/undefined
-             // However, schema enforces they are File objects, so this path should ideally not be hit
-             // if form validation passed and files were selected.
              console.warn("File upload was skipped. This could mean no files were selected or an unexpected issue occurred. Schema requires files.");
          }
       }
@@ -496,7 +494,7 @@ function EnrollmentFormContent() {
 
       for (const key in employeeDataForFirestore) {
         const value = (employeeDataForFirestore as any)[key];
-        if (value !== undefined) { 
+        if (value !== undefined) {
           if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
             continue;
           }
@@ -530,7 +528,7 @@ function EnrollmentFormContent() {
         description = error;
       } else {
         try {
-          description = JSON.stringify(error); 
+          description = JSON.stringify(error);
         } catch (e) {
            description = "An unknown error occurred during submission. Check console for details."
         }
@@ -858,7 +856,14 @@ function EnrollmentFormContent() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>Your primary contact number. {isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel>
+                        <FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl>
+                        <FormDescription>Your primary contact number. {isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                  )} />
                 </div>
               </section>
 
@@ -878,7 +883,7 @@ function EnrollmentFormContent() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
-            <ShadDialogDescription className="sr-only">
+             <ShadDialogDescription className="sr-only">
               Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
             </ShadDialogDescription>
           </DialogHeader>
@@ -914,6 +919,13 @@ function EnrollmentFormContent() {
   );
 }
 
+function EnrollmentFormWrapper() {
+  const searchParams = useSearchParams();
+  const initialPhoneNumberFromQuery = searchParams.get('phone');
+  return <ActualEnrollmentForm initialPhoneNumberFromQuery={initialPhoneNumberFromQuery} />;
+}
+
+
 function EnrollmentPageSkeleton() {
   return (
     <Card className="shadow-xl">
@@ -940,8 +952,10 @@ export default function EnrollEmployeePage() {
         </Link>
       </div>
       <Suspense fallback={<EnrollmentPageSkeleton />}>
-        <EnrollmentFormContent />
+        <EnrollmentFormWrapper />
       </Suspense>
     </div>
   );
 }
+
+    
