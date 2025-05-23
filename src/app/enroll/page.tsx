@@ -34,9 +34,9 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase"; 
-import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot } from "firebase/firestore";
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSearchParams } from 'next/navigation';
 
@@ -302,7 +302,7 @@ export default function EnrollEmployeePage() {
   
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
-    toast({ title: "Processing Registration...", description: "Please wait." });
+    toast({ title: "Processing Registration...", description: "Please wait. Initializing submission..." });
 
     let profilePictureUrl: string | null = null;
     let idProofDocumentUrl: string | null = null;
@@ -312,14 +312,23 @@ export default function EnrollEmployeePage() {
       const uploadPromises = [];
       const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
 
+      toast({ title: "File Processing", description: "Preparing files for upload..." });
+
       if (data.profilePicture) {
         const file = data.profilePicture;
         const storagePath = `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
+        toast({ title: "Profile Picture", description: "Compressing profile picture..." });
         uploadPromises.push(
           compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8, targetMimeType: 'image/jpeg' })
-            .then(blob => uploadFileToStorage(blob, storagePath))
-            .then(url => { profilePictureUrl = url; })
-            .catch(err => { throw new Error(`Profile picture processing failed: ${err.message}`); })
+            .then(blob => {
+              toast({ title: "Profile Picture", description: "Uploading profile picture..." });
+              return uploadFileToStorage(blob, storagePath);
+            })
+            .then(url => { profilePictureUrl = url; toast({ title: "Profile Picture", description: "Upload complete." }); })
+            .catch(err => { 
+              console.error("Profile picture processing/upload error:", err); 
+              throw new Error(`Profile picture processing failed: ${err.message}`); 
+            })
         );
       }
 
@@ -327,15 +336,26 @@ export default function EnrollEmployeePage() {
         const file = data.idProofDocument;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
         const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof.${file.type.startsWith("image/") ? 'jpg' : ext}`;
+        toast({ title: "ID Proof", description: `Preparing ID proof (${file.type})...` });
         
         const processAndUpload = file.type.startsWith("image/") 
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath); 
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' })
+              .then(blob => {
+                toast({ title: "ID Proof", description: "Uploading ID proof image..." });
+                return uploadFileToStorage(blob, storagePath);
+              })
+          : (() => {
+              toast({ title: "ID Proof", description: "Uploading ID proof document (PDF)..." });
+              return uploadFileToStorage(file, storagePath);
+            })();
 
         uploadPromises.push(
           processAndUpload
-            .then(url => { idProofDocumentUrl = url; })
-            .catch(err => { throw new Error(`ID proof processing failed: ${err.message}`); })
+            .then(url => { idProofDocumentUrl = url; toast({ title: "ID Proof", description: "Upload complete." });})
+            .catch(err => { 
+              console.error("ID proof processing/upload error:", err); 
+              throw new Error(`ID proof processing failed: ${err.message}`); 
+            })
         );
       }
       
@@ -343,48 +363,100 @@ export default function EnrollEmployeePage() {
         const file = data.bankPassbookStatement;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
         const storagePath = `employees/${phoneNumber}/bankDocuments/${Date.now()}_bankDoc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
+        toast({ title: "Bank Document", description: `Preparing bank document (${file.type})...` });
 
         const processAndUpload = file.type.startsWith("image/")
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath);
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' })
+              .then(blob => {
+                toast({ title: "Bank Document", description: "Uploading bank document image..." });
+                return uploadFileToStorage(blob, storagePath);
+              })
+          : (() => {
+              toast({ title: "Bank Document", description: "Uploading bank document (PDF)..." });
+              return uploadFileToStorage(file, storagePath);
+            })();
 
         uploadPromises.push(
           processAndUpload
-            .then(url => { bankPassbookStatementUrl = url; })
-            .catch(err => { throw new Error(`Bank document processing failed: ${err.message}`); })
+            .then(url => { bankPassbookStatementUrl = url; toast({ title: "Bank Document", description: "Upload complete." });})
+            .catch(err => { 
+              console.error("Bank document processing/upload error:", err); 
+              throw new Error(`Bank document processing failed: ${err.message}`); 
+            })
         );
       }
 
       if (uploadPromises.length > 0) {
-        toast({ title: "Uploading Files...", description: "This may take a moment."});
+        toast({ title: "Uploading All Files...", description: "This may take a moment. Please monitor individual file completion messages."});
         await Promise.all(uploadPromises);
+        toast({ title: "All Files Uploaded", description: "File uploads completed successfully. Proceeding to save data."});
+      } else {
+        toast({ title: "No Files to Upload", description: "Skipping file upload step. Note: File fields are currently required."});
+        // Check if file fields are truly optional by schema or if this is an error state.
+        // For now, assuming fileSchema makes them required.
+        if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
+            throw new Error("Required document files are missing.");
+        }
       }
       
-      toast({ title: "Saving Employee Data...", description: "Almost done."});
+      toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
+
+      // Ensure URLs are not null if files were expected
+      // Zod schema requires these files, so their URLs should be populated if uploads succeeded
+      if (!profilePictureUrl || !idProofDocumentUrl || !bankPassbookStatementUrl) {
+          console.error("One or more file URLs are null after upload attempts. Profile:", profilePictureUrl, "ID:", idProofDocumentUrl, "Bank:", bankPassbookStatementUrl);
+          throw new Error("A required document failed to upload or its URL was not retrieved. Cannot save record.");
+      }
 
       const employeeDataForFirestore = {
-        ...data, 
+        clientName: data.clientName,
+        resourceIdNumber: data.resourceIdNumber,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        fatherName: data.fatherName,
+        motherName: data.motherName,
         joiningDate: Timestamp.fromDate(data.joiningDate),
         dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
-        profilePictureUrl,
-        idProofDocumentUrl,
-        bankPassbookStatementUrl,
+        gender: data.gender,
+        maritalStatus: data.maritalStatus,
+        spouseName: data.spouseName,
+        district: data.district,
+        panNumber: data.panNumber,
+        idProofType: data.idProofType,
+        idProofNumber: data.idProofNumber,
+        epfUanNumber: data.epfUanNumber,
+        esicNumber: data.esicNumber,
+        bankAccountNumber: data.bankAccountNumber,
+        ifscCode: data.ifscCode,
+        bankName: data.bankName,
+        fullAddress: data.fullAddress,
+        emailAddress: data.emailAddress,
+        phoneNumber: data.phoneNumber,
+        profilePictureUrl, // Must be non-null if required by schema
+        idProofDocumentUrl,  // Must be non-null
+        bankPassbookStatementUrl, // Must be non-null
         status: 'Active', 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        profilePicture: undefined, 
-        idProofDocument: undefined, 
-        bankPassbookStatement: undefined, 
       };
       
-      Object.keys(employeeDataForFirestore).forEach(keyStr => {
-        const key = keyStr as keyof typeof employeeDataForFirestore;
-        if (employeeDataForFirestore[key] === undefined || employeeDataForFirestore[key] === '') { 
-            delete employeeDataForFirestore[key];
-        }
-      });
+      const finalDataForFirestore: any = {};
+      const optionalStringFields = ['resourceIdNumber', 'spouseName', 'panNumber', 'epfUanNumber', 'esicNumber'];
 
-      const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
+      for (const key in employeeDataForFirestore) {
+        const value = (employeeDataForFirestore as any)[key];
+        if (value !== undefined) { // Keep nulls if they are URLs from failed uploads (should be caught above)
+          if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
+            // Skip adding empty optional strings
+            continue;
+          }
+          finalDataForFirestore[key] = value;
+        }
+      }
+      
+      toast({ title: "Finalizing Data...", description: "Saving to database..." });
+      console.log("Data being sent to Firestore:", finalDataForFirestore);
+      const docRef = await addDoc(collection(db, "employees"), finalDataForFirestore);
       
       toast({
         title: "Registration Successful!",
@@ -397,11 +469,24 @@ export default function EnrollEmployeePage() {
       setBankPassbookPreview(null);
 
     } catch (error: any) {
-      console.error("Registration or Upload Error: ", error);
+      console.error("Detailed Registration or Upload Error: ", error, error.stack);
+      let description = "An unexpected error occurred. Could not save employee data or upload files. Please check details and try again.";
+      if (error instanceof Error) {
+        description = error.message;
+      } else if (typeof error === 'string') {
+        description = error;
+      } else {
+        try {
+          description = JSON.stringify(error); 
+        } catch (e) {
+           description = "An unknown error occurred during submission. Check console for details."
+        }
+      }
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: error.message || "Could not save employee data or upload files. Please check details and try again.",
+        description: description,
+        duration: 9000, // Longer duration for error messages
       });
     } finally {
       setIsLoading(false);
@@ -767,3 +852,4 @@ export default function EnrollEmployeePage() {
   );
 }
 
+    
