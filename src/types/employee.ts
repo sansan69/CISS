@@ -7,7 +7,7 @@ export interface Employee {
   firstName: string;
   lastName: string;
   fullName: string; // Combined for convenience, can be derived or stored
-  dateOfBirth: string; // Should be ISO string or Firebase Timestamp
+  dateOfBirth: any; // Firebase Timestamp or ISO string
   gender: 'Male' | 'Female' | 'Other';
   fatherName: string;
   motherName: string;
@@ -28,14 +28,17 @@ export interface Employee {
   profilePictureUrl?: string;
   idProofDocumentUrl?: string;
   bankPassbookStatementUrl?: string;
-  joiningDate: string; // Should be ISO string or Firebase Timestamp
-  status: 'Active' | 'Inactive' | 'OnLeave';
+  joiningDate: any; // Firebase Timestamp or ISO string
+  status: 'Active' | 'Inactive' | 'OnLeave' | 'Exited'; // Added 'Exited'
   qrCodeUrl?: string;
+  exitDate?: any; // Firebase Timestamp or ISO string, for 'Exited' status
   createdAt: any; // Firestore Timestamp
   updatedAt: any; // Firestore Timestamp
 
   // Fields from previous mock, to be phased out or mapped
   department?: string; // May not be needed if clientName implies department or not used
+  // emailId?: string; // Replaced by emailAddress
+  // mobileNumber?: string; // Replaced by phoneNumber
 }
 
 // Mock data for development - update with new fields
@@ -53,7 +56,7 @@ export const mockEmployees: Employee[] = [
     motherName: 'Sunita Sharma',
     maritalStatus: 'Married',
     spouseName: 'Priya Sharma',
-    district: 'Bangalore',
+    district: 'Thiruvananthapuram', // Changed for Kerala context
     panNumber: 'ABCDE1234F',
     idProofType: 'Aadhar Card',
     idProofNumber: '123456789012',
@@ -62,7 +65,7 @@ export const mockEmployees: Employee[] = [
     bankAccountNumber: '001234567890',
     ifscCode: 'HDFC0000123',
     bankName: 'HDFC Bank',
-    fullAddress: '123 MG Road, Bangalore, Karnataka',
+    fullAddress: '123 MG Road, Thiruvananthapuram, Kerala',
     emailAddress: 'aarav.sharma@example.com',
     phoneNumber: '9876543210',
     profilePictureUrl: 'https://placehold.co/150x150.png',
@@ -87,14 +90,14 @@ export const mockEmployees: Employee[] = [
     fatherName: 'Suresh Patel',
     motherName: 'Anita Patel',
     maritalStatus: 'Unmarried',
-    district: 'Ahmedabad',
+    district: 'Ernakulam', // Changed for Kerala context
     panNumber: 'FGHIJ5678K',
     idProofType: 'Voter ID',
     idProofNumber: '234567890123',
     bankAccountNumber: '002345678901',
     ifscCode: 'ICIC0000456',
     bankName: 'ICICI Bank',
-    fullAddress: '456 Park Avenue, Mumbai, Maharashtra',
+    fullAddress: '456 Park Avenue, Kochi, Kerala',
     emailAddress: 'priya.patel@example.com',
     phoneNumber: '9876543211',
     profilePictureUrl: 'https://placehold.co/150x150.png',
