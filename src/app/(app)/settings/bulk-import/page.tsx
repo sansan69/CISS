@@ -12,9 +12,17 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import axios from 'axios';
 
-// IMPORTANT: Replace this with your actual deployed Cloud Function URL
-const CLOUD_FUNCTION_URL = 'YOUR_CLOUD_FUNCTION_URL_HERE/processEmployeeCSV'; 
-// Example: 'https://us-central1-your-project-id.cloudfunctions.net/processEmployeeCSV'
+// =====================================================================================
+// IMPORTANT: ACTION REQUIRED FOR BULK IMPORT TO WORK
+//
+// The administrator MUST deploy the `processEmployeeCSV` Firebase Cloud Function
+// and then replace the placeholder URL below with the actual deployed function URL.
+//
+// Example after deployment:
+// const CLOUD_FUNCTION_URL = 'https://us-central1-your-project-id.cloudfunctions.net/processEmployeeCSV';
+//
+// =====================================================================================
+const CLOUD_FUNCTION_URL = '!!!_MUST_BE_REPLACED_WITH_DEPLOYED_FUNCTION_URL_!!!/processEmployeeCSV';
 
 export default function BulkImportPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -56,7 +64,9 @@ export default function BulkImportPage() {
       toast({ variant: "destructive", title: "No File Selected", description: "Please select a CSV file to upload." });
       return;
     }
-    if (CLOUD_FUNCTION_URL.startsWith('YOUR_CLOUD_FUNCTION_URL_HERE')) {
+    
+    // Check if the placeholder URL is still in use
+    if (CLOUD_FUNCTION_URL.includes('!!!_MUST_BE_REPLACED_WITH_DEPLOYED_FUNCTION_URL_!!!')) {
         toast({
           variant: "destructive",
           title: "Configuration Error",
@@ -93,25 +103,35 @@ export default function BulkImportPage() {
         },
       });
 
+      // The Cloud Function might take time to process after upload is complete.
+      // The frontend will show "Processing data..."
+      // The actual success/failure comes from the Cloud Function's response after it finishes its own processing.
       setStatusMessage('Processing data, please wait. This can take several minutes for large files...'); 
       
       if (response.data.success) {
         setSuccessMessage(response.data.message || `Import successful! ${response.data.recordsProcessed || 'Some'} records processed.`);
         toast({ title: "Import Complete", description: response.data.message, duration: 7000 });
         setSelectedFile(null); 
-        setStatusMessage('Import completed successfully.');
+        // Reset input field value so the same file can be re-selected if needed after an error
+        const fileInput = document.getElementById('csv-file') as HTMLInputElement;
+        if (fileInput) fileInput.value = "";
+        setStatusMessage('Import completed successfully. Select another file or navigate away.');
       } else {
+        // This case handles errors reported by the Cloud Function itself (e.g., processing errors)
         throw new Error(response.data.message || "Unknown error during processing by the Cloud Function.");
       }
     } catch (error: any) {
       console.error("Upload or processing error:", error);
       let specificError = "An unexpected error occurred.";
       if (error.response) {
+        // Error from the HTTP request itself (e.g., 404, 500 from Cloud Function endpoint before JSON response)
         specificError = error.response.data?.message || error.response.statusText || `Server error: ${error.response.status}`;
       } else if (error.request) {
+        // Request was made but no response received
         specificError = "No response from server. Check network connection or Cloud Function status and URL.";
       } else {
-        specificError = error.message || "Error setting up the request.";
+        // Error setting up the request or error thrown from the try block (e.g., from response.data.success being false)
+        specificError = error.message || "Error setting up the request or processing response.";
       }
       setErrorMessage(`Import failed: ${specificError}`);
       toast({ variant: "destructive", title: "Import Failed", description: specificError, duration: 9000 });
@@ -132,9 +152,9 @@ export default function BulkImportPage() {
           <ul className="list-disc list-inside space-y-1">
             <li>Ensure your CSV file follows the provided template format. The first row must be headers.</li>
             <li>Essential headers: <code>FirstName</code>, <code>LastName</code>, <code>PhoneNumber</code>, <code>ClientName</code>, <code>JoiningDate (YYYY-MM-DD)</code>. Many other fields are supported (see template).</li>
-            <li><code>PhotoBlob</code> column (optional): Should contain Data URIs for images (e.g., <code>data:image/jpeg;base64,...</code>). Large images will be compressed.</li>
-            <li>Supported file format: .csv. Max file size: ~200MB (Cloud Function limits apply).</li>
-            <li>Processing large files can take several minutes. Please be patient.</li>
+            <li><code>PhotoBlob</code> column (optional): Should contain Data URIs for images (e.g., <code>data:image/jpeg;base64,...</code>). Large images will be compressed by the backend.</li>
+            <li>Supported file format: .csv. Max file size: ~200MB (Cloud Function and network limits apply).</li>
+            <li>Processing large files can take several minutes. Please be patient after the upload completes.</li>
           </ul>
           <Button variant="link" className="p-0 h-auto mt-2" asChild>
             <a href="/templates/employee_import_template.csv" download data-ai-hint="download template">
@@ -152,6 +172,7 @@ export default function BulkImportPage() {
             The Cloud Function URL for bulk import is not set up correctly in the frontend code. 
             An administrator needs to deploy the `processEmployeeCSV` Firebase Cloud Function and update the 
             `CLOUD_FUNCTION_URL` constant in the file: `src/app/(app)/settings/bulk-import/page.tsx`.
+            The current placeholder is: <code>{CLOUD_FUNCTION_URL.split('/')[0]}</code>
           </AlertDescription>
         </Alert>
       )}
