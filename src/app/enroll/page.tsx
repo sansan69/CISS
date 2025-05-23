@@ -36,7 +36,7 @@ import Image from "next/image";
 import { db, storage } from "@/lib/firebase"; 
 import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot } from "firebase/firestore";
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog"; // Added DialogDescription
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSearchParams } from 'next/navigation';
 
@@ -828,6 +828,9 @@ export default function EnrollEmployeePage() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
+            <ShadDialogDescription className="sr-only">
+              Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field.
+            </ShadDialogDescription>
           </DialogHeader>
           <div className="py-4">
             {cameraError && (
@@ -861,5 +864,4 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
     
