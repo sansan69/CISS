@@ -4,100 +4,101 @@
 
 @layer base {
   :root {
-    --background: 258 34% 21%; /* Dark Purple */
-    --foreground: 220 20% 90%; /* Light Gray */
+    --background: 220 25% 96%; /* Light Gray */
+    --foreground: 220 15% 25%; /* Dark Gray */
 
-    --muted: 258 30% 35%;
-    --muted-foreground: 220 20% 70%;
+    --muted: 220 20% 88%;
+    --muted-foreground: 220 15% 45%;
 
-    --popover: 258 34% 18%;
+    --popover: 220 30% 99%; /* Almost White */
     --popover-foreground: var(--foreground);
 
-    --card: 258 30% 28%; /* Slightly Lighter Purple for card */
+    --card: 220 30% 99%; /* Almost White */
     --card-foreground: var(--foreground);
 
-    --border: 258 25% 40%;
-    --input: 258 25% 38%; /* Input background/border */
+    --border: 220 20% 80%;
+    --input: 220 20% 85%;
 
-    --primary: 40 65% 55%; /* Gold/Ochre for Continue button */
-    --primary-foreground: 258 34% 15%; /* Dark text for Gold button */
+    --primary: 230 60% 60%; /* Vibrant Blue */
+    --primary-foreground: 220 20% 98%; /* Light text for primary */
 
-    --secondary: 258 40% 50%; /* Medium Purple for other elements */
-    --secondary-foreground: var(--foreground);
+    --secondary: 230 50% 70%; /* Lighter Blue */
+    --secondary-foreground: 220 15% 20%;
 
-    --accent: 258 40% 55%; /* Medium Purple for other buttons */
-    --accent-foreground: var(--foreground);
+    --accent: 260 60% 70%; /* Expressive Purple Accent */
+    --accent-foreground: 220 20% 98%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 51%; /* Standard Destructive Red */
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 40 65% 60%; /* Gold for rings */
+    --ring: 230 60% 65%; /* Ring color based on primary */
 
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* Slightly more rounded corners */
 
-    /* Sidebar specific theme (can remain or be adjusted if needed) */
-    --sidebar-background: 231 30% 25%; 
+    /* Sidebar specific theme - can be harmonized or kept distinct */
+    --sidebar-background: 225 20% 22%; /* Darker, desaturated blue for sidebar */
     --sidebar-foreground: 220 20% 90%; 
-    --sidebar-primary: 0 0% 98%; 
-    --sidebar-primary-foreground: 231 30% 25%; 
-    --sidebar-accent: 232 38% 50%; 
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 231 30% 35%;
-    --sidebar-ring: 232 38% 62%;
+    --sidebar-primary: 220 20% 98%; /* Text on active items */
+    --sidebar-primary-foreground: 225 20% 22%; /* Background of active items */
+    --sidebar-accent: 230 50% 70%; /* Hover/focus color - same as secondary */
+    --sidebar-accent-foreground: 220 15% 20%;
+    --sidebar-border: 225 20% 30%;
+    --sidebar-ring: 230 50% 75%;
 
-    --chart-1: 40 65% 55%; /* Gold */
-    --chart-2: 258 40% 60%; /* Purple */
-    --chart-3: 258 30% 70%; /* Lighter Purple */
-    --chart-4: 220 20% 80%; /* Light Gray */
-    --chart-5: 220 29% 80%;
+    /* Chart Colors - Material 3 Style */
+    --chart-1: 230 60% 60%; /* Primary */
+    --chart-2: 260 60% 70%; /* Accent */
+    --chart-3: 200 60% 60%; /* Teal/Cyan like color */
+    --chart-4: 30 70% 65%;  /* Expressive Orange */
+    --chart-5: 320 60% 70%; /* Expressive Pink/Magenta */
   }
 
   .dark {
-    /* Dark theme can be a variation, e.g., even darker or different accent */
-    --background: 231 15% 18%; 
-    --foreground: 220 29% 95%; 
+    --background: 220 15% 15%; /* Dark Blue-Gray */
+    --foreground: 220 20% 85%; /* Light Gray Text */
 
-    --muted: 231 15% 25%;
-    --muted-foreground: 220 20% 75%;
+    --muted: 220 15% 25%;
+    --muted-foreground: 220 20% 65%;
 
-    --popover: 231 15% 12%;
-    --popover-foreground: 220 29% 95%;
+    --popover: 220 15% 12%;
+    --popover-foreground: var(--foreground);
 
-    --card: 231 15% 22%;
-    --card-foreground: 220 29% 95%;
+    --card: 220 15% 20%; /* Darker card surface */
+    --card-foreground: var(--foreground);
 
-    --border: 231 15% 30%;
-    --input: 231 15% 30%;
+    --border: 220 15% 30%;
+    --input: 220 15% 28%;
 
-    --primary: 231 48% 55%; 
-    --primary-foreground: 0 0% 98%;
+    --primary: 230 70% 70%; /* Brighter Blue for Dark Mode */
+    --primary-foreground: 220 10% 10%; /* Dark text for primary */
 
-    --secondary: 232 38% 50%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 230 60% 80%; /* Lighter Blue */
+    --secondary-foreground: 220 10% 10%;
 
-    --accent: 232 38% 70%; 
-    --accent-foreground: 231 15% 18%;
+    --accent: 260 70% 80%; /* Brighter Purple Accent */
+    --accent-foreground: 220 10% 10%;
 
-    --destructive: 0 63% 45%;
+    --destructive: 0 63% 50%; /* Darker Red */
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 231 48% 55%;
+    --ring: 230 70% 75%;
 
     /* Dark Sidebar specific theme */
-    --sidebar-background: 231 20% 12%; 
+    --sidebar-background: 225 15% 10%; 
     --sidebar-foreground: 220 20% 85%;
-    --sidebar-primary: 0 0% 98%;
-    --sidebar-primary-foreground: 231 20% 12%;
-    --sidebar-accent: 232 38% 40%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 231 20% 20%;
-    --sidebar-ring: 232 38% 70%;
+    --sidebar-primary: 220 15% 10%; 
+    --sidebar-primary-foreground: 220 20% 98%;
+    --sidebar-accent: 230 60% 80%; 
+    --sidebar-accent-foreground: 220 10% 10%;
+    --sidebar-border: 225 15% 20%;
+    --sidebar-ring: 230 60% 85%;
     
-    --chart-1: 231 48% 55%;
-    --chart-2: 232 38% 70%;
-    --chart-3: 231 40% 65%;
-    --chart-4: 232 30% 75%;
-    --chart-5: 220 29% 85%;
+    /* Chart Colors - Material 3 Style Dark */
+    --chart-1: 230 70% 70%; /* Primary Dark */
+    --chart-2: 260 70% 80%; /* Accent Dark */
+    --chart-3: 200 70% 70%; /* Teal/Cyan Dark */
+    --chart-4: 30 80% 75%;  /* Expressive Orange Dark */
+    --chart-5: 320 70% 80%; /* Expressive Pink/Magenta Dark */
   }
 }
 
@@ -107,5 +108,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Add a subtle transition for overall color changes if desired */
+    /* transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out; */
+  }
+  /* Ensure buttons and interactive elements have smooth transitions */
+  button, a, input[type="checkbox"], input[type="radio"], select {
+    @apply transition-colors duration-150 ease-in-out;
+  }
+  input, textarea, select {
+     @apply transition-all duration-150 ease-in-out; /* For border, shadow etc */
   }
 }

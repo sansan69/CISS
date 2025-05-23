@@ -39,7 +39,7 @@ export default function LandingPage() {
       return;
     }
 
-    const employee = mockEmployees.find(emp => emp.mobileNumber === normalizedPhoneNumber);
+    const employee = mockEmployees.find(emp => emp.phoneNumber === normalizedPhoneNumber); // Corrected to use phoneNumber
 
     if (employee) {
       toast({
@@ -59,7 +59,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
       <div className="absolute top-4 right-4">
-        <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle clicked!")}>
+        <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")}> {/* Theme toggle action placeholder */}
           <Sun className="h-6 w-6" />
         </Button>
       </div>
@@ -73,8 +73,6 @@ export default function LandingPage() {
             data-ai-hint="company logo"
             unoptimized={true}
             className="mx-auto"
-            style={{ border: '1px solid var(--border)', color: 'var(--destructive)' }}
-
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Employee Management System</p>
@@ -109,14 +107,14 @@ export default function LandingPage() {
       </Card>
 
       <div className="mt-8 w-full max-w-md space-y-3">
-        <Button variant="accent" className="w-full text-base py-3 justify-center" asChild>
+        <Button variant="secondary" className="w-full text-base py-3 justify-center" asChild> {/* Changed to secondary for better theme harmony */}
           <Link href="/attendance">
             <CalendarDays className="mr-2 h-5 w-5" />
             Record Attendance
             <QrCode className="ml-2 h-5 w-5" />
           </Link>
         </Button>
-        <Button variant="outline" className="w-full text-base py-3 border-accent text-accent hover:bg-accent/10 hover:text-accent" asChild>
+        <Button variant="outline" className="w-full text-base py-3" asChild> {/* Outline is generally theme-adaptive */}
           <Link href="/admin-login">
             Admin Dashboard
             <ChevronRight className="ml-2 h-5 w-5" />

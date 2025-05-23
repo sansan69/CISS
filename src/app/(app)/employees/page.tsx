@@ -3,18 +3,18 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Employee } from '@/types/employee';
+import { type Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
-import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants import
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { db, storage } from '@/lib/firebase'; // Import storage
-import { ref, deleteObject } from "firebase/storage"; // Import storage functions
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, QueryDocumentSnapshot, DocumentData, deleteField, deleteDoc } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { ref, deleteObject } from "firebase/storage";
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -84,24 +84,22 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('status', '==', filterStatus));
     }
     
-    // Basic search by Employee ID prefix
+    // Basic search by employeeId prefix
     if (searchTerm.trim() !== '') {
-      const searchTermUpper = searchTerm.trim().toUpperCase();
-      q = query(q, 
-        where('employeeId', '>=', searchTermUpper), 
-        where('employeeId', '<=', searchTermUpper + '\uf8ff')
-      );
+        const searchTermUpper = searchTerm.trim().toUpperCase();
+        q = query(q, 
+          where('employeeId', '>=', searchTermUpper), 
+          where('employeeId', '<=', searchTermUpper + '\uf8ff')
+        );
     }
     
-    if (!forCount) {
-        // Always order by employeeId first, then by createdAt for consistent pagination tie-breaking.
-        // Firestore requires that if you use a range filter on a field (like employeeId >= searchTerm),
-        // your first orderBy must be on that same field.
-        if (searchTerm.trim() !== '') {
-            q = query(q, orderBy('employeeId', 'asc'));
-        }
-        q = query(q, orderBy('createdAt', 'desc')); 
+    // Order by employeeId first if searching, then by createdAt for consistent pagination
+    if (searchTerm.trim() !== '') {
+        q = query(q, orderBy('employeeId', 'asc'));
+    }
+    q = query(q, orderBy('createdAt', 'desc')); 
 
+    if (!forCount) {
         if (direction === 'next' && lastVisibleDoc) {
             q = query(q, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
         } else if (direction === 'prev' && firstVisibleDoc) {
@@ -130,7 +128,7 @@ export default function EmployeeDirectoryPage() {
         return {
             id: docSnap.id,
             ...data,
-            // Ensure date fields are consistently handled (e.g., toISOString if they are Timestamps)
+            // Ensure Timestamps are converted to ISO strings or Date objects for client-side use
             joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
             dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
             exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
@@ -145,26 +143,35 @@ export default function EmployeeDirectoryPage() {
         setFirstVisibleDoc(documentSnapshots.docs[0]);
         setLastVisibleDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
       } else {
-        if (direction !== 'next') { 
+        if (!direction || direction !== 'next') { 
             setFirstVisibleDoc(null);
             setLastVisibleDoc(null);
         }
       }
       
-      // Check if there's a next page
-      if (direction !== 'prev' && documentSnapshots.docs.length === ITEMS_PER_PAGE) {
-        const nextQueryCheck = query(buildQuery(false, 'next'), limit(1));
-        const nextSnapshotCheck = await getDocs(nextQueryCheck);
-        setHasMoreNext(!nextSnapshotCheck.empty);
-      } else if (documentSnapshots.docs.length < ITEMS_PER_PAGE && direction !== 'prev') {
-        setHasMoreNext(false);
-      } else if (direction === 'prev') {
-        setHasMoreNext(true); // If we just went back, there's likely a next page
+      // Check for more next pages
+      if (direction !== 'prev') {
+        if (documentSnapshots.docs.length === ITEMS_PER_PAGE) {
+          const nextCheckQuery = query(collection(db, 'employees'), 
+                                      ...(filterClient !== 'all' ? [where('clientName', '==', filterClient)] : []),
+                                      ...(filterStatus !== 'all' ? [where('status', '==', filterStatus)] : []),
+                                      ...(searchTerm.trim() !== '' ? [
+                                        where('employeeId', '>=', searchTerm.trim().toUpperCase()), 
+                                        where('employeeId', '<=', searchTerm.trim().toUpperCase() + '\uf8ff'),
+                                        orderBy('employeeId', 'asc')
+                                      ] : []),
+                                      orderBy('createdAt', 'desc'),
+                                      startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), 
+                                      limit(1));
+          const nextSnapshotCheck = await getDocs(nextCheckQuery);
+          setHasMoreNext(!nextSnapshotCheck.empty);
+        } else {
+          setHasMoreNext(false);
+        }
       }
 
-
-      setHasMorePrev(currentPage > 1 || (direction === 'next' && fetchedEmployees.length > 0));
-
+      // Check for more previous pages (simplified: if not on first page)
+      setHasMorePrev(currentPage > 1);
 
     } catch (err: any) {
       console.error("Error fetching employees:", err);
@@ -175,30 +182,33 @@ export default function EmployeeDirectoryPage() {
       setIsFetchingNext(false);
       setIsFetchingPrev(false);
     }
-  }, [toast, buildQuery, currentPage]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast, buildQuery, currentPage, filterClient, filterStatus, searchTerm]); 
 
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
   
   useEffect(() => {
-    setCurrentPage(1);
-    setLastVisibleDoc(null);
+    // This effect runs when searchTerm, filterClient, or filterStatus changes
+    setCurrentPage(1); // Reset to first page
+    setLastVisibleDoc(null); // Clear pagination cursors
     setFirstVisibleDoc(null);
-    setHasMorePrev(false); 
-    fetchEmployees();
+    setHasMorePrev(false); // No previous pages when filters change
+    fetchEmployees(); // Fetch with new filters
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterClient, filterStatus]); // Removed fetchEmployees from here
+  }, [searchTerm, filterClient, filterStatus]);
+
 
   const handleNextPage = () => {
-    if (hasMoreNext) {
+    if (hasMoreNext && lastVisibleDoc) {
       setCurrentPage(prev => prev + 1);
       fetchEmployees('next');
     }
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 1) {
+    if (currentPage > 1 && firstVisibleDoc) {
       setCurrentPage(prev => prev - 1);
       fetchEmployees('prev'); 
     }
@@ -251,10 +261,17 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      // Re-fetch current page data
-      setLastVisibleDoc(null); // Reset pagination to re-fetch current view potentially
+      setLastVisibleDoc(null); 
       setFirstVisibleDoc(null);
-      fetchEmployees(); 
+      // fetchEmployees(); // This will be triggered by the filter/search useEffect if current page doesn't change or fetch current page data again
+      // To ensure refresh even if on the same page (e.g. item 1 of 1)
+      const currentEmployees = [...employees];
+      const updatedEmployees = currentEmployees.map(emp => 
+        emp.id === selectedEmployeeForStatusChange.id 
+        ? {...emp, status: newStatus, exitDate: newStatus === 'Exited' && exitDate ? exitDate.toISOString() : undefined } 
+        : emp
+      );
+      setEmployees(updatedEmployees);
       
       setIsStatusModalOpen(false);
       setSelectedEmployeeForStatusChange(null);
@@ -278,11 +295,8 @@ export default function EmployeeDirectoryPage() {
     if (!employeeToDelete) return;
     setIsDeleting(true);
     try {
-      // Delete Firestore document
       await deleteDoc(doc(db, "employees", employeeToDelete.id));
       
-
-      // Attempt to delete associated files from Firebase Storage
       const filesToDelete = [
         employeeToDelete.profilePictureUrl,
         employeeToDelete.idProofDocumentUrl,
@@ -292,29 +306,31 @@ export default function EmployeeDirectoryPage() {
       for (const fileUrl of filesToDelete) {
         if (fileUrl) {
           try {
+            // Check if it's a Firebase Storage URL before trying to delete
             if (fileUrl.startsWith("https://firebasestorage.googleapis.com/")) {
                 const storageRef = ref(storage, fileUrl);
                 await deleteObject(storageRef);
-                console.log(`Successfully deleted file: ${fileUrl}`);
-            } else {
-                console.warn(`Skipping deletion for non-Firebase Storage URL: ${fileUrl}`);
             }
           } catch (fileError: any) {
+            // Log specific file deletion errors but don't let them stop the overall process
             console.error(`Failed to delete file ${fileUrl}:`, fileError);
             toast({
               variant: "destructive",
               title: "File Deletion Warning",
               description: `Could not delete file ${fileUrl.split('/').pop()?.split('?')[0]}. You may need to remove it manually from Firebase Storage.`,
-              duration: 7000,
+              duration: 7000, // Longer duration for warning
             });
           }
         }
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
-      // Re-fetch current page data
-      setLastVisibleDoc(null); // Reset pagination to re-fetch current view
+      
+      // Refresh data after deletion
+      setCurrentPage(1); // Reset to first page
+      setLastVisibleDoc(null); 
       setFirstVisibleDoc(null);
       fetchEmployees(); 
+      
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
     } catch (err) {
@@ -356,164 +372,176 @@ export default function EmployeeDirectoryPage() {
         </Link>
       </div>
 
-      <div className="p-4 bg-card rounded-lg shadow">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by Employee ID..."
-              className="pl-8 w-full"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Select value={filterClient} onValueChange={setFilterClient}>
-            <SelectTrigger>
-              <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Filter by Client" />
-            </SelectTrigger>
-            <SelectContent>
-              {clients.map(client => (
-                <SelectItem key={client.id} value={client.name === 'All Clients' ? 'all' : client.name}>
-                  {client.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger>
-               <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Filter by Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statuses.map(status => (
-                <SelectItem key={status} value={status}>{status === 'all' ? 'All Statuses' : status}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Employee ID</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Mobile</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(isLoading && employees.length === 0) || isFetchingNext || isFetchingPrev ? ( 
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center h-24">
-                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {!isLoading && !isFetchingNext && !isFetchingPrev && employees.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center h-24">
-                    No employees found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                employees.map((emp) => (
-                <TableRow key={emp.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName} data-ai-hint="profile avatar" />
-                        <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{emp.fullName}</div>
-                        <div className="text-sm text-muted-foreground">{emp.emailAddress}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{emp.employeeId}</TableCell>
-                  <TableCell>{emp.clientName}</TableCell>
-                  <TableCell>{emp.phoneNumber}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/employees/${emp.id}`}>
-                            <Eye className="mr-2 h-4 w-4" /> View Profile
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                           <Link href={`/employees/${emp.id}?edit=true`}> 
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {emp.status !== 'Active' && (
-                          <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}>
-                            <UserCheck className="mr-2 h-4 w-4" /> Set Active
-                          </DropdownMenuItem>
-                        )}
-                        {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
-                          <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
-                            <UserX className="mr-2 h-4 w-4" /> Set Inactive
-                          </DropdownMenuItem>
-                        )}
-                        {emp.status !== 'Exited' && (
-                           <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}>
-                            <LogOutIcon className="mr-2 h-4 w-4" /> Set Exited
-                          </DropdownMenuItem>
-                        )}
-                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex justify-between items-center mt-4">
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousPage}
-                disabled={isFetchingPrev || !hasMorePrev}
-              >
-                {isFetchingPrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextPage}
-                disabled={isFetchingNext || !hasMoreNext}
-              >
-                 {isFetchingNext ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-                Next
-              </Button>
+      <Card className="shadow">
+        <CardHeader>
+            <CardTitle>Filters & Search</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                type="search"
+                placeholder="Search by Employee ID..."
+                className="pl-8 w-full"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                />
             </div>
-          </div>
-      </div>
+            <Select value={filterClient} onValueChange={setFilterClient}>
+                <SelectTrigger>
+                <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Filter by Client" />
+                </SelectTrigger>
+                <SelectContent>
+                {clients.map(client => (
+                    <SelectItem key={client.id} value={client.name === 'All Clients' ? 'all' : client.name}>
+                    {client.name}
+                    </SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger>
+                <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Filter by Status" />
+                </SelectTrigger>
+                <SelectContent>
+                {statuses.map(status => (
+                    <SelectItem key={status} value={status}>{status === 'all' ? 'All Statuses' : status}</SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+            </div>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow">
+        <CardHeader>
+            <CardTitle>Employee List</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Mobile</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {(isLoading && employees.length === 0 && !isFetchingNext && !isFetchingPrev) || isFetchingNext || isFetchingPrev ? ( 
+                    <TableRow>
+                    <TableCell colSpan={6} className="text-center h-24">
+                        <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                    </TableCell>
+                    </TableRow>
+                ) : null}
+                {!isLoading && !isFetchingNext && !isFetchingPrev && employees.length === 0 ? (
+                    <TableRow>
+                    <TableCell colSpan={6} className="text-center h-24">
+                        No employees found.
+                    </TableCell>
+                    </TableRow>
+                ) : (
+                    employees.map((emp) => (
+                    <TableRow key={emp.id}>
+                    <TableCell>
+                        <div className="flex items-center gap-3">
+                        <Avatar>
+                            <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName} data-ai-hint="profile avatar" />
+                            <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <div className="font-medium">{emp.fullName}</div>
+                            <div className="text-sm text-muted-foreground">{emp.emailAddress}</div>
+                        </div>
+                        </div>
+                    </TableCell>
+                    <TableCell>{emp.employeeId}</TableCell>
+                    <TableCell>{emp.clientName}</TableCell>
+                    <TableCell>{emp.phoneNumber}</TableCell>
+                    <TableCell>
+                        <Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                        <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                            <Link href={`/employees/${emp.id}`}>
+                                <Eye className="mr-2 h-4 w-4" /> View Profile
+                            </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                            <Link href={`/employees/${emp.id}?edit=true`}> 
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                            </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {emp.status !== 'Active' && (
+                            <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}>
+                                <UserCheck className="mr-2 h-4 w-4" /> Set Active
+                            </DropdownMenuItem>
+                            )}
+                            {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
+                            <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
+                                <UserX className="mr-2 h-4 w-4" /> Set Inactive
+                            </DropdownMenuItem>
+                            )}
+                            {emp.status !== 'Exited' && (
+                            <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}>
+                                <LogOutIcon className="mr-2 h-4 w-4" /> Set Exited
+                            </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                        </DropdownMenu>
+                    </TableCell>
+                    </TableRow>
+                )))}
+                </TableBody>
+            </Table>
+            </div>
+
+            <div className="flex justify-between items-center mt-4">
+                <span className="text-sm text-muted-foreground">
+                Page {currentPage}
+                </span>
+                <div className="flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreviousPage}
+                    disabled={isFetchingPrev || !hasMorePrev}
+                >
+                    {isFetchingPrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                    Previous
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNextPage}
+                    disabled={isFetchingNext || !hasMoreNext}
+                >
+                    {isFetchingNext ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                    Next
+                </Button>
+                </div>
+            </div>
+        </CardContent>
+      </Card>
 
       {selectedEmployeeForStatusChange && (
         <AlertDialog open={isStatusModalOpen} onOpenChange={setIsStatusModalOpen}>
@@ -521,8 +549,10 @@ export default function EmployeeDirectoryPage() {
                 <AlertDialogHeader>
                 <AlertDialogTitle>Update Status for {selectedEmployeeForStatusChange.fullName}</AlertDialogTitle>
                 <AlertDialogDescription>
-                    You are about to change the status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{newStatus}</Badge>.
-                    {newStatus === 'Exited' && " Please provide the date of exit."}
+                    <span>
+                        You are about to change the status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{newStatus}</Badge>.
+                        {newStatus === 'Exited' && " Please provide the date of exit."}
+                    </span>
                 </AlertDialogDescription>
                 </AlertDialogHeader>
                 {newStatus === 'Exited' && (
@@ -554,8 +584,10 @@ export default function EmployeeDirectoryPage() {
                 <AlertDialogFooter>
                 <AlertDialogCancel disabled={isUpdatingStatus}>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleConfirmStatusUpdate} disabled={isUpdatingStatus || (newStatus === 'Exited' && !exitDate)}>
+                  <span className="flex items-center justify-center">
                     {isUpdatingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Confirm Update
+                  </span>
                 </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
@@ -575,8 +607,10 @@ export default function EmployeeDirectoryPage() {
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeleting} onClick={() => setEmployeeToDelete(null)}>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className={buttonVariants({ variant: "destructive" })}>
+                      <span className="flex items-center justify-center">
                         {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Confirm Delete
+                      </span>
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

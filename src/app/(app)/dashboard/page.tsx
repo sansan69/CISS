@@ -2,9 +2,9 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CheckCircle, AlertTriangle, Clock } from "lucide-react"; // Removed BarChart icon import
+import { Users, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"; // Added BarChart component import
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import React from "react";
@@ -18,6 +18,7 @@ const attendanceData = [
   { date: "Sat", present: 15, absent: 0, late: 0 },
 ];
 
+// Chart config colors are now driven by CSS variables defined in globals.css
 const chartConfig = {
   present: { label: "Present", color: "hsl(var(--chart-1))" },
   absent: { label: "Absent", color: "hsl(var(--chart-2))" },
@@ -69,7 +70,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Present Today</CardTitle>
-            <CheckCircle className="h-5 w-5 text-green-500" />
+            <CheckCircle className="h-5 w-5 text-primary" /> {/* Use theme color */}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">1,150</div>
@@ -79,7 +80,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Absent Today</CardTitle>
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <AlertTriangle className="h-5 w-5 text-destructive" /> {/* Use theme color */}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">54</div>
@@ -89,7 +90,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Late Comers</CardTitle>
-            <Clock className="h-5 w-5 text-yellow-500" />
+            <Clock className="h-5 w-5 text-accent" /> {/* Use theme color for warning/neutral */}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">30</div>
