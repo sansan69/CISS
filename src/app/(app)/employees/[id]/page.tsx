@@ -4,34 +4,35 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { type Employee } from '@/types/employee'; // Ensure new fields are in Employee type
+import { type Employee } from '@/types/employee';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import QRCode from 'qrcode';
 
 const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean }> = ({ label, value, isDate }) => {
   let displayValue = 'N/A';
   if (value !== null && value !== undefined) {
     if (isDate && value instanceof Date) {
-      displayValue = format(value, "PPP"); // Format: Jan 1, 2023
-    } else if (isDate && typeof value === 'string') { // Handle ISO string dates from mock or Firestore
+      displayValue = format(value, "PPP"); 
+    } else if (isDate && typeof value === 'string') { 
       try {
         displayValue = format(new Date(value), "PPP");
       } catch (e) {
-        displayValue = String(value); // Fallback if date parsing fails
+        displayValue = String(value); 
       }
     }
-     else if (value instanceof Timestamp) { // Handle Firestore Timestamps
+     else if (value instanceof Timestamp) { 
       displayValue = format(value.toDate(), "PPP");
     }
     else {
@@ -78,7 +79,8 @@ export default function EmployeeProfilePage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = React.useState(false); // Placeholder for edit state
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
 
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -96,16 +98,12 @@ export default function EmployeeProfilePage() {
 
         if (employeeDocSnap.exists()) {
           const data = employeeDocSnap.data();
-          // Convert Firestore Timestamps to Date objects or keep as ISO strings if needed
           const formattedData: Employee = {
             ...data,
             id: employeeDocSnap.id,
-            // Ensure date fields that might be Timestamps are converted to ISO strings for consistency if needed,
-            // or directly to Date objects if DetailItem handles them.
-            // For DetailItem, passing Firestore Timestamp directly is fine.
-            joiningDate: data.joiningDate, // Keep as Timestamp or convert based on DetailItem
-            dateOfBirth: data.dateOfBirth, // Keep as Timestamp or convert
-            exitDate: data.exitDate, // Keep as Timestamp or convert
+            joiningDate: data.joiningDate, 
+            dateOfBirth: data.dateOfBirth, 
+            exitDate: data.exitDate, 
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           } as Employee;
@@ -138,11 +136,40 @@ export default function EmployeeProfilePage() {
   };
 
   const handleDownloadProfile = () => {
-    // Placeholder for actual PDF generation and download
     toast({
       title: "Download Requested",
       description: "CV/Biodata download functionality is under development.",
     });
+  };
+
+  const handleRegenerateQrCode = async () => {
+    if (!employee) return;
+    setIsRegeneratingQr(true);
+    try {
+      const dataString = `Employee ID: ${employee.employeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
+      const newQrDataUrl = await QRCode.toDataURL(dataString, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        quality: 0.92,
+        margin: 1,
+        width: 256,
+      });
+
+      const employeeDocRef = doc(db, "employees", employee.id);
+      await updateDoc(employeeDocRef, {
+        qrCodeUrl: newQrDataUrl,
+        updatedAt: serverTimestamp(),
+      });
+
+      setEmployee(prev => prev ? { ...prev, qrCodeUrl: newQrDataUrl, updatedAt: new Date().toISOString() } : null);
+      toast({ title: "QR Code Regenerated", description: "Employee QR code has been updated." });
+
+    } catch (err) {
+      console.error("Error regenerating QR code:", err);
+      toast({ variant: "destructive", title: "QR Regeneration Failed", description: "Could not regenerate the QR code." });
+    } finally {
+      setIsRegeneratingQr(false);
+    }
   };
 
   if (isLoading) {
@@ -287,8 +314,18 @@ export default function EmployeeProfilePage() {
                         ) : (
                             <p className="text-muted-foreground">QR Code not available.</p>
                         )}
-                        <Button variant="outline" className="mt-4" disabled>
-                            <QrCode className="mr-2 h-4 w-4" /> Regenerate QR (soon)
+                        <Button 
+                            variant="outline" 
+                            className="mt-4" 
+                            onClick={handleRegenerateQrCode}
+                            disabled={isRegeneratingQr}
+                        >
+                            {isRegeneratingQr ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                            ) : (
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                            )}
+                            {isRegeneratingQr ? "Regenerating..." : "Regenerate QR"}
                         </Button>
                         {employee.qrCodeUrl && employee.qrCodeUrl.startsWith('data:image/png;base64,') && (
                            <p className="text-xs text-muted-foreground mt-2 truncate w-full text-center" title={decodeURIComponent(employee.qrCodeUrl.split('data=')[1] || '')}>
@@ -337,3 +374,4 @@ export default function EmployeeProfilePage() {
     </div>
   );
 }
+
