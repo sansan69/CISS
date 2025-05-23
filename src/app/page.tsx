@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, QrCode, ChevronRight, Sun } from 'lucide-react';
+import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/types/employee';
 import Link from 'next/link';
@@ -39,7 +39,7 @@ export default function LandingPage() {
       return;
     }
 
-    const employee = mockEmployees.find(emp => emp.phoneNumber === normalizedPhoneNumber); // Corrected to use phoneNumber
+    const employee = mockEmployees.find(emp => emp.phoneNumber === normalizedPhoneNumber);
 
     if (employee) {
       toast({
@@ -59,7 +59,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
       <div className="absolute top-4 right-4">
-        <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")}> {/* Theme toggle action placeholder */}
+        <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
           <Sun className="h-6 w-6" />
         </Button>
       </div>
@@ -70,8 +70,8 @@ export default function LandingPage() {
             alt="CISS Workforce Logo"
             width={80}
             height={80}
-            data-ai-hint="company logo"
             unoptimized={true}
+            data-ai-hint="company logo"
             className="mx-auto"
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
@@ -107,17 +107,21 @@ export default function LandingPage() {
       </Card>
 
       <div className="mt-8 w-full max-w-md space-y-3">
-        <Button variant="secondary" className="w-full text-base py-3 justify-center" asChild> {/* Changed to secondary for better theme harmony */}
+        <Button variant="secondary" className="w-full text-base py-3 justify-center" asChild>
           <Link href="/attendance">
-            <CalendarDays className="mr-2 h-5 w-5" />
-            Record Attendance
-            <QrCode className="ml-2 h-5 w-5" />
+            <span className="inline-flex items-center justify-center gap-2">
+              <CalendarDays className="h-5 w-5" />
+              Record Attendance
+              <QrCode className="h-5 w-5" />
+            </span>
           </Link>
         </Button>
-        <Button variant="outline" className="w-full text-base py-3" asChild> {/* Outline is generally theme-adaptive */}
+        <Button variant="outline" className="w-full text-base py-3" asChild>
           <Link href="/admin-login">
-            Admin Dashboard
-            <ChevronRight className="ml-2 h-5 w-5" />
+            <span className="inline-flex items-center justify-center gap-2">
+              Admin Dashboard
+              <ChevronRight className="h-5 w-5" />
+            </span>
           </Link>
         </Button>
       </div>
