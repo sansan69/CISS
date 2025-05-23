@@ -9,6 +9,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Added Card imports
 import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,7 @@ export default function EmployeeDirectoryPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [statuses, setStatuses] = useState(['all', 'Active', 'Inactive', 'OnLeave', 'Exited']);
+  const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited']; // Corrected: const instead of useState
 
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
@@ -128,7 +129,6 @@ export default function EmployeeDirectoryPage() {
         return {
             id: docSnap.id,
             ...data,
-            // Ensure Timestamps are converted to ISO strings or Date objects for client-side use
             joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
             dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
             exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
@@ -149,20 +149,22 @@ export default function EmployeeDirectoryPage() {
         }
       }
       
-      // Check for more next pages
       if (direction !== 'prev') {
         if (documentSnapshots.docs.length === ITEMS_PER_PAGE) {
-          const nextCheckQuery = query(collection(db, 'employees'), 
-                                      ...(filterClient !== 'all' ? [where('clientName', '==', filterClient)] : []),
-                                      ...(filterStatus !== 'all' ? [where('status', '==', filterStatus)] : []),
-                                      ...(searchTerm.trim() !== '' ? [
-                                        where('employeeId', '>=', searchTerm.trim().toUpperCase()), 
-                                        where('employeeId', '<=', searchTerm.trim().toUpperCase() + '\uf8ff'),
-                                        orderBy('employeeId', 'asc')
-                                      ] : []),
-                                      orderBy('createdAt', 'desc'),
-                                      startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), 
-                                      limit(1));
+          let nextCheckQueryParts: any[] = [collection(db, 'employees')];
+          if (filterClient !== 'all') nextCheckQueryParts.push(where('clientName', '==', filterClient));
+          if (filterStatus !== 'all') nextCheckQueryParts.push(where('status', '==', filterStatus));
+          if (searchTerm.trim() !== '') {
+            const searchTermUpper = searchTerm.trim().toUpperCase();
+            nextCheckQueryParts.push(where('employeeId', '>=', searchTermUpper));
+            nextCheckQueryParts.push(where('employeeId', '<=', searchTermUpper + '\uf8ff'));
+            nextCheckQueryParts.push(orderBy('employeeId', 'asc'));
+          }
+          nextCheckQueryParts.push(orderBy('createdAt', 'desc'));
+          nextCheckQueryParts.push(startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]));
+          nextCheckQueryParts.push(limit(1));
+          
+          const nextCheckQuery = query.apply(null, nextCheckQueryParts as [any, ...any[]]);
           const nextSnapshotCheck = await getDocs(nextCheckQuery);
           setHasMoreNext(!nextSnapshotCheck.empty);
         } else {
@@ -170,7 +172,6 @@ export default function EmployeeDirectoryPage() {
         }
       }
 
-      // Check for more previous pages (simplified: if not on first page)
       setHasMorePrev(currentPage > 1);
 
     } catch (err: any) {
@@ -182,7 +183,6 @@ export default function EmployeeDirectoryPage() {
       setIsFetchingNext(false);
       setIsFetchingPrev(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast, buildQuery, currentPage, filterClient, filterStatus, searchTerm]); 
 
   useEffect(() => {
@@ -190,14 +190,12 @@ export default function EmployeeDirectoryPage() {
   }, [fetchClients]);
   
   useEffect(() => {
-    // This effect runs when searchTerm, filterClient, or filterStatus changes
-    setCurrentPage(1); // Reset to first page
-    setLastVisibleDoc(null); // Clear pagination cursors
+    setCurrentPage(1); 
+    setLastVisibleDoc(null); 
     setFirstVisibleDoc(null);
-    setHasMorePrev(false); // No previous pages when filters change
-    fetchEmployees(); // Fetch with new filters
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterClient, filterStatus]);
+    setHasMorePrev(false); 
+    fetchEmployees(); 
+  }, [searchTerm, filterClient, filterStatus, fetchEmployees]); // fetchEmployees added as dependency
 
 
   const handleNextPage = () => {
@@ -261,17 +259,13 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      setLastVisibleDoc(null); 
-      setFirstVisibleDoc(null);
-      // fetchEmployees(); // This will be triggered by the filter/search useEffect if current page doesn't change or fetch current page data again
-      // To ensure refresh even if on the same page (e.g. item 1 of 1)
-      const currentEmployees = [...employees];
-      const updatedEmployees = currentEmployees.map(emp => 
-        emp.id === selectedEmployeeForStatusChange.id 
-        ? {...emp, status: newStatus, exitDate: newStatus === 'Exited' && exitDate ? exitDate.toISOString() : undefined } 
-        : emp
+      setEmployees(prevEmployees => 
+        prevEmployees.map(emp => 
+          emp.id === selectedEmployeeForStatusChange.id 
+          ? {...emp, status: newStatus, exitDate: newStatus === 'Exited' && exitDate ? exitDate.toISOString() : undefined, updatedAt: new Date().toISOString() } 
+          : emp
+        )
       );
-      setEmployees(updatedEmployees);
       
       setIsStatusModalOpen(false);
       setSelectedEmployeeForStatusChange(null);
@@ -306,30 +300,30 @@ export default function EmployeeDirectoryPage() {
       for (const fileUrl of filesToDelete) {
         if (fileUrl) {
           try {
-            // Check if it's a Firebase Storage URL before trying to delete
             if (fileUrl.startsWith("https://firebasestorage.googleapis.com/")) {
                 const storageRef = ref(storage, fileUrl);
                 await deleteObject(storageRef);
             }
           } catch (fileError: any) {
-            // Log specific file deletion errors but don't let them stop the overall process
             console.error(`Failed to delete file ${fileUrl}:`, fileError);
             toast({
               variant: "destructive",
               title: "File Deletion Warning",
               description: `Could not delete file ${fileUrl.split('/').pop()?.split('?')[0]}. You may need to remove it manually from Firebase Storage.`,
-              duration: 7000, // Longer duration for warning
+              duration: 7000,
             });
           }
         }
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      // Refresh data after deletion
-      setCurrentPage(1); // Reset to first page
-      setLastVisibleDoc(null); 
-      setFirstVisibleDoc(null);
-      fetchEmployees(); 
+      setEmployees(prev => prev.filter(emp => emp.id !== employeeToDelete.id));
+      if (employees.length -1 < ITEMS_PER_PAGE && (hasMoreNext || currentPage > 1) ) {
+        setCurrentPage(1); 
+        setLastVisibleDoc(null);
+        setFirstVisibleDoc(null);
+        fetchEmployees();
+      }
       
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
@@ -342,7 +336,7 @@ export default function EmployeeDirectoryPage() {
   };
   
 
-  if (isLoading && employees.length === 0) { 
+  if (isLoading && employees.length === 0 && !isFetchingNext && !isFetchingPrev) { 
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -453,7 +447,7 @@ export default function EmployeeDirectoryPage() {
                     <TableCell>
                         <div className="flex items-center gap-3">
                         <Avatar>
-                            <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName} data-ai-hint="profile avatar" />
+                            <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName || 'Employee avatar'} data-ai-hint="profile avatar" />
                             <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -549,10 +543,10 @@ export default function EmployeeDirectoryPage() {
                 <AlertDialogHeader>
                 <AlertDialogTitle>Update Status for {selectedEmployeeForStatusChange.fullName}</AlertDialogTitle>
                 <AlertDialogDescription>
-                    <span>
-                        You are about to change the status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{newStatus}</Badge>.
-                        {newStatus === 'Exited' && " Please provide the date of exit."}
-                    </span>
+                  <span>
+                    You are about to change the status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{newStatus}</Badge>.
+                    {newStatus === 'Exited' && " Please provide the date of exit."}
+                  </span>
                 </AlertDialogDescription>
                 </AlertDialogHeader>
                 {newStatus === 'Exited' && (
@@ -619,5 +613,7 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
+
+    
 
     
