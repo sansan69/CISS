@@ -203,7 +203,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         bankName: '',
         fullAddress: '',
         emailAddress: '',
-        phoneNumber: '', 
+        phoneNumber: '',
      },
   });
 
@@ -254,12 +254,22 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        let facingMode: VideoFacingModeEnum = "user";
+        if (fieldName === "idProofDocument" || fieldName === "bankPassbookStatement") {
+          facingMode = "environment";
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
         setCameraStream(stream);
       } catch (err) {
         console.error("Error accessing camera:", err);
-        setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
-        toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
+        let errorMessage = "Could not access camera. Please ensure permission is granted in your browser settings.";
+        if (err instanceof Error && err.name === "NotAllowedError") {
+            errorMessage = "Camera access was denied. Please enable camera permissions in your browser settings.";
+        } else if (err instanceof Error && err.name === "NotFoundError") {
+            errorMessage = "No camera found. Please ensure a camera is connected and enabled.";
+        }
+        setCameraError(errorMessage);
+        toast({ variant: "destructive", title: "Camera Error", description: errorMessage });
         setIsCameraDialogOpen(false);
         setCameraStream(null);
       }
@@ -957,5 +967,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
-    
