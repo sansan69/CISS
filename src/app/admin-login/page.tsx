@@ -12,12 +12,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase'; // Import Firebase auth instance
-import { signInWithEmailAndPassword, FirebaseError } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [email, setEmail] = useState(''); // Changed from username to email
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -36,31 +36,35 @@ export default function AdminLoginPage() {
     }
 
     try {
-      // Use the email "admin@example.com" and password "admin123" 
-      // (or whatever you set in Firebase Auth console)
       await signInWithEmailAndPassword(auth, email, password);
       toast({
         title: 'Login Successful',
         description: 'Welcome, Super Admin!',
       });
-      router.push('/dashboard'); // Redirect to dashboard on successful login
-    } catch (error) {
+      router.push('/dashboard'); 
+    } catch (error: any) { // Catch error as any to inspect its properties
       let errorMessage = 'An unexpected error occurred. Please try again.';
-      if (error instanceof FirebaseError) {
+      if (error && error.code) { // Check if error object and error.code exist
         switch (error.code) {
           case 'auth/user-not-found':
           case 'auth/wrong-password':
-          case 'auth/invalid-credential':
+          case 'auth/invalid-credential': // Common error for wrong email/password
             errorMessage = 'Invalid email or password. Please try again.';
             break;
           case 'auth/invalid-email':
             errorMessage = 'Invalid email format.';
             break;
+          case 'auth/too-many-requests':
+            errorMessage = 'Too many login attempts. Please try again later.';
+            break;
           default:
-            errorMessage = `Login failed: ${error.message}`;
+            errorMessage = `Login failed: ${error.message || 'Unknown error'}`;
             break;
         }
+      } else if (error instanceof Error) {
+        errorMessage = `Login failed: ${error.message}`;
       }
+      
       toast({
         variant: 'destructive',
         title: 'Login Failed',
