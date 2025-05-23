@@ -44,7 +44,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import React, { useEffect } from 'react'; // Removed useEffect for diagnostic
+import React from 'react';
 
 interface NavItem {
   href: string;
@@ -137,8 +137,6 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter(); 
 
-  // useEffect for diagnostic removed
-
   const handleLogout = () => {
     router.push('/admin-login');
   };
@@ -149,10 +147,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarHeader className="p-4 flex items-center gap-3">
           <Image 
             src="/ciss-logo.png" 
-            alt="CISS Workforce Logo" 
+            alt="CISS Logo - Check public/ciss-logo.png" 
             width={32}
             height={32}
-            className="shrink-0"
+            className="shrink-0 border-2 border-red-500 text-red-500 text-xs"
             data-ai-hint="company logo"
             unoptimized={true}
           />

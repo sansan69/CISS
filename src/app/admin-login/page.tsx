@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect } from 'react'; // Removed useEffect for diagnostic
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,8 +13,6 @@ import Image from 'next/image';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-
-  // useEffect for diagnostic removed
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,11 +27,12 @@ export default function AdminLoginPage() {
       <header className="text-center mb-8">
          <Image
             src="/ciss-logo.png"
-            alt="CISS Workforce Logo"
+            alt="CISS Workforce Logo - If broken, check public/ciss-logo.png"
             width={80}
             height={80}
             data-ai-hint="company logo"
             unoptimized={true}
+            className="border-2 border-red-500 text-red-500 text-xs"
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Admin Portal</p>
