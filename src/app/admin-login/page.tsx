@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LogIn, HomeIcon } from 'lucide-react'; 
-import Link from 'next/link'; 
+import { LogIn, HomeIcon } from 'lucide-react';
+import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase'; // Import Firebase auth instance
@@ -41,14 +41,14 @@ export default function AdminLoginPage() {
         title: 'Login Successful',
         description: 'Welcome, Super Admin!',
       });
-      router.push('/dashboard'); 
-    } catch (error: any) { 
+      router.push('/dashboard');
+    } catch (error: any) {
       let errorMessage = 'An unexpected error occurred. Please try again.';
-      if (error && error.code) { 
+      if (error && error.code) {
         switch (error.code) {
           case 'auth/user-not-found':
           case 'auth/wrong-password':
-          case 'auth/invalid-credential': 
+          case 'auth/invalid-credential':
             errorMessage = 'Invalid email or password. Please try again.';
             break;
           case 'auth/invalid-email':
@@ -64,7 +64,7 @@ export default function AdminLoginPage() {
       } else if (error instanceof Error) {
         errorMessage = `Login failed: ${error.message}`;
       }
-      
+
       toast({
         variant: 'destructive',
         title: 'Login Failed',
@@ -77,7 +77,16 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground relative">
+      <div className="absolute top-4 right-4">
+        <Button variant="outline" asChild size="sm">
+          <Link href="/">
+            <HomeIcon className="mr-2 h-4 w-4" />
+            Home
+          </Link>
+        </Button>
+      </div>
+
       <header className="text-center mb-8">
          <Image
             src="/ciss-logo.png"
@@ -85,7 +94,7 @@ export default function AdminLoginPage() {
             width={80}
             height={80}
             data-ai-hint="company logo"
-            unoptimized={true} 
+            unoptimized={true}
             className="mx-auto"
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
@@ -103,11 +112,11 @@ export default function AdminLoginPage() {
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="admin@example.com" 
-                required 
+              <Input
+                id="email"
+                type="email"
+                placeholder="admin@example.com"
+                required
                 className="text-base"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -116,11 +125,11 @@ export default function AdminLoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                placeholder="••••••••" 
-                required 
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                required
                 className="text-base"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -147,12 +156,6 @@ export default function AdminLoginPage() {
         </CardContent>
       </Card>
        <footer className="mt-8 text-center text-sm text-muted-foreground space-y-3">
-        <Button variant="outline" asChild>
-          <Link href="/">
-            <HomeIcon className="mr-2 h-4 w-4" />
-            Home
-          </Link>
-        </Button>
         <div>&copy; {new Date().getFullYear()} CISS Workforce. All rights reserved.</div>
       </footer>
     </div>
