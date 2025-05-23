@@ -44,7 +44,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import React from 'react';
+import React, { useEffect } from 'react'; // Added useEffect
 
 interface NavItem {
   href: string;
@@ -136,6 +136,13 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter(); 
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.src = '/ciss-logo.png';
+    img.onload = () => console.log('DIAGNOSTIC: CISS Logo loaded successfully from /ciss-logo.png in AppLayout sidebar.');
+    img.onerror = (e) => console.error('DIAGNOSTIC: CISS Logo failed to load from /ciss-logo.png in AppLayout sidebar. Check if public/ciss-logo.png exists and is accessible by the server.', e);
+  }, []);
 
   const handleLogout = () => {
     router.push('/admin-login');

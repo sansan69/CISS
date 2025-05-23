@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,13 @@ export default function LandingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.src = '/ciss-logo.png';
+    img.onload = () => console.log('DIAGNOSTIC: CISS Logo loaded successfully from /ciss-logo.png on LandingPage.');
+    img.onerror = (e) => console.error('DIAGNOSTIC: CISS Logo failed to load from /ciss-logo.png on LandingPage. Check if public/ciss-logo.png exists and is accessible by the server.', e);
+  }, []);
 
   const handleContinue = () => {
     if (!/^\d{10}$/.test(phoneNumber)) {
