@@ -18,16 +18,28 @@ export default function LandingPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const handleContinue = () => {
-    if (!/^\d{10}$/.test(phoneNumber)) {
+    let normalizedPhoneNumber = phoneNumber.trim();
+
+    if (normalizedPhoneNumber.startsWith('+91')) {
+      normalizedPhoneNumber = normalizedPhoneNumber.substring(3);
+    } else if (normalizedPhoneNumber.startsWith('91')) {
+      normalizedPhoneNumber = normalizedPhoneNumber.substring(2);
+    }
+
+    // Remove any non-digit characters that might have been pasted
+    normalizedPhoneNumber = normalizedPhoneNumber.replace(/\D/g, '');
+
+
+    if (!/^\d{10}$/.test(normalizedPhoneNumber)) {
       toast({
         variant: "destructive",
         title: "Invalid Phone Number",
-        description: "Please enter a 10-digit phone number.",
+        description: "Please enter a valid 10-digit phone number. Prefixes like +91 or 91 are allowed.",
       });
       return;
     }
 
-    const employee = mockEmployees.find(emp => emp.mobileNumber === phoneNumber);
+    const employee = mockEmployees.find(emp => emp.mobileNumber === normalizedPhoneNumber);
 
     if (employee) {
       toast({
@@ -40,7 +52,7 @@ export default function LandingPage() {
         title: "Employee Not Found",
         description: "Redirecting to enrollment page.",
       });
-      router.push('/enroll'); // Updated path
+      router.push(`/enroll?phone=${normalizedPhoneNumber}`);
     }
   };
 
@@ -61,6 +73,8 @@ export default function LandingPage() {
             data-ai-hint="company logo"
             unoptimized={true}
             className="mx-auto"
+            style={{ border: '1px solid var(--border)', color: 'var(--destructive)' }}
+
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Employee Management System</p>
@@ -85,7 +99,7 @@ export default function LandingPage() {
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               className="pl-10 text-base"
-              maxLength={10}
+              maxLength={13} // Allows for +91 and 10 digits
             />
           </div>
           <Button onClick={handleContinue} className="w-full text-base py-3" variant="default">

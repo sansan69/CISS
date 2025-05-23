@@ -38,6 +38,7 @@ import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnaps
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useSearchParams } from 'next/navigation';
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -49,7 +50,7 @@ const fileSchema = z.instanceof(File, { message: "This field is required." })
 const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
-  clientName: z.string({ required_error: "Client name is required." }),
+  clientName: z.string({ required_error: "Client name is required." }).min(1, {message: "Client name is required."}),
   resourceIdNumber: z.string().optional(),
 
   // Personal Information
@@ -63,7 +64,7 @@ const enrollmentFormSchema = z.object({
   maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed", "Unmarried"], { required_error: "Marital status is required." }),
 
   // Location & Identification
-  district: z.string({ required_error: "District is required." }),
+  district: z.string({ required_error: "District is required." }).min(1, {message: "District is required."}),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
@@ -110,6 +111,9 @@ type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement
 
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const initialPhoneNumberFromQuery = searchParams.get('phone');
+
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
   const [idProofPreview, setIdProofPreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
@@ -147,11 +151,17 @@ export default function EnrollEmployeePage() {
         bankName: '',
         fullAddress: '',
         emailAddress: '',
-        phoneNumber: '',
+        phoneNumber: initialPhoneNumberFromQuery || '',
      },
   });
 
   const watchClientName = form.watch("clientName");
+
+  useEffect(() => {
+    if (initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery)) {
+      form.setValue('phoneNumber', initialPhoneNumberFromQuery, { shouldValidate: true });
+    }
+  }, [initialPhoneNumberFromQuery, form]);
 
   useEffect(() => {
     setIsLoadingClients(true);
@@ -187,18 +197,17 @@ export default function EnrollEmployeePage() {
   const openCamera = async (fieldName: CameraField) => {
     setActiveCameraField(fieldName);
     setCameraError(null);
-    setIsCameraDialogOpen(true); // Open dialog first
+    setIsCameraDialogOpen(true); 
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
         setCameraStream(stream);
-        // The useEffect will handle attaching the stream to videoRef.current and playing it
       } catch (err) {
         console.error("Error accessing camera:", err);
         setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
         toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
-        setIsCameraDialogOpen(false); // Close dialog if camera access fails
+        setIsCameraDialogOpen(false); 
         setCameraStream(null);
       }
     } else {
@@ -273,7 +282,7 @@ export default function EnrollEmployeePage() {
         setPreview(null);
       }
     } else {
-      form.setValue(fieldName, undefined as any, { shouldValidate: true }); // Use 'as any' to bypass strict File type for undefined
+      form.setValue(fieldName, undefined as any, { shouldValidate: true }); 
       setPreview(null);
     }
     if (event.target) {
@@ -360,7 +369,7 @@ export default function EnrollEmployeePage() {
       
       Object.keys(employeeDataForFirestore).forEach(keyStr => {
         const key = keyStr as keyof typeof employeeDataForFirestore;
-        if (employeeDataForFirestore[key] === undefined) { // Check for undefined only
+        if (employeeDataForFirestore[key] === undefined) { 
             delete employeeDataForFirestore[key];
         }
       });
@@ -389,6 +398,8 @@ export default function EnrollEmployeePage() {
     }
   }
   
+  const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="mb-6">
@@ -665,7 +676,7 @@ export default function EnrollEmployeePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormDescription>Your primary contact number</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>Your primary contact number. {isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription><FormMessage /></FormItem>)} />
                 </div>
               </section>
 
@@ -694,11 +705,9 @@ export default function EnrollEmployeePage() {
                 <AlertDescription>{cameraError}</AlertDescription>
               </Alert>
             )}
-            {/* Conditionally render video only when stream is available and no error */}
             {(cameraStream && !cameraError) && (
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-auto rounded-md border aspect-video bg-muted" />
             )}
-            {/* Show placeholder if stream is not ready but dialog is open and no error yet */}
             {(!cameraStream && isCameraDialogOpen && !cameraError) && (
                 <div className="w-full aspect-video bg-muted rounded-md flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -720,4 +729,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
