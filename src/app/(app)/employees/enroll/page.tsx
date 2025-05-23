@@ -26,367 +26,444 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check } from "lucide-react";
+import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
+import Link from "next/link";
+import Image from "next/image";
 
 const enrollmentFormSchema = z.object({
+  // Client Information
+  joiningDate: z.date({ required_error: "Joining date is required." }),
+  clientName: z.string({ required_error: "Client name is required." }),
+  resourceIdNumber: z.string().min(1, { message: "Resource ID number is required." }),
+
   // Personal Information
-  fullName: z.string().min(2, { message: "Full name must be at least 2 characters." }),
-  dateOfBirth: z.date({ required_error: "Date of birth is required." }),
-  gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
+  profilePicture: z.any().optional().refine(file => file?.name, "Profile picture is required."), // Assuming file object if uploaded
+  firstName: z.string().min(1, { message: "First name is required." }),
+  lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
   motherName: z.string().min(2, { message: "Mother's name is required." }),
-  maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed"], { required_error: "Marital status is required." }),
-  nationality: z.string().min(2, { message: "Nationality is required." }),
-  religion: z.string().optional(),
-  bloodGroup: z.string().optional(),
-  joiningDate: z.date({ required_error: "Joining date is required." }),
-  department: z.string().optional(),
-  employeeId: z.string().min(3, { message: "Employee ID is required." }),
-  status: z.enum(["Active", "Inactive", "OnLeave"], { required_error: "Status is required." }),
+  dateOfBirth: z.date({ required_error: "Date of birth is required." }),
+  gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
+  maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed", "Unmarried"], { required_error: "Marital status is required." }),
+
+  // Location & Identification
+  district: z.string({ required_error: "District is required." }),
+  panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
+  idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
+  idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
+  idProofDocument: z.any().optional().refine(file => file?.name, "ID proof document is required."),
+
+  // Bank Account Details
+  bankAccountNumber: z.string().min(5, { message: "Bank account number is required." }),
+  ifscCode: z.string().length(11, { message: "IFSC code must be 11 characters." }),
+  bankName: z.string().min(2, { message: "Bank name is required." }),
+  bankPassbookStatement: z.any().optional().refine(file => file?.name, "Bank passbook/statement is required."),
 
   // Contact Information
-  presentAddress: z.string().min(5, { message: "Present address is required." }),
-  permanentAddress: z.string().min(5, { message: "Permanent address is required." }),
-  mobileNumber: z.string().regex(/^\d{10}$/, { message: "Mobile number must be 10 digits." }),
-  alternateMobile: z.string().regex(/^\d{10}$/, { message: "Alternate mobile must be 10 digits." }).optional().or(z.literal('')),
-  emailId: z.string().email({ message: "Invalid email address." }),
-
-  // Identification
-  aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhar number must be 12 digits." }),
-  panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format." }),
-  uanNumber: z.string().optional(),
-  esicNumber: z.string().optional(),
-  pfNumber: z.string().optional(),
-
-  // Bank Details
-  bankName: z.string().min(2, { message: "Bank name is required." }),
-  accountNumber: z.string().min(5, { message: "Account number is required." }),
-  ifscCode: z.string().min(5, { message: "IFSC code is required." }), // Basic validation, can be improved
-  branchName: z.string().min(2, { message: "Branch name is required." }),
-
-  // Document Uploads (represented as file inputs, actual upload logic is backend)
-  profilePicture: z.any().optional(), // Using `any` for File type from input
-  idProof: z.any().optional(),
-  bankPassbook: z.any().optional(),
+  fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
+  emailAddress: z.string().email({ message: "Invalid email address." }),
+  phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
 });
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 
+const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"];
+const keralaDistricts = [
+  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
+  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
+  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
+];
+const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
+const maritalStatuses = ["Unmarried", "Married", "Divorced", "Widowed", "Single"]; // "Single" from prev, "Unmarried" in image
+
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
+  const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
+  const [idProofPreview, setIdProofPreview] = React.useState<string | null>(null);
+  const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
+
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
     defaultValues: {
-      fullName: "",
-      gender: undefined,
+      clientName: undefined,
+      resourceIdNumber: "",
+      firstName: "",
+      lastName: "",
       fatherName: "",
       motherName: "",
+      gender: undefined,
       maritalStatus: undefined,
-      nationality: "Indian",
-      religion: "",
-      bloodGroup: "",
-      employeeId: "",
-      status: "Active",
-      department: "",
-      presentAddress: "",
-      permanentAddress: "",
-      mobileNumber: "",
-      alternateMobile: "",
-      emailId: "",
-      aadharNumber: "",
+      district: undefined,
       panNumber: "",
-      uanNumber: "",
-      esicNumber: "",
-      pfNumber: "",
-      bankName: "",
-      accountNumber: "",
+      idProofType: undefined,
+      idProofNumber: "",
+      bankAccountNumber: "",
       ifscCode: "",
-      branchName: "",
+      bankName: "",
+      fullAddress: "",
+      emailAddress: "",
+      phoneNumber: "",
+      profilePicture: null,
+      idProofDocument: null,
+      bankPassbookStatement: null,
     },
   });
 
   function onSubmit(data: EnrollmentFormValues) {
     console.log(data);
-    // Here you would typically send data to your backend
     toast({
-      title: "Enrollment Submitted",
-      description: `${data.fullName} has been successfully submitted for enrollment.`,
+      title: "Registration Submitted",
+      description: `${data.firstName} ${data.lastName}'s registration has been submitted.`,
       action: <Check className="h-5 w-5 text-green-500" />,
     });
-    form.reset(); // Reset form after submission
+    form.reset();
+    setProfilePicPreview(null);
+    setIdProofPreview(null);
+    setBankPassbookPreview(null);
   }
 
-  const SectionCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {children}
-      </CardContent>
-    </Card>
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: keyof EnrollmentFormValues, setPreview: React.Dispatch<React.SetStateAction<string | null>>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      form.setValue(fieldName, file);
+      setPreview(URL.createObjectURL(file));
+    } else {
+      form.setValue(fieldName, null);
+      setPreview(null);
+    }
+  };
+  
+  const FileUploadButton: React.FC<{label: string, icon: React.ElementType, required?: boolean, currentFile?: File | null, onUploadClick: () => void, onTakePhotoClick: () => void }> = ({ label, icon: Icon, required, currentFile, onUploadClick, onTakePhotoClick }) => (
+    <div className="space-y-1 text-center">
+      <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${currentFile ? 'border-green-500 bg-green-50' : 'bg-muted'}`}>
+        {currentFile ? <Check className="h-10 w-10 text-green-600" /> : <Icon className="h-10 w-10 text-muted-foreground" />}
+      </div>
+      <p className="text-xs text-muted-foreground">{label} {required && <span className="text-destructive">*</span>}</p>
+      <div className="flex justify-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onUploadClick} className="text-xs px-2 py-1 h-auto">
+            <Upload className="mr-1 h-3 w-3" /> Upload
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onTakePhotoClick} className="text-xs px-2 py-1 h-auto">
+            <Camera className="mr-1 h-3 w-3" /> Take Photo
+          </Button>
+      </div>
+      {currentFile && <p className="text-xs text-green-600 truncate w-full px-2">{currentFile.name}</p>}
+    </div>
   );
 
+
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Enroll New Employee</h1>
-        <UserPlus className="h-8 w-8 text-primary" />
+    <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="mb-6">
+        <Link href="/" className="flex items-center text-sm text-primary hover:underline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
+        </Link>
       </div>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <SectionCard title="Personal Information">
-            <FormField
-              control={form.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl><Input placeholder="Enter full name" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="dateOfBirth"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Date of Birth</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="gender"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Gender</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name</FormLabel><FormControl><Input placeholder="Father's full name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name</FormLabel><FormControl><Input placeholder="Mother's full name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField
-              control={form.control}
-              name="maritalStatus"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Marital Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select marital status" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="Single">Single</SelectItem>
-                      <SelectItem value="Married">Married</SelectItem>
-                      <SelectItem value="Divorced">Divorced</SelectItem>
-                      <SelectItem value="Widowed">Widowed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality</FormLabel><FormControl><Input placeholder="e.g. Indian" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="religion" render={({ field }) => (<FormItem><FormLabel>Religion (Optional)</FormLabel><FormControl><Input placeholder="e.g. Hindu" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="bloodGroup" render={({ field }) => (<FormItem><FormLabel>Blood Group (Optional)</FormLabel><FormControl><Input placeholder="e.g. O+" {...field} /></FormControl><FormMessage /></FormItem>)} />
-          </SectionCard>
 
-          <SectionCard title="Employment Details">
-            <FormField control={form.control} name="employeeId" render={({ field }) => (<FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input placeholder="Enter Employee ID" {...field} /></FormControl><FormMessage /></FormItem>)} />
-             <FormField
-              control={form.control}
-              name="joiningDate"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Joining Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) => date > new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="department" render={({ field }) => (<FormItem><FormLabel>Department (Optional)</FormLabel><FormControl><Input placeholder="e.g. IT, Operations" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Inactive">Inactive</SelectItem>
-                      <SelectItem value="OnLeave">On Leave</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </SectionCard>
+      <Card className="shadow-xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
+          <CardDescription>Complete your employee profile with accurate information</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              
+              {/* Client Information */}
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="joiningDate"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Joining Date <span className="text-destructive">*</span></FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
+                                {field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date > new Date()} />
+                          </PopoverContent>
+                        </Popover>
+                        <FormDescription>Your first day of employment</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="clientName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {clientNames.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Client you are deployed with</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter TCS Resource ID Number" {...field} /></FormControl><FormDescription>This field is required for TCS employees (example)</FormDescription><FormMessage /></FormItem>)} />
+                </div>
+              </section>
 
-          <SectionCard title="Contact Information">
-            <FormField
-              control={form.control}
-              name="presentAddress"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Present Address</FormLabel>
-                  <FormControl><Textarea placeholder="Full present address" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="permanentAddress"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Permanent Address</FormLabel>
-                  <FormControl><Textarea placeholder="Full permanent address" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField control={form.control} name="mobileNumber" render={({ field }) => (<FormItem><FormLabel>Mobile Number</FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="alternateMobile" render={({ field }) => (<FormItem><FormLabel>Alternate Mobile (Optional)</FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="emailId" render={({ field }) => (<FormItem><FormLabel>Email ID</FormLabel><FormControl><Input type="email" placeholder="employee@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-          </SectionCard>
+              {/* Personal Information */}
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Personal Information</h2>
+                <FormField
+                  control={form.control}
+                  name="profilePicture"
+                  render={({ field }) => (
+                    <FormItem className="mb-6 text-center">
+                      <FormLabel className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Profile Picture <span className="text-destructive">*</span></FormLabel>
+                       <div className="flex flex-col items-center gap-4">
+                        {profilePicPreview ? (
+                          <Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border" data-ai-hint="profile photo" />
+                        ) : (
+                          <div className="flex items-center justify-center h-32 w-32 rounded-full bg-muted border">
+                            <UserCircle2 className="h-20 w-20 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}>
+                            <Upload className="mr-2 h-4 w-4" /> Upload Photo
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => alert("Camera functionality to be implemented.")}>
+                            <Camera className="mr-2 h-4 w-4" /> Take Photo
+                          </Button>
+                        </div>
+                        <FormControl>
+                           <Input 
+                            id="profilePictureInput"
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*" 
+                            onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)} 
+                          />
+                        </FormControl>
+                         <FormDescription>Upload a clear passport-sized photo (will be resized to 500x500px)</FormDescription>
+                        <FormMessage />
+                       </div>
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormDescription>Your given name</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormDescription>Your family name</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter father's name" {...field} /></FormControl><FormDescription>Your father's full name</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter mother's name" {...field} /></FormControl><FormDescription>Your mother's full name</FormDescription><FormMessage /></FormItem>)} />
+                   <FormField
+                    control={form.control}
+                    name="dateOfBirth"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
+                                {field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                          </PopoverContent>
+                        </Popover>
+                        <FormDescription>Your date of birth</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="gender"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value="Male">Male</SelectItem>
+                            <SelectItem value="Female">Female</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Your gender</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="maritalStatus"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Marital Status <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select marital status" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {maritalStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Your current marital status</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
 
-          <SectionCard title="Identification Details">
-            <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhar Number</FormLabel><FormControl><Input placeholder="12-digit Aadhar" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input placeholder="ABCDE1234F" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="uanNumber" render={({ field }) => (<FormItem><FormLabel>UAN Number (Optional)</FormLabel><FormControl><Input placeholder="Universal Account Number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number (Optional)</FormLabel><FormControl><Input placeholder="ESIC registration number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="pfNumber" render={({ field }) => (<FormItem><FormLabel>PF Number (Optional)</FormLabel><FormControl><Input placeholder="Provident Fund number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-          </SectionCard>
+              {/* Location & Identification */}
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Location & Identification</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="district"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>District <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Your current district of residence</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number (if available)" {...field} /></FormControl><FormDescription>Your Permanent Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField
+                    control={form.control}
+                    name="idProofType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Proof Type <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {idProofTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Type of identity document you're providing</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your selected identity document</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField
+                    control={form.control}
+                    name="idProofDocument"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2 text-center">
+                        <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
+                        {idProofPreview && <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>}
+                        <div className="flex justify-center gap-2">
+                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentInput')?.click()}>
+                            <Upload className="mr-2 h-4 w-4" /> Upload ID Proof
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => alert("Camera functionality to be implemented.")}>
+                            <Camera className="mr-2 h-4 w-4" /> Take Photo of ID
+                          </Button>
+                        </div>
+                        <FormControl>
+                          <Input id="idProofDocumentInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, "idProofDocument", setIdProofPreview)} />
+                        </FormControl>
+                         <FormDescription>Upload a clear photo of your ID document (will be resized to 800x600px)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
+              
+              {/* Bank Account Details */}
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter your bank account number" {...field} /></FormControl><FormDescription>The account where your salary will be deposited</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character code that uniquely identifies your bank branch</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Full name of your bank (e.g., State Bank of India)" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                   <FormField
+                    control={form.control}
+                    name="bankPassbookStatement"
+                    render={({ field }) => (
+                       <FormItem className="md:col-span-2 text-center">
+                        <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
+                        {bankPassbookPreview && <Image src={bankPassbookPreview} alt="Bank Passbook Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="bank document"/>}
+                         <div className="flex justify-center gap-2">
+                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('bankPassbookStatementInput')?.click()}>
+                            <Upload className="mr-2 h-4 w-4" /> Upload Document
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => alert("Camera functionality to be implemented.")}>
+                            <Camera className="mr-2 h-4 w-4" /> Take Photo
+                          </Button>
+                        </div>
+                        <FormControl>
+                          <Input id="bankPassbookStatementInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, "bankPassbookStatement", setBankPassbookPreview)} />
+                        </FormControl>
+                        <FormDescription>Upload a clear photo of your bank passbook or statement (will be compressed)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
 
-          <SectionCard title="Bank Account Details">
-            <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="e.g. State Bank of India" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="accountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="e.g. SBIN0001234" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name</FormLabel><FormControl><Input placeholder="e.g. Main Branch, City" {...field} /></FormControl><FormMessage /></FormItem>)} />
-          </SectionCard>
-          
-          <SectionCard title="Document Uploads" description="Upload relevant documents for verification. Max file size 5MB.">
-            <FormField
-              control={form.control}
-              name="profilePicture"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profile Picture</FormLabel>
-                  <FormControl>
-                    <Input type="file" accept="image/*" onChange={(e) => field.onChange(e.target.files ? e.target.files[0] : null)} />
-                  </FormControl>
-                  <FormDescription>Upload a clear passport-size photograph.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="idProof"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ID Proof (Aadhar/PAN/Voter ID)</FormLabel>
-                  <FormControl>
-                     <Input type="file" accept=".pdf,image/*" onChange={(e) => field.onChange(e.target.files ? e.target.files[0] : null)} />
-                  </FormControl>
-                   <FormDescription>Upload a scanned copy of your ID proof.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="bankPassbook"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Bank Passbook / Cancelled Cheque</FormLabel>
-                  <FormControl>
-                    <Input type="file" accept=".pdf,image/*" onChange={(e) => field.onChange(e.target.files ? e.target.files[0] : null)} />
-                  </FormControl>
-                  <FormDescription>Upload first page of passbook or a cancelled cheque.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </SectionCard>
+              {/* Contact Information */}
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Contact Information</h2>
+                <div className="grid grid-cols-1 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="fullAddress"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
+                        <FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl>
+                        <FormDescription>Include apartment/house number, street, area, and PIN code</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>Your email for official communications and alerts</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="+910123456787" {...field} /></FormControl><FormDescription>Your registered phone number for official communications</FormDescription><FormMessage /></FormItem>)} />
+                </div>
+              </section>
 
-          <div className="flex justify-end gap-4 pt-4">
-            <Button type="button" variant="outline" onClick={() => form.reset()}>
-              Reset Form
-            </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Submitting..." : "Enroll Employee"}
-            </Button>
-          </div>
-        </form>
-      </Form>
+              <div className="flex justify-end pt-6">
+                <Button type="submit" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 text-base" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Submitting..." : "Complete Registration"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
+
+    
