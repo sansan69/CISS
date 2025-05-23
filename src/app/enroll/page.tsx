@@ -61,7 +61,7 @@ const enrollmentFormSchema = z.object({
   motherName: z.string().min(2, { message: "Mother's name is required." }),
   dateOfBirth: z.date({ required_error: "Date of birth is required." }),
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
-  maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed", "Unmarried"], { required_error: "Marital status is required." }),
+  maritalStatus: z.enum(["Married", "Unmarried"], { required_error: "Marital status is required." }),
   spouseName: z.string().optional(),
 
   // Location & Identification
@@ -113,7 +113,7 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
-const maritalStatuses = ["Unmarried", "Married", "Divorced", "Widowed", "Single"];
+const maritalStatuses = ["Married", "Unmarried"];
 
 type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
 
