@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect } from 'react'; // Added useEffect
+import React, { useEffect } from 'react'; // Removed useEffect for diagnostic
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,12 +14,7 @@ import Image from 'next/image';
 export default function AdminLoginPage() {
   const router = useRouter();
 
-  useEffect(() => {
-    const img = new window.Image();
-    img.src = '/ciss-logo.png';
-    img.onload = () => console.log('DIAGNOSTIC: CISS Logo loaded successfully from /ciss-logo.png on AdminLoginPage.');
-    img.onerror = (e) => console.error('DIAGNOSTIC: CISS Logo failed to load from /ciss-logo.png on AdminLoginPage. Check if public/ciss-logo.png exists and is accessible by the server.', e);
-  }, []);
+  // useEffect for diagnostic removed
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
