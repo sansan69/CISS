@@ -7,34 +7,31 @@ import * as Busboy from 'busboy';
 import { v4 as uuidv4 } from 'uuid';
 import * as corsLib from 'cors';
 import { Timestamp } from 'firebase-admin/firestore';
+import * as QRCode from 'qrcode'; // Import qrcode
 
-// Initialize Firebase Admin SDK (do this once, will use the project's environment)
+// Initialize Firebase Admin SDK (do this once)
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
 const db = admin.firestore();
 const storage = admin.storage();
-const bucket = storage.bucket(); // Default bucket for the project
+const bucket = storage.bucket(); // Default bucket: <project-id>.appspot.com
 
-// Configure CORS middleware.
-// Important: For production, restrict origins to your actual app domains.
-// Example: const cors = corsLib({ origin: ["https://your-app-domain.com", "https://cisskerala.vercel.app"] });
-const cors = corsLib({ origin: true }); // Allows all for development ease, tighten later.
+const cors = corsLib({ origin: true });
 
 const runtimeOpts: functions.RuntimeOptions = {
-  timeoutSeconds: 540, // 9 minutes (maximum for HTTP functions)
-  memory: '1GB',       // Start with 1GB. Increase to '2GB' if processing many large images.
+  timeoutSeconds: 540,
+  memory: '1GB',
 };
 
-// Helper to generate Employee ID
 const getCurrentFinancialYear = (): string => {
     const now = new Date();
-    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
-    if (currentMonth >= 4) { // April or later
+    if (currentMonth >= 4) {
       return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
-    } else { // Jan, Feb, March
+    } else {
       return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
     }
 };
@@ -46,38 +43,49 @@ const generateEmployeeId = (clientName: string = "UNKNOWNCLIENT"): string => {
     return `${sanitizedClientName}/${financialYear}/${randomNumber.toString().padStart(3, '0')}`;
 };
 
-const generateQrCodeData = (employeeId: string, fullName: string, phoneNumber: string): string => {
-    // This will store the data string that the client-side qrcode library can use to generate the QR image.
-    // Storing the full data URL from the server can lead to very large strings in Firestore.
-    // The client-side enrollment already generates a data URL from a similar string.
-    return `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
+    const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+    try {
+      const dataUrl = await QRCode.toDataURL(dataString, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        quality: 0.92,
+        margin: 1,
+        width: 256, // Consistent with client-side generation
+      });
+      return dataUrl;
+    } catch (err) {
+      console.error('Server-side QR code generation failed:', err);
+      // Fallback or throw error
+      return `ERROR_GENERATING_QR_FOR:${encodeURIComponent(dataString)}`;
+    }
 };
-
 
 export const processEmployeeCSV = functions
   .runWith(runtimeOpts)
   .https.onRequest((req, res) => {
     cors(req, res, async () => {
       if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+        res.status(405).send({ success: false, message: 'Method Not Allowed' });
+        return;
       }
 
       const busboy = Busboy({ headers: req.headers });
       const employeesToProcess: any[] = [];
       let fileProcessingError: Error | null = null;
 
-      busboy.on('file', (_fieldname, fileStream, MimeInfo) => {
-        console.log(`Processing file: ${MimeInfo.filename}, MimeType: ${MimeInfo.mimeType}`);
+      busboy.on('file', (_fieldname, fileStream, MimeType) => {
+        console.log(`Processing file: ${MimeType.filename}, MimeType: ${MimeType.mimeType}`);
         fileStream
           .pipe(csvParser({
-            mapHeaders: ({ header }) => header.trim(), // Trim header whitespace
-            mapValues: ({ value }) => typeof value === 'string' ? value.trim() : value 
+            mapHeaders: ({ header }) => header.trim(),
+            mapValues: ({ value }) => typeof value === 'string' ? value.trim() : value
           }))
           .on('data', (row: any) => {
             employeesToProcess.push(row);
           })
           .on('end', () => {
-            console.log(`CSV file [${MimeInfo.filename}] parsed. ${employeesToProcess.length} rows found.`);
+            console.log(`CSV file [${MimeType.filename}] parsed. ${employeesToProcess.length} rows found.`);
           })
           .on('error', (error: Error) => {
             console.error('Error parsing CSV stream:', error);
@@ -120,20 +128,20 @@ export const processEmployeeCSV = functions
                 employeeData.joiningDate = Timestamp.fromDate(new Date(emp.JoiningDate));
             } else {
                 console.warn(`Invalid or missing JoiningDate for ${employeeData.fullName || emp.PhoneNumber}, using current date as fallback.`);
-                employeeData.joiningDate = Timestamp.now(); // Fallback or skip
+                employeeData.joiningDate = Timestamp.now(); 
             }
             if (emp.DateOfBirth && !isNaN(new Date(emp.DateOfBirth).getTime())) {
                 employeeData.dateOfBirth = Timestamp.fromDate(new Date(emp.DateOfBirth));
             } else {
                 console.warn(`Invalid or missing DateOfBirth for ${employeeData.fullName || emp.PhoneNumber}`);
-                employeeData.dateOfBirth = null; // Or handle as error
+                employeeData.dateOfBirth = null; 
             }
 
             employeeData.gender = emp.Gender || 'Other';
             employeeData.fatherName = emp.FatherName || '';
             employeeData.motherName = emp.MotherName || '';
             employeeData.maritalStatus = emp.MaritalStatus || 'Unmarried';
-            employeeData.spouseName = emp.SpouseName || ''; // Will be empty if not provided
+            employeeData.spouseName = emp.SpouseName || ''; 
             employeeData.district = emp.District || '';
             employeeData.idProofType = emp.IDProofType || '';
             employeeData.idProofNumber = emp.IDProofNumber || '';
@@ -147,13 +155,12 @@ export const processEmployeeCSV = functions
             employeeData.esicNumber = emp.ESICNumber || '';
             employeeData.resourceIdNumber = emp.ResourceIDNumber || '';
 
-            // Image Handling for 'PhotoBlob' (Profile Picture)
             if (emp.PhotoBlob && typeof emp.PhotoBlob === 'string' && emp.PhotoBlob.startsWith('data:image/')) {
               const matches = emp.PhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
               if (matches && matches.length === 3) {
                 const base64Data = matches[2];
                 const imageBuffer = Buffer.from(base64Data, 'base64');
-                const imageName = `${uuidv4()}.jpg`; // Compress to JPEG
+                const imageName = `${uuidv4()}.jpg`; 
                 const filePath = `employee_photos/${employeeData.phoneNumber || uuidv4()}/${imageName}`;
                 
                 const compressedImageBuffer = await sharp(imageBuffer)
@@ -174,21 +181,17 @@ export const processEmployeeCSV = functions
                 employeeData.profilePictureUrl = null;
             }
 
-            // Assuming IDProofDocumentURL and BankPassbookStatementURL are direct URLs if provided in CSV
-            // If they were base64 blobs, you'd handle them similarly to PhotoBlob
             employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
             employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
 
             employeeData.employeeId = generateEmployeeId(employeeData.clientName);
-            // Store the data string for the QR code. The client-side 'qrcode' library can use this.
-            employeeData.qrCodeUrl = generateQrCodeData(employeeData.employeeId, employeeData.fullName, employeeData.phoneNumber);
+            employeeData.qrCodeUrl = await generateQrCodeDataUrl(employeeData.employeeId, employeeData.fullName, employeeData.phoneNumber);
 
 
             employeeData.createdAt = admin.firestore.FieldValue.serverTimestamp();
             employeeData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
             employeeData.status = emp.Status || 'Active';
 
-            // Add only if essential fields are present (e.g., name and phone)
             if (employeeData.fullName && employeeData.phoneNumber) {
                  processedEmployeesForFirestore.push(employeeData);
             } else {
@@ -209,12 +212,12 @@ export const processEmployeeCSV = functions
             return;
         }
         
-        const batchSize = 400; // Firestore limit is 500 operations per batch
+        const batchSize = 400; 
         for (let i = 0; i < processedEmployeesForFirestore.length; i += batchSize) {
           const batch = db.batch();
           const chunk = processedEmployeesForFirestore.slice(i, i + batchSize);
           chunk.forEach((empData) => {
-            const docRef = db.collection('employees').doc(); // Auto-generate ID
+            const docRef = db.collection('employees').doc(); 
             batch.set(docRef, empData);
           });
           try {
@@ -243,4 +246,4 @@ export const processEmployeeCSV = functions
       req.pipe(busboy);
     });
   });
-
+    
