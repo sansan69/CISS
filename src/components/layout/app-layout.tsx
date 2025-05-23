@@ -34,7 +34,8 @@ import {
   LogOut,
   QrCode,
   FileUp,
-  BarChart3
+  BarChart3,
+  Briefcase // Added Briefcase icon
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -45,8 +46,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import React, { useEffect, useState } from 'react';
-import { auth } from '@/lib/firebase'; // Import Firebase auth instance
-import { onAuthStateChanged, User, signOut } from 'firebase/auth'; // Import onAuthStateChanged and User
+import { auth } from '@/lib/firebase'; 
+import { onAuthStateChanged, User, signOut } from 'firebase/auth'; 
+import { SheetTitle } from '@/components/ui/sheet';
+
 
 interface NavItem {
   href: string;
@@ -75,6 +78,7 @@ const navItems: NavItem[] = [
         { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
         { href: '/settings/qr-management', label: 'QR Management', icon: QrCode },
         { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
+        { href: '/settings/client-management', label: 'Client Management', icon: Briefcase }, // Added Client Management
     ]
   },
 ];
@@ -149,8 +153,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         setAuthUser(null);
         // If not authenticated and trying to access an authenticated page, redirect to login.
         // This check might be more robustly handled by route guards or middleware in a larger app.
-        if (router.pathname !== '/admin-login') { // Avoid redirect loop if already on login
-           // router.push('/admin-login'); // Let's comment this for now to avoid potential loops if user lands directly on protected route
+        // For now, ensure they are on admin-login or root to avoid loops
+        const publicPaths = ['/admin-login', '/'];
+        if (!publicPaths.includes(router.pathname) && !router.pathname.startsWith('/employees/enroll')) {
+            // router.push('/admin-login'); 
         }
       }
       setIsLoadingAuth(false);
@@ -182,6 +188,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             className="shrink-0"
             data-ai-hint="company logo"
             unoptimized={true}
+            style={{ border: '1px solid red', color: 'red', display: 'none' }} // Debug style, to be removed
           />
           <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>
