@@ -13,13 +13,14 @@ import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, QueryDocumentSnapshot, DocumentData, deleteField } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
+import { useRouter } from 'next/navigation';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -30,6 +31,7 @@ interface ClientOption {
 
 export default function EmployeeDirectoryPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,10 +69,9 @@ export default function EmployeeDirectoryPage() {
     }
   }, [toast]);
 
-  const buildQuery = useCallback((direction?: 'next' | 'prev') => {
+  const buildQuery = useCallback((forCount: boolean = false, direction?: 'next' | 'prev') => {
     let q = query(collection(db, 'employees'));
 
-    // Filtering
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
     }
@@ -78,30 +79,21 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('status', '==', filterStatus));
     }
     
-    // Searching (Basic - can be improved with full-text search or search array field)
-    // Firestore SDK does not support direct OR queries on different fields easily or case-insensitive partial search efficiently without specific data structuring.
-    // This search is limited. For robust search, consider a dedicated search service or denormalizing searchable fields.
     if (searchTerm.trim() !== '') {
-      // This example will only search by exact employeeId or fullName if structured for it.
-      // A common workaround is to store a `keywords` array in each document.
-      // For simplicity here, we'll filter client-side after a broader fetch if search is active, or limit search.
-      // Let's try searching by employeeId for now as an example.
+       // Simple prefix search on employeeId. For broader search, consider a keywords array or dedicated search service.
       q = query(q, where('employeeId', '>=', searchTerm.trim()), where('employeeId', '<=', searchTerm.trim() + '\uf8ff'));
-      // To search by fullName, you'd need a similar range query on a `fullName` field.
-      // Or, if you want to match anywhere in the name, it's harder.
-      // q = query(q, where('fullName', '>=', searchTerm.trim()), where('fullName', '<=', searchTerm.trim() + '\uf8ff'));
     }
     
-    // Ordering (Important for consistent pagination)
-    q = query(q, orderBy('createdAt', 'desc')); // Primary sort key
+    if (!forCount) {
+        q = query(q, orderBy('createdAt', 'desc')); 
 
-    // Pagination
-    if (direction === 'next' && lastVisibleDoc) {
-      q = query(q, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
-    } else if (direction === 'prev' && firstVisibleDoc) {
-      q = query(q, endBefore(firstVisibleDoc), limitToLast(ITEMS_PER_PAGE));
-    } else {
-      q = query(q, limit(ITEMS_PER_PAGE));
+        if (direction === 'next' && lastVisibleDoc) {
+            q = query(q, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
+        } else if (direction === 'prev' && firstVisibleDoc) {
+            q = query(q, endBefore(firstVisibleDoc), limitToLast(ITEMS_PER_PAGE));
+        } else {
+            q = query(q, limit(ITEMS_PER_PAGE));
+        }
     }
     return q;
   }, [filterClient, filterStatus, searchTerm, lastVisibleDoc, firstVisibleDoc]);
@@ -115,30 +107,42 @@ export default function EmployeeDirectoryPage() {
     setError(null);
 
     try {
-      const q = buildQuery(direction);
+      const q = buildQuery(false, direction);
       const documentSnapshots = await getDocs(q);
       
-      const fetchedEmployees = documentSnapshots.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Ensure date fields are handled (e.g. convert Timestamps if needed for display)
-        joiningDate: (doc.data().joiningDate as Timestamp)?.toDate ? (doc.data().joiningDate as Timestamp).toDate().toISOString() : doc.data().joiningDate,
-        dateOfBirth: (doc.data().dateOfBirth as Timestamp)?.toDate ? (doc.data().dateOfBirth as Timestamp).toDate().toISOString() : doc.data().dateOfBirth,
-        exitDate: (doc.data().exitDate as Timestamp)?.toDate ? (doc.data().exitDate as Timestamp).toDate().toISOString() : doc.data().exitDate,
-        createdAt: (doc.data().createdAt as Timestamp)?.toDate ? (doc.data().createdAt as Timestamp).toDate().toISOString() : doc.data().createdAt,
-        updatedAt: (doc.data().updatedAt as Timestamp)?.toDate ? (doc.data().updatedAt as Timestamp).toDate().toISOString() : doc.data().updatedAt,
-      } as Employee));
-
+      const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+            id: docSnap.id,
+            ...data,
+            joiningDate: (data.joiningDate as Timestamp)?.toDate ? (data.joiningDate as Timestamp).toDate().toISOString() : data.joiningDate,
+            dateOfBirth: (data.dateOfBirth as Timestamp)?.toDate ? (data.dateOfBirth as Timestamp).toDate().toISOString() : data.dateOfBirth,
+            exitDate: (data.exitDate as Timestamp)?.toDate ? (data.exitDate as Timestamp).toDate().toISOString() : data.exitDate,
+            createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : data.createdAt,
+            updatedAt: (data.updatedAt as Timestamp)?.toDate ? (data.updatedAt as Timestamp).toDate().toISOString() : data.updatedAt,
+        } as Employee;
+      });
+      
       setEmployees(fetchedEmployees);
       
       if (documentSnapshots.docs.length > 0) {
-        if (direction !== 'prev') setFirstVisibleDoc(documentSnapshots.docs[0]);
-        if (direction !== 'next') setLastVisibleDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+        setFirstVisibleDoc(documentSnapshots.docs[0]);
+        setLastVisibleDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+      } else {
+        if (direction !== 'next') { // if fetching first page or prev and no results
+            setFirstVisibleDoc(null);
+            setLastVisibleDoc(null);
+        }
+      }
+      
+      // Check if there are more pages
+      if (direction !== 'prev') {
+        const nextQuery = query(buildQuery(false, 'next'), limit(1)); // Check if there's at least one more item for 'next'
+        const nextSnapshot = await getDocs(nextQuery);
+        setHasMoreNext(!nextSnapshot.empty);
       }
 
-      setHasMoreNext(fetchedEmployees.length === ITEMS_PER_PAGE);
-      // setHasMorePrev logic would need to know if we are on page > 1
-      setHasMorePrev(currentPage > 1);
+      setHasMorePrev(currentPage > 1 && (direction === 'prev' || firstVisibleDoc !== null));
 
 
     } catch (err: any) {
@@ -150,21 +154,21 @@ export default function EmployeeDirectoryPage() {
       setIsFetchingNext(false);
       setIsFetchingPrev(false);
     }
-  }, [toast, buildQuery, currentPage]);
+  }, [toast, buildQuery, currentPage, firstVisibleDoc]); // Added firstVisibleDoc to dependency array
 
   useEffect(() => {
     fetchClients();
-    fetchEmployees();
-  }, [fetchClients, fetchEmployees]); // Initial fetch
-
- useEffect(() => {
-    // Debounced fetch or direct fetch on filter/search change
-    // For simplicity, direct fetch. Consider debounce for search term.
-    setCurrentPage(1); // Reset to first page on filter change
+  }, [fetchClients]);
+  
+  useEffect(() => {
+    // This useEffect handles initial load and re-fetch on filter/search changes.
+    // Reset pagination states before fetching.
+    setCurrentPage(1);
     setLastVisibleDoc(null);
     setFirstVisibleDoc(null);
+    setHasMorePrev(false); // Can't go prev from page 1
     fetchEmployees();
-  }, [searchTerm, filterClient, filterStatus]); // Removed fetchEmployees from here to avoid loop, it's called inside itself now.
+  }, [searchTerm, filterClient, filterStatus, fetchClients]); // Removed fetchEmployees from here to avoid loops if it's not stable. Added fetchClients
 
   const handleNextPage = () => {
     if (hasMoreNext) {
@@ -176,7 +180,7 @@ export default function EmployeeDirectoryPage() {
   const handlePreviousPage = () => {
     if (currentPage > 1) {
       setCurrentPage(prev => prev - 1);
-      fetchEmployees('prev'); // This might need a more complex cursor logic for true "previous"
+      fetchEmployees('prev'); 
     }
   };
 
@@ -185,7 +189,7 @@ export default function EmployeeDirectoryPage() {
     switch (status) {
       case 'Active': return 'default';
       case 'Inactive': return 'secondary';
-      case 'OnLeave': return 'outline'; // Consider a different color
+      case 'OnLeave': return 'outline'; 
       case 'Exited': return 'destructive';
       default: return 'outline';
     }
@@ -195,7 +199,7 @@ export default function EmployeeDirectoryPage() {
     setSelectedEmployeeForStatusChange(employee);
     setNewStatus(status);
     if (status === 'Exited') {
-      setExitDate(employee.exitDate ? new Date(employee.exitDate) : new Date()); // Default to today or existing
+      setExitDate(employee.exitDate ? new Date(employee.exitDate) : new Date()); 
     } else {
       setExitDate(undefined);
     }
@@ -221,15 +225,16 @@ export default function EmployeeDirectoryPage() {
         }
         updateData.exitDate = Timestamp.fromDate(exitDate);
       } else {
-        // If changing status from Exited to something else, or just updating to Active/Inactive, clear exitDate
-        updateData.exitDate = null; // Or use deleteField() if you prefer to remove it
+        updateData.exitDate = deleteField(); 
       }
 
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      // Refresh employees list
-      fetchEmployees(); // This will fetch the current page again
+      // Refresh employees list by calling fetchEmployees without arguments
+      // It will use the current filters and reset pagination to the current page, effectively refreshing it.
+      fetchEmployees(); 
+      
       setIsStatusModalOpen(false);
       setSelectedEmployeeForStatusChange(null);
       setNewStatus('');
@@ -244,7 +249,7 @@ export default function EmployeeDirectoryPage() {
   };
   
 
-  if (isLoading && employees.length === 0) { // Show full page loader only on initial load
+  if (isLoading && employees.length === 0) { 
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -253,7 +258,7 @@ export default function EmployeeDirectoryPage() {
     );
   }
 
-  if (error) {
+  if (error && employees.length === 0) {
     return (
       <div className="text-center py-10">
         <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
@@ -325,14 +330,14 @@ export default function EmployeeDirectoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && employees.length > 0 && ( // Show loader for table updates
+              {(isLoading && employees.length === 0) || isFetchingNext || isFetchingPrev ? ( 
                 <TableRow>
                   <TableCell colSpan={6} className="text-center h-24">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
-              )}
-              {!isLoading && employees.length === 0 ? (
+              ) : null}
+              {!isLoading && !isFetchingNext && !isFetchingPrev && employees.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center h-24">
                     No employees found.
@@ -372,8 +377,10 @@ export default function EmployeeDirectoryPage() {
                             <Eye className="mr-2 h-4 w-4" /> View Profile
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem disabled>
-                          <Edit className="mr-2 h-4 w-4" /> Edit (soon)
+                        <DropdownMenuItem asChild>
+                          <Link href={`/employees/${emp.id}?edit=true`}> {/* Or a dedicated edit page like /employees/${emp.id}/edit */}
+                            <Edit className="mr-2 h-4 w-4" /> Edit
+                          </Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {emp.status !== 'Active' && (
@@ -381,7 +388,7 @@ export default function EmployeeDirectoryPage() {
                             <UserCheck className="mr-2 h-4 w-4" /> Set Active
                           </DropdownMenuItem>
                         )}
-                        {emp.status !== 'Inactive' && (
+                        {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( // Don't show inactive if already exited
                           <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
                             <UserX className="mr-2 h-4 w-4" /> Set Inactive
                           </DropdownMenuItem>
@@ -413,7 +420,7 @@ export default function EmployeeDirectoryPage() {
                 variant="outline"
                 size="sm"
                 onClick={handlePreviousPage}
-                disabled={isFetchingPrev || currentPage === 1 || !hasMorePrev}
+                disabled={isFetchingPrev || currentPage === 1}
               >
                 {isFetchingPrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                 Previous
@@ -431,7 +438,6 @@ export default function EmployeeDirectoryPage() {
           </div>
       </div>
 
-      {/* Status Update Modal/Dialog */}
       {selectedEmployeeForStatusChange && (
         <AlertDialog open={isStatusModalOpen} onOpenChange={setIsStatusModalOpen}>
             <AlertDialogContent>
@@ -461,7 +467,7 @@ export default function EmployeeDirectoryPage() {
                         mode="single"
                         selected={exitDate}
                         onSelect={setExitDate}
-                        disabled={(date) => date > new Date()} // Cannot select future date
+                        disabled={(date) => date > new Date()} 
                         initialFocus
                         />
                     </PopoverContent>
@@ -481,3 +487,6 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
+
+
+    
