@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { db } from "../../../lib/firebase"; // Corrected path
+import { db, storage } from "@/lib/firebase"; // Corrected import path
 import { collection, addDoc, Timestamp, serverTimestamp } from "firebase/firestore";
 import { compressImage, uploadFileToStorage } from "@/lib/storageUtils"; // Import new utils
 
@@ -84,7 +84,7 @@ const enrollmentFormSchema = z.object({
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 
-const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"];
+const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"]; // Admin should manage this list
 const keralaDistricts = [
   "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
@@ -123,9 +123,9 @@ export default function EnrollEmployeePage() {
       fullAddress: "",
       emailAddress: "",
       phoneNumber: "",
-      profilePicture: undefined, // Will be File object
-      idProofDocument: undefined, // Will be File object
-      bankPassbookStatement: undefined, // Will be File object
+      profilePicture: undefined, 
+      idProofDocument: undefined, 
+      bankPassbookStatement: undefined, 
     },
   });
 
@@ -177,7 +177,6 @@ export default function EnrollEmployeePage() {
               .catch(err => { throw new Error(`ID proof (PDF) upload failed: ${err.message}`); })
           );
         } else {
-          // Optionally handle unsupported file types more gracefully or let Zod validation catch it earlier
           form.setError("idProofDocument", { type: "manual", message: "Unsupported file type for ID proof. Please use JPG, PNG, or PDF." });
           throw new Error("Unsupported file type for ID proof.");
         }
@@ -218,21 +217,20 @@ export default function EnrollEmployeePage() {
       toast({ title: "Saving Employee Data...", description: "Almost done."});
 
       const employeeData = {
-        ...data, // Spread validated form data
+        ...data, 
         joiningDate: Timestamp.fromDate(data.joiningDate),
         dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
         profilePictureUrl,
         idProofDocumentUrl,
         bankPassbookStatementUrl,
-        profilePicture: undefined, // Remove File object before Firestore save
-        idProofDocument: undefined, // Remove File object
-        bankPassbookStatement: undefined, // Remove File object
+        profilePicture: undefined, 
+        idProofDocument: undefined, 
+        bankPassbookStatement: undefined, 
         status: 'Active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       
-      // Ensure no undefined top-level fields are sent to Firestore
       Object.keys(employeeData).forEach(key => {
         if (employeeData[key as keyof typeof employeeData] === undefined) {
           delete employeeData[key as keyof typeof employeeData];
@@ -270,24 +268,23 @@ export default function EnrollEmployeePage() {
   ) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      // Validate file type for previews (optional, Zod handles submission validation)
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
          form.setValue(fieldName, file, { shouldValidate: true });
          if (file.type.startsWith("image/")) {
             setPreview(URL.createObjectURL(file));
          } else if (file.type === "application/pdf") {
-             setPreview("/pdf-icon.png"); // Placeholder for PDF icon, ensure this exists or use a generic one
+             setPreview("/pdf-icon.png"); // Ensure you have a pdf-icon.png in your public folder
          }
       } else {
-        form.setValue(fieldName, undefined, { shouldValidate: true }); // Or null if schema allows
+        form.setValue(fieldName, undefined, { shouldValidate: true }); 
         setPreview(null);
-        toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image (JPG, PNG) or PDF file." });
+        toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image (JPG, PNG, WEBP) or PDF file." });
       }
     } else {
-      form.setValue(fieldName, undefined, { shouldValidate: true }); // Or null
+      form.setValue(fieldName, undefined, { shouldValidate: true }); 
       setPreview(null);
     }
-    // Manually clear the input value to allow re-selecting the same file if needed
+    // Reset the input value to allow re-selection of the same file if needed
     if (event.target) {
         event.target.value = "";
     }
@@ -393,7 +390,6 @@ export default function EnrollEmployeePage() {
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}>
                             <Upload className="mr-2 h-4 w-4" /> Upload Photo
                           </Button>
-                          {/* Camera functionality can be added here */}
                         </div>
                         <FormControl>
                            <Input 
@@ -623,3 +619,4 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
+
