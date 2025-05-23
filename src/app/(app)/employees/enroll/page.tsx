@@ -56,6 +56,8 @@ const enrollmentFormSchema = z.object({
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
   idProofDocument: z.any().optional().refine(file => file?.name, "ID proof document is required."),
+  epfUanNumber: z.string().optional(),
+  esicNumber: z.string().optional(),
 
   // Bank Account Details
   bankAccountNumber: z.string().min(5, { message: "Bank account number is required." }),
@@ -110,6 +112,8 @@ export default function EnrollEmployeePage() {
       panNumber: "",
       idProofType: undefined,
       idProofNumber: "",
+      epfUanNumber: "",
+      esicNumber: "",
       bankAccountNumber: "",
       ifscCode: "",
       bankName: "",
@@ -356,7 +360,7 @@ export default function EnrollEmployeePage() {
                       </FormItem>
                     )}
                   />
-                  <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number (if available)" {...field} /></FormControl><FormDescription>Your Permanent Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
                   <FormField
                     control={form.control}
                     name="idProofType"
@@ -375,10 +379,12 @@ export default function EnrollEmployeePage() {
                     )}
                   />
                   <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your selected identity document</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>Employees' State Insurance Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                   <FormField
                     control={form.control}
                     name="idProofDocument"
-                    render={({ field }) => ( // field is passed but not directly used for value
+                    render={({ field }) => ( 
                       <FormItem className="md:col-span-2 text-center">
                         <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
                         {idProofPreview && <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>}
@@ -411,7 +417,7 @@ export default function EnrollEmployeePage() {
                    <FormField
                     control={form.control}
                     name="bankPassbookStatement"
-                    render={({ field }) => ( // field is passed but not directly used for value
+                    render={({ field }) => ( 
                        <FormItem className="md:col-span-2 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         {bankPassbookPreview && <Image src={bankPassbookPreview} alt="Bank Passbook Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="bank document"/>}
