@@ -210,18 +210,20 @@ export default function EnrollEmployeePage() {
                       </FormItem>
                     )}
                   />
-                  <FormField 
-                    control={form.control} 
-                    name="resourceIdNumber" 
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Resource ID Number {watchClientName === "TCS" && <span className="text-destructive">*</span>}</FormLabel>
-                        <FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl>
-                        <FormDescription>Required if client is TCS. E.g., TCS12345</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )} 
-                  />
+                  {watchClientName === "TCS" && (
+                    <FormField 
+                      control={form.control} 
+                      name="resourceIdNumber" 
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl>
+                          <FormDescription>Required if client is TCS. E.g., TCS12345</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} 
+                    />
+                  )}
                 </div>
               </section>
 
