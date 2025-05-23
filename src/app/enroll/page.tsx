@@ -399,6 +399,10 @@ export default function EnrollEmployeePage() {
   }
   
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
+  const currentYear = new Date().getFullYear();
+  const fromYear = currentYear - 70; // Approx 70 years ago
+  const toYear = currentYear;
+  const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25)); // Default to 25 years ago
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -544,7 +548,16 @@ export default function EnrollEmployeePage() {
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                            <Calendar 
+                              mode="single" 
+                              selected={field.value} 
+                              onSelect={field.onChange} 
+                              disabled={(date) => date > new Date() || date < new Date(fromYear, 0, 1)}
+                              captionLayout="dropdown-buttons"
+                              fromYear={fromYear}
+                              toYear={toYear}
+                              defaultMonth={defaultCalendarMonth}
+                            />
                           </PopoverContent>
                         </Popover>
                         <FormDescription>Your date of birth</FormDescription>
@@ -729,3 +742,4 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
+
