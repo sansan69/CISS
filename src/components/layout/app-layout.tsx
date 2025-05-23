@@ -48,7 +48,8 @@ import {
 import React, { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, User, signOut } from 'firebase/auth'; 
-import { SheetTitle } from '@/components/ui/sheet';
+// Removed SheetTitle import as it's not correctly used here.
+// If an accessible name is needed for the sidebar itself, aria-label or a generic sr-only span would be more appropriate.
 
 
 interface NavItem {
@@ -188,7 +189,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             data-ai-hint="company logo"
             unoptimized={true}
           />
-          <SheetTitle className="sr-only">CISS Workforce Sidebar Menu</SheetTitle>
+          {/* Removed SheetTitle from here as it's not within a Sheet/Dialog context */}
           <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>
         <SidebarContent>
