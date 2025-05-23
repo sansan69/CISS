@@ -38,10 +38,10 @@ const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
   clientName: z.string({ required_error: "Client name is required." }),
-  resourceIdNumber: z.string().min(1, { message: "Resource ID number is required." }),
+  resourceIdNumber: z.string().optional(), // Optional by default
 
   // Personal Information
-  profilePicture: z.any().optional().refine(file => file?.name, "Profile picture is required."), // Assuming file object if uploaded
+  profilePicture: z.any().optional().refine(file => file?.name, "Profile picture is required."),
   firstName: z.string().min(1, { message: "First name is required." }),
   lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
@@ -67,10 +67,19 @@ const enrollmentFormSchema = z.object({
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
   emailAddress: z.string().email({ message: "Invalid email address." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
+}).superRefine((data, ctx) => {
+  if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Resource ID number is required for TCS client.",
+      path: ["resourceIdNumber"],
+    });
+  }
 });
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 
+// In a real application, this list would be dynamic and managed by an admin.
 const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"];
 const keralaDistricts = [
   "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
@@ -78,7 +87,7 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
-const maritalStatuses = ["Unmarried", "Married", "Divorced", "Widowed", "Single"]; // "Single" from prev, "Unmarried" in image
+const maritalStatuses = ["Unmarried", "Married", "Divorced", "Widowed", "Single"];
 
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
@@ -113,6 +122,8 @@ export default function EnrollEmployeePage() {
     },
   });
 
+  const watchClientName = form.watch("clientName");
+
   function onSubmit(data: EnrollmentFormValues) {
     console.log(data);
     toast({
@@ -129,7 +140,7 @@ export default function EnrollEmployeePage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: keyof EnrollmentFormValues, setPreview: React.Dispatch<React.SetStateAction<string | null>>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      form.setValue(fieldName, file);
+      form.setValue(fieldName, file); // Store the File object
       setPreview(URL.createObjectURL(file));
     } else {
       form.setValue(fieldName, null);
@@ -137,25 +148,6 @@ export default function EnrollEmployeePage() {
     }
   };
   
-  const FileUploadButton: React.FC<{label: string, icon: React.ElementType, required?: boolean, currentFile?: File | null, onUploadClick: () => void, onTakePhotoClick: () => void }> = ({ label, icon: Icon, required, currentFile, onUploadClick, onTakePhotoClick }) => (
-    <div className="space-y-1 text-center">
-      <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${currentFile ? 'border-green-500 bg-green-50' : 'bg-muted'}`}>
-        {currentFile ? <Check className="h-10 w-10 text-green-600" /> : <Icon className="h-10 w-10 text-muted-foreground" />}
-      </div>
-      <p className="text-xs text-muted-foreground">{label} {required && <span className="text-destructive">*</span>}</p>
-      <div className="flex justify-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onUploadClick} className="text-xs px-2 py-1 h-auto">
-            <Upload className="mr-1 h-3 w-3" /> Upload
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onTakePhotoClick} className="text-xs px-2 py-1 h-auto">
-            <Camera className="mr-1 h-3 w-3" /> Take Photo
-          </Button>
-      </div>
-      {currentFile && <p className="text-xs text-green-600 truncate w-full px-2">{currentFile.name}</p>}
-    </div>
-  );
-
-
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="mb-6">
@@ -213,12 +205,23 @@ export default function EnrollEmployeePage() {
                             {clientNames.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                        <FormDescription>Client you are deployed with</FormDescription>
+                        <FormDescription>Client you are deployed with. (Admin can manage this list)</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter TCS Resource ID Number" {...field} /></FormControl><FormDescription>This field is required for TCS employees (example)</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField 
+                    control={form.control} 
+                    name="resourceIdNumber" 
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Resource ID Number {watchClientName === "TCS" && <span className="text-destructive">*</span>}</FormLabel>
+                        <FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl>
+                        <FormDescription>Required if client is TCS. E.g., TCS12345</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )} 
+                  />
                 </div>
               </section>
 
@@ -228,9 +231,9 @@ export default function EnrollEmployeePage() {
                 <FormField
                   control={form.control}
                   name="profilePicture"
-                  render={({ field }) => (
+                  render={({ field }) => ( // field is passed but not directly used for value, onChange for file input is custom
                     <FormItem className="mb-6 text-center">
-                      <FormLabel className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Profile Picture <span className="text-destructive">*</span></FormLabel>
+                      <FormLabel className="block mb-2 text-sm font-medium">Profile Picture <span className="text-destructive">*</span></FormLabel>
                        <div className="flex flex-col items-center gap-4">
                         {profilePicPreview ? (
                           <Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border" data-ai-hint="profile photo" />
@@ -253,7 +256,7 @@ export default function EnrollEmployeePage() {
                             type="file" 
                             className="hidden" 
                             accept="image/*" 
-                            onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)} 
+                            onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
                          <FormDescription>Upload a clear passport-sized photo (will be resized to 500x500px)</FormDescription>
@@ -373,7 +376,7 @@ export default function EnrollEmployeePage() {
                   <FormField
                     control={form.control}
                     name="idProofDocument"
-                    render={({ field }) => (
+                    render={({ field }) => ( // field is passed but not directly used for value
                       <FormItem className="md:col-span-2 text-center">
                         <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
                         {idProofPreview && <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>}
@@ -406,7 +409,7 @@ export default function EnrollEmployeePage() {
                    <FormField
                     control={form.control}
                     name="bankPassbookStatement"
-                    render={({ field }) => (
+                    render={({ field }) => ( // field is passed but not directly used for value
                        <FormItem className="md:col-span-2 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         {bankPassbookPreview && <Image src={bankPassbookPreview} alt="Bank Passbook Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="bank document"/>}
@@ -464,6 +467,5 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
 
     
