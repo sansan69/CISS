@@ -35,7 +35,7 @@ import {
   QrCode,
   FileUp,
   BarChart3,
-  Briefcase // Added Briefcase icon
+  Briefcase
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -66,7 +66,7 @@ const navItems: NavItem[] = [
     icon: Users,
     subItems: [
       { href: '/employees', label: 'Directory', icon: Users },
-      { href: '/employees/enroll', label: 'Enroll New', icon: UserPlus },
+      { href: '/enroll', label: 'Enroll New', icon: UserPlus }, // Updated path
     ],
   },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
         { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
         { href: '/settings/qr-management', label: 'QR Management', icon: QrCode },
         { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
-        { href: '/settings/client-management', label: 'Client Management', icon: Briefcase }, // Added Client Management
+        { href: '/settings/client-management', label: 'Client Management', icon: Briefcase },
     ]
   },
 ];
@@ -151,12 +151,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         setAuthUser(user);
       } else {
         setAuthUser(null);
-        // If not authenticated and trying to access an authenticated page, redirect to login.
-        // This check might be more robustly handled by route guards or middleware in a larger app.
-        // For now, ensure they are on admin-login or root to avoid loops
-        const publicPaths = ['/admin-login', '/'];
-        if (!publicPaths.includes(router.pathname) && !router.pathname.startsWith('/employees/enroll')) {
-            // router.push('/admin-login'); 
+        const publicPaths = ['/admin-login', '/', '/enroll']; // Added /enroll
+        if (!publicPaths.includes(router.pathname) && !router.pathname.startsWith('/enroll')) { // Check /enroll explicitly
+             router.push('/admin-login'); 
         }
       }
       setIsLoadingAuth(false);
@@ -172,7 +169,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       router.push('/admin-login');
     } catch (error) {
       console.error("Error signing out: ", error);
-      // Handle logout error (e.g., show a toast)
     }
   };
 
@@ -188,7 +184,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
             className="shrink-0"
             data-ai-hint="company logo"
             unoptimized={true}
-            style={{ border: '1px solid red', color: 'red', display: 'none' }} // Debug style, to be removed
           />
           <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>

@@ -40,7 +40,7 @@ export default function LandingPage() {
         title: "Employee Not Found",
         description: "Redirecting to enrollment page.",
       });
-      router.push('/employees/enroll');
+      router.push('/enroll'); // Updated path
     }
   };
 
