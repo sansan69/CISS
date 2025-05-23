@@ -136,6 +136,9 @@ export default function EnrollEmployeePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
+  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
+
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
@@ -392,8 +395,6 @@ export default function EnrollEmployeePage() {
         toast({ title: "All Files Uploaded", description: "File uploads completed successfully. Proceeding to save data."});
       } else {
         toast({ title: "No Files to Upload", description: "Skipping file upload step. Note: File fields are currently required."});
-        // Check if file fields are truly optional by schema or if this is an error state.
-        // For now, assuming fileSchema makes them required.
         if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
             throw new Error("Required document files are missing.");
         }
@@ -401,8 +402,6 @@ export default function EnrollEmployeePage() {
       
       toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
 
-      // Ensure URLs are not null if files were expected
-      // Zod schema requires these files, so their URLs should be populated if uploads succeeded
       if (!profilePictureUrl || !idProofDocumentUrl || !bankPassbookStatementUrl) {
           console.error("One or more file URLs are null after upload attempts. Profile:", profilePictureUrl, "ID:", idProofDocumentUrl, "Bank:", bankPassbookStatementUrl);
           throw new Error("A required document failed to upload or its URL was not retrieved. Cannot save record.");
@@ -432,9 +431,9 @@ export default function EnrollEmployeePage() {
         fullAddress: data.fullAddress,
         emailAddress: data.emailAddress,
         phoneNumber: data.phoneNumber,
-        profilePictureUrl, // Must be non-null if required by schema
-        idProofDocumentUrl,  // Must be non-null
-        bankPassbookStatementUrl, // Must be non-null
+        profilePictureUrl, 
+        idProofDocumentUrl,  
+        bankPassbookStatementUrl, 
         status: 'Active', 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -445,9 +444,8 @@ export default function EnrollEmployeePage() {
 
       for (const key in employeeDataForFirestore) {
         const value = (employeeDataForFirestore as any)[key];
-        if (value !== undefined) { // Keep nulls if they are URLs from failed uploads (should be caught above)
+        if (value !== undefined) { 
           if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
-            // Skip adding empty optional strings
             continue;
           }
           finalDataForFirestore[key] = value;
@@ -486,7 +484,7 @@ export default function EnrollEmployeePage() {
         variant: "destructive",
         title: "Registration Failed",
         description: description,
-        duration: 9000, // Longer duration for error messages
+        duration: 9000, 
       });
     } finally {
       setIsLoading(false);
@@ -525,7 +523,7 @@ export default function EnrollEmployeePage() {
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Joining Date <span className="text-destructive">*</span></FormLabel>
-                        <Popover>
+                        <Popover open={isJoiningDatePopoverOpen} onOpenChange={setIsJoiningDatePopoverOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -535,7 +533,16 @@ export default function EnrollEmployeePage() {
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date > new Date()} />
+                            <Calendar 
+                              mode="single" 
+                              selected={field.value} 
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                setIsJoiningDatePopoverOpen(false);
+                              }} 
+                              initialFocus 
+                              disabled={(date) => date > new Date()} 
+                            />
                           </PopoverContent>
                         </Popover>
                         <FormDescription>Your first day of employment</FormDescription>
@@ -633,7 +640,7 @@ export default function EnrollEmployeePage() {
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
-                        <Popover>
+                        <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -646,7 +653,10 @@ export default function EnrollEmployeePage() {
                             <Calendar 
                               mode="single" 
                               selected={field.value} 
-                              onSelect={field.onChange} 
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                setIsDobPopoverOpen(false);
+                              }}
                               disabled={(date) => date > new Date() || date < new Date(fromYear, 0, 1)}
                               captionLayout="dropdown-buttons"
                               fromYear={fromYear}
