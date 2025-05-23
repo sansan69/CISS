@@ -30,7 +30,7 @@ import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserC
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState, useRef } from "react";
+import React, { Suspense, useEffect, useState, useRef } from "react"; // Added Suspense
 import Link from "next/link";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase";
@@ -143,19 +143,18 @@ const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phone
     const dataUrl = await QRCode.toDataURL(dataString, {
       errorCorrectionLevel: 'H',
       type: 'image/png',
-      quality: 0.92, // For PNG, quality is more about compression options if library supports, often ignored.
+      quality: 0.92,
       margin: 1,
-      width: 256, // Specify width for the QR code image
+      width: 256,
     });
     return dataUrl;
   } catch (err) {
     console.error('QR code generation failed:', err);
-    throw new Error('Failed to generate QR code.'); // Propagate error
+    throw new Error('Failed to generate QR code.');
   }
 };
 
-
-export default function EnrollEmployeePage() {
+function EnrollmentFormContent() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -202,7 +201,7 @@ export default function EnrollEmployeePage() {
         bankName: '',
         fullAddress: '',
         emailAddress: '',
-        phoneNumber: initialPhoneNumberFromQuery || '',
+        phoneNumber: '', // Initialize as empty, will be set by useEffect
      },
   });
 
@@ -355,10 +354,10 @@ export default function EnrollEmployeePage() {
       const phoneNumber = data.phoneNumber.replace(/\D/g, "");
       const fullName = `${data.firstName} ${data.lastName}`;
 
+      toast({ title: "Generating Unique IDs...", description: "Creating Employee ID and QR code." });
       const newEmployeeId = generateEmployeeId(data.clientName);
-      toast({ title: "Generating QR Code...", description: "Creating QR code for the employee." });
       const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
-      toast({ title: "QR Code Generated", description: "QR code created successfully." });
+      toast({ title: "IDs Generated", description: "Employee ID and QR code created successfully." });
 
 
       toast({ title: "File Processing", description: "Preparing files for upload..." });
@@ -442,15 +441,19 @@ export default function EnrollEmployeePage() {
       } else {
          toast({ title: "No Files to Upload", description: "Skipping file upload step as no files were provided or required."});
          if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
-             console.warn("Required document files are missing based on schema, but proceeding without them based on current logic path.");
+             // This condition is too strict since fields are mandatory by schema
+             // A better check would be if any of the data.fieldName is null/undefined
+             // However, schema enforces they are File objects, so this path should ideally not be hit
+             // if form validation passed and files were selected.
+             console.warn("File upload was skipped. This could mean no files were selected or an unexpected issue occurred. Schema requires files.");
          }
       }
 
       toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
 
-      if (!profilePictureUrl) throw new Error("Profile picture failed to upload or its URL was not retrieved.");
-      if (!idProofDocumentUrl) throw new Error("ID proof document failed to upload or its URL was not retrieved.");
-      if (!bankPassbookStatementUrl) throw new Error("Bank passbook document failed to upload or its URL was not retrieved.");
+      if (!profilePictureUrl) throw new Error("Profile picture URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
+      if (!idProofDocumentUrl) throw new Error("ID proof document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
+      if (!bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
 
 
       const employeeDataForFirestore = {
@@ -460,7 +463,7 @@ export default function EnrollEmployeePage() {
         resourceIdNumber: data.resourceIdNumber,
         firstName: data.firstName,
         lastName: data.lastName,
-        fullName: fullName, 
+        fullName: fullName,
         fatherName: data.fatherName,
         motherName: data.motherName,
         joiningDate: Timestamp.fromDate(data.joiningDate),
@@ -493,9 +496,9 @@ export default function EnrollEmployeePage() {
 
       for (const key in employeeDataForFirestore) {
         const value = (employeeDataForFirestore as any)[key];
-        if (value !== undefined) {
+        if (value !== undefined) { 
           if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
-            continue; 
+            continue;
           }
           finalDataForFirestore[key] = value;
         }
@@ -516,7 +519,7 @@ export default function EnrollEmployeePage() {
       setIdProofPreview(null);
       setBankPassbookPreview(null);
 
-      router.push(`/employees/${docRef.id}`); 
+      router.push(`/employees/${docRef.id}`);
 
     } catch (error: any) {
       console.error("Detailed Registration or Upload Error: ", error, error.stack);
@@ -527,7 +530,7 @@ export default function EnrollEmployeePage() {
         description = error;
       } else {
         try {
-          description = JSON.stringify(error);
+          description = JSON.stringify(error); 
         } catch (e) {
            description = "An unknown error occurred during submission. Check console for details."
         }
@@ -549,14 +552,9 @@ export default function EnrollEmployeePage() {
   const toYear = currentYear;
   const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25));
 
-  return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-6">
-        <Link href="/" className="flex items-center text-sm text-primary hover:underline">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-        </Link>
-      </div>
 
+  return (
+    <>
       <Card className="shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
@@ -912,8 +910,38 @@ export default function EnrollEmployeePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-    </div>
+    </>
   );
 }
 
+function EnrollmentPageSkeleton() {
+  return (
+    <Card className="shadow-xl">
+      <CardHeader className="text-center">
+        <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
+        <CardDescription>Loading form...</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex justify-center items-center h-96">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+          <p className="ml-4 text-lg text-muted-foreground">Preparing enrollment form...</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function EnrollEmployeePage() {
+  return (
+    <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="mb-6">
+        <Link href="/" className="flex items-center text-sm text-primary hover:underline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
+        </Link>
+      </div>
+      <Suspense fallback={<EnrollmentPageSkeleton />}>
+        <EnrollmentFormContent />
+      </Suspense>
+    </div>
+  );
+}
