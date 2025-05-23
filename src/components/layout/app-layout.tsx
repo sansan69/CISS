@@ -3,7 +3,8 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
+import Image from 'next/image'; // Added Image import
+import { usePathname, useRouter } from 'next/navigation'; 
 import {
   SidebarProvider,
   Sidebar,
@@ -30,7 +31,6 @@ import {
   Settings,
   ChevronDown,
   ChevronUp,
-  Briefcase,
   LogOut,
   QrCode,
   FileUp,
@@ -135,7 +135,7 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const router = useRouter(); // Initialize router
+  const router = useRouter(); 
 
   const handleLogout = () => {
     router.push('/admin-login');
@@ -144,9 +144,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider defaultOpen>
       <Sidebar className="border-r">
-        <SidebarHeader className="p-4 flex items-center gap-2">
-          <Briefcase className="w-8 h-8 text-primary" />
-          <h1 className="text-xl font-semibold text-sidebar-primary">CISS Workforce</h1>
+        <SidebarHeader className="p-4 flex items-center gap-3"> {/* Increased gap slightly */}
+          <Image 
+            src="/ciss-logo.png" 
+            alt="CISS Workforce Logo" 
+            width={32}  // Adjusted size for sidebar
+            height={32}
+            className="shrink-0" // Prevents image from shrinking too much
+            data-ai-hint="company logo"
+          />
+          <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
@@ -181,7 +188,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}> {/* Added onClick handler */}
+              <DropdownMenuItem onClick={handleLogout}> 
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>

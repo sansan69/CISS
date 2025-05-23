@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Briefcase, LogIn } from 'lucide-react'; // Added LogIn icon
-import Link from 'next/link'; // Added import for Link
+import { LogIn } from 'lucide-react'; 
+import Link from 'next/link'; 
+import Image from 'next/image';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -24,8 +25,14 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
       <header className="text-center mb-8">
-         <div className="inline-block p-3 bg-gray-700/30 rounded-lg mb-4" data-ai-hint="company logo">
-          <Briefcase className="h-12 w-12 text-primary" />
+         <div className="mb-4" data-ai-hint="company logo">
+            <Image
+                src="/ciss-logo.png"
+                alt="CISS Workforce Logo"
+                width={80}
+                height={80}
+                priority
+            />
         </div>
         <h1 className="text-4xl font-bold text-foreground">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Admin Portal</p>

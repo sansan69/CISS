@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, QrCode, ChevronRight, Sun, Briefcase } from 'lucide-react';
+import { Phone, CalendarDays, QrCode, ChevronRight, Sun } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/types/employee';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -52,9 +53,14 @@ export default function LandingPage() {
       </div>
 
       <header className="text-center mb-8">
-        <div className="inline-block p-3 bg-gray-700/30 rounded-lg mb-4" data-ai-hint="company logo">
-          {/* Placeholder for CP logo, using Briefcase for now */}
-          <Briefcase className="h-12 w-12 text-primary" />
+        <div className="mb-4" data-ai-hint="company logo">
+          <Image
+            src="/ciss-logo.png"
+            alt="CISS Workforce Logo"
+            width={80}
+            height={80}
+            priority
+          />
         </div>
         <h1 className="text-4xl font-bold text-foreground">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Employee Management System</p>
