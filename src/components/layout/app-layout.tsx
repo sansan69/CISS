@@ -147,10 +147,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarHeader className="p-4 flex items-center gap-3">
           <Image 
             src="/ciss-logo.png" 
-            alt="CISS Logo - Check public/ciss-logo.png" 
+            alt="CISS Logo"
             width={32}
             height={32}
-            className="shrink-0 border-2 border-red-500 text-red-500 text-xs"
+            className="shrink-0"
             data-ai-hint="company logo"
             unoptimized={true}
           />

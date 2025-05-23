@@ -27,12 +27,12 @@ export default function AdminLoginPage() {
       <header className="text-center mb-8">
          <Image
             src="/ciss-logo.png"
-            alt="CISS Workforce Logo - If broken, check public/ciss-logo.png"
+            alt="CISS Workforce Logo"
             width={80}
             height={80}
             data-ai-hint="company logo"
             unoptimized={true}
-            className="border-2 border-red-500 text-red-500 text-xs"
+            className="mx-auto"
         />
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Admin Portal</p>
