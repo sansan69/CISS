@@ -127,7 +127,28 @@ export default function EnrollEmployeePage() {
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
-    defaultValues: { /* Default values remain the same */ },
+    defaultValues: { 
+        clientName: '',
+        resourceIdNumber: '',
+        firstName: '',
+        lastName: '',
+        fatherName: '',
+        motherName: '',
+        gender: undefined,
+        maritalStatus: undefined,
+        district: '',
+        panNumber: '',
+        idProofType: undefined,
+        idProofNumber: '',
+        epfUanNumber: '',
+        esicNumber: '',
+        bankAccountNumber: '',
+        ifscCode: '',
+        bankName: '',
+        fullAddress: '',
+        emailAddress: '',
+        phoneNumber: '',
+     },
   });
 
   const watchClientName = form.watch("clientName");
@@ -147,24 +168,44 @@ export default function EnrollEmployeePage() {
     return () => unsubscribe();
   }, [toast]);
 
+  useEffect(() => {
+    if (isCameraDialogOpen && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current?.play().catch(error => {
+          console.error("Video play failed:", error);
+          setCameraError("Could not play video stream. Please check camera connection or permissions.");
+        });
+      };
+      videoRef.current.onerror = (e) => {
+          console.error("Video element error:", e);
+          setCameraError("There was an error with the video stream display.");
+      };
+    }
+  }, [isCameraDialogOpen, cameraStream]);
+
   const openCamera = async (fieldName: CameraField) => {
     setActiveCameraField(fieldName);
     setCameraError(null);
+    setIsCameraDialogOpen(true); // Open dialog first
+
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
         setCameraStream(stream);
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setIsCameraDialogOpen(true);
+        // The useEffect will handle attaching the stream to videoRef.current and playing it
       } catch (err) {
         console.error("Error accessing camera:", err);
         setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
         toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
-        setIsCameraDialogOpen(false); // Keep dialog closed if permission fails immediately
+        setIsCameraDialogOpen(false); // Close dialog if camera access fails
+        setCameraStream(null);
       }
     } else {
       setCameraError("Camera access is not supported by your browser.");
       toast({ variant: "destructive", title: "Camera Not Supported", description: "Your browser does not support camera access." });
+      setIsCameraDialogOpen(false);
+      setCameraStream(null);
     }
   };
 
@@ -184,10 +225,10 @@ export default function EnrollEmployeePage() {
       canvas.height = videoRef.current.videoHeight;
       const context = canvas.getContext('2d');
       context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); // Capture as JPEG
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
 
       try {
-        const fileName = `${activeCameraField}_${Date.now()}.jpg`;
+        const fileName = `${activeCameraField}_capture_${Date.now()}.jpg`;
         const capturedFile = await dataURLtoFile(dataUrl, fileName);
         
         form.setValue(activeCameraField, capturedFile, { shouldValidate: true });
@@ -197,7 +238,7 @@ export default function EnrollEmployeePage() {
         else if (activeCameraField === "idProofDocument") setIdProofPreview(previewUrl);
         else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
         
-        toast({ title: "Photo Captured", description: `${activeCameraField} photo taken.` });
+        toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
       } catch (error) {
         console.error("Error converting data URL to file:", error);
         toast({ variant: "destructive", title: "Capture Error", description: "Could not process captured photo." });
@@ -232,11 +273,11 @@ export default function EnrollEmployeePage() {
         setPreview(null);
       }
     } else {
-      form.setValue(fieldName, undefined, { shouldValidate: true }); 
+      form.setValue(fieldName, undefined as any, { shouldValidate: true }); // Use 'as any' to bypass strict File type for undefined
       setPreview(null);
     }
     if (event.target) {
-        event.target.value = ""; // Reset file input to allow re-selection of the same file
+        event.target.value = ""; 
     }
   };
   
@@ -250,9 +291,8 @@ export default function EnrollEmployeePage() {
 
     try {
       const uploadPromises = [];
-      const phoneNumber = data.phoneNumber.replace(/\D/g, ""); // Ensure phone number is clean for path
+      const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
 
-      // Profile Picture
       if (data.profilePicture) {
         const file = data.profilePicture;
         const storagePath = `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
@@ -264,7 +304,6 @@ export default function EnrollEmployeePage() {
         );
       }
 
-      // ID Proof Document
       if (data.idProofDocument) {
         const file = data.idProofDocument;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
@@ -272,7 +311,7 @@ export default function EnrollEmployeePage() {
         
         const processAndUpload = file.type.startsWith("image/") 
           ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath); // Upload PDF or other directly
+          : uploadFileToStorage(file, storagePath); 
 
         uploadPromises.push(
           processAndUpload
@@ -281,7 +320,6 @@ export default function EnrollEmployeePage() {
         );
       }
       
-      // Bank Passbook/Statement
       if (data.bankPassbookStatement) {
         const file = data.bankPassbookStatement;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
@@ -305,33 +343,29 @@ export default function EnrollEmployeePage() {
       
       toast({ title: "Saving Employee Data...", description: "Almost done."});
 
-      const employeeData = {
+      const employeeDataForFirestore = {
         ...data, 
         joiningDate: Timestamp.fromDate(data.joiningDate),
         dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
         profilePictureUrl,
         idProofDocumentUrl,
         bankPassbookStatementUrl,
-        status: 'Active', // Default status
+        status: 'Active', 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        // Remove File objects before saving to Firestore
         profilePicture: undefined, 
         idProofDocument: undefined, 
         bankPassbookStatement: undefined, 
       };
       
-      // Ensure no undefined actual File objects are passed
-      Object.keys(employeeData).forEach(keyStr => {
-        const key = keyStr as keyof typeof employeeData;
-        if (employeeData[key] instanceof File) {
-          delete employeeData[key];
-        } else if (employeeData[key] === undefined) {
-            delete employeeData[key];
+      Object.keys(employeeDataForFirestore).forEach(keyStr => {
+        const key = keyStr as keyof typeof employeeDataForFirestore;
+        if (employeeDataForFirestore[key] === undefined) { // Check for undefined only
+            delete employeeDataForFirestore[key];
         }
       });
 
-      const docRef = await addDoc(collection(db, "employees"), employeeData);
+      const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
       
       toast({
         title: "Registration Successful!",
@@ -371,8 +405,6 @@ export default function EnrollEmployeePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Sections: Client, Personal, Location/ID, Bank, Contact */}
-              {/* ... (existing sections for joiningDate, clientName, resourceIdNumber) ... */}
               
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
@@ -474,13 +506,12 @@ export default function EnrollEmployeePage() {
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
-                         <FormDescription>Upload or take a clear passport-sized photo (Max 5MB).</FormDescription>
+                         <FormDescription>Upload or take a clear passport-sized photo (JPG, PNG, WEBP. Max 5MB).</FormDescription>
                         <FormMessage />
                        </div>
                     </FormItem>
                   )}
                 />
-                {/* ... (rest of Personal Information fields: firstName, lastName, etc.) ... */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormDescription>Your given name</FormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormDescription>Your family name</FormDescription><FormMessage /></FormItem>)} />
@@ -552,7 +583,6 @@ export default function EnrollEmployeePage() {
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Location & Identification</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* ... (district, panNumber, idProofType, idProofNumber, epf, esic) ... */}
                     <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="idProofType" render={({ field }) => ( <FormItem><FormLabel>ID Proof Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormDescription>Type of identity document</FormDescription><FormMessage /></FormItem>)} />
@@ -593,7 +623,6 @@ export default function EnrollEmployeePage() {
               
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
-                {/* ... (bankAccountNumber, ifscCode, bankName) ... */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
@@ -631,7 +660,6 @@ export default function EnrollEmployeePage() {
 
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Contact Information</h2>
-                {/* ... (fullAddress, emailAddress, phoneNumber) ... */}
                  <div className="grid grid-cols-1 gap-6">
                   <FormField control={form.control} name="fullAddress" render={({ field }) => ( <FormItem><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl><FormDescription>Include house number, street, area, PIN code</FormDescription><FormMessage /></FormItem>)} />
                 </div>
@@ -653,7 +681,6 @@ export default function EnrollEmployeePage() {
         </CardContent>
       </Card>
 
-      {/* Camera Dialog */}
       <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -667,10 +694,18 @@ export default function EnrollEmployeePage() {
                 <AlertDescription>{cameraError}</AlertDescription>
               </Alert>
             )}
-            {cameraStream && !cameraError && (
+            {/* Conditionally render video only when stream is available and no error */}
+            {(cameraStream && !cameraError) && (
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-auto rounded-md border aspect-video bg-muted" />
             )}
-            <canvas ref={canvasRef} className="hidden" /> {/* Hidden canvas for capturing */}
+            {/* Show placeholder if stream is not ready but dialog is open and no error yet */}
+            {(!cameraStream && isCameraDialogOpen && !cameraError) && (
+                <div className="w-full aspect-video bg-muted rounded-md flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <p className="ml-2">Starting camera...</p>
+                </div>
+            )}
+            <canvas ref={canvasRef} className="hidden" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
@@ -685,3 +720,4 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
+
