@@ -105,6 +105,7 @@ export default function EmployeeProfilePage() {
             // For DetailItem, passing Firestore Timestamp directly is fine.
             joiningDate: data.joiningDate, // Keep as Timestamp or convert based on DetailItem
             dateOfBirth: data.dateOfBirth, // Keep as Timestamp or convert
+            exitDate: data.exitDate, // Keep as Timestamp or convert
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           } as Employee;
@@ -131,6 +132,7 @@ export default function EmployeeProfilePage() {
       case 'Active': return 'default';
       case 'Inactive': return 'destructive';
       case 'OnLeave': return 'secondary';
+      case 'Exited': return 'destructive';
       default: return 'outline';
     }
   };
@@ -184,7 +186,7 @@ export default function EmployeeProfilePage() {
         <div className="flex items-center gap-4">
           <Image
             src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
-            alt={employee.fullName}
+            alt={employee.fullName || 'Employee profile picture'}
             width={100}
             height={100}
             className="rounded-full border-4 border-primary shadow-md object-cover"
@@ -249,6 +251,9 @@ export default function EmployeeProfilePage() {
                 {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
                 <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
                 <DetailItem label="Status" value={employee.status} />
+                {employee.status === 'Exited' && employee.exitDate && (
+                    <DetailItem label="Exit Date" value={employee.exitDate} isDate />
+                )}
               </div>
             </TabsContent>
 
@@ -285,10 +290,6 @@ export default function EmployeeProfilePage() {
                         <Button variant="outline" className="mt-4" disabled>
                             <QrCode className="mr-2 h-4 w-4" /> Regenerate QR (soon)
                         </Button>
-                        {/* Displaying the actual data of the QR code can be long.
-                            Consider removing this or making it toggleable if it clutters the UI.
-                            It's good for debugging, less so for user display.
-                        */}
                         {employee.qrCodeUrl && employee.qrCodeUrl.startsWith('data:image/png;base64,') && (
                            <p className="text-xs text-muted-foreground mt-2 truncate w-full text-center" title={decodeURIComponent(employee.qrCodeUrl.split('data=')[1] || '')}>
                                 QR Data URL (truncated)
@@ -336,4 +337,3 @@ export default function EmployeeProfilePage() {
     </div>
   );
 }
-
