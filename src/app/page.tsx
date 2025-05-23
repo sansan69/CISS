@@ -59,7 +59,6 @@ export default function LandingPage() {
             alt="CISS Workforce Logo"
             width={80}
             height={80}
-            priority
             data-ai-hint="company logo"
           />
         </div>
