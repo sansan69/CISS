@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants import
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -84,12 +84,22 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('status', '==', filterStatus));
     }
     
+    // Basic search by Employee ID prefix
     if (searchTerm.trim() !== '') {
-      q = query(q, where('employeeId', '>=', searchTerm.trim().toUpperCase()), where('employeeId', '<=', searchTerm.trim().toUpperCase() + '\uf8ff'));
+      const searchTermUpper = searchTerm.trim().toUpperCase();
+      q = query(q, 
+        where('employeeId', '>=', searchTermUpper), 
+        where('employeeId', '<=', searchTermUpper + '\uf8ff')
+      );
     }
     
     if (!forCount) {
-        q = query(q, orderBy('employeeId', 'asc')); // Default order by employeeId if no search term, or order by search term's field
+        // Always order by employeeId first, then by createdAt for consistent pagination tie-breaking.
+        // Firestore requires that if you use a range filter on a field (like employeeId >= searchTerm),
+        // your first orderBy must be on that same field.
+        if (searchTerm.trim() !== '') {
+            q = query(q, orderBy('employeeId', 'asc'));
+        }
         q = query(q, orderBy('createdAt', 'desc')); 
 
         if (direction === 'next' && lastVisibleDoc) {
@@ -120,11 +130,12 @@ export default function EmployeeDirectoryPage() {
         return {
             id: docSnap.id,
             ...data,
-            joiningDate: (data.joiningDate as Timestamp)?.toDate ? (data.joiningDate as Timestamp).toDate().toISOString() : data.joiningDate,
-            dateOfBirth: (data.dateOfBirth as Timestamp)?.toDate ? (data.dateOfBirth as Timestamp).toDate().toISOString() : data.dateOfBirth,
-            exitDate: (data.exitDate as Timestamp)?.toDate ? (data.exitDate as Timestamp).toDate().toISOString() : data.exitDate,
-            createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : data.createdAt,
-            updatedAt: (data.updatedAt as Timestamp)?.toDate ? (data.updatedAt as Timestamp).toDate().toISOString() : data.updatedAt,
+            // Ensure date fields are consistently handled (e.g., toISOString if they are Timestamps)
+            joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
+            dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
+            exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
         } as Employee;
       });
       
@@ -140,23 +151,25 @@ export default function EmployeeDirectoryPage() {
         }
       }
       
-      if (direction !== 'prev') {
-        const nextQuery = query(buildQuery(false, 'next'), limit(1));
-        const nextSnapshot = await getDocs(nextQuery);
-        setHasMoreNext(!nextSnapshot.empty);
-      } else {
-        // When going previous, assume next is available unless we're at the end
-        setHasMoreNext(true);
+      // Check if there's a next page
+      if (direction !== 'prev' && documentSnapshots.docs.length === ITEMS_PER_PAGE) {
+        const nextQueryCheck = query(buildQuery(false, 'next'), limit(1));
+        const nextSnapshotCheck = await getDocs(nextQueryCheck);
+        setHasMoreNext(!nextSnapshotCheck.empty);
+      } else if (documentSnapshots.docs.length < ITEMS_PER_PAGE && direction !== 'prev') {
+        setHasMoreNext(false);
+      } else if (direction === 'prev') {
+        setHasMoreNext(true); // If we just went back, there's likely a next page
       }
 
 
-      setHasMorePrev(currentPage > 1);
+      setHasMorePrev(currentPage > 1 || (direction === 'next' && fetchedEmployees.length > 0));
 
 
     } catch (err: any) {
       console.error("Error fetching employees:", err);
       setError(err.message || "Failed to fetch employees.");
-      toast({ variant: "destructive", title: "Error", description: "Could not fetch employees." });
+      toast({ variant: "destructive", title: "Error", description: err.message || "Could not fetch employees." });
     } finally {
       setIsLoading(false);
       setIsFetchingNext(false);
@@ -175,7 +188,7 @@ export default function EmployeeDirectoryPage() {
     setHasMorePrev(false); 
     fetchEmployees();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterClient, filterStatus]);
+  }, [searchTerm, filterClient, filterStatus]); // Removed fetchEmployees from here
 
   const handleNextPage = () => {
     if (hasMoreNext) {
@@ -238,6 +251,9 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
+      // Re-fetch current page data
+      setLastVisibleDoc(null); // Reset pagination to re-fetch current view potentially
+      setFirstVisibleDoc(null);
       fetchEmployees(); 
       
       setIsStatusModalOpen(false);
@@ -264,7 +280,7 @@ export default function EmployeeDirectoryPage() {
     try {
       // Delete Firestore document
       await deleteDoc(doc(db, "employees", employeeToDelete.id));
-      toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
+      
 
       // Attempt to delete associated files from Firebase Storage
       const filesToDelete = [
@@ -276,8 +292,6 @@ export default function EmployeeDirectoryPage() {
       for (const fileUrl of filesToDelete) {
         if (fileUrl) {
           try {
-            // Firebase Storage URLs need to be parsed to get the storage path
-            // This is a simplified approach; a robust solution might store paths directly or use a helper
             if (fileUrl.startsWith("https://firebasestorage.googleapis.com/")) {
                 const storageRef = ref(storage, fileUrl);
                 await deleteObject(storageRef);
@@ -286,7 +300,6 @@ export default function EmployeeDirectoryPage() {
                 console.warn(`Skipping deletion for non-Firebase Storage URL: ${fileUrl}`);
             }
           } catch (fileError: any) {
-            // Log file deletion errors but don't block the overall success
             console.error(`Failed to delete file ${fileUrl}:`, fileError);
             toast({
               variant: "destructive",
@@ -297,7 +310,11 @@ export default function EmployeeDirectoryPage() {
           }
         }
       }
-      fetchEmployees(); // Refresh the list
+      toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
+      // Re-fetch current page data
+      setLastVisibleDoc(null); // Reset pagination to re-fetch current view
+      setFirstVisibleDoc(null);
+      fetchEmployees(); 
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
     } catch (err) {
@@ -438,7 +455,7 @@ export default function EmployeeDirectoryPage() {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link href={`/employees/${emp.id}?edit=true`}> 
+                           <Link href={`/employees/${emp.id}?edit=true`}> 
                             <Edit className="mr-2 h-4 w-4" /> Edit
                           </Link>
                         </DropdownMenuItem>
