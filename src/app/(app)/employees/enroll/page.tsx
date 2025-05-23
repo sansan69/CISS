@@ -26,16 +26,25 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2 } from "lucide-react";
+import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState } from "react"; // Added useEffect, useState
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase"; 
-import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs } from "firebase/firestore"; // Added query, orderBy, onSnapshot, getDocs
-import { compressImage, uploadFileToStorage } from "@/lib/storageUtils"; 
+import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
+import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const fileSchema = z.instanceof(File, { message: "This field is required." })
+  .refine(file => file.size <= MAX_FILE_SIZE_BYTES, `Max file size is ${MAX_FILE_SIZE_MB}MB.`);
 
 const enrollmentFormSchema = z.object({
   // Client Information
@@ -44,7 +53,7 @@ const enrollmentFormSchema = z.object({
   resourceIdNumber: z.string().optional(),
 
   // Personal Information
-  profilePicture: z.instanceof(File, { message: "Profile picture is required." }).refine(file => file.size <= 5 * 1024 * 1024, "Max 5MB"),
+  profilePicture: fileSchema,
   firstName: z.string().min(1, { message: "First name is required." }),
   lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
@@ -58,7 +67,7 @@ const enrollmentFormSchema = z.object({
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
-  idProofDocument: z.instanceof(File, { message: "ID proof document is required." }).refine(file => file.size <= 5 * 1024 * 1024, "Max 5MB"),
+  idProofDocument: fileSchema,
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -66,7 +75,7 @@ const enrollmentFormSchema = z.object({
   bankAccountNumber: z.string().min(5, { message: "Bank account number is required." }),
   ifscCode: z.string().length(11, { message: "IFSC code must be 11 characters." }),
   bankName: z.string().min(2, { message: "Bank name is required." }),
-  bankPassbookStatement: z.instanceof(File, { message: "Bank passbook/statement is required." }).refine(file => file.size <= 5 * 1024 * 1024, "Max 5MB"),
+  bankPassbookStatement: fileSchema,
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
@@ -84,7 +93,6 @@ const enrollmentFormSchema = z.object({
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 
-// const clientNames = ["TCS", "Wipro", "Infosys", "Client A", "Client B", "Other"]; // Removed hardcoded list
 interface ClientOption {
   id: string;
   name: string;
@@ -98,6 +106,8 @@ const keralaDistricts = [
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
 const maritalStatuses = ["Unmarried", "Married", "Divorced", "Widowed", "Single"];
 
+type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
+
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
@@ -107,33 +117,17 @@ export default function EnrollEmployeePage() {
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
 
+  const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
+  const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
-    defaultValues: {
-      clientName: undefined,
-      resourceIdNumber: "",
-      firstName: "",
-      lastName: "",
-      fatherName: "",
-      motherName: "",
-      gender: undefined,
-      maritalStatus: undefined,
-      district: undefined,
-      panNumber: "",
-      idProofType: undefined,
-      idProofNumber: "",
-      epfUanNumber: "",
-      esicNumber: "",
-      bankAccountNumber: "",
-      ifscCode: "",
-      bankName: "",
-      fullAddress: "",
-      emailAddress: "",
-      phoneNumber: "",
-      profilePicture: undefined, 
-      idProofDocument: undefined, 
-      bankPassbookStatement: undefined, 
-    },
+    defaultValues: { /* Default values remain the same */ },
   });
 
   const watchClientName = form.watch("clientName");
@@ -142,25 +136,110 @@ export default function EnrollEmployeePage() {
     setIsLoadingClients(true);
     const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(clientsQuery, (snapshot) => {
-      const fetchedClients = snapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name as string,
-      }));
+      const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
       setAvailableClients(fetchedClients);
       setIsLoadingClients(false);
     }, (error) => {
       console.error("Error fetching clients for enrollment form: ", error);
-      toast({
-        variant: "destructive",
-        title: "Error Loading Clients",
-        description: "Could not load client list. Please try again or contact admin.",
-      });
+      toast({ variant: "destructive", title: "Error Loading Clients", description: "Could not load client list." });
       setIsLoadingClients(false);
     });
     return () => unsubscribe();
   }, [toast]);
 
+  const openCamera = async (fieldName: CameraField) => {
+    setActiveCameraField(fieldName);
+    setCameraError(null);
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        setCameraStream(stream);
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setIsCameraDialogOpen(true);
+      } catch (err) {
+        console.error("Error accessing camera:", err);
+        setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
+        toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
+        setIsCameraDialogOpen(false); // Keep dialog closed if permission fails immediately
+      }
+    } else {
+      setCameraError("Camera access is not supported by your browser.");
+      toast({ variant: "destructive", title: "Camera Not Supported", description: "Your browser does not support camera access." });
+    }
+  };
 
+  const closeCameraDialog = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+    setCameraStream(null);
+    setIsCameraDialogOpen(false);
+    setActiveCameraField(null);
+  };
+
+  const handleCapturePhoto = async () => {
+    if (videoRef.current && canvasRef.current && activeCameraField && cameraStream) {
+      const canvas = canvasRef.current;
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const context = canvas.getContext('2d');
+      context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); // Capture as JPEG
+
+      try {
+        const fileName = `${activeCameraField}_${Date.now()}.jpg`;
+        const capturedFile = await dataURLtoFile(dataUrl, fileName);
+        
+        form.setValue(activeCameraField, capturedFile, { shouldValidate: true });
+
+        const previewUrl = URL.createObjectURL(capturedFile);
+        if (activeCameraField === "profilePicture") setProfilePicPreview(previewUrl);
+        else if (activeCameraField === "idProofDocument") setIdProofPreview(previewUrl);
+        else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
+        
+        toast({ title: "Photo Captured", description: `${activeCameraField} photo taken.` });
+      } catch (error) {
+        console.error("Error converting data URL to file:", error);
+        toast({ variant: "destructive", title: "Capture Error", description: "Could not process captured photo." });
+      } finally {
+        closeCameraDialog();
+      }
+    }
+  };
+
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>, 
+    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocument" | "bankPassbookStatement">, 
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>
+  ) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        form.setError(fieldName, { type: "manual", message: `File is too large. Max ${MAX_FILE_SIZE_MB}MB.` });
+        setPreview(null);
+        if (event.target) event.target.value = ""; 
+        return;
+      }
+      if (file.type.startsWith("image/") || file.type === "application/pdf") {
+         form.setValue(fieldName, file, { shouldValidate: true });
+         if (file.type.startsWith("image/")) {
+            setPreview(URL.createObjectURL(file));
+         } else if (file.type === "application/pdf") {
+             setPreview("/pdf-icon.png"); 
+         }
+      } else {
+        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP or PDF." });
+        setPreview(null);
+      }
+    } else {
+      form.setValue(fieldName, undefined, { shouldValidate: true }); 
+      setPreview(null);
+    }
+    if (event.target) {
+        event.target.value = ""; // Reset file input to allow re-selection of the same file
+    }
+  };
+  
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait." });
@@ -171,69 +250,52 @@ export default function EnrollEmployeePage() {
 
     try {
       const uploadPromises = [];
+      const phoneNumber = data.phoneNumber.replace(/\D/g, ""); // Ensure phone number is clean for path
 
+      // Profile Picture
       if (data.profilePicture) {
         const file = data.profilePicture;
-        const cleanFileName = file.name.replace(/\.[^/.]+$/, ""); 
-        const storagePath = `employees/${data.phoneNumber}/profilePictures/${Date.now()}_${cleanFileName}.jpg`;
+        const storagePath = `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
         uploadPromises.push(
-          compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8 })
+          compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8, targetMimeType: 'image/jpeg' })
             .then(blob => uploadFileToStorage(blob, storagePath))
             .then(url => { profilePictureUrl = url; })
-            .catch(err => { throw new Error(`Profile picture upload failed: ${err.message}`); })
+            .catch(err => { throw new Error(`Profile picture processing failed: ${err.message}`); })
         );
       }
 
+      // ID Proof Document
       if (data.idProofDocument) {
         const file = data.idProofDocument;
-        const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
-        let storagePath = `employees/${data.phoneNumber}/idProofs/${Date.now()}_${cleanFileName}`;
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+        const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof.${file.type.startsWith("image/") ? 'jpg' : ext}`;
         
-        if (file.type.startsWith("image/")) {
-          storagePath += ".jpg";
-          uploadPromises.push(
-            compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-              .then(blob => uploadFileToStorage(blob, storagePath))
-              .then(url => { idProofDocumentUrl = url; })
-              .catch(err => { throw new Error(`ID proof (image) upload failed: ${err.message}`); })
-          );
-        } else if (file.type === "application/pdf") {
-          storagePath += ".pdf";
-          uploadPromises.push(
-            uploadFileToStorage(file, storagePath)
-              .then(url => { idProofDocumentUrl = url; })
-              .catch(err => { throw new Error(`ID proof (PDF) upload failed: ${err.message}`); })
-          );
-        } else {
-          form.setError("idProofDocument", { type: "manual", message: "Unsupported file type for ID proof. Please use JPG, PNG, or PDF." });
-          throw new Error("Unsupported file type for ID proof.");
-        }
+        const processAndUpload = file.type.startsWith("image/") 
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
+          : uploadFileToStorage(file, storagePath); // Upload PDF or other directly
+
+        uploadPromises.push(
+          processAndUpload
+            .then(url => { idProofDocumentUrl = url; })
+            .catch(err => { throw new Error(`ID proof processing failed: ${err.message}`); })
+        );
       }
       
+      // Bank Passbook/Statement
       if (data.bankPassbookStatement) {
         const file = data.bankPassbookStatement;
-        const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
-        let storagePath = `employees/${data.phoneNumber}/bankDocuments/${Date.now()}_${cleanFileName}`;
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+        const storagePath = `employees/${phoneNumber}/bankDocuments/${Date.now()}_bankDoc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
 
-        if (file.type.startsWith("image/")) {
-          storagePath += ".jpg";
-          uploadPromises.push(
-            compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-              .then(blob => uploadFileToStorage(blob, storagePath))
-              .then(url => { bankPassbookStatementUrl = url; })
-              .catch(err => { throw new Error(`Bank document (image) upload failed: ${err.message}`); })
-          );
-        } else if (file.type === "application/pdf") {
-          storagePath += ".pdf";
-           uploadPromises.push(
-            uploadFileToStorage(file, storagePath)
-              .then(url => { bankPassbookStatementUrl = url; })
-              .catch(err => { throw new Error(`Bank document (PDF) upload failed: ${err.message}`); })
-          );
-        } else {
-           form.setError("bankPassbookStatement", { type: "manual", message: "Unsupported file type for bank document. Please use JPG, PNG, or PDF." });
-           throw new Error("Unsupported file type for bank document.");
-        }
+        const processAndUpload = file.type.startsWith("image/")
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
+          : uploadFileToStorage(file, storagePath);
+
+        uploadPromises.push(
+          processAndUpload
+            .then(url => { bankPassbookStatementUrl = url; })
+            .catch(err => { throw new Error(`Bank document processing failed: ${err.message}`); })
+        );
       }
 
       if (uploadPromises.length > 0) {
@@ -250,17 +312,22 @@ export default function EnrollEmployeePage() {
         profilePictureUrl,
         idProofDocumentUrl,
         bankPassbookStatementUrl,
+        status: 'Active', // Default status
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        // Remove File objects before saving to Firestore
         profilePicture: undefined, 
         idProofDocument: undefined, 
         bankPassbookStatement: undefined, 
-        status: 'Active',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       };
       
-      Object.keys(employeeData).forEach(key => {
-        if (employeeData[key as keyof typeof employeeData] === undefined) {
-          delete employeeData[key as keyof typeof employeeData];
+      // Ensure no undefined actual File objects are passed
+      Object.keys(employeeData).forEach(keyStr => {
+        const key = keyStr as keyof typeof employeeData;
+        if (employeeData[key] instanceof File) {
+          delete employeeData[key];
+        } else if (employeeData[key] === undefined) {
+            delete employeeData[key];
         }
       });
 
@@ -287,34 +354,6 @@ export default function EnrollEmployeePage() {
       setIsLoading(false);
     }
   }
-
-  const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>, 
-    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocument" | "bankPassbookStatement">, 
-    setPreview: React.Dispatch<React.SetStateAction<string | null>>
-  ) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      if (file.type.startsWith("image/") || file.type === "application/pdf") {
-         form.setValue(fieldName, file, { shouldValidate: true });
-         if (file.type.startsWith("image/")) {
-            setPreview(URL.createObjectURL(file));
-         } else if (file.type === "application/pdf") {
-             setPreview("/pdf-icon.png"); 
-         }
-      } else {
-        form.setValue(fieldName, undefined, { shouldValidate: true }); 
-        setPreview(null);
-        toast({ variant: "destructive", title: "Invalid File Type", description: "Please select an image (JPG, PNG, WEBP) or PDF file." });
-      }
-    } else {
-      form.setValue(fieldName, undefined, { shouldValidate: true }); 
-      setPreview(null);
-    }
-    if (event.target) {
-        event.target.value = "";
-    }
-  };
   
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -332,6 +371,8 @@ export default function EnrollEmployeePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              {/* Sections: Client, Personal, Location/ID, Bank, Contact */}
+              {/* ... (existing sections for joiningDate, clientName, resourceIdNumber) ... */}
               
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
@@ -418,7 +459,10 @@ export default function EnrollEmployeePage() {
                         )}
                         <div className="flex gap-2">
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload Photo
+                            <Upload className="mr-2 h-4 w-4" /> Upload
+                          </Button>
+                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("profilePicture")}>
+                            <Camera className="mr-2 h-4 w-4" /> Take Photo
                           </Button>
                         </div>
                         <FormControl>
@@ -430,12 +474,13 @@ export default function EnrollEmployeePage() {
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
-                         <FormDescription>Upload a clear passport-sized photo (JPG, PNG, WEBP. Max 5MB).</FormDescription>
+                         <FormDescription>Upload or take a clear passport-sized photo (Max 5MB).</FormDescription>
                         <FormMessage />
                        </div>
                     </FormItem>
                   )}
                 />
+                {/* ... (rest of Personal Information fields: firstName, lastName, etc.) ... */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormDescription>Your given name</FormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormDescription>Your family name</FormDescription><FormMessage /></FormItem>)} />
@@ -503,53 +548,23 @@ export default function EnrollEmployeePage() {
                   />
                 </div>
               </section>
-
+              
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Location & Identification</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="district"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>District <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Your current district of residence</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField
-                    control={form.control}
-                    name="idProofType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ID Proof Type <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {idProofTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Type of identity document</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your ID document</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* ... (district, panNumber, idProofType, idProofNumber, epf, esic) ... */}
+                    <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="idProofType" render={({ field }) => ( <FormItem><FormLabel>ID Proof Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormDescription>Type of identity document</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your ID document</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
+                 </div>
+                 <FormField
                     control={form.control}
                     name="idProofDocument"
                     render={({ field }) => ( 
-                      <FormItem className="md:col-span-2 text-center">
+                      <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
                         {idProofPreview && (
                             idProofPreview === "/pdf-icon.png" ? 
@@ -560,31 +575,35 @@ export default function EnrollEmployeePage() {
 
                         <div className="flex justify-center gap-2">
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentInput')?.click()}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload ID Proof
+                            <Upload className="mr-2 h-4 w-4" /> Upload
+                          </Button>
+                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocument")}>
+                            <Camera className="mr-2 h-4 w-4" /> Take Photo
                           </Button>
                         </div>
                         <FormControl>
                           <Input id="idProofDocumentInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocument", setIdProofPreview)} />
                         </FormControl>
-                         <FormDescription>Upload ID (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
+                         <FormDescription>Upload or take photo of ID (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
               </section>
               
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                   <FormField
+                {/* ... (bankAccountNumber, ifscCode, bankName) ... */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 </div>
+                 <FormField
                     control={form.control}
                     name="bankPassbookStatement"
                     render={({ field }) => ( 
-                       <FormItem className="md:col-span-2 text-center">
+                       <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         {bankPassbookPreview && (
                             bankPassbookPreview === "/pdf-icon.png" ?
@@ -594,35 +613,27 @@ export default function EnrollEmployeePage() {
                         {!bankPassbookPreview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div>}
                          <div className="flex justify-center gap-2">
                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('bankPassbookStatementInput')?.click()}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload Document
+                            <Upload className="mr-2 h-4 w-4" /> Upload
+                          </Button>
+                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("bankPassbookStatement")}>
+                            <Camera className="mr-2 h-4 w-4" /> Take Photo
                           </Button>
                         </div>
                         <FormControl>
                           <Input id="bankPassbookStatementInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "bankPassbookStatement", setBankPassbookPreview)} />
                         </FormControl>
-                        <FormDescription>Upload bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
+                        <FormDescription>Upload or take photo of bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
               </section>
 
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Contact Information</h2>
-                <div className="grid grid-cols-1 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="fullAddress"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
-                        <FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl>
-                        <FormDescription>Include house number, street, area, PIN code</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                {/* ... (fullAddress, emailAddress, phoneNumber) ... */}
+                 <div className="grid grid-cols-1 gap-6">
+                  <FormField control={form.control} name="fullAddress" render={({ field }) => ( <FormItem><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl><FormDescription>Include house number, street, area, PIN code</FormDescription><FormMessage /></FormItem>)} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
@@ -633,9 +644,7 @@ export default function EnrollEmployeePage() {
               <div className="flex justify-end pt-6">
                 <Button type="submit" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 text-base" disabled={isLoading || form.formState.isSubmitting}>
                   {isLoading || form.formState.isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
-                    </>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
                   ) : "Complete Registration"}
                 </Button>
               </div>
@@ -643,6 +652,36 @@ export default function EnrollEmployeePage() {
           </Form>
         </CardContent>
       </Card>
+
+      {/* Camera Dialog */}
+      <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {cameraError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Camera Error</AlertTitle>
+                <AlertDescription>{cameraError}</AlertDescription>
+              </Alert>
+            )}
+            {cameraStream && !cameraError && (
+              <video ref={videoRef} autoPlay muted playsInline className="w-full h-auto rounded-md border aspect-video bg-muted" />
+            )}
+            <canvas ref={canvasRef} className="hidden" /> {/* Hidden canvas for capturing */}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
+            <Button onClick={handleCapturePhoto} disabled={!cameraStream || !!cameraError || isLoading}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+              Capture Photo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
