@@ -3,7 +3,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as csvParser from "csv-parser";
 import * as sharp from "sharp";
-import * as Busboy from "busboy";
+import * as Busboy from "busboy"; // Corrected import name if it was 'busboy'
 import {v4 as uuidv4} from "uuid";
 import * as corsLib from "cors";
 import {Timestamp} from "firebase-admin/firestore";
@@ -16,12 +16,13 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 const storage = admin.storage();
-const bucket = storage.bucket(); // Default bucket
+const bucket = storage.bucket(); // Default bucket: <project-id>.appspot.com
 
+// Configure CORS middleware
 const cors = corsLib({origin: true});
 
 const runtimeOpts: functions.RuntimeOptions = {
-  timeoutSeconds: 540,
+  timeoutSeconds: 540, // 9 minutes (maximum)
   memory: "1GB",
 };
 
@@ -56,48 +57,11 @@ const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phone
     return dataUrl;
   } catch (err) {
     console.error("Server-side QR code generation failed:", err);
+    // Return a placeholder or rethrow, depending on how critical it is.
+    // For now, returning a string that indicates an error might be better than a generic placeholder.
     return `ERROR_GENERATING_QR_FOR:${encodeURIComponent(dataString)}`;
   }
 };
-
-// Helper function to process and upload a Base64 image
-async function processAndUploadBase64Image(
-  base64String: string,
-  baseFolderPath: string, // e.g., "employee_photos", "employee_id_proofs"
-  employeeIdentifier: string, // e.g., phone number or uuid for path organization
-): Promise<string | null> {
-  if (!base64String || typeof base64String !== "string" || !base64String.startsWith("data:image/")) {
-    console.warn(`Invalid or missing Base64 string for ${baseFolderPath}`);
-    return null;
-  }
-
-  const matches = base64String.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
-  if (!matches || matches.length !== 3) {
-    console.warn(`Invalid Data URI format for ${baseFolderPath}`);
-    return null;
-  }
-
-  const base64Data = matches[2];
-  const imageBuffer = Buffer.from(base64Data, "base64");
-  const imageName = `${uuidv4()}.jpg`; // Compress to JPEG
-  const filePath = `${baseFolderPath}/${employeeIdentifier}/${imageName}`;
-
-  try {
-    const compressedImageBuffer = await sharp(imageBuffer)
-      .resize({width: 800, height: 800, fit: "inside", withoutEnlargement: true})
-      .jpeg({quality: 75})
-      .toBuffer();
-
-    const file = bucket.file(filePath);
-    await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
-    const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"}); // Long-lived URL
-    console.log(`Uploaded image to ${filePath}`);
-    return url;
-  } catch (error) {
-    console.error(`Error processing/uploading image for ${baseFolderPath} to ${filePath}:`, error);
-    return null;
-  }
-}
 
 
 export const processEmployeeCSV = functions
@@ -109,18 +73,20 @@ export const processEmployeeCSV = functions
         return;
       }
 
+      /* eslint-disable new-cap */
       const busboy = Busboy({headers: req.headers});
-      const employeesToProcess: Record<string, any>[] = [];
+      /* eslint-enable new-cap */
+      const employeesToProcess: Record<string, string>[] = [];
       let fileProcessingError: Error | null = null;
 
       busboy.on("file", (_fieldname, fileStream, MimeType) => {
         console.log(`Processing file: ${MimeType.filename}, MimeType: ${MimeType.mimeType}`);
         fileStream
           .pipe(csvParser({
-            mapHeaders: ({header}) => header.trim(), // Trim header whitespace
-            mapValues: ({value}) => typeof value === "string" ? value.trim() : value, // Trim value whitespace
+            mapHeaders: ({header}) => header.trim(),
+            mapValues: ({value}) => typeof value === "string" ? value.trim() : value,
           }))
-          .on("data", (row: Record<string, any>) => {
+          .on("data", (row: Record<string, string>) => {
             employeesToProcess.push(row);
           })
           .on("end", () => {
@@ -143,7 +109,10 @@ export const processEmployeeCSV = functions
         if (employeesToProcess.length === 0) {
           console.log("No data rows found in CSV or file was not processed.");
           if (!res.headersSent) {
-            res.status(400).json({success: false, message: "CSV contains no data rows or was not processed correctly."});
+            res.status(400).json({
+              success: false,
+              message: "CSV contains no data rows or was not processed correctly.",
+            });
           }
           return;
         }
@@ -166,13 +135,13 @@ export const processEmployeeCSV = functions
             if (emp.joining_date && !isNaN(new Date(emp.joining_date).getTime())) {
               employeeData.joiningDate = Timestamp.fromDate(new Date(emp.joining_date));
             } else {
-              console.warn(`Invalid or missing JoiningDate for ${employeeData.fullName || emp.phone_number}, using current date as fallback.`);
-              employeeData.joiningDate = Timestamp.now();
+              console.warn(`Invalid or missing JoiningDate for ${employeeData.fullName}, using current date as fallback.`);
+              employeeData.joiningDate = Timestamp.now(); // Fallback or handle as error
             }
             if (emp.date_of_birth && !isNaN(new Date(emp.date_of_birth).getTime())) {
               employeeData.dateOfBirth = Timestamp.fromDate(new Date(emp.date_of_birth));
             } else {
-              console.warn(`Invalid or missing DateOfBirth for ${employeeData.fullName || emp.phone_number}`);
+              console.warn(`Invalid or missing DateOfBirth for ${employeeData.fullName}`);
               employeeData.dateOfBirth = null;
             }
 
@@ -180,7 +149,7 @@ export const processEmployeeCSV = functions
             employeeData.fatherName = emp.father_name || "";
             employeeData.motherName = emp.mother_name || "";
             employeeData.maritalStatus = emp.marital_status || "Unmarried";
-            employeeData.spouseName = emp.spouse_name || "";
+            employeeData.spouseName = emp.spouse_name || ""; // Optional
             employeeData.district = emp.district || "";
             employeeData.idProofType = emp.id_proof_type || "";
             employeeData.idProofNumber = emp.id_proof_number || "";
@@ -194,53 +163,130 @@ export const processEmployeeCSV = functions
             employeeData.esicNumber = emp.esic_number || "";
             employeeData.resourceIdNumber = emp.resource_id_number || "";
 
+            // Use phone number for subfolder, or uuid if phone is missing (should be rare)
             const safeIdentifier = employeeData.phoneNumber || uuidv4();
 
-            if (emp.PhotoBlob) {
-              employeeData.profilePictureUrl = await processAndUploadBase64Image(emp.PhotoBlob, "employee_photos", safeIdentifier);
+            // Image Handling for 'PhotoBlob'
+            if (emp.PhotoBlob && typeof emp.PhotoBlob === "string" && emp.PhotoBlob.startsWith("data:image/")) {
+              const matches = emp.PhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
+              if (matches && matches.length === 3) {
+                const base64Data = matches[2];
+                const imageBuffer = Buffer.from(base64Data, "base64");
+                const imageName = `${uuidv4()}.jpg`;
+                const filePath = `employee_photos/${safeIdentifier}/${imageName}`;
+
+                const compressedImageBuffer = await sharp(imageBuffer)
+                  .resize({width: 800, height: 800, fit: "inside", withoutEnlargement: true})
+                  .jpeg({quality: 75})
+                  .toBuffer();
+                const file = bucket.file(filePath);
+                await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
+                const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
+                employeeData.profilePictureUrl = url;
+              } else {
+                employeeData.profilePictureUrl = null;
+                console.warn(`Invalid PhotoBlob format for ${employeeData.fullName}`);
+              }
             } else {
               employeeData.profilePictureUrl = null;
             }
 
-            if (emp.IDProofPhotoBlob) {
-              employeeData.idProofDocumentUrl = await processAndUploadBase64Image(emp.IDProofPhotoBlob, "employee_id_proofs", safeIdentifier);
+            // Image Handling for 'IDProofPhotoBlob'
+            if (emp.IDProofPhotoBlob &&
+                typeof emp.IDProofPhotoBlob === "string" &&
+                emp.IDProofPhotoBlob.startsWith("data:image/")) {
+              const matches = emp.IDProofPhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
+              if (matches && matches.length === 3) {
+                const base64Data = matches[2];
+                const imageBuffer = Buffer.from(base64Data, "base64");
+                const imageName = `${uuidv4()}.jpg`;
+                const filePath = `employee_id_proofs/${safeIdentifier}/${imageName}`;
+
+                const compressedImageBuffer = await sharp(imageBuffer)
+                  .resize({width: 1024, height: 1024, fit: "inside", withoutEnlargement: true})
+                  .jpeg({quality: 75})
+                  .toBuffer();
+                const file = bucket.file(filePath);
+                await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
+                const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
+                employeeData.idProofDocumentUrl = url;
+              } else {
+                employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null; // Fallback to URL if blob invalid
+                console.warn(`Invalid IDProofPhotoBlob format for ${employeeData.fullName}`);
+              }
             } else {
-              employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
+              employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null; // If only URL is provided
             }
 
-            if (emp.BankPassbookPhotoBlob) {
-              employeeData.bankPassbookStatementUrl = await processAndUploadBase64Image(emp.BankPassbookPhotoBlob, "employee_bank_documents", safeIdentifier);
+            // Image Handling for 'BankPassbookPhotoBlob'
+            if (emp.BankPassbookPhotoBlob &&
+                typeof emp.BankPassbookPhotoBlob === "string" &&
+                emp.BankPassbookPhotoBlob.startsWith("data:image/")) {
+              const matches = emp.BankPassbookPhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
+              if (matches && matches.length === 3) {
+                const base64Data = matches[2];
+                const imageBuffer = Buffer.from(base64Data, "base64");
+                const imageName = `${uuidv4()}.jpg`;
+                const filePath = `employee_bank_documents/${safeIdentifier}/${imageName}`;
+
+                const compressedImageBuffer = await sharp(imageBuffer)
+                  .resize({width: 1024, height: 1024, fit: "inside", withoutEnlargement: true})
+                  .jpeg({quality: 75})
+                  .toBuffer();
+                const file = bucket.file(filePath);
+                await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
+                const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
+                employeeData.bankPassbookStatementUrl = url;
+              } else {
+                // Fallback to URL if blob invalid
+                employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
+                console.warn(`Invalid BankPassbookPhotoBlob format for ${employeeData.fullName}`);
+              }
             } else {
+              // If only URL is provided in CSV
               employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
             }
 
-            delete employeeData.PhotoBlob;
-            delete employeeData.IDProofPhotoBlob;
-            delete employeeData.BankPassbookPhotoBlob;
 
             employeeData.employeeId = generateEmployeeId(employeeData.clientName);
-            employeeData.qrCodeUrl = await generateQrCodeDataUrl(employeeData.employeeId, employeeData.fullName, employeeData.phoneNumber);
-
+            employeeData.qrCodeUrl = await generateQrCodeDataUrl(
+              employeeData.employeeId,
+              employeeData.fullName,
+              employeeData.phoneNumber
+            );
 
             employeeData.createdAt = admin.firestore.FieldValue.serverTimestamp();
             employeeData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
             employeeData.status = emp.Status || "Active";
+
+            // Remove blob fields if they existed, as we don't store them in Firestore
+            delete employeeData.PhotoBlob;
+            delete employeeData.IDProofPhotoBlob;
+            delete employeeData.BankPassbookPhotoBlob;
 
             if (employeeData.fullName && employeeData.phoneNumber) {
               processedEmployeesForFirestore.push(employeeData);
             } else {
               console.warn(`Skipping record due to missing essential data (Name/Phone): ${JSON.stringify(emp)}`);
             }
-          } catch (processingError: any) {
-            console.error(`Error processing row data for CSV row ${JSON.stringify(emp)}:`, processingError.message);
+          } catch (processingError: unknown) {
+            const message = (processingError instanceof Error) ?
+              processingError.message :
+              "Unknown error during row processing";
+            console.error(`Error processing row data for CSV row ${JSON.stringify(emp)}:`, message);
           }
         }
 
-        console.log(`Finished individual record processing. Attempting to save ${processedEmployeesForFirestore.length} valid records to Firestore.`);
+        console.log(`Finished individual record processing. Attempting to save ${
+          processedEmployeesForFirestore.length
+        } valid records to Firestore.`);
 
         if (processedEmployeesForFirestore.length === 0) {
           if (!res.headersSent) {
-            res.status(400).json({success: false, message: "No valid employee records could be processed from the CSV."});
+            res.status(400).json({
+              success: false,
+              message: "No valid employee records could be processed from the CSV.",
+            });
           }
           return;
         }
@@ -256,11 +302,14 @@ export const processEmployeeCSV = functions
           try {
             await batch.commit();
             recordsProcessedCount += chunk.length;
-            console.log(`Batch ${Math.floor(i / batchSize) + 1} committed. Total records committed so far: ${recordsProcessedCount}`);
-          } catch (dbError: any) {
+            console.log(`Batch ${Math.floor(i / batchSize) + 1} committed. Total records committed so far: ${
+              recordsProcessedCount
+            }`);
+          } catch (dbError: unknown) {
+            const message = (dbError instanceof Error) ? dbError.message : "Unknown database error";
             console.error("Error committing batch to Firestore:", dbError);
             if (!res.headersSent) {
-              res.status(500).json({success: false, message: `Error saving data to database: ${dbError.message}`});
+              res.status(500).json({success: false, message: `Error saving data to database: ${message}`});
             }
             return;
           }
@@ -279,3 +328,5 @@ export const processEmployeeCSV = functions
       req.pipe(busboy);
     });
   });
+
+    
