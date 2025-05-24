@@ -20,7 +20,7 @@ const storage = admin.storage();
 const bucket = storage.bucket(); // Default bucket: <project-id>.appspot.com
 
 // Configure CORS middleware
-// IMPORTANT: In production, restrict the origin to your app's actual domain(s)
+// IMPORTANT: In production, restrict the origin to your app"s actual domain(s)
 const cors = corsLib({origin: true});
 
 const runtimeOpts: functions.RuntimeOptions = {
