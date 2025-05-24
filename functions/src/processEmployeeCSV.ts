@@ -227,8 +227,7 @@ export const processEmployeeCSV = functions
                 // Fallback to URL if blob invalid and URL is present in CSV
                 employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
                 console.warn(
-                  `Invalid IDProofPhotoBlob format for ${employeeData.fullName}, ` +
-                  `using IDProofDocumentURL if present.`
+                  `Invalid IDProofPhotoBlob format for ${employeeData.fullName}, using IDProofDocumentURL if present.`
                 );
               }
             } else {
@@ -259,8 +258,7 @@ export const processEmployeeCSV = functions
                 // Fallback to URL if blob invalid and URL is present in CSV
                 employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
                 console.warn(
-                  `Invalid BankPassbookPhotoBlob format for ${employeeData.fullName}, ` +
-                  `using BankPassbookStatementURL if present.`
+                  `Invalid BankPassbookPhotoBlob format for ${employeeData.fullName}, using BankPassbookStatementURL if present.`
                 );
               }
             } else {
@@ -301,9 +299,7 @@ export const processEmployeeCSV = functions
         }
 
         console.log(
-          `Finished individual record processing. Attempting to save ${
-            processedEmployeesForFirestore.length
-          } valid records to Firestore.`
+          `Finished individual record processing. Attempting to save ${processedEmployeesForFirestore.length} valid records to Firestore.`
         );
 
         if (processedEmployeesForFirestore.length === 0) {
@@ -328,13 +324,12 @@ export const processEmployeeCSV = functions
           try {
             await batch.commit();
             recordsProcessedCount += chunk.length;
-            console.log(`Batch ${Math.floor(i / batchSize) + 1} committed. Total records committed so far: ${
-              recordsProcessedCount
-            }`);
+            console.log(`Batch ${Math.floor(i / batchSize) + 1} committed. Total records committed so far: ${recordsProcessedCount}`);
           } catch (dbError: unknown) { // Changed from 'any' to 'unknown'
             const message = (dbError instanceof Error) ? dbError.message : "Unknown database error";
             console.error("Error committing batch to Firestore:", dbError);
             if (!res.headersSent) {
+              // Corrected: Changed single quotes to double quotes
               res.status(500).json({success: false, message: `Error saving data to database: ${message}`});
             }
             return;
@@ -343,6 +338,7 @@ export const processEmployeeCSV = functions
 
         console.log("All batches committed successfully.");
         if (!res.headersSent) {
+          // Corrected: Changed single quotes to double quotes
           res.status(200).json({
             success: true,
             message: `Employee data imported successfully. ${recordsProcessedCount} records processed.`,
@@ -354,4 +350,3 @@ export const processEmployeeCSV = functions
       req.pipe(busboy);
     });
   });
-

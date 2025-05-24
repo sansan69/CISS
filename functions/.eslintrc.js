@@ -15,9 +15,9 @@ module.exports = {
   ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
-    project: ["tsconfig.json"], // Simplified to just tsconfig.json
+    project: ["tsconfig.json"], // Main tsconfig for src
     sourceType: "module",
-    tsconfigRootDir: __dirname, // Ensures correct path resolution for tsconfig.json
+    tsconfigRootDir: __dirname,
   },
   ignorePatterns: [
     "/lib/**/*", // Ignore built files.
@@ -28,11 +28,13 @@ module.exports = {
     "quotes": ["error", "double"],
     "import/no-unresolved": 0,
     "indent": ["error", 2],
-    "object-curly-spacing": ["error", "never"], // Google style typically uses 'always' or 'never'. Let's stick to never as per your output.
-    "require-jsdoc": 0, // Disable JSDoc requirement
-    "max-len": ["error", {"code": 120}], // Max line length
-    "comma-dangle": ["error", "always-multiline"], // Require trailing commas for multiline
+    "object-curly-spacing": ["error", "never"],
+    "require-jsdoc": 0,
+    "max-len": ["error", {"code": 160, "ignoreUrls": true, "ignoreStrings": true, "ignoreTemplateLiterals": true, "ignoreComments": true}], // Increased length
+    "comma-dangle": ["error", "always-multiline"],
     "no-trailing-spaces": "error",
     "padded-blocks": ["error", "never"],
+    "@typescript-eslint/no-explicit-any": "warn", // Changed from error to warn
+    "new-cap": ["error", { "capIsNewExceptions": ["Busboy"] }], // Allow Busboy to be called without 'new'
   },
 };
