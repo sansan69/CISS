@@ -195,7 +195,9 @@ export const processEmployeeCSV = functions
                 employeeData.profilePictureUrl = url;
                 console.log(`Uploaded photo for ${employeeData.fullName} to ${filePath}`);
               } else {
-                console.warn(`Invalid Data URI format for PhotoBlob for employee: ${employeeData.fullName}`);
+                console.warn(
+                  `Invalid Data URI format for PhotoBlob for employee: ${employeeData.fullName}`
+                );
                 employeeData.profilePictureUrl = null;
               }
             } else {
@@ -352,3 +354,4 @@ export const processEmployeeCSV = functions
       req.pipe(busboy);
     });
   });
+
