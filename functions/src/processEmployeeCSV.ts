@@ -3,11 +3,12 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as csvParser from "csv-parser";
 import * as sharp from "sharp";
-import * as Busboy from "busboy"; // Corrected import name if it was 'busboy'
+import * as Busboy from "busboy";
 import {v4 as uuidv4} from "uuid";
 import * as corsLib from "cors";
 import {Timestamp} from "firebase-admin/firestore";
 import * as QRCode from "qrcode";
+
 
 // Initialize Firebase Admin SDK (do this once)
 if (admin.apps.length === 0) {
@@ -19,28 +20,30 @@ const storage = admin.storage();
 const bucket = storage.bucket(); // Default bucket: <project-id>.appspot.com
 
 // Configure CORS middleware
+// IMPORTANT: In production, restrict the origin to your app's actual domain(s)
 const cors = corsLib({origin: true});
 
 const runtimeOpts: functions.RuntimeOptions = {
   timeoutSeconds: 540, // 9 minutes (maximum)
-  memory: "1GB",
+  memory: "1GB", // Start with 1GB, might need 2GB for many large images
 };
 
+// Helper to generate Employee ID
 const getCurrentFinancialYear = (): string => {
   const now = new Date();
-  const currentMonth = now.getMonth() + 1;
+  const currentMonth = now.getMonth() + 1; // 1-12
   const currentYear = now.getFullYear();
-  if (currentMonth >= 4) {
+  if (currentMonth >= 4) { // April or later
     return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
-  } else {
+  } else { // Jan, Feb, March
     return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
   }
 };
 
-const generateEmployeeId = (clientName: string = "UNKNOWNCLIENT"): string => {
+const generateEmployeeId = (clientNameParam: string): string => {
   const financialYear = getCurrentFinancialYear();
-  const randomNumber = Math.floor(Math.random() * 1000) + 1; // 1-1000
-  const sanitizedClientName = (clientName || "UNKNOWNCLIENT").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  const randomNumber = Math.floor(Math.random() * 1001); // 0-1000
+  const sanitizedClientName = (clientNameParam || "NOCLIENT").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   return `${sanitizedClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
 };
 
@@ -74,6 +77,7 @@ export const processEmployeeCSV = functions
       }
 
       /* eslint-disable new-cap */
+      // The `new-cap` rule is disabled for this line because `Busboy` is a constructor-like function.
       const busboy = Busboy({headers: req.headers});
       /* eslint-enable new-cap */
       const employeesToProcess: Record<string, string>[] = [];
@@ -83,18 +87,19 @@ export const processEmployeeCSV = functions
         console.log(`Processing file: ${MimeType.filename}, MimeType: ${MimeType.mimeType}`);
         fileStream
           .pipe(csvParser({
-            mapHeaders: ({header}) => header.trim(),
-            mapValues: ({value}) => typeof value === "string" ? value.trim() : value,
+            mapHeaders: ({header}: { header: string }) => header.trim(), // Trim header whitespace
+            mapValues: ({value}: { value: string }) => typeof value === "string" ? value.trim() : value,
           }))
           .on("data", (row: Record<string, string>) => {
             employeesToProcess.push(row);
           })
           .on("end", () => {
             console.log(`CSV file [${MimeType.filename}] parsed. ${employeesToProcess.length} rows found.`);
+            // Processing will happen in busboy.on('finish')
           })
           .on("error", (error: Error) => {
             console.error("Error parsing CSV stream:", error);
-            fileProcessingError = error;
+            fileProcessingError = error; // Capture error to respond later
           });
       });
 
@@ -124,14 +129,15 @@ export const processEmployeeCSV = functions
         for (const emp of employeesToProcess) {
           try {
             const employeeData: Record<string, any> = {};
-
+            // Map and validate essential fields
             employeeData.firstName = emp.first_name || "";
             employeeData.lastName = emp.last_name || "";
             employeeData.fullName = `${employeeData.firstName} ${employeeData.lastName}`.trim();
-            employeeData.phoneNumber = (emp.phone_number || "").replace(/\D/g, "");
+            employeeData.phoneNumber = (emp.phone_number || "").replace(/\D/g, ""); // Sanitize phone
             employeeData.emailAddress = emp.email || "";
             employeeData.clientName = emp.client_name || "Unassigned";
 
+            // Date handling (ensure they are valid dates before converting)
             if (emp.joining_date && !isNaN(new Date(emp.joining_date).getTime())) {
               employeeData.joiningDate = Timestamp.fromDate(new Date(emp.joining_date));
             } else {
@@ -170,22 +176,27 @@ export const processEmployeeCSV = functions
             if (emp.PhotoBlob && typeof emp.PhotoBlob === "string" && emp.PhotoBlob.startsWith("data:image/")) {
               const matches = emp.PhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
               if (matches && matches.length === 3) {
+                // const imageMimeType = matches[1]; // e.g., image/jpeg // Not directly used, sharp infers
                 const base64Data = matches[2];
                 const imageBuffer = Buffer.from(base64Data, "base64");
-                const imageName = `${uuidv4()}.jpg`;
+
+                const imageName = `${uuidv4()}.jpg`; // Compress to JPEG
                 const filePath = `employee_photos/${safeIdentifier}/${imageName}`;
 
                 const compressedImageBuffer = await sharp(imageBuffer)
                   .resize({width: 800, height: 800, fit: "inside", withoutEnlargement: true})
                   .jpeg({quality: 75})
                   .toBuffer();
+
                 const file = bucket.file(filePath);
                 await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
+
                 const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
                 employeeData.profilePictureUrl = url;
+                console.log(`Uploaded photo for ${employeeData.fullName} to ${filePath}`);
               } else {
+                console.warn(`Invalid Data URI format for PhotoBlob for employee: ${employeeData.fullName}`);
                 employeeData.profilePictureUrl = null;
-                console.warn(`Invalid PhotoBlob format for ${employeeData.fullName}`);
               }
             } else {
               employeeData.profilePictureUrl = null;
@@ -211,11 +222,13 @@ export const processEmployeeCSV = functions
                 const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
                 employeeData.idProofDocumentUrl = url;
               } else {
-                employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null; // Fallback to URL if blob invalid
+                // Fallback to URL if blob invalid and URL is present in CSV
+                employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
                 console.warn(`Invalid IDProofPhotoBlob format for ${employeeData.fullName}`);
               }
             } else {
-              employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null; // If only URL is provided
+              // If only URL is provided in CSV and no blob
+              employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
             }
 
             // Image Handling for 'BankPassbookPhotoBlob'
@@ -238,16 +251,17 @@ export const processEmployeeCSV = functions
                 const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
                 employeeData.bankPassbookStatementUrl = url;
               } else {
-                // Fallback to URL if blob invalid
+                // Fallback to URL if blob invalid and URL is present in CSV
                 employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
                 console.warn(`Invalid BankPassbookPhotoBlob format for ${employeeData.fullName}`);
               }
             } else {
-              // If only URL is provided in CSV
+              // If only URL is provided in CSV and no blob
               employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
             }
 
 
+            // Generate Employee ID and QR Code URL (data for client-side generation)
             employeeData.employeeId = generateEmployeeId(employeeData.clientName);
             employeeData.qrCodeUrl = await generateQrCodeDataUrl(
               employeeData.employeeId,
@@ -269,17 +283,20 @@ export const processEmployeeCSV = functions
             } else {
               console.warn(`Skipping record due to missing essential data (Name/Phone): ${JSON.stringify(emp)}`);
             }
-          } catch (processingError: unknown) {
+          } catch (processingError: unknown) { // Changed from 'any' to 'unknown' for better practice
             const message = (processingError instanceof Error) ?
               processingError.message :
               "Unknown error during row processing";
             console.error(`Error processing row data for CSV row ${JSON.stringify(emp)}:`, message);
+            // Optionally, collect these errors to report back
           }
         }
 
-        console.log(`Finished individual record processing. Attempting to save ${
-          processedEmployeesForFirestore.length
-        } valid records to Firestore.`);
+        console.log(
+          `Finished individual record processing. Attempting to save ${
+            processedEmployeesForFirestore.length
+          } valid records to Firestore.`
+        );
 
         if (processedEmployeesForFirestore.length === 0) {
           if (!res.headersSent) {
@@ -291,12 +308,13 @@ export const processEmployeeCSV = functions
           return;
         }
 
-        const batchSize = 400;
+        // Firestore Batch Writes
+        const batchSize = 400; // Firestore limit is 500 operations per batch
         for (let i = 0; i < processedEmployeesForFirestore.length; i += batchSize) {
           const batch = db.batch();
           const chunk = processedEmployeesForFirestore.slice(i, i + batchSize);
           chunk.forEach((empData) => {
-            const docRef = db.collection("employees").doc();
+            const docRef = db.collection("employees").doc(); // Auto-generate ID
             batch.set(docRef, empData);
           });
           try {
@@ -305,7 +323,7 @@ export const processEmployeeCSV = functions
             console.log(`Batch ${Math.floor(i / batchSize) + 1} committed. Total records committed so far: ${
               recordsProcessedCount
             }`);
-          } catch (dbError: unknown) {
+          } catch (dbError: unknown) { // Changed from 'any' to 'unknown'
             const message = (dbError instanceof Error) ? dbError.message : "Unknown database error";
             console.error("Error committing batch to Firestore:", dbError);
             if (!res.headersSent) {
@@ -328,5 +346,3 @@ export const processEmployeeCSV = functions
       req.pipe(busboy);
     });
   });
-
-    
