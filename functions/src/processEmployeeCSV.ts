@@ -224,7 +224,10 @@ export const processEmployeeCSV = functions
               } else {
                 // Fallback to URL if blob invalid and URL is present in CSV
                 employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
-                console.warn(`Invalid IDProofPhotoBlob format for ${employeeData.fullName}`);
+                console.warn(
+                  `Invalid IDProofPhotoBlob format for ${employeeData.fullName}, ` +
+                  `using IDProofDocumentURL if present.`
+                );
               }
             } else {
               // If only URL is provided in CSV and no blob
@@ -253,7 +256,10 @@ export const processEmployeeCSV = functions
               } else {
                 // Fallback to URL if blob invalid and URL is present in CSV
                 employeeData.bankPassbookStatementUrl = emp.BankPassbookStatementURL || null;
-                console.warn(`Invalid BankPassbookPhotoBlob format for ${employeeData.fullName}`);
+                console.warn(
+                  `Invalid BankPassbookPhotoBlob format for ${employeeData.fullName}, ` +
+                  `using BankPassbookStatementURL if present.`
+                );
               }
             } else {
               // If only URL is provided in CSV and no blob
