@@ -203,7 +203,7 @@ export default function EmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push('/employees')} className="mt-4">Back to Directory</Button>
+            <Button onClick={() => router.push('/employees')} className="mt-4">Back to Employee Directory</Button>
         </AlertDescription>
       </Alert>
     );
@@ -216,7 +216,7 @@ export default function EmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push('/employees')} className="mt-4">Back to Directory</Button>
+                <Button onClick={() => router.push('/employees')} className="mt-4">Back to Employee Directory</Button>
             </AlertDescription>
         </Alert>
     );
@@ -336,19 +336,21 @@ export default function EmployeeProfilePage() {
                         ) : (
                             <p className="text-muted-foreground">QR Code not available.</p>
                         )}
-                        <Button 
-                            variant="outline" 
-                            className="mt-4" 
-                            onClick={handleRegenerateQrCode}
-                            disabled={isRegeneratingQr}
-                        >
-                            {isRegeneratingQr ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                            ) : (
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                            )}
-                            {isRegeneratingQr ? "Regenerating..." : "Regenerate QR"}
-                        </Button>
+                        {isEditing && (
+                            <Button 
+                                variant="outline" 
+                                className="mt-4" 
+                                onClick={handleRegenerateQrCode}
+                                disabled={isRegeneratingQr}
+                            >
+                                {isRegeneratingQr ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                                ) : (
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                )}
+                                {isRegeneratingQr ? "Regenerating..." : "Regenerate QR"}
+                            </Button>
+                        )}
                         {employee.qrCodeUrl && employee.qrCodeUrl.startsWith('data:image/png;base64,') && (
                            <p className="text-xs text-muted-foreground mt-2 truncate w-full text-center" title={decodeURIComponent(employee.qrCodeUrl.split('data=')[1] || '')}>
                                 QR Data URL (truncated)
@@ -362,14 +364,16 @@ export default function EmployeeProfilePage() {
                         <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
                         <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
                         <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                        <div className="pt-4">
-                             <Label htmlFor="new-doc" className="text-sm font-medium">Upload New Document (Placeholder)</Label>
-                             <div className="flex gap-2 mt-1">
-                                <Input id="new-doc" type="file" className="flex-grow" disabled />
-                                <Button size="sm" disabled><FileUp className="mr-2 h-4 w-4" /> Upload</Button>
-                             </div>
-                             <p className="text-xs text-muted-foreground mt-1">Max 5MB. PDF, JPG, PNG accepted.</p>
-                        </div>
+                        {isEditing && (
+                            <div className="pt-4">
+                                <Label htmlFor="new-doc" className="text-sm font-medium">Upload New Document (Placeholder)</Label>
+                                <div className="flex gap-2 mt-1">
+                                    <Input id="new-doc" type="file" className="flex-grow" disabled />
+                                    <Button size="sm" disabled><FileUp className="mr-2 h-4 w-4" /> Upload</Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Max 5MB. PDF, JPG, PNG accepted.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
               </div>
@@ -405,3 +409,4 @@ export default function EmployeeProfilePage() {
     </div>
   );
 }
+
