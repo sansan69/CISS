@@ -1,21 +1,43 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon } from 'lucide-react';
+import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/types/employee';
 import Link from 'next/link';
 import Image from 'next/image';
 
+const INSTALL_PROMPT_KEY = 'cissAppInstallPromptShown';
+
 export default function LandingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
+
+  useEffect(() => {
+    // Check if the install prompt has been shown before
+    const installPromptShown = localStorage.getItem(INSTALL_PROMPT_KEY);
+    if (!installPromptShown) {
+      toast({
+        title: "Install CISS Workforce?",
+        description: "For quick and easy access, consider adding this app to your home screen or installing it on your device.",
+        duration: 9000, // Keep it visible a bit longer
+        action: (
+          <Button variant="outline" size="sm" onClick={() => { /* Future: Could trigger custom install guide */ }}>
+            <DownloadCloud className="mr-2 h-4 w-4" />
+            Learn More
+          </Button>
+        ),
+      });
+      // Mark the prompt as shown
+      localStorage.setItem(INSTALL_PROMPT_KEY, 'true');
+    }
+  }, [toast]);
 
   const handleContinue = () => {
     let normalizedPhoneNumber = phoneNumber.trim();
