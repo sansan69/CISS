@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { type Employee } from '@/types/employee';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -73,14 +73,19 @@ const DocumentItem: React.FC<{ name: string, url?: string, type: string }> = ({ 
 export default function EmployeeProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = React.useState(false);
+  const [isEditing, setIsEditing] = React.useState(searchParams.get('edit') === 'true');
   const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
+
+  useEffect(() => {
+    setIsEditing(searchParams.get('edit') === 'true');
+  }, [searchParams]);
 
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -172,6 +177,16 @@ export default function EmployeeProfilePage() {
     }
   };
 
+  const toggleEditMode = () => {
+    const newEditState = !isEditing;
+    setIsEditing(newEditState);
+    if (newEditState) {
+      router.push(`/employees/${employeeIdFromUrl}?edit=true`, { scroll: false });
+    } else {
+      router.push(`/employees/${employeeIdFromUrl}`, { scroll: false });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
@@ -209,6 +224,13 @@ export default function EmployeeProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="mb-4">
+        <Button variant="outline" size="sm" onClick={() => router.push('/employees')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Employee Directory
+        </Button>
+      </div>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Image
@@ -225,12 +247,12 @@ export default function EmployeeProfilePage() {
             <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-4 sm:mt-0">
             <Button onClick={handleDownloadProfile} variant="outline">
                 <Download className="mr-2 h-4 w-4" /> Download Profile
             </Button>
-            <Button onClick={() => setIsEditing(!isEditing)}>
-                <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Save Changes" : "Edit Profile"}
+            <Button onClick={toggleEditMode}>
+                <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel Editing" : "Edit Profile"}
             </Button>
         </div>
       </div>
@@ -310,7 +332,7 @@ export default function EmployeeProfilePage() {
                     <CardTitle className="mb-4">Employee QR Code</CardTitle>
                     <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
                         {employee.qrCodeUrl ? (
-                            <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee" />
+                            <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
                         ) : (
                             <p className="text-muted-foreground">QR Code not available.</p>
                         )}
@@ -364,14 +386,22 @@ export default function EmployeeProfilePage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">Edit form components would go here, pre-filled and allowing updates. Save would update Firestore document.</p>
+            {/* Example: <Input label="First Name" defaultValue={employee.firstName} /> */}
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-            <Button onClick={() => { /* Handle save logic */ setIsEditing(false); toast({title: "Save (Placeholder)", description:"Save functionality to be implemented."}) }}>Save Changes</Button>
+            <Button variant="outline" onClick={() => {
+              setIsEditing(false);
+              router.push(`/employees/${employeeIdFromUrl}`, { scroll: false });
+            }}>Cancel</Button>
+            <Button onClick={() => { 
+              // Placeholder for actual save logic
+              setIsEditing(false); 
+              router.push(`/employees/${employeeIdFromUrl}`, { scroll: false });
+              toast({title: "Save (Placeholder)", description:"Save functionality to be implemented."}) 
+            }}>Save Changes</Button>
           </CardFooter>
         </Card>
       )}
     </div>
   );
 }
-
