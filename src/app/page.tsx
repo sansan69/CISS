@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud } from 'lucide-react';
+import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { mockEmployees } from '@/types/employee';
 import Link from 'next/link';
 import Image from 'next/image';
+import { db } from '@/lib/firebase'; // Import Firestore instance
+import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore'; // Import Firestore functions
+import type { Employee } from '@/types/employee';
 
 const INSTALL_PROMPT_KEY = 'cissAppInstallPromptShown';
 
@@ -18,15 +20,15 @@ export default function LandingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Check if the install prompt has been shown before
     const installPromptShown = localStorage.getItem(INSTALL_PROMPT_KEY);
     if (!installPromptShown) {
       toast({
         title: "Install CISS Workforce?",
         description: "For quick and easy access, consider adding this app to your home screen or installing it on your device.",
-        duration: 9000, // Keep it visible a bit longer
+        duration: 9000,
         action: (
           <Button variant="outline" size="sm" onClick={() => { /* Future: Could trigger custom install guide */ }}>
             <DownloadCloud className="mr-2 h-4 w-4" />
@@ -34,12 +36,11 @@ export default function LandingPage() {
           </Button>
         ),
       });
-      // Mark the prompt as shown
       localStorage.setItem(INSTALL_PROMPT_KEY, 'true');
     }
   }, [toast]);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     let normalizedPhoneNumber = phoneNumber.trim();
 
     if (normalizedPhoneNumber.startsWith('+91')) {
@@ -47,34 +48,55 @@ export default function LandingPage() {
     } else if (normalizedPhoneNumber.startsWith('91')) {
       normalizedPhoneNumber = normalizedPhoneNumber.substring(2);
     }
-
-    // Remove any non-digit characters that might have been pasted
     normalizedPhoneNumber = normalizedPhoneNumber.replace(/\D/g, '');
-
 
     if (!/^\d{10}$/.test(normalizedPhoneNumber)) {
       toast({
         variant: "destructive",
         title: "Invalid Phone Number",
-        description: "Please enter a valid 10-digit phone number. Prefixes like +91 or 91 are allowed.",
+        description: "Please enter a valid 10-digit phone number.",
       });
       return;
     }
 
-    const employee = mockEmployees.find(emp => emp.phoneNumber === normalizedPhoneNumber);
+    setIsLoading(true);
+    toast({
+      title: "Searching...",
+      description: "Looking up employee details.",
+    });
 
-    if (employee) {
+    try {
+      const employeesRef = collection(db, "employees");
+      const q = query(employeesRef, where("phoneNumber", "==", normalizedPhoneNumber));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // Employee found
+        const employeeDoc = querySnapshot.docs[0];
+        const employeeData = employeeDoc.data() as Employee; // Cast to Employee type
+        
+        toast({
+          title: "Login Successful",
+          description: `Welcome back, ${employeeData.fullName || employeeData.firstName}!`,
+        });
+        router.push(`/employees/${employeeDoc.id}`);
+      } else {
+        // Employee not found
+        toast({
+          title: "Employee Not Found",
+          description: "Redirecting to enrollment page.",
+        });
+        router.push(`/enroll?phone=${normalizedPhoneNumber}`);
+      }
+    } catch (error) {
+      console.error("Error searching for employee:", error);
       toast({
-        title: "Login Successful",
-        description: `Welcome back, ${employee.fullName}!`,
+        variant: "destructive",
+        title: "Search Error",
+        description: "Could not perform search. Please try again.",
       });
-      router.push(`/employees/${employee.id}`);
-    } else {
-      toast({
-        title: "Employee Not Found",
-        description: "Redirecting to enrollment page.",
-      });
-      router.push(`/enroll?phone=${normalizedPhoneNumber}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -119,11 +141,18 @@ export default function LandingPage() {
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               className="pl-10 text-base"
-              maxLength={13} // Allows for +91 and 10 digits
+              maxLength={13} 
+              disabled={isLoading}
             />
           </div>
-          <Button onClick={handleContinue} className="w-full text-base py-3" variant="default">
-            Continue
+          <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching...
+              </>
+            ) : (
+              "Continue"
+            )}
           </Button>
         </CardContent>
       </Card>
