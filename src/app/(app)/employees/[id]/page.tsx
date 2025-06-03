@@ -112,6 +112,7 @@ export default function EmployeeProfilePage() {
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           } as Employee;
+          console.log("Fetched employee data for profile page:", formattedData); // Added console log
           setEmployee(formattedData);
         } else {
           setError("Employee not found with the provided ID.");
@@ -133,8 +134,8 @@ export default function EmployeeProfilePage() {
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
       case 'Active': return 'default';
-      case 'Inactive': return 'destructive';
-      case 'OnLeave': return 'secondary';
+      case 'Inactive': return 'secondary';
+      case 'OnLeave': return 'outline'; 
       case 'Exited': return 'destructive';
       default: return 'outline';
     }
@@ -410,3 +411,5 @@ export default function EmployeeProfilePage() {
   );
 }
 
+
+      
