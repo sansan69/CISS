@@ -48,8 +48,6 @@ import {
 import React, { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, User, signOut } from 'firebase/auth'; 
-// Removed SheetTitle import as it's not correctly used here.
-// If an accessible name is needed for the sidebar itself, aria-label or a generic sr-only span would be more appropriate.
 
 
 interface NavItem {
@@ -143,6 +141,7 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter(); 
+  const pathname = usePathname();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
@@ -153,9 +152,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       } else {
         setAuthUser(null);
         const publicPaths = ['/admin-login', '/', '/enroll']; 
-        if (router.pathname && 
-            !publicPaths.includes(router.pathname) && 
-            !router.pathname.startsWith('/enroll')) { 
+        const isPublicPath = publicPaths.includes(pathname) || pathname.startsWith('/enroll?');
+        
+        if (!isPublicPath) { 
              router.push('/admin-login'); 
         }
       }
@@ -163,7 +162,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [router]);
+  }, [router, pathname]);
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('SW registered: ', registration);
+        }).catch(registrationError => {
+          console.log('SW registration failed: ', registrationError);
+        });
+      });
+    }
+  }, []);
 
 
   const handleLogout = async () => {
@@ -172,7 +183,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       router.push('/admin-login');
     } catch (error) {
       console.error("Error signing out: ", error);
-      // Optionally, show a toast message to the user
     }
   };
 
@@ -189,7 +199,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
             data-ai-hint="company logo"
             unoptimized={true}
           />
-          {/* Removed SheetTitle from here as it's not within a Sheet/Dialog context */}
           <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
         </SidebarHeader>
         <SidebarContent>
