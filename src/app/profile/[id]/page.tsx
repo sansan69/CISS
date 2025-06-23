@@ -2,25 +2,20 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { type Employee } from '@/types/employee';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, Home } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import QRCode from 'qrcode';
-
-// This is the ADMIN view of the employee profile page.
 
 const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean }> = ({ label, value, isDate }) => {
   let displayValue = 'N/A';
@@ -47,7 +42,6 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
   );
 };
 
-
 const DocumentItem: React.FC<{ name: string, url?: string, type: string }> = ({ name, url, type }) => (
     <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center gap-3">
@@ -69,25 +63,15 @@ const DocumentItem: React.FC<{ name: string, url?: string, type: string }> = ({ 
     </div>
 );
 
-
-export default function AdminEmployeeProfilePage() {
+export default function PublicEmployeeProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
-  const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
-
-  useEffect(() => {
-    // Update isEditing state if the URL query param changes
-    setIsEditing(searchParams.get('edit') === 'true');
-  }, [searchParams]);
 
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -114,7 +98,6 @@ export default function AdminEmployeeProfilePage() {
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           } as Employee;
-          console.log("Fetched employee data for admin profile page:", formattedData);
           setEmployee(formattedData);
         } else {
           setError("Employee not found with the provided ID.");
@@ -132,7 +115,6 @@ export default function AdminEmployeeProfilePage() {
     fetchEmployee();
   }, [employeeIdFromUrl, toast]);
 
-
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
       case 'Active': return 'default';
@@ -141,53 +123,6 @@ export default function AdminEmployeeProfilePage() {
       case 'Exited': return 'destructive';
       default: return 'outline';
     }
-  };
-
-  const handleDownloadProfile = () => {
-    toast({
-      title: "Download Requested",
-      description: "CV/Biodata download functionality is under development.",
-    });
-  };
-
-  const handleRegenerateQrCode = async () => {
-    if (!employee) return;
-    setIsRegeneratingQr(true);
-    try {
-      const dataString = `Employee ID: ${employee.employeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
-      const newQrDataUrl = await QRCode.toDataURL(dataString, {
-        errorCorrectionLevel: 'H',
-        type: 'image/png',
-        quality: 0.92,
-        margin: 1,
-        width: 256,
-      });
-
-      const employeeDocRef = doc(db, "employees", employee.id);
-      await updateDoc(employeeDocRef, {
-        qrCodeUrl: newQrDataUrl,
-        updatedAt: serverTimestamp(),
-      });
-
-      setEmployee(prev => prev ? { ...prev, qrCodeUrl: newQrDataUrl, updatedAt: new Date().toISOString() } : null);
-      toast({ title: "QR Code Regenerated", description: "Employee QR code has been updated." });
-
-    } catch (err) {
-      console.error("Error regenerating QR code:", err);
-      toast({ variant: "destructive", title: "QR Regeneration Failed", description: "Could not regenerate the QR code." });
-    } finally {
-      setIsRegeneratingQr(false);
-    }
-  };
-
-  const toggleEditMode = () => {
-    const newEditState = !isEditing;
-    if (newEditState) {
-      router.push(`/employees/${employeeIdFromUrl}?edit=true`, { scroll: false });
-    } else {
-      router.push(`/employees/${employeeIdFromUrl}`, { scroll: false });
-    }
-    // The useEffect listening to searchParams will update the isEditing state.
   };
   
   if (isLoading) {
@@ -206,8 +141,8 @@ export default function AdminEmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push('/employees')} className="mt-4">
-              Back to Employee Directory
+            <Button onClick={() => router.push('/')} className="mt-4">
+              <Home className="mr-2 h-4 w-4" /> Back to Home
             </Button>
         </AlertDescription>
       </Alert>
@@ -221,8 +156,8 @@ export default function AdminEmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push('/employees')} className="mt-4">
-                  Back to Employee Directory
+                <Button onClick={() => router.push('/')} className="mt-4">
+                  <Home className="mr-2 h-4 w-4" /> Back to Home
                 </Button>
             </AlertDescription>
         </Alert>
@@ -230,11 +165,10 @@ export default function AdminEmployeeProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
       <div className="mb-4">
-        <Button variant="outline" size="sm" onClick={() => router.push('/employees')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Employee Directory
+        <Button variant="outline" size="sm" onClick={() => router.push('/')}>
+          <Home className="mr-2 h-4 w-4" /> Back to Home
         </Button>
       </div>
 
@@ -253,14 +187,6 @@ export default function AdminEmployeeProfilePage() {
             <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
             <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
           </div>
-        </div>
-        <div className="flex gap-2 mt-4 sm:mt-0">
-            <Button onClick={handleDownloadProfile} variant="outline">
-                <Download className="mr-2 h-4 w-4" /> Download Profile
-            </Button>
-            <Button onClick={toggleEditMode}>
-                <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel Editing" : "Edit Profile"}
-            </Button>
         </div>
       </div>
 
@@ -343,21 +269,6 @@ export default function AdminEmployeeProfilePage() {
                         ) : (
                             <p className="text-muted-foreground">QR Code not available.</p>
                         )}
-                        {isEditing && (
-                            <Button
-                                variant="outline"
-                                className="mt-4"
-                                onClick={handleRegenerateQrCode}
-                                disabled={isRegeneratingQr}
-                            >
-                                {isRegeneratingQr ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <RefreshCw className="mr-2 h-4 w-4" />
-                                )}
-                                {isRegeneratingQr ? "Regenerating..." : "Regenerate QR"}
-                            </Button>
-                        )}
                     </div>
                 </div>
                 <div>
@@ -366,16 +277,6 @@ export default function AdminEmployeeProfilePage() {
                         <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
                         <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
                         <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                        {isEditing && (
-                            <div className="pt-4">
-                                <Label htmlFor="new-doc" className="text-sm font-medium">Upload New Document (Placeholder)</Label>
-                                <div className="flex gap-2 mt-1">
-                                    <Input id="new-doc" type="file" className="flex-grow" disabled />
-                                    <Button size="sm" disabled><FileUp className="mr-2 h-4 w-4" /> Upload</Button>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">Max 5MB. PDF, JPG, PNG accepted.</p>
-                            </div>
-                        )}
                     </div>
                 </div>
               </div>
@@ -383,27 +284,6 @@ export default function AdminEmployeeProfilePage() {
           </CardContent>
         </Card>
       </Tabs>
-
-      {isEditing && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Edit Profile Information</CardTitle>
-            <CardDescription>Update employee details here. This is a placeholder for the actual edit form.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">Edit form components would go here, pre-filled and allowing updates. Save would update Firestore document.</p>
-            {/* Example: <Input label="First Name" defaultValue={employee.firstName} /> */}
-          </CardContent>
-          <CardFooter className="flex justify-end gap-2">
-            <Button variant="outline" onClick={toggleEditMode}>Cancel</Button>
-            <Button onClick={() => {
-              // Placeholder for actual save logic
-              toggleEditMode();
-              toast({title: "Save (Placeholder)", description:"Save functionality to be implemented."})
-            }}>Save Changes</Button>
-          </CardFooter>
-        </Card>
-      )}
     </div>
   );
 }

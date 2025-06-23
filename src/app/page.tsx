@@ -10,8 +10,8 @@ import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
-import { db } from '@/lib/firebase'; // Import Firestore instance
-import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore'; // Import Firestore functions
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 
 const INSTALL_PROMPT_KEY = 'cissAppInstallPromptShown';
@@ -71,17 +71,16 @@ export default function LandingPage() {
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        // Employee found
         const employeeDoc = querySnapshot.docs[0];
-        const employeeData = employeeDoc.data() as Employee; // Cast to Employee type
+        const employeeData = employeeDoc.data() as Employee;
         
         toast({
           title: "Login Successful",
           description: `Welcome back, ${employeeData.fullName || employeeData.firstName}!`,
         });
-        router.push(`/employees/${employeeDoc.id}`);
+        // Redirect to the new public profile page
+        router.push(`/profile/${employeeDoc.id}`);
       } else {
-        // Employee not found
         toast({
           title: "Employee Not Found",
           description: "Redirecting to enrollment page.",
@@ -93,7 +92,7 @@ export default function LandingPage() {
       toast({
         variant: "destructive",
         title: "Search Error",
-        description: "Could not perform search. Please try again.",
+        description: "Could not perform search. Please check your Firestore security rules and network connection.",
       });
     } finally {
       setIsLoading(false);
