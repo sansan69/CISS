@@ -154,18 +154,26 @@ export default function EnrollEmployeePage() {
   const watchClientName = form.watch("clientName");
 
   useEffect(() => {
-    setIsLoadingClients(true);
-    const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
-    const unsubscribe = onSnapshot(clientsQuery, (snapshot) => {
-      const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
-      setAvailableClients(fetchedClients);
-      setIsLoadingClients(false);
-    }, (error) => {
-      console.error("Error fetching clients for enrollment form: ", error);
-      toast({ variant: "destructive", title: "Error Loading Clients", description: "Could not load client list." });
-      setIsLoadingClients(false);
-    });
-    return () => unsubscribe();
+    const fetchClients = async () => {
+        setIsLoadingClients(true);
+        try {
+            const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
+            const snapshot = await getDocs(clientsQuery);
+            const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+            setAvailableClients(fetchedClients);
+        } catch (error) {
+            console.error("Error fetching clients for enrollment form: ", error);
+            toast({ 
+              variant: "destructive", 
+              title: "Error Loading Clients", 
+              description: "Could not load client list. Please check Firestore security rules." 
+            });
+        } finally {
+            setIsLoadingClients(false);
+        }
+    };
+
+    fetchClients();
   }, [toast]);
 
   useEffect(() => {
@@ -392,8 +400,8 @@ export default function EnrollEmployeePage() {
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="mb-6">
-        <Link href="/" className="flex items-center text-sm text-primary hover:underline">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
+        <Link href="/employees" className="flex items-center text-sm text-primary hover:underline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Employee Directory
         </Link>
       </div>
 
@@ -720,4 +728,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-

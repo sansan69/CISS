@@ -34,7 +34,7 @@ import React, { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase";
-import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, getDocs } from "firebase/firestore";
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -217,18 +217,26 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   }, [initialPhoneNumberFromQuery, form]);
 
   useEffect(() => {
-    setIsLoadingClients(true);
-    const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
-    const unsubscribe = onSnapshot(clientsQuery, (snapshot) => {
-      const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
-      setAvailableClients(fetchedClients);
-      setIsLoadingClients(false);
-    }, (error) => {
-      console.error("Error fetching clients for enrollment form: ", error);
-      toast({ variant: "destructive", title: "Error Loading Clients", description: "Could not load client list." });
-      setIsLoadingClients(false);
-    });
-    return () => unsubscribe();
+    const fetchClients = async () => {
+        setIsLoadingClients(true);
+        try {
+            const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
+            const snapshot = await getDocs(clientsQuery);
+            const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+            setAvailableClients(fetchedClients);
+        } catch (error) {
+            console.error("Error fetching clients for enrollment form: ", error);
+            toast({ 
+              variant: "destructive", 
+              title: "Error Loading Clients", 
+              description: "Could not load client list. Please check Firestore security rules." 
+            });
+        } finally {
+            setIsLoadingClients(false);
+        }
+    };
+
+    fetchClients();
   }, [toast]);
 
   useEffect(() => {
@@ -527,7 +535,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       setIdProofPreview(null);
       setBankPassbookPreview(null);
 
-      router.push(`/employees/${docRef.id}`);
+      router.push(`/profile/${docRef.id}`);
 
     } catch (error: any) {
       console.error("Detailed Registration or Upload Error: ", error, error.stack);
