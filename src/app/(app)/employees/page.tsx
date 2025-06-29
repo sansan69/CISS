@@ -69,9 +69,13 @@ export default function EmployeeDirectoryPage() {
       const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
       const fetchedClients = clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string }));
       setClients([{ id: 'all', name: 'All Clients' }, ...fetchedClients]);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching clients:", err);
-      toast({ variant: "destructive", title: "Error", description: "Could not fetch client list." });
+      let message = "Could not fetch client list.";
+      if (err.code === 'permission-denied') {
+        message = "Permission denied. Check Firestore rules to allow client list access.";
+      }
+      toast({ variant: "destructive", title: "Error", description: message });
     }
   }, [toast]);
 
@@ -176,8 +180,12 @@ export default function EmployeeDirectoryPage() {
 
     } catch (err: any) {
       console.error("Error fetching employees:", err);
-      setError(err.message || "Failed to fetch employees.");
-      toast({ variant: "destructive", title: "Error", description: err.message || "Could not fetch employees." });
+      let message = err.message || "Failed to fetch employees.";
+      if (err.code === 'permission-denied') {
+        message = "Permission denied. Please check your Firestore security rules to ensure authenticated users can list employees.";
+      }
+      setError(message);
+      toast({ variant: "destructive", title: "Data Fetch Error", description: message });
     } finally {
       setIsLoading(false);
       setIsFetchingNext(false);
@@ -359,7 +367,7 @@ export default function EmployeeDirectoryPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Employee Directory</h1>
-        <Link href="/enroll" passHref>
+        <Link href="/employees/enroll" passHref>
           <Button>
             <UserPlus className="mr-2 h-4 w-4" /> Enroll New Employee
           </Button>
