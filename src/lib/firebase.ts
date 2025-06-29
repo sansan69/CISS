@@ -14,6 +14,13 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
+// Diagnostic log to check if environment variables are loaded correctly
+console.log("--- Firebase Config Check ---");
+console.log("Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+console.log("API Key Loaded:", !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+console.log("--------------------------");
+
+
 // Initialize Firebase
 let app;
 if (!getApps().length) {
