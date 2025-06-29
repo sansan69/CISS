@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { type Employee } from '@/types/employee';
@@ -11,15 +11,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db, auth } from '@/lib/firebase';
+import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import QRCode from 'qrcode';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { ref, deleteObject } from 'firebase/storage';
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -30,6 +31,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
+
 
 // Dropdown options
 const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
@@ -38,6 +42,7 @@ const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 interface ClientOption { id: string; name: string; }
+type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
 
 // Zod schema for validation
 const employeeUpdateSchema = z.object({
@@ -143,6 +148,24 @@ export default function AdminEmployeeProfilePage() {
   
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // State for new file uploads
+  const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
+  const [newIdProofDocument, setNewIdProofDocument] = useState<File | null>(null);
+  const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
+
+  // State for file previews
+  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+  const [idProofPreview, setIdProofPreview] = useState<string | null>(null);
+  const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
+  
+  // State for camera dialog
+  const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
+  const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -153,7 +176,6 @@ export default function AdminEmployeeProfilePage() {
   }, []);
 
   const isAdminView = !isAuthLoading && currentUser !== null;
-  const isPublicView = !isAuthLoading && currentUser === null;
 
   const form = useForm<EmployeeUpdateValues>({
     resolver: zodResolver(employeeUpdateSchema),
@@ -233,58 +255,171 @@ export default function AdminEmployeeProfilePage() {
     setIsEditing(isAdminView && searchParams.get('edit') === 'true');
   }, [searchParams, isAdminView]);
 
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    setFile: React.Dispatch<React.SetStateAction<File | null>>,
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ variant: "destructive", title: "File too large", description: "Please select a file smaller than 5MB." });
+        return;
+      }
+      setFile(file);
+      if (file.type.startsWith("image/")) {
+        setPreview(URL.createObjectURL(file));
+      } else if (file.type === "application/pdf") {
+        setPreview("/pdf-icon.png"); 
+      }
+    }
+  };
+
+  const openCamera = (fieldName: CameraField) => {
+    setActiveCameraField(fieldName);
+    setCameraError(null);
+    setIsCameraDialogOpen(true);
+    // Camera stream logic is handled in a useEffect to ensure dialog is open first
+  };
+
+  useEffect(() => {
+    async function getCameraStream() {
+      if (!isCameraDialogOpen) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        setCameraStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        setCameraError("Could not access camera. Please ensure permission is granted.");
+        setIsCameraDialogOpen(false);
+      }
+    }
+    getCameraStream();
+  }, [isCameraDialogOpen]);
+  
+  const closeCameraDialog = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+    setCameraStream(null);
+    setIsCameraDialogOpen(false);
+    setActiveCameraField(null);
+  };
+  
+  const handleCapturePhoto = async () => {
+    if (videoRef.current && canvasRef.current && activeCameraField) {
+      const canvas = canvasRef.current;
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const context = canvas.getContext('2d');
+      context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const file = await dataURLtoFile(dataUrl, `${activeCameraField}.jpg`);
+
+      if (activeCameraField === 'profilePicture') {
+        setNewProfilePicture(file);
+        setProfilePicPreview(URL.createObjectURL(file));
+      } else if (activeCameraField === 'idProofDocument') {
+        setNewIdProofDocument(file);
+        setIdProofPreview(URL.createObjectURL(file));
+      } else if (activeCameraField === 'bankPassbookStatement') {
+        setNewBankPassbookStatement(file);
+        setBankPassbookPreview(URL.createObjectURL(file));
+      }
+      closeCameraDialog();
+    }
+  };
+
 
   async function handleSaveChanges(data: EmployeeUpdateValues) {
     if (!employee) return;
     setIsSubmitting(true);
+    toast({ title: "Saving...", description: "Updating employee profile." });
+
+    const updatePromises: Promise<void>[] = [];
+    const updatedUrls: { [key: string]: string } = {};
+
+    // Handle Profile Picture
+    if (newProfilePicture) {
+        updatePromises.push((async () => {
+            if (employee.profilePictureUrl) await deleteFileFromStorage(employee.profilePictureUrl);
+            const storagePath = `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
+            const blob = await compressImage(newProfilePicture, { maxWidth: 500, maxHeight: 500, quality: 0.8 });
+            updatedUrls.profilePictureUrl = await uploadFileToStorage(blob, storagePath);
+        })());
+    }
+
+    // Handle ID Proof
+    if (newIdProofDocument) {
+        updatePromises.push((async () => {
+            if (employee.idProofDocumentUrl) await deleteFileFromStorage(employee.idProofDocumentUrl);
+            const ext = newIdProofDocument.name.split('.').pop() || 'bin';
+            const storagePath = `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id.${newIdProofDocument.type.startsWith("image/") ? 'jpg' : ext}`;
+            const fileToUpload = newIdProofDocument.type.startsWith("image/")
+                ? await compressImage(newIdProofDocument, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+                : newIdProofDocument;
+            updatedUrls.idProofDocumentUrl = await uploadFileToStorage(fileToUpload, storagePath);
+        })());
+    }
+
+    // Handle Bank Passbook
+    if (newBankPassbookStatement) {
+        updatePromises.push((async () => {
+            if (employee.bankPassbookStatementUrl) await deleteFileFromStorage(employee.bankPassbookStatementUrl);
+            const ext = newBankPassbookStatement.name.split('.').pop() || 'bin';
+            const storagePath = `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement.type.startsWith("image/") ? 'jpg' : ext}`;
+            const fileToUpload = newBankPassbookStatement.type.startsWith("image/")
+                ? await compressImage(newBankPassbookStatement, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+                : newBankPassbookStatement;
+            updatedUrls.bankPassbookStatementUrl = await uploadFileToStorage(fileToUpload, storagePath);
+        })());
+    }
     
     try {
-      const updatePayload: Record<string, any> = {};
-      const original = employee;
+        await Promise.all(updatePromises);
 
-      // Type-safe key iteration
-      (Object.keys(data) as Array<keyof EmployeeUpdateValues>).forEach(key => {
-        const formValue = data[key];
-        const originalValue = original[key as keyof Employee];
+        const formPayload: Record<string, any> = {};
+        const original = employee;
 
-        if (key === 'dateOfBirth' || key === 'joiningDate' || key === 'exitDate') {
-          const formDate = formValue as Date | null | undefined;
-          const originalDate = originalValue?.toDate ? originalValue.toDate() : (originalValue ? new Date(originalValue) : null);
-          if (formDate?.getTime() !== originalDate?.getTime()) {
-             updatePayload[key] = formValue ? Timestamp.fromDate(formValue) : (key === 'exitDate' ? deleteField() : originalValue);
-          }
-        } else if (formValue !== originalValue) {
-          updatePayload[key] = formValue;
+        (Object.keys(data) as Array<keyof EmployeeUpdateValues>).forEach(key => {
+            const formValue = data[key];
+            const originalValue = original[key as keyof Employee];
+            if (key === 'dateOfBirth' || key === 'joiningDate' || key === 'exitDate') {
+                const formDate = formValue as Date | null | undefined;
+                const originalDate = originalValue?.toDate ? originalValue.toDate() : (originalValue ? new Date(originalValue) : null);
+                if (formDate?.getTime() !== originalDate?.getTime()) {
+                    formPayload[key] = formValue ? Timestamp.fromDate(formValue) : (key === 'exitDate' ? deleteField() : originalValue);
+                }
+            } else if (formValue !== originalValue) {
+                formPayload[key] = formValue;
+            }
+        });
+
+        if (data.status !== 'Exited' && employee.exitDate) formPayload.exitDate = deleteField();
+        if (data.maritalStatus !== 'Married' && employee.spouseName) formPayload.spouseName = "";
+
+        const finalPayload = { ...formPayload, ...updatedUrls };
+
+        if (Object.keys(finalPayload).length > 0) {
+            finalPayload.updatedAt = serverTimestamp();
+            const employeeDocRef = doc(db, "employees", employee.id);
+            await updateDoc(employeeDocRef, finalPayload);
+            toast({ title: "Profile Updated", description: "Employee details have been saved." });
+            await fetchEmployee();
+            toggleEditMode(false);
+        } else {
+            toast({ title: "No Changes", description: "No changes were detected to save." });
+            toggleEditMode(false);
         }
-      });
-      
-      if (data.status !== 'Exited' && employee.exitDate) {
-        updatePayload.exitDate = deleteField();
-      }
-      if (data.maritalStatus !== 'Married' && employee.spouseName) {
-        updatePayload.spouseName = "";
-      }
-
-      if (Object.keys(updatePayload).length > 0) {
-        updatePayload.updatedAt = serverTimestamp();
-        const employeeDocRef = doc(db, "employees", employee.id);
-        await updateDoc(employeeDocRef, updatePayload);
-
-        toast({ title: "Profile Updated", description: "Employee details have been saved." });
-        await fetchEmployee(); // Refetch data
-        toggleEditMode(false); // Exit edit mode
-      } else {
-        toast({ title: "No Changes", description: "No changes were detected to save." });
-        toggleEditMode(false);
-      }
     } catch (err: any) {
-      console.error("Error updating profile:", err);
-      toast({ variant: "destructive", title: "Update Failed", description: err.message || "An error occurred while saving." });
+        console.error("Error updating profile:", err);
+        toast({ variant: "destructive", title: "Update Failed", description: err.message || "An error occurred while saving." });
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   }
-
 
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
@@ -332,6 +467,15 @@ export default function AdminEmployeeProfilePage() {
       setIsRegeneratingQr(false);
     }
   };
+  
+  const resetFileStates = () => {
+      setNewProfilePicture(null);
+      setNewIdProofDocument(null);
+      setNewBankPassbookStatement(null);
+      setProfilePicPreview(null);
+      setIdProofPreview(null);
+      setBankPassbookPreview(null);
+  }
 
   const toggleEditMode = (forceState?: boolean) => {
     const newEditState = forceState !== undefined ? forceState : !isEditing;
@@ -339,6 +483,7 @@ export default function AdminEmployeeProfilePage() {
     if (newEditState) {
       router.push(`${path}?edit=true`, { scroll: false });
     } else {
+      resetFileStates();
       form.reset(employee ? {
           ...employee,
           joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
@@ -392,8 +537,8 @@ export default function AdminEmployeeProfilePage() {
     <div className="flex flex-col gap-6">
       <div className="mb-4">
         <Button variant="outline" size="sm" onClick={() => router.push(isAdminView ? '/employees' : '/')}>
-          {isAdminView ? <ArrowLeft className="mr-2 h-4 w-4" /> : <Home className="mr-2 h-4 w-4" />}
-          {isAdminView ? 'Back to Employee Directory' : 'Back to Home'}
+          <ArrowLeft className="mr-2 h-4 w-4" /> 
+          Back to {isAdminView ? 'Employee Directory' : 'Home'}
         </Button>
       </div>
 
@@ -500,12 +645,6 @@ export default function AdminEmployeeProfilePage() {
                           ) : (
                               <p className="text-muted-foreground">QR Code not available.</p>
                           )}
-                          {isAdminView && isEditing && (
-                              <Button variant="outline" className="mt-4" onClick={handleRegenerateQrCode} disabled={isRegeneratingQr}>
-                                  {isRegeneratingQr ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                  {isRegeneratingQr ? "Regenerating..." : "Regenerate QR"}
-                              </Button>
-                          )}
                       </div>
                   </div>
                   <div>
@@ -514,16 +653,6 @@ export default function AdminEmployeeProfilePage() {
                           <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
                           <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
                           <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                          {isAdminView && isEditing && (
-                              <div className="pt-4">
-                                  <Label htmlFor="new-doc" className="text-sm font-medium">Upload New Document (Placeholder)</Label>
-                                  <div className="flex gap-2 mt-1">
-                                      <Input id="new-doc" type="file" className="flex-grow" disabled />
-                                      <Button size="sm" disabled><FileUp className="mr-2 h-4 w-4" /> Upload</Button>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mt-1">Max 5MB. PDF, JPG, PNG accepted.</p>
-                              </div>
-                          )}
                       </div>
                   </div>
                 </div>
@@ -554,7 +683,7 @@ export default function AdminEmployeeProfilePage() {
                     <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                     {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
-                    <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="fullAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Full Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -586,6 +715,42 @@ export default function AdminEmployeeProfilePage() {
                     <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                   </div>
                 </section>
+                {/* Documents Section */}
+                <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Documents</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Profile Picture */}
+                        <div className="flex flex-col items-center gap-2 p-4 border rounded-md">
+                            <Label>Profile Picture</Label>
+                            <Image src={profilePicPreview || employee.profilePictureUrl || "https://placehold.co/128x128.png"} alt="Profile" width={128} height={128} className="rounded-full object-cover h-32 w-32" data-ai-hint="profile picture" />
+                            <div className="flex gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('profilePicture')}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                            </div>
+                            <Input id="profilePictureInput" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, setNewProfilePicture, setProfilePicPreview)} />
+                        </div>
+                        {/* ID Proof */}
+                        <div className="flex flex-col items-center gap-2 p-4 border rounded-md">
+                            <Label>ID Proof</Label>
+                             <Image src={idProofPreview || (employee.idProofDocumentUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrl) || "https://placehold.co/200x120.png"} alt="ID Proof" width={200} height={120} className="object-contain h-32 w-full" data-ai-hint="id card" />
+                            <div className="flex gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocument')}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                            </div>
+                            <Input id="idProofInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocument, setIdProofPreview)} />
+                        </div>
+                        {/* Bank Passbook */}
+                        <div className="flex flex-col items-center gap-2 p-4 border rounded-md">
+                            <Label>Bank Document</Label>
+                            <Image src={bankPassbookPreview || (employee.bankPassbookStatementUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.bankPassbookStatementUrl) || "https://placehold.co/200x120.png"} alt="Bank Document" width={200} height={120} className="object-contain h-32 w-full" data-ai-hint="bank document" />
+                             <div className="flex gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('bankPassbookInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('bankPassbookStatement')}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                            </div>
+                            <Input id="bankPassbookInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewBankPassbookStatement, setBankPassbookPreview)} />
+                        </div>
+                    </div>
+                </section>
               </CardContent>
               <CardFooter className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => toggleEditMode(false)} disabled={isSubmitting}>Cancel</Button>
@@ -598,6 +763,23 @@ export default function AdminEmployeeProfilePage() {
           </form>
         </Form>
       )}
+
+    <Dialog open={isCameraDialogOpen} onOpenChange={setIsCameraDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Take Photo</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+                 {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
+                <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto rounded-md border", { 'hidden': cameraError })} />
+                <canvas ref={canvasRef} className="hidden" />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
+                <Button onClick={handleCapturePhoto} disabled={!!cameraError || !cameraStream}>Capture</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </div>
   );
 }
