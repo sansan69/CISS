@@ -542,7 +542,7 @@ export default function AdminEmployeeProfilePage() {
 
     updatePromises.push(uploadAndSetUrl(
         newIdProofDocumentFront,
-        employee.idProofDocumentUrlFront,
+        employee.idProofDocumentUrlFront || employee.idProofDocumentUrl, // Use legacy URL if new one isn't present
         `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.jpg`,
         'idProofDocumentUrlFront'
     ));
@@ -585,6 +585,12 @@ export default function AdminEmployeeProfilePage() {
         if (data.maritalStatus !== 'Married' && employee.spouseName) formPayload.spouseName = "";
 
         const finalPayload = { ...formPayload, ...updatedUrls };
+        
+        // If a new front image was uploaded AND a legacy URL exists, we should remove the legacy field.
+        if (updatedUrls.idProofDocumentUrlFront && employee.idProofDocumentUrl) {
+            finalPayload.idProofDocumentUrl = deleteField();
+        }
+
 
         if (Object.keys(finalPayload).length > 0) {
             finalPayload.updatedAt = serverTimestamp();
@@ -942,7 +948,7 @@ export default function AdminEmployeeProfilePage() {
                         <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                         <div className="space-y-3">
                             <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                            <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
                             <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
                         </div>
@@ -1025,7 +1031,7 @@ export default function AdminEmployeeProfilePage() {
                           {/* ID Proof Front */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
                               <Label className="md:col-span-1 text-base self-center">ID Proof (Front)</Label>
-                              <Image src={idProofPreviewFront || (employee.idProofDocumentUrlFront?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlFront) || "https://placehold.co/200x120.png"} alt="ID Proof Front" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
+                              <Image src={idProofPreviewFront || ((employee.idProofDocumentUrlFront || employee.idProofDocumentUrl)?.includes('.pdf') ? '/pdf-icon.png' : (employee.idProofDocumentUrlFront || employee.idProofDocumentUrl)) || "https://placehold.co/200x120.png"} alt="ID Proof Front" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
                               <div className="flex flex-col justify-center gap-2">
                                   <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofFrontInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
                                   <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentFront')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>

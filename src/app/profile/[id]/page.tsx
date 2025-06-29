@@ -275,7 +275,8 @@ export default function PublicEmployeeProfilePage() {
                     <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                     <div className="space-y-3">
                         <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                        <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
+                        <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
+                        <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
                         <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
                     </div>
                 </div>

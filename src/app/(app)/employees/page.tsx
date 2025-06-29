@@ -314,7 +314,9 @@ export default function EmployeeDirectoryPage() {
       
       const filesToDelete = [
         employeeToDelete.profilePictureUrl,
-        employeeToDelete.idProofDocumentUrl,
+        employeeToDelete.idProofDocumentUrl, // Legacy field
+        employeeToDelete.idProofDocumentUrlFront,
+        employeeToDelete.idProofDocumentUrlBack,
         employeeToDelete.bankPassbookStatementUrl,
       ];
 

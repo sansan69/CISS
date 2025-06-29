@@ -26,8 +26,9 @@ export interface Employee {
   emailAddress: string;
   phoneNumber: string;
   profilePictureUrl?: string;
-  idProofDocumentUrlFront?: string; // Changed from idProofDocumentUrl
-  idProofDocumentUrlBack?: string; // Added for back side
+  idProofDocumentUrl?: string; // Legacy field for backwards compatibility
+  idProofDocumentUrlFront?: string;
+  idProofDocumentUrlBack?: string;
   bankPassbookStatementUrl?: string;
   joiningDate: any; // Firebase Timestamp or ISO string
   status: 'Active' | 'Inactive' | 'OnLeave' | 'Exited'; // Added 'Exited'
