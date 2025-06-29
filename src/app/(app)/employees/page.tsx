@@ -492,7 +492,8 @@ export default function EmployeeDirectoryPage() {
                         </Avatar>
                         <div>
                             <div className="font-medium">{emp.fullName}</div>
-                            <div className="text-sm text-muted-foreground">{emp.emailAddress}</div>
+                            <div className="text-sm text-muted-foreground sm:hidden">{emp.phoneNumber}</div>
+                            <div className="text-sm text-muted-foreground hidden sm:block">{emp.emailAddress}</div>
                         </div>
                         </div>
                     </TableCell>
