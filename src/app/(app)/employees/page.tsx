@@ -216,7 +216,7 @@ export default function EmployeeDirectoryPage() {
     setFirstVisibleDoc(null);
     setHasMorePrev(false); 
     fetchEmployees(); 
-  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
+  }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
 
 
   const handleNextPage = () => {
@@ -477,7 +477,11 @@ export default function EmployeeDirectoryPage() {
                     </TableRow>
                 ) : (
                     employees.map((emp) => (
-                    <TableRow key={emp.id}>
+                    <TableRow 
+                      key={emp.id} 
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/employees/${emp.id}`)}
+                    >
                     <TableCell>
                         <div className="flex items-center gap-3">
                         <Avatar>
@@ -497,45 +501,47 @@ export default function EmployeeDirectoryPage() {
                         <Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
+                      <div onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                            <Link href={`/employees/${emp.id}`}>
-                                <Eye className="mr-2 h-4 w-4" /> View Profile
-                            </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                            <Link href={`/employees/${emp.id}?edit=true`}> 
-                                <Edit className="mr-2 h-4 w-4" /> Edit
-                            </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {emp.status !== 'Active' && (
-                            <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}>
-                                <UserCheck className="mr-2 h-4 w-4" /> Set Active
-                            </DropdownMenuItem>
-                            )}
-                            {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
-                            <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
-                                <UserX className="mr-2 h-4 w-4" /> Set Inactive
-                            </DropdownMenuItem>
-                            )}
-                            {emp.status !== 'Exited' && (
-                            <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}>
-                                <LogOutIcon className="mr-2 h-4 w-4" /> Set Exited
-                            </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
+                          <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                              <Link href={`/employees/${emp.id}`}>
+                                  <Eye className="mr-2 h-4 w-4" /> View Profile
+                              </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                              <Link href={`/employees/${emp.id}?edit=true`}> 
+                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                              </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {emp.status !== 'Active' && (
+                              <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}>
+                                  <UserCheck className="mr-2 h-4 w-4" /> Set Active
+                              </DropdownMenuItem>
+                              )}
+                              {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
+                              <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
+                                  <UserX className="mr-2 h-4 w-4" /> Set Inactive
+                              </DropdownMenuItem>
+                              )}
+                              {emp.status !== 'Exited' && (
+                              <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}>
+                                  <LogOutIcon className="mr-2 h-4 w-4" /> Set Exited
+                              </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                          </DropdownMenuContent>
                         </DropdownMenu>
+                      </div>
                     </TableCell>
                     </TableRow>
                 )))}
