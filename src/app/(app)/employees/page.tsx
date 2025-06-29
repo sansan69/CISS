@@ -31,6 +31,12 @@ interface ClientOption {
   name: string;
 }
 
+const keralaDistricts = [
+  'all', "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
+  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
+  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
+];
+
 export default function EmployeeDirectoryPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -41,9 +47,10 @@ export default function EmployeeDirectoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterDistrict, setFilterDistrict] = useState('all');
   
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited']; // Corrected: const instead of useState
+  const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited'];
 
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
@@ -88,6 +95,9 @@ export default function EmployeeDirectoryPage() {
     if (filterStatus !== 'all') {
       q = query(q, where('status', '==', filterStatus));
     }
+    if (filterDistrict !== 'all') {
+      q = query(q, where('district', '==', filterDistrict));
+    }
     
     // Basic search by employeeId prefix
     if (searchTerm.trim() !== '') {
@@ -114,7 +124,7 @@ export default function EmployeeDirectoryPage() {
         }
     }
     return q;
-  }, [filterClient, filterStatus, searchTerm, lastVisibleDoc, firstVisibleDoc]);
+  }, [filterClient, filterStatus, filterDistrict, searchTerm, lastVisibleDoc, firstVisibleDoc]);
 
 
   const fetchEmployees = useCallback(async (direction?: 'next' | 'prev') => {
@@ -158,6 +168,7 @@ export default function EmployeeDirectoryPage() {
           let nextCheckQueryParts: any[] = [collection(db, 'employees')];
           if (filterClient !== 'all') nextCheckQueryParts.push(where('clientName', '==', filterClient));
           if (filterStatus !== 'all') nextCheckQueryParts.push(where('status', '==', filterStatus));
+          if (filterDistrict !== 'all') nextCheckQueryParts.push(where('district', '==', filterDistrict));
           if (searchTerm.trim() !== '') {
             const searchTermUpper = searchTerm.trim().toUpperCase();
             nextCheckQueryParts.push(where('employeeId', '>=', searchTermUpper));
@@ -191,7 +202,7 @@ export default function EmployeeDirectoryPage() {
       setIsFetchingNext(false);
       setIsFetchingPrev(false);
     }
-  }, [toast, buildQuery, currentPage, filterClient, filterStatus, searchTerm]); 
+  }, [toast, buildQuery, currentPage, filterClient, filterStatus, filterDistrict, searchTerm]); 
 
   useEffect(() => {
     fetchClients();
@@ -203,7 +214,7 @@ export default function EmployeeDirectoryPage() {
     setFirstVisibleDoc(null);
     setHasMorePrev(false); 
     fetchEmployees(); 
-  }, [searchTerm, filterClient, filterStatus, fetchEmployees]); // fetchEmployees added as dependency
+  }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
 
 
   const handleNextPage = () => {
@@ -379,7 +390,7 @@ export default function EmployeeDirectoryPage() {
             <CardTitle>Filters & Search</CardTitle>
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -399,6 +410,19 @@ export default function EmployeeDirectoryPage() {
                 {clients.map(client => (
                     <SelectItem key={client.id} value={client.name === 'All Clients' ? 'all' : client.name}>
                     {client.name}
+                    </SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+            <Select value={filterDistrict} onValueChange={setFilterDistrict}>
+                <SelectTrigger>
+                <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Filter by District" />
+                </SelectTrigger>
+                <SelectContent>
+                {keralaDistricts.map(district => (
+                    <SelectItem key={district} value={district}>
+                    {district === 'all' ? 'All Districts' : district}
                     </SelectItem>
                 ))}
                 </SelectContent>
@@ -621,7 +645,3 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
-
-    
-
-    
