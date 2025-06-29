@@ -2,7 +2,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CheckCircle, AlertTriangle, Clock, Loader2 } from "lucide-react";
+import { Users, CheckCircle, AlertTriangle, Clock, Loader2, AlertCircle as AlertIcon } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import React, { useEffect, useState } from "react";
 import { db } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Mock data for weekly attendance - real data would require an attendance system
 const weeklyAttendanceMockData = [
@@ -45,10 +46,14 @@ interface ClientDistributionData {
 
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = React.useState("last_7_days");
+  
   const [totalEmployees, setTotalEmployees] = useState<number | null>(null);
   const [isLoadingTotalEmployees, setIsLoadingTotalEmployees] = useState(true);
+  const [totalEmployeesError, setTotalEmployeesError] = useState<string | null>(null);
+
   const [clientDistribution, setClientDistribution] = useState<ClientDistributionData[]>([]);
   const [isLoadingClientDistribution, setIsLoadingClientDistribution] = useState(true);
+  const [clientDistributionError, setClientDistributionError] = useState<string | null>(null);
 
   // State for mock data (to be replaced with real data fetching later)
   const [presentToday, setPresentToday] = useState(1150); // Mock
@@ -58,15 +63,18 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchTotalEmployees = async () => {
       setIsLoadingTotalEmployees(true);
+      setTotalEmployeesError(null);
       try {
         const employeesColRef = collection(db, "employees");
-        // You might want to filter by 'Active' status if needed:
-        // const q = query(employeesColRef, where('status', '==', 'Active'));
-        // const snapshot = await getCountFromServer(q);
         const snapshot = await getCountFromServer(employeesColRef);
         setTotalEmployees(snapshot.data().count);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching total employees:", error);
+        if (error.code === 'permission-denied') {
+          setTotalEmployeesError("Permission denied. Check Firestore rules to allow 'list' operations for admins.");
+        } else {
+          setTotalEmployeesError("Failed to fetch employee count.");
+        }
         setTotalEmployees(0); // Fallback
       } finally {
         setIsLoadingTotalEmployees(false);
@@ -75,6 +83,7 @@ export default function DashboardPage() {
 
     const fetchClientDistribution = async () => {
       setIsLoadingClientDistribution(true);
+      setClientDistributionError(null);
       try {
         const employeesSnapshot = await getDocs(collection(db, "employees"));
         const employeesData = employeesSnapshot.docs.map(doc => doc.data() as Employee);
@@ -92,8 +101,13 @@ export default function DashboardPage() {
         }));
         setClientDistribution(formattedDistribution);
 
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching client distribution:", error);
+        if (error.code === 'permission-denied') {
+          setClientDistributionError("Permission denied. Check Firestore rules to allow 'list' operations for admins.");
+        } else {
+          setClientDistributionError("Failed to fetch employee data for chart.");
+        }
         setClientDistribution([]);
       } finally {
         setIsLoadingClientDistribution(false);
@@ -137,6 +151,11 @@ export default function DashboardPage() {
           <CardContent>
             {isLoadingTotalEmployees ? (
               <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            ) : totalEmployeesError ? (
+                <div className="text-xs text-destructive flex items-center gap-2">
+                    <AlertIcon className="h-4 w-4" />
+                    {totalEmployeesError}
+                </div>
             ) : (
               <div className="text-2xl font-bold">{totalEmployees?.toLocaleString() ?? 'N/A'}</div>
             )}
@@ -207,6 +226,14 @@ export default function DashboardPage() {
           <CardContent className="flex-1 flex items-center justify-center">
             {isLoadingClientDistribution ? (
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            ) : clientDistributionError ? (
+                <Alert variant="destructive" className="w-full">
+                    <AlertIcon className="h-4 w-4" />
+                    <AlertTitle>Error Loading Chart</AlertTitle>
+                    <AlertDescription>
+                        {clientDistributionError}
+                    </AlertDescription>
+                </Alert>
             ) : clientDistribution.length === 0 ? (
                 <p className="text-muted-foreground">No client data available.</p>
             ) : (
