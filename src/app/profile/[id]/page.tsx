@@ -35,9 +35,9 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
     }
   }
   return (
-    <div className="grid grid-cols-3 gap-2 py-1.5">
-      <span className="text-sm text-muted-foreground col-span-1">{label}</span>
-      <span className="text-sm font-medium col-span-2">{displayValue}</span>
+    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5">
+      <span className="text-sm text-muted-foreground sm:col-span-1">{label}</span>
+      <span className="text-sm font-medium sm:col-span-2">{displayValue}</span>
     </div>
   );
 };

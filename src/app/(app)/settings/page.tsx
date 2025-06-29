@@ -42,7 +42,7 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {settingsOptions.map((option) => (
           <Card key={option.title} className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">

@@ -454,9 +454,9 @@ export default function EmployeeDirectoryPage() {
                 <TableHeader>
                 <TableRow>
                     <TableHead>Employee</TableHead>
-                    <TableHead>Employee ID</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Mobile</TableHead>
+                    <TableHead className="hidden md:table-cell">Employee ID</TableHead>
+                    <TableHead className="hidden lg:table-cell">Client</TableHead>
+                    <TableHead className="hidden sm:table-cell">Mobile</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -494,9 +494,9 @@ export default function EmployeeDirectoryPage() {
                         </div>
                         </div>
                     </TableCell>
-                    <TableCell>{emp.employeeId}</TableCell>
-                    <TableCell>{emp.clientName}</TableCell>
-                    <TableCell>{emp.phoneNumber}</TableCell>
+                    <TableCell className="hidden md:table-cell">{emp.employeeId}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{emp.clientName}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{emp.phoneNumber}</TableCell>
                     <TableCell>
                         <Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge>
                     </TableCell>
