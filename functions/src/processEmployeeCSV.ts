@@ -199,64 +199,69 @@ export const processEmployeeCSV = functions
             if (emp.PhotoBlob && typeof emp.PhotoBlob === "string" && emp.PhotoBlob.startsWith("data:image/")) {
               const matches = emp.PhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
               if (matches && matches.length === 3) {
-                // const imageMimeType = matches[1]; // e.g., image/jpeg // Not directly used, sharp infers
                 const base64Data = matches[2];
                 const imageBuffer = Buffer.from(base64Data, "base64");
-
                 const imageName = `${uuidv4()}.jpg`; // Compress to JPEG
                 const filePath = `employee_photos/${safeIdentifier}/${imageName}`;
-
                 const compressedImageBuffer = await sharp(imageBuffer)
                   .resize({width: 800, height: 800, fit: "inside", withoutEnlargement: true})
                   .jpeg({quality: 75})
                   .toBuffer();
-
                 const file = bucket.file(filePath);
                 await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
-
                 const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
                 employeeData.profilePictureUrl = url;
                 console.log(`Uploaded photo for ${employeeData.fullName} to ${filePath}`);
               } else {
-                console.warn(
-                  `Invalid Data URI format for PhotoBlob for employee: ${employeeData.fullName}`
-                );
+                console.warn(`Invalid Data URI format for PhotoBlob for employee: ${employeeData.fullName}`);
                 employeeData.profilePictureUrl = null;
               }
             } else {
               employeeData.profilePictureUrl = null;
             }
 
-            // Image Handling for 'IDProofPhotoBlob'
-            if (emp.IDProofPhotoBlob &&
-                typeof emp.IDProofPhotoBlob === "string" &&
-                emp.IDProofPhotoBlob.startsWith("data:image/")) {
-              const matches = emp.IDProofPhotoBlob.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
+            // Image Handling for 'IDProofPhotoBlobFront'
+            if (emp.IDProofPhotoBlobFront && typeof emp.IDProofPhotoBlobFront === "string" && emp.IDProofPhotoBlobFront.startsWith("data:image/")) {
+              const matches = emp.IDProofPhotoBlobFront.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
               if (matches && matches.length === 3) {
                 const base64Data = matches[2];
                 const imageBuffer = Buffer.from(base64Data, "base64");
-                const imageName = `${uuidv4()}.jpg`;
+                const imageName = `${uuidv4()}_front.jpg`;
                 const filePath = `employee_id_proofs/${safeIdentifier}/${imageName}`;
-
-                const compressedImageBuffer = await sharp(imageBuffer)
-                  .resize({width: 1024, height: 1024, fit: "inside", withoutEnlargement: true})
-                  .jpeg({quality: 75})
-                  .toBuffer();
+                const compressedImageBuffer = await sharp(imageBuffer).resize({width: 1024, fit: "inside"}).jpeg({quality: 80}).toBuffer();
                 const file = bucket.file(filePath);
                 await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
                 const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
-                employeeData.idProofDocumentUrl = url;
+                employeeData.idProofDocumentUrlFront = url;
               } else {
-                // Fallback to URL if blob invalid and URL is present in CSV
-                employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
-                console.warn(
-                  `Invalid IDProofPhotoBlob format for ${employeeData.fullName}, using IDProofDocumentURL if present.`
-                );
+                console.warn(`Invalid IDProofPhotoBlobFront format for ${employeeData.fullName}.`);
+                employeeData.idProofDocumentUrlFront = null;
               }
             } else {
-              // If only URL is provided in CSV and no blob
-              employeeData.idProofDocumentUrl = emp.IDProofDocumentURL || null;
+              employeeData.idProofDocumentUrlFront = null;
             }
+
+            // Image Handling for 'IDProofPhotoBlobBack'
+            if (emp.IDProofPhotoBlobBack && typeof emp.IDProofPhotoBlobBack === "string" && emp.IDProofPhotoBlobBack.startsWith("data:image/")) {
+              const matches = emp.IDProofPhotoBlobBack.match(/^data:(image\/(?:jpeg|png|gif|webp));base64,(.*)$/i);
+              if (matches && matches.length === 3) {
+                const base64Data = matches[2];
+                const imageBuffer = Buffer.from(base64Data, "base64");
+                const imageName = `${uuidv4()}_back.jpg`;
+                const filePath = `employee_id_proofs/${safeIdentifier}/${imageName}`;
+                const compressedImageBuffer = await sharp(imageBuffer).resize({width: 1024, fit: "inside"}).jpeg({quality: 80}).toBuffer();
+                const file = bucket.file(filePath);
+                await file.save(compressedImageBuffer, {metadata: {contentType: "image/jpeg"}});
+                const [url] = await file.getSignedUrl({action: "read", expires: "03-01-2500"});
+                employeeData.idProofDocumentUrlBack = url;
+              } else {
+                console.warn(`Invalid IDProofPhotoBlobBack format for ${employeeData.fullName}.`);
+                employeeData.idProofDocumentUrlBack = null;
+              }
+            } else {
+              employeeData.idProofDocumentUrlBack = null;
+            }
+
 
             // Image Handling for 'BankPassbookPhotoBlob'
             if (emp.BankPassbookPhotoBlob &&
@@ -304,7 +309,8 @@ export const processEmployeeCSV = functions
 
             // Remove blob fields if they existed, as we don't store them in Firestore
             delete employeeData.PhotoBlob;
-            delete employeeData.IDProofPhotoBlob;
+            delete employeeData.IDProofPhotoBlobFront;
+            delete employeeData.IDProofPhotoBlobBack;
             delete employeeData.BankPassbookPhotoBlob;
 
             if (employeeData.fullName && employeeData.phoneNumber) {

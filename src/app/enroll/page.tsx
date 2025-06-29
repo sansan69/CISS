@@ -70,7 +70,8 @@ const enrollmentFormSchema = z.object({
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
-  idProofDocument: fileSchema,
+  idProofDocumentFront: fileSchema.describe("Front side of ID proof"),
+  idProofDocumentBack: fileSchema.describe("Back side of ID proof"),
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -116,7 +117,7 @@ const keralaDistricts = [
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
 const maritalStatuses = ["Married", "Unmarried"];
 
-type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
+type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
 
 // Helper Functions
 const abbreviateClientName = (clientName: string): string => {
@@ -186,7 +187,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const router = useRouter();
 
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
-  const [idProofPreview, setIdProofPreview] = React.useState<string | null>(null);
+  const [idProofPreviewFront, setIdProofPreviewFront] = React.useState<string | null>(null);
+  const [idProofPreviewBack, setIdProofPreviewBack] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
@@ -286,7 +288,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         let facingMode: VideoFacingModeEnum = "user";
-        if (fieldName === "idProofDocument" || fieldName === "bankPassbookStatement") {
+        if (fieldName === "idProofDocumentFront" || fieldName === "idProofDocumentBack" || fieldName === "bankPassbookStatement") {
           facingMode = "environment";
         }
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
@@ -338,7 +340,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
         const previewUrl = URL.createObjectURL(capturedFile);
         if (activeCameraField === "profilePicture") setProfilePicPreview(previewUrl);
-        else if (activeCameraField === "idProofDocument") setIdProofPreview(previewUrl);
+        else if (activeCameraField === "idProofDocumentFront") setIdProofPreviewFront(previewUrl);
+        else if (activeCameraField === "idProofDocumentBack") setIdProofPreviewBack(previewUrl);
         else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
         
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
@@ -353,7 +356,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
-    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocument" | "bankPassbookStatement">,
+    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement">,
     setPreview: React.Dispatch<React.SetStateAction<string | null>>
   ) => {
     if (event.target.files && event.target.files[0]) {
@@ -389,7 +392,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     toast({ title: "Processing Registration...", description: "Please wait. Initializing submission..." });
 
     let profilePictureUrl: string | null = null;
-    let idProofDocumentUrl: string | null = null;
+    let idProofDocumentUrlFront: string | null = null;
+    let idProofDocumentUrlBack: string | null = null;
     let bankPassbookStatementUrl: string | null = null;
 
     try {
@@ -423,37 +427,40 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         );
       }
 
-      if (data.idProofDocument) {
-        const file = data.idProofDocument;
+      // ID Proof Front Upload
+      if (data.idProofDocumentFront) {
+        const file = data.idProofDocumentFront;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        toast({ title: "ID Proof", description: `Preparing ID proof (${file.type})...` });
-
-        const processAndUpload = file.type.startsWith("image/") 
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => {
-                toast({ title: "ID Proof", description: "Uploading ID proof image..." });
-                return uploadFileToStorage(blob, storagePath);
-              })
-          : (() => {
-              toast({ title: "ID Proof", description: "Uploading ID proof document (PDF)..." });
-              return uploadFileToStorage(file, storagePath);
-            })();
-
+        const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof_front.${file.type.startsWith("image/") ? 'jpg' : ext}`;
+        const processAndUpload = file.type.startsWith("image/")
+            ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
+            : uploadFileToStorage(file, storagePath);
         uploadPromises.push(
-          processAndUpload
-            .then(url => { idProofDocumentUrl = url; toast({ title: "ID Proof", description: "Upload complete." });})
-            .catch(err => {
-              console.error("ID proof processing/upload error:", err);
-              throw new Error(`ID proof processing failed: ${err.message}`);
-            })
+            processAndUpload
+                .then(url => { idProofDocumentUrlFront = url; })
+                .catch(err => { throw new Error(`ID proof (front) processing failed: ${err.message}`); })
         );
+      }
+
+      // ID Proof Back Upload
+      if (data.idProofDocumentBack) {
+          const file = data.idProofDocumentBack;
+          const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+          const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof_back.${file.type.startsWith("image/") ? 'jpg' : ext}`;
+          const processAndUpload = file.type.startsWith("image/")
+              ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
+              : uploadFileToStorage(file, storagePath);
+          uploadPromises.push(
+              processAndUpload
+                  .then(url => { idProofDocumentUrlBack = url; })
+                  .catch(err => { throw new Error(`ID proof (back) processing failed: ${err.message}`); })
+          );
       }
       
       if (data.bankPassbookStatement) {
         const file = data.bankPassbookStatement;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
         const storagePath = `employees/${phoneNumber}/bankDocuments/${Date.now()}_bankDoc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        toast({ title: "Bank Document", description: `Preparing bank document (${file.type})...` });
 
         const processAndUpload = file.type.startsWith("image/")
           ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => {
@@ -481,7 +488,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         toast({ title: "All Files Uploaded", description: "File uploads completed successfully. Proceeding to save data."});
       } else {
          toast({ title: "No Files to Upload", description: "Skipping file upload step as no files were provided or required."});
-         if (!data.profilePicture || !data.idProofDocument || !data.bankPassbookStatement) {
+         if (!data.profilePicture || !data.idProofDocumentFront || !data.idProofDocumentBack || !data.bankPassbookStatement) {
              console.warn("File upload was skipped. This could mean no files were selected or an unexpected issue occurred. Schema requires files.");
          }
       }
@@ -489,7 +496,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
 
       if (!profilePictureUrl) throw new Error("Profile picture URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
-      if (!idProofDocumentUrl) throw new Error("ID proof document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
+      if (!idProofDocumentUrlFront) throw new Error("ID proof front document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
+      if (!idProofDocumentUrlBack) throw new Error("ID proof back document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
       if (!bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
 
 
@@ -521,7 +529,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         emailAddress: data.emailAddress,
         phoneNumber: data.phoneNumber,
         profilePictureUrl,
-        idProofDocumentUrl,
+        idProofDocumentUrlFront,
+        idProofDocumentUrlBack,
         bankPassbookStatementUrl,
         status: 'Active',
         createdAt: serverTimestamp(),
@@ -553,7 +562,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       });
       form.reset();
       setProfilePicPreview(null);
-      setIdProofPreview(null);
+      setIdProofPreviewFront(null);
+      setIdProofPreviewBack(null);
       setBankPassbookPreview(null);
 
       router.push(`/profile/${docRef.id}`);
@@ -820,35 +830,51 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                  </div>
-                 <FormField
-                    control={form.control}
-                    name="idProofDocument"
-                    render={({ field }) => (
-                      <FormItem className="mt-6 text-center">
-                        <FormLabel className="block mb-2">ID Proof Document <span className="text-destructive">*</span></FormLabel>
-                        {idProofPreview && (
-                            idProofPreview === "/pdf-icon.png" ?
-                            <Image src={idProofPreview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
-                            <Image src={idProofPreview} alt="ID Proof Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <FormField
+                        control={form.control}
+                        name="idProofDocumentFront"
+                        render={({ field }) => ( 
+                        <FormItem className="text-center">
+                            <FormLabel className="block mb-2">ID Proof (Front) <span className="text-destructive">*</span></FormLabel>
+                            {idProofPreviewFront && (idProofPreviewFront === "/pdf-icon.png" ? 
+                                <Image src={idProofPreviewFront} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
+                                <Image src={idProofPreviewFront} alt="ID Proof Front Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
+                            )}
+                            {!idProofPreviewFront && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+                            <div className="flex justify-center gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentFrontInput')?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
+                                <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocumentFront")}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
+                            </div>
+                            <FormControl><Input id="idProofDocumentFrontInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocumentFront", setIdProofPreviewFront)} /></FormControl>
+                            <FormDescription>Upload front of ID (JPG, PNG, PDF. Max 5MB).</FormDescription>
+                            <FormMessage />
+                        </FormItem>
                         )}
-                        {!idProofPreview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
-
-                        <div className="flex justify-center gap-2">
-                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentInput')?.click()}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload
-                          </Button>
-                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocument")}>
-                            <Camera className="mr-2 h-4 w-4" /> Take Photo
-                          </Button>
-                        </div>
-                        <FormControl>
-                          <Input id="idProofDocumentInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocument", setIdProofPreview)} />
-                        </FormControl>
-                         <FormDescription>Upload or take photo of ID (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    />
+                    <FormField
+                        control={form.control}
+                        name="idProofDocumentBack"
+                        render={({ field }) => ( 
+                        <FormItem className="text-center">
+                            <FormLabel className="block mb-2">ID Proof (Back) <span className="text-destructive">*</span></FormLabel>
+                            {idProofPreviewBack && (idProofPreviewBack === "/pdf-icon.png" ? 
+                                <Image src={idProofPreviewBack} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
+                                <Image src={idProofPreviewBack} alt="ID Proof Back Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
+                            )}
+                            {!idProofPreviewBack && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+                            <div className="flex justify-center gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentBackInput')?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
+                                <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocumentBack")}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
+                            </div>
+                            <FormControl><Input id="idProofDocumentBackInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocumentBack", setIdProofPreviewBack)} /></FormControl>
+                            <FormDescription>Upload back of ID (JPG, PNG, PDF. Max 5MB).</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                 </div>
               </section>
 
               <section>

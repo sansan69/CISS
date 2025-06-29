@@ -26,7 +26,8 @@ export interface Employee {
   emailAddress: string;
   phoneNumber: string;
   profilePictureUrl?: string;
-  idProofDocumentUrl?: string;
+  idProofDocumentUrlFront?: string; // Changed from idProofDocumentUrl
+  idProofDocumentUrlBack?: string; // Added for back side
   bankPassbookStatementUrl?: string;
   joiningDate: any; // Firebase Timestamp or ISO string
   status: 'Active' | 'Inactive' | 'OnLeave' | 'Exited'; // Added 'Exited'
@@ -37,8 +38,6 @@ export interface Employee {
 
   // Fields from previous mock, to be phased out or mapped
   department?: string; // May not be needed if clientName implies department or not used
-  // emailId?: string; // Replaced by emailAddress
-  // mobileNumber?: string; // Replaced by phoneNumber
 }
 
 // Mock data for development - update with new fields
@@ -69,7 +68,8 @@ export const mockEmployees: Employee[] = [
     emailAddress: 'aarav.sharma@example.com',
     phoneNumber: '9876543210',
     profilePictureUrl: 'https://placehold.co/150x150.png',
-    idProofDocumentUrl: 'https://placehold.co/300x200.png',
+    idProofDocumentUrlFront: 'https://placehold.co/300x200.png',
+    idProofDocumentUrlBack: 'https://placehold.co/300x200.png',
     bankPassbookStatementUrl: 'https://placehold.co/300x200.png',
     joiningDate: '2022-01-10T00:00:00.000Z',
     status: 'Active',
@@ -101,6 +101,8 @@ export const mockEmployees: Employee[] = [
     emailAddress: 'priya.patel@example.com',
     phoneNumber: '9876543211',
     profilePictureUrl: 'https://placehold.co/150x150.png',
+    idProofDocumentUrlFront: 'https://placehold.co/300x200.png',
+    idProofDocumentUrlBack: 'https://placehold.co/300x200.png',
     joiningDate: '2021-11-05T00:00:00.000Z',
     status: 'Active',
     qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MOCK_QR_PRIYA',

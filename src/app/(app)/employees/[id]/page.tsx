@@ -43,7 +43,7 @@ const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 interface ClientOption { id: string; name: string; }
-type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
+type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
 
 // Zod schema for validation
 const employeeUpdateSchema = z.object({
@@ -195,12 +195,14 @@ export default function AdminEmployeeProfilePage() {
 
   // State for new file uploads
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
-  const [newIdProofDocument, setNewIdProofDocument] = useState<File | null>(null);
+  const [newIdProofDocumentFront, setNewIdProofDocumentFront] = useState<File | null>(null);
+  const [newIdProofDocumentBack, setNewIdProofDocumentBack] = useState<File | null>(null);
   const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
 
   // State for file previews
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
-  const [idProofPreview, setIdProofPreview] = useState<string | null>(null);
+  const [idProofPreviewFront, setIdProofPreviewFront] = useState<string | null>(null);
+  const [idProofPreviewBack, setIdProofPreviewBack] = useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
   
   // State for camera dialog
@@ -269,8 +271,6 @@ export default function AdminEmployeeProfilePage() {
           id: employeeDocSnap.id,
         } as Employee;
         setEmployee(formattedData);
-        // Log the fetched data for debugging
-        console.log("Fetched employee data for profile page:", formattedData);
       } else {
         setError("Employee not found with the provided ID.");
         toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
@@ -398,15 +398,25 @@ export default function AdminEmployeeProfilePage() {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
       const file = await dataURLtoFile(dataUrl, `${activeCameraField}.jpg`);
 
-      if (activeCameraField === 'profilePicture') {
-        setNewProfilePicture(file);
-        setProfilePicPreview(URL.createObjectURL(file));
-      } else if (activeCameraField === 'idProofDocument') {
-        setNewIdProofDocument(file);
-        setIdProofPreview(URL.createObjectURL(file));
-      } else if (activeCameraField === 'bankPassbookStatement') {
-        setNewBankPassbookStatement(file);
-        setBankPassbookPreview(URL.createObjectURL(file));
+      const previewUrl = URL.createObjectURL(file);
+
+      switch (activeCameraField) {
+        case 'profilePicture':
+          setNewProfilePicture(file);
+          setProfilePicPreview(previewUrl);
+          break;
+        case 'idProofDocumentFront':
+          setNewIdProofDocumentFront(file);
+          setIdProofPreviewFront(previewUrl);
+          break;
+        case 'idProofDocumentBack':
+          setNewIdProofDocumentBack(file);
+          setIdProofPreviewBack(previewUrl);
+          break;
+        case 'bankPassbookStatement':
+          setNewBankPassbookStatement(file);
+          setBankPassbookPreview(previewUrl);
+          break;
       }
       closeCameraDialog();
     }
@@ -421,42 +431,51 @@ export default function AdminEmployeeProfilePage() {
     const updatePromises: Promise<void>[] = [];
     const updatedUrls: { [key: string]: string } = {};
 
-    // Handle Profile Picture
-    if (newProfilePicture) {
-        updatePromises.push((async () => {
-            if (employee.profilePictureUrl) await deleteFileFromStorage(employee.profilePictureUrl);
-            const storagePath = `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
-            const blob = await compressImage(newProfilePicture, { maxWidth: 500, maxHeight: 500, quality: 0.8 });
-            updatedUrls.profilePictureUrl = await uploadFileToStorage(blob, storagePath);
-        })());
-    }
+    const uploadAndSetUrl = async (
+        newFile: File | null,
+        oldUrl: string | undefined,
+        filePath: string,
+        urlKey: string,
+        compress: boolean = true
+    ) => {
+        if (!newFile) return;
+        if (oldUrl) await deleteFileFromStorage(oldUrl);
+        
+        const fileToUpload = compress && newFile.type.startsWith("image/")
+            ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+            : newFile;
+            
+        updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
+    };
 
-    // Handle ID Proof
-    if (newIdProofDocument) {
-        updatePromises.push((async () => {
-            if (employee.idProofDocumentUrl) await deleteFileFromStorage(employee.idProofDocumentUrl);
-            const ext = newIdProofDocument.name.split('.').pop() || 'bin';
-            const storagePath = `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id.${newIdProofDocument.type.startsWith("image/") ? 'jpg' : ext}`;
-            const fileToUpload = newIdProofDocument.type.startsWith("image/")
-                ? await compressImage(newIdProofDocument, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : newIdProofDocument;
-            updatedUrls.idProofDocumentUrl = await uploadFileToStorage(fileToUpload, storagePath);
-        })());
-    }
+    updatePromises.push(uploadAndSetUrl(
+        newProfilePicture,
+        employee.profilePictureUrl,
+        `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`,
+        'profilePictureUrl'
+    ));
 
-    // Handle Bank Passbook
-    if (newBankPassbookStatement) {
-        updatePromises.push((async () => {
-            if (employee.bankPassbookStatementUrl) await deleteFileFromStorage(employee.bankPassbookStatementUrl);
-            const ext = newBankPassbookStatement.name.split('.').pop() || 'bin';
-            const storagePath = `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement.type.startsWith("image/") ? 'jpg' : ext}`;
-            const fileToUpload = newBankPassbookStatement.type.startsWith("image/")
-                ? await compressImage(newBankPassbookStatement, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : newBankPassbookStatement;
-            updatedUrls.bankPassbookStatementUrl = await uploadFileToStorage(fileToUpload, storagePath);
-        })());
-    }
-    
+    updatePromises.push(uploadAndSetUrl(
+        newIdProofDocumentFront,
+        employee.idProofDocumentUrlFront,
+        `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.jpg`,
+        'idProofDocumentUrlFront'
+    ));
+
+    updatePromises.push(uploadAndSetUrl(
+        newIdProofDocumentBack,
+        employee.idProofDocumentUrlBack,
+        `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.jpg`,
+        'idProofDocumentUrlBack'
+    ));
+
+    updatePromises.push(uploadAndSetUrl(
+        newBankPassbookStatement,
+        employee.bankPassbookStatementUrl,
+        `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.jpg`,
+        'bankPassbookStatementUrl'
+    ));
+
     try {
         await Promise.all(updatePromises);
 
@@ -577,10 +596,12 @@ export default function AdminEmployeeProfilePage() {
   
   const resetFileStates = () => {
       setNewProfilePicture(null);
-      setNewIdProofDocument(null);
+      setNewIdProofDocumentFront(null);
+      setNewIdProofDocumentBack(null);
       setNewBankPassbookStatement(null);
       setProfilePicPreview(null);
-      setIdProofPreview(null);
+      setIdProofPreviewFront(null);
+      setIdProofPreviewBack(null);
       setBankPassbookPreview(null);
   }
 
@@ -678,12 +699,12 @@ export default function AdminEmployeeProfilePage() {
 
       {!isEditing && (
         <Tabs defaultValue="personal">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2">
-            <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
-            <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
-            <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
-            <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 hidden md:inline-block" />Identification</TabsTrigger>
-            <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 hidden md:inline-block" />QR & Docs</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
+            <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
+            <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
+            <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
+            <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
+            <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
           </TabsList>
           <Card className="mt-4">
             <CardContent className="pt-6">
@@ -789,7 +810,8 @@ export default function AdminEmployeeProfilePage() {
                       <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                       <div className="space-y-3">
                           <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                          <DocumentItem name="ID Proof" url={employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
+                          <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront} type={employee.idProofType || "ID Document"} />
+                          <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
                           <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
                       </div>
                   </div>
@@ -856,34 +878,47 @@ export default function AdminEmployeeProfilePage() {
                 {/* Documents Section */}
                 <section>
                     <h3 className="text-lg font-semibold mb-4 border-b pb-2">Documents</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 gap-6">
                         {/* Profile Picture */}
-                        <div className="flex flex-col items-center gap-2 p-4 border rounded-md">
-                            <Label>Profile Picture</Label>
-                            <Image src={profilePicPreview || employee.profilePictureUrl || "https://placehold.co/128x128.png"} alt="Profile" width={128} height={128} className="rounded-full object-cover h-32 w-32" data-ai-hint="profile picture" />
-                            <div className="flex gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('profilePicture')}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                            <Label className="md:col-span-1 text-base self-center">Profile Picture</Label>
+                            <Image src={profilePicPreview || employee.profilePictureUrl || "https://placehold.co/128x128.png"} alt="Profile" width={128} height={128} className="rounded-full object-cover h-32 w-32 justify-self-center" data-ai-hint="profile picture" />
+                            <div className="flex flex-col justify-center gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('profilePicture')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                <Input id="profilePictureInput" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, setNewProfilePicture, setProfilePicPreview)} />
                             </div>
-                            <Input id="profilePictureInput" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, setNewProfilePicture, setProfilePicPreview)} />
                         </div>
-                        {/* ID Proof */}
-                        <div className="flex flex-col items-center gap-2 p-4 border rounded-md">
-                            <Label>ID Proof</Label>
-                             <Image src={idProofPreview || (employee.idProofDocumentUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrl) || "https://placehold.co/200x120.png"} alt="ID Proof" width={200} height={120} className="object-contain h-32 w-full" data-ai-hint="id card" />
-                            <div className="flex gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocument')}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+
+                        {/* ID Proof Front */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                            <Label className="md:col-span-1 text-base self-center">ID Proof (Front)</Label>
+                            <Image src={idProofPreviewFront || (employee.idProofDocumentUrlFront?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlFront) || "https://placehold.co/200x120.png"} alt="ID Proof Front" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
+                            <div className="flex flex-col justify-center gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofFrontInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentFront')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                <Input id="idProofFrontInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentFront, setIdProofPreviewFront)} />
                             </div>
-                            <Input id="idProofInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocument, setIdProofPreview)} />
                         </div>
+
+                        {/* ID Proof Back */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                            <Label className="md:col-span-1 text-base self-center">ID Proof (Back)</Label>
+                            <Image src={idProofPreviewBack || (employee.idProofDocumentUrlBack?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlBack) || "https://placehold.co/200x120.png"} alt="ID Proof Back" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
+                            <div className="flex flex-col justify-center gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofBackInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentBack')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                <Input id="idProofBackInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentBack, setIdProofPreviewBack)} />
+                            </div>
+                        </div>
+
                         {/* Bank Passbook */}
-                        <div className="flex flex-col items-center gap-2 p-4 border rounded-md">
-                            <Label>Bank Document</Label>
-                            <Image src={bankPassbookPreview || (employee.bankPassbookStatementUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.bankPassbookStatementUrl) || "https://placehold.co/200x120.png"} alt="Bank Document" width={200} height={120} className="object-contain h-32 w-full" data-ai-hint="bank document" />
-                             <div className="flex gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('bankPassbookInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('bankPassbookStatement')}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                            <Label className="md:col-span-1 text-base self-center">Bank Document</Label>
+                            <Image src={bankPassbookPreview || (employee.bankPassbookStatementUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.bankPassbookStatementUrl) || "https://placehold.co/200x120.png"} alt="Bank Document" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="bank document" />
+                             <div className="flex flex-col justify-center gap-2">
+                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('bankPassbookInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('bankPassbookStatement')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
                             </div>
                             <Input id="bankPassbookInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewBankPassbookStatement, setBankPassbookPreview)} />
                         </div>
@@ -902,8 +937,8 @@ export default function AdminEmployeeProfilePage() {
         </Form>
       )}
 
-    <Dialog open={isCameraDialogOpen} onOpenChange={setIsCameraDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+    <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
+        <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
             <DialogHeader>
                 <DialogTitle>Take Photo</DialogTitle>
             </DialogHeader>
