@@ -304,7 +304,6 @@ export default function AdminEmployeeProfilePage() {
         joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
         dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
         exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-        // Ensure optional string fields default to "" to avoid uncontrolled to controlled input error
         spouseName: employee.spouseName || "",
         resourceIdNumber: employee.resourceIdNumber || "",
         panNumber: employee.panNumber || "",
@@ -666,12 +665,12 @@ export default function AdminEmployeeProfilePage() {
           </div>
         </div>
         {isAdminView && (
-          <div className="flex gap-2 mt-4 sm:mt-0">
-            <Button onClick={handleDownloadProfile} variant="outline">
+          <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
+            <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none">
                 <Download className="mr-2 h-4 w-4" /> Download Profile
             </Button>
-            <Button onClick={() => toggleEditMode()}>
-                <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel Editing" : "Edit Profile"}
+            <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
+                <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
             </Button>
           </div>
         )}
@@ -680,11 +679,11 @@ export default function AdminEmployeeProfilePage() {
       {!isEditing && (
         <Tabs defaultValue="personal">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2">
-            <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Personal</TabsTrigger>
-            <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Employment</TabsTrigger>
-            <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Bank</TabsTrigger>
-            <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Identification</TabsTrigger>
-            <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 sm:hidden md:inline-block" />QR & Docs</TabsTrigger>
+            <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
+            <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
+            <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
+            <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 hidden md:inline-block" />Identification</TabsTrigger>
+            <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 hidden md:inline-block" />QR & Docs</TabsTrigger>
           </TabsList>
           <Card className="mt-4">
             <CardContent className="pt-6">
@@ -714,7 +713,7 @@ export default function AdminEmployeeProfilePage() {
               <TabsContent value="employment">
                 <CardTitle className="mb-4">Employment Details</CardTitle>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5 items-center">
+                  <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5 items-start sm:items-center">
                       <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
                       <span className="text-sm font-medium sm:col-span-2 flex items-center gap-2">
                           {employee.employeeId}
@@ -891,7 +890,7 @@ export default function AdminEmployeeProfilePage() {
                     </div>
                 </section>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2">
+              <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => toggleEditMode(false)} disabled={isSubmitting}>Cancel</Button>
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -904,7 +903,7 @@ export default function AdminEmployeeProfilePage() {
       )}
 
     <Dialog open={isCameraDialogOpen} onOpenChange={setIsCameraDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
                 <DialogTitle>Take Photo</DialogTitle>
             </DialogHeader>

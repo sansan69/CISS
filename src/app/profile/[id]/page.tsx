@@ -192,11 +192,11 @@ export default function PublicEmployeeProfilePage() {
 
       <Tabs defaultValue="personal">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2">
-          <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Personal</TabsTrigger>
-          <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Employment</TabsTrigger>
-          <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Bank</TabsTrigger>
-          <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 sm:hidden md:inline-block" />Identification</TabsTrigger>
-          <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 sm:hidden md:inline-block" />QR & Docs</TabsTrigger>
+          <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
+          <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
+          <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
+          <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 hidden md:inline-block" />Identification</TabsTrigger>
+          <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 hidden md:inline-block" />QR & Docs</TabsTrigger>
         </TabsList>
 
         <Card className="mt-4">
