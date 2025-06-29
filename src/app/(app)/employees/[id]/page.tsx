@@ -223,13 +223,18 @@ export default function AdminEmployeeProfilePage() {
 
   useEffect(() => {
     if (employee) {
-      const defaultFormValues: Partial<EmployeeUpdateValues> = {
-          ...employee,
-          joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
-          dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
-          exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-      };
-      form.reset(defaultFormValues);
+      form.reset({
+        ...employee,
+        joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
+        dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
+        exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
+        // Ensure optional string fields default to "" to avoid uncontrolled to controlled input error
+        spouseName: employee.spouseName || "",
+        resourceIdNumber: employee.resourceIdNumber || "",
+        panNumber: employee.panNumber || "",
+        epfUanNumber: employee.epfUanNumber || "",
+        esicNumber: employee.esicNumber || "",
+      });
     }
   }, [employee, form]);
 
