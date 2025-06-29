@@ -14,7 +14,14 @@ import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 
-const INSTALL_PROMPT_KEY = 'cissAppInstallPromptShown';
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: Array<string>;
+  readonly userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed',
+    platform: string
+  }>;
+  prompt(): Promise<void>;
+}
 
 export default function LandingPage() {
   const router = useRouter();
@@ -23,22 +30,46 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const installPromptShown = localStorage.getItem(INSTALL_PROMPT_KEY);
-    if (!installPromptShown) {
+    let deferredPrompt: BeforeInstallPromptEvent | null;
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt = e as BeforeInstallPromptEvent;
+
+      const handleInstallClick = () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+              console.log('User accepted the install prompt');
+            } else {
+              console.log('User dismissed the install prompt');
+            }
+            deferredPrompt = null;
+          });
+        }
+      };
+
       toast({
         title: "Install CISS Workforce?",
-        description: "For quick and easy access, consider adding this app to your home screen or installing it on your device.",
-        duration: 9000,
+        description: "For quick and easy access, add this app to your home screen.",
+        duration: 30000, // Keep it visible for longer
         action: (
-          <Button variant="outline" size="sm" onClick={() => { /* Future: Could trigger custom install guide */ }}>
+          <Button variant="outline" size="sm" onClick={handleInstallClick}>
             <DownloadCloud className="mr-2 h-4 w-4" />
-            Learn More
+            Install
           </Button>
         ),
       });
-      localStorage.setItem(INSTALL_PROMPT_KEY, 'true');
-    }
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
   }, [toast]);
+
 
   const handleContinue = async () => {
     let normalizedPhoneNumber = phoneNumber.trim();
