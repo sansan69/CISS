@@ -35,7 +35,8 @@ import {
   QrCode,
   FileUp,
   BarChart3,
-  Briefcase
+  Briefcase,
+  Loader2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -65,7 +66,7 @@ const navItems: NavItem[] = [
     icon: Users,
     subItems: [
       { href: '/employees', label: 'Directory', icon: Users },
-      { href: '/enroll', label: 'Enroll New', icon: UserPlus },
+      { href: '/employees/enroll', label: 'Enroll New', icon: UserPlus },
     ],
   },
   { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
@@ -145,24 +146,28 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
+  // Effect to listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setAuthUser(user);
-      } else {
-        setAuthUser(null);
-        const publicPaths = ['/admin-login', '/', '/enroll']; 
-        const isPublicPath = publicPaths.includes(pathname) || pathname.startsWith('/enroll?');
-        
-        if (!isPublicPath) { 
-             router.push('/admin-login'); 
-        }
-      }
+      setAuthUser(user);
       setIsLoadingAuth(false);
     });
-
     return () => unsubscribe();
-  }, [router, pathname]);
+  }, []);
+
+  // Effect to handle redirection based on auth state
+  useEffect(() => {
+    if (isLoadingAuth) {
+      return; // Wait until auth state is determined
+    }
+
+    const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
+    const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+
+    if (!authUser && !isPublicPath) {
+      router.push('/admin-login');
+    }
+  }, [isLoadingAuth, authUser, pathname, router]);
 
   useEffect(() => {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
@@ -185,6 +190,27 @@ export function AppLayout({ children }: { children: ReactNode }) {
       console.error("Error signing out: ", error);
     }
   };
+  
+  // While checking auth, show a full-screen loader to prevent race conditions.
+  if (isLoadingAuth) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // If auth check is complete, but user is not authenticated and on a protected page,
+  // continue showing loader while redirect happens to prevent content flicker.
+  const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
+  const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+  if (!authUser && !isPublicPath) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider defaultOpen>
