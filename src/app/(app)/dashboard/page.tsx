@@ -2,33 +2,16 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CheckCircle, AlertTriangle, Clock, Loader2, AlertCircle as AlertIcon } from "lucide-react";
+import { Users, CheckCircle, AlertTriangle, Clock, Loader2, AlertCircle as AlertIcon, UserMinus, UserCheck } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import React, { useEffect, useState } from "react";
 import { db } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 
-// Mock data for weekly attendance - real data would require an attendance system
-const weeklyAttendanceMockData = [
-  { date: "Mon", present: 28, absent: 2, late: 1 },
-  { date: "Tue", present: 29, absent: 1, late: 0 },
-  { date: "Wed", present: 25, absent: 3, late: 2 },
-  { date: "Thu", present: 30, absent: 0, late: 0 },
-  { date: "Fri", present: 27, absent: 2, late: 1 },
-  { date: "Sat", present: 15, absent: 0, late: 0 },
-];
-
-// Chart config colors are driven by CSS variables defined in globals.css
-const barChartConfig = {
-  present: { label: "Present", color: "hsl(var(--chart-1))" },
-  absent: { label: "Absent", color: "hsl(var(--chart-2))" },
-  late: { label: "Late", color: "hsl(var(--chart-3))" },
-};
 
 const THEME_CHART_COLORS = [
   "hsl(var(--chart-1))",
@@ -44,103 +27,148 @@ interface ClientDistributionData {
   color: string;
 }
 
+interface DashboardStats {
+    total: number;
+    active: number;
+    onLeave: number;
+    inactiveOrExited: number;
+}
+
+interface NewHiresData {
+    month: string;
+    hires: number;
+}
+
 export default function DashboardPage() {
-  const [timeRange, setTimeRange] = React.useState("last_7_days");
-  
-  const [totalEmployees, setTotalEmployees] = useState<number | null>(null);
-  const [isLoadingTotalEmployees, setIsLoadingTotalEmployees] = useState(true);
-  const [totalEmployeesError, setTotalEmployeesError] = useState<string | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   const [clientDistribution, setClientDistribution] = useState<ClientDistributionData[]>([]);
   const [isLoadingClientDistribution, setIsLoadingClientDistribution] = useState(true);
   const [clientDistributionError, setClientDistributionError] = useState<string | null>(null);
-
-  // State for mock data (to be replaced with real data fetching later)
-  const [presentToday, setPresentToday] = useState(1150); // Mock
-  const [absentToday, setAbsentToday] = useState(54); // Mock
-  const [lateComers, setLateComers] = useState(30); // Mock
+  
+  const [newHiresData, setNewHiresData] = useState<NewHiresData[]>([]);
+  const [isLoadingHires, setIsLoadingHires] = useState(true);
+  const [hiresError, setHiresError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchTotalEmployees = async () => {
-      setIsLoadingTotalEmployees(true);
-      setTotalEmployeesError(null);
-      try {
-        const employeesColRef = collection(db, "employees");
-        const snapshot = await getCountFromServer(employeesColRef);
-        setTotalEmployees(snapshot.data().count);
-      } catch (error: any) {
-        console.error("Error fetching total employees:", error);
-        if (error.code === 'permission-denied') {
-          setTotalEmployeesError("Permission denied. Check Firestore rules to allow 'list' operations for admins.");
-        } else {
-          setTotalEmployeesError("Failed to fetch employee count.");
-        }
-        setTotalEmployees(0); // Fallback
-      } finally {
-        setIsLoadingTotalEmployees(false);
-      }
-    };
-
-    const fetchClientDistribution = async () => {
+    const fetchDashboardData = async () => {
+      setIsLoadingStats(true);
       setIsLoadingClientDistribution(true);
+      setIsLoadingHires(true);
+      setStatsError(null);
       setClientDistributionError(null);
-      try {
-        const employeesSnapshot = await getDocs(collection(db, "employees"));
-        const employeesData = employeesSnapshot.docs.map(doc => doc.data() as Employee);
-        
-        const countsByClient: { [key: string]: number } = {};
-        employeesData.forEach(emp => {
-          const client = emp.clientName || "Unassigned";
-          countsByClient[client] = (countsByClient[client] || 0) + 1;
-        });
+      setHiresError(null);
 
-        const formattedDistribution = Object.entries(countsByClient).map(([name, value], index) => ({
-          name,
-          value,
-          color: THEME_CHART_COLORS[index % THEME_CHART_COLORS.length],
-        }));
-        setClientDistribution(formattedDistribution);
+      try {
+        // --- Fetch all data in parallel ---
+        const [statsData, clientData, hiresData] = await Promise.all([
+          fetchStats(),
+          fetchClientDistribution(),
+          fetchNewHires(),
+        ]);
+
+        setStats(statsData);
+        setClientDistribution(clientData);
+        setNewHiresData(hiresData);
 
       } catch (error: any) {
-        console.error("Error fetching client distribution:", error);
-        if (error.code === 'permission-denied') {
-          setClientDistributionError("Permission denied. Check Firestore rules to allow 'list' operations for admins.");
+        console.error("Error fetching dashboard data:", error);
+        if (error.code === 'permission-denied' || error.message.includes('permission-denied')) {
+          const permissionError = "Permission denied. Check Firestore rules to allow 'list' and 'aggregate' operations for admins.";
+          setStatsError(permissionError);
+          setClientDistributionError(permissionError);
+          setHiresError(permissionError);
         } else {
-          setClientDistributionError("Failed to fetch employee data for chart.");
+          const genericError = "Failed to fetch dashboard data.";
+          setStatsError(genericError);
+          setClientDistributionError(genericError);
+          setHiresError(genericError);
         }
-        setClientDistribution([]);
       } finally {
+        setIsLoadingStats(false);
         setIsLoadingClientDistribution(false);
+        setIsLoadingHires(false);
       }
     };
+    
+    fetchDashboardData();
 
-    fetchTotalEmployees();
-    fetchClientDistribution();
-    // Add logic here to fetch real data for presentToday, absentToday, lateComers
-    // based on the 'timeRange' state and a dedicated attendance collection.
-    // For now, they use mock values.
+  }, []);
 
-  }, [timeRange]); // Re-fetch if timeRange changes for attendance data
+  const fetchStats = async (): Promise<DashboardStats> => {
+      const employeesRef = collection(db, "employees");
+      const totalQuery = getCountFromServer(employeesRef);
+      const activeQuery = getCountFromServer(query(employeesRef, where('status', '==', 'Active')));
+      const onLeaveQuery = getCountFromServer(query(employeesRef, where('status', '==', 'OnLeave')));
+      const inactiveQuery = getCountFromServer(query(employeesRef, where('status', 'in', ['Inactive', 'Exited'])));
+      
+      const [totalSnap, activeSnap, onLeaveSnap, inactiveSnap] = await Promise.all([totalQuery, activeQuery, onLeaveQuery, inactiveQuery]);
+
+      return {
+          total: totalSnap.data().count,
+          active: activeSnap.data().count,
+          onLeave: onLeaveSnap.data().count,
+          inactiveOrExited: inactiveSnap.data().count,
+      };
+  };
+
+  const fetchClientDistribution = async (): Promise<ClientDistributionData[]> => {
+      const employeesSnapshot = await getDocs(collection(db, "employees"));
+      const employeesData = employeesSnapshot.docs.map(doc => doc.data() as Employee);
+      
+      const countsByClient: { [key: string]: number } = {};
+      employeesData.forEach(emp => {
+        const client = emp.clientName || "Unassigned";
+        countsByClient[client] = (countsByClient[client] || 0) + 1;
+      });
+
+      return Object.entries(countsByClient).map(([name, value], index) => ({
+        name,
+        value,
+        color: THEME_CHART_COLORS[index % THEME_CHART_COLORS.length],
+      }));
+  };
+  
+  const fetchNewHires = async (): Promise<NewHiresData[]> => {
+    const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5)); // Include current month
+    const hiresQuery = query(collection(db, "employees"), where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
+    const snapshot = await getDocs(hiresQuery);
+
+    const hiresByMonth: { [key: string]: number } = {};
+    
+    // Initialize last 6 months
+    for (let i = 0; i < 6; i++) {
+        const monthDate = subMonths(new Date(), i);
+        const monthKey = format(monthDate, 'MMM yyyy');
+        hiresByMonth[monthKey] = 0;
+    }
+
+    snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.joiningDate) {
+            const joiningDate = (data.joiningDate as Timestamp).toDate();
+            const monthKey = format(joiningDate, 'MMM yyyy');
+            if (hiresByMonth.hasOwnProperty(monthKey)) {
+                hiresByMonth[monthKey]++;
+            }
+        }
+    });
+
+    return Object.entries(hiresByMonth)
+      .map(([month, hires]) => ({ month, hires }))
+      .reverse(); // To show oldest month first
+  };
+
+  const newHiresChartConfig = {
+      hires: { label: "New Hires", color: "hsl(var(--chart-1))" },
+  };
+
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="time-range">Time Range:</Label>
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger id="time-range" className="w-[180px]">
-              <SelectValue placeholder="Select time range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="last_7_days">Last 7 Days</SelectItem>
-              <SelectItem value="last_30_days">Last 30 Days</SelectItem>
-              <SelectItem value="this_month">This Month</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -149,47 +177,66 @@ export default function DashboardPage() {
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingTotalEmployees ? (
+            {isLoadingStats ? (
               <Loader2 className="h-7 w-7 animate-spin text-primary" />
-            ) : totalEmployeesError ? (
+            ) : statsError ? (
                 <div className="text-xs text-destructive flex items-center gap-2">
                     <AlertIcon className="h-4 w-4" />
-                    {totalEmployeesError}
+                    {statsError}
                 </div>
             ) : (
-              <div className="text-2xl font-bold">{totalEmployees?.toLocaleString() ?? 'N/A'}</div>
+              <div className="text-2xl font-bold">{stats?.total?.toLocaleString() ?? 'N/A'}</div>
             )}
-            {/* <p className="text-xs text-muted-foreground">+20.1% from last month</p> */}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Present Today</CardTitle>
-            <CheckCircle className="h-5 w-5 text-primary" /> {/* Use theme color */}
+            <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
+            <UserCheck className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{presentToday}</div>
-            <p className="text-xs text-muted-foreground">{totalEmployees ? ((presentToday / totalEmployees) * 100).toFixed(1) + '%' : '-'} of total (Mock Data)</p>
+             {isLoadingStats ? (
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            ) : statsError ? (
+                <div className="text-xs text-destructive flex items-center gap-2">...</div>
+            ) : (
+                <>
+                    <div className="text-2xl font-bold">{stats?.active?.toLocaleString() ?? 'N/A'}</div>
+                    <p className="text-xs text-muted-foreground">
+                        {stats?.total ? ((stats.active / stats.total) * 100).toFixed(1) + '%' : '-%'} of total
+                    </p>
+                </>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Absent Today</CardTitle>
-            <AlertTriangle className="h-5 w-5 text-destructive" /> {/* Use theme color */}
+            <CardTitle className="text-sm font-medium">Inactive & Exited</CardTitle>
+            <UserMinus className="h-5 w-5 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{absentToday}</div>
-            <p className="text-xs text-muted-foreground">{totalEmployees ? ((absentToday / totalEmployees) * 100).toFixed(1) + '%' : '-'} of total (Mock Data)</p>
+            {isLoadingStats ? (
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            ) : statsError ? (
+                <div className="text-xs text-destructive flex items-center gap-2">...</div>
+            ) : (
+                <div className="text-2xl font-bold">{stats?.inactiveOrExited?.toLocaleString() ?? 'N/A'}</div>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Late Comers</CardTitle>
-            <Clock className="h-5 w-5 text-accent" /> {/* Use theme color for warning/neutral */}
+            <CardTitle className="text-sm font-medium">On Leave</CardTitle>
+            <Clock className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{lateComers}</div>
-            <p className="text-xs text-muted-foreground">(Mock Data)</p>
+            {isLoadingStats ? (
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            ) : statsError ? (
+                <div className="text-xs text-destructive flex items-center gap-2">...</div>
+            ) : (
+                 <div className="text-2xl font-bold">{stats?.onLeave?.toLocaleString() ?? 'N/A'}</div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -197,24 +244,33 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="h-[400px] flex flex-col">
           <CardHeader>
-            <CardTitle>Weekly Attendance Overview</CardTitle>
-            <CardDescription>Present, Absent, and Late employees. (Mock Data)</CardDescription>
+            <CardTitle>New Hires - Last 6 Months</CardTitle>
+            <CardDescription>Number of employees who joined each month.</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1">
-            <ChartContainer config={barChartConfig} className="h-full w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyAttendanceMockData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false}/>
-                  <XAxis dataKey="date" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="present" fill="var(--color-present)" radius={4} />
-                  <Bar dataKey="absent" fill="var(--color-absent)" radius={4} />
-                  <Bar dataKey="late" fill="var(--color-late)" radius={4} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+          <CardContent className="flex-1 flex items-center justify-center">
+             {isLoadingHires ? (
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+             ) : hiresError ? (
+                <Alert variant="destructive" className="w-full">
+                    <AlertIcon className="h-4 w-4" />
+                    <AlertTitle>Error Loading Chart</AlertTitle>
+                    <AlertDescription>{hiresError}</AlertDescription>
+                </Alert>
+             ) : newHiresData.length === 0 ? (
+                <p className="text-muted-foreground">No new hire data in the last 6 months.</p>
+             ) : (
+                <ChartContainer config={newHiresChartConfig} className="h-full w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={newHiresData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false}/>
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                      <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="hires" fill="var(--color-hires)" radius={4} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+             )}
           </CardContent>
         </Card>
 
