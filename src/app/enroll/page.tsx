@@ -773,18 +773,18 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     )}
                   />
                   {watchMaritalStatus === "Married" && (
-                     <FormField
-                        control={form.control}
-                        name="spouseName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel>
-                            <FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl>
-                            <FormDescription>Your spouse's full name</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <FormField
+                      control={form.control}
+                      name="spouseName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl>
+                          <FormDescription>Your spouse's full name</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   )}
                 </div>
               </section>

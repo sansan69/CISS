@@ -75,15 +75,15 @@ export default function LandingPage() {
         const employeeData = employeeDoc.data() as Employee;
         
         toast({
-          title: "Login Successful",
-          description: `Welcome back, ${employeeData.fullName || employeeData.firstName}!`,
+          title: "Employee Found",
+          description: `Welcome back, ${employeeData.fullName || employeeData.firstName}! Redirecting...`,
         });
         // Redirect to the new public profile page
         router.push(`/profile/${employeeDoc.id}`);
       } else {
         toast({
-          title: "Employee Not Found",
-          description: "Redirecting to enrollment page.",
+          title: "New User Detected",
+          description: "This phone number is not registered. Redirecting to enrollment page.",
         });
         router.push(`/enroll?phone=${normalizedPhoneNumber}`);
       }
@@ -91,7 +91,7 @@ export default function LandingPage() {
       console.error("Error searching for employee:", error);
       let description = "Could not perform search. Please check your network connection.";
       if (error.code === 'permission-denied') {
-        description = "Could not perform search due to security rules. Please ask your administrator to update Firestore rules to allow public employee lookups.";
+        description = "Could not perform search. Please ask your administrator to update Firestore rules to allow public employee lookups.";
       }
       toast({
         variant: "destructive",
@@ -147,6 +147,7 @@ export default function LandingPage() {
               className="pl-10 text-base"
               maxLength={13} 
               disabled={isLoading}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleContinue(); }}
             />
           </div>
           <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading}>

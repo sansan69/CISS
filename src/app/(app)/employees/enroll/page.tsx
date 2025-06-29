@@ -60,7 +60,8 @@ const enrollmentFormSchema = z.object({
   motherName: z.string().min(2, { message: "Mother's name is required." }),
   dateOfBirth: z.date({ required_error: "Date of birth is required." }),
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
-  maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed", "Unmarried"], { required_error: "Marital status is required." }),
+  maritalStatus: z.enum(["Married", "Unmarried"], { required_error: "Marital status is required." }),
+  spouseName: z.string().optional(),
 
   // Location & Identification
   district: z.string({ required_error: "District is required." }),
@@ -89,6 +90,13 @@ const enrollmentFormSchema = z.object({
       path: ["resourceIdNumber"],
     });
   }
+  if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Spouse name is required if married.",
+      path: ["spouseName"],
+    });
+  }
 });
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
@@ -104,7 +112,7 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
-const maritalStatuses = ["Unmarried", "Married", "Divorced", "Widowed", "Single"];
+const maritalStatuses = ["Married", "Unmarried"];
 
 type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
 
@@ -136,6 +144,7 @@ export default function EnrollEmployeePage() {
         motherName: '',
         gender: undefined,
         maritalStatus: undefined,
+        spouseName: '',
         district: '',
         panNumber: '',
         idProofType: undefined,
@@ -152,6 +161,7 @@ export default function EnrollEmployeePage() {
   });
 
   const watchClientName = form.watch("clientName");
+  const watchMaritalStatus = form.watch("maritalStatus");
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -585,6 +595,20 @@ export default function EnrollEmployeePage() {
                       </FormItem>
                     )}
                   />
+                  {watchMaritalStatus === "Married" && (
+                    <FormField
+                      control={form.control}
+                      name="spouseName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl>
+                          <FormDescription>Your spouse's full name</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
               </section>
               
