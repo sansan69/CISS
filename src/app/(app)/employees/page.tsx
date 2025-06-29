@@ -194,9 +194,11 @@ export default function EmployeeDirectoryPage() {
       let message = err.message || "Failed to fetch employees.";
       if (err.code === 'permission-denied') {
         message = "Permission denied. Please check your Firestore security rules to ensure authenticated users can list employees.";
+      } else if (err.code === 'failed-precondition') {
+        message = "A required database index is missing. This is expected when using new filter combinations for the first time. Please check the browser's developer console for a link to create the index in your Firebase project.";
       }
       setError(message);
-      toast({ variant: "destructive", title: "Data Fetch Error", description: message });
+      toast({ variant: "destructive", title: "Data Fetch Error", description: message, duration: 9000 });
     } finally {
       setIsLoading(false);
       setIsFetchingNext(false);
@@ -214,7 +216,7 @@ export default function EmployeeDirectoryPage() {
     setFirstVisibleDoc(null);
     setHasMorePrev(false); 
     fetchEmployees(); 
-  }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
+  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
 
 
   const handleNextPage = () => {
