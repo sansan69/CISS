@@ -85,8 +85,14 @@ const navItems: NavItem[] = [
 
 function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
   const pathname = usePathname();
-  const { open: sidebarOpen } = useSidebar();
+  const { open: sidebarOpen, isMobile, setOpenMobile } = useSidebar();
   const [isSubMenuOpen, setIsSubMenuOpen] = React.useState(pathname.startsWith(item.href) && item.href !== '/');
+
+  const handleNavigation = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   const isActive = item.subItems
     ? pathname.startsWith(item.href)
@@ -114,7 +120,9 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
             {item.subItems.map((subItem) => (
               <SidebarMenuSubItem key={subItem.href}>
                 <Link href={subItem.href} passHref legacyBehavior>
-                  <SidebarMenuSubButton isActive={pathname === subItem.href || (subItem.href !== '/' && pathname.startsWith(subItem.href))}>
+                  <SidebarMenuSubButton 
+                    onClick={handleNavigation}
+                    isActive={pathname === subItem.href || (subItem.href !== '/' && pathname.startsWith(subItem.href))}>
                     <subItem.icon />
                     <span>{subItem.label}</span>
                   </SidebarMenuSubButton>
@@ -130,13 +138,30 @@ function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
   return (
     <SidebarMenuItem>
       <Link href={item.href} passHref legacyBehavior>
-        <SidebarMenuButton isActive={isActive} tooltip={sidebarOpen ? undefined : item.label}>
+        <SidebarMenuButton 
+            onClick={handleNavigation}
+            isActive={isActive} 
+            tooltip={sidebarOpen ? undefined : item.label}>
           <item.icon />
           <span>{item.label}</span>
         </SidebarMenuButton>
       </Link>
     </SidebarMenuItem>
   );
+}
+
+// Helper component to close mobile sidebar on route change (e.g., back button)
+function MobileSidebarManager() {
+  const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, isMobile, setOpenMobile]);
+
+  return null;
 }
 
 
@@ -163,7 +188,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
     const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
     
-    // Corrected logic to check for public paths
     const isPublicPath = publicPaths.some(path => {
         if (path === '/') return pathname === '/';
         return pathname.startsWith(path);
@@ -196,7 +220,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   };
   
-  // While checking auth, show a full-screen loader to prevent content flicker or premature redirects.
   if (isLoadingAuth) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -205,8 +228,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // If auth check is complete, but user is not authenticated and on a protected page,
-  // continue showing loader while redirect happens to prevent content flicker.
   const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
   const isPublicPath = publicPaths.some(path => {
       if (path === '/') return pathname === '/';
@@ -222,9 +243,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
   
-  // If user is authenticated OR on a public path, render the layout
   return (
     <SidebarProvider defaultOpen>
+      <MobileSidebarManager />
       <Sidebar className="border-r">
         <SidebarHeader className="p-4 flex items-center gap-3">
           <Image 
