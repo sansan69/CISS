@@ -162,7 +162,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
 
     const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
-    const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+    
+    // Corrected logic to check for public paths
+    const isPublicPath = publicPaths.some(path => {
+        if (path === '/') return pathname === '/';
+        return pathname.startsWith(path);
+    });
 
     if (!authUser && !isPublicPath) {
       router.push('/admin-login');
@@ -191,7 +196,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   };
   
-  // While checking auth, show a full-screen loader to prevent race conditions.
+  // While checking auth, show a full-screen loader to prevent content flicker or premature redirects.
   if (isLoadingAuth) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -203,15 +208,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
   // If auth check is complete, but user is not authenticated and on a protected page,
   // continue showing loader while redirect happens to prevent content flicker.
   const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
-  const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+  const isPublicPath = publicPaths.some(path => {
+      if (path === '/') return pathname === '/';
+      return pathname.startsWith(path);
+  });
+  
   if (!authUser && !isPublicPath) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4">Redirecting to login...</p>
       </div>
     );
   }
-
+  
+  // If user is authenticated OR on a public path, render the layout
   return (
     <SidebarProvider defaultOpen>
       <Sidebar className="border-r">
@@ -241,15 +252,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={authUser?.photoURL || undefined} alt={authUser?.displayName || authUser?.email || "User avatar"} data-ai-hint="user avatar" />
                   <AvatarFallback>
-                    {isLoadingAuth ? 'L' : authUser?.email?.[0]?.toUpperCase() || 'A'}
+                    {authUser?.email?.[0]?.toUpperCase() || 'A'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="text-left truncate">
                   <p className="text-sm font-medium text-sidebar-foreground truncate">
-                    {isLoadingAuth ? "Loading..." : authUser?.displayName || authUser?.email?.split('@')[0] || 'Admin User'}
+                    {authUser?.displayName || authUser?.email?.split('@')[0] || 'Admin User'}
                   </p>
                   <p className="text-xs text-sidebar-foreground/70 truncate">
-                    {isLoadingAuth ? "..." : authUser?.email || 'admin@example.com'}
+                    {authUser?.email || 'admin@example.com'}
                   </p>
                 </div>
               </Button>
