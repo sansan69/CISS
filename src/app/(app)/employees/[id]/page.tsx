@@ -179,7 +179,33 @@ export default function AdminEmployeeProfilePage() {
 
   const form = useForm<EmployeeUpdateValues>({
     resolver: zodResolver(employeeUpdateSchema),
-    defaultValues: {},
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      dateOfBirth: undefined,
+      gender: undefined,
+      fatherName: "",
+      motherName: "",
+      maritalStatus: undefined,
+      spouseName: "",
+      district: "",
+      fullAddress: "",
+      phoneNumber: "",
+      emailAddress: "",
+      clientName: "",
+      resourceIdNumber: "",
+      joiningDate: undefined,
+      status: undefined,
+      exitDate: null,
+      bankName: "",
+      bankAccountNumber: "",
+      ifscCode: "",
+      panNumber: "",
+      idProofType: undefined,
+      idProofNumber: "",
+      epfUanNumber: "",
+      esicNumber: "",
+    },
   });
   
   const watchStatus = form.watch('status');
@@ -199,14 +225,20 @@ export default function AdminEmployeeProfilePage() {
           id: employeeDocSnap.id,
         } as Employee;
         setEmployee(formattedData);
+        // Log the fetched data for debugging
+        console.log("Fetched employee data for profile page:", formattedData);
       } else {
         setError("Employee not found with the provided ID.");
         toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
       }
     } catch (err: any) {
       console.error("Error fetching employee:", err);
-      setError(err.message || "Failed to fetch employee data.");
-      toast({ variant: "destructive", title: "Fetch Error", description: "Could not retrieve employee details."});
+      let message = "Failed to fetch employee data.";
+      if(err.code === 'permission-denied') {
+          message = "Permission Denied. Please ensure Firestore rules allow admins to read employee documents.";
+      }
+      setError(message);
+      toast({ variant: "destructive", title: "Fetch Error", description: message});
     } finally {
       setIsLoading(false);
     }
@@ -516,7 +548,7 @@ export default function AdminEmployeeProfilePage() {
         <AlertDescription>
             {error}
             <Button onClick={() => router.push(isAdminView ? '/employees' : '/')} className="mt-4">
-              {isAdminView ? 'Back to Directory' : 'Back to Home'}
+              {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
             </Button>
         </AlertDescription>
       </Alert>
@@ -531,7 +563,7 @@ export default function AdminEmployeeProfilePage() {
             <AlertDescription>
                 The requested employee profile could not be found.
                 <Button onClick={() => router.push(isAdminView ? '/employees' : '/')} className="mt-4">
-                  {isAdminView ? 'Back to Directory' : 'Back to Home'}
+                   {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
                 </Button>
             </AlertDescription>
         </Alert>
@@ -542,8 +574,7 @@ export default function AdminEmployeeProfilePage() {
     <div className="flex flex-col gap-6">
       <div className="mb-4">
         <Button variant="outline" size="sm" onClick={() => router.push(isAdminView ? '/employees' : '/')}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> 
-          Back to {isAdminView ? 'Employee Directory' : 'Home'}
+            {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
         </Button>
       </div>
 
