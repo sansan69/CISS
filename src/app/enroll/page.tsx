@@ -119,6 +119,29 @@ const maritalStatuses = ["Married", "Unmarried"];
 type CameraField = "profilePicture" | "idProofDocument" | "bankPassbookStatement";
 
 // Helper Functions
+const abbreviateClientName = (clientName: string): string => {
+  if (!clientName) return "CLIENT";
+  const upperCaseName = clientName.trim().toUpperCase();
+
+  const abbreviations: { [key: string]: string } = {
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "WIPRO": "WIPRO",
+  };
+  if (abbreviations[upperCaseName]) {
+    return abbreviations[upperCaseName];
+  }
+
+  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("");
+  }
+
+  if (upperCaseName.length <= 4) {
+    return upperCaseName;
+  }
+  return upperCaseName.substring(0, 4);
+};
+
 const getCurrentFinancialYear = (): string => {
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
@@ -131,10 +154,10 @@ const getCurrentFinancialYear = (): string => {
 };
 
 const generateEmployeeId = (clientName: string): string => {
+  const shortClientName = abbreviateClientName(clientName);
   const financialYear = getCurrentFinancialYear();
-  const randomNumber = Math.floor(Math.random() * 1001); // 0-1000
-  const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9]/g, "").toUpperCase() || "CLIENT";
-  return `${sanitizedClientName}/${financialYear}/${randomNumber.toString().padStart(3, '0')}`;
+  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
+  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
 };
 
 const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
@@ -310,14 +333,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       try {
         const fileName = `${activeCameraField}_capture_${Date.now()}.jpg`;
         const capturedFile = await dataURLtoFile(dataUrl, fileName);
-
+        
         form.setValue(activeCameraField, capturedFile, { shouldValidate: true });
 
         const previewUrl = URL.createObjectURL(capturedFile);
         if (activeCameraField === "profilePicture") setProfilePicPreview(previewUrl);
         else if (activeCameraField === "idProofDocument") setIdProofPreview(previewUrl);
         else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
-
+        
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
       } catch (error) {
         console.error("Error converting data URL to file:", error);
@@ -406,9 +429,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof.${file.type.startsWith("image/") ? 'jpg' : ext}`;
         toast({ title: "ID Proof", description: `Preparing ID proof (${file.type})...` });
 
-        const processAndUpload = file.type.startsWith("image/")
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' })
-              .then(blob => {
+        const processAndUpload = file.type.startsWith("image/") 
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => {
                 toast({ title: "ID Proof", description: "Uploading ID proof image..." });
                 return uploadFileToStorage(blob, storagePath);
               })
@@ -426,7 +448,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             })
         );
       }
-
+      
       if (data.bankPassbookStatement) {
         const file = data.bankPassbookStatement;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
@@ -434,8 +456,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         toast({ title: "Bank Document", description: `Preparing bank document (${file.type})...` });
 
         const processAndUpload = file.type.startsWith("image/")
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' })
-              .then(blob => {
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => {
                 toast({ title: "Bank Document", description: "Uploading bank document image..." });
                 return uploadFileToStorage(blob, storagePath);
               })

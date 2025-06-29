@@ -29,6 +29,29 @@ const runtimeOpts: functions.RuntimeOptions = {
 };
 
 // Helper to generate Employee ID
+const abbreviateClientName = (clientName: string): string => {
+  if (!clientName) return "CLIENT";
+  const upperCaseName = clientName.trim().toUpperCase();
+
+  const abbreviations: { [key: string]: string } = {
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "WIPRO": "WIPRO",
+  };
+  if (abbreviations[upperCaseName]) {
+    return abbreviations[upperCaseName];
+  }
+
+  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("");
+  }
+
+  if (upperCaseName.length <= 4) {
+    return upperCaseName;
+  }
+  return upperCaseName.substring(0, 4);
+};
+
 const getCurrentFinancialYear = (): string => {
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
@@ -40,11 +63,11 @@ const getCurrentFinancialYear = (): string => {
   }
 };
 
-const generateEmployeeId = (clientNameParam: string): string => {
+const generateEmployeeId = (clientName: string): string => {
+  const shortClientName = abbreviateClientName(clientName);
   const financialYear = getCurrentFinancialYear();
-  const randomNumber = Math.floor(Math.random() * 1001); // 0-1000
-  const sanitizedClientName = (clientNameParam || "NOCLIENT").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-  return `${sanitizedClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
+  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
 };
 
 const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {

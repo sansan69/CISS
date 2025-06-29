@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
 
 
@@ -127,6 +128,48 @@ const DocumentItem: React.FC<{ name: string, url?: string, type: string }> = ({ 
     </div>
 );
 
+// Employee ID Generation Logic
+const abbreviateClientName = (clientName: string): string => {
+  if (!clientName) return "CLIENT";
+  const upperCaseName = clientName.trim().toUpperCase();
+
+  const abbreviations: { [key: string]: string } = {
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "WIPRO": "WIPRO",
+  };
+  if (abbreviations[upperCaseName]) {
+    return abbreviations[upperCaseName];
+  }
+
+  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("");
+  }
+
+  if (upperCaseName.length <= 4) {
+    return upperCaseName;
+  }
+  return upperCaseName.substring(0, 4);
+};
+
+const getCurrentFinancialYear = (): string => {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  if (currentMonth >= 4) { // April or later
+    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+  } else { // Jan, Feb, March
+    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+  }
+};
+
+const generateEmployeeId = (clientName: string): string => {
+  const shortClientName = abbreviateClientName(clientName);
+  const financialYear = getCurrentFinancialYear();
+  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
+  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+};
+
 
 export default function AdminEmployeeProfilePage() {
   const params = useParams();
@@ -141,6 +184,7 @@ export default function AdminEmployeeProfilePage() {
   
   const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
   const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
+  const [isRegeneratingId, setIsRegeneratingId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
@@ -504,6 +548,33 @@ export default function AdminEmployeeProfilePage() {
       setIsRegeneratingQr(false);
     }
   };
+
+  const handleRegenerateEmployeeId = async () => {
+    if (!employee) return;
+    setIsRegeneratingId(true);
+    try {
+      const newEmployeeId = generateEmployeeId(employee.clientName);
+      const dataString = `Employee ID: ${newEmployeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
+      const newQrDataUrl = await QRCode.toDataURL(dataString, {
+        errorCorrectionLevel: 'H', type: 'image/png', quality: 0.92, margin: 1, width: 256,
+      });
+
+      const employeeDocRef = doc(db, "employees", employee.id);
+      await updateDoc(employeeDocRef, {
+        employeeId: newEmployeeId,
+        qrCodeUrl: newQrDataUrl,
+        updatedAt: serverTimestamp(),
+      });
+
+      setEmployee(prev => prev ? { ...prev, employeeId: newEmployeeId, qrCodeUrl: newQrDataUrl } : null);
+      toast({ title: "Employee ID Regenerated", description: `New ID is ${newEmployeeId}. QR code also updated.` });
+    } catch (err) {
+      console.error("Error regenerating Employee ID:", err);
+      toast({ variant: "destructive", title: "ID Regeneration Failed", description: "Could not regenerate the Employee ID." });
+    } finally {
+      setIsRegeneratingId(false);
+    }
+  };
   
   const resetFileStates = () => {
       setNewProfilePicture(null);
@@ -643,7 +714,33 @@ export default function AdminEmployeeProfilePage() {
               <TabsContent value="employment">
                 <CardTitle className="mb-4">Employment Details</CardTitle>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <DetailItem label="Employee ID" value={employee.employeeId} />
+                  <div className="grid grid-cols-3 gap-2 py-1.5 items-center col-span-1">
+                      <span className="text-sm text-muted-foreground col-span-1">Employee ID</span>
+                      <span className="text-sm font-medium col-span-2 flex items-center gap-2">
+                          {employee.employeeId}
+                          {isAdminView && (
+                              <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isRegeneratingId} title="Regenerate Employee ID">
+                                          {isRegeneratingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                      </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                          <AlertDialogTitle>Confirm Employee ID Regeneration</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                              This will generate a new employee ID and a new QR code. This action cannot be undone. Are you sure?
+                                          </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction onClick={handleRegenerateEmployeeId}>Confirm</AlertDialogAction>
+                                      </AlertDialogFooter>
+                                  </AlertDialogContent>
+                              </AlertDialog>
+                          )}
+                      </span>
+                  </div>
                   <DetailItem label="Client Name" value={employee.clientName} />
                   {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
                   <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
@@ -680,6 +777,12 @@ export default function AdminEmployeeProfilePage() {
                               <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
                           ) : (
                               <p className="text-muted-foreground">QR Code not available.</p>
+                          )}
+                           {isAdminView && (
+                              <Button onClick={handleRegenerateQrCode} variant="outline" size="sm" className="mt-4" disabled={isRegeneratingQr}>
+                                  {isRegeneratingQr ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
+                                  Regenerate QR Code
+                              </Button>
                           )}
                       </div>
                   </div>
@@ -729,7 +832,7 @@ export default function AdminEmployeeProfilePage() {
                 <section>
                   <h3 className="text-lg font-semibold mb-4 border-b pb-2">Employment</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed.</FormDescription></FormItem>
+                    <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
                     <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="joiningDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Joining Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
