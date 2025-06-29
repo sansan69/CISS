@@ -21,6 +21,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import QRCode from 'qrcode';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { ref, deleteObject } from 'firebase/storage';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -170,6 +172,87 @@ const generateEmployeeId = (clientName: string): string => {
   return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
 };
 
+// Component for the hidden biodata sheet for PDF generation
+const BiodataDocument = React.forwardRef<HTMLDivElement, { employee: Employee }>(({ employee }, ref) => {
+    const formatDate = (date: any) => {
+      if (!date) return 'N/A';
+      const dateObj = date.toDate ? date.toDate() : new Date(date);
+      return format(dateObj, "PPP");
+    };
+
+    return (
+        <div ref={ref} className="p-10 bg-white text-black font-sans" style={{ width: '210mm', minHeight: '297mm' }}>
+            <div className="flex justify-between items-start border-b-2 border-gray-700 pb-4 mb-8">
+                <div>
+                    <h1 className="text-4xl font-bold text-gray-800">{employee.fullName}</h1>
+                    <p className="text-lg text-gray-600">{employee.clientName}</p>
+                    <p className="text-sm text-gray-500 mt-1">Employee ID: {employee.employeeId}</p>
+                </div>
+                {employee.profilePictureUrl && (
+                    <Image
+                        src={employee.profilePictureUrl}
+                        alt={employee.fullName}
+                        width={100}
+                        height={100}
+                        className="rounded-md border-2 border-gray-300 object-cover"
+                        crossOrigin="anonymous"
+                        data-ai-hint="profile picture"
+                    />
+                )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-8 text-sm">
+                <div className="col-span-1 space-y-6">
+                    <div>
+                        <h2 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-3 text-gray-700">Contact Information</h2>
+                        <p><strong>Phone:</strong> {employee.phoneNumber}</p>
+                        <p><strong>Email:</strong> {employee.emailAddress}</p>
+                        <p className="mt-2"><strong>Address:</strong><br />{employee.fullAddress}</p>
+                    </div>
+                </div>
+
+                <div className="col-span-2 space-y-6">
+                    <div>
+                        <h2 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-3 text-gray-700">Personal Details</h2>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <p><strong>Date of Birth:</strong> {formatDate(employee.dateOfBirth)}</p>
+                            <p><strong>Gender:</strong> {employee.gender}</p>
+                            <p><strong>Father's Name:</strong> {employee.fatherName}</p>
+                            <p><strong>Mother's Name:</strong> {employee.motherName}</p>
+                            <p><strong>Marital Status:</strong> {employee.maritalStatus}</p>
+                            {employee.maritalStatus === 'Married' && <p><strong>Spouse:</strong> {employee.spouseName || 'N/A'}</p>}
+                            <p><strong>District:</strong> {employee.district}</p>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-3 text-gray-700">Employment Details</h2>
+                         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <p><strong>Joining Date:</strong> {formatDate(employee.joiningDate)}</p>
+                            <p><strong>Status:</strong> {employee.status}</p>
+                            {employee.resourceIdNumber && <p><strong>Resource ID:</strong> {employee.resourceIdNumber}</p>}
+                        </div>
+                    </div>
+                     <div>
+                        <h2 className="text-lg font-semibold border-b border-gray-300 pb-1 mb-3 text-gray-700">Identification Details</h2>
+                         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <p><strong>ID Proof:</strong> {employee.idProofType}</p>
+                            <p><strong>ID Number:</strong> {employee.idProofNumber}</p>
+                            {employee.panNumber && <p><strong>PAN:</strong> {employee.panNumber}</p>}
+                            {employee.epfUanNumber && <p><strong>EPF/UAN:</strong> {employee.epfUanNumber}</p>}
+                            {employee.esicNumber && <p><strong>ESIC:</strong> {employee.esicNumber}</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="absolute bottom-10 left-10 right-10 text-center text-xs text-gray-500 border-t pt-2">
+                This document was generated on {format(new Date(), "PPP")} from the CISS Workforce system.
+            </div>
+        </div>
+    );
+});
+BiodataDocument.displayName = 'BiodataDocument';
+
 
 export default function AdminEmployeeProfilePage() {
   const params = useParams();
@@ -177,6 +260,7 @@ export default function AdminEmployeeProfilePage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
+  const biodataRef = useRef<HTMLDivElement>(null);
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -186,6 +270,7 @@ export default function AdminEmployeeProfilePage() {
   const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
   const [isRegeneratingId, setIsRegeneratingId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
@@ -530,11 +615,53 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
-  const handleDownloadProfile = () => {
-    toast({
-      title: "Download Requested",
-      description: "CV/Biodata download functionality is under development.",
-    });
+  const handleDownloadProfile = async () => {
+    if (!biodataRef.current || !employee) return;
+    setIsDownloadingPdf(true);
+    toast({ title: "Generating PDF...", description: "Please wait while we create the profile document." });
+
+    try {
+        const canvas = await html2canvas(biodataRef.current, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true, // Important for external images from other domains
+            allowTaint: true,
+        });
+    
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4',
+        });
+    
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasWidth / canvasHeight;
+        
+        let imgWidth = pdfWidth - 20; // with margin
+        let imgHeight = imgWidth / ratio;
+    
+        if (imgHeight > pdfHeight - 20) {
+            imgHeight = pdfHeight - 20;
+            imgWidth = imgHeight * ratio;
+        }
+
+        const x = (pdfWidth - imgWidth) / 2;
+        const y = 10;
+
+        pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+        pdf.save(`${employee.fullName}_Profile.pdf`);
+    
+        toast({ title: "Download Started", description: "Your PDF is being downloaded." });
+
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        toast({ variant: "destructive", title: "PDF Generation Failed", description: "Could not generate the profile document." });
+    } finally {
+        setIsDownloadingPdf(false);
+    }
   };
 
   const handleRegenerateQrCode = async () => {
@@ -662,297 +789,303 @@ export default function AdminEmployeeProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="mb-4">
-        <Button variant="outline" size="sm" onClick={() => router.push(isAdminView ? '/employees' : '/')}>
-            {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
-        </Button>
+    <>
+      <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
+        {employee && <BiodataDocument ref={biodataRef} employee={employee} />}
       </div>
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <Image
-            src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
-            alt={employee.fullName || 'Employee profile picture'}
-            width={100}
-            height={100}
-            className="rounded-full border-4 border-primary shadow-md object-cover"
-            data-ai-hint="profile picture"
-          />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{employee.fullName}</h1>
-            <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
-            <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
-          </div>
+      <div className="flex flex-col gap-6">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" onClick={() => router.push(isAdminView ? '/employees' : '/')}>
+              {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
+          </Button>
         </div>
-        {isAdminView && (
-          <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
-            <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none">
-                <Download className="mr-2 h-4 w-4" /> Download Profile
-            </Button>
-            <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
-                <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
-            </Button>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Image
+              src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
+              alt={employee.fullName || 'Employee profile picture'}
+              width={100}
+              height={100}
+              className="rounded-full border-4 border-primary shadow-md object-cover"
+              data-ai-hint="profile picture"
+            />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{employee.fullName}</h1>
+              <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
+              <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
+            </div>
           </div>
-        )}
-      </div>
+          {isAdminView && (
+            <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
+              <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
+                  {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Download Profile
+              </Button>
+              <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
+                  <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
+              </Button>
+            </div>
+          )}
+        </div>
 
-      {!isEditing && (
-        <Tabs defaultValue="personal">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
-            <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
-            <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
-            <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
-            <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
-            <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
-          </TabsList>
-          <Card className="mt-4">
-            <CardContent className="pt-6">
-              <TabsContent value="personal">
-                <CardTitle className="mb-4">Personal Information</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <DetailItem label="First Name" value={employee.firstName} />
-                  <DetailItem label="Last Name" value={employee.lastName} />
-                  <DetailItem label="Date of Birth" value={employee.dateOfBirth} isDate />
-                  <DetailItem label="Gender" value={employee.gender} />
-                  <DetailItem label="Father's Name" value={employee.fatherName} />
-                  <DetailItem label="Mother's Name" value={employee.motherName} />
-                  <DetailItem label="Marital Status" value={employee.maritalStatus} />
-                  {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} />}
-                  <DetailItem label="District" value={employee.district} />
-                </div>
-                <Separator className="my-6" />
-                <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <DetailItem label="Phone Number" value={employee.phoneNumber} />
-                  <DetailItem label="Email Address" value={employee.emailAddress} />
-                   <div className="md:col-span-2">
-                      <DetailItem label="Full Address" value={employee.fullAddress} />
-                   </div>
-                </div>
-              </TabsContent>
-              <TabsContent value="employment">
-                <CardTitle className="mb-4">Employment Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5 items-start sm:items-center">
-                      <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
-                      <span className="text-sm font-medium sm:col-span-2 flex items-center gap-2">
-                          {employee.employeeId}
-                          {isAdminView && (
-                              <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isRegeneratingId} title="Regenerate Employee ID">
-                                          {isRegeneratingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                                      </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                          <AlertDialogTitle>Confirm Employee ID Regeneration</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                              This will generate a new employee ID and a new QR code. This action cannot be undone. Are you sure?
-                                          </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction onClick={handleRegenerateEmployeeId}>Confirm</AlertDialogAction>
-                                      </AlertDialogFooter>
-                                  </AlertDialogContent>
-                              </AlertDialog>
-                          )}
-                      </span>
+        {!isEditing && (
+          <Tabs defaultValue="personal">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
+              <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
+              <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
+              <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
+              <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
+              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
+            </TabsList>
+            <Card className="mt-4">
+              <CardContent className="pt-6">
+                <TabsContent value="personal">
+                  <CardTitle className="mb-4">Personal Information</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="First Name" value={employee.firstName} />
+                    <DetailItem label="Last Name" value={employee.lastName} />
+                    <DetailItem label="Date of Birth" value={employee.dateOfBirth} isDate />
+                    <DetailItem label="Gender" value={employee.gender} />
+                    <DetailItem label="Father's Name" value={employee.fatherName} />
+                    <DetailItem label="Mother's Name" value={employee.motherName} />
+                    <DetailItem label="Marital Status" value={employee.maritalStatus} />
+                    {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} />}
+                    <DetailItem label="District" value={employee.district} />
                   </div>
-                  <DetailItem label="Client Name" value={employee.clientName} />
-                  {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
-                  <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
-                  <DetailItem label="Status" value={employee.status} />
-                  {employee.status === 'Exited' && employee.exitDate && (
-                      <DetailItem label="Exit Date" value={employee.exitDate} isDate />
-                  )}
-                </div>
-              </TabsContent>
-              <TabsContent value="bank">
-                <CardTitle className="mb-4">Bank Account Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <DetailItem label="Bank Name" value={employee.bankName} />
-                  <DetailItem label="Account Number" value={employee.bankAccountNumber} />
-                  <DetailItem label="IFSC Code" value={employee.ifscCode} />
-                </div>
-              </TabsContent>
-              <TabsContent value="identification">
-                <CardTitle className="mb-4">Identification Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                  <DetailItem label="PAN Number" value={employee.panNumber} />
-                  <DetailItem label="ID Proof Type" value={employee.idProofType} />
-                  <DetailItem label="ID Proof Number" value={employee.idProofNumber} />
-                  <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
-                  <DetailItem label="ESIC Number" value={employee.esicNumber} />
-                </div>
-              </TabsContent>
-              <TabsContent value="qr">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                      <CardTitle className="mb-4">Employee QR Code</CardTitle>
-                      <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
-                          {employee.qrCodeUrl ? (
-                              <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
-                          ) : (
-                              <p className="text-muted-foreground">QR Code not available.</p>
-                          )}
-                           {isAdminView && (
-                              <Button onClick={handleRegenerateQrCode} variant="outline" size="sm" className="mt-4" disabled={isRegeneratingQr}>
-                                  {isRegeneratingQr ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
-                                  Regenerate QR Code
-                              </Button>
-                          )}
-                      </div>
+                  <Separator className="my-6" />
+                  <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Phone Number" value={employee.phoneNumber} />
+                    <DetailItem label="Email Address" value={employee.emailAddress} />
+                     <div className="md:col-span-2">
+                        <DetailItem label="Full Address" value={employee.fullAddress} />
+                     </div>
                   </div>
-                  <div>
-                      <CardTitle className="mb-4">Uploaded Documents</CardTitle>
-                      <div className="space-y-3">
-                          <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                          <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront} type={employee.idProofType || "ID Document"} />
-                          <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
-                          <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                      </div>
+                </TabsContent>
+                <TabsContent value="employment">
+                  <CardTitle className="mb-4">Employment Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5 items-start sm:items-center">
+                        <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
+                        <span className="text-sm font-medium sm:col-span-2 flex items-center gap-2">
+                            {employee.employeeId}
+                            {isAdminView && (
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isRegeneratingId} title="Regenerate Employee ID">
+                                            {isRegeneratingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirm Employee ID Regeneration</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This will generate a new employee ID and a new QR code. This action cannot be undone. Are you sure?
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleRegenerateEmployeeId}>Confirm</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            )}
+                        </span>
+                    </div>
+                    <DetailItem label="Client Name" value={employee.clientName} />
+                    {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
+                    <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
+                    <DetailItem label="Status" value={employee.status} />
+                    {employee.status === 'Exited' && employee.exitDate && (
+                        <DetailItem label="Exit Date" value={employee.exitDate} isDate />
+                    )}
                   </div>
-                </div>
-              </TabsContent>
-            </CardContent>
-          </Card>
-        </Tabs>
-      )}
-
-      {isAdminView && isEditing && (
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSaveChanges)}>
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Edit Profile Information</CardTitle>
-                <CardDescription>Update employee details below. Click "Save Changes" when done.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* Personal Information Section */}
-                <section>
-                  <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal & Contact</h3>
+                </TabsContent>
+                <TabsContent value="bank">
+                  <CardTitle className="mb-4">Bank Account Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Bank Name" value={employee.bankName} />
+                    <DetailItem label="Account Number" value={employee.bankAccountNumber} />
+                    <DetailItem label="IFSC Code" value={employee.ifscCode} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="identification">
+                  <CardTitle className="mb-4">Identification Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="PAN Number" value={employee.panNumber} />
+                    <DetailItem label="ID Proof Type" value={employee.idProofType} />
+                    <DetailItem label="ID Proof Number" value={employee.idProofNumber} />
+                    <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
+                    <DetailItem label="ESIC Number" value={employee.esicNumber} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="qr">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="dateOfBirth" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date of Birth</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(d) => d > new Date()} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
-                    <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="fullAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Full Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  </div>
-                </section>
-                {/* Employment Information Section */}
-                <section>
-                  <h3 className="text-lg font-semibold mb-4 border-b pb-2">Employment</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
-                    <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="joiningDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Joining Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
-                  </div>
-                </section>
-                {/* Bank & ID Section */}
-                <section>
-                  <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Identification</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="idProofType" render={({ field }) => (<FormItem><FormLabel>ID Proof Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{idProofTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  </div>
-                </section>
-                {/* Documents Section */}
-                <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Documents</h3>
-                    <div className="grid grid-cols-1 gap-6">
-                        {/* Profile Picture */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                            <Label className="md:col-span-1 text-base self-center">Profile Picture</Label>
-                            <Image src={profilePicPreview || employee.profilePictureUrl || "https://placehold.co/128x128.png"} alt="Profile" width={128} height={128} className="rounded-full object-cover h-32 w-32 justify-self-center" data-ai-hint="profile picture" />
-                            <div className="flex flex-col justify-center gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('profilePicture')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                <Input id="profilePictureInput" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, setNewProfilePicture, setProfilePicPreview)} />
-                            </div>
-                        </div>
-
-                        {/* ID Proof Front */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                            <Label className="md:col-span-1 text-base self-center">ID Proof (Front)</Label>
-                            <Image src={idProofPreviewFront || (employee.idProofDocumentUrlFront?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlFront) || "https://placehold.co/200x120.png"} alt="ID Proof Front" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
-                            <div className="flex flex-col justify-center gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofFrontInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentFront')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                <Input id="idProofFrontInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentFront, setIdProofPreviewFront)} />
-                            </div>
-                        </div>
-
-                        {/* ID Proof Back */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                            <Label className="md:col-span-1 text-base self-center">ID Proof (Back)</Label>
-                            <Image src={idProofPreviewBack || (employee.idProofDocumentUrlBack?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlBack) || "https://placehold.co/200x120.png"} alt="ID Proof Back" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
-                            <div className="flex flex-col justify-center gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofBackInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentBack')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                <Input id="idProofBackInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentBack, setIdProofPreviewBack)} />
-                            </div>
-                        </div>
-
-                        {/* Bank Passbook */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                            <Label className="md:col-span-1 text-base self-center">Bank Document</Label>
-                            <Image src={bankPassbookPreview || (employee.bankPassbookStatementUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.bankPassbookStatementUrl) || "https://placehold.co/200x120.png"} alt="Bank Document" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="bank document" />
-                             <div className="flex flex-col justify-center gap-2">
-                                <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('bankPassbookInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                <Button type="button" size="sm" variant="outline" onClick={() => openCamera('bankPassbookStatement')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                            </div>
-                            <Input id="bankPassbookInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewBankPassbookStatement, setBankPassbookPreview)} />
+                    <div>
+                        <CardTitle className="mb-4">Employee QR Code</CardTitle>
+                        <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
+                            {employee.qrCodeUrl ? (
+                                <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
+                            ) : (
+                                <p className="text-muted-foreground">QR Code not available.</p>
+                            )}
+                             {isAdminView && (
+                                <Button onClick={handleRegenerateQrCode} variant="outline" size="sm" className="mt-4" disabled={isRegeneratingQr}>
+                                    {isRegeneratingQr ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
+                                    Regenerate QR Code
+                                </Button>
+                            )}
                         </div>
                     </div>
-                </section>
+                    <div>
+                        <CardTitle className="mb-4">Uploaded Documents</CardTitle>
+                        <div className="space-y-3">
+                            <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
+                            <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                        </div>
+                    </div>
+                  </div>
+                </TabsContent>
               </CardContent>
-              <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => toggleEditMode(false)} disabled={isSubmitting}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
-                </Button>
-              </CardFooter>
             </Card>
-          </form>
-        </Form>
-      )}
+          </Tabs>
+        )}
 
-    <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
-        <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
-            <DialogHeader>
-                <DialogTitle>Take Photo</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-                 {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
-                <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto rounded-md border", { 'hidden': cameraError })} />
-                <canvas ref={canvasRef} className="hidden" />
-            </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
-                <Button onClick={handleCapturePhoto} disabled={!!cameraError || !cameraStream}>Capture</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-    </div>
+        {isAdminView && isEditing && (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSaveChanges)}>
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Edit Profile Information</CardTitle>
+                  <CardDescription>Update employee details below. Click "Save Changes" when done.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  {/* Personal Information Section */}
+                  <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal & Contact</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="dateOfBirth" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date of Birth</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(d) => d > new Date()} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
+                      <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="fullAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Full Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                  </section>
+                  {/* Employment Information Section */}
+                  <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Employment</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
+                      <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="joiningDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Joining Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
+                    </div>
+                  </section>
+                  {/* Bank & ID Section */}
+                  <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Identification</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="idProofType" render={({ field }) => (<FormItem><FormLabel>ID Proof Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{idProofTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                  </section>
+                  {/* Documents Section */}
+                  <section>
+                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Documents</h3>
+                      <div className="grid grid-cols-1 gap-6">
+                          {/* Profile Picture */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                              <Label className="md:col-span-1 text-base self-center">Profile Picture</Label>
+                              <Image src={profilePicPreview || employee.profilePictureUrl || "https://placehold.co/128x128.png"} alt="Profile" width={128} height={128} className="rounded-full object-cover h-32 w-32 justify-self-center" data-ai-hint="profile picture" />
+                              <div className="flex flex-col justify-center gap-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('profilePicture')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                  <Input id="profilePictureInput" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, setNewProfilePicture, setProfilePicPreview)} />
+                              </div>
+                          </div>
+
+                          {/* ID Proof Front */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                              <Label className="md:col-span-1 text-base self-center">ID Proof (Front)</Label>
+                              <Image src={idProofPreviewFront || (employee.idProofDocumentUrlFront?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlFront) || "https://placehold.co/200x120.png"} alt="ID Proof Front" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
+                              <div className="flex flex-col justify-center gap-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofFrontInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentFront')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                  <Input id="idProofFrontInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentFront, setIdProofPreviewFront)} />
+                              </div>
+                          </div>
+
+                          {/* ID Proof Back */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                              <Label className="md:col-span-1 text-base self-center">ID Proof (Back)</Label>
+                              <Image src={idProofPreviewBack || (employee.idProofDocumentUrlBack?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlBack) || "https://placehold.co/200x120.png"} alt="ID Proof Back" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
+                              <div className="flex flex-col justify-center gap-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofBackInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentBack')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                  <Input id="idProofBackInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentBack, setIdProofPreviewBack)} />
+                              </div>
+                          </div>
+
+                          {/* Bank Passbook */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                              <Label className="md:col-span-1 text-base self-center">Bank Document</Label>
+                              <Image src={bankPassbookPreview || (employee.bankPassbookStatementUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.bankPassbookStatementUrl) || "https://placehold.co/200x120.png"} alt="Bank Document" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="bank document" />
+                               <div className="flex flex-col justify-center gap-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('bankPassbookInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('bankPassbookStatement')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                              </div>
+                              <Input id="bankPassbookInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewBankPassbookStatement, setBankPassbookPreview)} />
+                          </div>
+                      </div>
+                  </section>
+                </CardContent>
+                <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => toggleEditMode(false)} disabled={isSubmitting}>Cancel</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                  </Button>
+                </CardFooter>
+              </Card>
+            </form>
+          </Form>
+        )}
+
+      <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
+          <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
+              <DialogHeader>
+                  <DialogTitle>Take Photo</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                   {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
+                  <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto rounded-md border", { 'hidden': cameraError })} />
+                  <canvas ref={canvasRef} className="hidden" />
+              </div>
+              <DialogFooter>
+                  <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
+                  <Button onClick={handleCapturePhoto} disabled={!!cameraError || !cameraStream}>Capture</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+      </div>
+    </>
   );
 }
