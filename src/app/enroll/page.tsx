@@ -71,7 +71,7 @@ const enrollmentFormSchema = z.object({
   idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
   idProofDocumentFront: fileSchema.describe("Front side of ID proof"),
-  idProofDocumentBack: fileSchema.describe("Back side of ID proof"),
+  idProofDocumentBack: fileSchema.describe("Back side of ID proof").optional(),
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -497,9 +497,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
       if (!profilePictureUrl) throw new Error("Profile picture URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
       if (!idProofDocumentUrlFront) throw new Error("ID proof front document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
-      if (!idProofDocumentUrlBack) throw new Error("ID proof back document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
       if (!bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
-
 
       const employeeDataForFirestore = {
         employeeId: newEmployeeId,
@@ -858,7 +856,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         name="idProofDocumentBack"
                         render={({ field }) => ( 
                         <FormItem className="text-center">
-                            <FormLabel className="block mb-2">ID Proof (Back) <span className="text-destructive">*</span></FormLabel>
+                            <FormLabel className="block mb-2">ID Proof (Back)</FormLabel>
                             {idProofPreviewBack && (idProofPreviewBack === "/pdf-icon.png" ? 
                                 <Image src={idProofPreviewBack} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
                                 <Image src={idProofPreviewBack} alt="ID Proof Back Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
@@ -869,7 +867,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                                 <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocumentBack")}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
                             </div>
                             <FormControl><Input id="idProofDocumentBackInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocumentBack", setIdProofPreviewBack)} /></FormControl>
-                            <FormDescription>Upload back of ID (JPG, PNG, PDF. Max 5MB).</FormDescription>
+                            <FormDescription>Upload back of ID (optional). Max 5MB.</FormDescription>
                             <FormMessage />
                         </FormItem>
                         )}
