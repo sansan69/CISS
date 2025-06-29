@@ -90,14 +90,17 @@ export default function LandingPage() {
     } catch (error: any) {
       console.error("Error searching for employee:", error);
       let description = "Could not perform search. Please check your network connection.";
+      
+      // Improved error detection for Firestore permissions
       if (error.code === 'permission-denied') {
-        description = "Could not perform search. Please ask your administrator to update Firestore rules to allow public employee lookups.";
+        description = "This search is being blocked by your database security rules. Please update your Firestore rules to allow public 'list' access on the 'employees' collection for this feature to work.";
       }
+      
       toast({
         variant: "destructive",
         title: "Search Error",
         description: description,
-        duration: 9000,
+        duration: 10000, // Increased duration for this important message
       });
     } finally {
       setIsLoading(false);
