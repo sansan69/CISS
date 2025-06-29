@@ -87,12 +87,17 @@ export default function LandingPage() {
         });
         router.push(`/enroll?phone=${normalizedPhoneNumber}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error searching for employee:", error);
+      let description = "Could not perform search. Please check your network connection.";
+      if (error.code === 'permission-denied') {
+        description = "Could not perform search due to security rules. Please ask your administrator to update Firestore rules to allow public employee lookups.";
+      }
       toast({
         variant: "destructive",
         title: "Search Error",
-        description: "Could not perform search. Please check your Firestore security rules and network connection.",
+        description: description,
+        duration: 9000,
       });
     } finally {
       setIsLoading(false);
