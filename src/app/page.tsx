@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -28,39 +29,12 @@ export default function LandingPage() {
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    let deferredPrompt: BeforeInstallPromptEvent | null;
-
     const handler = (e: Event) => {
       e.preventDefault();
-      deferredPrompt = e as BeforeInstallPromptEvent;
-
-      const handleInstallClick = () => {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          deferredPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-              console.log('User accepted the install prompt');
-            } else {
-              console.log('User dismissed the install prompt');
-            }
-            deferredPrompt = null;
-          });
-        }
-      };
-
-      toast({
-        title: "Install CISS Workforce?",
-        description: "For quick and easy access, add this app to your home screen.",
-        duration: 30000, // Keep it visible for longer
-        action: (
-          <Button variant="outline" size="sm" onClick={handleInstallClick}>
-            <DownloadCloud className="mr-2 h-4 w-4" />
-            Install
-          </Button>
-        ),
-      });
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
@@ -68,8 +42,22 @@ export default function LandingPage() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
     };
-  }, [toast]);
+  }, []);
 
+  const handleInstallClick = () => {
+    if (!deferredPrompt) {
+      return;
+    }
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      setDeferredPrompt(null);
+    });
+  };
 
   const handleContinue = async () => {
     let normalizedPhoneNumber = phoneNumber.trim();
@@ -159,6 +147,19 @@ export default function LandingPage() {
         <h1 className="text-4xl font-bold text-foreground mt-4">CISS Workforce</h1>
         <p className="text-lg text-muted-foreground">Employee Management System</p>
       </header>
+
+      {deferredPrompt && (
+        <Alert className="max-w-xl w-full mb-8 border-primary/50 bg-primary/10">
+          <DownloadCloud className="h-4 w-4" />
+          <AlertTitle>Install CISS Workforce</AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <p>For a better experience, install the app on your device for quick, offline access.</p>
+            <Button onClick={handleInstallClick} className="w-full sm:w-auto shrink-0">
+                Install App
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <p className="max-w-xl text-center text-muted-foreground mb-10">
         Welcome to CISS Workforce, a comprehensive solution for employee management and
