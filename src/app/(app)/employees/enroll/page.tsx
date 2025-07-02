@@ -38,6 +38,8 @@ import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnaps
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
+import QRCode from 'qrcode';
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -117,7 +119,6 @@ const maritalStatuses = ["Married", "Unmarried"];
 
 type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
 
-// Helper function to provide more specific error messages for file uploads
 const handleUploadError = (err: any, documentName: string): never => {
   if (err.code === 'storage/unauthorized') {
     throw new Error(`Permission Denied: Your admin account does not have permission to upload the ${documentName}. Please check your Firebase Storage security rules to allow writes for authenticated users.`);
@@ -125,9 +126,67 @@ const handleUploadError = (err: any, documentName: string): never => {
   throw new Error(`${documentName} processing failed: ${err.message}`);
 };
 
+const abbreviateClientName = (clientName: string): string => {
+  if (!clientName) return "CLIENT";
+  const upperCaseName = clientName.trim().toUpperCase();
+
+  const abbreviations: { [key: string]: string } = {
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "WIPRO": "WIPRO",
+  };
+  if (abbreviations[upperCaseName]) {
+    return abbreviations[upperCaseName];
+  }
+
+  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("");
+  }
+
+  if (upperCaseName.length <= 4) {
+    return upperCaseName;
+  }
+  return upperCaseName.substring(0, 4);
+};
+
+const getCurrentFinancialYear = (): string => {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  if (currentMonth >= 4) { // April or later
+    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+  } else { // Jan, Feb, March
+    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+  }
+};
+
+const generateEmployeeId = (clientName: string): string => {
+  const shortClientName = abbreviateClientName(clientName);
+  const financialYear = getCurrentFinancialYear();
+  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
+  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+};
+
+const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
+  const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+  try {
+    return await QRCode.toDataURL(dataString, {
+      errorCorrectionLevel: 'H',
+      type: 'image/png',
+      quality: 0.92,
+      margin: 1,
+      width: 256,
+    });
+  } catch (err) {
+    console.error('QR code generation failed:', err);
+    throw new Error('Failed to generate QR code.');
+  }
+};
+
 
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
   const [idProofPreviewFront, setIdProofPreviewFront] = React.useState<string | null>(null);
   const [idProofPreviewBack, setIdProofPreviewBack] = React.useState<string | null>(null);
@@ -323,6 +382,9 @@ export default function EnrollEmployeePage() {
     try {
       const uploadPromises = [];
       const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
+      const fullName = `${data.firstName} ${data.lastName}`;
+      const newEmployeeId = generateEmployeeId(data.clientName);
+      const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
 
       // Profile Picture Upload
       if (data.profilePicture) {
@@ -389,6 +451,9 @@ export default function EnrollEmployeePage() {
       toast({ title: "Saving Employee Data...", description: "Almost done."});
 
       const employeeDataForFirestore = {
+        employeeId: newEmployeeId,
+        qrCodeUrl: newQrCodeUrl,
+        fullName: fullName,
         ...data, 
         joiningDate: Timestamp.fromDate(data.joiningDate),
         dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
@@ -416,7 +481,7 @@ export default function EnrollEmployeePage() {
       
       toast({
         title: "Registration Successful!",
-        description: `${data.firstName} ${data.lastName}'s registration (ID: ${docRef.id}) has been saved.`,
+        description: `${data.firstName} ${data.lastName}'s registration (ID: ${newEmployeeId}) has been saved.`,
         action: <Check className="h-5 w-5 text-green-500" />,
       });
       form.reset();
@@ -424,6 +489,7 @@ export default function EnrollEmployeePage() {
       setIdProofPreviewFront(null);
       setIdProofPreviewBack(null);
       setBankPassbookPreview(null);
+      router.push(`/employees/${docRef.id}`);
 
     } catch (error: any) {
       console.error("Registration or Upload Error: ", error);
