@@ -771,8 +771,8 @@ export default function AdminEmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push(isAdminView ? '/employees' : '/')} className="mt-4">
-              {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
+            <Button onClick={() => router.push('/employees')} className="mt-4">
+              <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
             </Button>
         </AlertDescription>
       </Alert>
@@ -786,8 +786,8 @@ export default function AdminEmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push(isAdminView ? '/employees' : '/')} className="mt-4">
-                   {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
+                <Button onClick={() => router.push('/employees')} className="mt-4">
+                   <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
                 </Button>
             </AlertDescription>
         </Alert>
@@ -801,8 +801,8 @@ export default function AdminEmployeeProfilePage() {
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
-          <Button variant="outline" size="sm" onClick={() => router.push(isAdminView ? '/employees' : '/')}>
-              {isAdminView ? <><ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory</> : <><Home className="mr-2 h-4 w-4" />Back to Home</>}
+          <Button variant="outline" size="sm" onClick={() => router.push('/employees')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory
           </Button>
         </div>
 
