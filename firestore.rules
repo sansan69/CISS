@@ -1,29 +1,28 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Employees Collection
-    // - Allow anyone to create (for public enrollment)
-    // - Allow authenticated admins to read, update, delete
-    match /employees/{employeeId} {
-      allow create: if true;
-      allow read, update, delete: if request.auth != null;
-    }
-
-    // Clients Collection
-    // - Allow anyone to read the list of clients (for dropdowns)
-    // - Allow authenticated admins to create, update, delete
+    
+    // --- CLIENTS COLLECTION ---
+    // Allow anyone (including unauthenticated users for the enrollment form dropdown) 
+    // to read the list of clients. Only authenticated admins can create, update, or delete clients.
     match /clients/{clientId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow write: if request.auth != null;
     }
 
-    // You can add rules for other collections here in the future.
-    // For example, the attendance collection:
-    // match /attendance/{attendanceId} {
-    //   allow create: if true;
-    //   allow read, update, delete: if request.auth != null;
-    // }
+    // --- EMPLOYEES COLLECTION ---
+    // Rule for creating new employee documents.
+    // Allow any user to create a new employee document. This is essential for the public enrollment form.
+    match /employees/{employeeId} {
+      allow create: if true;
+
+      // Rules for reading, updating, and deleting existing documents.
+      // Anyone can read a public profile.
+      // Only authenticated admins can update or delete employee records.
+      allow read: if true;
+      allow update, delete: if request.auth != null;
+    }
   }
 }
