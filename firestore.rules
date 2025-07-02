@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Employees Collection
+    // - Allow anyone to create (for public enrollment)
+    // - Allow authenticated admins to read, update, delete
+    match /employees/{employeeId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // Clients Collection
+    // - Allow anyone to read the list of clients (for dropdowns)
+    // - Allow authenticated admins to create, update, delete
+    match /clients/{clientId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    // You can add rules for other collections here in the future.
+    // For example, the attendance collection:
+    // match /attendance/{attendanceId} {
+    //   allow create: if true;
+    //   allow read, update, delete: if request.auth != null;
+    // }
+  }
+}
