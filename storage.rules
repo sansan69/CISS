@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Allow public read access on all files so that profile pictures and
+    // other documents can be easily viewed in the application.
+    match /{allPaths=**} {
+      allow read;
+    }
+
+    // Rules for the 'employees' folder where all enrollment documents are stored.
+    match /employees/{phoneNumber}/{fileCategory}/{fileName} {
+      
+      // Allow any user (authenticated or not) to CREATE (upload) new files.
+      // This is required for the public-facing enrollment form.
+      // We add critical security constraints on file size and type.
+      allow create: if request.resource.size < 5 * 1024 * 1024
+                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf')
+                    && fileCategory in ['profilePictures', 'idProofs', 'bankDocuments'];
+
+      // Allow only authenticated users (admins) to UPDATE or DELETE files.
+      // This prevents public users from overwriting or deleting existing data.
+      allow update, delete: if request.auth != null;
+    }
+  }
+}
