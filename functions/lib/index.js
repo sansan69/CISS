@@ -33,15 +33,12 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processEmployeeCSV = void 0;
 const admin = __importStar(require("firebase-admin"));
 // Initialize Firebase Admin SDK if not already initialized elsewhere
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
-// Export your new function
-var processEmployeeCSV_1 = require("./processEmployeeCSV");
-Object.defineProperty(exports, "processEmployeeCSV", { enumerable: true, get: function () { return processEmployeeCSV_1.processEmployeeCSV; } });
+// No cloud functions are defined for this version.
 // Example: you might have other functions exported here
 // export { anotherFunction } from "./anotherFunction";
 //# sourceMappingURL=index.js.map

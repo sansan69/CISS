@@ -8,13 +8,6 @@ import Link from "next/link";
 
 const settingsOptions = [
   {
-    title: "Bulk Data Import",
-    description: "Upload existing employee data from an Excel file.",
-    icon: FileUp,
-    href: "/settings/bulk-import",
-    aiHint: "excel import"
-  },
-  {
     title: "QR Code Management",
     description: "Manage and regenerate QR codes for employees.",
     icon: QrCode,

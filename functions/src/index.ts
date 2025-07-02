@@ -6,8 +6,7 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-// Export your new function
-export {processEmployeeCSV} from "./processEmployeeCSV";
+// No cloud functions are defined for this version.
 
 // Example: you might have other functions exported here
 // export { anotherFunction } from "./anotherFunction";
