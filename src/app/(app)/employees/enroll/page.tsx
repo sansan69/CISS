@@ -117,6 +117,15 @@ const maritalStatuses = ["Married", "Unmarried"];
 
 type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
 
+// Helper function to provide more specific error messages for file uploads
+const handleUploadError = (err: any, documentName: string): never => {
+  if (err.code === 'storage/unauthorized') {
+    throw new Error(`Permission Denied: Your admin account does not have permission to upload the ${documentName}. Please check your Firebase Storage security rules to allow writes for authenticated users.`);
+  }
+  throw new Error(`${documentName} processing failed: ${err.message}`);
+};
+
+
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
@@ -323,7 +332,7 @@ export default function EnrollEmployeePage() {
           compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8, targetMimeType: 'image/jpeg' })
             .then(blob => uploadFileToStorage(blob, storagePath))
             .then(url => { profilePictureUrl = url; })
-            .catch(err => { throw new Error(`Profile picture processing failed: ${err.message}`); })
+            .catch(err => handleUploadError(err, 'profile picture'))
         );
       }
 
@@ -338,7 +347,7 @@ export default function EnrollEmployeePage() {
         uploadPromises.push(
           processAndUpload
             .then(url => { idProofDocumentUrlFront = url; })
-            .catch(err => { throw new Error(`ID proof (front) processing failed: ${err.message}`); })
+            .catch(err => handleUploadError(err, 'ID proof (front)'))
         );
       }
 
@@ -353,7 +362,7 @@ export default function EnrollEmployeePage() {
         uploadPromises.push(
           processAndUpload
             .then(url => { idProofDocumentUrlBack = url; })
-            .catch(err => { throw new Error(`ID proof (back) processing failed: ${err.message}`); })
+            .catch(err => handleUploadError(err, 'ID proof (back)'))
         );
       }
       
@@ -368,7 +377,7 @@ export default function EnrollEmployeePage() {
         uploadPromises.push(
           processAndUpload
             .then(url => { bankPassbookStatementUrl = url; })
-            .catch(err => { throw new Error(`Bank document processing failed: ${err.message}`); })
+            .catch(err => handleUploadError(err, 'bank document'))
         );
       }
 
@@ -422,6 +431,7 @@ export default function EnrollEmployeePage() {
         variant: "destructive",
         title: "Registration Failed",
         description: error.message || "Could not save employee data or upload files. Please check details and try again.",
+        duration: 9000
       });
     } finally {
       setIsLoading(false);

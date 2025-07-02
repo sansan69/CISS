@@ -182,6 +182,13 @@ interface ActualEnrollmentFormProps {
   initialPhoneNumberFromQuery?: string | null;
 }
 
+const handlePublicUploadError = (err: any, documentName: string): never => {
+  if (err.code === 'storage/unauthorized') {
+    throw new Error(`Upload Permission Denied: The system is not configured to allow file uploads for new enrollments. Please contact an administrator and check the Firebase Storage security rules to allow unauthenticated writes.`);
+  }
+  throw new Error(`${documentName} processing failed: ${err.message}`);
+};
+
 function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentFormProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -412,22 +419,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       if (data.profilePicture) {
         const file = data.profilePicture;
         const storagePath = `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
-        toast({ title: "Profile Picture", description: "Compressing profile picture..." });
         uploadPromises.push(
           compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8, targetMimeType: 'image/jpeg' })
             .then(blob => {
-              toast({ title: "Profile Picture", description: "Uploading profile picture..." });
               return uploadFileToStorage(blob, storagePath);
             })
-            .then(url => { profilePictureUrl = url; toast({ title: "Profile Picture", description: "Upload complete." }); })
-            .catch(err => {
-              console.error("Profile picture processing/upload error:", err);
-              throw new Error(`Profile picture processing failed: ${err.message}`);
-            })
+            .then(url => { profilePictureUrl = url; })
+            .catch(err => handlePublicUploadError(err, 'profile picture'))
         );
       }
 
-      // ID Proof Front Upload
       if (data.idProofDocumentFront) {
         const file = data.idProofDocumentFront;
         const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
@@ -438,11 +439,10 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         uploadPromises.push(
             processAndUpload
                 .then(url => { idProofDocumentUrlFront = url; })
-                .catch(err => { throw new Error(`ID proof (front) processing failed: ${err.message}`); })
+                .catch(err => handlePublicUploadError(err, 'ID proof (front)'))
         );
       }
 
-      // ID Proof Back Upload
       if (data.idProofDocumentBack) {
           const file = data.idProofDocumentBack;
           const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
@@ -453,7 +453,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           uploadPromises.push(
               processAndUpload
                   .then(url => { idProofDocumentUrlBack = url; })
-                  .catch(err => { throw new Error(`ID proof (back) processing failed: ${err.message}`); })
+                  .catch(err => handlePublicUploadError(err, 'ID proof (back)'))
           );
       }
       
@@ -463,41 +463,27 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         const storagePath = `employees/${phoneNumber}/bankDocuments/${Date.now()}_bankDoc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
 
         const processAndUpload = file.type.startsWith("image/")
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => {
-                toast({ title: "Bank Document", description: "Uploading bank document image..." });
-                return uploadFileToStorage(blob, storagePath);
-              })
-          : (() => {
-              toast({ title: "Bank Document", description: "Uploading bank document (PDF)..." });
-              return uploadFileToStorage(file, storagePath);
-            })();
+          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
+          : uploadFileToStorage(file, storagePath);
 
         uploadPromises.push(
           processAndUpload
-            .then(url => { bankPassbookStatementUrl = url; toast({ title: "Bank Document", description: "Upload complete." });})
-            .catch(err => {
-              console.error("Bank document processing/upload error:", err);
-              throw new Error(`Bank document processing failed: ${err.message}`);
-            })
+            .then(url => { bankPassbookStatementUrl = url; })
+            .catch(err => handlePublicUploadError(err, 'bank document'))
         );
       }
 
       if (uploadPromises.length > 0) {
-        toast({ title: "Uploading All Files...", description: "This may take a moment. Please monitor individual file completion messages."});
+        toast({ title: "Uploading All Files...", description: "This may take a moment."});
         await Promise.all(uploadPromises);
-        toast({ title: "All Files Uploaded", description: "File uploads completed successfully. Proceeding to save data."});
-      } else {
-         toast({ title: "No Files to Upload", description: "Skipping file upload step as no files were provided or required."});
-         if (!data.profilePicture || !data.idProofDocumentFront || !data.idProofDocumentBack || !data.bankPassbookStatement) {
-             console.warn("File upload was skipped. This could mean no files were selected or an unexpected issue occurred. Schema requires files.");
-         }
+        toast({ title: "All Files Uploaded", description: "File uploads completed successfully."});
       }
 
       toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
 
-      if (!profilePictureUrl) throw new Error("Profile picture URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
-      if (!idProofDocumentUrlFront) throw new Error("ID proof front document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
-      if (!bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing. Upload might have failed silently or was not initiated. Form data invalid according to submission logic.");
+      if (!profilePictureUrl) throw new Error("Profile picture URL is missing after upload attempt.");
+      if (!idProofDocumentUrlFront) throw new Error("ID proof front document URL is missing after upload attempt.");
+      if (!bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing after upload attempt.");
 
       const employeeDataForFirestore = {
         employeeId: newEmployeeId,
@@ -549,7 +535,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       }
 
       toast({ title: "Finalizing Data...", description: "Saving to database..." });
-      console.log("Data being sent to Firestore:", finalDataForFirestore);
       const docRef = await addDoc(collection(db, "employees"), finalDataForFirestore);
 
       toast({
@@ -568,22 +553,10 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
     } catch (error: any) {
       console.error("Detailed Registration or Upload Error: ", error, error.stack);
-      let description = "An unexpected error occurred. Could not save employee data or upload files. Please check details and try again.";
-      if (error instanceof Error) {
-        description = error.message;
-      } else if (typeof error === 'string') {
-        description = error;
-      } else {
-        try {
-          description = JSON.stringify(error);
-        } catch (e) {
-           description = "An unknown error occurred during submission. Check console for details."
-        }
-      }
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: description,
+        description: error.message || "An unexpected error occurred. Could not save employee data or upload files.",
         duration: 9000,
       });
     } finally {
