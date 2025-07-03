@@ -55,10 +55,10 @@ export default function EmployeeDirectoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [firstVisibleDoc, setFirstVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [isFetchingNext, setIsFetchingNext] = useState(false);
-  const [isFetchingPrev, setIsFetchingPrev] = useState(false);
+  
+  const [isTableLoading, setIsTableLoading] = useState(false);
   const [hasMoreNext, setHasMoreNext] = useState(true);
-  const [hasMorePrev, setHasMorePrev] = useState(false);
+  const hasMorePrev = currentPage > 1;
 
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -107,7 +107,6 @@ export default function EmployeeDirectoryPage() {
         );
     }
     
-    // Order by employeeId first if searching, then by createdAt for consistent pagination
     if (searchTerm.trim() !== '') {
         q = query(q, orderBy('employeeId', 'asc'));
     }
@@ -117,10 +116,12 @@ export default function EmployeeDirectoryPage() {
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
   const fetchEmployees = useCallback(async (direction?: 'next' | 'prev') => {
-    if (direction === 'next') setIsFetchingNext(true);
-    else if (direction === 'prev') setIsFetchingPrev(true);
-    else setIsLoading(true);
-    
+    // For the very first load, use the main loader. For subsequent loads, use the table loader.
+    if (isLoading) {
+        setIsTableLoading(true);
+    } else {
+        setIsTableLoading(true);
+    }
     setError(null);
 
     try {
@@ -131,7 +132,7 @@ export default function EmployeeDirectoryPage() {
           finalQuery = query(baseQuery, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
       } else if (direction === 'prev' && firstVisibleDoc) {
           finalQuery = query(baseQuery, endBefore(firstVisibleDoc), limitToLast(ITEMS_PER_PAGE));
-      } else {
+      } else { // This handles the initial load and filter resets
           finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
       }
 
@@ -152,24 +153,20 @@ export default function EmployeeDirectoryPage() {
       
       setEmployees(fetchedEmployees);
       
-      const currentLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-      const currentFirstDoc = documentSnapshots.docs[0];
+      const currentFirstDoc = documentSnapshots.docs[0] || null;
+      const currentLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
 
-      if (documentSnapshots.docs.length > 0) {
-        setFirstVisibleDoc(currentFirstDoc);
-        setLastVisibleDoc(currentLastDoc);
-      }
+      setFirstVisibleDoc(currentFirstDoc);
+      setLastVisibleDoc(currentLastDoc);
       
-      if (documentSnapshots.docs.length < ITEMS_PER_PAGE) {
-          setHasMoreNext(false);
-      } else {
+      if (currentLastDoc) {
           const nextCheckQuery = query(baseQuery, startAfter(currentLastDoc), limit(1));
           const nextSnapshot = await getDocs(nextCheckQuery);
           setHasMoreNext(!nextSnapshot.empty);
+      } else {
+          setHasMoreNext(false);
       }
-
-      setHasMorePrev(currentPage > 1);
-
+      
     } catch (err: any) {
       console.error("Error fetching employees:", err);
       let message = err.message || "Failed to fetch employees.";
@@ -182,10 +179,9 @@ export default function EmployeeDirectoryPage() {
       toast({ variant: "destructive", title: "Data Fetch Error", description: message, duration: 9000 });
     } finally {
       setIsLoading(false);
-      setIsFetchingNext(false);
-      setIsFetchingPrev(false);
+      setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, currentPage, lastVisibleDoc, firstVisibleDoc]); 
+  }, [toast, buildBaseQuery, lastVisibleDoc, firstVisibleDoc, isLoading]); 
 
   useEffect(() => {
     fetchClients();
@@ -196,30 +192,24 @@ export default function EmployeeDirectoryPage() {
     setCurrentPage(1); 
     setLastVisibleDoc(null); 
     setFirstVisibleDoc(null);
-    setHasMorePrev(false); 
     fetchEmployees(); 
-    // We want this to run ONLY when filters change, fetchEmployees has other dependencies
-    // that would cause it to re-run incorrectly here.
+    // We want this to run ONLY when filters change. fetchEmployees is a dependency
+    // but the state resets ensure it acts as a 'reset' call.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, filterClient, filterStatus, filterDistrict]);
 
 
-  // This effect fetches data when page or cursors change.
-  useEffect(() => {
-    if(!isLoading) { // Avoid fetching on initial load as the effect above handles it.
-      fetchEmployees();
-    }
-  }, [currentPage]);
-
-
   const handleNextPage = () => {
-    if (hasMoreNext && lastVisibleDoc) {
+    if (hasMoreNext) {
       setCurrentPage(prev => prev + 1);
+      fetchEmployees('next');
     }
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 1 && firstVisibleDoc) {
+    if (hasMorePrev) {
       setCurrentPage(prev => prev - 1);
+      fetchEmployees('prev');
     }
   };
 
@@ -330,7 +320,6 @@ export default function EmployeeDirectoryPage() {
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      // Refetch current page after deletion
       fetchEmployees();
       
       setIsDeleteDialogOpen(false);
@@ -344,7 +333,7 @@ export default function EmployeeDirectoryPage() {
   };
   
 
-  if (isLoading && employees.length === 0 && !isFetchingNext && !isFetchingPrev) { 
+  if (isLoading) { 
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -449,7 +438,7 @@ export default function EmployeeDirectoryPage() {
                 </TableRow>
                 </TableHeader>
                 <TableBody>
-                {(isFetchingNext || isFetchingPrev) ? ( 
+                {isTableLoading ? ( 
                     <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
@@ -545,18 +534,18 @@ export default function EmployeeDirectoryPage() {
                     variant="outline"
                     size="sm"
                     onClick={handlePreviousPage}
-                    disabled={isFetchingPrev || !hasMorePrev}
+                    disabled={isTableLoading || !hasMorePrev}
                 >
-                    {isFetchingPrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                    {isTableLoading && !hasMorePrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                     Previous
                 </Button>
                 <Button
                     variant="outline"
                     size="sm"
                     onClick={handleNextPage}
-                    disabled={isFetchingNext || !hasMoreNext}
+                    disabled={isTableLoading || !hasMoreNext}
                 >
-                    {isFetchingNext ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                    {isTableLoading && hasMoreNext ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                     Next
                 </Button>
                 </div>
