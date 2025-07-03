@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -171,248 +172,199 @@ const generateEmployeeId = (clientName: string): string => {
   return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
 };
 
-// Component for the hidden biodata sheet for PDF generation
-const BiodataDocument = React.forwardRef<HTMLDivElement, { employee: Employee }>(({ employee }, ref) => {
-    const formatDate = (date: any) => {
-      if (!date) return 'N/A';
-      const dateObj = date.toDate ? date.toDate() : new Date(date);
-      return format(dateObj, "PPP");
-    };
+// #region PDF Generation Components
 
-    const companyName = "CISS Workforce";
+const pageStyle: React.CSSProperties = {
+  width: '210mm',
+  minHeight: '297mm',
+  padding: '15mm',
+  backgroundColor: 'white',
+  color: 'black',
+  fontFamily: 'Arial, sans-serif',
+  display: 'flex',
+  flexDirection: 'column',
+  position: 'relative',
+  boxSizing: 'border-box'
+};
 
-    const WatermarkedImage = ({ src, alt }: { src: string; alt: string }) => (
-        <div className="relative inline-block border bg-gray-50 p-2 rounded-lg">
-            <Image
-                src={src}
-                alt={alt}
-                width={500}
-                height={300}
-                className="object-contain"
-                crossOrigin="anonymous"
-                data-ai-hint="document id"
-            />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none">
-                    FOR CISS USE ONLY
-                </span>
-            </div>
-        </div>
-    );
+const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
+  <footer style={{
+    position: 'absolute',
+    bottom: '10mm',
+    left: '15mm',
+    right: '15mm',
+    textAlign: 'center',
+    fontSize: '9px',
+    color: '#666',
+    borderTop: '1px solid #ccc',
+    paddingTop: '5px'
+  }}>
+    Page {pageNumber} | CISS Workforce | Generated on: {format(new Date(), "PPP")}
+  </footer>
+);
 
-    const DetailGridItem = ({ label, value }: { label: string; value?: string | number | null }) => (
+
+const DetailGridItem = ({ label, value }: { label: string; value?: string | number | null }) => (
+  <div>
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="font-medium text-gray-800">{value || 'N/A'}</p>
+  </div>
+);
+
+const formatDate = (date: any) => {
+  if (!date) return 'N/A';
+  const dateObj = date.toDate ? date.toDate() : new Date(date);
+  return format(dateObj, "PPP");
+};
+
+const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
+  <div ref={ref} style={pageStyle}>
+    <header className="flex justify-between items-start pb-4 border-b border-gray-300">
+      <div className="flex items-center gap-4">
+        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
         <div>
-            <p className="text-xs text-gray-500">{label}</p>
-            <p className="font-medium text-gray-800">{value || 'N/A'}</p>
+          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{employee.fullName}</h1>
+          <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
+          <p className="text-gray-600">Client: {employee.clientName}</p>
         </div>
-    );
+      </div>
+      {employee.profilePictureUrl && (
+        <Image src={employee.profilePictureUrl} alt={employee.fullName} width={100} height={120} className="rounded-lg border-2 border-gray-200 object-cover" crossOrigin="anonymous" data-ai-hint="profile photo" />
+      )}
+    </header>
 
-    const pageStyle: React.CSSProperties = {
-        width: '210mm',
-        minHeight: '296mm',
-        padding: '15mm',
-        backgroundColor: 'white',
-        color: 'black',
-        fontFamily: 'Arial, sans-serif',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-    };
-
-    const pageBreakStyle: React.CSSProperties = {
-        ...pageStyle,
-        pageBreakBefore: 'always',
-    };
-
-    return (
-        <div ref={ref} className="bg-gray-200">
-            {/* -- PAGE 1: BIODATA -- */}
-            <div style={pageStyle}>
-                <header className="flex justify-between items-start pb-4 border-b border-gray-300">
-                    <div className="flex items-center gap-4">
-                        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
-                        <div>
-                            <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{employee.fullName}</h1>
-                            <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
-                            <p className="text-gray-600">Client: {employee.clientName}</p>
-                        </div>
-                    </div>
-                     {employee.profilePictureUrl && (
-                        <Image
-                            src={employee.profilePictureUrl}
-                            alt={employee.fullName}
-                            width={100}
-                            height={120}
-                            className="rounded-lg border-2 border-gray-200 object-cover"
-                            crossOrigin="anonymous"
-                            data-ai-hint="profile photo"
-                        />
-                    )}
-                </header>
-
-                <main className="flex-grow mt-8 space-y-8 text-sm">
-                    <section>
-                        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
-                        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                            <DetailGridItem label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
-                            <DetailGridItem label="Gender" value={employee.gender} />
-                            <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
-                            <DetailGridItem label="Father's Name" value={employee.fatherName} />
-                            <DetailGridItem label="Mother's Name" value={employee.motherName} />
-                            {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={employee.spouseName} />}
-                            <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
-                            <DetailGridItem label="Email Address" value={employee.emailAddress} />
-                            <DetailGridItem label="District" value={employee.district} />
-                            <div className="col-span-3">
-                                <DetailGridItem label="Full Address" value={employee.fullAddress} />
-                            </div>
-                        </div>
-                    </section>
-                    
-                    <section>
-                         <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
-                         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                            <DetailGridItem label="Joining Date" value={formatDate(employee.joiningDate)} />
-                            <DetailGridItem label="Status" value={employee.status} />
-                            {employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}
-                            <DetailGridItem label="PAN Number" value={employee.panNumber} />
-                            <DetailGridItem label="EPF/UAN Number" value={employee.epfUanNumber} />
-                            <DetailGridItem label="ESIC Number" value={employee.esicNumber} />
-                         </div>
-                    </section>
-
-                    <section>
-                        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
-                        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                           <DetailGridItem label="Bank Name" value={employee.bankName} />
-                           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
-                           <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
-                           <DetailGridItem label="ID Proof Type" value={employee.idProofType} />
-                           <DetailGridItem label="ID Proof Number" value={employee.idProofNumber} />
-                        </div>
-                    </section>
-                </main>
-                <footer className="text-center text-xs text-gray-500 border-t pt-2 mt-auto">
-                    This document was generated on {format(new Date(), "PPP")} from the CISS Workforce system.
-                </footer>
-            </div>
-            
-            {employee.qrCodeUrl && (
-                <div style={pageBreakStyle} className="flex flex-col justify-center items-center text-center">
-                    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
-                    <p className="mb-2 text-lg">{employee.fullName}</p>
-                    <p className="mb-8 text-gray-600">{employee.employeeId}</p>
-                    <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
-                        <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={300} height={300} data-ai-hint="qr code"/>
-                    </div>
-                    <div className="mt-8 text-gray-600 max-w-md">
-                        <p className="font-semibold mb-2">Instructions:</p>
-                        <p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p>
-                    </div>
-                     <footer className="text-center text-xs text-gray-500 border-t pt-2 mt-auto w-full">
-                        Please print this page and keep it for your records.
-                    </footer>
-                </div>
-            )}
-
-            {(employee.idProofDocumentUrlFront || employee.idProofDocumentUrl) && (
-                <div style={pageBreakStyle} className="flex flex-col items-center">
-                     <h1 className="text-xl font-semibold mb-6">Uploaded Document: ID Proof (Front)</h1>
-                     <WatermarkedImage src={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl!} alt="ID Proof Front" />
-                </div>
-            )}
-            
-            {employee.idProofDocumentUrlBack && (
-                <div style={pageBreakStyle} className="flex flex-col items-center">
-                    <h1 className="text-xl font-semibold mb-6">Uploaded Document: ID Proof (Back)</h1>
-                    <WatermarkedImage src={employee.idProofDocumentUrlBack} alt="ID Proof Back" />
-                </div>
-            )}
-
-            {employee.bankPassbookStatementUrl && (
-                <div style={pageBreakStyle} className="flex flex-col items-center">
-                    <h1 className="text-xl font-semibold mb-6">Uploaded Document: Bank Passbook/Statement</h1>
-                    <WatermarkedImage src={employee.bankPassbookStatementUrl} alt="Bank Document" />
-                </div>
-            )}
-            
-            <div style={pageBreakStyle}>
-                <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment for Security Guard</h1>
-                <div className="space-y-4 text-xs text-justify">
-                    <section>
-                        <h2 className="text-base font-bold mb-2">I. General Eligibility and Statutory Compliance</h2>
-                        <ul className="list-disc list-outside space-y-1 pl-5">
-                            <li><strong>Compliance with PSARA Act, 2005 and Kerala Private Security Agencies Rules, 2010:</strong> The Security Guard acknowledges that their enrollment and employment are strictly governed by the provisions of the Private Security Agencies (Regulation) Act, 2005 (Central Act 29 of 2005), and the Kerala Private Security Agencies Rules, 2010, as amended from time to time.</li>
-                            <li><strong>Age and Citizenship:</strong> The Security Guard must be an Indian citizen, between 18 and 65 years of age.</li>
-                            <li><strong>Physical Fitness:</strong> The Security Guard must meet the prescribed physical standards for security guards as stipulated under PSARA and relevant rules. This includes, but is not limited to, height, chest measurements (with expansion), and overall physical fitness as determined by a medical examination.</li>
-                            <li><strong>Character and Antecedent Verification:</strong> Enrollment is provisional and subject to successful verification of the Security Guard's character and antecedents by the Controlling Authority (Superintendent of Police/Commissioner of Police concerned) as per PSARA requirements (Form II). Any adverse report or criminal record will lead to immediate termination of enrollment and employment. The Security Guard undertakes to provide true and complete information for this verification.</li>
-                            <li><strong>Training and Certification:</strong> The Security Guard must undergo and successfully complete the mandatory security training as prescribed by the Controlling Authority, in alignment with the National Skill Qualification Framework. This includes a minimum of one hundred hours of classroom instruction and sixty hours of field training over at least twenty working days (or condensed courses for ex-servicemen/former police personnel as applicable). The Security Guard agrees to undertake refresher training biennially.</li>
-                            <li><strong>Photo Identity Card:</strong> Upon successful enrollment and training, the Security Guard will be issued a photo identity card by {companyName}, which must be carried at all times during duty and produced for inspection upon demand by the Controlling Authority or any authorized official.</li>
-                        </ul>
-                    </section>
-                    
-                     <section>
-                        <h2 className="text-base font-bold mb-2">II. Employment Terms and Conditions (as per Labour Laws and State Regulations)</h2>
-                        <ul className="list-disc list-outside space-y-1 pl-5">
-                          <li><strong>Kerala Shops and Commercial Establishments Act, 1960:</strong> For Security Guards deployed in establishments covered by the Kerala Shops and Commercial Establishments Act, 1960, the terms of employment, including working hours, leaves, and welfare measures, shall comply with this Act and its amendments.</li>
-                          <li><strong>Working Hours:</strong> The normal working hours for a Security Guard shall not exceed eight hours a day or forty-eight hours a week.</li>
-                          <li><strong>Overtime:</strong> Any work performed beyond the normal working hours will be compensated at twice the ordinary wage rate, in accordance with the Minimum Wages Act, 1948, and the Kerala Shops and Commercial Establishments Act.</li>
-                          <li><strong>Wages:</strong> The Security Guard's wages shall be as per the minimum wages notified by the Government of Kerala for security service employment, including basic wages and Dearness Allowance, as amended from time to time under the Minimum Wages Act, 1948. Wages will be paid timely, and the use of a Wage Protection System (WPS) is recommended.</li>
-                          <li><strong>Leaves and Holidays:</strong> The Security Guard is entitled to leaves as per applicable labour laws, including but not limited to, weekly holidays, earned leave, sick leave, and casual leave, as stipulated in the Kerala Shops and Commercial Establishments Act and other relevant labour enactments.</li>
-                          <li><strong>Welfare Measures (Kerala-Specific):</strong> In accordance with the directives issued by the Kerala Labour Commissioner's Office, {companyName} undertakes to provide suitable seating arrangements, protective equipment, access to drinking water, and any other welfare facilities mandated by the state government for security personnel.</li>
-                          <li><strong>Provident Fund (PF) and Employees' State Insurance (ESI):</strong> The Security Guard's employment will be subject to the provisions of the Employees' Provident Funds and Miscellaneous Provisions Act, 1952, and the Employees' State Insurance Act, 1948, as applicable.</li>
-                          <li><strong>Gratuity and Bonus:</strong> The Security Guard will be eligible for gratuity as per the Payment of Gratuity Act, 1972, and bonus as per the Payment of Bonus Act, 1965, subject to fulfilling the eligibility criteria under these Acts.</li>
-                          <li><strong>Dispute Resolution:</strong> Any disputes arising out of the terms of employment will be resolved as per the provisions of the Industrial Disputes Act, 1947, and other relevant labour laws.</li>
-                        </ul>
-                    </section>
-                
-                    <section>
-                        <h2 className="text-base font-bold mb-2">III. Responsibilities of the Security Guard</h2>
-                        <p>By accepting these terms, the Security Guard undertakes to fulfill the following responsibilities:</p>
-                        <ul className="list-disc list-outside space-y-1 pl-5">
-                            <li><strong>Adherence to Laws and Regulations:</strong> Strictly adhere to all applicable laws, rules, and regulations.</li>
-                            <li><strong>Duty and Discipline:</strong> Perform assigned duties diligently, maintain strict discipline, report for duty on time in proper uniform, and refrain from any act of insubordination or misconduct.</li>
-                            <li><strong>Protection of Life and Property:</strong> Safeguard the client's premises, prevent unauthorized entry, and monitor for any unlawful activities.</li>
-                            <li><strong>Access Control:</strong> Effectively manage access control for personnel, vehicles, and materials.</li>
-                            <li><strong>Emergency Response:</strong> Act effectively during emergencies and inform relevant authorities promptly.</li>
-                            <li><strong>Reporting and Communication:</strong> Promptly report any incidents and maintain accurate logbooks.</li>
-                            <li><strong>Confidentiality:</strong> Maintain strict confidentiality of all client information.</li>
-                            <li><strong>Prohibited Activities:</strong> Refrain from unauthorized use of force, consumption of intoxicating substances on duty, carrying unauthorized weapons, and divulging confidential information.</li>
-                        </ul>
-                    </section>
-
-                    <section>
-                        <h2 className="text-base font-bold mb-2">IV. Grievance Redressal and Disciplinary Action</h2>
-                        <ul className="list-disc list-outside space-y-1 pl-5">
-                            <li><strong>Grievance Mechanism:</strong> Any grievances will be addressed through the established grievance redressal mechanism of {companyName}.</li>
-                            <li><strong>Disciplinary Action:</strong> Any breach of these terms may lead to disciplinary action, including suspension or termination of employment.</li>
-                        </ul>
-                    </section>
-                </div>
-                
-                <section className="mt-12 pt-8 border-t-2 border-dashed border-gray-400">
-                    <h2 className="text-lg font-bold text-center mb-4">V. Declaration</h2>
-                    <p className="text-sm mb-6 text-justify">
-                        I, <strong>{employee.fullName}</strong>, son/daughter of <strong>{employee.fatherName}</strong>, residing at {employee.fullAddress}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me in this enrollment form and supporting documents is true and correct to the best of my knowledge and belief. I understand that any false information or non-compliance with these terms may lead to the cancellation of my enrollment and employment.
-                    </p>
-                    <div className="grid grid-cols-2 gap-12 mt-16 text-sm">
-                        <div>
-                            <div className="border-t border-gray-400 pt-2">Signature of Security Guard</div>
-                        </div>
-                        <div>
-                             <div className="border-t border-gray-400 pt-2">Date</div>
-                        </div>
-                         <div className="col-span-2 mt-8">
-                            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName.toUpperCase()}</span></div>
-                        </div>
-                    </div>
-                </section>
-            </div>
+    <main className="flex-grow mt-8 space-y-8 text-sm">
+      <section>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <DetailGridItem label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+          <DetailGridItem label="Gender" value={employee.gender} />
+          <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
+          <DetailGridItem label="Father's Name" value={employee.fatherName} />
+          <DetailGridItem label="Mother's Name" value={employee.motherName} />
+          {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={employee.spouseName} />}
+          <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
+          <DetailGridItem label="Email Address" value={employee.emailAddress} />
+          <DetailGridItem label="District" value={employee.district} />
+          <div className="col-span-3">
+            <DetailGridItem label="Full Address" value={employee.fullAddress} />
+          </div>
         </div>
-    );
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <DetailGridItem label="Joining Date" value={formatDate(employee.joiningDate)} />
+          <DetailGridItem label="Status" value={employee.status} />
+          {employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}
+          <DetailGridItem label="PAN Number" value={employee.panNumber} />
+          <DetailGridItem label="EPF/UAN Number" value={employee.epfUanNumber} />
+          <DetailGridItem label="ESIC Number" value={employee.esicNumber} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <DetailGridItem label="Bank Name" value={employee.bankName} />
+          <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
+          <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
+          <DetailGridItem label="ID Proof Type" value={employee.idProofType} />
+          <DetailGridItem label="ID Proof Number" value={employee.idProofNumber} />
+        </div>
+      </section>
+    </main>
+    <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+BiodataPage.displayName = 'BiodataPage';
+
+
+const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
+  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
+    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
+    <p className="mb-2 text-lg">{employee.fullName}</p>
+    <p className="mb-8 text-gray-600">{employee.employeeId}</p>
+    <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
+      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} data-ai-hint="qr code" />
+    </div>
+    <div className="mt-8 text-gray-600 max-w-md">
+      <p className="font-semibold mb-2">Instructions:</p>
+      <p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p>
+    </div>
+    <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+QrPage.displayName = 'QrPage';
+
+const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
+  <div ref={ref} style={{...pageStyle, alignItems: 'center'}}>
+    <h1 className="text-xl font-semibold mb-6">{title}</h1>
+    <div className="relative inline-block border bg-gray-50 p-2 rounded-lg" style={{width: '180mm', flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+      <Image src={imageUrl} alt={title} layout="fill" className="object-contain" crossOrigin="anonymous" data-ai-hint="document id" />
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="text-7xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">
+          FOR CISS USE ONLY
+        </span>
+      </div>
+    </div>
+    <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+DocumentPage.displayName = 'DocumentPage';
+
+const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => {
+  const companyName = "CISS Workforce";
+  return (
+    <div ref={ref} style={pageStyle}>
+      <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment</h1>
+      <div className="space-y-3 text-xs text-justify flex-grow">
+        <section>
+          <h2 className="text-sm font-bold mb-1">I. General Eligibility and Compliance</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
+            <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
+            <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
+            <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
+          </ul>
+        </section>
+        <section>
+          <h2 className="text-sm font-bold mb-1">II. Employment Terms & Responsibilities</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
+            <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
+            <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
+            <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
+            <li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li>
+          </ul>
+        </section>
+        <section>
+          <h2 className="text-sm font-bold mb-1">III. Disciplinary Action</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
+            <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
+          </ul>
+        </section>
+      </div>
+      <section className="mt-8 pt-6 border-t-2 border-dashed border-gray-400">
+        <h2 className="text-base font-bold text-center mb-4">IV. Declaration</h2>
+        <p className="text-sm mb-6 text-justify">
+          I, <strong>{employee.fullName}</strong>, son/daughter of <strong>{employee.fatherName}</strong>, residing at {employee.fullAddress}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
+        </p>
+        <div className="grid grid-cols-2 gap-12 mt-12 text-sm">
+          <div><div className="border-t border-gray-400 pt-2">Signature of Security Guard</div></div>
+          <div><div className="border-t border-gray-400 pt-2">Date</div></div>
+          <div className="col-span-2 mt-6">
+            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName.toUpperCase()}</span></div>
+          </div>
+        </div>
+      </section>
+      <PageFooter pageNumber={pageNumber} />
+    </div>
+  );
 });
-BiodataDocument.displayName = 'BiodataDocument';
+TermsPage.displayName = 'TermsPage';
 
+
+// #endregion
 
 export default function AdminEmployeeProfilePage() {
   const params = useParams();
@@ -420,7 +372,13 @@ export default function AdminEmployeeProfilePage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
-  const biodataRef = useRef<HTMLDivElement>(null);
+  
+  const biodataPageRef = useRef<HTMLDivElement>(null);
+  const qrPageRef = useRef<HTMLDivElement>(null);
+  const idFrontPageRef = useRef<HTMLDivElement>(null);
+  const idBackPageRef = useRef<HTMLDivElement>(null);
+  const bankDocPageRef = useRef<HTMLDivElement>(null);
+  const termsPageRef = useRef<HTMLDivElement>(null);
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -782,56 +740,73 @@ export default function AdminEmployeeProfilePage() {
   };
 
   const handleDownloadProfile = async () => {
-    if (!biodataRef.current || !employee) return;
+    if (!employee) return;
     setIsDownloadingPdf(true);
-    toast({ title: "Generating PDF...", description: "Please wait while we create the profile document. This may take a moment." });
+    toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
 
-    try {
-        const canvas = await html2canvas(biodataRef.current, {
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    let pageCount = 0;
+
+    const addPageToPdf = async (element: HTMLElement | null) => {
+        if (!element) return;
+        pageCount++;
+        const canvas = await html2canvas(element, {
             scale: 2,
             useCORS: true,
             allowTaint: true,
-            scrollY: -window.scrollY,
-            windowWidth: biodataRef.current.scrollWidth,
-            windowHeight: biodataRef.current.scrollHeight
+            logging: false,
         });
-    
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-        });
-    
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-
-        const pageHeightInPixels = (canvasWidth / pdfWidth) * pdfHeight;
-        const totalPages = Math.ceil(canvasHeight / pageHeightInPixels);
-
-        for (let i = 0; i < totalPages; i++) {
-            if (i > 0) {
-                pdf.addPage();
-            }
-            const yPosition = -pageHeightInPixels * i;
-            // The height of the image added to the PDF needs to be the total canvas height scaled to fit the PDF width.
-            const imgHeightInPdf = canvasHeight * (pdfWidth / canvasWidth);
-            pdf.addImage(imgData, 'PNG', 0, yPosition, pdfWidth, imgHeightInPdf);
+        const imgData = canvas.toDataURL('image/jpeg', 0.85); // Use JPEG compression
+        
+        if (pageCount > 1) {
+            pdf.addPage();
         }
-    
-        pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
-    
-        toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
+        
+        // Calculate aspect ratio to fit the page correctly
+        const canvasAspectRatio = canvas.width / canvas.height;
+        const pageAspectRatio = pdfWidth / pdfHeight;
+        let finalWidth, finalHeight;
+        
+        if (canvasAspectRatio > pageAspectRatio) {
+            finalWidth = pdfWidth;
+            finalHeight = pdfWidth / canvasAspectRatio;
+        } else {
+            finalHeight = pdfHeight;
+            finalWidth = pdfHeight * canvasAspectRatio;
+        }
 
+        // Center the image on the page
+        const xOffset = (pdfWidth - finalWidth) / 2;
+        const yOffset = (pdfHeight - finalHeight) / 2;
+        
+        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
+    };
+
+    try {
+        const pagesToRender = [
+            biodataPageRef.current,
+            employee.qrCodeUrl ? qrPageRef.current : null,
+            employee.idProofDocumentUrlFront || employee.idProofDocumentUrl ? idFrontPageRef.current : null,
+            employee.idProofDocumentUrlBack ? idBackPageRef.current : null,
+            employee.bankPassbookStatementUrl ? bankDocPageRef.current : null,
+            termsPageRef.current
+        ].filter(Boolean);
+
+        for (const pageElement of pagesToRender) {
+            await addPageToPdf(pageElement);
+        }
+
+        pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
+        toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
     } catch (error: any) {
         console.error("Error generating PDF:", error);
         toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
     } finally {
         setIsDownloadingPdf(false);
     }
-  };
+};
 
   const handleRegenerateQrCode = async () => {
     if (!employee) return;
@@ -960,7 +935,16 @@ export default function AdminEmployeeProfilePage() {
   return (
     <>
       <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
-        {employee && <BiodataDocument ref={biodataRef} employee={employee} />}
+        {employee && (
+            <div>
+              <BiodataPage ref={biodataPageRef} employee={employee} pageNumber={1}/>
+              {employee.qrCodeUrl && <QrPage ref={qrPageRef} employee={employee} pageNumber={2}/>}
+              {(employee.idProofDocumentUrlFront || employee.idProofDocumentUrl) && <DocumentPage ref={idFrontPageRef} title="Uploaded Document: ID Proof (Front)" imageUrl={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl!} pageNumber={3}/>}
+              {employee.idProofDocumentUrlBack && <DocumentPage ref={idBackPageRef} title="Uploaded Document: ID Proof (Back)" imageUrl={employee.idProofDocumentUrlBack} pageNumber={4}/>}
+              {employee.bankPassbookStatementUrl && <DocumentPage ref={bankDocPageRef} title="Uploaded Document: Bank Passbook/Statement" imageUrl={employee.bankPassbookStatementUrl} pageNumber={5}/>}
+              <TermsPage ref={termsPageRef} employee={employee} pageNumber={6}/>
+            </div>
+        )}
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
