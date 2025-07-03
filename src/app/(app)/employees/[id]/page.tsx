@@ -298,21 +298,53 @@ const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber
 ));
 QrPage.displayName = 'QrPage';
 
-const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
-  <div ref={ref} style={{...pageStyle, alignItems: 'center'}}>
-    <h1 className="text-xl font-semibold mb-6">{title}</h1>
-    <div className="relative inline-block border bg-gray-50 p-2 rounded-lg" style={{width: '180mm', flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-      <Image src={imageUrl} alt={title} layout="fill" className="object-contain" crossOrigin="anonymous" data-ai-hint="document id" />
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-7xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">
-          FOR CISS USE ONLY
-        </span>
+const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number; blur?: boolean }>(({ title, imageUrl, pageNumber, blur }, ref) => (
+    <div ref={ref} style={{...pageStyle, alignItems: 'center'}}>
+        <h1 className="text-xl font-semibold mb-6">{title}</h1>
+        <div className="relative inline-block border bg-gray-50 p-2 rounded-lg" style={{width: '180mm', flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+            <Image
+                src={imageUrl}
+                alt={title}
+                layout="fill"
+                className="object-contain"
+                style={blur ? { filter: 'blur(4px)' } : {}}
+                crossOrigin="anonymous"
+                data-ai-hint="document id"
+            />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-7xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">
+                    FOR CISS USE ONLY
+                </span>
+            </div>
+        </div>
+        <PageFooter pageNumber={pageNumber} />
+    </div>
+));
+DocumentPage.displayName = 'DocumentPage';
+
+const CombinedIdPage = React.forwardRef<HTMLDivElement, { frontUrl: string; backUrl: string; pageNumber: number }>(({ frontUrl, backUrl, pageNumber }, ref) => (
+  <div ref={ref} style={pageStyle}>
+    <h1 className="text-xl font-semibold mb-6 text-center">ID Proof Document</h1>
+    <div className="flex gap-4" style={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
+        <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
+          <Image src={frontUrl} alt="ID Proof (Front)" layout="fill" className="object-contain" style={{ filter: 'blur(4px)' }} crossOrigin="anonymous" />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
+        </div>
+        <p className="text-sm text-gray-600">Front Side</p>
+      </div>
+      <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
+        <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
+          <Image src={backUrl} alt="ID Proof (Back)" layout="fill" className="object-contain" style={{ filter: 'blur(4px)' }} crossOrigin="anonymous" />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
+        </div>
+        <p className="text-sm text-gray-600">Back Side</p>
       </div>
     </div>
     <PageFooter pageNumber={pageNumber} />
   </div>
 ));
-DocumentPage.displayName = 'DocumentPage';
+CombinedIdPage.displayName = 'CombinedIdPage';
 
 const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => {
   const companyName = "CISS Workforce";
@@ -377,6 +409,7 @@ export default function AdminEmployeeProfilePage() {
   const qrPageRef = useRef<HTMLDivElement>(null);
   const idFrontPageRef = useRef<HTMLDivElement>(null);
   const idBackPageRef = useRef<HTMLDivElement>(null);
+  const combinedIdPageRef = useRef<HTMLDivElement>(null);
   const bankDocPageRef = useRef<HTMLDivElement>(null);
   const termsPageRef = useRef<HTMLDivElement>(null);
 
@@ -739,74 +772,81 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
-  const handleDownloadProfile = async () => {
-    if (!employee) return;
-    setIsDownloadingPdf(true);
-    toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
+    const handleDownloadProfile = async () => {
+        if (!employee) return;
+        setIsDownloadingPdf(true);
+        toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
 
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    let pageCount = 0;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        let pageCount = 0;
 
-    const addPageToPdf = async (element: HTMLElement | null) => {
-        if (!element) return;
-        pageCount++;
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-        });
-        const imgData = canvas.toDataURL('image/jpeg', 0.85); // Use JPEG compression
-        
-        if (pageCount > 1) {
-            pdf.addPage();
+        const addPageToPdf = async (element: HTMLElement | null) => {
+            if (!element) return;
+            pageCount++;
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+            });
+            const imgData = canvas.toDataURL('image/jpeg', 0.85);
+            
+            if (pageCount > 1) {
+                pdf.addPage();
+            }
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasAspectRatio = canvas.width / canvas.height;
+            const pageAspectRatio = pdfWidth / pdfHeight;
+            let finalWidth, finalHeight;
+            
+            if (canvasAspectRatio > pageAspectRatio) {
+                finalWidth = pdfWidth;
+                finalHeight = pdfWidth / canvasAspectRatio;
+            } else {
+                finalHeight = pdfHeight;
+                finalWidth = pdfHeight * canvasAspectRatio;
+            }
+
+            const xOffset = (pdfWidth - finalWidth) / 2;
+            const yOffset = (pdfHeight - finalHeight) / 2;
+            
+            pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
+        };
+
+        try {
+            const pagesToRender = [];
+            pagesToRender.push(biodataPageRef.current);
+            if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
+
+            const idFrontUrl = employee.idProofDocumentUrlFront || employee.idProofDocumentUrl;
+            const idBackUrl = employee.idProofDocumentUrlBack;
+
+            if (idFrontUrl && idBackUrl) {
+                pagesToRender.push(combinedIdPageRef.current);
+            } else if (idFrontUrl) {
+                pagesToRender.push(idFrontPageRef.current);
+            } else if (idBackUrl) {
+                pagesToRender.push(idBackPageRef.current);
+            }
+
+            if (employee.bankPassbookStatementUrl) pagesToRender.push(bankDocPageRef.current);
+            pagesToRender.push(termsPageRef.current);
+
+            for (const pageElement of pagesToRender.filter(Boolean)) {
+                await addPageToPdf(pageElement);
+            }
+
+            pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
+            toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
+        } catch (error: any) {
+            console.error("Error generating PDF:", error);
+            toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
+        } finally {
+            setIsDownloadingPdf(false);
         }
-        
-        // Calculate aspect ratio to fit the page correctly
-        const canvasAspectRatio = canvas.width / canvas.height;
-        const pageAspectRatio = pdfWidth / pdfHeight;
-        let finalWidth, finalHeight;
-        
-        if (canvasAspectRatio > pageAspectRatio) {
-            finalWidth = pdfWidth;
-            finalHeight = pdfWidth / canvasAspectRatio;
-        } else {
-            finalHeight = pdfHeight;
-            finalWidth = pdfHeight * canvasAspectRatio;
-        }
-
-        // Center the image on the page
-        const xOffset = (pdfWidth - finalWidth) / 2;
-        const yOffset = (pdfHeight - finalHeight) / 2;
-        
-        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
     };
-
-    try {
-        const pagesToRender = [
-            biodataPageRef.current,
-            employee.qrCodeUrl ? qrPageRef.current : null,
-            employee.idProofDocumentUrlFront || employee.idProofDocumentUrl ? idFrontPageRef.current : null,
-            employee.idProofDocumentUrlBack ? idBackPageRef.current : null,
-            employee.bankPassbookStatementUrl ? bankDocPageRef.current : null,
-            termsPageRef.current
-        ].filter(Boolean);
-
-        for (const pageElement of pagesToRender) {
-            await addPageToPdf(pageElement);
-        }
-
-        pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
-        toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
-    } catch (error: any) {
-        console.error("Error generating PDF:", error);
-        toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
-    } finally {
-        setIsDownloadingPdf(false);
-    }
-};
 
   const handleRegenerateQrCode = async () => {
     if (!employee) return;
@@ -893,6 +933,38 @@ export default function AdminEmployeeProfilePage() {
     }
   };
   
+  const renderOffscreenPages = () => {
+    if (!employee) return null;
+
+    const pages = [];
+    let pageNumber = 1;
+
+    pages.push(<BiodataPage key={`page-${pageNumber}`} ref={biodataPageRef} employee={employee} pageNumber={pageNumber++} />);
+    
+    if (employee.qrCodeUrl) {
+      pages.push(<QrPage key={`page-${pageNumber}`} ref={qrPageRef} employee={employee} pageNumber={pageNumber++} />);
+    }
+
+    const idFrontUrl = employee.idProofDocumentUrlFront || employee.idProofDocumentUrl;
+    const idBackUrl = employee.idProofDocumentUrlBack;
+
+    if (idFrontUrl && idBackUrl) {
+      pages.push(<CombinedIdPage key={`page-${pageNumber}`} ref={combinedIdPageRef} frontUrl={idFrontUrl} backUrl={idBackUrl} pageNumber={pageNumber++} />);
+    } else if (idFrontUrl) {
+      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="ID Proof Document (Front)" imageUrl={idFrontUrl} pageNumber={pageNumber++} blur />);
+    } else if (idBackUrl) {
+      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="ID Proof Document (Back)" imageUrl={idBackUrl} pageNumber={pageNumber++} blur />);
+    }
+
+    if (employee.bankPassbookStatementUrl) {
+      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={bankDocPageRef} title="Bank Passbook/Statement" imageUrl={employee.bankPassbookStatementUrl} pageNumber={pageNumber++} />);
+    }
+
+    pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
+
+    return pages;
+  };
+
   if (isLoading || isAuthLoading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
@@ -935,16 +1007,7 @@ export default function AdminEmployeeProfilePage() {
   return (
     <>
       <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
-        {employee && (
-            <div>
-              <BiodataPage ref={biodataPageRef} employee={employee} pageNumber={1}/>
-              {employee.qrCodeUrl && <QrPage ref={qrPageRef} employee={employee} pageNumber={2}/>}
-              {(employee.idProofDocumentUrlFront || employee.idProofDocumentUrl) && <DocumentPage ref={idFrontPageRef} title="Uploaded Document: ID Proof (Front)" imageUrl={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl!} pageNumber={3}/>}
-              {employee.idProofDocumentUrlBack && <DocumentPage ref={idBackPageRef} title="Uploaded Document: ID Proof (Back)" imageUrl={employee.idProofDocumentUrlBack} pageNumber={4}/>}
-              {employee.bankPassbookStatementUrl && <DocumentPage ref={bankDocPageRef} title="Uploaded Document: Bank Passbook/Statement" imageUrl={employee.bankPassbookStatementUrl} pageNumber={5}/>}
-              <TermsPage ref={termsPageRef} employee={employee} pageNumber={6}/>
-            </div>
-        )}
+        {renderOffscreenPages()}
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
