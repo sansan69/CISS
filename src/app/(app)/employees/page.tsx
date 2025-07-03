@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -85,9 +85,9 @@ export default function EmployeeDirectoryPage() {
       toast({ variant: "destructive", title: "Error", description: message });
     }
   }, [toast]);
-
-  const buildQuery = useCallback((forCount: boolean = false, direction?: 'next' | 'prev') => {
-    let q = query(collection(db, 'employees'));
+  
+  const buildBaseQuery = useCallback(() => {
+    let q: Query<DocumentData> = query(collection(db, "employees"));
 
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
@@ -99,7 +99,6 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('district', '==', filterDistrict));
     }
     
-    // Basic search by employeeId prefix
     if (searchTerm.trim() !== '') {
         const searchTermUpper = searchTerm.trim().toUpperCase();
         q = query(q, 
@@ -114,18 +113,8 @@ export default function EmployeeDirectoryPage() {
     }
     q = query(q, orderBy('createdAt', 'desc')); 
 
-    if (!forCount) {
-        if (direction === 'next' && lastVisibleDoc) {
-            q = query(q, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
-        } else if (direction === 'prev' && firstVisibleDoc) {
-            q = query(q, endBefore(firstVisibleDoc), limitToLast(ITEMS_PER_PAGE));
-        } else {
-            q = query(q, limit(ITEMS_PER_PAGE));
-        }
-    }
     return q;
-  }, [filterClient, filterStatus, filterDistrict, searchTerm, lastVisibleDoc, firstVisibleDoc]);
-
+  }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
   const fetchEmployees = useCallback(async (direction?: 'next' | 'prev') => {
     if (direction === 'next') setIsFetchingNext(true);
@@ -135,8 +124,18 @@ export default function EmployeeDirectoryPage() {
     setError(null);
 
     try {
-      const q = buildQuery(false, direction);
-      const documentSnapshots = await getDocs(q);
+      const baseQuery = buildBaseQuery();
+      let finalQuery: Query<DocumentData>;
+
+      if (direction === 'next' && lastVisibleDoc) {
+          finalQuery = query(baseQuery, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
+      } else if (direction === 'prev' && firstVisibleDoc) {
+          finalQuery = query(baseQuery, endBefore(firstVisibleDoc), limitToLast(ITEMS_PER_PAGE));
+      } else {
+          finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+      }
+
+      const documentSnapshots = await getDocs(finalQuery);
       
       const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
         const data = docSnap.data();
@@ -153,38 +152,20 @@ export default function EmployeeDirectoryPage() {
       
       setEmployees(fetchedEmployees);
       
+      const currentLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+      const currentFirstDoc = documentSnapshots.docs[0];
+
       if (documentSnapshots.docs.length > 0) {
-        setFirstVisibleDoc(documentSnapshots.docs[0]);
-        setLastVisibleDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
-      } else {
-        if (!direction || direction !== 'next') { 
-            setFirstVisibleDoc(null);
-            setLastVisibleDoc(null);
-        }
+        setFirstVisibleDoc(currentFirstDoc);
+        setLastVisibleDoc(currentLastDoc);
       }
       
-      if (direction !== 'prev') {
-        if (documentSnapshots.docs.length === ITEMS_PER_PAGE) {
-          let nextCheckQueryParts: any[] = [collection(db, 'employees')];
-          if (filterClient !== 'all') nextCheckQueryParts.push(where('clientName', '==', filterClient));
-          if (filterStatus !== 'all') nextCheckQueryParts.push(where('status', '==', filterStatus));
-          if (filterDistrict !== 'all') nextCheckQueryParts.push(where('district', '==', filterDistrict));
-          if (searchTerm.trim() !== '') {
-            const searchTermUpper = searchTerm.trim().toUpperCase();
-            nextCheckQueryParts.push(where('employeeId', '>=', searchTermUpper));
-            nextCheckQueryParts.push(where('employeeId', '<=', searchTermUpper + '\uf8ff'));
-            nextCheckQueryParts.push(orderBy('employeeId', 'asc'));
-          }
-          nextCheckQueryParts.push(orderBy('createdAt', 'desc'));
-          nextCheckQueryParts.push(startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]));
-          nextCheckQueryParts.push(limit(1));
-          
-          const nextCheckQuery = query.apply(null, nextCheckQueryParts as [any, ...any[]]);
-          const nextSnapshotCheck = await getDocs(nextCheckQuery);
-          setHasMoreNext(!nextSnapshotCheck.empty);
-        } else {
+      if (documentSnapshots.docs.length < ITEMS_PER_PAGE) {
           setHasMoreNext(false);
-        }
+      } else {
+          const nextCheckQuery = query(baseQuery, startAfter(currentLastDoc), limit(1));
+          const nextSnapshot = await getDocs(nextCheckQuery);
+          setHasMoreNext(!nextSnapshot.empty);
       }
 
       setHasMorePrev(currentPage > 1);
@@ -204,32 +185,41 @@ export default function EmployeeDirectoryPage() {
       setIsFetchingNext(false);
       setIsFetchingPrev(false);
     }
-  }, [toast, buildQuery, currentPage, filterClient, filterStatus, filterDistrict, searchTerm]); 
+  }, [toast, buildBaseQuery, currentPage, lastVisibleDoc, firstVisibleDoc]); 
 
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
   
+  // This effect resets pagination and fetches data when filters change
   useEffect(() => {
     setCurrentPage(1); 
     setLastVisibleDoc(null); 
     setFirstVisibleDoc(null);
     setHasMorePrev(false); 
     fetchEmployees(); 
-  }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
+    // We want this to run ONLY when filters change, fetchEmployees has other dependencies
+    // that would cause it to re-run incorrectly here.
+  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
+
+
+  // This effect fetches data when page or cursors change.
+  useEffect(() => {
+    if(!isLoading) { // Avoid fetching on initial load as the effect above handles it.
+      fetchEmployees();
+    }
+  }, [currentPage]);
 
 
   const handleNextPage = () => {
     if (hasMoreNext && lastVisibleDoc) {
       setCurrentPage(prev => prev + 1);
-      fetchEmployees('next');
     }
   };
 
   const handlePreviousPage = () => {
     if (currentPage > 1 && firstVisibleDoc) {
       setCurrentPage(prev => prev - 1);
-      fetchEmployees('prev'); 
     }
   };
 
@@ -340,13 +330,8 @@ export default function EmployeeDirectoryPage() {
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      setEmployees(prev => prev.filter(emp => emp.id !== employeeToDelete.id));
-      if (employees.length -1 < ITEMS_PER_PAGE && (hasMoreNext || currentPage > 1) ) {
-        setCurrentPage(1); 
-        setLastVisibleDoc(null);
-        setFirstVisibleDoc(null);
-        fetchEmployees();
-      }
+      // Refetch current page after deletion
+      fetchEmployees();
       
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
@@ -464,14 +449,13 @@ export default function EmployeeDirectoryPage() {
                 </TableRow>
                 </TableHeader>
                 <TableBody>
-                {(isLoading && employees.length === 0 && !isFetchingNext && !isFetchingPrev) || isFetchingNext || isFetchingPrev ? ( 
+                {(isFetchingNext || isFetchingPrev) ? ( 
                     <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                     </TableCell>
                     </TableRow>
-                ) : null}
-                {!isLoading && !isFetchingNext && !isFetchingPrev && employees.length === 0 ? (
+                ) : employees.length === 0 ? (
                     <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
                         No employees found.
@@ -487,7 +471,7 @@ export default function EmployeeDirectoryPage() {
                     <TableCell>
                         <div className="flex items-center gap-3">
                         <Avatar>
-                            <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName || 'Employee avatar'} data-ai-hint="profile avatar" />
+                            <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName || 'Employee avatar'} data-ai-hint="profile avatar"/>
                             <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
                         </Avatar>
                         <div>
