@@ -229,7 +229,16 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
         </div>
       </div>
       {employee.profilePictureUrl && (
-        <Image src={employee.profilePictureUrl} alt={employee.fullName || 'Profile photo'} width={100} height={120} className="rounded-lg border-2 border-gray-200 object-cover" crossOrigin="anonymous" data-ai-hint="profile photo" />
+        <Image 
+            src={employee.profilePictureUrl} 
+            alt={employee.fullName || 'Profile photo'} 
+            width={100} 
+            height={120} 
+            className="rounded-lg border-2 border-gray-200 object-contain p-1 bg-gray-50" 
+            crossOrigin="anonymous" 
+            unoptimized={true}
+            data-ai-hint="profile photo" 
+        />
       )}
     </header>
 
@@ -287,7 +296,7 @@ const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber
     <p className="mb-2 text-lg">{employee.fullName}</p>
     <p className="mb-8 text-gray-600">{employee.employeeId}</p>
     <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
-      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} data-ai-hint="qr code" />
+      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} data-ai-hint="qr code" />
     </div>
     <div className="mt-8 text-gray-600 max-w-md">
       <p className="font-semibold mb-2">Instructions:</p>
@@ -298,7 +307,7 @@ const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber
 ));
 QrPage.displayName = 'QrPage';
 
-const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number; blur?: boolean }>(({ title, imageUrl, pageNumber, blur }, ref) => (
+const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
     <div ref={ref} style={{...pageStyle, alignItems: 'center'}}>
         <h1 className="text-xl font-semibold mb-6">{title}</h1>
         <div className="relative inline-block border bg-gray-50 p-2 rounded-lg" style={{width: '180mm', flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
@@ -307,8 +316,8 @@ const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl:
                 alt={title}
                 layout="fill"
                 className="object-contain"
-                style={blur ? { filter: 'blur(2px)' } : {}}
                 crossOrigin="anonymous"
+                unoptimized={true}
                 data-ai-hint="document id"
             />
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -328,14 +337,14 @@ const CombinedIdPage = React.forwardRef<HTMLDivElement, { frontUrl: string; back
     <div className="flex gap-4" style={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
       <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
         <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
-          <Image src={frontUrl} alt="ID Proof (Front)" layout="fill" className="object-contain" style={{ filter: 'blur(2px)' }} crossOrigin="anonymous" />
+          <Image src={frontUrl} alt="ID Proof (Front)" layout="fill" className="object-contain" crossOrigin="anonymous" unoptimized={true}/>
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
         </div>
         <p className="text-sm text-gray-600">Front Side</p>
       </div>
       <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
         <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
-          <Image src={backUrl} alt="ID Proof (Back)" layout="fill" className="object-contain" style={{ filter: 'blur(2px)' }} crossOrigin="anonymous" />
+          <Image src={backUrl} alt="ID Proof (Back)" layout="fill" className="object-contain" crossOrigin="anonymous" unoptimized={true}/>
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
         </div>
         <p className="text-sm text-gray-600">Back Side</p>
@@ -959,9 +968,9 @@ export default function AdminEmployeeProfilePage() {
     if (idFrontUrl && idBackUrl) {
       pages.push(<CombinedIdPage key={`page-${pageNumber}`} ref={combinedIdPageRef} frontUrl={idFrontUrl} backUrl={idBackUrl} pageNumber={pageNumber++} />);
     } else if (idFrontUrl) {
-      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="ID Proof Document (Front)" imageUrl={idFrontUrl} pageNumber={pageNumber++} blur />);
+      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="ID Proof Document (Front)" imageUrl={idFrontUrl} pageNumber={pageNumber++} />);
     } else if (idBackUrl) {
-      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="ID Proof Document (Back)" imageUrl={idBackUrl} pageNumber={pageNumber++} blur />);
+      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="ID Proof Document (Back)" imageUrl={idBackUrl} pageNumber={pageNumber++} />);
     }
 
     if (employee.bankPassbookStatementUrl) {
