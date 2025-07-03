@@ -199,7 +199,7 @@ const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
     borderTop: '1px solid #ccc',
     paddingTop: '5px'
   }}>
-    Page {pageNumber} | CISS Workforce | Generated on: {format(new Date(), "PPP")}
+    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "PPP")}
   </footer>
 );
 
@@ -347,7 +347,7 @@ const CombinedIdPage = React.forwardRef<HTMLDivElement, { frontUrl: string; back
 CombinedIdPage.displayName = 'CombinedIdPage';
 
 const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => {
-  const companyName = "CISS Workforce";
+  const companyName = "CISS Services Ltd.";
   return (
     <div ref={ref} style={pageStyle}>
       <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment</h1>
@@ -1313,4 +1313,3 @@ export default function AdminEmployeeProfilePage() {
     </>
   );
 }
-
