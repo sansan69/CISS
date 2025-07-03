@@ -229,7 +229,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
         </div>
       </div>
       {employee.profilePictureUrl && (
-        <Image src={employee.profilePictureUrl} alt={employee.fullName} width={100} height={120} className="rounded-lg border-2 border-gray-200 object-cover" crossOrigin="anonymous" data-ai-hint="profile photo" />
+        <Image src={employee.profilePictureUrl} alt={employee.fullName || 'Profile photo'} width={100} height={120} className="rounded-lg border-2 border-gray-200 object-cover" crossOrigin="anonymous" data-ai-hint="profile photo" />
       )}
     </header>
 
@@ -502,6 +502,14 @@ export default function AdminEmployeeProfilePage() {
 
       if (employeeDocSnap.exists()) {
         const data = employeeDocSnap.data();
+        
+        // Defensive coding: Ensure fullName exists, which can be missing in older records.
+        if (!data.fullName && data.firstName && data.lastName) {
+          data.fullName = `${data.firstName} ${data.lastName}`;
+        } else if (!data.fullName) {
+          data.fullName = 'Unnamed Employee'; // Fallback if even names are missing
+        }
+
         const formattedData: Employee = {
           ...data,
           id: employeeDocSnap.id,
@@ -1305,3 +1313,4 @@ export default function AdminEmployeeProfilePage() {
     </>
   );
 }
+
