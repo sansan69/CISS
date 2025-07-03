@@ -307,7 +307,7 @@ const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl:
                 alt={title}
                 layout="fill"
                 className="object-contain"
-                style={blur ? { filter: 'blur(4px)' } : {}}
+                style={blur ? { filter: 'blur(2px)' } : {}}
                 crossOrigin="anonymous"
                 data-ai-hint="document id"
             />
@@ -328,14 +328,14 @@ const CombinedIdPage = React.forwardRef<HTMLDivElement, { frontUrl: string; back
     <div className="flex gap-4" style={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
       <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
         <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
-          <Image src={frontUrl} alt="ID Proof (Front)" layout="fill" className="object-contain" style={{ filter: 'blur(4px)' }} crossOrigin="anonymous" />
+          <Image src={frontUrl} alt="ID Proof (Front)" layout="fill" className="object-contain" style={{ filter: 'blur(2px)' }} crossOrigin="anonymous" />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
         </div>
         <p className="text-sm text-gray-600">Front Side</p>
       </div>
       <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
         <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
-          <Image src={backUrl} alt="ID Proof (Back)" layout="fill" className="object-contain" style={{ filter: 'blur(4px)' }} crossOrigin="anonymous" />
+          <Image src={backUrl} alt="ID Proof (Back)" layout="fill" className="object-contain" style={{ filter: 'blur(2px)' }} crossOrigin="anonymous" />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
         </div>
         <p className="text-sm text-gray-600">Back Side</p>
