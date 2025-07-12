@@ -87,7 +87,7 @@ export default function EmployeeDirectoryPage() {
   }, [toast]);
   
   const buildBaseQuery = useCallback(() => {
-    let q: Query<DocumentData> = query(collection(db, "employees"));
+    let q: Query<DocumentData> = collection(db, "employees");
 
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
@@ -99,18 +99,18 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('district', '==', filterDistrict));
     }
     
+    // IMPORTANT: Conditional ordering to prevent index errors
+    // If searching by employeeId, order by that. Otherwise, order by creation date.
     if (searchTerm.trim() !== '') {
         const searchTermUpper = searchTerm.trim().toUpperCase();
         q = query(q, 
           where('employeeId', '>=', searchTermUpper), 
-          where('employeeId', '<=', searchTermUpper + '\uf8ff')
+          where('employeeId', '<=', searchTermUpper + '\uf8ff'),
+          orderBy('employeeId', 'asc') // Sort by employeeId when searching
         );
+    } else {
+       q = query(q, orderBy('createdAt', 'desc')); // Default sort
     }
-    
-    if (searchTerm.trim() !== '') {
-        q = query(q, orderBy('employeeId', 'asc'));
-    }
-    q = query(q, orderBy('createdAt', 'desc')); 
 
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
@@ -196,7 +196,7 @@ export default function EmployeeDirectoryPage() {
     // We want this to run ONLY when filters change. fetchEmployees is a dependency
     // but the state resets ensure it acts as a 'reset' call.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
+  }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
 
   const handleNextPage = () => {
@@ -536,7 +536,7 @@ export default function EmployeeDirectoryPage() {
                     onClick={handlePreviousPage}
                     disabled={isTableLoading || !hasMorePrev}
                 >
-                    {isTableLoading && !hasMorePrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                    {isTableLoading && hasMorePrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                     Previous
                 </Button>
                 <Button
