@@ -75,9 +75,10 @@ const navItems: NavItem[] = [
     label: 'Settings',
     icon: Settings,
     subItems: [
-        { href: '/settings/qr-management', label: 'QR Management', icon: QrCode },
-        { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
         { href: '/settings/client-management', label: 'Client Management', icon: Briefcase },
+        { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
+        { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
+        { href: '/settings/qr-management', label: 'QR Management', icon: QrCode },
     ]
   },
 ];

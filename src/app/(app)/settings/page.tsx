@@ -28,6 +28,13 @@ const settingsOptions = [
     href: "/settings/client-management",
     aiHint: "client companies"
   },
+  {
+    title: "Bulk Employee Import",
+    description: "Upload a CSV file to add multiple employees at once.",
+    icon: FileUp,
+    href: "/settings/bulk-import",
+    aiHint: "bulk upload employees"
+  },
 ];
 
 export default function SettingsPage() {
