@@ -58,8 +58,7 @@ export default function EmployeeDirectoryPage() {
   
   const [isTableLoading, setIsTableLoading] = useState(false);
   const [hasMoreNext, setHasMoreNext] = useState(true);
-  const hasMorePrev = currentPage > 1;
-
+  
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
   const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
@@ -70,6 +69,7 @@ export default function EmployeeDirectoryPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const hasMorePrev = currentPage > 1;
 
   const fetchClients = useCallback(async () => {
     try {
@@ -100,7 +100,6 @@ export default function EmployeeDirectoryPage() {
     }
     
     // IMPORTANT: Conditional ordering to prevent index errors
-    // If searching by employeeId, order by that. Otherwise, order by creation date.
     if (searchTerm.trim() !== '') {
         const searchTermUpper = searchTerm.trim().toUpperCase();
         q = query(q, 
@@ -108,20 +107,15 @@ export default function EmployeeDirectoryPage() {
           where('employeeId', '<=', searchTermUpper + '\uf8ff'),
           orderBy('employeeId', 'asc') // Sort by employeeId when searching
         );
-    } else {
-       q = query(q, orderBy('createdAt', 'desc')); // Default sort
-    }
+    } 
+    // NOTE: Default 'orderBy' was removed to prevent index-related crashes.
+    // The default view is now unsorted but stable with filters.
 
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
   const fetchEmployees = useCallback(async (direction?: 'next' | 'prev') => {
-    // For the very first load, use the main loader. For subsequent loads, use the table loader.
-    if (isLoading) {
-        setIsTableLoading(true);
-    } else {
-        setIsTableLoading(true);
-    }
+    setIsTableLoading(true);
     setError(null);
 
     try {
@@ -181,22 +175,21 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, lastVisibleDoc, firstVisibleDoc, isLoading]); 
+  }, [toast, buildBaseQuery, lastVisibleDoc, firstVisibleDoc]); 
 
   useEffect(() => {
     fetchClients();
-  }, [fetchClients]);
+    fetchEmployees();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // This effect resets pagination and fetches data when filters change
-  useEffect(() => {
+  const handleFilterOrSearch = useCallback(() => {
     setCurrentPage(1); 
     setLastVisibleDoc(null); 
     setFirstVisibleDoc(null);
-    fetchEmployees(); 
-    // We want this to run ONLY when filters change. fetchEmployees is a dependency
-    // but the state resets ensure it acts as a 'reset' call.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterClient, filterStatus, filterDistrict, searchTerm]);
+    fetchEmployees();
+  }, [fetchEmployees]);
 
 
   const handleNextPage = () => {
@@ -320,7 +313,7 @@ export default function EmployeeDirectoryPage() {
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      fetchEmployees();
+      handleFilterOrSearch();
       
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
@@ -347,7 +340,7 @@ export default function EmployeeDirectoryPage() {
       <div className="text-center py-10">
         <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
         <p className="mt-4 text-lg text-destructive">{error}</p>
-        <Button onClick={() => fetchEmployees()} className="mt-4">Try Again</Button>
+        <Button onClick={handleFilterOrSearch} className="mt-4">Try Again</Button>
       </div>
     );
   }
@@ -368,54 +361,68 @@ export default function EmployeeDirectoryPage() {
             <CardTitle>Filters & Search</CardTitle>
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                type="search"
-                placeholder="Search by Employee ID..."
-                className="pl-8 w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-            <Select value={filterClient} onValueChange={setFilterClient}>
-                <SelectTrigger>
-                <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                <SelectValue placeholder="Filter by Client" />
-                </SelectTrigger>
-                <SelectContent>
-                {clients.map(client => (
-                    <SelectItem key={client.id} value={client.name === 'All Clients' ? 'all' : client.name}>
-                    {client.name}
-                    </SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
-            <Select value={filterDistrict} onValueChange={setFilterDistrict}>
-                <SelectTrigger>
-                <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                <SelectValue placeholder="Filter by District" />
-                </SelectTrigger>
-                <SelectContent>
-                {keralaDistricts.map(district => (
-                    <SelectItem key={district} value={district}>
-                    {district === 'all' ? 'All Districts' : district}
-                    </SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger>
-                <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                <SelectValue placeholder="Filter by Status" />
-                </SelectTrigger>
-                <SelectContent>
-                {statuses.map(status => (
-                    <SelectItem key={status} value={status}>{status === 'all' ? 'All Statuses' : status}</SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div className="relative">
+                  <Label htmlFor="search-input">Search by ID</Label>
+                  <Search className="absolute left-2.5 bottom-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search-input"
+                    type="search"
+                    placeholder="Search by Employee ID..."
+                    className="pl-8 w-full"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+              </div>
+              <div>
+                <Label htmlFor="client-filter">Client</Label>
+                <Select value={filterClient} onValueChange={setFilterClient}>
+                    <SelectTrigger id="client-filter">
+                    <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="Filter by Client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {clients.map(client => (
+                        <SelectItem key={client.id} value={client.name === 'All Clients' ? 'all' : client.name}>
+                        {client.name}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="district-filter">District</Label>
+                <Select value={filterDistrict} onValueChange={setFilterDistrict}>
+                    <SelectTrigger id="district-filter">
+                    <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="Filter by District" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {keralaDistricts.map(district => (
+                        <SelectItem key={district} value={district}>
+                        {district === 'all' ? 'All Districts' : district}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="status-filter">Status</Label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger id="status-filter">
+                    <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="Filter by Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {statuses.map(status => (
+                        <SelectItem key={status} value={status}>{status === 'all' ? 'All Statuses' : status}</SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleFilterOrSearch} className="w-full sm:col-span-2 lg:col-span-4">
+                  Apply Filters & Search
+              </Button>
             </div>
         </CardContent>
       </Card>
@@ -454,7 +461,7 @@ export default function EmployeeDirectoryPage() {
                     employees.map((emp) => (
                     <TableRow 
                       key={emp.id} 
-                      className="cursor-pointer"
+                      className="cursor-pointer hover:bg-muted/50"
                       onClick={() => router.push(`/employees/${emp.id}`)}
                     >
                     <TableCell>
