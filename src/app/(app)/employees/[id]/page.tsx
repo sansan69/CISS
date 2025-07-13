@@ -635,63 +635,39 @@ export default function AdminEmployeeProfilePage() {
     setIsSubmitting(true);
     toast({ title: "Saving...", description: "Updating employee profile." });
 
-    const updatePromises: Promise<void>[] = [];
-    const updatedUrls: { [key: string]: string } = {};
+    const updatedUrls: { [key: string]: string | null } = {};
 
     const uploadAndSetUrl = async (
         newFile: File | null,
         oldUrl: string | undefined,
         filePath: string,
-        urlKey: string,
-        compress: boolean = true
+        urlKey: keyof typeof updatedUrls,
+        isImage: boolean
     ) => {
         if (!newFile) return;
-        if (oldUrl) await deleteFileFromStorage(oldUrl);
+        if (oldUrl) {
+            await deleteFileFromStorage(oldUrl);
+        }
         
-        const fileToUpload = compress && newFile.type.startsWith("image/")
+        const fileToUpload = isImage
             ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
             : newFile;
             
         updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
     };
 
-    updatePromises.push(uploadAndSetUrl(
-        newProfilePicture,
-        employee.profilePictureUrl,
-        `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`,
-        'profilePictureUrl'
-    ));
-
-    updatePromises.push(uploadAndSetUrl(
-        newIdProofDocumentFront,
-        employee.idProofDocumentUrlFront || employee.idProofDocumentUrl, // Use legacy URL if new one isn't present
-        `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.jpg`,
-        'idProofDocumentUrlFront'
-    ));
-
-    updatePromises.push(uploadAndSetUrl(
-        newIdProofDocumentBack,
-        employee.idProofDocumentUrlBack,
-        `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.jpg`,
-        'idProofDocumentUrlBack'
-    ));
-
-    updatePromises.push(uploadAndSetUrl(
-        newBankPassbookStatement,
-        employee.bankPassbookStatementUrl,
-        `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.jpg`,
-        'bankPassbookStatementUrl'
-    ));
-    
-    updatePromises.push(uploadAndSetUrl(
-        newPoliceClearanceCertificate,
-        employee.policeClearanceCertificateUrl,
-        `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.jpg`,
-        'policeClearanceCertificateUrl'
-    ));
-
     try {
-        await Promise.all(updatePromises);
+        const uploadJobs = [
+            { file: newProfilePicture, oldUrl: employee.profilePictureUrl, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
+            { file: newIdProofDocumentFront, oldUrl: employee.idProofDocumentUrlFront || employee.idProofDocumentUrl, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdProofDocumentFront?.name.split('.').pop()}`, key: 'idProofDocumentUrlFront', isImage: newIdProofDocumentFront?.type.startsWith("image/") ?? false },
+            { file: newIdProofDocumentBack, oldUrl: employee.idProofDocumentUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdProofDocumentBack?.name.split('.').pop()}`, key: 'idProofDocumentUrlBack', isImage: newIdProofDocumentBack?.type.startsWith("image/") ?? false },
+            { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
+            { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
+        ];
+
+        for (const job of uploadJobs) {
+            await uploadAndSetUrl(job.file, job.oldUrl, job.path, job.key as any, job.isImage);
+        }
 
         const formPayload: Record<string, any> = {};
         const original = employee;
@@ -715,11 +691,9 @@ export default function AdminEmployeeProfilePage() {
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
-        // If a new front image was uploaded AND a legacy URL exists, we should remove the legacy field.
         if (updatedUrls.idProofDocumentUrlFront && employee.idProofDocumentUrl) {
             finalPayload.idProofDocumentUrl = deleteField();
         }
-
 
         if (Object.keys(finalPayload).length > 0) {
             finalPayload.updatedAt = serverTimestamp();
