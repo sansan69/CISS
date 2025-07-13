@@ -84,6 +84,8 @@ export default function LandingPage() {
         description = "The phone number is not valid.";
       } else if (error.code === 'auth/captcha-check-failed' || error.code === 'auth/firebase-app-check-token-is-invalid') {
           description = "Verification failed. Please ensure your domain is authorized in your reCAPTCHA & Firebase settings."
+      } else if (error.code === 'auth/argument-error') {
+          description = "Verification is required. App Check might be misconfigured. Check console for details."
       }
       toast({ variant: "destructive", title: "OTP Send Failed", description });
     } finally {
@@ -274,5 +276,3 @@ export default function LandingPage() {
     </div>
   );
 }
-
-    
