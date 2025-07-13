@@ -6,15 +6,14 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud, Loader2, KeyRound } from 'lucide-react';
+import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -25,17 +24,11 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-// The RecaptchaVerifier is no longer managed manually here.
-// The Firebase SDK with App Check will handle verification automatically.
-
 export default function LandingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [showOtpInput, setShowOtpInput] = useState(false);
   
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -55,64 +48,20 @@ export default function LandingPage() {
       setDeferredPrompt(null);
     });
   };
-
-  const handleSendOtp = async () => {
-    let normalizedPhoneNumber = phoneNumber.trim();
-    if (!/^\d{10}$/.test(normalizedPhoneNumber.replace(/\D/g, ''))) {
+  
+  const handleContinue = async () => {
+    const normalizedPhoneNumber = phoneNumber.trim().replace(/\D/g, '');
+    if (!/^\d{10}$/.test(normalizedPhoneNumber)) {
       toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit phone number." });
       return;
     }
-    const fullPhoneNumber = `+91${normalizedPhoneNumber.replace(/\D/g, '')}`;
 
     setIsLoading(true);
-    toast({ title: "Sending OTP...", description: "Please wait." });
-    
-    try {
-      // The Firebase SDK with App Check will handle verification automatically.
-      // We no longer need to manually create a RecaptchaVerifier here.
-      // The third argument (appVerifier) is intentionally omitted.
-      const result = await signInWithPhoneNumber(auth, fullPhoneNumber);
-      setConfirmationResult(result);
-      setShowOtpInput(true);
-      toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
-    } catch (error: any) {
-      console.error("Error sending OTP:", error);
-      let description = "Could not send OTP. Please check the phone number and try again.";
-      if (error.code === 'auth/too-many-requests') {
-        description = "Too many requests. Please wait a while before trying again. Ensure App Check is enforced in Firebase.";
-      } else if (error.code === 'auth/invalid-phone-number') {
-        description = "The phone number is not valid.";
-      } else if (error.code === 'auth/captcha-check-failed' || error.code === 'auth/firebase-app-check-token-is-invalid') {
-          description = "Verification failed. Please ensure your domain is authorized in your reCAPTCHA & Firebase settings."
-      } else if (error.code === 'auth/argument-error') {
-          description = "Verification is required. App Check might be misconfigured. Check console for details."
-      }
-      toast({ variant: "destructive", title: "OTP Send Failed", description });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otp || otp.length !== 6) {
-      toast({ variant: "destructive", title: "Invalid OTP", description: "Please enter the 6-digit OTP." });
-      return;
-    }
-    if (!confirmationResult) {
-      toast({ variant: "destructive", title: "Verification Failed", description: "Could not verify OTP. Please try again." });
-      return;
-    }
-
-    setIsLoading(true);
-    toast({ title: "Verifying OTP...", description: "Please wait." });
+    toast({ title: "Checking Your Status...", description: "Please wait." });
 
     try {
-      await confirmationResult.confirm(otp);
-      toast({ title: "OTP Verified!", description: "Checking for existing registration..." });
-      
-      const verifiedPhoneNumber = phoneNumber.replace(/\D/g, '');
       const employeesRef = collection(db, "employees");
-      const q = query(employeesRef, where("phoneNumber", "==", verifiedPhoneNumber));
+      const q = query(employeesRef, where("phoneNumber", "==", normalizedPhoneNumber));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
@@ -121,18 +70,15 @@ export default function LandingPage() {
         router.push(`/profile/${employeeDoc.id}`);
       } else {
         toast({ title: "New User Detected", description: "Redirecting to enrollment page." });
-        router.push(`/enroll?phone=${verifiedPhoneNumber}`);
+        router.push(`/enroll?phone=${normalizedPhoneNumber}`);
       }
-
     } catch (error: any) {
-      console.error("Error verifying OTP:", error);
-      let description = "Failed to verify OTP. Please check the code and try again.";
-      if (error.code === 'auth/invalid-verification-code') {
-        description = "The OTP you entered is invalid. Please try again.";
-      } else if (error.code === 'auth/code-expired') {
-        description = "The OTP has expired. Please request a new one.";
+      console.error("Error checking employee status:", error);
+      let description = "Could not check your status. Please try again later.";
+      if (error.code === 'permission-denied') {
+        description = "Permission denied. Please contact an administrator.";
       }
-      toast({ variant: "destructive", title: "Verification Failed", description });
+      toast({ variant: "destructive", title: "An Error Occurred", description });
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +86,6 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
-      {/* The reCAPTCHA container is no longer needed here as App Check works invisibly */}
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
           <Sun className="h-6 w-6" />
@@ -174,79 +119,42 @@ export default function LandingPage() {
         </Alert>
       )}
 
-      {!showOtpInput && (
-        <p className="max-w-xl text-center text-muted-foreground mb-10">
-          Welcome to CISS Workforce. Please enter your mobile number to log in or register.
-          An OTP will be sent for verification.
-        </p>
-      )}
+      <p className="max-w-xl text-center text-muted-foreground mb-10">
+        Welcome to CISS Workforce. Please enter your mobile number to view your profile or to register.
+      </p>
 
       <Card className="w-full max-w-md shadow-2xl bg-card">
         <CardHeader>
           <CardTitle className="text-2xl text-center text-card-foreground">
-            {showOtpInput ? 'Verify Your Number' : 'Employee Login'}
+            Employee Access
           </CardTitle>
-          {showOtpInput && (
-            <CardDescription className="text-center">
-              An OTP has been sent to +91 {phoneNumber}.
-            </CardDescription>
-          )}
+          <CardDescription className="text-center">
+            Enter your 10-digit mobile number.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-            {!showOtpInput ? (
+            <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                type="tel"
+                placeholder="Enter your 10-digit number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="pl-10 text-base"
+                maxLength={10}
+                disabled={isLoading}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleContinue(); }}
+                />
+            </div>
+            <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading}>
+                {isLoading ? (
                 <>
-                    <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input
-                        type="tel"
-                        placeholder="Enter your 10-digit number"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="pl-10 text-base"
-                        maxLength={10}
-                        disabled={isLoading}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleSendOtp(); }}
-                        />
-                    </div>
-                    <Button onClick={handleSendOtp} className="w-full text-base py-3" variant="default" disabled={isLoading}>
-                        {isLoading ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...
-                        </>
-                        ) : (
-                        "Send OTP"
-                        )}
-                    </Button>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking...
                 </>
-            ) : (
-                 <>
-                    <div className="relative">
-                        <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input
-                        type="tel"
-                        placeholder="Enter 6-digit OTP"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        className="pl-10 text-base"
-                        maxLength={6}
-                        disabled={isLoading}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyOtp(); }}
-                        />
-                    </div>
-                    <Button onClick={handleVerifyOtp} className="w-full text-base py-3" variant="default" disabled={isLoading}>
-                        {isLoading ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...
-                        </>
-                        ) : (
-                        "Verify & Continue"
-                        )}
-                    </Button>
-                    <Button variant="link" size="sm" onClick={() => setShowOtpInput(false)} disabled={isLoading}>
-                        Change Number
-                    </Button>
-                </>
-            )}
+                ) : (
+                "Continue"
+                )}
+            </Button>
         </CardContent>
       </Card>
 
