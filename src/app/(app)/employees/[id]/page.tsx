@@ -394,7 +394,7 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
           <div><div className="border-t border-gray-400 pt-2">Signature of Security Guard</div></div>
           <div><div className="border-t border-gray-400 pt-2">Date</div></div>
           <div className="col-span-2 mt-6">
-            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName.toUpperCase()}</span></div>
+            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></div>
           </div>
         </div>
       </section>
@@ -836,19 +836,6 @@ export default function AdminEmployeeProfilePage() {
             const pagesToRender = [];
             pagesToRender.push(biodataPageRef.current);
             if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
-
-            const idFrontUrl = employee.idProofDocumentUrlFront || employee.idProofDocumentUrl;
-            const idBackUrl = employee.idProofDocumentUrlBack;
-
-            if (idFrontUrl && idBackUrl) {
-                pagesToRender.push(combinedIdPageRef.current);
-            } else if (idFrontUrl) {
-                pagesToRender.push(idFrontPageRef.current);
-            } else if (idBackUrl) {
-                pagesToRender.push(idBackPageRef.current);
-            }
-
-            if (employee.bankPassbookStatementUrl) pagesToRender.push(bankDocPageRef.current);
             pagesToRender.push(termsPageRef.current);
 
             for (const pageElement of pagesToRender.filter(Boolean)) {
