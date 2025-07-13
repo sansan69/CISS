@@ -14,7 +14,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
+import { signInWithPhoneNumber, RecaptchaVerifier, type ConfirmationResult } from "firebase/auth";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -23,6 +23,12 @@ interface BeforeInstallPromptEvent extends Event {
     platform: string
   }>;
   prompt(): Promise<void>;
+}
+
+declare global {
+    interface Window {
+        recaptchaVerifier?: RecaptchaVerifier;
+    }
 }
 
 export default function LandingPage() {
@@ -45,6 +51,23 @@ export default function LandingPage() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  const setupRecaptcha = () => {
+    if (window.recaptchaVerifier) return window.recaptchaVerifier;
+    
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      'size': 'invisible',
+      'callback': (response: any) => {
+        // reCAPTCHA solved, allow signInWithPhoneNumber.
+      },
+      'expired-callback': () => {
+        // Response expired. Ask user to solve reCAPTCHA again.
+        toast({ variant: "destructive", title: "reCAPTCHA Expired", description: "Please try sending the OTP again." });
+      }
+    });
+    window.recaptchaVerifier = verifier;
+    return verifier;
+  };
+
   const handleInstallClick = () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -65,9 +88,8 @@ export default function LandingPage() {
     toast({ title: "Sending OTP...", description: "Please wait." });
     
     try {
-      // The Firebase SDK will automatically use App Check if it's initialized.
-      // We pass the `auth` instance, and no longer need to pass a manual verifier.
-      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, (window as any).recaptchaVerifier);
+      const appVerifier = setupRecaptcha();
+      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
       toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
@@ -132,7 +154,6 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
-      {/* This container is used by Firebase for the invisible reCAPTCHA */}
       <div id="recaptcha-container"></div>
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
