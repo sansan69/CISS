@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { type Employee } from '@/types/employee';
@@ -16,6 +16,197 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+
+// #region PDF Generation Components
+
+const pageStyle: React.CSSProperties = {
+  width: '210mm',
+  minHeight: '297mm',
+  padding: '15mm',
+  backgroundColor: 'white',
+  color: 'black',
+  fontFamily: 'Arial, sans-serif',
+  display: 'flex',
+  flexDirection: 'column',
+  position: 'relative',
+  boxSizing: 'border-box'
+};
+
+const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
+  <footer style={{
+    position: 'absolute',
+    bottom: '10mm',
+    left: '15mm',
+    right: '15mm',
+    textAlign: 'center',
+    fontSize: '9px',
+    color: '#666',
+    borderTop: '1px solid #ccc',
+    paddingTop: '5px'
+  }}>
+    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "PPP")}
+  </footer>
+);
+
+
+const DetailGridItem = ({ label, value }: { label: string; value?: string | number | null }) => (
+  <div>
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="font-medium text-gray-800">{value || 'N/A'}</p>
+  </div>
+);
+
+const formatDate = (date: any) => {
+  if (!date) return 'N/A';
+  const dateObj = date.toDate ? date.toDate() : new Date(date);
+  if (isNaN(dateObj.getTime())) return 'N/A';
+  return format(dateObj, "PPP");
+};
+
+const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
+  <div ref={ref} style={pageStyle}>
+    <header className="flex justify-between items-start pb-4 border-b border-gray-300">
+      <div className="flex items-center gap-4">
+        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
+        <div>
+          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{employee.fullName}</h1>
+          <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
+          <p className="text-gray-600">Client: {employee.clientName}</p>
+        </div>
+      </div>
+      {employee.profilePictureUrl && (
+        <Image 
+            src={employee.profilePictureUrl} 
+            alt={employee.fullName || 'Profile photo'} 
+            width={100} 
+            height={120} 
+            className="rounded-lg border-2 border-gray-200 object-contain p-1 bg-gray-50" 
+            crossOrigin="anonymous" 
+            unoptimized={true}
+            data-ai-hint="profile photo" 
+        />
+      )}
+    </header>
+
+    <main className="flex-grow mt-8 space-y-8 text-sm">
+      <section>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <DetailGridItem label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+          <DetailGridItem label="Gender" value={employee.gender} />
+          <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
+          <DetailGridItem label="Father's Name" value={employee.fatherName} />
+          <DetailGridItem label="Mother's Name" value={employee.motherName} />
+          {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={employee.spouseName} />}
+          <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
+          <DetailGridItem label="Email Address" value={employee.emailAddress} />
+          <DetailGridItem label="District" value={employee.district} />
+          <div className="col-span-3">
+            <DetailGridItem label="Full Address" value={employee.fullAddress} />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <DetailGridItem label="Joining Date" value={formatDate(employee.joiningDate)} />
+          <DetailGridItem label="Status" value={employee.status} />
+          {employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}
+          <DetailGridItem label="PAN Number" value={employee.panNumber} />
+          <DetailGridItem label="EPF/UAN Number" value={employee.epfUanNumber} />
+          <DetailGridItem label="ESIC Number" value={employee.esicNumber} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <DetailGridItem label="Bank Name" value={employee.bankName} />
+          <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
+          <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
+          <DetailGridItem label="ID Proof Type" value={employee.idProofType} />
+          <DetailGridItem label="ID Proof Number" value={employee.idProofNumber} />
+        </div>
+      </section>
+    </main>
+    <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+BiodataPage.displayName = 'BiodataPage';
+
+
+const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
+  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
+    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
+    <p className="mb-2 text-lg">{employee.fullName}</p>
+    <p className="mb-8 text-gray-600">{employee.employeeId}</p>
+    <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
+      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} data-ai-hint="qr code" />
+    </div>
+    <div className="mt-8 text-gray-600 max-w-md">
+      <p className="font-semibold mb-2">Instructions:</p>
+      <p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p>
+    </div>
+    <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+QrPage.displayName = 'QrPage';
+
+const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => {
+  const companyName = "CISS Services Ltd.";
+  return (
+    <div ref={ref} style={pageStyle}>
+      <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment</h1>
+      <div className="space-y-3 text-xs text-justify flex-grow">
+        <section>
+          <h2 className="text-sm font-bold mb-1">I. General Eligibility and Compliance</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
+            <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
+            <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
+            <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
+          </ul>
+        </section>
+        <section>
+          <h2 className="text-sm font-bold mb-1">II. Employment Terms & Responsibilities</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
+            <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
+            <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
+            <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
+            <li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li>
+          </ul>
+        </section>
+        <section>
+          <h2 className="text-sm font-bold mb-1">III. Disciplinary Action</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
+            <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
+          </ul>
+        </section>
+      </div>
+      <section className="mt-8 pt-6 border-t-2 border-dashed border-gray-400">
+        <h2 className="text-base font-bold text-center mb-4">IV. Declaration</h2>
+        <p className="text-sm mb-6 text-justify">
+          I, <strong>{employee.fullName}</strong>, son/daughter of <strong>{employee.fatherName}</strong>, residing at {employee.fullAddress}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
+        </p>
+        <div className="grid grid-cols-2 gap-12 mt-12 text-sm">
+          <div><div className="border-t border-gray-400 pt-2">Signature of Security Guard</div></div>
+          <div><div className="border-t border-gray-400 pt-2">Date</div></div>
+          <div className="col-span-2 mt-6">
+            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></div>
+          </div>
+        </div>
+      </section>
+      <PageFooter pageNumber={pageNumber} />
+    </div>
+  );
+});
+TermsPage.displayName = 'TermsPage';
+
+// #endregion
+
 
 const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean }> = ({ label, value, isDate }) => {
   let displayValue = 'N/A';
@@ -72,6 +263,11 @@ export default function PublicEmployeeProfilePage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const biodataPageRef = useRef<HTMLDivElement>(null);
+  const qrPageRef = useRef<HTMLDivElement>(null);
+  const termsPageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -124,10 +320,90 @@ export default function PublicEmployeeProfilePage() {
       default: return 'outline';
     }
   };
+
+  const handleDownloadProfile = async () => {
+    if (!employee) return;
+    setIsDownloadingPdf(true);
+    toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    let pageCount = 0;
+
+    const addPageToPdf = async (element: HTMLElement | null) => {
+        if (!element) return;
+        pageCount++;
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        
+        if (pageCount > 1) {
+            pdf.addPage();
+        }
+        
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasAspectRatio = canvas.width / canvas.height;
+        const pageAspectRatio = pdfWidth / pdfHeight;
+        let finalWidth, finalHeight;
+        
+        if (canvasAspectRatio > pageAspectRatio) {
+            finalWidth = pdfWidth;
+            finalHeight = pdfWidth / canvasAspectRatio;
+        } else {
+            finalHeight = pdfHeight;
+            finalWidth = pdfHeight * canvasAspectRatio;
+        }
+
+        const xOffset = (pdfWidth - finalWidth) / 2;
+        const yOffset = (pdfHeight - finalHeight) / 2;
+        
+        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
+    };
+
+    try {
+        const pagesToRender = [];
+        pagesToRender.push(biodataPageRef.current);
+        if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
+        pagesToRender.push(termsPageRef.current);
+
+        for (const pageElement of pagesToRender.filter(Boolean)) {
+            await addPageToPdf(pageElement);
+        }
+
+        pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
+        toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
+    } catch (error: any) {
+        console.error("Error generating PDF:", error);
+        toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
+    } finally {
+        setIsDownloadingPdf(false);
+    }
+  };
+
+  const renderOffscreenPages = () => {
+    if (!employee) return null;
+
+    const pages = [];
+    let pageNumber = 1;
+
+    pages.push(<BiodataPage key={`page-${pageNumber}`} ref={biodataPageRef} employee={employee} pageNumber={pageNumber++} />);
+    
+    if (employee.qrCodeUrl) {
+      pages.push(<QrPage key={`page-${pageNumber}`} ref={qrPageRef} employee={employee} pageNumber={pageNumber++} />);
+    }
+
+    pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
+
+    return pages;
+  };
   
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
+      <div className="flex justify-center items-center h-[calc(100vh-100px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg text-muted-foreground">Loading employee profile...</p>
       </div>
@@ -165,126 +441,135 @@ export default function PublicEmployeeProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
-      <div className="mb-4">
-        <Button variant="outline" size="sm" onClick={() => router.push('/')}>
-          <Home className="mr-2 h-4 w-4" /> Back to Home
-        </Button>
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <Image
-            src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
-            alt={employee.fullName || 'Employee profile picture'}
-            width={100}
-            height={100}
-            className="rounded-full border-4 border-primary shadow-md object-cover"
-            data-ai-hint="profile picture"
-          />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{employee.fullName}</h1>
-            <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
-            <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
-          </div>
+    <>
+        <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
+            {renderOffscreenPages()}
         </div>
-      </div>
+        <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+            <Button variant="outline" size="sm" onClick={() => router.push('/')}>
+            <Home className="mr-2 h-4 w-4" /> Back to Home
+            </Button>
+            <Button onClick={handleDownloadProfile} variant="outline" className="w-full sm:w-auto" disabled={isDownloadingPdf}>
+                {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Download Profile Kit
+            </Button>
+        </div>
 
-      <Tabs defaultValue="personal">
-        <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
-          <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
-          <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
-          <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 hidden md:inline-block" />Identification</TabsTrigger>
-          <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 hidden md:inline-block" />QR & Docs</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex items-center gap-4">
+            <Image
+                src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
+                alt={employee.fullName || 'Employee profile picture'}
+                width={100}
+                height={100}
+                className="rounded-full border-4 border-primary shadow-md object-cover"
+                data-ai-hint="profile picture"
+            />
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">{employee.fullName}</h1>
+                <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
+                <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
+            </div>
+            </div>
+        </div>
 
-        <Card className="mt-4">
-          <CardContent className="pt-6">
-            <TabsContent value="personal">
-              <CardTitle className="mb-4">Personal Information</CardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                <DetailItem label="First Name" value={employee.firstName} />
-                <DetailItem label="Last Name" value={employee.lastName} />
-                <DetailItem label="Date of Birth" value={employee.dateOfBirth} isDate />
-                <DetailItem label="Gender" value={employee.gender} />
-                <DetailItem label="Father's Name" value={employee.fatherName} />
-                <DetailItem label="Mother's Name" value={employee.motherName} />
-                <DetailItem label="Marital Status" value={employee.maritalStatus} />
-                {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} />}
-                <DetailItem label="District" value={employee.district} />
-              </div>
-              <Separator className="my-6" />
-              <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                <DetailItem label="Phone Number" value={employee.phoneNumber} />
-                <DetailItem label="Email Address" value={employee.emailAddress} />
-                 <div className="md:col-span-2">
-                    <DetailItem label="Full Address" value={employee.fullAddress} />
-                 </div>
-              </div>
-            </TabsContent>
+        <Tabs defaultValue="personal">
+            <TabsList className="h-auto flex-wrap justify-start">
+            <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
+            <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
+            <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
+            <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 hidden md:inline-block" />Identification</TabsTrigger>
+            <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 hidden md:inline-block" />QR & Docs</TabsTrigger>
+            </TabsList>
 
-            <TabsContent value="employment">
-              <CardTitle className="mb-4">Employment Details</CardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                <DetailItem label="Employee ID" value={employee.employeeId} />
-                <DetailItem label="Client Name" value={employee.clientName} />
-                {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
-                <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
-                <DetailItem label="Status" value={employee.status} />
-                {employee.status === 'Exited' && employee.exitDate && (
-                    <DetailItem label="Exit Date" value={employee.exitDate} isDate />
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="bank">
-              <CardTitle className="mb-4">Bank Account Details</CardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                <DetailItem label="Bank Name" value={employee.bankName} />
-                <DetailItem label="Account Number" value={employee.bankAccountNumber} />
-                <DetailItem label="IFSC Code" value={employee.ifscCode} />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="identification">
-              <CardTitle className="mb-4">Identification Details</CardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                <DetailItem label="PAN Number" value={employee.panNumber} />
-                <DetailItem label="ID Proof Type" value={employee.idProofType} />
-                <DetailItem label="ID Proof Number" value={employee.idProofNumber} />
-                <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
-                <DetailItem label="ESIC Number" value={employee.esicNumber} />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="qr">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <CardTitle className="mb-4">Employee QR Code</CardTitle>
-                    <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
-                        {employee.qrCodeUrl ? (
-                            <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
-                        ) : (
-                            <p className="text-muted-foreground">QR Code not available.</p>
-                        )}
+            <Card className="mt-4">
+            <CardContent className="pt-6">
+                <TabsContent value="personal">
+                <CardTitle className="mb-4">Personal Information</CardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="First Name" value={employee.firstName} />
+                    <DetailItem label="Last Name" value={employee.lastName} />
+                    <DetailItem label="Date of Birth" value={employee.dateOfBirth} isDate />
+                    <DetailItem label="Gender" value={employee.gender} />
+                    <DetailItem label="Father's Name" value={employee.fatherName} />
+                    <DetailItem label="Mother's Name" value={employee.motherName} />
+                    <DetailItem label="Marital Status" value={employee.maritalStatus} />
+                    {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} />}
+                    <DetailItem label="District" value={employee.district} />
+                </div>
+                <Separator className="my-6" />
+                <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Phone Number" value={employee.phoneNumber} />
+                    <DetailItem label="Email Address" value={employee.emailAddress} />
+                    <div className="md:col-span-2">
+                        <DetailItem label="Full Address" value={employee.fullAddress} />
                     </div>
                 </div>
-                <div>
-                    <CardTitle className="mb-4">Uploaded Documents</CardTitle>
-                    <div className="space-y-3">
-                        <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                        <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
-                        <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
-                        <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                </TabsContent>
+
+                <TabsContent value="employment">
+                <CardTitle className="mb-4">Employment Details</CardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Employee ID" value={employee.employeeId} />
+                    <DetailItem label="Client Name" value={employee.clientName} />
+                    {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
+                    <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
+                    <DetailItem label="Status" value={employee.status} />
+                    {employee.status === 'Exited' && employee.exitDate && (
+                        <DetailItem label="Exit Date" value={employee.exitDate} isDate />
+                    )}
+                </div>
+                </TabsContent>
+
+                <TabsContent value="bank">
+                <CardTitle className="mb-4">Bank Account Details</CardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Bank Name" value={employee.bankName} />
+                    <DetailItem label="Account Number" value={employee.bankAccountNumber} />
+                    <DetailItem label="IFSC Code" value={employee.ifscCode} />
+                </div>
+                </TabsContent>
+
+                <TabsContent value="identification">
+                <CardTitle className="mb-4">Identification Details</CardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="PAN Number" value={employee.panNumber} />
+                    <DetailItem label="ID Proof Type" value={employee.idProofType} />
+                    <DetailItem label="ID Proof Number" value={employee.idProofNumber} />
+                    <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
+                    <DetailItem label="ESIC Number" value={employee.esicNumber} />
+                </div>
+                </TabsContent>
+
+                <TabsContent value="qr">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <CardTitle className="mb-4">Employee QR Code</CardTitle>
+                        <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
+                            {employee.qrCodeUrl ? (
+                                <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
+                            ) : (
+                                <p className="text-muted-foreground">QR Code not available.</p>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <CardTitle className="mb-4">Uploaded Documents</CardTitle>
+                        <div className="space-y-3">
+                            <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
+                            <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                        </div>
                     </div>
                 </div>
-              </div>
-            </TabsContent>
-          </CardContent>
-        </Card>
-      </Tabs>
-    </div>
+                </TabsContent>
+            </CardContent>
+            </Card>
+        </Tabs>
+        </div>
+    </>
   );
 }
