@@ -1,5 +1,5 @@
 
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
 import PwaLoader from '@/components/pwa-loader';
@@ -32,7 +32,6 @@ export const metadata: Metadata = {
     'msapplication-TileColor': '#3F51B5',
     'msapplication-tap-highlight': 'no',
   },
-  themeColor: '#3F51B5',
   icons: {
     icon: [
       { url: '/ciss-logo.png', sizes: 'any', type: 'image/png' },
@@ -42,6 +41,10 @@ export const metadata: Metadata = {
     ],
     shortcut: ['/ciss-logo.png'],
   }
+};
+
+export const viewport: Viewport = {
+  themeColor: '#3F51B5',
 };
 
 export default function RootLayout({

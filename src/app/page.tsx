@@ -60,24 +60,32 @@ export default function LandingPage() {
   };
 
   const setupRecaptcha = () => {
-    // Check if verifier already exists to avoid re-creating it on every call
     if (window.recaptchaVerifier) {
+      // If verifier exists, ensure it's rendered. This can help re-render if needed.
+      window.recaptchaVerifier.render();
       return window.recaptchaVerifier;
     }
+
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
       'callback': (response: any) => {
         // reCAPTCHA solved, allow signInWithPhoneNumber.
+        // This callback is usually executed when the user clicks the sign-in button.
       },
       'expired-callback': () => {
         // Response expired. Ask user to solve reCAPTCHA again.
         toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try sending the OTP again.' });
+        // It might be useful to reset the verifier here.
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+        }
       }
     });
+
     window.recaptchaVerifier = verifier;
     return verifier;
   };
-  
+
   const handleSendOtp = async () => {
     setIsLoading(true);
     const normalizedPhoneNumber = phoneNumber.trim().replace(/\D/g, '');
@@ -86,7 +94,7 @@ export default function LandingPage() {
       setIsLoading(false);
       return;
     }
-
+  
     try {
       const fullPhoneNumber = `+91${normalizedPhoneNumber}`;
       const appVerifier = setupRecaptcha();
@@ -135,6 +143,7 @@ export default function LandingPage() {
         description = "The verification code is invalid. Please check and try again.";
       }
       toast({ variant: "destructive", title: "Verification Failed", description });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -154,7 +163,7 @@ export default function LandingPage() {
             src="/ciss-logo.png"
             alt="CISS Workforce Logo"
             width={80}
-            height={80}
+            height="auto"
             unoptimized={true}
             data-ai-hint="company logo"
             className="mx-auto"
