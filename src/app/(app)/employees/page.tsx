@@ -54,8 +54,8 @@ export default function EmployeeDirectoryPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [firstVisibleDoc, setFirstVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+
   const [isTableLoading, setIsTableLoading] = useState(false);
   
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -67,8 +67,6 @@ export default function EmployeeDirectoryPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
 
 
   const fetchClients = useCallback(async () => {
@@ -88,17 +86,17 @@ export default function EmployeeDirectoryPage() {
   
   const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
-
+    
+    // IMPORTANT: Always have a consistent base sort order.
+    // When searching by ID, override to sort by ID. Otherwise, sort by creation date.
     if (searchTerm.trim() !== '') {
         const searchTermUpper = searchTerm.trim().toUpperCase();
-        // When searching, sort by employeeId is the most logical
         q = query(q, 
           where('employeeId', '>=', searchTermUpper), 
           where('employeeId', '<=', searchTermUpper + '\uf8ff'),
           orderBy('employeeId', 'asc')
         );
     } else {
-        // Default sort order: newest first
         q = query(q, orderBy('createdAt', 'desc'));
     }
 
@@ -147,11 +145,8 @@ export default function EmployeeDirectoryPage() {
         setEmployees(fetchedEmployees);
       
         const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+        setLastVisibleDoc(newLastVisible);
 
-        if (page > currentPage) {
-            setPageHistory(prev => [...prev, newLastVisible]);
-        }
-      
     } catch (err: any) {
       console.error("Error fetching employees:", err);
       let message = err.message || "Failed to fetch employees.";
@@ -166,11 +161,12 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, currentPage]); 
+  }, [toast, buildBaseQuery]); 
 
   const handleFilterOrSearch = useCallback(() => {
     setCurrentPage(1); 
     setPageHistory([null]);
+    setLastVisibleDoc(null);
     fetchEmployees(1, null);
   }, [fetchEmployees]);
   
@@ -182,11 +178,11 @@ export default function EmployeeDirectoryPage() {
   
 
   const handleNextPage = () => {
-    if (employees.length < ITEMS_PER_PAGE) return; // No more pages
+    if (!lastVisibleDoc) return; // Can't go next if there's no last doc
 
     const nextPage = currentPage + 1;
-    const lastDoc = pageHistory[pageHistory.length - 1];
-    fetchEmployees(nextPage, lastDoc);
+    setPageHistory(prev => [...prev, lastVisibleDoc]);
+    fetchEmployees(nextPage, lastVisibleDoc);
     setCurrentPage(nextPage);
   };
 
@@ -249,13 +245,8 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      setEmployees(prevEmployees => 
-        prevEmployees.map(emp => 
-          emp.id === selectedEmployeeForStatusChange.id 
-          ? {...emp, status: newStatus, exitDate: newStatus === 'Exited' && exitDate ? exitDate.toISOString() : undefined, updatedAt: new Date().toISOString() } 
-          : emp
-        )
-      );
+      // Refetch current page to show updated data
+      fetchEmployees(currentPage, pageHistory[currentPage - 1]);
       
       setIsStatusModalOpen(false);
       setSelectedEmployeeForStatusChange(null);
@@ -299,12 +290,14 @@ export default function EmployeeDirectoryPage() {
             }
           } catch (fileError: any) {
             console.error(`Failed to delete file ${fileUrl}:`, fileError);
-            toast({
-              variant: "destructive",
-              title: "File Deletion Warning",
-              description: `Could not delete file ${fileUrl.split('/').pop()?.split('?')[0]}. You may need to remove it manually from Firebase Storage.`,
-              duration: 7000,
-            });
+            if (fileError.code !== 'storage/object-not-found') {
+              toast({
+                variant: "destructive",
+                title: "File Deletion Warning",
+                description: `Could not delete file ${fileUrl.split('/').pop()?.split('?')[0]}. You may need to remove it manually from Firebase Storage.`,
+                duration: 7000,
+              });
+            }
           }
         }
       }
