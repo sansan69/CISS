@@ -60,22 +60,25 @@ export default function LandingPage() {
   };
 
   const setupRecaptcha = () => {
+    // Only create a new verifier if one doesn't exist
     if (window.recaptchaVerifier) {
-      // If verifier exists, ensure it's rendered. This can help re-render if needed.
-      window.recaptchaVerifier.render();
       return window.recaptchaVerifier;
+    }
+
+    // Ensure the container exists before initializing.
+    const recaptchaContainer = document.getElementById('recaptcha-container');
+    if (!recaptchaContainer) {
+      console.error("reCAPTCHA container not found");
+      return null;
     }
 
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
       'callback': (response: any) => {
         // reCAPTCHA solved, allow signInWithPhoneNumber.
-        // This callback is usually executed when the user clicks the sign-in button.
       },
       'expired-callback': () => {
-        // Response expired. Ask user to solve reCAPTCHA again.
         toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try sending the OTP again.' });
-        // It might be useful to reset the verifier here.
         if (window.recaptchaVerifier) {
             window.recaptchaVerifier.clear();
         }
@@ -98,6 +101,9 @@ export default function LandingPage() {
     try {
       const fullPhoneNumber = `+91${normalizedPhoneNumber}`;
       const appVerifier = setupRecaptcha();
+      if (!appVerifier) {
+        throw new Error("reCAPTCHA Verifier could not be initialized.");
+      }
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
@@ -121,7 +127,6 @@ export default function LandingPage() {
     setIsLoading(true);
     try {
       const userCredential = await confirmationResult.confirm(otp);
-      // User signed in successfully.
       const user = userCredential.user;
       toast({ title: "Verification Successful", description: "Checking your registration status..." });
 
@@ -163,7 +168,7 @@ export default function LandingPage() {
             src="/ciss-logo.png"
             alt="CISS Workforce Logo"
             width={80}
-            height="auto"
+            height={80}
             unoptimized={true}
             data-ai-hint="company logo"
             className="mx-auto"
