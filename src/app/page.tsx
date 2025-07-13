@@ -68,7 +68,7 @@ export default function LandingPage() {
   
   useEffect(() => {
     // Initialize RecaptchaVerifier only on the client-side after the component has mounted.
-    // This ensures the 'recaptcha-container' div exists.
+    // This ensures the 'recaptcha-container' div exists and prevents the "cannot read properties of null" error.
     setupRecaptcha();
   }, []);
 
@@ -107,9 +107,13 @@ export default function LandingPage() {
         description = "Too many requests. Please try again later.";
       }
       toast({ variant: "destructive", title: "An Error Occurred", description });
-      window.recaptchaVerifier?.render().then(widgetId => {
-        window.grecaptcha.reset(widgetId);
-      });
+      // Reset reCAPTCHA widget if it exists and an error occurs
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.render().then(widgetId => {
+          // @ts-ignore - grecaptcha is available on window when reCAPTCHA is loaded
+          grecaptcha.reset(widgetId);
+        });
+      }
     } finally {
       setIsLoading(false);
     }
