@@ -88,19 +88,15 @@ export default function EmployeeDirectoryPage() {
   
   const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
-    let appliedFilters = false;
 
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
-      appliedFilters = true;
     }
     if (filterStatus !== 'all') {
       q = query(q, where('status', '==', filterStatus));
-      appliedFilters = true;
     }
     if (filterDistrict !== 'all') {
       q = query(q, where('district', '==', filterDistrict));
-      appliedFilters = true;
     }
     
     // IMPORTANT: Conditional ordering to prevent index errors
@@ -112,11 +108,7 @@ export default function EmployeeDirectoryPage() {
           where('employeeId', '<=', searchTermUpper + '\uf8ff'),
           orderBy('employeeId', 'asc')
         );
-    } else {
-        // For all other cases, sort by creation date descending (newest first)
-        // This requires composite indexes if combined with filters.
-        q = query(q, orderBy('createdAt', 'desc'));
-    }
+    } 
 
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
@@ -184,20 +176,19 @@ export default function EmployeeDirectoryPage() {
     }
   }, [toast, buildBaseQuery, lastVisibleDoc, firstVisibleDoc]); 
 
-  useEffect(() => {
-    fetchClients();
-    fetchEmployees();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  
-  // This effect resets pagination and fetches data when filters change
   const handleFilterOrSearch = useCallback(() => {
     setCurrentPage(1); 
     setLastVisibleDoc(null); 
     setFirstVisibleDoc(null);
     fetchEmployees();
   }, [fetchEmployees]);
-
+  
+  useEffect(() => {
+    fetchClients();
+    handleFilterOrSearch();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
 
   const handleNextPage = () => {
     if (hasMoreNext) {
@@ -298,6 +289,7 @@ export default function EmployeeDirectoryPage() {
         employeeToDelete.idProofDocumentUrlFront,
         employeeToDelete.idProofDocumentUrlBack,
         employeeToDelete.bankPassbookStatementUrl,
+        employeeToDelete.policeClearanceCertificateUrl,
       ];
 
       for (const fileUrl of filesToDelete) {
