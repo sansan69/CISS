@@ -14,7 +14,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
+import { signInWithPhoneNumber, RecaptchaVerifier, type ConfirmationResult } from "firebase/auth";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -25,9 +25,6 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-// The RecaptchaVerifier is no longer managed manually here.
-// The Firebase SDK with App Check will handle verification automatically.
-
 export default function LandingPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -36,7 +33,8 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
-  
+  const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
+
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
@@ -48,6 +46,27 @@ export default function LandingPage() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // Effect to set up reCAPTCHA verifier on component mount
+  useEffect(() => {
+    try {
+      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response: any) => {
+          // reCAPTCHA solved, allow signInWithPhoneNumber.
+        },
+        'expired-callback': () => {
+          // Response expired. Ask user to solve reCAPTCHA again.
+          toast({ variant: "destructive", title: "reCAPTCHA Expired", description: "Please try sending the OTP again." });
+        }
+      });
+      setRecaptchaVerifier(verifier);
+    } catch (error) {
+        console.error("Error creating RecaptchaVerifier:", error);
+        toast({ variant: "destructive", title: "Verification Error", description: "Could not initialize security verification. Please refresh the page." });
+    }
+  }, []);
+
+
   const handleInstallClick = () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -57,6 +76,11 @@ export default function LandingPage() {
   };
 
   const handleSendOtp = async () => {
+    if (!recaptchaVerifier) {
+      toast({ variant: "destructive", title: "Verification Not Ready", description: "Security verification is not ready. Please wait a moment and try again." });
+      return;
+    }
+    
     let normalizedPhoneNumber = phoneNumber.trim();
     if (!/^\d{10}$/.test(normalizedPhoneNumber.replace(/\D/g, ''))) {
       toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit phone number." });
@@ -68,10 +92,8 @@ export default function LandingPage() {
     toast({ title: "Sending OTP...", description: "Please wait." });
     
     try {
-      // The Firebase SDK with App Check will handle verification automatically.
-      // We no longer need to manually create a RecaptchaVerifier here.
-      // The third argument (appVerifier) is intentionally omitted.
-      const result = await signInWithPhoneNumber(auth, fullPhoneNumber);
+      const appVerifier = recaptchaVerifier;
+      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
       toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
@@ -79,7 +101,7 @@ export default function LandingPage() {
       console.error("Error sending OTP:", error);
       let description = "Could not send OTP. Please check the phone number and try again.";
       if (error.code === 'auth/too-many-requests') {
-        description = "Too many requests. Please wait a while before trying again. Ensure App Check is enforced in Firebase.";
+        description = "Too many requests. Please wait a while before trying again.";
       } else if (error.code === 'auth/invalid-phone-number') {
         description = "The phone number is not valid.";
       } else if (error.code === 'auth/captcha-check-failed' || error.code === 'auth/firebase-app-check-token-is-invalid') {
@@ -138,7 +160,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
-      {/* The reCAPTCHA container is no longer needed here as App Check works invisibly */}
+      <div id="recaptcha-container"></div>
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
           <Sun className="h-6 w-6" />
@@ -274,3 +296,5 @@ export default function LandingPage() {
     </div>
   );
 }
+
+    
