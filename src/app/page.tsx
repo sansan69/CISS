@@ -33,7 +33,8 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
-  const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
+  
+  // No need to manage recaptchaVerifier in state. It's tied to the window object.
 
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -45,26 +46,28 @@ export default function LandingPage() {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
-
+  
   // Effect to set up reCAPTCHA verifier on component mount
   useEffect(() => {
-    try {
-      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': (response: any) => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
-        },
-        'expired-callback': () => {
-          // Response expired. Ask user to solve reCAPTCHA again.
-          toast({ variant: "destructive", title: "reCAPTCHA Expired", description: "Please try sending the OTP again." });
-        }
-      });
-      setRecaptchaVerifier(verifier);
-    } catch (error) {
-        console.error("Error creating RecaptchaVerifier:", error);
-        toast({ variant: "destructive", title: "Verification Error", description: "Could not initialize security verification. Please refresh the page." });
+    if (!(window as any).recaptchaVerifier) {
+      try {
+        (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            'size': 'invisible',
+            'callback': (response: any) => {
+              // reCAPTCHA solved, allow signInWithPhoneNumber.
+              // This is often used for auto-verification on page load.
+            },
+            'expired-callback': () => {
+              // Response expired. User needs to solve reCAPTCHA again.
+              toast({ variant: "destructive", title: "reCAPTCHA Expired", description: "Please try sending the OTP again." });
+            }
+        });
+      } catch (error) {
+          console.error("Error creating RecaptchaVerifier:", error);
+          toast({ variant: "destructive", title: "Verification Error", description: "Could not initialize security verification. Please refresh the page." });
+      }
     }
-  }, []);
+  }, [toast]);
 
 
   const handleInstallClick = () => {
@@ -76,7 +79,8 @@ export default function LandingPage() {
   };
 
   const handleSendOtp = async () => {
-    if (!recaptchaVerifier) {
+    const appVerifier = (window as any).recaptchaVerifier;
+    if (!appVerifier) {
       toast({ variant: "destructive", title: "Verification Not Ready", description: "Security verification is not ready. Please wait a moment and try again." });
       return;
     }
@@ -92,7 +96,6 @@ export default function LandingPage() {
     toast({ title: "Sending OTP...", description: "Please wait." });
     
     try {
-      const appVerifier = recaptchaVerifier;
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
@@ -296,5 +299,3 @@ export default function LandingPage() {
     </div>
   );
 }
-
-    
