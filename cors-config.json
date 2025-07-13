@@ -6,6 +6,7 @@
       "https://cisskerala.vercel.app",
       "https://ciss-kerala.vercel.app",
       "https://cisskerala.site"
+      "https://ciss-irxegwvz7-sansan69s-projects.vercel.app/"
     ],
     "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
