@@ -21,10 +21,10 @@ const firebaseConfig = {
 };
 
 // Diagnostic log to check if environment variables are loaded correctly
-console.log("--- Firebase Config Check ---");
-console.log("Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-console.log("API Key Loaded:", !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-console.log("--------------------------");
+// console.log("--- Firebase Config Check ---");
+// console.log("Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+// console.log("API Key Loaded:", !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+// console.log("--------------------------");
 
 
 // Initialize Firebase
@@ -40,10 +40,15 @@ if (!getApps().length) {
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
-  const appCheck = initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY as string),
-    isTokenAutoRefreshEnabled: true
-  });
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY;
+  if (siteKey) {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(siteKey),
+      isTokenAutoRefreshEnabled: true
+    });
+  } else {
+    console.warn("Firebase App Check is not initialized. NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY is missing. This is expected for local development but required for production.");
+  }
 }
 
 
