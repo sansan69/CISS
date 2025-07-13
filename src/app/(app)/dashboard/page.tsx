@@ -4,7 +4,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, CheckCircle, AlertTriangle, Clock, Loader2, AlertCircle as AlertIcon, UserMinus, UserCheck } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from "recharts";
 import React, { useEffect, useState } from "react";
 import { db } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp } from "firebase/firestore";
@@ -24,7 +24,7 @@ const THEME_CHART_COLORS = [
 interface ClientDistributionData {
   name: string;
   value: number;
-  color: string;
+  fill: string;
 }
 
 interface DashboardStats {
@@ -127,7 +127,7 @@ export default function DashboardPage() {
       return Object.entries(countsByClient).map(([name, value], index) => ({
         name,
         value,
-        color: THEME_CHART_COLORS[index % THEME_CHART_COLORS.length],
+        fill: THEME_CHART_COLORS[index % THEME_CHART_COLORS.length],
       }));
   };
   
@@ -164,6 +164,11 @@ export default function DashboardPage() {
   const newHiresChartConfig = {
       hires: { label: "New Hires", color: "hsl(var(--chart-1))" },
   };
+
+  const clientChartConfig = clientDistribution.reduce((acc, client) => {
+    acc[client.name] = { label: client.name, color: client.fill };
+    return acc;
+  }, {} as any);
 
 
   return (
@@ -211,7 +216,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inactive & Exited</CardTitle>
+            <CardTitle className="text-sm font-medium">Inactive &amp; Exited</CardTitle>
             <UserMinus className="h-5 w-5 text-destructive" />
           </CardHeader>
           <CardContent>
@@ -261,12 +266,14 @@ export default function DashboardPage() {
              ) : (
                 <ChartContainer config={newHiresChartConfig} className="h-full w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={newHiresData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                    <BarChart data={newHiresData} margin={{ top: 20, right: 20, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false}/>
                       <XAxis dataKey="month" tickLine={false} axisLine={false} />
                       <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
                       <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar dataKey="hires" fill="var(--color-hires)" radius={4} />
+                      <Bar dataKey="hires" fill="var(--color-hires)" radius={4}>
+                        <LabelList dataKey="hires" position="top" offset={5} className="fill-foreground text-xs"/>
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
@@ -293,22 +300,34 @@ export default function DashboardPage() {
             ) : clientDistribution.length === 0 ? (
                 <p className="text-muted-foreground">No client data available.</p>
             ) : (
-                <ChartContainer config={{}} className="h-full w-full max-w-[300px]">
+                <ChartContainer config={clientChartConfig} className="h-full w-full max-w-[350px] aspect-square">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                    <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
                     <Pie
                         data={clientDistribution}
                         dataKey="value"
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        outerRadius={100}
+                        outerRadius={120}
+                        innerRadius={50}
                         labelLine={false}
-                        label={({ name, percent, value }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                        label={({ name, percent, value, x, y }) => (
+                           <text
+                                x={x}
+                                y={y}
+                                textAnchor={x > 175 ? "start" : "end"} // 175 is half of 350 (container width)
+                                dominantBaseline="central"
+                                fill="hsl(var(--foreground))"
+                                fontSize={12}
+                            >
+                              {`${name} (${(percent * 100).toFixed(0)}%)`}
+                            </text>
+                        )}
                     >
                         {clientDistribution.map((entry) => (
-                        <Cell key={`cell-${entry.name}`} fill={entry.color} />
+                          <Cell key={`cell-${entry.name}`} fill={entry.fill} />
                         ))}
                     </Pie>
                     <ChartLegend content={<ChartLegendContent nameKey="name" />} />
