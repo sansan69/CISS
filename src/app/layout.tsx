@@ -23,7 +23,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'default',
     title: 'CISS Workforce',
-    // startupImage: [...] // You can add startup images here
   },
   formatDetection: {
     telephone: false,
@@ -36,16 +35,12 @@ export const metadata: Metadata = {
   themeColor: '#3F51B5',
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
-      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
-      { url: '/icons/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/icons/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/ciss-logo.png', sizes: 'any', type: 'image/png' },
     ],
     apple: [
-      { url: '/icons/apple-touch-icon.png', sizes: '180x180' },
+      { url: '/ciss-logo.png', sizes: '180x180' },
     ],
-    shortcut: ['/favicon.ico'],
+    shortcut: ['/ciss-logo.png'],
   }
 };
 

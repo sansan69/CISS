@@ -2,7 +2,8 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage"; // Added
+import { getStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import dotenv from 'dotenv';
 
 // Explicitly load environment variables from .env file to ensure they are available.
@@ -36,6 +37,15 @@ if (!getApps().length) {
 } else {
   app = getApp();
 }
+
+// Initialize App Check
+if (typeof window !== 'undefined') {
+  const appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY as string),
+    isTokenAutoRefreshEnabled: true
+  });
+}
+
 
 const auth = getAuth(app);
 const db = getFirestore(app);
