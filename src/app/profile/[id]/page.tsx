@@ -172,7 +172,7 @@ export default function PublicEmployeeProfilePage() {
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Image
             src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
@@ -191,7 +191,7 @@ export default function PublicEmployeeProfilePage() {
       </div>
 
       <Tabs defaultValue="personal">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2">
+        <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
           <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
           <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
