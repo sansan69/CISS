@@ -52,19 +52,23 @@ export default function LandingPage() {
   }, []);
 
   const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': () => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
-        },
-      });
+    // Check if the verifier is already initialized to avoid re-creating it on every render.
+    if (window.recaptchaVerifier) {
+      return window.recaptchaVerifier;
     }
-    return window.recaptchaVerifier;
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      'size': 'invisible',
+      'callback': () => {
+        // reCAPTCHA solved, allow signInWithPhoneNumber.
+      },
+    });
+    window.recaptchaVerifier = verifier;
+    return verifier;
   };
   
   useEffect(() => {
-    // Initialize RecaptchaVerifier when the component mounts
+    // Initialize RecaptchaVerifier only on the client-side after the component has mounted.
+    // This ensures the 'recaptcha-container' div exists.
     setupRecaptcha();
   }, []);
 
