@@ -88,28 +88,35 @@ export default function EmployeeDirectoryPage() {
   
   const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
+    let appliedFilters = false;
 
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
+      appliedFilters = true;
     }
     if (filterStatus !== 'all') {
       q = query(q, where('status', '==', filterStatus));
+      appliedFilters = true;
     }
     if (filterDistrict !== 'all') {
       q = query(q, where('district', '==', filterDistrict));
+      appliedFilters = true;
     }
     
     // IMPORTANT: Conditional ordering to prevent index errors
     if (searchTerm.trim() !== '') {
         const searchTermUpper = searchTerm.trim().toUpperCase();
+        // When searching, sort by employeeId is the most logical
         q = query(q, 
           where('employeeId', '>=', searchTermUpper), 
           where('employeeId', '<=', searchTermUpper + '\uf8ff'),
-          orderBy('employeeId', 'asc') // Sort by employeeId when searching
+          orderBy('employeeId', 'asc')
         );
-    } 
-    // NOTE: Default 'orderBy' was removed to prevent index-related crashes.
-    // The default view is now unsorted but stable with filters.
+    } else {
+        // For all other cases, sort by creation date descending (newest first)
+        // This requires composite indexes if combined with filters.
+        q = query(q, orderBy('createdAt', 'desc'));
+    }
 
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
