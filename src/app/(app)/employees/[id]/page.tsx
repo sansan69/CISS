@@ -84,9 +84,17 @@ const employeeUpdateSchema = z.object({
 });
 type EmployeeUpdateValues = z.infer<typeof employeeUpdateSchema>;
 
+const toTitleCase = (str: string | null | undefined): string => {
+    if (!str) return '';
+    if (str.includes('@')) return str.toLowerCase(); // Keep emails lowercase
+    if (str.toUpperCase() === str) { // Likely an all-caps address
+        return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+    }
+    return str.replace(/\b\w/g, char => char.toUpperCase());
+};
 
-const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean }> = ({ label, value, isDate }) => {
-  let displayValue = 'N/A';
+const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean; isName?: boolean; isAddress?: boolean }> = ({ label, value, isDate, isName, isAddress }) => {
+  let displayValue: string | number = 'N/A';
   if (value !== null && value !== undefined) {
     if (value instanceof Timestamp) {
       displayValue = format(value.toDate(), "PPP");
@@ -98,6 +106,9 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
        }
     } else {
       displayValue = String(value);
+      if (isName || isAddress) {
+          displayValue = toTitleCase(displayValue);
+      }
     }
   }
   return (
@@ -223,7 +234,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <div className="flex items-center gap-4">
         <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
         <div>
-          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{employee.fullName}</h1>
+          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{toTitleCase(employee.fullName)}</h1>
           <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
           <p className="text-gray-600">Client: {employee.clientName}</p>
         </div>
@@ -249,14 +260,14 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
           <DetailGridItem label="Gender" value={employee.gender} />
           <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
-          <DetailGridItem label="Father's Name" value={employee.fatherName} />
-          <DetailGridItem label="Mother's Name" value={employee.motherName} />
-          {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={employee.spouseName} />}
+          <DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} />
+          <DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />
+          {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}
           <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
-          <DetailGridItem label="Email Address" value={employee.emailAddress} />
-          <DetailGridItem label="District" value={employee.district} />
+          <DetailGridItem label="Email Address" value={employee.emailAddress.toLowerCase()} />
+          <DetailGridItem label="District" value={toTitleCase(employee.district)} />
           <div className="col-span-3">
-            <DetailGridItem label="Full Address" value={employee.fullAddress} />
+            <DetailGridItem label="Full Address" value={toTitleCase(employee.fullAddress)} />
           </div>
         </div>
       </section>
@@ -276,7 +287,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <section>
         <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Bank Name" value={employee.bankName} />
+          <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
           <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
           <DetailGridItem label="ID Proof Type" value={employee.idProofType} />
@@ -293,7 +304,7 @@ BiodataPage.displayName = 'BiodataPage';
 const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
   <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
     <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
-    <p className="mb-2 text-lg">{employee.fullName}</p>
+    <p className="mb-2 text-lg">{toTitleCase(employee.fullName)}</p>
     <p className="mb-8 text-gray-600">{employee.employeeId}</p>
     <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
       <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} data-ai-hint="qr code" />
@@ -340,7 +351,7 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
       <section className="mt-8 pt-6 border-t-2 border-dashed border-gray-400">
         <h2 className="text-base font-bold text-center mb-4">IV. Declaration</h2>
         <p className="text-sm mb-6 text-justify">
-          I, <strong>{employee.fullName}</strong>, son/daughter of <strong>{employee.fatherName}</strong>, residing at {employee.fullAddress}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
+          I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
         </p>
         <div className="grid grid-cols-2 gap-12 mt-12 text-sm">
           <div><div className="border-t border-gray-400 pt-2">Signature of Security Guard</div></div>
@@ -953,7 +964,7 @@ export default function AdminEmployeeProfilePage() {
               data-ai-hint="profile picture"
             />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">{employee.fullName}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
               <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
               <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
             </div>
@@ -985,15 +996,15 @@ export default function AdminEmployeeProfilePage() {
                 <TabsContent value="personal">
                   <CardTitle className="mb-4">Personal Information</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <DetailItem label="First Name" value={employee.firstName} />
-                    <DetailItem label="Last Name" value={employee.lastName} />
+                    <DetailItem label="First Name" value={employee.firstName} isName />
+                    <DetailItem label="Last Name" value={employee.lastName} isName />
                     <DetailItem label="Date of Birth" value={employee.dateOfBirth} isDate />
                     <DetailItem label="Gender" value={employee.gender} />
-                    <DetailItem label="Father's Name" value={employee.fatherName} />
-                    <DetailItem label="Mother's Name" value={employee.motherName} />
+                    <DetailItem label="Father's Name" value={employee.fatherName} isName />
+                    <DetailItem label="Mother's Name" value={employee.motherName} isName />
                     <DetailItem label="Marital Status" value={employee.maritalStatus} />
-                    {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} />}
-                    <DetailItem label="District" value={employee.district} />
+                    {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} isName />}
+                    <DetailItem label="District" value={employee.district} isName />
                   </div>
                   <Separator className="my-6" />
                   <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
@@ -1001,7 +1012,7 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="Phone Number" value={employee.phoneNumber} />
                     <DetailItem label="Email Address" value={employee.emailAddress} />
                      <div className="md:col-span-2">
-                        <DetailItem label="Full Address" value={employee.fullAddress} />
+                        <DetailItem label="Full Address" value={employee.fullAddress} isAddress />
                      </div>
                   </div>
                 </TabsContent>
@@ -1035,7 +1046,7 @@ export default function AdminEmployeeProfilePage() {
                             )}
                         </span>
                     </div>
-                    <DetailItem label="Client Name" value={employee.clientName} />
+                    <DetailItem label="Client Name" value={employee.clientName} isName />
                     {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
                     <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
                     <DetailItem label="Status" value={employee.status} />
@@ -1047,7 +1058,7 @@ export default function AdminEmployeeProfilePage() {
                 <TabsContent value="bank">
                   <CardTitle className="mb-4">Bank Account Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <DetailItem label="Bank Name" value={employee.bankName} />
+                    <DetailItem label="Bank Name" value={employee.bankName} isName />
                     <DetailItem label="Account Number" value={employee.bankAccountNumber} />
                     <DetailItem label="IFSC Code" value={employee.ifscCode} />
                   </div>
