@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'CISS Workforce',
   description: 'CISS Workforce Employee Management System',
-  manifest: '/manifest.json',
+  // manifest: '/manifest.json', // Removed to prevent 404s on icons within it
   applicationName: 'CISS Workforce',
   appleWebApp: {
     capable: true,
