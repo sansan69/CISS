@@ -33,7 +33,6 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
-  const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
   
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -43,27 +42,7 @@ export default function LandingPage() {
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
     window.addEventListener('beforeinstallprompt', handler);
-
-    // Setup reCAPTCHA verifier once the component mounts
-    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      'size': 'invisible',
-      'callback': (response: any) => {
-        // reCAPTCHA solved, allow signInWithPhoneNumber.
-        // This callback is usually executed automatically for invisible reCAPTCHA.
-      },
-      'expired-callback': () => {
-        // Response expired. Ask user to solve reCAPTCHA again.
-        toast({ variant: "destructive", title: "Verification Expired", description: "Please try sending the OTP again." });
-      }
-    });
-
-    setRecaptchaVerifier(verifier);
-    
-    // Cleanup on unmount
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-      verifier.clear();
-    };
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallClick = () => {
@@ -73,6 +52,24 @@ export default function LandingPage() {
       setDeferredPrompt(null);
     });
   };
+  
+  const setupRecaptcha = () => {
+    // Ensure window.recaptchaVerifier is not already set
+    if (window.recaptchaVerifier) {
+      return window.recaptchaVerifier;
+    }
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response: any) => {
+          // reCAPTCHA solved, allow signInWithPhoneNumber.
+        },
+        'expired-callback': () => {
+           toast({ variant: "destructive", title: "reCAPTCHA Expired", description: "Please try sending the OTP again." });
+        }
+    });
+    window.recaptchaVerifier = verifier;
+    return verifier;
+  }
 
   const handleSendOtp = async () => {
     let normalizedPhoneNumber = phoneNumber.trim();
@@ -80,18 +77,14 @@ export default function LandingPage() {
       toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit phone number." });
       return;
     }
-    if (!recaptchaVerifier) {
-      toast({ variant: "destructive", title: "Verification Not Ready", description: "reCAPTCHA is not initialized. Please wait a moment and try again." });
-      return;
-    }
-
+    
     const fullPhoneNumber = `+91${normalizedPhoneNumber.replace(/\D/g, '')}`;
 
     setIsLoading(true);
     toast({ title: "Sending OTP...", description: "Please wait." });
     
     try {
-      const appVerifier = recaptchaVerifier;
+      const appVerifier = setupRecaptcha();
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
@@ -105,6 +98,8 @@ export default function LandingPage() {
         description = "The phone number is not valid.";
       } else if (error.code === 'auth/captcha-check-failed') {
           description = "Verification failed. Please ensure your domain is authorized in your reCAPTCHA settings."
+      } else if (error.code === 'auth/argument-error') {
+          description = "Verification is required. The reCAPTCHA verifier may not be ready."
       }
       toast({ variant: "destructive", title: "OTP Send Failed", description });
     } finally {
@@ -159,9 +154,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
-      {/* This div is required for the invisible reCAPTCHA to work */}
       <div id="recaptcha-container"></div>
-
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
           <Sun className="h-6 w-6" />
@@ -296,4 +289,11 @@ export default function LandingPage() {
       </footer>
     </div>
   );
+}
+
+// Extend the Window interface to include our custom property
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+  }
 }

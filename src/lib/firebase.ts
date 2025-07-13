@@ -3,7 +3,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+// App Check is no longer initialized here to avoid conflicts with manual RecaptchaVerifier
 import dotenv from 'dotenv';
 
 // Explicitly load environment variables from .env file to ensure they are available.
@@ -38,18 +38,8 @@ if (!getApps().length) {
   app = getApp();
 }
 
-// Initialize App Check
-if (typeof window !== 'undefined') {
-  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY;
-  if (siteKey) {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(siteKey),
-      isTokenAutoRefreshEnabled: true
-    });
-  } else {
-    console.warn("Firebase App Check is not initialized. NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY is missing. This is expected for local development but required for production.");
-  }
-}
+// App Check initialization has been removed from this file.
+// The landing page will now use a manual RecaptchaVerifier for phone authentication.
 
 
 const auth = getAuth(app);
