@@ -30,11 +30,9 @@ if (!getApps().length) {
   app = getApp();
 }
 
-// NOTE: Programmatic App Check initialization is removed from the client-side.
-// When App Check is ENFORCED in the Firebase console, the backend services are protected.
-// For phone authentication on the web, a manual RecaptchaVerifier is now the sole
-// method of verification to prevent token conflicts. This is handled on the page (`/src/app/page.tsx`)
-// where phone sign-in is initiated.
+// NOTE: Client-side App Check has been removed to resolve conflicts with the manual
+// RecaptchaVerifier used for phone authentication. The backend services remain
+// protected by App Check enforcement in the Firebase console.
 
 const auth = getAuth(app);
 const db = getFirestore(app);

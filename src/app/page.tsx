@@ -52,7 +52,7 @@ export default function LandingPage() {
   }, []);
 
   const setupRecaptcha = () => {
-    // Check if the verifier is already initialized to avoid re-creating it on every render.
+    // This function must be called only after the component has mounted.
     if (window.recaptchaVerifier) {
       return window.recaptchaVerifier;
     }
@@ -68,7 +68,7 @@ export default function LandingPage() {
   
   useEffect(() => {
     // Initialize RecaptchaVerifier only on the client-side after the component has mounted.
-    // This ensures the 'recaptcha-container' div exists and prevents the "cannot read properties of null" error.
+    // This ensures the 'recaptcha-container' div exists and prevents startup errors.
     setupRecaptcha();
   }, []);
 
