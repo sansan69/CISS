@@ -57,7 +57,6 @@ export default function EmployeeDirectoryPage() {
   const [firstVisibleDoc, setFirstVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   
   const [isTableLoading, setIsTableLoading] = useState(false);
-  const [hasMoreNext, setHasMoreNext] = useState(true);
   
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -69,7 +68,8 @@ export default function EmployeeDirectoryPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const hasMorePrev = currentPage > 1;
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+
 
   const fetchClients = useCallback(async () => {
     try {
@@ -89,6 +89,19 @@ export default function EmployeeDirectoryPage() {
   const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
 
+    if (searchTerm.trim() !== '') {
+        const searchTermUpper = searchTerm.trim().toUpperCase();
+        // When searching, sort by employeeId is the most logical
+        q = query(q, 
+          where('employeeId', '>=', searchTermUpper), 
+          where('employeeId', '<=', searchTermUpper + '\uf8ff'),
+          orderBy('employeeId', 'asc')
+        );
+    } else {
+        // Default sort order: newest first
+        q = query(q, orderBy('createdAt', 'desc'));
+    }
+
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
     }
@@ -99,66 +112,45 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('district', '==', filterDistrict));
     }
     
-    // IMPORTANT: Conditional ordering to prevent index errors
-    if (searchTerm.trim() !== '') {
-        const searchTermUpper = searchTerm.trim().toUpperCase();
-        // When searching, sort by employeeId is the most logical
-        q = query(q, 
-          where('employeeId', '>=', searchTermUpper), 
-          where('employeeId', '<=', searchTermUpper + '\uf8ff'),
-          orderBy('employeeId', 'asc')
-        );
-    } 
-
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
-  const fetchEmployees = useCallback(async (direction?: 'next' | 'prev') => {
+  const fetchEmployees = useCallback(async (page: number, startAfterDoc: QueryDocumentSnapshot<DocumentData> | null) => {
     setIsTableLoading(true);
     setError(null);
 
     try {
-      const baseQuery = buildBaseQuery();
-      let finalQuery: Query<DocumentData>;
+        const baseQuery = buildBaseQuery();
+        let finalQuery: Query<DocumentData>;
 
-      if (direction === 'next' && lastVisibleDoc) {
-          finalQuery = query(baseQuery, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
-      } else if (direction === 'prev' && firstVisibleDoc) {
-          finalQuery = query(baseQuery, endBefore(firstVisibleDoc), limitToLast(ITEMS_PER_PAGE));
-      } else { // This handles the initial load and filter resets
-          finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-      }
+        if (startAfterDoc) {
+            finalQuery = query(baseQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
+        } else {
+            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+        }
 
-      const documentSnapshots = await getDocs(finalQuery);
+        const documentSnapshots = await getDocs(finalQuery);
       
-      const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-            id: docSnap.id,
-            ...data,
-            joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
-            dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
-            exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-        } as Employee;
-      });
+        const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                ...data,
+                joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
+                dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
+                exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            } as Employee;
+        });
       
-      setEmployees(fetchedEmployees);
+        setEmployees(fetchedEmployees);
       
-      const currentFirstDoc = documentSnapshots.docs[0] || null;
-      const currentLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+        const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
 
-      setFirstVisibleDoc(currentFirstDoc);
-      setLastVisibleDoc(currentLastDoc);
-      
-      if (currentLastDoc) {
-          const nextCheckQuery = query(baseQuery, startAfter(currentLastDoc), limit(1));
-          const nextSnapshot = await getDocs(nextCheckQuery);
-          setHasMoreNext(!nextSnapshot.empty);
-      } else {
-          setHasMoreNext(false);
-      }
+        if (page > currentPage) {
+            setPageHistory(prev => [...prev, newLastVisible]);
+        }
       
     } catch (err: any) {
       console.error("Error fetching employees:", err);
@@ -166,7 +158,7 @@ export default function EmployeeDirectoryPage() {
       if (err.code === 'permission-denied') {
         message = "Permission denied. Please check your Firestore security rules to ensure authenticated users can list employees.";
       } else if (err.code === 'failed-precondition') {
-        message = "A required database index is missing. This is expected when using new filter combinations for the first time. Please check the browser's developer console for a link to create the index in your Firebase project.";
+        message = "A required database index is missing. This is expected when using new filter combinations. Please check the browser's developer console for a link to create the required index in your Firebase project. This change might take a few minutes to apply.";
       }
       setError(message);
       toast({ variant: "destructive", title: "Data Fetch Error", description: message, duration: 9000 });
@@ -174,13 +166,12 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, lastVisibleDoc, firstVisibleDoc]); 
+  }, [toast, buildBaseQuery, currentPage]); 
 
   const handleFilterOrSearch = useCallback(() => {
     setCurrentPage(1); 
-    setLastVisibleDoc(null); 
-    setFirstVisibleDoc(null);
-    fetchEmployees();
+    setPageHistory([null]);
+    fetchEmployees(1, null);
   }, [fetchEmployees]);
   
   useEffect(() => {
@@ -191,17 +182,24 @@ export default function EmployeeDirectoryPage() {
   
 
   const handleNextPage = () => {
-    if (hasMoreNext) {
-      setCurrentPage(prev => prev + 1);
-      fetchEmployees('next');
-    }
+    if (employees.length < ITEMS_PER_PAGE) return; // No more pages
+
+    const nextPage = currentPage + 1;
+    const lastDoc = pageHistory[pageHistory.length - 1];
+    fetchEmployees(nextPage, lastDoc);
+    setCurrentPage(nextPage);
   };
 
   const handlePreviousPage = () => {
-    if (hasMorePrev) {
-      setCurrentPage(prev => prev - 1);
-      fetchEmployees('prev');
-    }
+      if (currentPage === 1) return;
+
+      const prevPage = currentPage - 1;
+      const prevHistory = pageHistory.slice(0, -1);
+      const startAfterDoc = prevHistory[prevPage -1] ?? null;
+      
+      setPageHistory(prevHistory);
+      fetchEmployees(prevPage, startAfterDoc);
+      setCurrentPage(prevPage);
   };
 
 
@@ -540,18 +538,16 @@ export default function EmployeeDirectoryPage() {
                     variant="outline"
                     size="sm"
                     onClick={handlePreviousPage}
-                    disabled={isTableLoading || !hasMorePrev}
+                    disabled={isTableLoading || currentPage === 1}
                 >
-                    {isTableLoading && hasMorePrev ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                     Previous
                 </Button>
                 <Button
                     variant="outline"
                     size="sm"
                     onClick={handleNextPage}
-                    disabled={isTableLoading || !hasMoreNext}
+                    disabled={isTableLoading || employees.length < ITEMS_PER_PAGE}
                 >
-                    {isTableLoading && hasMoreNext ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                     Next
                 </Button>
                 </div>
