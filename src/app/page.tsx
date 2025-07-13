@@ -14,7 +14,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { signInWithPhoneNumber, RecaptchaVerifier, type ConfirmationResult } from "firebase/auth";
+import { signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -25,8 +25,8 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-// This state holds the RecaptchaVerifier instance.
-let recaptchaVerifier: RecaptchaVerifier | null = null;
+// The RecaptchaVerifier is no longer managed manually.
+// The Firebase SDK with App Check will handle verification automatically.
 
 export default function LandingPage() {
   const router = useRouter();
@@ -36,7 +36,6 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [showOtpInput, setShowOtpInput] = useState(false);
-  const [isRecaptchaReady, setIsRecaptchaReady] = useState(false);
   
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -48,52 +47,6 @@ export default function LandingPage() {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
-
-  // Effect to set up the RecaptchaVerifier after the component mounts
-  useEffect(() => {
-    // Only initialize once
-    if (recaptchaVerifier) {
-      setIsRecaptchaReady(true);
-      return;
-    }
-
-    // Delay to ensure the container is rendered
-    const timeoutId = setTimeout(() => {
-        try {
-            recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                'size': 'invisible',
-                'callback': () => {
-                    // reCAPTCHA solved, allow signInWithPhoneNumber.
-                    setIsRecaptchaReady(true);
-                },
-                'expired-callback': () => {
-                    // Response expired. Ask user to solve reCAPTCHA again.
-                    toast({ variant: "destructive", title: "Verification Expired", description: "Please try sending the OTP again." });
-                    recaptchaVerifier?.clear();
-                    setIsRecaptchaReady(false);
-                }
-            });
-            // This renders the reCAPTCHA widget.
-            recaptchaVerifier.render().then(() => {
-                setIsRecaptchaReady(true);
-            }).catch(error => {
-                console.error("reCAPTCHA render error:", error);
-                toast({ variant: "destructive", title: "Verification Error", description: "Could not initialize reCAPTCHA. Please refresh the page." });
-            });
-        } catch (error) {
-            console.error("Error creating RecaptchaVerifier:", error);
-            toast({ variant: "destructive", title: "Setup Failed", description: "Could not set up phone number verification." });
-        }
-    }, 100); // 100ms delay to be safe
-
-    // Cleanup on unmount
-    return () => {
-        clearTimeout(timeoutId);
-        recaptchaVerifier?.clear();
-        recaptchaVerifier = null;
-    };
-  }, [toast]);
-
 
   const handleInstallClick = () => {
     if (!deferredPrompt) return;
@@ -111,24 +64,21 @@ export default function LandingPage() {
     }
     const fullPhoneNumber = `+91${normalizedPhoneNumber.replace(/\D/g, '')}`;
 
-    if (!recaptchaVerifier) {
-        toast({ variant: "destructive", title: "Verification Not Ready", description: "Please wait a moment for the verification system to load." });
-        return;
-    }
-
     setIsLoading(true);
     toast({ title: "Sending OTP...", description: "Please wait." });
     
     try {
-      const appVerifier = recaptchaVerifier;
-      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
+      // The Firebase SDK with App Check will handle verification automatically.
+      // We no longer need to manually create a RecaptchaVerifier here.
+      // The third argument (appVerifier) is intentionally omitted.
+      const result = await signInWithPhoneNumber(auth, fullPhoneNumber);
       setConfirmationResult(result);
       setShowOtpInput(true);
       toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
     } catch (error: any) {
       console.error("Error sending OTP:", error);
       let description = "Could not send OTP. Please check the phone number and try again.";
-       if (error.code === 'auth/too-many-requests') {
+      if (error.code === 'auth/too-many-requests') {
         description = "Too many requests. Please wait a while before trying again. Ensure App Check is enforced in Firebase.";
       } else if (error.code === 'auth/invalid-phone-number') {
         description = "The phone number is not valid.";
@@ -190,8 +140,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
-      {/* This div is REQUIRED for the invisible reCAPTCHA to anchor itself. */}
-      <div id="recaptcha-container"></div>
+      {/* The reCAPTCHA container is no longer needed here as App Check works invisibly */}
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
           <Sun className="h-6 w-6" />
@@ -259,14 +208,10 @@ export default function LandingPage() {
                         onKeyDown={(e) => { if (e.key === 'Enter') handleSendOtp(); }}
                         />
                     </div>
-                    <Button onClick={handleSendOtp} className="w-full text-base py-3" variant="default" disabled={isLoading || !isRecaptchaReady}>
+                    <Button onClick={handleSendOtp} className="w-full text-base py-3" variant="default" disabled={isLoading}>
                         {isLoading ? (
                         <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...
-                        </>
-                        ) : !isRecaptchaReady ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Initializing...
                         </>
                         ) : (
                         "Send OTP"
