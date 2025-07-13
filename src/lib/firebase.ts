@@ -3,7 +3,6 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-// App Check is no longer initialized here to avoid conflicts with manual RecaptchaVerifier
 import dotenv from 'dotenv';
 
 // Explicitly load environment variables from .env file to ensure they are available.
@@ -20,13 +19,6 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
-// Diagnostic log to check if environment variables are loaded correctly
-// console.log("--- Firebase Config Check ---");
-// console.log("Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-// console.log("API Key Loaded:", !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-// console.log("--------------------------");
-
-
 // Initialize Firebase
 let app;
 if (!getApps().length) {
@@ -38,9 +30,11 @@ if (!getApps().length) {
   app = getApp();
 }
 
-// App Check initialization has been removed from this file.
-// The landing page will now use a manual RecaptchaVerifier for phone authentication.
-
+// NOTE: Programmatic App Check initialization is removed from the client-side.
+// When App Check is ENFORCED in the Firebase console, the backend services are protected.
+// For phone authentication on the web, a manual RecaptchaVerifier is now the sole
+// method of verification to prevent token conflicts. This is handled on the page (`/src/app/page.tsx`)
+// where phone sign-in is initiated.
 
 const auth = getAuth(app);
 const db = getFirestore(app);
