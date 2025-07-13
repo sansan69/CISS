@@ -6,14 +6,15 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud, Loader2 } from 'lucide-react';
+import { Phone, CalendarDays, QrCode, ChevronRight, Sun, HomeIcon, DownloadCloud, Loader2, KeyRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -28,7 +29,11 @@ export default function LandingPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
@@ -36,91 +41,108 @@ export default function LandingPage() {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
-
     window.addEventListener('beforeinstallprompt', handler);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-    };
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const handleInstallClick = () => {
-    if (!deferredPrompt) {
-      return;
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response: any) => {
+          // reCAPTCHA solved, allow signInWithPhoneNumber.
+          console.log("reCAPTCHA solved");
+        },
+        'expired-callback': () => {
+          // Response expired. Ask user to solve reCAPTCHA again.
+          toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try again.' });
+        }
+      });
     }
+  };
+
+  const handleInstallClick = () => {
+    if (!deferredPrompt) return;
     deferredPrompt.prompt();
     deferredPrompt.userChoice.then((choiceResult) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
-      }
       setDeferredPrompt(null);
     });
   };
 
-  const handleContinue = async () => {
+  const handleSendOtp = async () => {
     let normalizedPhoneNumber = phoneNumber.trim();
-
-    if (normalizedPhoneNumber.startsWith('+91')) {
-      normalizedPhoneNumber = normalizedPhoneNumber.substring(3);
-    } else if (normalizedPhoneNumber.startsWith('91')) {
-      normalizedPhoneNumber = normalizedPhoneNumber.substring(2);
+    if (!/^\d{10}$/.test(normalizedPhoneNumber.replace(/\D/g, ''))) {
+      toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit phone number." });
+      return;
     }
-    normalizedPhoneNumber = normalizedPhoneNumber.replace(/\D/g, '');
+    const fullPhoneNumber = `+91${normalizedPhoneNumber.replace(/\D/g, '')}`;
 
-    if (!/^\d{10}$/.test(normalizedPhoneNumber)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Phone Number",
-        description: "Please enter a valid 10-digit phone number.",
-      });
+    setIsLoading(true);
+    toast({ title: "Sending OTP...", description: "Please wait." });
+    
+    setupRecaptcha();
+    const appVerifier = window.recaptchaVerifier;
+
+    try {
+      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
+      setConfirmationResult(result);
+      setShowOtpInput(true);
+      toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
+    } catch (error: any) {
+      console.error("Error sending OTP:", error);
+      let description = "Could not send OTP. Please check the phone number and try again.";
+      if (error.code === 'auth/too-many-requests') {
+        description = "Too many requests. Please wait a while before trying again.";
+      } else if (error.code === 'auth/invalid-phone-number') {
+        description = "The phone number is not valid.";
+      }
+      toast({ variant: "destructive", title: "OTP Send Failed", description });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      toast({ variant: "destructive", title: "Invalid OTP", description: "Please enter the 6-digit OTP." });
+      return;
+    }
+    if (!confirmationResult) {
+      toast({ variant: "destructive", title: "Verification Failed", description: "Could not verify OTP. Please try again." });
       return;
     }
 
     setIsLoading(true);
-    toast({
-      title: "Searching...",
-      description: "Looking up employee details.",
-    });
+    toast({ title: "Verifying OTP...", description: "Please wait." });
 
     try {
+      await confirmationResult.confirm(otp);
+      toast({ title: "OTP Verified!", description: "Checking for existing registration..." });
+      
+      // Now that OTP is verified, check if user exists in Firestore
+      const verifiedPhoneNumber = phoneNumber.replace(/\D/g, '');
       const employeesRef = collection(db, "employees");
-      const q = query(employeesRef, where("phoneNumber", "==", normalizedPhoneNumber));
+      const q = query(employeesRef, where("phoneNumber", "==", verifiedPhoneNumber));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
         const employeeDoc = querySnapshot.docs[0];
-        const employeeData = employeeDoc.data() as Employee;
-        
-        toast({
-          title: "Employee Found",
-          description: `Welcome back, ${employeeData.fullName || employeeData.firstName}! Redirecting...`,
-        });
-        // Redirect to the new public profile page
+        toast({ title: "Employee Found", description: `Welcome back, ${employeeDoc.data().fullName}! Redirecting...` });
         router.push(`/profile/${employeeDoc.id}`);
       } else {
-        toast({
-          title: "New User Detected",
-          description: "This phone number is not registered. Redirecting to enrollment page.",
-        });
-        router.push(`/enroll?phone=${normalizedPhoneNumber}`);
+        toast({ title: "New User Detected", description: "Redirecting to enrollment page." });
+        router.push(`/enroll?phone=${verifiedPhoneNumber}`);
       }
+
     } catch (error: any) {
-      console.error("Error searching for employee:", error);
-      let description = "Could not perform search. Please check your network connection.";
-      
-      // Improved error detection for Firestore permissions
-      if (error.code === 'permission-denied') {
-        description = "This search is being blocked by your database security rules. Please update your Firestore rules to allow public 'list' access on the 'employees' collection for this feature to work.";
+      console.error("Error verifying OTP:", error);
+      let description = "Failed to verify OTP. Please check the code and try again.";
+      if (error.code === 'auth/invalid-verification-code') {
+        description = "The OTP you entered is invalid. Please try again.";
+      } else if (error.code === 'auth/code-expired') {
+        description = "The OTP has expired. Please request a new one.";
       }
-      
-      toast({
-        variant: "destructive",
-        title: "Search Error",
-        description: description,
-        duration: 10000, // Increased duration for this important message
-      });
+      toast({ variant: "destructive", title: "Verification Failed", description });
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +150,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
+      <div id="recaptcha-container"></div>
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
           <Sun className="h-6 w-6" />
@@ -161,39 +184,79 @@ export default function LandingPage() {
         </Alert>
       )}
 
-      <p className="max-w-xl text-center text-muted-foreground mb-10">
-        Welcome to CISS Workforce, a comprehensive solution for employee management and
-        attendance tracking. Our platform streamlines workforce operations with secure authentication,
-        real-time attendance monitoring, and centralized employee data management.
-      </p>
+      {!showOtpInput && (
+        <p className="max-w-xl text-center text-muted-foreground mb-10">
+          Welcome to CISS Workforce. Please enter your mobile number to log in or register.
+          An OTP will be sent for verification.
+        </p>
+      )}
 
       <Card className="w-full max-w-md shadow-2xl bg-card">
         <CardHeader>
-          <CardTitle className="text-2xl text-center text-card-foreground">Employee Login</CardTitle>
+          <CardTitle className="text-2xl text-center text-card-foreground">
+            {showOtpInput ? 'Verify Your Number' : 'Employee Login'}
+          </CardTitle>
+          {showOtpInput && (
+            <CardDescription className="text-center">
+              An OTP has been sent to +91 {phoneNumber}.
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="relative">
-            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              type="tel"
-              placeholder="Enter your phone number"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              className="pl-10 text-base"
-              maxLength={13} 
-              disabled={isLoading}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleContinue(); }}
-            />
-          </div>
-          <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching...
-              </>
+            {!showOtpInput ? (
+                <>
+                    <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Input
+                        type="tel"
+                        placeholder="Enter your 10-digit number"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="pl-10 text-base"
+                        maxLength={10}
+                        disabled={isLoading}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSendOtp(); }}
+                        />
+                    </div>
+                    <Button onClick={handleSendOtp} className="w-full text-base py-3" variant="default" disabled={isLoading}>
+                        {isLoading ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...
+                        </>
+                        ) : (
+                        "Send OTP"
+                        )}
+                    </Button>
+                </>
             ) : (
-              "Continue"
+                 <>
+                    <div className="relative">
+                        <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Input
+                        type="tel"
+                        placeholder="Enter 6-digit OTP"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        className="pl-10 text-base"
+                        maxLength={6}
+                        disabled={isLoading}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyOtp(); }}
+                        />
+                    </div>
+                    <Button onClick={handleVerifyOtp} className="w-full text-base py-3" variant="default" disabled={isLoading}>
+                        {isLoading ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...
+                        </>
+                        ) : (
+                        "Verify & Continue"
+                        )}
+                    </Button>
+                    <Button variant="link" size="sm" onClick={() => setShowOtpInput(false)} disabled={isLoading}>
+                        Change Number
+                    </Button>
+                </>
             )}
-          </Button>
         </CardContent>
       </Card>
 
