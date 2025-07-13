@@ -14,7 +14,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Employee } from '@/types/employee';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
+import { signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
@@ -45,22 +45,6 @@ export default function LandingPage() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': (response: any) => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
-          console.log("reCAPTCHA solved");
-        },
-        'expired-callback': () => {
-          // Response expired. Ask user to solve reCAPTCHA again.
-          toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try again.' });
-        }
-      });
-    }
-  };
-
   const handleInstallClick = () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -80,11 +64,10 @@ export default function LandingPage() {
     setIsLoading(true);
     toast({ title: "Sending OTP...", description: "Please wait." });
     
-    setupRecaptcha();
-    const appVerifier = window.recaptchaVerifier;
-
     try {
-      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
+      // The Firebase SDK will automatically use App Check if it's initialized.
+      // We pass the `auth` instance, and no longer need to pass a manual verifier.
+      const result = await signInWithPhoneNumber(auth, fullPhoneNumber, (window as any).recaptchaVerifier);
       setConfirmationResult(result);
       setShowOtpInput(true);
       toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
@@ -92,7 +75,7 @@ export default function LandingPage() {
       console.error("Error sending OTP:", error);
       let description = "Could not send OTP. Please check the phone number and try again.";
       if (error.code === 'auth/too-many-requests') {
-        description = "Too many requests. Please wait a while before trying again.";
+        description = "Too many requests. Please wait a while before trying again. Ensure App Check is enforced in Firebase.";
       } else if (error.code === 'auth/invalid-phone-number') {
         description = "The phone number is not valid.";
       }
@@ -119,7 +102,6 @@ export default function LandingPage() {
       await confirmationResult.confirm(otp);
       toast({ title: "OTP Verified!", description: "Checking for existing registration..." });
       
-      // Now that OTP is verified, check if user exists in Firestore
       const verifiedPhoneNumber = phoneNumber.replace(/\D/g, '');
       const employeesRef = collection(db, "employees");
       const q = query(employeesRef, where("phoneNumber", "==", verifiedPhoneNumber));
@@ -150,6 +132,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
+      {/* This container is used by Firebase for the invisible reCAPTCHA */}
       <div id="recaptcha-container"></div>
       <div className="absolute top-4 right-4">
         <Button variant="ghost" size="icon" onClick={() => alert("Theme toggle functionality to be implemented")} title="Toggle theme">
