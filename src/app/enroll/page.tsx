@@ -402,190 +402,123 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
-    toast({ title: "Processing Registration...", description: "Please wait. Initializing submission..." });
+    toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
 
-    let profilePictureUrl: string | null = null;
-    let idProofDocumentUrlFront: string | null = null;
-    let idProofDocumentUrlBack: string | null = null;
-    let bankPassbookStatementUrl: string | null = null;
-    let policeClearanceCertificateUrl: string | null = null;
+    const phoneNumber = data.phoneNumber.replace(/\D/g, "");
+    const fullName = `${data.firstName} ${data.lastName}`;
+    const uploadedUrls: { [key: string]: string | null } = {
+        profilePictureUrl: null,
+        idProofDocumentUrlFront: null,
+        idProofDocumentUrlBack: null,
+        bankPassbookStatementUrl: null,
+        policeClearanceCertificateUrl: null,
+    };
 
     try {
-      const uploadPromises = [];
-      const phoneNumber = data.phoneNumber.replace(/\D/g, "");
-      const fullName = `${data.firstName} ${data.lastName}`;
+        toast({ title: "Generating Unique IDs...", description: "Creating Employee ID and QR code." });
+        const newEmployeeId = generateEmployeeId(data.clientName);
+        const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
+        toast({ title: "IDs Generated", description: "Employee ID and QR code created successfully." });
 
-      toast({ title: "Generating Unique IDs...", description: "Creating Employee ID and QR code." });
-      const newEmployeeId = generateEmployeeId(data.clientName);
-      const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
-      toast({ title: "IDs Generated", description: "Employee ID and QR code created successfully." });
+        const filesToUpload: { name: string; file: File; path: string; isImage: boolean, key: keyof typeof uploadedUrls }[] = [
+            { name: "Profile Picture", file: data.profilePicture, path: `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, isImage: true, key: 'profilePictureUrl' },
+            { name: "ID Proof (Front)", file: data.idProofDocumentFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_front.${data.idProofDocumentFront.name.split('.').pop()}`, isImage: data.idProofDocumentFront.type.startsWith("image/"), key: 'idProofDocumentUrlFront' },
+            { name: "ID Proof (Back)", file: data.idProofDocumentBack!, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_back.${data.idProofDocumentBack?.name.split('.').pop()}`, isImage: data.idProofDocumentBack?.type.startsWith("image/") ?? false, key: 'idProofDocumentUrlBack' },
+            { name: "Bank Document", file: data.bankPassbookStatement, path: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank.${data.bankPassbookStatement.name.split('.').pop()}`, isImage: data.bankPassbookStatement.type.startsWith("image/"), key: 'bankPassbookStatementUrl' },
+            { name: "Police Certificate", file: data.policeClearanceCertificate!, path: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${data.policeClearanceCertificate?.name.split('.').pop()}`, isImage: data.policeClearanceCertificate?.type.startsWith("image/") ?? false, key: 'policeClearanceCertificateUrl' },
+        ];
 
-
-      toast({ title: "File Processing", description: "Preparing files for upload..." });
-
-      if (data.profilePicture) {
-        const file = data.profilePicture;
-        const storagePath = `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
-        uploadPromises.push(
-          compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8, targetMimeType: 'image/jpeg' })
-            .then(blob => {
-              return uploadFileToStorage(blob, storagePath);
-            })
-            .then(url => { profilePictureUrl = url; })
-            .catch(err => handlePublicUploadError(err, 'profile picture'))
-        );
-      }
-
-      if (data.idProofDocumentFront) {
-        const file = data.idProofDocumentFront;
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof_front.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        const processAndUpload = file.type.startsWith("image/")
-            ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-            : uploadFileToStorage(file, storagePath);
-        uploadPromises.push(
-            processAndUpload
-                .then(url => { idProofDocumentUrlFront = url; })
-                .catch(err => handlePublicUploadError(err, 'ID proof (front)'))
-        );
-      }
-
-      if (data.idProofDocumentBack) {
-          const file = data.idProofDocumentBack;
-          const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-          const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof_back.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-          const processAndUpload = file.type.startsWith("image/")
-              ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-              : uploadFileToStorage(file, storagePath);
-          uploadPromises.push(
-              processAndUpload
-                  .then(url => { idProofDocumentUrlBack = url; })
-                  .catch(err => handlePublicUploadError(err, 'ID proof (back)'))
-          );
-      }
-      
-      if (data.bankPassbookStatement) {
-        const file = data.bankPassbookStatement;
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/bankDocuments/${Date.now()}_bankDoc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-
-        const processAndUpload = file.type.startsWith("image/")
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath);
-
-        uploadPromises.push(
-          processAndUpload
-            .then(url => { bankPassbookStatementUrl = url; })
-            .catch(err => handlePublicUploadError(err, 'bank document'))
-        );
-      }
-
-      if (data.policeClearanceCertificate) {
-        const file = data.policeClearanceCertificate;
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        const processAndUpload = file.type.startsWith("image/")
-            ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-            : uploadFileToStorage(file, storagePath);
-        uploadPromises.push(
-            processAndUpload
-                .then(url => { policeClearanceCertificateUrl = url; })
-                .catch(err => handlePublicUploadError(err, 'Police Clearance Certificate'))
-        );
-      }
-
-      if (uploadPromises.length > 0) {
-        toast({ title: "Uploading All Files...", description: "This may take a moment."});
-        await Promise.all(uploadPromises);
-        toast({ title: "All Files Uploaded", description: "File uploads completed successfully."});
-      }
-
-      toast({ title: "Saving Employee Data...", description: "Preparing data for database..."});
-
-      if (!profilePictureUrl) throw new Error("Profile picture URL is missing after upload attempt.");
-      if (!idProofDocumentUrlFront) throw new Error("ID proof front document URL is missing after upload attempt.");
-      if (!bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing after upload attempt.");
-
-      const employeeDataForFirestore = {
-        employeeId: newEmployeeId,
-        qrCodeUrl: newQrCodeUrl,
-        clientName: data.clientName,
-        resourceIdNumber: data.resourceIdNumber,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        fullName: fullName,
-        fatherName: data.fatherName,
-        motherName: data.motherName,
-        joiningDate: Timestamp.fromDate(data.joiningDate),
-        dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
-        gender: data.gender,
-        maritalStatus: data.maritalStatus,
-        spouseName: data.spouseName,
-        district: data.district,
-        panNumber: data.panNumber,
-        idProofType: data.idProofType,
-        idProofNumber: data.idProofNumber,
-        epfUanNumber: data.epfUanNumber,
-        esicNumber: data.esicNumber,
-        bankAccountNumber: data.bankAccountNumber,
-        ifscCode: data.ifscCode,
-        bankName: data.bankName,
-        fullAddress: data.fullAddress,
-        emailAddress: data.emailAddress,
-        phoneNumber: data.phoneNumber,
-        profilePictureUrl,
-        idProofDocumentUrlFront,
-        idProofDocumentUrlBack,
-        bankPassbookStatementUrl,
-        policeClearanceCertificateUrl,
-        status: 'Active',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      const finalDataForFirestore: any = {};
-      const optionalStringFields = ['resourceIdNumber', 'spouseName', 'panNumber', 'epfUanNumber', 'esicNumber'];
-
-      for (const key in employeeDataForFirestore) {
-        const value = (employeeDataForFirestore as any)[key];
-        if (value !== undefined && value !== null) {
-          if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
-            continue;
-          }
-          finalDataForFirestore[key] = value;
+        for (const { name, file, path, isImage, key } of filesToUpload) {
+            if (!file) continue;
+            toast({ title: `Uploading ${name}...`});
+            try {
+                const fileToUpload = isImage
+                    ? await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+                    : file;
+                const url = await uploadFileToStorage(fileToUpload, path);
+                uploadedUrls[key] = url;
+            } catch (err) {
+                handlePublicUploadError(err, name);
+            }
         }
-      }
+        
+        toast({ title: "All Files Uploaded", description: "File uploads completed successfully."});
+        
+        if (!uploadedUrls.profilePictureUrl) throw new Error("Profile picture URL is missing after upload attempt.");
+        if (!uploadedUrls.idProofDocumentUrlFront) throw new Error("ID proof front document URL is missing after upload attempt.");
+        if (!uploadedUrls.bankPassbookStatementUrl) throw new Error("Bank passbook document URL is missing after upload attempt.");
 
-      toast({ title: "Finalizing Data...", description: "Saving to database..." });
-      const docRef = await addDoc(collection(db, "employees"), finalDataForFirestore);
+        const employeeDataForFirestore = {
+            employeeId: newEmployeeId,
+            qrCodeUrl: newQrCodeUrl,
+            clientName: data.clientName,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            fullName: fullName,
+            fatherName: data.fatherName,
+            motherName: data.motherName,
+            joiningDate: Timestamp.fromDate(data.joiningDate),
+            dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
+            gender: data.gender,
+            maritalStatus: data.maritalStatus,
+            district: data.district,
+            idProofType: data.idProofType,
+            idProofNumber: data.idProofNumber,
+            bankAccountNumber: data.bankAccountNumber,
+            ifscCode: data.ifscCode,
+            bankName: data.bankName,
+            fullAddress: data.fullAddress,
+            emailAddress: data.emailAddress,
+            phoneNumber: data.phoneNumber,
+            status: 'Active',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            // Optional fields - only add if they have a value
+            ...(data.resourceIdNumber && { resourceIdNumber: data.resourceIdNumber }),
+            ...(data.spouseName && { spouseName: data.spouseName }),
+            ...(data.panNumber && { panNumber: data.panNumber }),
+            ...(data.epfUanNumber && { epfUanNumber: data.epfUanNumber }),
+            ...(data.esicNumber && { esicNumber: data.esicNumber }),
+            // URLs
+            profilePictureUrl: uploadedUrls.profilePictureUrl,
+            idProofDocumentUrlFront: uploadedUrls.idProofDocumentUrlFront,
+            ...(uploadedUrls.idProofDocumentUrlBack && { idProofDocumentUrlBack: uploadedUrls.idProofDocumentUrlBack }),
+            bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl,
+            ...(uploadedUrls.policeClearanceCertificateUrl && { policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl }),
+        };
 
-      toast({
-        title: "Registration Successful!",
-        description: `${data.firstName} ${data.lastName}'s registration (ID: ${docRef.id}) has been saved. Employee ID: ${newEmployeeId}`,
-        action: <Check className="h-5 w-5 text-green-500" />,
-        duration: 7000,
-      });
-      form.reset();
-      setProfilePicPreview(null);
-      setIdProofPreviewFront(null);
-      setIdProofPreviewBack(null);
-      setBankPassbookPreview(null);
-      setPoliceCertPreview(null);
+        toast({ title: "Finalizing Data...", description: "Saving to database..." });
+        const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
 
-      router.push(`/profile/${docRef.id}`);
+        toast({
+            title: "Registration Successful!",
+            description: `${data.firstName} ${data.lastName}'s profile has been created. Employee ID: ${newEmployeeId}`,
+            action: <Check className="h-5 w-5 text-green-500" />,
+            duration: 7000,
+        });
+
+        form.reset();
+        setProfilePicPreview(null);
+        setIdProofPreviewFront(null);
+        setIdProofPreviewBack(null);
+        setBankPassbookPreview(null);
+        setPoliceCertPreview(null);
+
+        router.push(`/profile/${docRef.id}`);
 
     } catch (error: any) {
-      console.error("Detailed Registration or Upload Error: ", error, error.stack);
-      toast({
-        variant: "destructive",
-        title: "Registration Failed",
-        description: error.message || "An unexpected error occurred. Could not save employee data or upload files.",
-        duration: 9000,
-      });
+        console.error("Detailed Registration or Upload Error: ", error, error.stack);
+        toast({
+            variant: "destructive",
+            title: "Registration Failed",
+            description: error.message || "An unexpected error occurred. Could not save employee data or upload files.",
+            duration: 9000,
+        });
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
-  }
+}
+
 
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
   const currentYear = new Date().getFullYear();
