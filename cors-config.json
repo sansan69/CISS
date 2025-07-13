@@ -4,7 +4,8 @@
       "https://6000-firebase-studio-1747976322032.cluster-44kx2eiocbhe2tyk3zoyo3ryuo.cloudworkstations.dev",
       "http://localhost:9002",
       "https://cisskerala.vercel.app",
-      "https://ciss-kerala.vercel.app"
+      "https://ciss-kerala.vercel.app",
+      "https://cisskerala.site"
     ],
     "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
