@@ -48,6 +48,8 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const fileSchema = z.instanceof(File, { message: "This field is required." })
   .refine(file => file.size <= MAX_FILE_SIZE_BYTES, `Max file size is ${MAX_FILE_SIZE_MB}MB.`);
 
+const optionalFileSchema = fileSchema.optional();
+
 const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
@@ -72,6 +74,7 @@ const enrollmentFormSchema = z.object({
   idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
   idProofDocumentFront: fileSchema.describe("Front side of ID proof"),
   idProofDocumentBack: fileSchema.describe("Back side of ID proof").optional(),
+  policeClearanceCertificate: optionalFileSchema,
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -117,7 +120,7 @@ const keralaDistricts = [
 const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
 const maritalStatuses = ["Married", "Unmarried"];
 
-type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
+type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement" | "policeClearanceCertificate";
 
 // Helper Functions
 const abbreviateClientName = (clientName: string): string => {
@@ -197,6 +200,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [idProofPreviewFront, setIdProofPreviewFront] = React.useState<string | null>(null);
   const [idProofPreviewBack, setIdProofPreviewBack] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
+  const [policeCertPreview, setPoliceCertPreview] = React.useState<string | null>(null);
+
   const [isLoading, setIsLoading] = React.useState(false);
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
@@ -295,7 +300,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         let facingMode: VideoFacingModeEnum = "user";
-        if (fieldName === "idProofDocumentFront" || fieldName === "idProofDocumentBack" || fieldName === "bankPassbookStatement") {
+        if (fieldName === "idProofDocumentFront" || fieldName === "idProofDocumentBack" || fieldName === "bankPassbookStatement" || fieldName === "policeClearanceCertificate") {
           facingMode = "environment";
         }
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
@@ -350,6 +355,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         else if (activeCameraField === "idProofDocumentFront") setIdProofPreviewFront(previewUrl);
         else if (activeCameraField === "idProofDocumentBack") setIdProofPreviewBack(previewUrl);
         else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
+        else if (activeCameraField === "policeClearanceCertificate") setPoliceCertPreview(previewUrl);
         
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
       } catch (error) {
@@ -363,7 +369,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
-    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement">,
+    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement" | "policeClearanceCertificate">,
     setPreview: React.Dispatch<React.SetStateAction<string | null>>
   ) => {
     if (event.target.files && event.target.files[0]) {
@@ -402,6 +408,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     let idProofDocumentUrlFront: string | null = null;
     let idProofDocumentUrlBack: string | null = null;
     let bankPassbookStatementUrl: string | null = null;
+    let policeClearanceCertificateUrl: string | null = null;
 
     try {
       const uploadPromises = [];
@@ -473,6 +480,20 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         );
       }
 
+      if (data.policeClearanceCertificate) {
+        const file = data.policeClearanceCertificate;
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+        const storagePath = `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
+        const processAndUpload = file.type.startsWith("image/")
+            ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
+            : uploadFileToStorage(file, storagePath);
+        uploadPromises.push(
+            processAndUpload
+                .then(url => { policeClearanceCertificateUrl = url; })
+                .catch(err => handlePublicUploadError(err, 'Police Clearance Certificate'))
+        );
+      }
+
       if (uploadPromises.length > 0) {
         toast({ title: "Uploading All Files...", description: "This may take a moment."});
         await Promise.all(uploadPromises);
@@ -516,6 +537,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         idProofDocumentUrlFront,
         idProofDocumentUrlBack,
         bankPassbookStatementUrl,
+        policeClearanceCertificateUrl,
         status: 'Active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -526,7 +548,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
       for (const key in employeeDataForFirestore) {
         const value = (employeeDataForFirestore as any)[key];
-        if (value !== undefined) {
+        if (value !== undefined && value !== null) {
           if (typeof value === 'string' && value.trim() === '' && optionalStringFields.includes(key)) {
             continue;
           }
@@ -548,6 +570,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       setIdProofPreviewFront(null);
       setIdProofPreviewBack(null);
       setBankPassbookPreview(null);
+      setPoliceCertPreview(null);
 
       router.push(`/profile/${docRef.id}`);
 
@@ -845,9 +868,30 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         </FormItem>
                         )}
                     />
+                     <FormField
+                        control={form.control}
+                        name="policeClearanceCertificate"
+                        render={({ field }) => ( 
+                        <FormItem className="text-center md:col-span-2">
+                            <FormLabel className="block mb-2">Police Clearance Certificate</FormLabel>
+                            {policeCertPreview && (policeCertPreview === "/pdf-icon.png" ? 
+                                <Image src={policeCertPreview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
+                                <Image src={policeCertPreview} alt="Police Certificate Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="police certificate document"/>
+                            )}
+                            {!policeCertPreview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+                            <div className="flex justify-center gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('policeClearanceCertInput')?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
+                                <Button type="button" variant="outline" size="sm" onClick={() => openCamera("policeClearanceCertificate")}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
+                            </div>
+                            <FormControl><Input id="policeClearanceCertInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "policeClearanceCertificate", setPoliceCertPreview)} /></FormControl>
+                            <FormDescription>PCC document (optional). Max 5MB.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
                  </div>
               </section>
-
+              
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -858,7 +902,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                  <FormField
                     control={form.control}
                     name="bankPassbookStatement"
-                    render={({ field }) => (
+                    render={({ field }) => ( 
                        <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         {bankPassbookPreview && (

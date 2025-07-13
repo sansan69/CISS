@@ -45,7 +45,7 @@ const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 interface ClientOption { id: string; name: string; }
-type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
+type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement" | "policeClearanceCertificate";
 
 // Zod schema for validation
 const employeeUpdateSchema = z.object({
@@ -307,54 +307,6 @@ const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber
 ));
 QrPage.displayName = 'QrPage';
 
-const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
-    <div ref={ref} style={{...pageStyle, alignItems: 'center'}}>
-        <h1 className="text-xl font-semibold mb-6">{title}</h1>
-        <div className="relative inline-block border bg-gray-50 p-2 rounded-lg" style={{width: '180mm', flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-            <Image
-                src={imageUrl}
-                alt={title}
-                layout="fill"
-                className="object-contain"
-                crossOrigin="anonymous"
-                unoptimized={true}
-                data-ai-hint="document id"
-            />
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-7xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">
-                    FOR CISS USE ONLY
-                </span>
-            </div>
-        </div>
-        <PageFooter pageNumber={pageNumber} />
-    </div>
-));
-DocumentPage.displayName = 'DocumentPage';
-
-const CombinedIdPage = React.forwardRef<HTMLDivElement, { frontUrl: string; backUrl: string; pageNumber: number }>(({ frontUrl, backUrl, pageNumber }, ref) => (
-  <div ref={ref} style={pageStyle}>
-    <h1 className="text-xl font-semibold mb-6 text-center">ID Proof Document</h1>
-    <div className="flex gap-4" style={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
-        <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
-          <Image src={frontUrl} alt="ID Proof (Front)" layout="fill" className="object-contain" crossOrigin="anonymous" unoptimized={true}/>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
-        </div>
-        <p className="text-sm text-gray-600">Front Side</p>
-      </div>
-      <div className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
-        <div className="relative border bg-gray-50 p-2 rounded-lg" style={{ width: '90mm', height: '120mm' }}>
-          <Image src={backUrl} alt="ID Proof (Back)" layout="fill" className="object-contain" crossOrigin="anonymous" unoptimized={true}/>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-5xl font-bold text-black/10 transform -rotate-45 select-none opacity-70">FOR CISS USE ONLY</span></div>
-        </div>
-        <p className="text-sm text-gray-600">Back Side</p>
-      </div>
-    </div>
-    <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-CombinedIdPage.displayName = 'CombinedIdPage';
-
 const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => {
   const companyName = "CISS Services Ltd.";
   return (
@@ -416,10 +368,6 @@ export default function AdminEmployeeProfilePage() {
   
   const biodataPageRef = useRef<HTMLDivElement>(null);
   const qrPageRef = useRef<HTMLDivElement>(null);
-  const idFrontPageRef = useRef<HTMLDivElement>(null);
-  const idBackPageRef = useRef<HTMLDivElement>(null);
-  const combinedIdPageRef = useRef<HTMLDivElement>(null);
-  const bankDocPageRef = useRef<HTMLDivElement>(null);
   const termsPageRef = useRef<HTMLDivElement>(null);
 
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -443,12 +391,14 @@ export default function AdminEmployeeProfilePage() {
   const [newIdProofDocumentFront, setNewIdProofDocumentFront] = useState<File | null>(null);
   const [newIdProofDocumentBack, setNewIdProofDocumentBack] = useState<File | null>(null);
   const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
+  const [newPoliceClearanceCertificate, setNewPoliceClearanceCertificate] = useState<File | null>(null);
 
   // State for file previews
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
   const [idProofPreviewFront, setIdProofPreviewFront] = useState<string | null>(null);
   const [idProofPreviewBack, setIdProofPreviewBack] = useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
+  const [policeCertificatePreview, setPoliceCertificatePreview] = useState<string | null>(null);
   
   // State for camera dialog
   const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
@@ -670,6 +620,10 @@ export default function AdminEmployeeProfilePage() {
           setNewBankPassbookStatement(file);
           setBankPassbookPreview(previewUrl);
           break;
+        case 'policeClearanceCertificate':
+            setNewPoliceClearanceCertificate(file);
+            setPoliceCertificatePreview(previewUrl);
+            break;
       }
       closeCameraDialog();
     }
@@ -727,6 +681,13 @@ export default function AdminEmployeeProfilePage() {
         employee.bankPassbookStatementUrl,
         `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.jpg`,
         'bankPassbookStatementUrl'
+    ));
+    
+    updatePromises.push(uploadAndSetUrl(
+        newPoliceClearanceCertificate,
+        employee.policeClearanceCertificateUrl,
+        `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.jpg`,
+        'policeClearanceCertificateUrl'
     ));
 
     try {
@@ -914,10 +875,12 @@ export default function AdminEmployeeProfilePage() {
       setNewIdProofDocumentFront(null);
       setNewIdProofDocumentBack(null);
       setNewBankPassbookStatement(null);
+      setNewPoliceClearanceCertificate(null);
       setProfilePicPreview(null);
       setIdProofPreviewFront(null);
       setIdProofPreviewBack(null);
       setBankPassbookPreview(null);
+      setPoliceCertificatePreview(null);
   }
 
   const toggleEditMode = (forceState?: boolean) => {
@@ -947,21 +910,6 @@ export default function AdminEmployeeProfilePage() {
     
     if (employee.qrCodeUrl) {
       pages.push(<QrPage key={`page-${pageNumber}`} ref={qrPageRef} employee={employee} pageNumber={pageNumber++} />);
-    }
-
-    const idFrontUrl = employee.idProofDocumentUrlFront || employee.idProofDocumentUrl;
-    const idBackUrl = employee.idProofDocumentUrlBack;
-
-    if (idFrontUrl && idBackUrl) {
-      pages.push(<CombinedIdPage key={`page-${pageNumber}`} ref={combinedIdPageRef} frontUrl={idFrontUrl} backUrl={idBackUrl} pageNumber={pageNumber++} />);
-    } else if (idFrontUrl) {
-      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="ID Proof Document (Front)" imageUrl={idFrontUrl} pageNumber={pageNumber++} />);
-    } else if (idBackUrl) {
-      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="ID Proof Document (Back)" imageUrl={idBackUrl} pageNumber={pageNumber++} />);
-    }
-
-    if (employee.bankPassbookStatementUrl) {
-      pages.push(<DocumentPage key={`page-${pageNumber}`} ref={bankDocPageRef} title="Bank Passbook/Statement" imageUrl={employee.bankPassbookStatementUrl} pageNumber={pageNumber++} />);
     }
 
     pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
@@ -1165,6 +1113,7 @@ export default function AdminEmployeeProfilePage() {
                             <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
                             <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                            <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
                         </div>
                     </div>
                   </div>
@@ -1274,6 +1223,19 @@ export default function AdminEmployeeProfilePage() {
                               </div>
                               <Input id="bankPassbookInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewBankPassbookStatement, setBankPassbookPreview)} />
                           </div>
+                          
+                           {/* Police Clearance Certificate */}
+                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                              <Label className="md:col-span-1 text-base self-center">Police Clearance Certificate</Label>
+                              <Image src={policeCertificatePreview || (employee.policeClearanceCertificateUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.policeClearanceCertificateUrl) || "https://placehold.co/200x120.png"} alt="Police Clearance Certificate" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="police certificate document" />
+                               <div className="flex flex-col justify-center gap-2">
+                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('policeCertInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('policeClearanceCertificate')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
+                                  <FormDescription>Optional document</FormDescription>
+                              </div>
+                              <Input id="policeCertInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewPoliceClearanceCertificate, setPoliceCertificatePreview)} />
+                          </div>
+
                       </div>
                   </section>
                 </CardContent>

@@ -30,6 +30,7 @@ export interface Employee {
   idProofDocumentUrlFront?: string;
   idProofDocumentUrlBack?: string;
   bankPassbookStatementUrl?: string;
+  policeClearanceCertificateUrl?: string;
   joiningDate: any; // Firebase Timestamp or ISO string
   status: 'Active' | 'Inactive' | 'OnLeave' | 'Exited'; // Added 'Exited'
   qrCodeUrl?: string;
