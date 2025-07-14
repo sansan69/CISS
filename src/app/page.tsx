@@ -59,19 +59,8 @@ export default function LandingPage() {
     });
   };
 
-  const setupRecaptcha = () => {
-    // Only create a new verifier if one doesn't exist
-    if (window.recaptchaVerifier) {
-      return window.recaptchaVerifier;
-    }
-
-    // Ensure the container exists before initializing.
-    const recaptchaContainer = document.getElementById('recaptcha-container');
-    if (!recaptchaContainer) {
-      console.error("reCAPTCHA container not found");
-      return null;
-    }
-
+   const setupRecaptcha = () => {
+    // Moved initialization to a useEffect to ensure 'recaptcha-container' exists.
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
       'callback': (response: any) => {
@@ -80,7 +69,9 @@ export default function LandingPage() {
       'expired-callback': () => {
         toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try sending the OTP again.' });
         if (window.recaptchaVerifier) {
-            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier.render().then(widgetId => {
+              window.recaptchaVerifier?.clear();
+            });
         }
       }
     });
@@ -88,6 +79,14 @@ export default function LandingPage() {
     window.recaptchaVerifier = verifier;
     return verifier;
   };
+
+  // Setup reCAPTCHA in a useEffect to ensure the container is mounted
+  useEffect(() => {
+    if (!window.recaptchaVerifier) {
+      setupRecaptcha();
+    }
+  }, []);
+
 
   const handleSendOtp = async () => {
     setIsLoading(true);
@@ -100,12 +99,14 @@ export default function LandingPage() {
   
     try {
       const fullPhoneNumber = `+91${normalizedPhoneNumber}`;
-      const appVerifier = setupRecaptcha();
+      const appVerifier = window.recaptchaVerifier;
       if (!appVerifier) {
-        throw new Error("reCAPTCHA Verifier could not be initialized.");
+        throw new Error("reCAPTCHA Verifier is not initialized.");
       }
+
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
+      window.confirmationResult = result;
       setShowOtpInput(true);
       toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
     } catch (error: any) {
@@ -123,10 +124,12 @@ export default function LandingPage() {
   };
 
   const handleVerifyOtp = async () => {
-    if (!confirmationResult) return;
+    const resultToConfirm = confirmationResult || window.confirmationResult;
+    if (!resultToConfirm) return;
     setIsLoading(true);
+
     try {
-      const userCredential = await confirmationResult.confirm(otp);
+      const userCredential = await resultToConfirm.confirm(otp);
       const user = userCredential.user;
       toast({ title: "Verification Successful", description: "Checking your registration status..." });
 
@@ -169,7 +172,6 @@ export default function LandingPage() {
             alt="CISS Workforce Logo"
             width={80}
             height={80}
-            unoptimized={true}
             data-ai-hint="company logo"
             className="mx-auto"
         />
