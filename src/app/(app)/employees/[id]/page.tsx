@@ -363,21 +363,21 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
         <p className="text-sm mb-6 text-justify">
           I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
         </p>
-        <div className="flex justify-between items-center mt-12 pt-12 text-sm">
-          <div className="flex-1">
-            {employee.signatureUrl ? (
-                <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
-            ): (
-                <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
-            )}
-            <div className="border-t border-gray-400 mt-2 pt-2">Signature of Security Guard</div>
+        <div className="flex justify-between items-end mt-12 pt-12 text-sm">
+            <div className="flex-1 space-y-2">
+                {employee.signatureUrl ? (
+                    <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
+                ): (
+                    <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
+                )}
+                <div className="border-t border-gray-400 pt-2 font-semibold">Signature of Security Guard</div>
             </div>
-          <div className="w-1/4">
-             <div className="border-b border-gray-400 h-8 text-center">{formatDate(employee.joiningDate)}</div>
-            <div className="border-t border-gray-400 mt-2 pt-2 text-center">Date</div>
-          </div>
+            <div className="w-1/4 text-center">
+                <p className="border-b border-gray-400 pb-1">{formatDate(employee.joiningDate)}</p>
+                <div className="border-t border-gray-400 mt-2 pt-2 font-semibold">Date of Registration</div>
+            </div>
         </div>
-        <div className="mt-6 pt-6 border-t border-gray-300">
+        <div className="mt-8 pt-6 border-t border-gray-300">
             <p className="text-sm">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></p>
         </div>
       </section>
@@ -1328,4 +1328,3 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
-
