@@ -69,7 +69,7 @@ export default function EmployeeDirectoryPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [isUpdatingSearchFields, setIsUpdatingSearchFields] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
 
 
@@ -88,10 +88,9 @@ export default function EmployeeDirectoryPage() {
     }
   }, [toast]);
   
-  const buildBaseQuery = useCallback((forPagination: boolean = false) => {
+  const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
     
-    // Apply equality filters first
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
     }
@@ -104,16 +103,8 @@ export default function EmployeeDirectoryPage() {
     
     if (searchTerm.trim() !== '') {
         q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
-    }
-    
-    // Only add orderBy if not searching, or if searching on a field that supports it.
-    // Firestore requires the first orderBy to be on the field used in inequality filters.
-    // As we are not using inequality filters here other than search, we can order by createdAt.
-    if (!searchTerm.trim()) {
-        q = query(q, orderBy('createdAt', 'desc'));
     } else {
-        // When searching, we can't reliably sort by another field without a composite index.
-        // The default Firestore order (by document ID) is acceptable for search results.
+        q = query(q, orderBy('createdAt', 'desc'));
     }
 
     return q;
@@ -139,7 +130,6 @@ export default function EmployeeDirectoryPage() {
             return {
                 id: docSnap.id,
                 ...data,
-                // Convert Timestamps to ISO strings for serialization
                 joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
                 dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
                 exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : (data.exitDate || null),
@@ -178,7 +168,7 @@ export default function EmployeeDirectoryPage() {
             setPageHistory([null]);
             setLastVisibleDoc(null);
             fetchEmployees(1, null);
-        }, 300); // Debounce search/filter changes by 300ms
+        }, 500); 
 
         return () => clearTimeout(debounceTimer);
     }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
@@ -252,7 +242,6 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      // Refetch current page data
       const currentStartDoc = pageHistory[currentPage - 1] ?? null;
       fetchEmployees(currentPage, currentStartDoc);
       
@@ -282,9 +271,11 @@ export default function EmployeeDirectoryPage() {
       
       const filesToDelete = [
         employeeToDelete.profilePictureUrl,
-        employeeToDelete.idProofDocumentUrl, // Legacy field
-        employeeToDelete.idProofDocumentUrlFront,
-        employeeToDelete.idProofDocumentUrlBack,
+        employeeToDelete.identityProofUrlFront,
+        employeeToDelete.identityProofUrlBack,
+        employeeToDelete.addressProofUrlFront,
+        employeeToDelete.addressProofUrlBack,
+        employeeToDelete.signatureUrl,
         employeeToDelete.bankPassbookStatementUrl,
         employeeToDelete.policeClearanceCertificateUrl,
       ];
@@ -297,21 +288,12 @@ export default function EmployeeDirectoryPage() {
                 await deleteObject(storageRef);
             }
           } catch (fileError: any) {
-            console.error(`Failed to delete file ${fileUrl}:`, fileError);
-            if (fileError.code !== 'storage/object-not-found') {
-              toast({
-                variant: "destructive",
-                title: "File Deletion Warning",
-                description: `Could not delete file ${fileUrl.split('/').pop()?.split('?')[0]}. You may need to remove it manually from Firebase Storage.`,
-                duration: 7000,
-              });
-            }
+            console.warn(`Failed to delete file ${fileUrl}:`, fileError.message);
           }
         }
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      // Reset and fetch first page
       setCurrentPage(1);
       setPageHistory([null]);
       setLastVisibleDoc(null);
@@ -327,57 +309,100 @@ export default function EmployeeDirectoryPage() {
     }
   };
 
-  const handleUpdateSearchFields = async () => {
-    setIsUpdatingSearchFields(true);
+  const runBatchUpdate = async (
+    updateTitle: string,
+    queryToRun: Query<DocumentData>,
+    updateLogic: (docData: Employee) => Record<string, any>
+  ) => {
+    setIsUpdating(true);
     setUpdateProgress(0);
-    toast({ title: "Starting Update Process", description: "Fetching all employee records. This may take a moment..." });
+    toast({ title: `Starting: ${updateTitle}`, description: "Fetching all relevant employee records. This may take a moment..." });
 
     try {
-      const allEmployeesQuery = query(collection(db, "employees"));
-      const snapshot = await getDocs(allEmployeesQuery);
-      const totalDocs = snapshot.size;
-      let processedCount = 0;
+        const snapshot = await getDocs(queryToRun);
+        const totalDocs = snapshot.size;
+        let processedCount = 0;
 
-      if (totalDocs === 0) {
-        toast({ title: "No Employees Found", description: "There are no employee records to update." });
-        setIsUpdatingSearchFields(false);
-        return;
-      }
-
-      const BATCH_SIZE = 400; // Firestore batch limit is 500 writes
-      for (let i = 0; i < totalDocs; i += BATCH_SIZE) {
-        const batch = writeBatch(db);
-        const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
-
-        for (const docSnapshot of chunk) {
-          const employeeData = docSnapshot.data() as Employee;
-          
-          const nameParts = (employeeData.fullName || '').toUpperCase().split(' ').filter(Boolean);
-          const searchableFields = Array.from(new Set([
-            ...nameParts,
-            (employeeData.employeeId || '').toUpperCase(),
-            employeeData.phoneNumber,
-          ].filter(Boolean) as string[]));
-
-          batch.update(docSnapshot.ref, { searchableFields });
+        if (totalDocs === 0) {
+            toast({ title: "No Records to Update", description: "No employees matched the criteria for this update." });
+            setIsUpdating(false);
+            return;
         }
 
-        await batch.commit();
-        processedCount += chunk.length;
-        setUpdateProgress((processedCount / totalDocs) * 100);
-      }
-      
-      toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} employee records for searching.`, duration: 5000 });
-      // Refresh the current view
-      fetchEmployees(1, null);
+        const BATCH_SIZE = 400;
+        for (let i = 0; i < totalDocs; i += BATCH_SIZE) {
+            const batch = writeBatch(db);
+            const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+
+            for (const docSnapshot of chunk) {
+                const employeeData = docSnapshot.data() as Employee;
+                const updates = updateLogic(employeeData);
+                if (Object.keys(updates).length > 0) {
+                    batch.update(docSnapshot.ref, updates);
+                }
+            }
+
+            await batch.commit();
+            processedCount += chunk.length;
+            setUpdateProgress((processedCount / totalDocs) * 100);
+        }
+        
+        toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} employee records for ${updateTitle}.`, duration: 5000 });
+        fetchEmployees(1, null);
 
     } catch (error) {
-      console.error("Error updating search fields:", error);
-      toast({ variant: "destructive", title: "Update Failed", description: "An error occurred while updating employee records." });
+        console.error(`Error during ${updateTitle}:`, error);
+        toast({ variant: "destructive", title: "Update Failed", description: `An error occurred while running the update for ${updateTitle}.` });
     } finally {
-      setIsUpdatingSearchFields(false);
+        setIsUpdating(false);
     }
   };
+
+
+  const handleUpdateSearchFields = () => {
+    const allEmployeesQuery = query(collection(db, "employees"));
+    runBatchUpdate("Search Fields", allEmployeesQuery, (employeeData) => {
+        const nameParts = (employeeData.fullName || '').toUpperCase().split(' ').filter(Boolean);
+        const searchableFields = Array.from(new Set([
+          ...nameParts,
+          (employeeData.firstName || '').toUpperCase(),
+          (employeeData.lastName || '').toUpperCase(),
+          (employeeData.employeeId || '').toUpperCase(),
+          employeeData.phoneNumber,
+        ].filter(Boolean) as string[]));
+
+        return { searchableFields };
+    });
+  };
+
+  const handleMigrateIdProofs = () => {
+    const oldRecordsQuery = query(
+        collection(db, "employees"), 
+        where("idProofType", "!=", null)
+    );
+    runBatchUpdate("ID Proof Migration", oldRecordsQuery, (employeeData) => {
+        // If new field already exists, skip update for this record
+        if (employeeData.identityProofType) {
+            return {};
+        }
+
+        const updates: Record<string, any> = {
+            identityProofType: employeeData.idProofType,
+            identityProofNumber: employeeData.idProofNumber,
+            identityProofUrlFront: employeeData.idProofDocumentUrlFront || employeeData.idProofDocumentUrl, // Handle legacy field
+            identityProofUrlBack: employeeData.idProofDocumentUrlBack,
+            // Now, mark old fields for deletion
+            idProofType: deleteField(),
+            idProofNumber: deleteField(),
+            idProofDocumentUrl: deleteField(),
+            idProofDocumentUrlFront: deleteField(),
+            idProofDocumentUrlBack: deleteField(),
+        };
+
+        return updates;
+    });
+  };
+
   
   const displayedEmployees = employees;
   const canShowNext = lastVisibleDoc !== null && employees.length === ITEMS_PER_PAGE;
@@ -618,43 +643,61 @@ export default function EmployeeDirectoryPage() {
         <CardHeader>
             <CardTitle>Data Maintenance</CardTitle>
             <CardDescription>
-                Use this tool to update existing employee records. This is useful after a new feature (like search) is added.
+                Use these one-time tools to update existing employee records for new features. Run them if you notice issues with older records.
             </CardDescription>
         </CardHeader>
         <CardContent>
-            {isUpdatingSearchFields ? (
+            {isUpdating ? (
                 <div className="flex flex-col gap-2">
-                    <p>Updating employee search data... Do not close this page.</p>
+                    <p>Updating employee data... Do not close this page.</p>
                     <Progress value={updateProgress} />
                     <p className="text-sm text-muted-foreground text-center">{Math.round(updateProgress)}%</p>
                 </div>
             ) : (
                  <p className="text-sm text-muted-foreground">
-                    If search isn't working for older employees, click this button to update all records.
-                    This process will add the necessary search fields to make them discoverable.
+                    If search isn't working for older employees or if ID proofs are not showing correctly, use the tools below.
                  </p>
             )}
 
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex flex-col sm:flex-row gap-4">
             <AlertDialog>
                 <AlertDialogTrigger asChild>
-                    <Button variant="secondary" disabled={isUpdatingSearchFields}>
+                    <Button variant="secondary" disabled={isUpdating}>
                         <DatabaseZap className="mr-2 h-4 w-4" />
-                        Update All Employees for Search
+                        Update Search Fields
                     </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Data Update</AlertDialogTitle>
+                        <AlertDialogTitle>Confirm Search Update</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will process all employee records in the database to add or update search fields. 
-                            This action is safe to run multiple times but may incur Firestore costs depending on the number of employees. Are you sure you want to proceed?
+                            This will process all employee records to add/update search fields. This action is safe but may incur Firestore costs. Proceed?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={handleUpdateSearchFields}>Confirm & Update</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="secondary" disabled={isUpdating}>
+                        <DatabaseZap className="mr-2 h-4 w-4" />
+                        Migrate Old ID Proofs
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm ID Proof Migration</AlertDialogTitle>
+                        <AlertDialogDescription>
+                           This will copy existing ID proof documents to the new "Identity Proof" fields for all old records. It will not affect employees who have already been updated. This is a one-time migration. Proceed?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleMigrateIdProofs}>Confirm & Migrate</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -737,5 +780,3 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
-
-    
