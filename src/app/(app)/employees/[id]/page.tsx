@@ -659,6 +659,16 @@ export default function AdminEmployeeProfilePage() {
 
   async function handleSaveChanges(data: EmployeeUpdateValues) {
     if (!employee) return;
+    
+    // Custom check for mandatory file fields
+    if (!newProfilePicture && !employee.profilePictureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Profile Picture is required."}); return; }
+    if (!newIdentityProofUrlFront && !employee.identityProofUrlFront) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Front) is required."}); return; }
+    if (!newIdentityProofUrlBack && !employee.identityProofUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Back) is required."}); return; }
+    if (!newAddressProofUrlFront && !employee.addressProofUrlFront) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Front) is required."}); return; }
+    if (!newAddressProofUrlBack && !employee.addressProofUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Back) is required."}); return; }
+    if (!newSignatureUrl && !employee.signatureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Signature is required."}); return; }
+    if (!newBankPassbookStatement && !employee.bankPassbookStatementUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Bank Document is required."}); return; }
+
     setIsSubmitting(true);
     toast({ title: "Saving...", description: "Updating employee profile." });
 
@@ -720,7 +730,7 @@ export default function AdminEmployeeProfilePage() {
         if (data.maritalStatus !== 'Married' && employee.spouseName) formPayload.spouseName = "";
         
         const fullName = `${data.firstName} ${data.lastName}`;
-        formPayload.fullName = fullName;
+        formPayload.fullName = fullName.toUpperCase();
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
@@ -1295,7 +1305,7 @@ const ImageInputWithPreview: React.FC<{
 
     return (
         <div className="space-y-2">
-            <Label className="text-base">{label}</Label>
+            <Label className="text-base">{label}<span className="text-destructive">*</span></Label>
             <div className="p-4 border rounded-md text-center space-y-2">
                 <Image
                     src={finalPreview}

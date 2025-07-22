@@ -83,7 +83,7 @@ const enrollmentFormSchema = z.object({
   addressProofUrlFront: fileSchema,
   addressProofUrlBack: fileSchema,
   
-  signatureUrl: fileSchema.describe("Employee's signature image"),
+  signatureUrl: fileSchema,
   
   policeClearanceCertificate: optionalFileSchema,
   epfUanNumber: z.string().optional(),
@@ -427,7 +427,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, "");
-    const fullName = `${data.firstName} ${data.lastName}`;
+    const fullName = `${data.firstName.toUpperCase()} ${data.lastName.toUpperCase()}`;
     const uploadedUrls: { [key: string]: string | null } = {
         profilePictureUrl: null,
         identityProofUrlFront: null,
@@ -444,12 +444,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         const newEmployeeId = generateEmployeeId(data.clientName);
         const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
         
-        const nameParts = (fullName || '').toUpperCase().split(' ').filter(Boolean);
+        const nameParts = fullName.split(' ').filter(Boolean);
         const searchableFields = Array.from(new Set([
           ...nameParts,
-          (data.firstName || '').toUpperCase(),
-          (data.lastName || '').toUpperCase(),
-          (newEmployeeId || '').toUpperCase(),
+          data.firstName.toUpperCase(),
+          data.lastName.toUpperCase(),
+          newEmployeeId.toUpperCase(),
           data.phoneNumber,
         ].filter(Boolean) as string[]));
 
@@ -492,21 +492,21 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             qrCodeUrl: newQrCodeUrl,
             searchableFields,
             clientName: data.clientName,
-            firstName: data.firstName,
-            lastName: data.lastName,
+            firstName: data.firstName.toUpperCase(),
+            lastName: data.lastName.toUpperCase(),
             fullName: fullName,
-            fatherName: data.fatherName,
-            motherName: data.motherName,
+            fatherName: data.fatherName.toUpperCase(),
+            motherName: data.motherName.toUpperCase(),
             joiningDate: Timestamp.fromDate(data.joiningDate),
             dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
             gender: data.gender,
             maritalStatus: data.maritalStatus,
             district: data.district,
             bankAccountNumber: data.bankAccountNumber,
-            ifscCode: data.ifscCode,
-            bankName: data.bankName,
-            fullAddress: data.fullAddress,
-            emailAddress: data.emailAddress,
+            ifscCode: data.ifscCode.toUpperCase(),
+            bankName: data.bankName.toUpperCase(),
+            fullAddress: data.fullAddress.toUpperCase(),
+            emailAddress: data.emailAddress.toLowerCase(),
             phoneNumber: data.phoneNumber,
             status: 'Active',
             createdAt: serverTimestamp(),
@@ -522,10 +522,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             addressProofUrlBack: uploadedUrls.addressProofUrlBack,
             signatureUrl: uploadedUrls.signatureUrl,
             bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl,
+            profilePictureUrl: uploadedUrls.profilePictureUrl,
             // Optional fields
             ...(data.resourceIdNumber && { resourceIdNumber: data.resourceIdNumber }),
-            ...(data.spouseName && { spouseName: data.spouseName }),
-            ...(data.panNumber && { panNumber: data.panNumber }),
+            ...(data.spouseName && { spouseName: data.spouseName.toUpperCase() }),
+            ...(data.panNumber && { panNumber: data.panNumber.toUpperCase() }),
             ...(data.epfUanNumber && { epfUanNumber: data.epfUanNumber }),
             ...(data.esicNumber && { esicNumber: data.esicNumber }),
             ...(uploadedUrls.policeClearanceCertificateUrl && { policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl }),
