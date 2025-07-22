@@ -10,15 +10,20 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, Home } from 'lucide-react';
+import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, Home, Upload, Camera, Edit } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { doc, getDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { compressImage, dataURLtoFile, uploadFileToStorage, deleteFileFromStorage } from "@/lib/storageUtils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 
 // #region PDF Generation Components
@@ -112,7 +117,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />
           {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}
           <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
-          <DetailGridItem label="Email Address" value={employee.emailAddress.toLowerCase()} />
+          <DetailGridItem label="Email Address" value={employee.emailAddress?.toLowerCase()} />
           <DetailGridItem label="District" value={toTitleCase(employee.district)} />
           <div className="col-span-3">
             <DetailGridItem label="Full Address" value={toTitleCase(employee.fullAddress)} />
@@ -277,6 +282,53 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
     </div>
 );
 
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+
+const ImageInputWithPreview: React.FC<{
+    label: string;
+    currentUrl?: string;
+    preview: string | null;
+    onFileSelect: (file: File) => void;
+    onCameraClick: () => void;
+    isProfilePic?: boolean;
+    isSignature?: boolean;
+}> = ({ label, currentUrl, preview, onFileSelect, onCameraClick, isProfilePic, isSignature }) => {
+    const uniqueId = React.useId();
+    const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl) || "https://placehold.co/200x120.png";
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            onFileSelect(file);
+        }
+    };
+
+    return (
+        <div className="space-y-2">
+            <Label className="text-base">{label}</Label>
+            <div className="p-4 border rounded-md text-center space-y-2">
+                <Image
+                    src={finalPreview}
+                    alt={label}
+                    width={isProfilePic || isSignature ? 128 : 200}
+                    height={isProfilePic ? 128 : isSignature ? 64 : 120}
+                    className={cn(
+                        "object-contain justify-self-center mx-auto",
+                        isProfilePic ? 'rounded-full h-32 w-32' : 'h-32 w-full',
+                        isSignature && 'h-20'
+                    )}
+                    data-ai-hint={isProfilePic ? "profile picture" : isSignature ? "signature" : "id card"}
+                />
+                <div className="flex justify-center gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById(uniqueId)?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={onCameraClick}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                    <Input id={uniqueId} type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function PublicEmployeeProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -288,9 +340,49 @@ export default function PublicEmployeeProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
+  const [isUploadMode, setIsUploadMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filesToUpload, setFilesToUpload] = useState<Record<string, File | null>>({});
+  const [filePreviews, setFilePreviews] = useState<Record<string, string | null>>({});
+
+  // Camera state
+  const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
+  const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const biodataPageRef = useRef<HTMLDivElement>(null);
   const qrPageRef = useRef<HTMLDivElement>(null);
   const termsPageRef = useRef<HTMLDivElement>(null);
+
+  const fetchEmployee = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
+      const employeeDocSnap = await getDoc(employeeDocRef);
+
+      if (employeeDocSnap.exists()) {
+        const data = employeeDocSnap.data();
+        const formattedData: Employee = {
+          ...data,
+          id: employeeDocSnap.id,
+        } as Employee;
+        setEmployee(formattedData);
+      } else {
+        setError("Employee not found with the provided ID.");
+        toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
+      }
+    } catch (err: any) {
+      console.error("Error fetching employee:", err);
+      setError(err.message || "Failed to fetch employee data.");
+      toast({ variant: "destructive", title: "Fetch Error", description: "Could not retrieve employee details."});
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -298,41 +390,8 @@ export default function PublicEmployeeProfilePage() {
       setIsLoading(false);
       return;
     }
-
-    const fetchEmployee = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
-        const employeeDocSnap = await getDoc(employeeDocRef);
-
-        if (employeeDocSnap.exists()) {
-          const data = employeeDocSnap.data();
-          const formattedData: Employee = {
-            ...data,
-            id: employeeDocSnap.id,
-            joiningDate: data.joiningDate,
-            dateOfBirth: data.dateOfBirth,
-            exitDate: data.exitDate,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          } as Employee;
-          setEmployee(formattedData);
-        } else {
-          setError("Employee not found with the provided ID.");
-          toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
-        }
-      } catch (err: any) {
-        console.error("Error fetching employee:", err);
-        setError(err.message || "Failed to fetch employee data.");
-        toast({ variant: "destructive", title: "Fetch Error", description: "Could not retrieve employee details."});
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchEmployee();
-  }, [employeeIdFromUrl, toast]);
+  }, [employeeIdFromUrl]);
 
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
@@ -341,6 +400,116 @@ export default function PublicEmployeeProfilePage() {
       case 'OnLeave': return 'outline';
       case 'Exited': return 'destructive';
       default: return 'outline';
+    }
+  };
+
+  const openCamera = (fieldName: CameraField) => {
+    setActiveCameraField(fieldName);
+    setCameraError(null);
+    setIsCameraDialogOpen(true);
+  };
+  
+  useEffect(() => {
+    async function getCameraStream() {
+        if (!isCameraDialogOpen) return;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: activeCameraField === 'profilePicture' ? 'user' : 'environment' } });
+            setCameraStream(stream);
+            if (videoRef.current) videoRef.current.srcObject = stream;
+        } catch (err) {
+            setCameraError("Could not access camera. Please ensure permission is granted.");
+            setIsCameraDialogOpen(false);
+        }
+    }
+    getCameraStream();
+  }, [isCameraDialogOpen, activeCameraField]);
+  
+  const closeCameraDialog = () => {
+    if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+    setCameraStream(null);
+    setIsCameraDialogOpen(false);
+    setActiveCameraField(null);
+  };
+  
+  const handleCapturePhoto = async () => {
+    if (videoRef.current && canvasRef.current && activeCameraField) {
+      const canvas = canvasRef.current;
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const context = canvas.getContext('2d');
+      context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const file = await dataURLtoFile(dataUrl, `${activeCameraField}.jpg`);
+      
+      handleFileSelect(activeCameraField, file);
+      closeCameraDialog();
+    }
+  };
+
+  const handleFileSelect = (fieldName: string, file: File) => {
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ variant: "destructive", title: "File too large", description: "Please select a file smaller than 5MB." });
+        return;
+    }
+    setFilesToUpload(prev => ({ ...prev, [fieldName]: file }));
+    if (file.type.startsWith("image/")) {
+        setFilePreviews(prev => ({ ...prev, [fieldName]: URL.createObjectURL(file) }));
+    } else if (file.type === "application/pdf") {
+        setFilePreviews(prev => ({ ...prev, [fieldName]: "/pdf-icon.png" }));
+    }
+  };
+  
+  const handleSaveChanges = async () => {
+    if (!employee || Object.keys(filesToUpload).length === 0) {
+      toast({ title: "No files selected", description: "Please select at least one file to upload." });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    toast({ title: "Uploading...", description: "Please wait while your documents are uploaded." });
+    
+    const updatedUrls: { [key: string]: string } = {};
+    const phoneNumber = employee.phoneNumber;
+    
+    const fileMap: Record<string, string> = {
+        identityProofUrlFront: `employees/${phoneNumber}/idProofs/${Date.now()}_id_front`,
+        identityProofUrlBack: `employees/${phoneNumber}/idProofs/${Date.now()}_id_back`,
+        addressProofUrlFront: `employees/${phoneNumber}/addressProofs/${Date.now()}_addr_front`,
+        addressProofUrlBack: `employees/${phoneNumber}/addressProofs/${Date.now()}_addr_back`,
+        signatureUrl: `employees/${phoneNumber}/signatures/${Date.now()}_sig`,
+        bankPassbookStatementUrl: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank`,
+        policeClearanceCertificateUrl: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc`,
+    };
+
+    try {
+      for (const [fieldName, file] of Object.entries(filesToUpload)) {
+        if (file) {
+          const isImage = file.type.startsWith("image/");
+          const fileExtension = file.name.split('.').pop() || (isImage ? 'jpg' : 'bin');
+          const storagePath = `${fileMap[fieldName]}.${fileExtension}`;
+          
+          const fileToUpload = isImage ? await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 }) : file;
+          updatedUrls[fieldName] = await uploadFileToStorage(fileToUpload, storagePath);
+        }
+      }
+
+      const employeeDocRef = doc(db, "employees", employee.id);
+      await updateDoc(employeeDocRef, {
+        ...updatedUrls,
+        updatedAt: serverTimestamp(),
+      });
+      
+      toast({ title: "Upload Successful", description: "Your documents have been saved." });
+      setIsUploadMode(false);
+      setFilesToUpload({});
+      setFilePreviews({});
+      await fetchEmployee(); // Re-fetch data to show the updated profile
+      
+    } catch (error: any) {
+      console.error("Error updating documents:", error);
+      toast({ variant: "destructive", title: "Upload Failed", description: error.message || "An error occurred while saving." });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -473,10 +642,15 @@ export default function PublicEmployeeProfilePage() {
             <Button variant="outline" size="sm" onClick={() => router.push('/')}>
             <Home className="mr-2 h-4 w-4" /> Back to Home
             </Button>
-            <Button onClick={handleDownloadProfile} variant="outline" className="w-full sm:w-auto" disabled={isDownloadingPdf}>
-                {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Download Profile Kit
-            </Button>
+            <div className="flex gap-2 w-full sm:w-auto">
+                <Button onClick={handleDownloadProfile} variant="outline" className="flex-1" disabled={isDownloadingPdf}>
+                    {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    Download Kit
+                </Button>
+                 <Button onClick={() => setIsUploadMode(!isUploadMode)} className="flex-1">
+                    <Edit className="mr-2 h-4 w-4" /> {isUploadMode ? "Cancel Upload" : "Upload Documents"}
+                </Button>
+            </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -496,6 +670,33 @@ export default function PublicEmployeeProfilePage() {
             </div>
             </div>
         </div>
+        
+        {isUploadMode && (
+          <Card>
+              <CardHeader>
+                  <CardTitle>Upload Missing Documents</CardTitle>
+                  <CardDescription>Upload any missing documents below. Click "Save Changes" when you are done.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {!employee.identityProofUrlFront && <ImageInputWithPreview label="Identity Proof (Front)" onFileSelect={(file) => handleFileSelect('identityProofUrlFront', file)} onCameraClick={() => openCamera('identityProofUrlFront')} preview={filePreviews.identityProofUrlFront} />}
+                    {!employee.identityProofUrlBack && <ImageInputWithPreview label="Identity Proof (Back)" onFileSelect={(file) => handleFileSelect('identityProofUrlBack', file)} onCameraClick={() => openCamera('identityProofUrlBack')} preview={filePreviews.identityProofUrlBack} />}
+                    {!employee.addressProofUrlFront && <ImageInputWithPreview label="Address Proof (Front)" onFileSelect={(file) => handleFileSelect('addressProofUrlFront', file)} onCameraClick={() => openCamera('addressProofUrlFront')} preview={filePreviews.addressProofUrlFront} />}
+                    {!employee.addressProofUrlBack && <ImageInputWithPreview label="Address Proof (Back)" onFileSelect={(file) => handleFileSelect('addressProofUrlBack', file)} onCameraClick={() => openCamera('addressProofUrlBack')} preview={filePreviews.addressProofUrlBack} />}
+                    {!employee.signatureUrl && <ImageInputWithPreview label="Signature" onFileSelect={(file) => handleFileSelect('signatureUrl', file)} onCameraClick={() => openCamera('signatureUrl')} isSignature={true} preview={filePreviews.signatureUrl} />}
+                    {!employee.bankPassbookStatementUrl && <ImageInputWithPreview label="Bank Document" onFileSelect={(file) => handleFileSelect('bankPassbookStatementUrl', file)} onCameraClick={() => openCamera('bankPassbookStatement')} preview={filePreviews.bankPassbookStatementUrl} />}
+                    {!employee.policeClearanceCertificateUrl && <ImageInputWithPreview label="Police Clearance Certificate" onFileSelect={(file) => handleFileSelect('policeClearanceCertificateUrl', file)} onCameraClick={() => openCamera('policeClearanceCertificate')} preview={filePreviews.policeClearanceCertificateUrl} />}
+                </div>
+                 {Object.values(employee).every(v => v) && <p className="text-muted-foreground text-center">All documents have been uploaded.</p>}
+              </CardContent>
+              <CardFooter className="flex justify-end">
+                <Button onClick={handleSaveChanges} disabled={isSubmitting || Object.keys(filesToUpload).length === 0}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                </Button>
+              </CardFooter>
+          </Card>
+        )}
 
         <Tabs defaultValue="personal">
             <TabsList className="h-auto flex-wrap justify-start">
@@ -597,6 +798,23 @@ export default function PublicEmployeeProfilePage() {
             </Card>
         </Tabs>
         </div>
+        
+        <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
+          <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
+              <DialogHeader>
+                  <DialogTitle>Take Photo</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                   {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
+                  <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto rounded-md border", { 'hidden': cameraError })} />
+                  <canvas ref={canvasRef} className="hidden" />
+              </div>
+              <DialogFooter>
+                  <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
+                  <Button onClick={handleCapturePhoto} disabled={!!cameraError || !cameraStream}>Capture</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </>
   );
 }

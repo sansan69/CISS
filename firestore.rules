@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -14,9 +15,31 @@ service cloud.firestore {
       // This is the critical rule that fixes the public enrollment failure.
       allow create: if true;
 
-      // Only allow authenticated users (admins) to update or delete employee records.
-      // This protects your data from being modified by public users.
-      allow update, delete: if request.auth != null;
+      // Allow authenticated users (admins) to update any field.
+      // Also allow any user (even unauthenticated) to update ONLY specific
+      // document URL fields, and only if those fields do not already exist.
+      // This securely enables the "upload missing documents" feature for public users.
+      allow update: if request.auth != null || (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'updatedAt', // Allow this to be set
+            'identityProofUrlFront', 'identityProofUrlBack', 
+            'addressProofUrlFront', 'addressProofUrlBack',
+            'signatureUrl', 'bankPassbookStatementUrl', 'policeClearanceCertificateUrl'
+          ]) && (
+            // For each key they are trying to write, check if it existed before.
+            (!('identityProofUrlFront' in resource.data) || !request.resource.data.keys().hasAny(['identityProofUrlFront'])) &&
+            (!('identityProofUrlBack' in resource.data) || !request.resource.data.keys().hasAny(['identityProofUrlBack'])) &&
+            (!('addressProofUrlFront' in resource.data) || !request.resource.data.keys().hasAny(['addressProofUrlFront'])) &&
+            (!('addressProofUrlBack' in resource.data) || !request.resource.data.keys().hasAny(['addressProofUrlBack'])) &&
+            (!('signatureUrl' in resource.data) || !request.resource.data.keys().hasAny(['signatureUrl'])) &&
+            (!('bankPassbookStatementUrl' in resource.data) || !request.resource.data.keys().hasAny(['bankPassbookStatementUrl'])) &&
+            (!('policeClearanceCertificateUrl' in resource.data) || !request.resource.data.keys().hasAny(['policeClearanceCertificateUrl']))
+          )
+      );
+
+      // Only allow authenticated users (admins) to delete employee records.
+      allow delete: if request.auth != null;
     }
 
     // Rules for the 'clients' collection
