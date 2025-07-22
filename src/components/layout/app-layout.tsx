@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
       { href: '/employees/enroll', label: 'Enroll New', icon: UserPlus },
     ],
   },
-  { href: '/attendance', label: 'Attendance', icon: CalendarCheck },
+  { href: '/attendance-logs', label: 'Attendance Logs', icon: CalendarCheck },
   {
     href: '/settings',
     label: 'Settings',
@@ -186,7 +186,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       return; // Wait until auth state is determined
     }
 
-    const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
+    const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
     
     const isPublicPath = publicPaths.some(path => {
         if (path === '/') return pathname === '/';
@@ -215,14 +215,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
-
-  const publicPaths = ['/admin-login', '/', '/enroll', '/profile'];
+  
+  const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
   const isPublicPath = publicPaths.some(path => {
       if (path === '/') return pathname === '/';
       return pathname.startsWith(path);
   });
   
-  if (!authUser && !isPublicPath) {
+  // This layout is only for authenticated admin pages
+  if (isPublicPath) {
+    return <>{children}</>;
+  }
+  
+  if (!authUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

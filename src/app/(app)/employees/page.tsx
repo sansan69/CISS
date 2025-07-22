@@ -87,19 +87,7 @@ export default function EmployeeDirectoryPage() {
   const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
     
-    // IMPORTANT: Always have a consistent base sort order.
-    // When searching by ID, override to sort by ID. Otherwise, sort by creation date.
-    if (searchTerm.trim() !== '') {
-        const searchTermUpper = searchTerm.trim().toUpperCase();
-        q = query(q, 
-          where('employeeId', '>=', searchTermUpper), 
-          where('employeeId', '<=', searchTermUpper + '\uf8ff'),
-          orderBy('employeeId', 'asc')
-        );
-    } else {
-        q = query(q, orderBy('createdAt', 'desc'));
-    }
-
+    // Apply equality filters first
     if (filterClient !== 'all') {
       q = query(q, where('clientName', '==', filterClient));
     }
@@ -108,6 +96,20 @@ export default function EmployeeDirectoryPage() {
     }
     if (filterDistrict !== 'all') {
       q = query(q, where('district', '==', filterDistrict));
+    }
+  
+    // Apply search term and order
+    if (searchTerm.trim() !== '') {
+        const searchTermUpper = searchTerm.trim().toUpperCase();
+        // When searching, we must order by the field we are searching on.
+        q = query(q, 
+            where('employeeId', '>=', searchTermUpper), 
+            where('employeeId', '<=', searchTermUpper + '\uf8ff'),
+            orderBy('employeeId', 'asc')
+        );
+    } else {
+        // Default sort order when not searching
+        q = query(q, orderBy('createdAt', 'desc'));
     }
     
     return q;
