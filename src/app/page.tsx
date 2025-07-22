@@ -60,7 +60,7 @@ export default function LandingPage() {
   };
 
    const setupRecaptcha = () => {
-    // Clear any existing verifier
+    // Clear any existing verifier to avoid conflicts
     if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
     }
@@ -73,8 +73,6 @@ export default function LandingPage() {
         toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try sending the OTP again.' });
       }
     });
-
-    window.recaptchaVerifier = verifier;
     return verifier;
   };
 
@@ -111,16 +109,22 @@ export default function LandingPage() {
   };
 
   const sendOtpForNewUser = async (normalizedPhoneNumber: string) => {
-    toast({ title: "New User Detected", description: "Please verify your number to continue with enrollment." });
+    // This function is now also used for resending OTP
+    if (!showOtpInput) {
+       toast({ title: "New User Detected", description: "Please verify your number to continue with enrollment." });
+    }
     try {
       const fullPhoneNumber = `+91${normalizedPhoneNumber}`;
-      const appVerifier = setupRecaptcha(); // Create a new verifier just-in-time
+      const appVerifier = setupRecaptcha();
 
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
+      
       setConfirmationResult(result);
       window.confirmationResult = result;
       setShowOtpInput(true);
+      setOtp(''); // Clear previous OTP on resend
       toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
+
     } catch (error: any) {
       console.error("Error sending OTP:", error);
       let description = "Could not send OTP. Please try again later.";
@@ -134,6 +138,16 @@ export default function LandingPage() {
       setIsLoading(false);
     }
   };
+  
+  const handleResendOtp = () => {
+     const normalizedPhoneNumber = phoneNumber.trim().replace(/\D/g, '');
+     if (!/^\d{10}$/.test(normalizedPhoneNumber)) {
+        toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit phone number." });
+        return;
+     }
+     setIsLoading(true);
+     sendOtpForNewUser(normalizedPhoneNumber);
+  }
 
   const handleVerifyOtp = async () => {
     const resultToConfirm = confirmationResult || window.confirmationResult;
@@ -156,6 +170,8 @@ export default function LandingPage() {
       let description = "Failed to verify OTP. Please try again.";
       if (error.code === 'auth/invalid-verification-code') {
         description = "The verification code is invalid. Please check and try again.";
+      } else if (error.code === 'auth/code-expired') {
+        description = "The verification code has expired. Please request a new one by clicking 'Resend OTP'.";
       }
       toast({ variant: "destructive", title: "Verification Failed", description });
     } finally {
@@ -228,7 +244,7 @@ export default function LandingPage() {
                       onKeyDown={(e) => { if (e.key === 'Enter') handleContinue(); }}
                   />
               </div>
-              <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading}>
+              <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading || phoneNumber.length < 10}>
                   {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : "Continue"}
               </Button>
             </>
@@ -250,9 +266,14 @@ export default function LandingPage() {
               <Button onClick={handleVerifyOtp} className="w-full text-base py-3" variant="default" disabled={isLoading || otp.length < 6}>
                   {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</> : "Verify & Continue"}
               </Button>
-              <Button variant="link" size="sm" onClick={() => setShowOtpInput(false)} disabled={isLoading}>
-                Change phone number
-              </Button>
+              <div className="flex justify-between items-center text-sm">
+                <Button variant="link" size="sm" onClick={() => setShowOtpInput(false)} disabled={isLoading}>
+                    Change phone number
+                </Button>
+                 <Button variant="link" size="sm" onClick={handleResendOtp} disabled={isLoading}>
+                    Resend OTP
+                </Button>
+              </div>
             </>
           )}
         </CardContent>
