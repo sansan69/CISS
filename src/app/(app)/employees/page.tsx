@@ -84,7 +84,7 @@ export default function EmployeeDirectoryPage() {
     }
   }, [toast]);
   
-  const buildBaseQuery = useCallback((field?: string) => {
+  const buildBaseQuery = useCallback(() => {
     let q: Query<DocumentData> = collection(db, "employees");
     
     // Apply equality filters first
@@ -97,19 +97,9 @@ export default function EmployeeDirectoryPage() {
     if (filterDistrict !== 'all') {
       q = query(q, where('district', '==', filterDistrict));
     }
-
-    if (field && searchTerm.trim() !== '') {
-        const term = searchTerm.trim();
-        q = query(q, where(field, '>=', term.toUpperCase()), where(field, '<=', term.toUpperCase() + '\uf8ff'));
-    }
-    
-    // Default sort order when not searching
-    if (!field && !searchTerm.trim()) {
-       q = query(q, orderBy('createdAt', 'desc'));
-    }
     
     return q;
-  }, [filterClient, filterStatus, filterDistrict, searchTerm]);
+  }, [filterClient, filterStatus, filterDistrict]);
 
   const fetchEmployees = useCallback(async (page: number, startAfterDoc: QueryDocumentSnapshot<DocumentData> | null) => {
     setIsTableLoading(true);
@@ -117,79 +107,53 @@ export default function EmployeeDirectoryPage() {
 
     try {
         let finalQuery: Query<DocumentData>;
-        let fetchedEmployees: Employee[] = [];
+        let baseQuery = buildBaseQuery();
 
         if (searchTerm.trim() !== '') {
-            // Hybrid Search: Query multiple fields and merge
-            const searchFields = ['fullName', 'employeeId', 'phoneNumber'];
-            const searchQueries = searchFields.map(field => {
-                const term = searchTerm.trim();
-                let q = collection(db, "employees");
-
-                if (filterClient !== 'all') q = query(q, where('clientName', '==', filterClient));
-                if (filterStatus !== 'all') q = query(q, where('status', '==', filterStatus));
-                if (filterDistrict !== 'all') q = query(q, where('district', '==', filterDistrict));
-                
-                const searchTermUpper = term.toUpperCase();
-                const searchTermLower = term.toLowerCase();
-                const searchTermTitle = term.charAt(0).toUpperCase() + term.slice(1).toLowerCase();
-
-                return getDocs(query(q, where(field, '>=', term), where(field, '<=', term + '\uf8ff')));
-            });
-
-            const allResults = await Promise.all(searchQueries);
-
-            const uniqueEmployees = new Map<string, Employee>();
-
-            allResults.forEach(snapshot => {
-                snapshot.docs.forEach(docSnap => {
-                    if (!uniqueEmployees.has(docSnap.id)) {
-                        const data = docSnap.data();
-                        uniqueEmployees.set(docSnap.id, {
-                             id: docSnap.id,
-                            ...data,
-                            joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
-                            dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
-                            exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
-                            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-                            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-                        } as Employee);
-                    }
-                });
-            });
-
-            fetchedEmployees = Array.from(uniqueEmployees.values());
-            // Client-side pagination for search results
-            setEmployees(fetchedEmployees);
-            setLastVisibleDoc(null); 
-
-
+            const term = searchTerm.trim().toUpperCase();
+            finalQuery = query(
+              baseQuery, 
+              where('searchableFields', 'array-contains', term),
+              // We cannot use orderBy on a different field than the array-contains, 
+              // so we accept Firestore's default ordering for search results.
+              // Client-side sorting can be added if a specific order is needed for search.
+            );
+            // Search fetches all results that match and relies on client-side pagination.
         } else {
-            // Standard pagination and filtering
-            const baseQuery = buildBaseQuery();
+            // Standard pagination and filtering, ordered by creation date
+            baseQuery = query(baseQuery, orderBy('createdAt', 'desc'));
             if (startAfterDoc) {
                 finalQuery = query(baseQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
             } else {
                 finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
             }
+        }
+        
+        const documentSnapshots = await getDocs(finalQuery);
+      
+        const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                ...data,
+                // Convert Timestamps to ISO strings for serialization
+                joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
+                dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
+                exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : (data.exitDate || null),
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            } as Employee;
+        });
 
-            const documentSnapshots = await getDocs(finalQuery);
-          
-            fetchedEmployees = documentSnapshots.docs.map(docSnap => {
-                const data = docSnap.data();
-                return {
-                    id: docSnap.id,
-                    ...data,
-                    joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
-                    dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
-                    exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-                    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-                } as Employee;
-            });
-            setEmployees(fetchedEmployees);
-            const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
-            setLastVisibleDoc(newLastVisible);
+        setEmployees(fetchedEmployees);
+        
+        // Handle pagination state
+        if (searchTerm.trim() === '') {
+          const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+          setLastVisibleDoc(newLastVisible);
+        } else {
+          // For search, pagination is handled client-side, so we clear the Firestore cursor
+          setLastVisibleDoc(null);
         }
 
     } catch (err: any) {
@@ -206,7 +170,7 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, searchTerm, filterClient, filterStatus, filterDistrict]); 
+  }, [toast, buildBaseQuery, searchTerm]);
 
     useEffect(() => {
         fetchClients();
@@ -300,7 +264,9 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      fetchEmployees(currentPage, pageHistory[currentPage - 1]);
+      // Refetch current page data
+      const currentStartDoc = pageHistory[currentPage - 1] ?? null;
+      fetchEmployees(currentPage, currentStartDoc);
       
       setIsStatusModalOpen(false);
       setSelectedEmployeeForStatusChange(null);
@@ -375,8 +341,10 @@ export default function EmployeeDirectoryPage() {
   
   const displayedEmployees = useMemo(() => {
     if (searchTerm.trim() !== '') {
+      // Client-side pagination for search results
       return employees.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     }
+    // Firestore pagination for non-search results
     return employees;
   }, [employees, currentPage, searchTerm]);
 
@@ -384,6 +352,7 @@ export default function EmployeeDirectoryPage() {
     if (searchTerm.trim() !== '') {
       return (currentPage * ITEMS_PER_PAGE) < employees.length;
     }
+    // For Firestore pagination, this logic holds: if we received a full page, there might be more.
     return employees.length >= ITEMS_PER_PAGE;
   }, [employees, currentPage, searchTerm]);
 
@@ -515,7 +484,7 @@ export default function EmployeeDirectoryPage() {
                 ) : displayedEmployees.length === 0 ? (
                     <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
-                        No employees found.
+                        No employees found matching your criteria.
                     </TableCell>
                     </TableRow>
                 ) : (
@@ -695,3 +664,5 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
+
+    
