@@ -4,7 +4,7 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // Default public read access.
-    // This allows anyone to view uploaded files like profile pictures.
+    // This allows anyone to view uploaded files like profile pictures and documents.
     match /{allPaths=**} {
       allow read;
     }
@@ -17,7 +17,7 @@ service firebase.storage {
       // We add critical security constraints on file size, type, and path.
       allow create: if request.resource.size < 5 * 1024 * 1024
                     && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf')
-                    && fileCategory in ['profilePictures', 'idProofs', 'bankDocuments'];
+                    && fileCategory in ['profilePictures', 'idProofs', 'bankDocuments', 'signatures', 'policeCertificates'];
 
       // Allow only authenticated users (admins) to UPDATE or DELETE files.
       // This prevents public users from overwriting or deleting existing data.
