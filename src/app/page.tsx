@@ -60,11 +60,10 @@ export default function LandingPage() {
   };
 
    const setupRecaptcha = () => {
-    // Moved initialization to a useEffect to ensure 'recaptcha-container' exists.
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
       'callback': (response: any) => {
-        // reCAPTCHA solved, allow signInWithPhoneNumber.
+        // reCAPTCHA solved.
       },
       'expired-callback': () => {
         toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try sending the OTP again.' });
@@ -80,7 +79,6 @@ export default function LandingPage() {
     return verifier;
   };
 
-  // Setup reCAPTCHA in a useEffect to ensure the container is mounted
   useEffect(() => {
     if (!window.recaptchaVerifier) {
       setupRecaptcha();
@@ -88,15 +86,39 @@ export default function LandingPage() {
   }, []);
 
 
-  const handleSendOtp = async () => {
+  const handleContinue = async () => {
     setIsLoading(true);
     const normalizedPhoneNumber = phoneNumber.trim().replace(/\D/g, '');
+
     if (!/^\d{10}$/.test(normalizedPhoneNumber)) {
       toast({ variant: "destructive", title: "Invalid Phone Number", description: "Please enter a valid 10-digit phone number." });
       setIsLoading(false);
       return;
     }
-  
+
+    try {
+      const employeesRef = collection(db, "employees");
+      const q = query(employeesRef, where("phoneNumber", "==", normalizedPhoneNumber));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // Number exists, redirect to profile
+        const employeeDoc = querySnapshot.docs[0];
+        toast({ title: "Welcome Back!", description: "Redirecting to your profile." });
+        router.push(`/profile/${employeeDoc.id}`);
+      } else {
+        // Number is new, start OTP flow
+        await sendOtpForNewUser(normalizedPhoneNumber);
+      }
+    } catch (error: any) {
+      console.error("Error during phone number check:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not verify phone number. Please check your connection and try again." });
+      setIsLoading(false);
+    }
+  };
+
+  const sendOtpForNewUser = async (normalizedPhoneNumber: string) => {
+    toast({ title: "New User Detected", description: "Please verify your number to continue with enrollment." });
     try {
       const fullPhoneNumber = `+91${normalizedPhoneNumber}`;
       const appVerifier = window.recaptchaVerifier;
@@ -131,19 +153,11 @@ export default function LandingPage() {
     try {
       const userCredential = await resultToConfirm.confirm(otp);
       const user = userCredential.user;
-      toast({ title: "Verification Successful", description: "Checking your registration status..." });
+      toast({ title: "Verification Successful", description: "Redirecting to enrollment form..." });
 
       const normalizedPhoneNumber = user.phoneNumber!.slice(3); // Remove +91
-      const employeesRef = collection(db, "employees");
-      const q = query(employeesRef, where("phoneNumber", "==", normalizedPhoneNumber));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        const employeeDoc = querySnapshot.docs[0];
-        router.push(`/profile/${employeeDoc.id}`);
-      } else {
-        router.push(`/enroll?phone=${normalizedPhoneNumber}`);
-      }
+      router.push(`/enroll?phone=${normalizedPhoneNumber}`);
+      
     } catch (error: any) {
       console.error("Error verifying OTP:", error);
       let description = "Failed to verify OTP. Please try again.";
@@ -218,11 +232,11 @@ export default function LandingPage() {
                       className="pl-10 text-base"
                       maxLength={10}
                       disabled={isLoading}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSendOtp(); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleContinue(); }}
                   />
               </div>
-              <Button onClick={handleSendOtp} className="w-full text-base py-3" variant="default" disabled={isLoading}>
-                  {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...</> : "Send OTP"}
+              <Button onClick={handleContinue} className="w-full text-base py-3" variant="default" disabled={isLoading}>
+                  {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : "Continue"}
               </Button>
             </>
           ) : (
@@ -277,3 +291,5 @@ export default function LandingPage() {
     </div>
   );
 }
+
+    
