@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, collectionGroup } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -84,7 +84,7 @@ export default function EmployeeDirectoryPage() {
     }
   }, [toast]);
   
-  const buildBaseQuery = useCallback(() => {
+  const buildBaseQuery = useCallback((field?: string) => {
     let q: Query<DocumentData> = collection(db, "employees");
     
     // Apply equality filters first
@@ -97,11 +97,15 @@ export default function EmployeeDirectoryPage() {
     if (filterDistrict !== 'all') {
       q = query(q, where('district', '==', filterDistrict));
     }
-  
-    if (searchTerm.trim() !== '') {
-        q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
-    } else {
-        q = query(q, orderBy('createdAt', 'desc'));
+
+    if (field && searchTerm.trim() !== '') {
+        const term = searchTerm.trim();
+        q = query(q, where(field, '>=', term.toUpperCase()), where(field, '<=', term.toUpperCase() + '\uf8ff'));
+    }
+    
+    // Default sort order when not searching
+    if (!field && !searchTerm.trim()) {
+       q = query(q, orderBy('createdAt', 'desc'));
     }
     
     return q;
@@ -112,34 +116,74 @@ export default function EmployeeDirectoryPage() {
     setError(null);
 
     try {
-        const baseQuery = buildBaseQuery();
         let finalQuery: Query<DocumentData>;
+        let fetchedEmployees: Employee[] = [];
 
-        if (startAfterDoc) {
-            finalQuery = query(baseQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
+        if (searchTerm.trim() !== '') {
+            // Hybrid Search: Query multiple fields and merge
+            const searchTerms = [
+                { field: 'fullName', query: buildBaseQuery('fullName')},
+                { field: 'employeeId', query: buildBaseQuery('employeeId')},
+                { field: 'phoneNumber', query: buildBaseQuery('phoneNumber')},
+            ];
+
+            const allQueries = searchTerms.map(st => getDocs(st.query));
+            const allResults = await Promise.all(allQueries);
+
+            const uniqueEmployees = new Map<string, Employee>();
+
+            allResults.forEach(snapshot => {
+                snapshot.docs.forEach(docSnap => {
+                    if (!uniqueEmployees.has(docSnap.id)) {
+                        const data = docSnap.data();
+                        uniqueEmployees.set(docSnap.id, {
+                             id: docSnap.id,
+                            ...data,
+                            // Convert Timestamps to ISO strings for serialization
+                            joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
+                            dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
+                            exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
+                            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+                            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+                        } as Employee);
+                    }
+                });
+            });
+
+            fetchedEmployees = Array.from(uniqueEmployees.values());
+            // Client-side pagination for search results
+            setEmployees(fetchedEmployees.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE));
+            // Note: server-side pagination for search is complex, disabling for now.
+             setLastVisibleDoc(null); 
+
+
         } else {
-            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-        }
+            // Standard pagination and filtering
+            const baseQuery = buildBaseQuery();
+            if (startAfterDoc) {
+                finalQuery = query(baseQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
+            } else {
+                finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+            }
 
-        const documentSnapshots = await getDocs(finalQuery);
-      
-        const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                ...data,
-                joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
-                dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
-                exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
-                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-            } as Employee;
-        });
-      
-        setEmployees(fetchedEmployees);
-      
-        const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
-        setLastVisibleDoc(newLastVisible);
+            const documentSnapshots = await getDocs(finalQuery);
+          
+            fetchedEmployees = documentSnapshots.docs.map(docSnap => {
+                const data = docSnap.data();
+                return {
+                    id: docSnap.id,
+                    ...data,
+                    joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
+                    dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
+                    exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+                    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+                } as Employee;
+            });
+            setEmployees(fetchedEmployees);
+            const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+            setLastVisibleDoc(newLastVisible);
+        }
 
     } catch (err: any) {
       console.error("Error fetching employees:", err);
@@ -155,7 +199,7 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery]); 
+  }, [toast, buildBaseQuery, searchTerm]); 
 
   const handleFilterOrSearch = useCallback(() => {
     setCurrentPage(1); 
@@ -175,21 +219,30 @@ export default function EmployeeDirectoryPage() {
     if (!lastVisibleDoc) return; // Can't go next if there's no last doc
 
     const nextPage = currentPage + 1;
-    setPageHistory(prev => [...prev, lastVisibleDoc]);
-    fetchEmployees(nextPage, lastVisibleDoc);
-    setCurrentPage(nextPage);
+    if (searchTerm.trim() !== '') {
+        // Handle client-side pagination for search
+        setCurrentPage(nextPage);
+    } else {
+       setPageHistory(prev => [...prev, lastVisibleDoc]);
+       fetchEmployees(nextPage, lastVisibleDoc);
+       setCurrentPage(nextPage);
+    }
   };
 
   const handlePreviousPage = () => {
       if (currentPage === 1) return;
-
       const prevPage = currentPage - 1;
-      const prevHistory = pageHistory.slice(0, -1);
-      const startAfterDoc = prevHistory[prevPage -1] ?? null;
       
-      setPageHistory(prevHistory);
-      fetchEmployees(prevPage, startAfterDoc);
-      setCurrentPage(prevPage);
+      if (searchTerm.trim() !== '') {
+        setCurrentPage(prevPage);
+      } else {
+        const prevHistory = pageHistory.slice(0, -1);
+        const startAfterDoc = prevHistory[prevPage -1] ?? null;
+        
+        setPageHistory(prevHistory);
+        fetchEmployees(prevPage, startAfterDoc);
+        setCurrentPage(prevPage);
+      }
   };
 
 
@@ -309,6 +362,20 @@ export default function EmployeeDirectoryPage() {
     }
   };
   
+  const displayedEmployees = useMemo(() => {
+    if (searchTerm.trim() !== '') {
+      return employees.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    }
+    return employees;
+  }, [employees, currentPage, searchTerm]);
+
+  const canShowNext = useMemo(() => {
+    if (searchTerm.trim() !== '') {
+      return (currentPage * ITEMS_PER_PAGE) < employees.length;
+    }
+    return employees.length >= ITEMS_PER_PAGE;
+  }, [employees.length, currentPage, searchTerm]);
+
 
   if (isLoading) { 
     return (
@@ -436,14 +503,14 @@ export default function EmployeeDirectoryPage() {
                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                     </TableCell>
                     </TableRow>
-                ) : employees.length === 0 ? (
+                ) : displayedEmployees.length === 0 ? (
                     <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
                         No employees found.
                     </TableCell>
                     </TableRow>
                 ) : (
-                    employees.map((emp) => (
+                    displayedEmployees.map((emp) => (
                     <TableRow 
                       key={emp.id} 
                       className="cursor-pointer hover:bg-muted/50"
@@ -519,7 +586,7 @@ export default function EmployeeDirectoryPage() {
 
             <div className="flex justify-between items-center mt-4">
                 <span className="text-sm text-muted-foreground">
-                Page {currentPage}
+                 Page {currentPage}
                 </span>
                 <div className="flex gap-2">
                 <Button
@@ -534,7 +601,7 @@ export default function EmployeeDirectoryPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleNextPage}
-                    disabled={isTableLoading || employees.length < ITEMS_PER_PAGE}
+                    disabled={isTableLoading || !canShowNext}
                 >
                     Next
                 </Button>
