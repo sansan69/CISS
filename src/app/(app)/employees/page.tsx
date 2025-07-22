@@ -9,13 +9,13 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Added Card imports
-import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, collectionGroup } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, collectionGroup, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
+import { Progress } from '@/components/ui/progress';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -68,6 +69,9 @@ export default function EmployeeDirectoryPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [isUpdatingSearchFields, setIsUpdatingSearchFields] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+
 
   const fetchClients = useCallback(async () => {
     try {
@@ -102,8 +106,10 @@ export default function EmployeeDirectoryPage() {
         q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
     }
     
-    if (forPagination) {
-      q = query(q, orderBy('createdAt', 'desc'));
+    // Only add orderBy if not searching, or if searching on a field that supports it.
+    // As of now, searching is exclusive.
+    if (!searchTerm.trim()) {
+        q = query(q, orderBy('createdAt', 'desc'));
     }
 
     return q;
@@ -114,7 +120,7 @@ export default function EmployeeDirectoryPage() {
     setError(null);
 
     try {
-        let finalQuery = buildBaseQuery(true);
+        let finalQuery = buildBaseQuery();
         
         if (startAfterDoc) {
             finalQuery = query(finalQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
@@ -168,7 +174,7 @@ export default function EmployeeDirectoryPage() {
             setPageHistory([null]);
             setLastVisibleDoc(null);
             fetchEmployees(1, null);
-        }, 500); // Debounce search/filter changes by 500ms
+        }, 300); // Debounce search/filter changes by 300ms
 
         return () => clearTimeout(debounceTimer);
     }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
@@ -314,6 +320,63 @@ export default function EmployeeDirectoryPage() {
       toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleUpdateSearchFields = async () => {
+    setIsUpdatingSearchFields(true);
+    setUpdateProgress(0);
+    toast({ title: "Starting Update Process", description: "Fetching all employee records. This may take a moment..." });
+
+    try {
+      const allEmployeesQuery = query(collection(db, "employees"));
+      const snapshot = await getDocs(allEmployeesQuery);
+      const totalDocs = snapshot.size;
+      let processedCount = 0;
+
+      if (totalDocs === 0) {
+        toast({ title: "No Employees Found", description: "There are no employee records to update." });
+        setIsUpdatingSearchFields(false);
+        return;
+      }
+
+      const BATCH_SIZE = 400; // Firestore batch limit is 500 writes
+      for (let i = 0; i < totalDocs; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+
+        for (const docSnapshot of chunk) {
+          const employeeData = docSnapshot.data() as Employee;
+          
+          if (employeeData.searchableFields && Array.isArray(employeeData.searchableFields) && employeeData.searchableFields.length > 0) {
+              // Optionally skip already updated docs, though re-running is safe
+          }
+
+          const searchableFields = Array.from(new Set([
+            employeeData.fullName?.toUpperCase(),
+            employeeData.firstName?.toUpperCase(),
+            employeeData.lastName?.toUpperCase(),
+            employeeData.employeeId?.toUpperCase(),
+            employeeData.phoneNumber,
+          ].filter(Boolean) as string[]));
+
+          batch.update(docSnapshot.ref, { searchableFields });
+        }
+
+        await batch.commit();
+        processedCount += chunk.length;
+        setUpdateProgress((processedCount / totalDocs) * 100);
+      }
+      
+      toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} employee records for searching.`, duration: 5000 });
+      // Refresh the current view
+      fetchEmployees(1, null);
+
+    } catch (error) {
+      console.error("Error updating search fields:", error);
+      toast({ variant: "destructive", title: "Update Failed", description: "An error occurred while updating employee records." });
+    } finally {
+      setIsUpdatingSearchFields(false);
     }
   };
   
@@ -550,6 +613,53 @@ export default function EmployeeDirectoryPage() {
                 </div>
             </div>
         </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+            <CardTitle>Data Maintenance</CardTitle>
+            <CardDescription>
+                Use this tool to update existing employee records. This is useful after a new feature (like search) is added.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            {isUpdatingSearchFields ? (
+                <div className="flex flex-col gap-2">
+                    <p>Updating employee search data... Do not close this page.</p>
+                    <Progress value={updateProgress} />
+                    <p className="text-sm text-muted-foreground text-center">{Math.round(updateProgress)}%</p>
+                </div>
+            ) : (
+                 <p className="text-sm text-muted-foreground">
+                    If search isn't working for older employees, click this button to update all records.
+                    This process will add the necessary search fields to make them discoverable.
+                 </p>
+            )}
+
+        </CardContent>
+        <CardFooter>
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="secondary" disabled={isUpdatingSearchFields}>
+                        <DatabaseZap className="mr-2 h-4 w-4" />
+                        Update All Employees for Search
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Data Update</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will process all employee records in the database to add or update search fields. 
+                            This action is safe to run multiple times but may incur Firestore costs depending on the number of employees. Are you sure you want to proceed?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleUpdateSearchFields}>Confirm & Update</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </CardFooter>
       </Card>
 
       {selectedEmployeeForStatusChange && (
