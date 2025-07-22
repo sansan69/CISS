@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -137,8 +138,8 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
           <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
-          <DetailGridItem label="ID Proof Type" value={employee.idProofType} />
-          <DetailGridItem label="ID Proof Number" value={employee.idProofNumber} />
+          <DetailGridItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
+          <DetailGridItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
         </div>
       </section>
     </main>
@@ -200,12 +201,22 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
         <p className="text-sm mb-6 text-justify">
           I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
         </p>
-        <div className="grid grid-cols-2 gap-12 mt-12 text-sm">
-          <div><div className="border-t border-gray-400 pt-2">Signature of Security Guard</div></div>
-          <div><div className="border-t border-gray-400 pt-2">Date</div></div>
-          <div className="col-span-2 mt-6">
-            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></div>
+        <div className="flex justify-between items-center mt-12 pt-12 text-sm">
+          <div className="flex-1">
+            {employee.signatureUrl ? (
+                <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
+            ): (
+                <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
+            )}
+            <div className="border-t border-gray-400 mt-2 pt-2">Signature of Security Guard</div>
+            </div>
+          <div className="w-1/4">
+            <div className="border-b border-gray-400 h-8"></div>
+            <div className="border-t border-gray-400 mt-2 pt-2">Date</div>
           </div>
+        </div>
+        <div className="mt-6 pt-6 border-t border-gray-300">
+            <p className="text-sm">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></p>
         </div>
       </section>
       <PageFooter pageNumber={pageNumber} />
@@ -245,18 +256,18 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
   );
 };
 
-const DocumentItem: React.FC<{ name: string, url?: string, type: string }> = ({ name, url, type }) => (
+const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({ name, url, type }) => (
     <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center gap-3">
             <FileUp className="h-5 w-5 text-primary" />
             <div>
                 <p className="text-sm font-medium">{name}</p>
-                <p className="text-xs text-muted-foreground">{type}</p>
+                {type && <p className="text-xs text-muted-foreground">{type}</p>}
             </div>
         </div>
         {url ? (
             <Button variant="outline" size="sm" asChild>
-                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type} document`}>
+                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
                     <Download className="mr-2 h-4 w-4" /> View/Download
                 </a>
             </Button>
@@ -457,7 +468,7 @@ export default function PublicEmployeeProfilePage() {
         <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
             {renderOffscreenPages()}
         </div>
-        <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+        <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 md:p-0">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <Button variant="outline" size="sm" onClick={() => router.push('/')}>
             <Home className="mr-2 h-4 w-4" /> Back to Home
@@ -548,8 +559,8 @@ export default function PublicEmployeeProfilePage() {
                 <CardTitle className="mb-4">Identification Details</CardTitle>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
-                    <DetailItem label="ID Proof Type" value={employee.idProofType} />
-                    <DetailItem label="ID Proof Number" value={employee.idProofNumber} />
+                    <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
+                    <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
                 </div>
@@ -571,9 +582,13 @@ export default function PublicEmployeeProfilePage() {
                         <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                         <div className="space-y-3">
                             <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                            <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
-                            <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />
+                            <DocumentItem name="Identity Proof (Front)" url={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} type={employee.identityProofType || (employee as any).idProofType} />
+                            <DocumentItem name="Identity Proof (Back)" url={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} type={employee.identityProofType || (employee as any).idProofType} />
+                            <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
+                            <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                            <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
                         </div>
                     </div>
                 </div>

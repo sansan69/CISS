@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -233,6 +234,7 @@ const DetailGridItem = ({ label, value }: { label: string; value?: string | numb
 const formatDate = (date: any) => {
   if (!date) return 'N/A';
   const dateObj = date.toDate ? date.toDate() : new Date(date);
+  if (isNaN(dateObj.getTime())) return 'N/A';
   return format(dateObj, "PPP");
 };
 
@@ -298,8 +300,8 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
           <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
-          <DetailGridItem label="Identity Proof" value={`${employee.identityProofType} - ${employee.identityProofNumber}`} />
-          <DetailGridItem label="Address Proof" value={`${employee.addressProofType} - ${employee.addressProofNumber}`} />
+          <DetailGridItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
+          <DetailGridItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
         </div>
       </section>
     </main>
@@ -364,7 +366,7 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
         <div className="flex justify-between items-center mt-12 pt-12 text-sm">
           <div className="flex-1">
             {employee.signatureUrl ? (
-                <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" />
+                <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
             ): (
                 <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
             )}
@@ -532,6 +534,7 @@ export default function AdminEmployeeProfilePage() {
 
   useEffect(() => {
     if (employee) {
+      const legacy = employee as any;
       form.reset({
         ...employee,
         joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
@@ -542,7 +545,8 @@ export default function AdminEmployeeProfilePage() {
         panNumber: employee.panNumber || "",
         epfUanNumber: employee.epfUanNumber || "",
         esicNumber: employee.esicNumber || "",
-        identityProofType: employee.identityProofType as any,
+        identityProofType: (employee.identityProofType || legacy.idProofType) as any,
+        identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber),
         addressProofType: employee.addressProofType as any,
       });
     }
@@ -1107,7 +1111,7 @@ export default function AdminEmployeeProfilePage() {
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
-                    <DetailItem label="Identity Proof" value={`${employee.identityProofType || 'N/A'} - ${employee.identityProofNumber || 'N/A'}`} />
+                    <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
@@ -1136,8 +1140,8 @@ export default function AdminEmployeeProfilePage() {
                         <div className="space-y-3">
                             <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
                             <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />
-                            <DocumentItem name="Identity Proof (Front)" url={employee.identityProofUrlFront} type={employee.identityProofType} />
-                            <DocumentItem name="Identity Proof (Back)" url={employee.identityProofUrlBack} type={employee.identityProofType} />
+                            <DocumentItem name="Identity Proof (Front)" url={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} type={employee.identityProofType || (employee as any).idProofType} />
+                            <DocumentItem name="Identity Proof (Back)" url={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} type={employee.identityProofType || (employee as any).idProofType} />
                             <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
                             <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
@@ -1213,8 +1217,8 @@ export default function AdminEmployeeProfilePage() {
                             <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
                         </div>
                     </div>
 
