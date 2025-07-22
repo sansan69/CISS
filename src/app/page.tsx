@@ -60,30 +60,23 @@ export default function LandingPage() {
   };
 
    const setupRecaptcha = () => {
+    // Clear any existing verifier
+    if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+    }
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       'size': 'invisible',
       'callback': (response: any) => {
-        // reCAPTCHA solved.
+        // reCAPTCHA solved, automatically triggers signInWithPhoneNumber.
       },
       'expired-callback': () => {
         toast({ variant: 'destructive', title: 'reCAPTCHA Expired', description: 'Please try sending the OTP again.' });
-        if (window.recaptchaVerifier) {
-            window.recaptchaVerifier.render().then(widgetId => {
-              window.recaptchaVerifier?.clear();
-            });
-        }
       }
     });
 
     window.recaptchaVerifier = verifier;
     return verifier;
   };
-
-  useEffect(() => {
-    if (!window.recaptchaVerifier) {
-      setupRecaptcha();
-    }
-  }, []);
 
 
   const handleContinue = async () => {
@@ -121,10 +114,7 @@ export default function LandingPage() {
     toast({ title: "New User Detected", description: "Please verify your number to continue with enrollment." });
     try {
       const fullPhoneNumber = `+91${normalizedPhoneNumber}`;
-      const appVerifier = window.recaptchaVerifier;
-      if (!appVerifier) {
-        throw new Error("reCAPTCHA Verifier is not initialized.");
-      }
+      const appVerifier = setupRecaptcha(); // Create a new verifier just-in-time
 
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
       setConfirmationResult(result);
@@ -147,7 +137,10 @@ export default function LandingPage() {
 
   const handleVerifyOtp = async () => {
     const resultToConfirm = confirmationResult || window.confirmationResult;
-    if (!resultToConfirm) return;
+    if (!resultToConfirm) {
+        toast({ variant: 'destructive', title: 'Verification Error', description: 'Could not find verification session. Please try again.' });
+        return;
+    }
     setIsLoading(true);
 
     try {
@@ -291,5 +284,3 @@ export default function LandingPage() {
     </div>
   );
 }
-
-    
