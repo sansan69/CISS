@@ -462,12 +462,18 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         ];
         
         for (const task of verificationTasks) {
-            // Only verify if it's an image
             if (task.docFile.type.startsWith('image/')) {
                 const dataUri = await fileToDataUri(task.docFile);
                 const result = await verifyDocument({ photoDataUri: dataUri, expectedType: task.docType });
                 if (!result.isMatch) {
-                    throw new Error(`AI Verification Failed for ${task.label}: ${result.reason}. Please upload the correct document.`);
+                    toast({
+                        variant: "destructive",
+                        title: `${task.label} Mismatch`,
+                        description: `The document you uploaded for ${task.label} does not appear to be a ${task.docType}. AI Reason: ${result.reason}`,
+                        duration: 9000
+                    });
+                    setIsLoading(false);
+                    return; // Stop submission
                 }
             }
         }
@@ -476,7 +482,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
     } catch (error: any) {
         console.error("AI Verification Error:", error);
-        toast({ variant: "destructive", title: "Document Mismatch", description: error.message, duration: 8000 });
+        toast({ variant: "destructive", title: "Document Verification Failed", description: "Could not verify documents with AI. Please try again.", duration: 8000 });
         setIsLoading(false);
         return; // Stop submission
     }
