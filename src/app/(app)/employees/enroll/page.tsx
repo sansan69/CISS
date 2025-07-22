@@ -386,10 +386,9 @@ export default function EnrollEmployeePage() {
       const newEmployeeId = generateEmployeeId(data.clientName);
       const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
       
+      const nameParts = fullName.toUpperCase().split(' ').filter(Boolean);
       const searchableFields = Array.from(new Set([
-          fullName.toUpperCase(),
-          data.firstName.toUpperCase(),
-          data.lastName.toUpperCase(),
+          ...nameParts,
           newEmployeeId.toUpperCase(),
           data.phoneNumber
       ].filter(Boolean)));
@@ -874,3 +873,5 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
+
+    

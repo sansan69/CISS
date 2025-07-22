@@ -706,11 +706,10 @@ export default function AdminEmployeeProfilePage() {
         const finalPayload = { ...formPayload, ...updatedUrls };
         
         // Update searchableFields if relevant info changed
-        if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId) {
+        if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId || finalPayload.firstName || finalPayload.lastName) {
+             const nameParts = (finalPayload.fullName || employee.fullName).toUpperCase().split(' ').filter(Boolean);
              finalPayload.searchableFields = Array.from(new Set([
-                (finalPayload.fullName || employee.fullName).toUpperCase(),
-                (finalPayload.fullName?.split(' ')[0] || employee.fullName.split(' ')[0]).toUpperCase(),
-                (finalPayload.fullName?.split(' ').slice(1).join(' ') || employee.fullName.split(' ').slice(1).join(' ')).toUpperCase(),
+                ...nameParts,
                 (finalPayload.employeeId || employee.employeeId).toUpperCase(),
                 finalPayload.phoneNumber || employee.phoneNumber
              ].filter(Boolean)));
@@ -852,10 +851,9 @@ export default function AdminEmployeeProfilePage() {
         errorCorrectionLevel: 'H', type: 'image/png', quality: 0.92, margin: 1, width: 256,
       });
       
-      const newSearchableFields = Array.from(new Set([
-          employee.fullName.toUpperCase(),
-          employee.fullName.toUpperCase().split(' ')[0],
-          employee.fullName.toUpperCase().split(' ').slice(1).join(' '),
+       const nameParts = employee.fullName.toUpperCase().split(' ').filter(Boolean);
+       const newSearchableFields = Array.from(new Set([
+          ...nameParts,
           newEmployeeId.toUpperCase(),
           employee.phoneNumber
       ].filter(Boolean)));
@@ -1279,3 +1277,5 @@ export default function AdminEmployeeProfilePage() {
     </>
   );
 }
+
+    

@@ -107,9 +107,13 @@ export default function EmployeeDirectoryPage() {
     }
     
     // Only add orderBy if not searching, or if searching on a field that supports it.
-    // As of now, searching is exclusive.
+    // Firestore requires the first orderBy to be on the field used in inequality filters.
+    // As we are not using inequality filters here other than search, we can order by createdAt.
     if (!searchTerm.trim()) {
         q = query(q, orderBy('createdAt', 'desc'));
+    } else {
+        // When searching, we can't reliably sort by another field without a composite index.
+        // The default Firestore order (by document ID) is acceptable for search results.
     }
 
     return q;
@@ -348,15 +352,10 @@ export default function EmployeeDirectoryPage() {
         for (const docSnapshot of chunk) {
           const employeeData = docSnapshot.data() as Employee;
           
-          if (employeeData.searchableFields && Array.isArray(employeeData.searchableFields) && employeeData.searchableFields.length > 0) {
-              // Optionally skip already updated docs, though re-running is safe
-          }
-
+          const nameParts = (employeeData.fullName || '').toUpperCase().split(' ').filter(Boolean);
           const searchableFields = Array.from(new Set([
-            employeeData.fullName?.toUpperCase(),
-            employeeData.firstName?.toUpperCase(),
-            employeeData.lastName?.toUpperCase(),
-            employeeData.employeeId?.toUpperCase(),
+            ...nameParts,
+            (employeeData.employeeId || '').toUpperCase(),
             employeeData.phoneNumber,
           ].filter(Boolean) as string[]));
 
@@ -738,3 +737,5 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
+
+    
