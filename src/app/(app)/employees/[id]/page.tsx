@@ -699,9 +699,23 @@ export default function AdminEmployeeProfilePage() {
 
         if (data.status !== 'Exited' && employee.exitDate) formPayload.exitDate = deleteField();
         if (data.maritalStatus !== 'Married' && employee.spouseName) formPayload.spouseName = "";
+        
+        const fullName = `${data.firstName} ${data.lastName}`;
+        formPayload.fullName = fullName;
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
+        // Update searchableFields if relevant info changed
+        if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId) {
+             finalPayload.searchableFields = [
+                (finalPayload.fullName || employee.fullName).toUpperCase(),
+                (finalPayload.fullName || employee.fullName).toUpperCase().split(' ')[0],
+                (finalPayload.fullName || employee.fullName).toUpperCase().split(' ').slice(1).join(' '),
+                (finalPayload.employeeId || employee.employeeId).toUpperCase(),
+                finalPayload.phoneNumber || employee.phoneNumber
+             ].filter(Boolean);
+        }
+
         if (updatedUrls.idProofDocumentUrlFront && employee.idProofDocumentUrl) {
             finalPayload.idProofDocumentUrl = deleteField();
         }
@@ -837,16 +851,25 @@ export default function AdminEmployeeProfilePage() {
       const newQrDataUrl = await QRCode.toDataURL(dataString, {
         errorCorrectionLevel: 'H', type: 'image/png', quality: 0.92, margin: 1, width: 256,
       });
+      
+      const newSearchableFields = [
+          employee.fullName.toUpperCase(),
+          employee.fullName.toUpperCase().split(' ')[0],
+          employee.fullName.toUpperCase().split(' ').slice(1).join(' '),
+          newEmployeeId.toUpperCase(),
+          employee.phoneNumber
+      ].filter(Boolean);
 
       const employeeDocRef = doc(db, "employees", employee.id);
       await updateDoc(employeeDocRef, {
         employeeId: newEmployeeId,
         qrCodeUrl: newQrDataUrl,
+        searchableFields: newSearchableFields,
         updatedAt: serverTimestamp(),
       });
 
-      setEmployee(prev => prev ? { ...prev, employeeId: newEmployeeId, qrCodeUrl: newQrDataUrl } : null);
-      toast({ title: "Employee ID Regenerated", description: `New ID is ${newEmployeeId}. QR code also updated.` });
+      setEmployee(prev => prev ? { ...prev, employeeId: newEmployeeId, qrCodeUrl: newQrDataUrl, searchableFields: newSearchableFields } : null);
+      toast({ title: "Employee ID Regenerated", description: `New ID is ${newEmployeeId}. QR code and search fields also updated.` });
     } catch (err) {
       console.error("Error regenerating Employee ID:", err);
       toast({ variant: "destructive", title: "ID Regeneration Failed", description: "Could not regenerate the Employee ID." });

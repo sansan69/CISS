@@ -385,6 +385,14 @@ export default function EnrollEmployeePage() {
       const fullName = `${data.firstName} ${data.lastName}`;
       const newEmployeeId = generateEmployeeId(data.clientName);
       const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
+      
+      const searchableFields = [
+          fullName.toUpperCase(),
+          data.firstName.toUpperCase(),
+          data.lastName.toUpperCase(),
+          newEmployeeId.toUpperCase(),
+          data.phoneNumber
+      ];
 
       // Profile Picture Upload
       if (data.profilePicture) {
@@ -455,6 +463,7 @@ export default function EnrollEmployeePage() {
         qrCodeUrl: newQrCodeUrl,
         fullName: fullName,
         ...data, 
+        searchableFields,
         joiningDate: Timestamp.fromDate(data.joiningDate),
         dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
         profilePictureUrl,

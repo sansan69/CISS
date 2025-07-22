@@ -98,17 +98,9 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('district', '==', filterDistrict));
     }
   
-    // Apply search term and order
     if (searchTerm.trim() !== '') {
-        const searchTermUpper = searchTerm.trim().toUpperCase();
-        // When searching, we must order by the field we are searching on.
-        q = query(q, 
-            where('employeeId', '>=', searchTermUpper), 
-            where('employeeId', '<=', searchTermUpper + '\uf8ff'),
-            orderBy('employeeId', 'asc')
-        );
+        q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
     } else {
-        // Default sort order when not searching
         q = query(q, orderBy('createdAt', 'desc'));
     }
     
@@ -355,15 +347,16 @@ export default function EmployeeDirectoryPage() {
         <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
               <div className="relative">
-                  <Label htmlFor="search-input">Search by ID</Label>
+                  <Label htmlFor="search-input">Search by Name/ID/Phone</Label>
                   <Search className="absolute left-2.5 bottom-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="search-input"
                     type="search"
-                    placeholder="Search by Employee ID..."
+                    placeholder="Search..."
                     className="pl-8 w-full"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleFilterOrSearch(); }}
                   />
               </div>
               <div>
