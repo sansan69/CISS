@@ -121,14 +121,23 @@ export default function EmployeeDirectoryPage() {
 
         if (searchTerm.trim() !== '') {
             // Hybrid Search: Query multiple fields and merge
-            const searchTerms = [
-                { field: 'fullName', query: buildBaseQuery('fullName')},
-                { field: 'employeeId', query: buildBaseQuery('employeeId')},
-                { field: 'phoneNumber', query: buildBaseQuery('phoneNumber')},
-            ];
+            const searchFields = ['fullName', 'employeeId', 'phoneNumber'];
+            const searchQueries = searchFields.map(field => {
+                const term = searchTerm.trim();
+                let q = collection(db, "employees");
 
-            const allQueries = searchTerms.map(st => getDocs(st.query));
-            const allResults = await Promise.all(allQueries);
+                if (filterClient !== 'all') q = query(q, where('clientName', '==', filterClient));
+                if (filterStatus !== 'all') q = query(q, where('status', '==', filterStatus));
+                if (filterDistrict !== 'all') q = query(q, where('district', '==', filterDistrict));
+                
+                const searchTermUpper = term.toUpperCase();
+                const searchTermLower = term.toLowerCase();
+                const searchTermTitle = term.charAt(0).toUpperCase() + term.slice(1).toLowerCase();
+
+                return getDocs(query(q, where(field, '>=', term), where(field, '<=', term + '\uf8ff')));
+            });
+
+            const allResults = await Promise.all(searchQueries);
 
             const uniqueEmployees = new Map<string, Employee>();
 
@@ -139,7 +148,6 @@ export default function EmployeeDirectoryPage() {
                         uniqueEmployees.set(docSnap.id, {
                              id: docSnap.id,
                             ...data,
-                            // Convert Timestamps to ISO strings for serialization
                             joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
                             dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
                             exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : data.exitDate,
@@ -152,9 +160,8 @@ export default function EmployeeDirectoryPage() {
 
             fetchedEmployees = Array.from(uniqueEmployees.values());
             // Client-side pagination for search results
-            setEmployees(fetchedEmployees.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE));
-            // Note: server-side pagination for search is complex, disabling for now.
-             setLastVisibleDoc(null); 
+            setEmployees(fetchedEmployees);
+            setLastVisibleDoc(null); 
 
 
         } else {
@@ -199,28 +206,29 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, searchTerm]); 
+  }, [toast, buildBaseQuery, searchTerm, filterClient, filterStatus, filterDistrict]); 
 
-  const handleFilterOrSearch = useCallback(() => {
-    setCurrentPage(1); 
-    setPageHistory([null]);
-    setLastVisibleDoc(null);
-    fetchEmployees(1, null);
-  }, [fetchEmployees]);
-  
-  useEffect(() => {
-    fetchClients();
-    handleFilterOrSearch();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    useEffect(() => {
+        fetchClients();
+    }, [fetchClients]);
+
+    useEffect(() => {
+        const debounceTimer = setTimeout(() => {
+            setCurrentPage(1);
+            setPageHistory([null]);
+            setLastVisibleDoc(null);
+            fetchEmployees(1, null);
+        }, 500); // Debounce search/filter changes by 500ms
+
+        return () => clearTimeout(debounceTimer);
+    }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
   
 
   const handleNextPage = () => {
-    if (!lastVisibleDoc) return; // Can't go next if there's no last doc
+    if (!lastVisibleDoc && searchTerm.trim() === '') return;
 
     const nextPage = currentPage + 1;
     if (searchTerm.trim() !== '') {
-        // Handle client-side pagination for search
         setCurrentPage(nextPage);
     } else {
        setPageHistory(prev => [...prev, lastVisibleDoc]);
@@ -292,7 +300,6 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      // Refetch current page to show updated data
       fetchEmployees(currentPage, pageHistory[currentPage - 1]);
       
       setIsStatusModalOpen(false);
@@ -350,7 +357,11 @@ export default function EmployeeDirectoryPage() {
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      handleFilterOrSearch();
+      // Reset and fetch first page
+      setCurrentPage(1);
+      setPageHistory([null]);
+      setLastVisibleDoc(null);
+      fetchEmployees(1, null);
       
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
@@ -374,7 +385,7 @@ export default function EmployeeDirectoryPage() {
       return (currentPage * ITEMS_PER_PAGE) < employees.length;
     }
     return employees.length >= ITEMS_PER_PAGE;
-  }, [employees.length, currentPage, searchTerm]);
+  }, [employees, currentPage, searchTerm]);
 
 
   if (isLoading) { 
@@ -391,7 +402,7 @@ export default function EmployeeDirectoryPage() {
       <div className="text-center py-10">
         <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
         <p className="mt-4 text-lg text-destructive">{error}</p>
-        <Button onClick={handleFilterOrSearch} className="mt-4">Try Again</Button>
+        <Button onClick={() => fetchEmployees(1, null)} className="mt-4">Try Again</Button>
       </div>
     );
   }
@@ -413,18 +424,19 @@ export default function EmployeeDirectoryPage() {
         </CardHeader>
         <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              <div className="relative">
+              <div className="sm:col-span-2 lg:col-span-1">
                   <Label htmlFor="search-input">Search by Name/ID/Phone</Label>
-                  <Search className="absolute left-2.5 bottom-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search-input"
-                    type="search"
-                    placeholder="Search..."
-                    className="pl-8 w-full"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleFilterOrSearch(); }}
-                  />
+                  <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="search-input"
+                        type="search"
+                        placeholder="Search..."
+                        className="pl-8 w-full"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                  </div>
               </div>
               <div>
                 <Label htmlFor="client-filter">Client</Label>
@@ -472,9 +484,6 @@ export default function EmployeeDirectoryPage() {
                     </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleFilterOrSearch} className="w-full sm:col-span-2 lg:col-span-4">
-                  Apply Filters & Search
-              </Button>
             </div>
         </CardContent>
       </Card>
