@@ -40,6 +40,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSearchParams, useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
+import { Checkbox } from "@/components/ui/checkbox";
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -99,6 +100,11 @@ const enrollmentFormSchema = z.object({
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
   emailAddress: z.string().email({ message: "Invalid email address." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
+  
+  // Terms and Conditions
+  termsAndConditions: z.boolean().refine((val) => val === true, {
+    message: "You must accept the terms and conditions to proceed.",
+  }),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({
@@ -258,6 +264,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         fullAddress: '',
         emailAddress: '',
         phoneNumber: '',
+        termsAndConditions: false,
      },
   });
 
@@ -892,6 +899,53 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         <FormMessage />
                     </FormItem>
                   )} />
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Terms & Conditions</h2>
+                <div className="space-y-4">
+                  <div className="h-48 overflow-y-auto p-4 border rounded-md text-xs text-muted-foreground space-y-2">
+                    <p className="font-bold">I. General Eligibility and Compliance</p>
+                    <ul className="list-disc list-outside pl-4 space-y-1">
+                      <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
+                      <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
+                      <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
+                    </ul>
+                    <p className="font-bold">II. Employment Terms & Responsibilities</p>
+                    <ul className="list-disc list-outside pl-4 space-y-1">
+                      <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
+                      <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
+                      <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
+                      <li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li>
+                    </ul>
+                    <p className="font-bold">III. Disciplinary Action</p>
+                     <ul className="list-disc list-outside pl-4 space-y-1">
+                        <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
+                     </ul>
+                    <p className="font-bold">IV. Declaration</p>
+                    <p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="termsAndConditions"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>
+                            I have read, understood, and agree to the Terms and Conditions of Enrollment.
+                          </FormLabel>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </section>
 
