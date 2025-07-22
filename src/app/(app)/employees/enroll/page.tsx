@@ -26,7 +26,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle } from "lucide-react";
+import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,10 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const fileSchema = z.instanceof(File, { message: "This field is required." })
   .refine(file => file.size <= MAX_FILE_SIZE_BYTES, `Max file size is ${MAX_FILE_SIZE_MB}MB.`);
 
+const optionalFileSchema = fileSchema.optional();
+
+const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
+
 const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
@@ -68,10 +72,20 @@ const enrollmentFormSchema = z.object({
   // Location & Identification
   district: z.string({ required_error: "District is required." }),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
-  idProofType: z.enum(["Aadhar Card", "Voter ID", "Driving License", "Passport"], { required_error: "ID proof type is required." }),
-  idProofNumber: z.string().min(5, { message: "ID proof number is required (min 5 chars)." }),
-  idProofDocumentFront: fileSchema.describe("Front side of ID proof"),
-  idProofDocumentBack: fileSchema.describe("Back side of ID proof").optional(),
+  
+  identityProofType: proofTypes,
+  identityProofNumber: z.string().min(5, { message: "ID proof number is required." }),
+  identityProofUrlFront: fileSchema,
+  identityProofUrlBack: fileSchema,
+  
+  addressProofType: proofTypes,
+  addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
+  addressProofUrlFront: fileSchema,
+  addressProofUrlBack: fileSchema,
+  
+  signatureUrl: fileSchema.describe("Employee's signature image"),
+  
+  policeClearanceCertificate: optionalFileSchema,
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 
@@ -114,10 +128,12 @@ const keralaDistricts = [
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
-const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
+
+const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
 const maritalStatuses = ["Married", "Unmarried"];
 
-type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement";
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+
 
 const handleUploadError = (err: any, documentName: string): never => {
   if (err.code === 'storage/unauthorized') {
@@ -187,10 +203,16 @@ const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phone
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
   const router = useRouter();
+
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
-  const [idProofPreviewFront, setIdProofPreviewFront] = React.useState<string | null>(null);
-  const [idProofPreviewBack, setIdProofPreviewBack] = React.useState<string | null>(null);
+  const [identityProofUrlFrontPreview, setIdentityProofUrlFrontPreview] = React.useState<string | null>(null);
+  const [identityProofUrlBackPreview, setIdentityProofUrlBackPreview] = React.useState<string | null>(null);
+  const [addressProofUrlFrontPreview, setAddressProofUrlFrontPreview] = React.useState<string | null>(null);
+  const [addressProofUrlBackPreview, setAddressProofUrlBackPreview] = React.useState<string | null>(null);
+  const [signatureUrlPreview, setSignatureUrlPreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
+  const [policeCertPreview, setPoliceCertPreview] = React.useState<string | null>(null);
+
   const [isLoading, setIsLoading] = React.useState(false);
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
@@ -217,8 +239,10 @@ export default function EnrollEmployeePage() {
         spouseName: '',
         district: '',
         panNumber: '',
-        idProofType: undefined,
-        idProofNumber: '',
+        identityProofType: undefined,
+        identityProofNumber: '',
+        addressProofType: undefined,
+        addressProofNumber: '',
         epfUanNumber: '',
         esicNumber: '',
         bankAccountNumber: '',
@@ -279,9 +303,12 @@ export default function EnrollEmployeePage() {
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        let facingMode: VideoFacingModeEnum = "user";
+        if (fieldName !== "profilePicture") {
+          facingMode = "environment";
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
         setCameraStream(stream);
-        // The useEffect will handle attaching the stream to videoRef.current and playing it
       } catch (err) {
         console.error("Error accessing camera:", err);
         setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
@@ -319,13 +346,19 @@ export default function EnrollEmployeePage() {
         const fileName = `${activeCameraField}_capture_${Date.now()}.jpg`;
         const capturedFile = await dataURLtoFile(dataUrl, fileName);
         
-        form.setValue(activeCameraField, capturedFile, { shouldValidate: true });
+        form.setValue(activeCameraField as any, capturedFile, { shouldValidate: true });
 
         const previewUrl = URL.createObjectURL(capturedFile);
-        if (activeCameraField === "profilePicture") setProfilePicPreview(previewUrl);
-        else if (activeCameraField === "idProofDocumentFront") setIdProofPreviewFront(previewUrl);
-        else if (activeCameraField === "idProofDocumentBack") setIdProofPreviewBack(previewUrl);
-        else if (activeCameraField === "bankPassbookStatement") setBankPassbookPreview(previewUrl);
+        switch(activeCameraField) {
+            case "profilePicture": setProfilePicPreview(previewUrl); break;
+            case "identityProofUrlFront": setIdentityProofUrlFrontPreview(previewUrl); break;
+            case "identityProofUrlBack": setIdentityProofUrlBackPreview(previewUrl); break;
+            case "addressProofUrlFront": setAddressProofUrlFrontPreview(previewUrl); break;
+            case "addressProofUrlBack": setAddressProofUrlBackPreview(previewUrl); break;
+            case "signatureUrl": setSignatureUrlPreview(previewUrl); break;
+            case "bankPassbookStatement": setBankPassbookPreview(previewUrl); break;
+            case "policeClearanceCertificate": setPoliceCertPreview(previewUrl); break;
+        }
         
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
       } catch (error) {
@@ -339,7 +372,7 @@ export default function EnrollEmployeePage() {
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>, 
-    fieldName: keyof Pick<EnrollmentFormValues, "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement">, 
+    fieldName: any, 
     setPreview: React.Dispatch<React.SetStateAction<string | null>>
   ) => {
     if (event.target.files && event.target.files[0]) {
@@ -374,117 +407,104 @@ export default function EnrollEmployeePage() {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait." });
 
-    let profilePictureUrl: string | null = null;
-    let idProofDocumentUrlFront: string | null = null;
-    let idProofDocumentUrlBack: string | null = null;
-    let bankPassbookStatementUrl: string | null = null;
+    const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
+    const fullName = `${data.firstName} ${data.lastName}`;
+    const newEmployeeId = generateEmployeeId(data.clientName);
+    const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
+    
+    const nameParts = (fullName || '').toUpperCase().split(' ').filter(Boolean);
+    const searchableFields = Array.from(new Set([
+        ...nameParts,
+        (data.firstName || '').toUpperCase(),
+        (data.lastName || '').toUpperCase(),
+        (newEmployeeId || '').toUpperCase(),
+        data.phoneNumber,
+    ].filter(Boolean) as string[]));
+
+    const uploadedUrls: { [key: string]: string | null } = {
+        profilePictureUrl: null,
+        identityProofUrlFront: null,
+        identityProofUrlBack: null,
+        addressProofUrlFront: null,
+        addressProofUrlBack: null,
+        signatureUrl: null,
+        bankPassbookStatementUrl: null,
+        policeClearanceCertificateUrl: null,
+    };
 
     try {
-      const uploadPromises = [];
-      const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
-      const fullName = `${data.firstName} ${data.lastName}`;
-      const newEmployeeId = generateEmployeeId(data.clientName);
-      const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
-      
-      const nameParts = fullName.toUpperCase().split(' ').filter(Boolean);
-      const searchableFields = Array.from(new Set([
-          ...nameParts,
-          newEmployeeId.toUpperCase(),
-          data.phoneNumber
-      ].filter(Boolean)));
+      const filesToUpload: { name: string; file?: File; path: string; isImage: boolean, key: keyof typeof uploadedUrls }[] = [
+            { name: "Profile Picture", file: data.profilePicture, path: `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, isImage: true, key: 'profilePictureUrl' },
+            { name: "Identity Proof (Front)", file: data.identityProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_front.${data.identityProofUrlFront.name.split('.').pop()}`, isImage: data.identityProofUrlFront.type.startsWith("image/"), key: 'identityProofUrlFront' },
+            { name: "Identity Proof (Back)", file: data.identityProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_back.${data.identityProofUrlBack.name.split('.').pop()}`, isImage: data.identityProofUrlBack.type.startsWith("image/"), key: 'identityProofUrlBack' },
+            { name: "Address Proof (Front)", file: data.addressProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_addr_front.${data.addressProofUrlFront.name.split('.').pop()}`, isImage: data.addressProofUrlFront.type.startsWith("image/"), key: 'addressProofUrlFront' },
+            { name: "Address Proof (Back)", file: data.addressProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_addr_back.${data.addressProofUrlBack.name.split('.').pop()}`, isImage: data.addressProofUrlBack.type.startsWith("image/"), key: 'addressProofUrlBack' },
+            { name: "Signature", file: data.signatureUrl, path: `employees/${phoneNumber}/signatures/${Date.now()}_sig.jpg`, isImage: true, key: 'signatureUrl' },
+            { name: "Bank Document", file: data.bankPassbookStatement, path: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank.${data.bankPassbookStatement.name.split('.').pop()}`, isImage: data.bankPassbookStatement.type.startsWith("image/"), key: 'bankPassbookStatementUrl' },
+            { name: "Police Certificate", file: data.policeClearanceCertificate, path: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${data.policeClearanceCertificate?.name.split('.').pop()}`, isImage: data.policeClearanceCertificate?.type.startsWith("image/") ?? false, key: 'policeClearanceCertificateUrl' },
+        ];
 
-      // Profile Picture Upload
-      if (data.profilePicture) {
-        const file = data.profilePicture;
-        const storagePath = `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`;
-        uploadPromises.push(
-          compressImage(file, { maxWidth: 500, maxHeight: 500, quality: 0.8, targetMimeType: 'image/jpeg' })
-            .then(blob => uploadFileToStorage(blob, storagePath))
-            .then(url => { profilePictureUrl = url; })
-            .catch(err => handleUploadError(err, 'profile picture'))
-        );
-      }
 
-      // ID Proof Front Upload
-      if (data.idProofDocumentFront) {
-        const file = data.idProofDocumentFront;
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof_front.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        const processAndUpload = file.type.startsWith("image/") 
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath); 
-        uploadPromises.push(
-          processAndUpload
-            .then(url => { idProofDocumentUrlFront = url; })
-            .catch(err => handleUploadError(err, 'ID proof (front)'))
-        );
-      }
-
-      // ID Proof Back Upload
-      if (data.idProofDocumentBack) {
-        const file = data.idProofDocumentBack;
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/idProofs/${Date.now()}_idProof_back.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        const processAndUpload = file.type.startsWith("image/") 
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath); 
-        uploadPromises.push(
-          processAndUpload
-            .then(url => { idProofDocumentUrlBack = url; })
-            .catch(err => handleUploadError(err, 'ID proof (back)'))
-        );
-      }
-      
-      // Bank Passbook Upload
-      if (data.bankPassbookStatement) {
-        const file = data.bankPassbookStatement;
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const storagePath = `employees/${phoneNumber}/bankDocuments/${Date.now()}_bankDoc.${file.type.startsWith("image/") ? 'jpg' : ext}`;
-        const processAndUpload = file.type.startsWith("image/")
-          ? compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7, targetMimeType: 'image/jpeg' }).then(blob => uploadFileToStorage(blob, storagePath))
-          : uploadFileToStorage(file, storagePath);
-        uploadPromises.push(
-          processAndUpload
-            .then(url => { bankPassbookStatementUrl = url; })
-            .catch(err => handleUploadError(err, 'bank document'))
-        );
-      }
-
-      if (uploadPromises.length > 0) {
-        toast({ title: "Uploading Files...", description: "This may take a moment."});
-        await Promise.all(uploadPromises);
-      }
+      for (const { name, file, path, isImage, key } of filesToUpload) {
+            if (!file) continue;
+            toast({ title: `Uploading ${name}...`});
+            try {
+                const fileToUpload = isImage
+                    ? await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+                    : file;
+                const url = await uploadFileToStorage(fileToUpload, path);
+                uploadedUrls[key] = url;
+            } catch (err) {
+                handleUploadError(err, name);
+            }
+        }
       
       toast({ title: "Saving Employee Data...", description: "Almost done."});
 
       const employeeDataForFirestore = {
-        employeeId: newEmployeeId,
-        qrCodeUrl: newQrCodeUrl,
-        fullName: fullName,
-        ...data, 
-        searchableFields,
-        joiningDate: Timestamp.fromDate(data.joiningDate),
-        dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
-        profilePictureUrl,
-        idProofDocumentUrlFront,
-        idProofDocumentUrlBack,
-        bankPassbookStatementUrl,
-        status: 'Active', 
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        profilePicture: undefined, 
-        idProofDocumentFront: undefined, 
-        idProofDocumentBack: undefined, 
-        bankPassbookStatement: undefined, 
-      };
+            employeeId: newEmployeeId,
+            qrCodeUrl: newQrCodeUrl,
+            searchableFields,
+            clientName: data.clientName,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            fullName: fullName,
+            fatherName: data.fatherName,
+            motherName: data.motherName,
+            joiningDate: Timestamp.fromDate(data.joiningDate),
+            dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
+            gender: data.gender,
+            maritalStatus: data.maritalStatus,
+            district: data.district,
+            bankAccountNumber: data.bankAccountNumber,
+            ifscCode: data.ifscCode,
+            bankName: data.bankName,
+            fullAddress: data.fullAddress,
+            emailAddress: data.emailAddress,
+            phoneNumber: data.phoneNumber,
+            status: 'Active',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            // New proof fields
+            identityProofType: data.identityProofType,
+            identityProofNumber: data.identityProofNumber,
+            identityProofUrlFront: uploadedUrls.identityProofUrlFront,
+            identityProofUrlBack: uploadedUrls.identityProofUrlBack,
+            addressProofType: data.addressProofType,
+            addressProofNumber: data.addressProofNumber,
+            addressProofUrlFront: uploadedUrls.addressProofUrlFront,
+            addressProofUrlBack: uploadedUrls.addressProofUrlBack,
+            signatureUrl: uploadedUrls.signatureUrl,
+            bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl,
+            // Optional fields
+            ...(data.resourceIdNumber && { resourceIdNumber: data.resourceIdNumber }),
+            ...(data.spouseName && { spouseName: data.spouseName }),
+            ...(data.panNumber && { panNumber: data.panNumber }),
+            ...(data.epfUanNumber && { epfUanNumber: data.epfUanNumber }),
+            ...(data.esicNumber && { esicNumber: data.esicNumber }),
+            ...(uploadedUrls.policeClearanceCertificateUrl && { policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl }),
+        };
       
-      Object.keys(employeeDataForFirestore).forEach(keyStr => {
-        const key = keyStr as keyof typeof employeeDataForFirestore;
-        if (employeeDataForFirestore[key] === undefined) {
-            delete employeeDataForFirestore[key];
-        }
-      });
-
       const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
       
       toast({
@@ -493,10 +513,15 @@ export default function EnrollEmployeePage() {
         action: <Check className="h-5 w-5 text-green-500" />,
       });
       form.reset();
+      // Reset all previews
       setProfilePicPreview(null);
-      setIdProofPreviewFront(null);
-      setIdProofPreviewBack(null);
+      setIdentityProofUrlFrontPreview(null);
+      setIdentityProofUrlBackPreview(null);
+      setAddressProofUrlFrontPreview(null);
+      setAddressProofUrlBackPreview(null);
+      setSignatureUrlPreview(null);
       setBankPassbookPreview(null);
+      setPoliceCertPreview(null);
       router.push(`/employees/${docRef.id}`);
 
     } catch (error: any) {
@@ -718,55 +743,58 @@ export default function EnrollEmployeePage() {
               </section>
               
               <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Location & Identification</h2>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Identification Documents</h2>
+                
+                {/* Identity Proof */}
+                <div className="p-4 border rounded-lg mt-4 space-y-4">
+                    <h3 className="font-medium text-lg">Identity Proof (Name, DOB, Father's Name)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <FormField control={form.control} name="identityProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlFront" preview={identityProofUrlFrontPreview} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
+                        <FormField control={form.control} name="identityProofUrlBack" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Back Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlBack" preview={identityProofUrlBackPreview} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
+                    </div>
+                </div>
+
+                {/* Address Proof */}
+                <div className="p-4 border rounded-lg mt-6 space-y-4">
+                    <h3 className="font-medium text-lg">Address Proof</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter address proof number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <FormField control={form.control} name="addressProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlFront" preview={addressProofUrlFrontPreview} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
+                        <FormField control={form.control} name="addressProofUrlBack" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Back Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlBack" preview={addressProofUrlBackPreview} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
+                    </div>
+                </div>
+
+                {/* Signature */}
+                 <div className="p-4 border rounded-lg mt-6 space-y-4">
+                    <h3 className="font-medium text-lg">Signature</h3>
+                     <FormField control={form.control} name="signatureUrl" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Employee Signature <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="signatureUrl" preview={signatureUrlPreview} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={openCamera} isSignature={true} /><FormDescription>Sign on a plain white paper and take a clear photo.</FormDescription><FormMessage /></FormItem> )} />
+                </div>
+              </section>
+              
+              <section>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Statutory & Location Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="idProofType" render={({ field }) => ( <FormItem><FormLabel>ID Proof Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormDescription>Type of identity document</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormDescription>Number on your ID document</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                  </div>
-                 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                 <div className="grid grid-cols-1 mt-6">
                     <FormField
                         control={form.control}
-                        name="idProofDocumentFront"
+                        name="policeClearanceCertificate"
                         render={({ field }) => ( 
                         <FormItem className="text-center">
-                            <FormLabel className="block mb-2">ID Proof (Front) <span className="text-destructive">*</span></FormLabel>
-                            {idProofPreviewFront && (idProofPreviewFront === "/pdf-icon.png" ? 
-                                <Image src={idProofPreviewFront} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
-                                <Image src={idProofPreviewFront} alt="ID Proof Front Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
-                            )}
-                            {!idProofPreviewFront && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
-                            <div className="flex justify-center gap-2">
-                                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentFrontInput')?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
-                                <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocumentFront")}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
-                            </div>
-                            <FormControl><Input id="idProofDocumentFrontInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocumentFront", setIdProofPreviewFront)} /></FormControl>
-                            <FormDescription>Upload front of ID (JPG, PNG, PDF. Max 5MB).</FormDescription>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="idProofDocumentBack"
-                        render={({ field }) => ( 
-                        <FormItem className="text-center">
-                            <FormLabel className="block mb-2">ID Proof (Back)</FormLabel>
-                            {idProofPreviewBack && (idProofPreviewBack === "/pdf-icon.png" ? 
-                                <Image src={idProofPreviewBack} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
-                                <Image src={idProofPreviewBack} alt="ID Proof Back Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
-                            )}
-                            {!idProofPreviewBack && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
-                            <div className="flex justify-center gap-2">
-                                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('idProofDocumentBackInput')?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
-                                <Button type="button" variant="outline" size="sm" onClick={() => openCamera("idProofDocumentBack")}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
-                            </div>
-                            <FormControl><Input id="idProofDocumentBackInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "idProofDocumentBack", setIdProofPreviewBack)} /></FormControl>
-                            <FormDescription>Upload back of ID (optional). Max 5MB.</FormDescription>
+                            <FormLabel className="block mb-2">Police Clearance Certificate</FormLabel>
+                            <ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
+                            <FormDescription>PCC document (optional). Max 5MB.</FormDescription>
                             <FormMessage />
                         </FormItem>
                         )}
@@ -787,23 +815,7 @@ export default function EnrollEmployeePage() {
                     render={({ field }) => ( 
                        <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
-                        {bankPassbookPreview && (
-                            bankPassbookPreview === "/pdf-icon.png" ?
-                            <Image src={bankPassbookPreview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
-                            <Image src={bankPassbookPreview} alt="Bank Passbook Preview" width={200} height={120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="bank document"/>
-                        )}
-                        {!bankPassbookPreview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div>}
-                         <div className="flex justify-center gap-2">
-                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('bankPassbookStatementInput')?.click()}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload
-                          </Button>
-                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("bankPassbookStatement")}>
-                            <Camera className="mr-2 h-4 w-4" /> Take Photo
-                          </Button>
-                        </div>
-                        <FormControl>
-                          <Input id="bankPassbookStatementInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, "bankPassbookStatement", setBankPassbookPreview)} />
-                        </FormControl>
+                        <ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
                         <FormDescription>Upload or take photo of bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -874,4 +886,27 @@ export default function EnrollEmployeePage() {
   );
 }
 
-    
+
+const ImagePreviewAndUpload: React.FC<{
+  fieldName: any;
+  preview: string | null;
+  setPreview: (p: string | null) => void;
+  handleFileChange: (e: React.ChangeEvent<HTMLInputElement>, fieldName: any, setPreview: any) => void;
+  openCamera: (fieldName: any) => void;
+  isSignature?: boolean;
+}> = ({ fieldName, preview, setPreview, handleFileChange, openCamera, isSignature }) => {
+    return (
+        <div>
+            {preview && (preview === "/pdf-icon.png" ? 
+                <Image src={preview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
+                <Image src={preview} alt={`${fieldName} Preview`} width={200} height={isSignature ? 100 : 120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
+            )}
+            {!preview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+            <div className="flex justify-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`${fieldName}Input`)?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
+            </div>
+            <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
+        </div>
+    );
+};

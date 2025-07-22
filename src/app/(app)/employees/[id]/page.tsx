@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -40,12 +40,15 @@ import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorag
 
 // Dropdown options
 const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
-const idProofTypes = ["Aadhar Card", "Voter ID", "Driving License", "Passport"];
+const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 interface ClientOption { id: string; name: string; }
-type CameraField = "profilePicture" | "idProofDocumentFront" | "idProofDocumentBack" | "bankPassbookStatement" | "policeClearanceCertificate";
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+
+
+const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
 
 // Zod schema for validation
 const employeeUpdateSchema = z.object({
@@ -70,8 +73,13 @@ const employeeUpdateSchema = z.object({
   bankAccountNumber: z.string().min(5, "Account number is required."),
   ifscCode: z.string().length(11, "IFSC code must be 11 characters."),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format.").optional().or(z.literal('')),
-  idProofType: z.string().min(1, "ID Proof type is required."),
-  idProofNumber: z.string().min(5, "ID Proof number is required."),
+  
+  identityProofType: proofTypes,
+  identityProofNumber: z.string().min(5, "ID Proof number is required."),
+  
+  addressProofType: proofTypes,
+  addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
+
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -120,18 +128,18 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
 };
 
 
-const DocumentItem: React.FC<{ name: string, url?: string, type: string }> = ({ name, url, type }) => (
+const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({ name, url, type }) => (
     <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center gap-3">
             <FileUp className="h-5 w-5 text-primary" />
             <div>
                 <p className="text-sm font-medium">{name}</p>
-                <p className="text-xs text-muted-foreground">{type}</p>
+                {type && <p className="text-xs text-muted-foreground">{type}</p>}
             </div>
         </div>
         {url ? (
             <Button variant="outline" size="sm" asChild>
-                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type} document`}>
+                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
                     <Download className="mr-2 h-4 w-4" /> View/Download
                 </a>
             </Button>
@@ -264,7 +272,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />
           {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}
           <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
-          <DetailGridItem label="Email Address" value={employee.emailAddress.toLowerCase()} />
+          <DetailGridItem label="Email Address" value={employee.emailAddress?.toLowerCase()} />
           <DetailGridItem label="District" value={toTitleCase(employee.district)} />
           <div className="col-span-3">
             <DetailGridItem label="Full Address" value={toTitleCase(employee.fullAddress)} />
@@ -290,8 +298,8 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
           <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
-          <DetailGridItem label="ID Proof Type" value={employee.idProofType} />
-          <DetailGridItem label="ID Proof Number" value={employee.idProofNumber} />
+          <DetailGridItem label="Identity Proof" value={`${employee.identityProofType} - ${employee.identityProofNumber}`} />
+          <DetailGridItem label="Address Proof" value={`${employee.addressProofType} - ${employee.addressProofNumber}`} />
         </div>
       </section>
     </main>
@@ -353,12 +361,22 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
         <p className="text-sm mb-6 text-justify">
           I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
         </p>
-        <div className="grid grid-cols-2 gap-12 mt-12 text-sm">
-          <div><div className="border-t border-gray-400 pt-2">Signature of Security Guard</div></div>
-          <div><div className="border-t border-gray-400 pt-2">Date</div></div>
-          <div className="col-span-2 mt-6">
-            <div className="border-t border-gray-400 pt-2">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></div>
+        <div className="flex justify-between items-center mt-12 pt-12 text-sm">
+          <div className="flex-1">
+            {employee.signatureUrl ? (
+                <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" />
+            ): (
+                <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
+            )}
+            <div className="border-t border-gray-400 mt-2 pt-2">Signature of Security Guard</div>
+            </div>
+          <div className="w-1/4">
+            <div className="border-b border-gray-400 h-8"></div>
+            <div className="border-t border-gray-400 mt-2 pt-2">Date</div>
           </div>
+        </div>
+        <div className="mt-6 pt-6 border-t border-gray-300">
+            <p className="text-sm">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></p>
         </div>
       </section>
       <PageFooter pageNumber={pageNumber} />
@@ -399,15 +417,21 @@ export default function AdminEmployeeProfilePage() {
 
   // State for new file uploads
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
-  const [newIdProofDocumentFront, setNewIdProofDocumentFront] = useState<File | null>(null);
-  const [newIdProofDocumentBack, setNewIdProofDocumentBack] = useState<File | null>(null);
+  const [newIdentityProofUrlFront, setNewIdentityProofUrlFront] = useState<File | null>(null);
+  const [newIdentityProofUrlBack, setNewIdentityProofUrlBack] = useState<File | null>(null);
+  const [newAddressProofUrlFront, setNewAddressProofUrlFront] = useState<File | null>(null);
+  const [newAddressProofUrlBack, setNewAddressProofUrlBack] = useState<File | null>(null);
+  const [newSignatureUrl, setNewSignatureUrl] = useState<File | null>(null);
   const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
   const [newPoliceClearanceCertificate, setNewPoliceClearanceCertificate] = useState<File | null>(null);
 
   // State for file previews
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
-  const [idProofPreviewFront, setIdProofPreviewFront] = useState<string | null>(null);
-  const [idProofPreviewBack, setIdProofPreviewBack] = useState<string | null>(null);
+  const [identityProofUrlFrontPreview, setIdentityProofUrlFrontPreview] = useState<string | null>(null);
+  const [identityProofUrlBackPreview, setIdentityProofUrlBackPreview] = useState<string | null>(null);
+  const [addressProofUrlFrontPreview, setAddressProofUrlFrontPreview] = useState<string | null>(null);
+  const [addressProofUrlBackPreview, setAddressProofUrlBackPreview] = useState<string | null>(null);
+  const [signatureUrlPreview, setSignatureUrlPreview] = useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
   const [policeCertificatePreview, setPoliceCertificatePreview] = useState<string | null>(null);
   
@@ -453,8 +477,10 @@ export default function AdminEmployeeProfilePage() {
       bankAccountNumber: "",
       ifscCode: "",
       panNumber: "",
-      idProofType: undefined,
-      idProofNumber: "",
+      identityProofType: undefined,
+      identityProofNumber: "",
+      addressProofType: undefined,
+      addressProofNumber: "",
       epfUanNumber: "",
       esicNumber: "",
     },
@@ -473,13 +499,6 @@ export default function AdminEmployeeProfilePage() {
       if (employeeDocSnap.exists()) {
         const data = employeeDocSnap.data();
         
-        // Defensive coding: Ensure fullName exists, which can be missing in older records.
-        if (!data.fullName && data.firstName && data.lastName) {
-          data.fullName = `${data.firstName} ${data.lastName}`;
-        } else if (!data.fullName) {
-          data.fullName = 'Unnamed Employee'; // Fallback if even names are missing
-        }
-
         const formattedData: Employee = {
           ...data,
           id: employeeDocSnap.id,
@@ -523,6 +542,8 @@ export default function AdminEmployeeProfilePage() {
         panNumber: employee.panNumber || "",
         epfUanNumber: employee.epfUanNumber || "",
         esicNumber: employee.esicNumber || "",
+        identityProofType: employee.identityProofType as any,
+        addressProofType: employee.addressProofType as any,
       });
     }
   }, [employee, form]);
@@ -573,14 +594,17 @@ export default function AdminEmployeeProfilePage() {
     setActiveCameraField(fieldName);
     setCameraError(null);
     setIsCameraDialogOpen(true);
-    // Camera stream logic is handled in a useEffect to ensure dialog is open first
   };
 
   useEffect(() => {
     async function getCameraStream() {
       if (!isCameraDialogOpen) return;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        let facingMode: VideoFacingModeEnum = "user";
+        if (activeCameraField && activeCameraField !== 'profilePicture') {
+            facingMode = "environment";
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
         setCameraStream(stream);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -591,7 +615,7 @@ export default function AdminEmployeeProfilePage() {
       }
     }
     getCameraStream();
-  }, [isCameraDialogOpen]);
+  }, [isCameraDialogOpen, activeCameraField]);
   
   const closeCameraDialog = () => {
     if (cameraStream) {
@@ -615,26 +639,14 @@ export default function AdminEmployeeProfilePage() {
       const previewUrl = URL.createObjectURL(file);
 
       switch (activeCameraField) {
-        case 'profilePicture':
-          setNewProfilePicture(file);
-          setProfilePicPreview(previewUrl);
-          break;
-        case 'idProofDocumentFront':
-          setNewIdProofDocumentFront(file);
-          setIdProofPreviewFront(previewUrl);
-          break;
-        case 'idProofDocumentBack':
-          setNewIdProofDocumentBack(file);
-          setIdProofPreviewBack(previewUrl);
-          break;
-        case 'bankPassbookStatement':
-          setNewBankPassbookStatement(file);
-          setBankPassbookPreview(previewUrl);
-          break;
-        case 'policeClearanceCertificate':
-            setNewPoliceClearanceCertificate(file);
-            setPoliceCertificatePreview(previewUrl);
-            break;
+        case 'profilePicture': setNewProfilePicture(file); setProfilePicPreview(previewUrl); break;
+        case 'identityProofUrlFront': setNewIdentityProofUrlFront(file); setIdentityProofUrlFrontPreview(previewUrl); break;
+        case 'identityProofUrlBack': setNewIdentityProofUrlBack(file); setIdentityProofUrlBackPreview(previewUrl); break;
+        case 'addressProofUrlFront': setNewAddressProofUrlFront(file); setAddressProofUrlFrontPreview(previewUrl); break;
+        case 'addressProofUrlBack': setNewAddressProofUrlBack(file); setAddressProofUrlBackPreview(previewUrl); break;
+        case 'signatureUrl': setNewSignatureUrl(file); setSignatureUrlPreview(previewUrl); break;
+        case 'bankPassbookStatement': setNewBankPassbookStatement(file); setBankPassbookPreview(previewUrl); break;
+        case 'policeClearanceCertificate': setNewPoliceClearanceCertificate(file); setPoliceCertificatePreview(previewUrl); break;
       }
       closeCameraDialog();
     }
@@ -670,8 +682,11 @@ export default function AdminEmployeeProfilePage() {
     try {
         const uploadJobs = [
             { file: newProfilePicture, oldUrl: employee.profilePictureUrl, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
-            { file: newIdProofDocumentFront, oldUrl: employee.idProofDocumentUrlFront || employee.idProofDocumentUrl, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdProofDocumentFront?.name.split('.').pop()}`, key: 'idProofDocumentUrlFront', isImage: newIdProofDocumentFront?.type.startsWith("image/") ?? false },
-            { file: newIdProofDocumentBack, oldUrl: employee.idProofDocumentUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdProofDocumentBack?.name.split('.').pop()}`, key: 'idProofDocumentUrlBack', isImage: newIdProofDocumentBack?.type.startsWith("image/") ?? false },
+            { file: newIdentityProofUrlFront, oldUrl: employee.identityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newIdentityProofUrlBack, oldUrl: employee.identityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newSignatureUrl, oldUrl: employee.signatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
             { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
             { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
         ];
@@ -705,18 +720,15 @@ export default function AdminEmployeeProfilePage() {
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
-        // Update searchableFields if relevant info changed
         if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId || finalPayload.firstName || finalPayload.lastName) {
              const nameParts = (finalPayload.fullName || employee.fullName).toUpperCase().split(' ').filter(Boolean);
              finalPayload.searchableFields = Array.from(new Set([
                 ...nameParts,
+                (finalPayload.firstName || employee.firstName).toUpperCase(),
+                (finalPayload.lastName || employee.lastName).toUpperCase(),
                 (finalPayload.employeeId || employee.employeeId).toUpperCase(),
                 finalPayload.phoneNumber || employee.phoneNumber
              ].filter(Boolean)));
-        }
-
-        if (updatedUrls.idProofDocumentUrlFront && employee.idProofDocumentUrl) {
-            finalPayload.idProofDocumentUrl = deleteField();
         }
 
         if (Object.keys(finalPayload).length > 0) {
@@ -878,13 +890,20 @@ export default function AdminEmployeeProfilePage() {
   
   const resetFileStates = () => {
       setNewProfilePicture(null);
-      setNewIdProofDocumentFront(null);
-      setNewIdProofDocumentBack(null);
+      setNewIdentityProofUrlFront(null);
+      setNewIdentityProofUrlBack(null);
+      setNewAddressProofUrlFront(null);
+      setNewAddressProofUrlBack(null);
+      setNewSignatureUrl(null);
       setNewBankPassbookStatement(null);
       setNewPoliceClearanceCertificate(null);
+
       setProfilePicPreview(null);
-      setIdProofPreviewFront(null);
-      setIdProofPreviewBack(null);
+      setIdentityProofUrlFrontPreview(null);
+      setIdentityProofUrlBackPreview(null);
+      setAddressProofUrlFrontPreview(null);
+      setAddressProofUrlBackPreview(null);
+      setSignatureUrlPreview(null);
       setBankPassbookPreview(null);
       setPoliceCertificatePreview(null);
   }
@@ -1088,8 +1107,8 @@ export default function AdminEmployeeProfilePage() {
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
-                    <DetailItem label="ID Proof Type" value={employee.idProofType} />
-                    <DetailItem label="ID Proof Number" value={employee.idProofNumber} />
+                    <DetailItem label="Identity Proof" value={`${employee.identityProofType || 'N/A'} - ${employee.identityProofNumber || 'N/A'}`} />
+                    <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
                   </div>
@@ -1116,8 +1135,11 @@ export default function AdminEmployeeProfilePage() {
                         <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                         <div className="space-y-3">
                             <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                            <DocumentItem name="ID Proof (Front)" url={employee.idProofDocumentUrlFront || employee.idProofDocumentUrl} type={employee.idProofType || "ID Document"} />
-                            <DocumentItem name="ID Proof (Back)" url={employee.idProofDocumentUrlBack} type={employee.idProofType || "ID Document"} />
+                            <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />
+                            <DocumentItem name="Identity Proof (Front)" url={employee.identityProofUrlFront} type={employee.identityProofType} />
+                            <DocumentItem name="Identity Proof (Back)" url={employee.identityProofUrlBack} type={employee.identityProofType} />
+                            <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
+                            <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
                             <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
                         </div>
@@ -1170,78 +1192,53 @@ export default function AdminEmployeeProfilePage() {
                   </section>
                   {/* Bank & ID Section */}
                   <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Identification</h3>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Statutory Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="idProofType" render={({ field }) => (<FormItem><FormLabel>ID Proof Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{idProofTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="idProofNumber" render={({ field }) => (<FormItem><FormLabel>ID Proof Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                   </section>
-                  {/* Documents Section */}
+                  
+                  {/* Identification Documents Section */}
                   <section>
-                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Documents</h3>
-                      <div className="grid grid-cols-1 gap-6">
-                          {/* Profile Picture */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                              <Label className="md:col-span-1 text-base self-center">Profile Picture</Label>
-                              <Image src={profilePicPreview || employee.profilePictureUrl || "https://placehold.co/128x128.png"} alt="Profile" width={128} height={128} className="rounded-full object-cover h-32 w-32 justify-self-center" data-ai-hint="profile picture" />
-                              <div className="flex flex-col justify-center gap-2">
-                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('profilePicture')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                  <Input id="profilePictureInput" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, setNewProfilePicture, setProfilePicPreview)} />
-                              </div>
-                          </div>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Identification Documents</h3>
+                    <div className="p-4 border rounded-lg mt-4 space-y-4">
+                        <h4 className="font-medium text-md">Identity Proof (Name, DOB, etc.)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
+                        </div>
+                    </div>
 
-                          {/* ID Proof Front */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                              <Label className="md:col-span-1 text-base self-center">ID Proof (Front)</Label>
-                              <Image src={idProofPreviewFront || ((employee.idProofDocumentUrlFront || employee.idProofDocumentUrl)?.includes('.pdf') ? '/pdf-icon.png' : (employee.idProofDocumentUrlFront || employee.idProofDocumentUrl)) || "https://placehold.co/200x120.png"} alt="ID Proof Front" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
-                              <div className="flex flex-col justify-center gap-2">
-                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofFrontInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentFront')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                  <Input id="idProofFrontInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentFront, setIdProofPreviewFront)} />
-                              </div>
-                          </div>
+                    <div className="p-4 border rounded-lg mt-6 space-y-4">
+                        <h4 className="font-medium text-md">Address Proof</h4>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} />
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} />
+                        </div>
+                    </div>
+                  </section>
 
-                          {/* ID Proof Back */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                              <Label className="md:col-span-1 text-base self-center">ID Proof (Back)</Label>
-                              <Image src={idProofPreviewBack || (employee.idProofDocumentUrlBack?.includes('.pdf') ? '/pdf-icon.png' : employee.idProofDocumentUrlBack) || "https://placehold.co/200x120.png"} alt="ID Proof Back" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="id card" />
-                              <div className="flex flex-col justify-center gap-2">
-                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('idProofBackInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('idProofDocumentBack')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                  <Input id="idProofBackInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewIdProofDocumentBack, setIdProofPreviewBack)} />
-                              </div>
-                          </div>
-
-                          {/* Bank Passbook */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                              <Label className="md:col-span-1 text-base self-center">Bank Document</Label>
-                              <Image src={bankPassbookPreview || (employee.bankPassbookStatementUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.bankPassbookStatementUrl) || "https://placehold.co/200x120.png"} alt="Bank Document" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="bank document" />
-                               <div className="flex flex-col justify-center gap-2">
-                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('bankPassbookInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('bankPassbookStatement')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                              </div>
-                              <Input id="bankPassbookInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewBankPassbookStatement, setBankPassbookPreview)} />
-                          </div>
-                          
-                           {/* Police Clearance Certificate */}
-                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-                              <Label className="md:col-span-1 text-base self-center">Police Clearance Certificate</Label>
-                              <Image src={policeCertificatePreview || (employee.policeClearanceCertificateUrl?.includes('.pdf') ? '/pdf-icon.png' : employee.policeClearanceCertificateUrl) || "https://placehold.co/200x120.png"} alt="Police Clearance Certificate" width={200} height={120} className="object-contain h-32 w-full justify-self-center" data-ai-hint="police certificate document" />
-                               <div className="flex flex-col justify-center gap-2">
-                                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('policeCertInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload New</Button>
-                                  <Button type="button" size="sm" variant="outline" onClick={() => openCamera('policeClearanceCertificate')}><Camera className="mr-2 h-4 w-4" /> Use Camera</Button>
-                                  <FormDescription>Optional document</FormDescription>
-                              </div>
-                              <Input id="policeCertInput" type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setNewPoliceClearanceCertificate, setPoliceCertificatePreview)} />
-                          </div>
-
+                  {/* Other Documents Section */}
+                  <section>
+                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents & Signature</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} />
+                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} />
+                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} />
+                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} />
                       </div>
                   </section>
                 </CardContent>
@@ -1278,4 +1275,42 @@ export default function AdminEmployeeProfilePage() {
   );
 }
 
-    
+const ImageInputWithPreview: React.FC<{
+    label: string;
+    currentUrl?: string;
+    preview: string | null;
+    setFile: (file: File | null) => void;
+    setPreview: (preview: string | null) => void;
+    handleFileChange: (event: React.ChangeEvent<HTMLInputElement>, setFile: any, setPreview: any) => void;
+    openCamera: () => void;
+    isProfilePic?: boolean;
+    isSignature?: boolean;
+}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, isProfilePic, isSignature }) => {
+    const uniqueId = React.useId();
+    const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl) || "https://placehold.co/200x120.png";
+
+    return (
+        <div className="space-y-2">
+            <Label className="text-base">{label}</Label>
+            <div className="p-4 border rounded-md text-center space-y-2">
+                <Image
+                    src={finalPreview}
+                    alt={label}
+                    width={isProfilePic || isSignature ? 128 : 200}
+                    height={isProfilePic ? 128 : isSignature ? 64 : 120}
+                    className={cn(
+                        "object-contain justify-self-center mx-auto",
+                        isProfilePic ? 'rounded-full h-32 w-32' : 'h-32 w-full',
+                        isSignature && 'h-20'
+                    )}
+                    data-ai-hint={isProfilePic ? "profile picture" : isSignature ? "signature" : "id card"}
+                />
+                <div className="flex justify-center gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById(uniqueId)?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={openCamera}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                    <Input id={uniqueId} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setFile, setPreview)} />
+                </div>
+            </div>
+        </div>
+    );
+};

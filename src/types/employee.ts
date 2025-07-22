@@ -15,8 +15,22 @@ export interface Employee {
   spouseName?: string;
   district: string;
   panNumber?: string;
-  idProofType: string;
-  idProofNumber: string;
+  
+  // New Identity Proof Fields
+  identityProofType?: string;
+  identityProofNumber?: string;
+  identityProofUrlFront?: string;
+  identityProofUrlBack?: string;
+
+  // New Address Proof Fields
+  addressProofType?: string;
+  addressProofNumber?: string;
+  addressProofUrlFront?: string;
+  addressProofUrlBack?: string;
+
+  // New Signature Field
+  signatureUrl?: string;
+
   epfUanNumber?: string;
   esicNumber?: string;
   bankAccountNumber: string;
@@ -26,20 +40,26 @@ export interface Employee {
   emailAddress: string;
   phoneNumber: string;
   profilePictureUrl?: string;
-  idProofDocumentUrl?: string; // Legacy field for backwards compatibility
+  
+  // Legacy ID proof fields (can be phased out)
+  idProofType?: string; 
+  idProofNumber?: string;
+  idProofDocumentUrl?: string;
   idProofDocumentUrlFront?: string;
   idProofDocumentUrlBack?: string;
+  
   bankPassbookStatementUrl?: string;
   policeClearanceCertificateUrl?: string;
   joiningDate: any; // Firebase Timestamp or ISO string
-  status: 'Active' | 'Inactive' | 'OnLeave' | 'Exited'; // Added 'Exited'
+  status: 'Active' | 'Inactive' | 'OnLeave' | 'Exited';
   qrCodeUrl?: string;
   exitDate?: any; // Firebase Timestamp or ISO string, for 'Exited' status
   createdAt: any; // Firestore Timestamp
   updatedAt: any; // Firestore Timestamp
+  searchableFields?: string[];
 
   // Fields from previous mock, to be phased out or mapped
-  department?: string; // May not be needed if clientName implies department or not used
+  department?: string;
 }
 
 // Mock data for development - update with new fields
@@ -57,10 +77,12 @@ export const mockEmployees: Employee[] = [
     motherName: 'Sunita Sharma',
     maritalStatus: 'Married',
     spouseName: 'Priya Sharma',
-    district: 'Thiruvananthapuram', // Changed for Kerala context
+    district: 'Thiruvananthapuram', 
     panNumber: 'ABCDE1234F',
-    idProofType: 'Aadhar Card',
-    idProofNumber: '123456789012',
+    identityProofType: 'PAN Card',
+    identityProofNumber: 'ABCDE1234F',
+    addressProofType: 'Aadhar Card',
+    addressProofNumber: '1234 5678 9012',
     epfUanNumber: '100123456789',
     esicNumber: '2001234567',
     bankAccountNumber: '001234567890',
@@ -70,8 +92,11 @@ export const mockEmployees: Employee[] = [
     emailAddress: 'aarav.sharma@example.com',
     phoneNumber: '9876543210',
     profilePictureUrl: 'https://placehold.co/150x150.png',
-    idProofDocumentUrlFront: 'https://placehold.co/300x200.png',
-    idProofDocumentUrlBack: 'https://placehold.co/300x200.png',
+    identityProofUrlFront: 'https://placehold.co/300x200.png',
+    identityProofUrlBack: 'https://placehold.co/300x200.png',
+    addressProofUrlFront: 'https://placehold.co/300x200.png',
+    addressProofUrlBack: 'https://placehold.co/300x200.png',
+    signatureUrl: 'https://placehold.co/200x100.png',
     bankPassbookStatementUrl: 'https://placehold.co/300x200.png',
     joiningDate: '2022-01-10T00:00:00.000Z',
     status: 'Active',
@@ -79,37 +104,5 @@ export const mockEmployees: Employee[] = [
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     department: 'IT',
-  },
-  {
-    id: 'mock2',
-    employeeId: 'WIPRO/2023-24/002',
-    clientName: 'Wipro',
-    firstName: 'Priya',
-    lastName: 'Patel',
-    fullName: 'Priya Patel',
-    dateOfBirth: '1992-08-20T00:00:00.000Z',
-    gender: 'Female',
-    fatherName: 'Suresh Patel',
-    motherName: 'Anita Patel',
-    maritalStatus: 'Unmarried',
-    district: 'Ernakulam', // Changed for Kerala context
-    panNumber: 'FGHIJ5678K',
-    idProofType: 'Voter ID',
-    idProofNumber: '234567890123',
-    bankAccountNumber: '002345678901',
-    ifscCode: 'ICIC0000456',
-    bankName: 'ICICI Bank',
-    fullAddress: '456 Park Avenue, Kochi, Kerala',
-    emailAddress: 'priya.patel@example.com',
-    phoneNumber: '9876543211',
-    profilePictureUrl: 'https://placehold.co/150x150.png',
-    idProofDocumentUrlFront: 'https://placehold.co/300x200.png',
-    idProofDocumentUrlBack: 'https://placehold.co/300x200.png',
-    joiningDate: '2021-11-05T00:00:00.000Z',
-    status: 'Active',
-    qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=MOCK_QR_PRIYA',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    department: 'HR',
   },
 ];
