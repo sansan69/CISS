@@ -707,13 +707,13 @@ export default function AdminEmployeeProfilePage() {
         
         // Update searchableFields if relevant info changed
         if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId) {
-             finalPayload.searchableFields = [
+             finalPayload.searchableFields = Array.from(new Set([
                 (finalPayload.fullName || employee.fullName).toUpperCase(),
-                (finalPayload.fullName || employee.fullName).toUpperCase().split(' ')[0],
-                (finalPayload.fullName || employee.fullName).toUpperCase().split(' ').slice(1).join(' '),
+                (finalPayload.fullName?.split(' ')[0] || employee.fullName.split(' ')[0]).toUpperCase(),
+                (finalPayload.fullName?.split(' ').slice(1).join(' ') || employee.fullName.split(' ').slice(1).join(' ')).toUpperCase(),
                 (finalPayload.employeeId || employee.employeeId).toUpperCase(),
                 finalPayload.phoneNumber || employee.phoneNumber
-             ].filter(Boolean);
+             ].filter(Boolean)));
         }
 
         if (updatedUrls.idProofDocumentUrlFront && employee.idProofDocumentUrl) {
@@ -852,13 +852,13 @@ export default function AdminEmployeeProfilePage() {
         errorCorrectionLevel: 'H', type: 'image/png', quality: 0.92, margin: 1, width: 256,
       });
       
-      const newSearchableFields = [
+      const newSearchableFields = Array.from(new Set([
           employee.fullName.toUpperCase(),
           employee.fullName.toUpperCase().split(' ')[0],
           employee.fullName.toUpperCase().split(' ').slice(1).join(' '),
           newEmployeeId.toUpperCase(),
           employee.phoneNumber
-      ].filter(Boolean);
+      ].filter(Boolean)));
 
       const employeeDocRef = doc(db, "employees", employee.id);
       await updateDoc(employeeDocRef, {

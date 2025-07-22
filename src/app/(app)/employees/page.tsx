@@ -84,7 +84,7 @@ export default function EmployeeDirectoryPage() {
     }
   }, [toast]);
   
-  const buildBaseQuery = useCallback(() => {
+  const buildBaseQuery = useCallback((forPagination: boolean = false) => {
     let q: Query<DocumentData> = collection(db, "employees");
     
     // Apply equality filters first
@@ -98,35 +98,28 @@ export default function EmployeeDirectoryPage() {
       q = query(q, where('district', '==', filterDistrict));
     }
     
+    if (searchTerm.trim() !== '') {
+        q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
+    }
+    
+    if (forPagination) {
+      q = query(q, orderBy('createdAt', 'desc'));
+    }
+
     return q;
-  }, [filterClient, filterStatus, filterDistrict]);
+  }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
   const fetchEmployees = useCallback(async (page: number, startAfterDoc: QueryDocumentSnapshot<DocumentData> | null) => {
     setIsTableLoading(true);
     setError(null);
 
     try {
-        let finalQuery: Query<DocumentData>;
-        let baseQuery = buildBaseQuery();
-
-        if (searchTerm.trim() !== '') {
-            const term = searchTerm.trim().toUpperCase();
-            finalQuery = query(
-              baseQuery, 
-              where('searchableFields', 'array-contains', term),
-              // We cannot use orderBy on a different field than the array-contains, 
-              // so we accept Firestore's default ordering for search results.
-              // Client-side sorting can be added if a specific order is needed for search.
-            );
-            // Search fetches all results that match and relies on client-side pagination.
+        let finalQuery = buildBaseQuery(true);
+        
+        if (startAfterDoc) {
+            finalQuery = query(finalQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
         } else {
-            // Standard pagination and filtering, ordered by creation date
-            baseQuery = query(baseQuery, orderBy('createdAt', 'desc'));
-            if (startAfterDoc) {
-                finalQuery = query(baseQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
-            } else {
-                finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-            }
+            finalQuery = query(finalQuery, limit(ITEMS_PER_PAGE));
         }
         
         const documentSnapshots = await getDocs(finalQuery);
@@ -147,15 +140,8 @@ export default function EmployeeDirectoryPage() {
 
         setEmployees(fetchedEmployees);
         
-        // Handle pagination state
-        if (searchTerm.trim() === '') {
-          const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
-          setLastVisibleDoc(newLastVisible);
-        } else {
-          // For search, pagination is handled client-side, so we clear the Firestore cursor
-          setLastVisibleDoc(null);
-        }
-
+        const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+        setLastVisibleDoc(newLastVisible);
     } catch (err: any) {
       console.error("Error fetching employees:", err);
       let message = err.message || "Failed to fetch employees.";
@@ -170,7 +156,7 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, searchTerm]);
+  }, [toast, buildBaseQuery]);
 
     useEffect(() => {
         fetchClients();
@@ -189,32 +175,24 @@ export default function EmployeeDirectoryPage() {
   
 
   const handleNextPage = () => {
-    if (!lastVisibleDoc && searchTerm.trim() === '') return;
+    if (!lastVisibleDoc) return;
 
     const nextPage = currentPage + 1;
-    if (searchTerm.trim() !== '') {
-        setCurrentPage(nextPage);
-    } else {
-       setPageHistory(prev => [...prev, lastVisibleDoc]);
-       fetchEmployees(nextPage, lastVisibleDoc);
-       setCurrentPage(nextPage);
-    }
+    setPageHistory(prev => [...prev, lastVisibleDoc]);
+    fetchEmployees(nextPage, lastVisibleDoc);
+    setCurrentPage(nextPage);
   };
 
   const handlePreviousPage = () => {
       if (currentPage === 1) return;
       const prevPage = currentPage - 1;
       
-      if (searchTerm.trim() !== '') {
-        setCurrentPage(prevPage);
-      } else {
-        const prevHistory = pageHistory.slice(0, -1);
-        const startAfterDoc = prevHistory[prevPage -1] ?? null;
-        
-        setPageHistory(prevHistory);
-        fetchEmployees(prevPage, startAfterDoc);
-        setCurrentPage(prevPage);
-      }
+      const prevHistory = pageHistory.slice(0, -1);
+      const startAfterDoc = prevHistory[prevPage -1] ?? null;
+      
+      setPageHistory(prevHistory);
+      fetchEmployees(prevPage, startAfterDoc);
+      setCurrentPage(prevPage);
   };
 
 
@@ -339,22 +317,8 @@ export default function EmployeeDirectoryPage() {
     }
   };
   
-  const displayedEmployees = useMemo(() => {
-    if (searchTerm.trim() !== '') {
-      // Client-side pagination for search results
-      return employees.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-    }
-    // Firestore pagination for non-search results
-    return employees;
-  }, [employees, currentPage, searchTerm]);
-
-  const canShowNext = useMemo(() => {
-    if (searchTerm.trim() !== '') {
-      return (currentPage * ITEMS_PER_PAGE) < employees.length;
-    }
-    // For Firestore pagination, this logic holds: if we received a full page, there might be more.
-    return employees.length >= ITEMS_PER_PAGE;
-  }, [employees, currentPage, searchTerm]);
+  const displayedEmployees = employees;
+  const canShowNext = lastVisibleDoc !== null && employees.length === ITEMS_PER_PAGE;
 
 
   if (isLoading) { 
@@ -664,5 +628,3 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
-
-    
