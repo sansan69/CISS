@@ -373,8 +373,8 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
             <div className="border-t border-gray-400 mt-2 pt-2">Signature of Security Guard</div>
             </div>
           <div className="w-1/4">
-            <div className="border-b border-gray-400 h-8"></div>
-            <div className="border-t border-gray-400 mt-2 pt-2">Date</div>
+             <div className="border-b border-gray-400 h-8 text-center">{formatDate(employee.joiningDate)}</div>
+            <div className="border-t border-gray-400 mt-2 pt-2 text-center">Date</div>
           </div>
         </div>
         <div className="mt-6 pt-6 border-t border-gray-300">
@@ -1328,3 +1328,4 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
+
