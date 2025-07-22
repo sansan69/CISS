@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -472,6 +471,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         description: `The document you uploaded for ${task.label} does not appear to be a ${task.docType}. AI Reason: ${result.reason}`,
                         duration: 9000
                     });
+                    form.setError(task.fieldName as any, {type: 'manual', message: `AI verification failed: This does not seem to be a ${task.docType}.`});
                     setIsLoading(false);
                     return; // Stop submission
                 }

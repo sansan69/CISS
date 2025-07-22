@@ -3,29 +3,10 @@
  * @fileOverview An AI flow to verify document types from images.
  *
  * - verifyDocument - A function that checks if an uploaded document matches an expected type.
- * - VerifyDocumentInput - The input type for the verifyDocument function.
- * - VerifyDocumentOutput - The return type for the verifyDocument function.
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'zod';
-
-export const VerifyDocumentInputSchema = z.object({
-  photoDataUri: z
-    .string()
-    .describe(
-      "A photo of a document, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-    ),
-  expectedType: z.string().describe('The expected type of the document (e.g., "PAN Card", "Aadhar Card").'),
-});
-export type VerifyDocumentInput = z.infer<typeof VerifyDocumentInputSchema>;
-
-export const VerifyDocumentOutputSchema = z.object({
-  isMatch: z.boolean().describe('Whether the document in the image matches the expected type.'),
-  reason: z.string().describe('A brief explanation for the decision.'),
-});
-export type VerifyDocumentOutput = z.infer<typeof VerifyDocumentOutputSchema>;
-
+import { VerifyDocumentInputSchema, VerifyDocumentOutputSchema, type VerifyDocumentInput, type VerifyDocumentOutput } from '@/ai/schemas/document-verification';
 
 const verifyPrompt = ai.definePrompt({
     name: 'verifyDocumentPrompt',
