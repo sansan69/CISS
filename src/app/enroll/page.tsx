@@ -41,6 +41,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSearchParams, useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { Checkbox } from "@/components/ui/checkbox";
+import { verifyDocument } from "@/ai/flows/verify-document-flow";
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -209,6 +210,24 @@ const handlePublicUploadError = (err: any, documentName: string): never => {
   }
   throw new Error(`${documentName} processing failed: ${err.message}`);
 };
+
+const fileToDataUri = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        if (!file.type.startsWith('image/')) {
+            reject(new Error("File is not an image and cannot be converted to data URI for verification."));
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            resolve(reader.result as string);
+        };
+        reader.onerror = (error) => {
+            reject(error);
+        };
+        reader.readAsDataURL(file);
+    });
+};
+
 
 function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentFormProps) {
   const { toast } = useToast();
@@ -432,6 +451,35 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
+
+    // Step 1: AI Document Verification
+    try {
+        toast({ title: "Verifying Documents...", description: "AI is checking your uploaded proofs." });
+        
+        const verificationTasks = [
+            { docFile: data.identityProofUrlFront, docType: data.identityProofType, fieldName: 'identityProofUrlFront', label: 'Identity Proof' },
+            { docFile: data.addressProofUrlFront, docType: data.addressProofType, fieldName: 'addressProofUrlFront', label: 'Address Proof' },
+        ];
+        
+        for (const task of verificationTasks) {
+            // Only verify if it's an image
+            if (task.docFile.type.startsWith('image/')) {
+                const dataUri = await fileToDataUri(task.docFile);
+                const result = await verifyDocument({ photoDataUri: dataUri, expectedType: task.docType });
+                if (!result.isMatch) {
+                    throw new Error(`AI Verification Failed for ${task.label}: ${result.reason}. Please upload the correct document.`);
+                }
+            }
+        }
+        
+        toast({ title: "Documents Verified!", description: "All proofs match the selected types." });
+
+    } catch (error: any) {
+        console.error("AI Verification Error:", error);
+        toast({ variant: "destructive", title: "Document Mismatch", description: error.message, duration: 8000 });
+        setIsLoading(false);
+        return; // Stop submission
+    }
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, "");
     const fullName = `${data.firstName.toUpperCase()} ${data.lastName.toUpperCase()}`;
