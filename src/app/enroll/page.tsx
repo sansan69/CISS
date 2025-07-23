@@ -1088,7 +1088,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
-             <ShadDialogDescription className="sr-only">
+             <ShadDialogDescription>
               Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
             </ShadDialogDescription>
           </DialogHeader>
