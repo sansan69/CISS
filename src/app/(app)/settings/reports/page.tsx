@@ -105,11 +105,11 @@ export default function ReportsPage() {
                   {dateRange?.from ? (
                     dateRange.to ? (
                       <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
+                        {format(dateRange.from, "dd-MM-yyyy")} -{" "}
+                        {format(dateRange.to, "dd-MM-yyyy")}
                       </>
                     ) : (
-                      format(dateRange.from, "LLL dd, y")
+                      format(dateRange.from, "dd-MM-yyyy")
                     )
                   ) : (
                     <span>Pick a date range</span>

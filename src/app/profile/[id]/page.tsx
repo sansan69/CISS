@@ -62,7 +62,7 @@ const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
     borderTop: '1px solid #ccc',
     paddingTop: '5px'
   }}>
-    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "PPP")}
+    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "dd-MM-yyyy")}
   </footer>
 );
 
@@ -74,11 +74,11 @@ const DetailGridItem = ({ label, value }: { label: string; value?: string | numb
   </div>
 );
 
-const formatDate = (date: any) => {
+const formatDateForPdf = (date: any) => {
   if (!date) return 'N/A';
   const dateObj = date.toDate ? date.toDate() : new Date(date);
   if (isNaN(dateObj.getTime())) return 'N/A';
-  return format(dateObj, "PPP");
+  return format(dateObj, "dd-MM-yyyy");
 };
 
 const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
@@ -110,7 +110,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <section>
         <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+          <DetailGridItem label="Date of Birth" value={formatDateForPdf(employee.dateOfBirth)} />
           <DetailGridItem label="Gender" value={employee.gender} />
           <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
           <DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} />
@@ -128,7 +128,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <section>
         <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Joining Date" value={formatDate(employee.joiningDate)} />
+          <DetailGridItem label="Joining Date" value={formatDateForPdf(employee.joiningDate)} />
           <DetailGridItem label="Status" value={employee.status} />
           {employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}
           <DetailGridItem label="PAN Number" value={employee.panNumber} />
@@ -216,7 +216,7 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
                 <div className="border-t border-gray-400 pt-2 font-semibold">Signature of Security Guard</div>
             </div>
             <div className="w-1/4 text-center">
-                <p className="border-b border-gray-400 pb-1">{formatDate(employee.joiningDate)}</p>
+                <p className="border-b border-gray-400 pb-1">{formatDateForPdf(employee.joiningDate)}</p>
                 <div className="border-t border-gray-400 mt-2 pt-2 font-semibold">Date of Registration</div>
             </div>
         </div>
@@ -237,15 +237,15 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
   let displayValue: string | number = 'N/A';
   if (value !== null && value !== undefined) {
     if (isDate && value instanceof Date) {
-      displayValue = format(value, "PPP");
+      displayValue = format(value, "dd-MM-yyyy");
     } else if (isDate && typeof value === 'string') {
       try {
-        displayValue = format(new Date(value), "PPP");
+        displayValue = format(new Date(value), "dd-MM-yyyy");
       } catch (e) {
         displayValue = String(value);
       }
     } else if (value instanceof Timestamp) {
-      displayValue = format(value.toDate(), "PPP");
+      displayValue = format(value.toDate(), "dd-MM-yyyy");
     } else {
       displayValue = String(value);
       if (isName || isAddress) {

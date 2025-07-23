@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, subYears, addYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import React, { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
@@ -66,7 +66,25 @@ const enrollmentFormSchema = z.object({
   lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
   motherName: z.string().min(2, { message: "Mother's name is required." }),
-  dateOfBirth: z.date({ required_error: "Date of birth is required." }),
+  dateOfBirth: z.date({ required_error: "Date of birth is required." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+            return age - 1 >= 18;
+        }
+        return age >= 18;
+    }, { message: "Must be at least 18 years old." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+             return age - 1 < 65;
+        }
+        return age < 65;
+    }, { message: "Must be under 65 years old." }),
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
   maritalStatus: z.enum(["Married", "Unmarried"], { required_error: "Marital status is required." }),
   spouseName: z.string().optional(),
@@ -639,10 +657,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
 
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
-  const currentYear = new Date().getFullYear();
-  const fromYear = currentYear - 70;
-  const toYear = currentYear;
-  const defaultCalendarMonth = new Date(new Date().setFullYear(currentYear - 25));
+  
+  const fromYear = new Date().getFullYear() - 65;
+  const toYear = new Date().getFullYear() - 18;
+  const defaultCalendarMonth = new Date();
+  defaultCalendarMonth.setFullYear(toYear - 10);
 
 
   return (
@@ -799,15 +818,15 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                                 field.onChange(date);
                                 setIsDobPopoverOpen(false);
                               }}
-                              disabled={(date) => date > new Date() || date < new Date(fromYear, 0, 1)}
                               captionLayout="dropdown-buttons"
                               fromYear={fromYear}
                               toYear={toYear}
                               defaultMonth={defaultCalendarMonth}
+                              disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
                             />
                           </PopoverContent>
                         </Popover>
-                        <FormDescription>Your date of birth</FormDescription>
+                        <FormDescription>Your date of birth (Age must be between 18 and 65).</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1126,5 +1145,3 @@ export default function EnrollEmployeePage() {
     </div>
   );
 }
-
-    

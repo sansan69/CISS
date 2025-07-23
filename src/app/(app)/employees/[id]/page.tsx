@@ -106,10 +106,10 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
   let displayValue: string | number = 'N/A';
   if (value !== null && value !== undefined) {
     if (value instanceof Timestamp) {
-      displayValue = format(value.toDate(), "PPP");
+      displayValue = format(value.toDate(), "dd-MM-yyyy");
     } else if (isDate && (value instanceof Date || typeof value === 'string')) {
        try {
-        displayValue = format(new Date(value), "PPP");
+        displayValue = format(new Date(value), "dd-MM-yyyy");
        } catch (e) {
         displayValue = 'Invalid Date';
        }
@@ -219,7 +219,7 @@ const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
     borderTop: '1px solid #ccc',
     paddingTop: '5px'
   }}>
-    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "PPP")}
+    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "dd-MM-yyyy")}
   </footer>
 );
 
@@ -231,11 +231,11 @@ const DetailGridItem = ({ label, value }: { label: string; value?: string | numb
   </div>
 );
 
-const formatDate = (date: any) => {
+const formatDateForPdf = (date: any) => {
   if (!date) return 'N/A';
   const dateObj = date.toDate ? date.toDate() : new Date(date);
   if (isNaN(dateObj.getTime())) return 'N/A';
-  return format(dateObj, "PPP");
+  return format(dateObj, "dd-MM-yyyy");
 };
 
 const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
@@ -267,7 +267,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <section>
         <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+          <DetailGridItem label="Date of Birth" value={formatDateForPdf(employee.dateOfBirth)} />
           <DetailGridItem label="Gender" value={employee.gender} />
           <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
           <DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} />
@@ -285,7 +285,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <section>
         <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Joining Date" value={formatDate(employee.joiningDate)} />
+          <DetailGridItem label="Joining Date" value={formatDateForPdf(employee.joiningDate)} />
           <DetailGridItem label="Status" value={employee.status} />
           {employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}
           <DetailGridItem label="PAN Number" value={employee.panNumber} />
@@ -373,7 +373,7 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
                 <div className="border-t border-gray-400 pt-2 font-semibold">Signature of Security Guard</div>
             </div>
             <div className="w-1/4 text-center">
-                <p className="border-b border-gray-400 pb-1">{formatDate(employee.joiningDate)}</p>
+                <p className="border-b border-gray-400 pb-1">{formatDateForPdf(employee.joiningDate)}</p>
                 <div className="border-t border-gray-400 mt-2 pt-2 font-semibold">Date of Registration</div>
             </div>
         </div>
@@ -1182,7 +1182,7 @@ export default function AdminEmployeeProfilePage() {
                       <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="dateOfBirth" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date of Birth</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(d) => d > new Date()} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="dateOfBirth" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date of Birth</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(d) => d > new Date()} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
@@ -1199,9 +1199,9 @@ export default function AdminEmployeeProfilePage() {
                       <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
                       <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="joiningDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Joining Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="joiningDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Joining Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                      {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "PPP") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
+                      {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                     </div>
                   </section>
                   {/* Bank & ID Section */}

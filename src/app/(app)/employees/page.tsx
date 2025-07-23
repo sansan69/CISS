@@ -727,7 +727,7 @@ export default function EmployeeDirectoryPage() {
                         className="w-full justify-start text-left font-normal"
                         >
                         <CalendarDays className="mr-2 h-4 w-4" />
-                        {exitDate ? format(exitDate, "PPP") : <span>Pick a date</span>}
+                        {exitDate ? format(exitDate, "dd-MM-yyyy") : <span>Pick a date</span>}
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
