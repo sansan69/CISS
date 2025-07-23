@@ -41,7 +41,7 @@ export default function AdminLoginPage() {
         title: 'Login Successful',
         description: 'Welcome, Super Admin!',
       });
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (error: any) {
       let errorMessage = 'An unexpected error occurred. Please try again.';
       if (error && error.code) {
