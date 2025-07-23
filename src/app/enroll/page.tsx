@@ -114,10 +114,10 @@ const enrollmentFormSchema = z.object({
   esicNumber: z.string().optional(),
 
   // Bank Account Details
-  bankAccountNumber: z.string().min(5, { message: "Bank account number is required." }),
-  ifscCode: z.string().length(11, { message: "IFSC code must be 11 characters." }),
-  bankName: z.string().min(2, { message: "Bank name is required." }),
-  bankPassbookStatement: fileSchema,
+  bankAccountNumber: z.string().optional().or(z.literal('')),
+  ifscCode: z.string().optional().or(z.literal('')),
+  bankName: z.string().optional().or(z.literal('')),
+  bankPassbookStatement: optionalFileSchema,
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
@@ -565,7 +565,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             { name: "Address Proof (Front)", file: data.addressProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_addr_front.${data.addressProofUrlFront.name.split('.').pop()}`, isImage: data.addressProofUrlFront.type.startsWith("image/"), key: 'addressProofUrlFront' },
             { name: "Address Proof (Back)", file: data.addressProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_addr_back.${data.addressProofUrlBack.name.split('.').pop()}`, isImage: data.addressProofUrlBack.type.startsWith("image/"), key: 'addressProofUrlBack' },
             { name: "Signature", file: data.signatureUrl, path: `employees/${phoneNumber}/signatures/${Date.now()}_sig.jpg`, isImage: true, key: 'signatureUrl' },
-            { name: "Bank Document", file: data.bankPassbookStatement, path: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank.${data.bankPassbookStatement.name.split('.').pop()}`, isImage: data.bankPassbookStatement.type.startsWith("image/"), key: 'bankPassbookStatementUrl' },
+            { name: "Bank Document", file: data.bankPassbookStatement, path: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank.${data.bankPassbookStatement?.name.split('.').pop()}`, isImage: data.bankPassbookStatement?.type.startsWith("image/") ?? false, key: 'bankPassbookStatementUrl' },
             { name: "Police Certificate", file: data.policeClearanceCertificate, path: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${data.policeClearanceCertificate?.name.split('.').pop()}`, isImage: data.policeClearanceCertificate?.type.startsWith("image/") ?? false, key: 'policeClearanceCertificateUrl' },
         ];
 
@@ -585,11 +585,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         
         toast({ title: "All Files Uploaded", description: "File uploads completed successfully."});
 
-        const requiredUploads: (keyof typeof uploadedUrls)[] = ['profilePictureUrl', 'identityProofUrlFront', 'identityProofUrlBack', 'addressProofUrlFront', 'addressProofUrlBack', 'signatureUrl', 'bankPassbookStatementUrl'];
-        for(const key of requiredUploads) {
-            if (!uploadedUrls[key]) throw new Error(`${key.replace('Url','')} URL is missing after upload attempt.`);
-        }
-
         const employeeDataForFirestore = {
             employeeId: newEmployeeId,
             qrCodeUrl: newQrCodeUrl,
@@ -607,9 +602,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             educationalQualification: data.educationalQualification,
             otherQualification: data.otherQualification,
             district: data.district,
-            bankAccountNumber: data.bankAccountNumber,
-            ifscCode: data.ifscCode.toUpperCase(),
-            bankName: data.bankName.toUpperCase(),
             fullAddress: data.fullAddress.toUpperCase(),
             emailAddress: data.emailAddress.toLowerCase(),
             phoneNumber: data.phoneNumber,
@@ -626,9 +618,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             addressProofUrlFront: uploadedUrls.addressProofUrlFront,
             addressProofUrlBack: uploadedUrls.addressProofUrlBack,
             signatureUrl: uploadedUrls.signatureUrl,
-            bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl,
             profilePictureUrl: uploadedUrls.profilePictureUrl,
             // Optional fields
+            ...(data.bankAccountNumber && { bankAccountNumber: data.bankAccountNumber }),
+            ...(data.ifscCode && { ifscCode: data.ifscCode.toUpperCase() }),
+            ...(data.bankName && { bankName: data.bankName.toUpperCase() }),
+            ...(uploadedUrls.bankPassbookStatementUrl && { bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl }),
             ...(data.resourceIdNumber && { resourceIdNumber: data.resourceIdNumber }),
             ...(data.spouseName && { spouseName: data.spouseName.toUpperCase() }),
             ...(data.panNumber && { panNumber: data.panNumber.toUpperCase() }),
@@ -994,16 +989,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
                  </div>
                  <FormField
                     control={form.control}
                     name="bankPassbookStatement"
                     render={({ field }) => ( 
                        <FormItem className="mt-6 text-center">
-                        <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel>
                         <ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
                         <FormDescription>Upload or take photo of bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />
