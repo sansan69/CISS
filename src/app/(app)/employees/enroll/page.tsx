@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, subYears, addYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
@@ -64,7 +64,25 @@ const enrollmentFormSchema = z.object({
   lastName: z.string().min(1, { message: "Last name is required." }),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
   motherName: z.string().min(2, { message: "Mother's name is required." }),
-  dateOfBirth: z.date({ required_error: "Date of birth is required." }),
+  dateOfBirth: z.date({ required_error: "Date of birth is required." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+            return age - 1 >= 18;
+        }
+        return age >= 18;
+    }, { message: "Must be at least 18 years old." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+             return age - 1 < 65;
+        }
+        return age < 65;
+    }, { message: "Must be under 65 years old." }),
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
   maritalStatus: z.enum(["Married", "Unmarried"], { required_error: "Marital status is required." }),
   spouseName: z.string().optional(),
@@ -112,6 +130,13 @@ const enrollmentFormSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: "Spouse name is required if married.",
       path: ["spouseName"],
+    });
+  }
+  if (data.identityProofType && data.addressProofType && data.identityProofType === data.addressProofType) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Identity and Address proof types cannot be the same.",
+      path: ["addressProofType"],
     });
   }
 });
@@ -223,6 +248,9 @@ export default function EnrollEmployeePage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
+  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
 
 
   const form = useForm<EnrollmentFormValues>({
@@ -538,6 +566,11 @@ export default function EnrollEmployeePage() {
     }
   }
   
+  const fromYear = new Date().getFullYear() - 65;
+  const toYear = new Date().getFullYear() - 18;
+  const defaultCalendarMonth = new Date();
+  defaultCalendarMonth.setFullYear(toYear - 10);
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="mb-6">
@@ -564,7 +597,7 @@ export default function EnrollEmployeePage() {
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Joining Date <span className="text-destructive">*</span></FormLabel>
-                        <Popover>
+                        <Popover open={isJoiningDatePopoverOpen} onOpenChange={setIsJoiningDatePopoverOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -574,7 +607,11 @@ export default function EnrollEmployeePage() {
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus disabled={(date) => date > new Date()} />
+                            <Calendar mode="single" selected={field.value} onSelect={(date) => {
+                                field.onChange(date);
+                                setIsJoiningDatePopoverOpen(false);
+                              }} 
+                              initialFocus disabled={(date) => date > new Date()} />
                           </PopoverContent>
                         </Popover>
                         <FormDescription>Your first day of employment</FormDescription>
@@ -672,7 +709,7 @@ export default function EnrollEmployeePage() {
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
-                        <Popover>
+                        <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
@@ -682,10 +719,22 @@ export default function EnrollEmployeePage() {
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                            <Calendar 
+                              mode="single" 
+                              selected={field.value} 
+                              onSelect={(date) => {
+                                field.onChange(date);
+                                setIsDobPopoverOpen(false);
+                              }} 
+                              captionLayout="dropdown-buttons"
+                              fromYear={fromYear}
+                              toYear={toYear}
+                              defaultMonth={defaultCalendarMonth}
+                              disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
+                            />
                           </PopoverContent>
                         </Popover>
-                        <FormDescription>Your date of birth</FormDescription>
+                        <FormDescription>Your date of birth (Age must be between 18 and 65).</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

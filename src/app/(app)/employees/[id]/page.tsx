@@ -16,7 +16,7 @@ import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import QRCode from 'qrcode';
@@ -55,7 +55,25 @@ const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport"
 const employeeUpdateSchema = z.object({
   firstName: z.string().min(1, "First name is required."),
   lastName: z.string().min(1, "Last name is required."),
-  dateOfBirth: z.date({ required_error: "Date of birth is required." }),
+  dateOfBirth: z.date({ required_error: "Date of birth is required." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+            return age - 1 >= 18;
+        }
+        return age >= 18;
+    }, { message: "Must be at least 18 years old." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+             return age - 1 < 65;
+        }
+        return age < 65;
+    }, { message: "Must be under 65 years old." }),
   gender: z.enum(["Male", "Female", "Other"]),
   fatherName: z.string().min(2, "Father's name is required."),
   motherName: z.string().min(2, "Mother's name is required."),
@@ -445,6 +463,9 @@ export default function AdminEmployeeProfilePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
+  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
+  const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -995,6 +1016,15 @@ export default function AdminEmployeeProfilePage() {
     );
   }
 
+  const fromYear = new Date().getFullYear() - 65;
+  const toYear = new Date().getFullYear() - 18;
+  const defaultCalendarMonth = new Date(employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : employee.dateOfBirth);
+  if (isNaN(defaultCalendarMonth.getTime())) {
+      const fallbackDate = new Date();
+      fallbackDate.setFullYear(toYear - 10);
+      defaultCalendarMonth.setTime(fallbackDate.getTime());
+  }
+
   return (
     <>
       <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
@@ -1182,7 +1212,38 @@ export default function AdminEmployeeProfilePage() {
                       <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="dateOfBirth" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date of Birth</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(d) => d > new Date()} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Date of Birth</FormLabel>
+                            <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <FormControl>
+                                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
+                                            {field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}
+                                            <CalendarIcon className="ml-auto h-4 w-4" />
+                                        </Button>
+                                    </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar 
+                                        mode="single" 
+                                        selected={field.value} 
+                                        onSelect={(date) => {
+                                            field.onChange(date);
+                                            setIsDobPopoverOpen(false);
+                                        }}
+                                        captionLayout="dropdown-buttons"
+                                        fromYear={fromYear}
+                                        toYear={toYear}
+                                        defaultMonth={defaultCalendarMonth}
+                                        disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <FormDescription>Age must be between 18 and 65.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                      )} />
                       <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
@@ -1199,7 +1260,34 @@ export default function AdminEmployeeProfilePage() {
                       <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
                       <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="joiningDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Joining Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="joiningDate" render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                              <FormLabel>Joining Date</FormLabel>
+                              <Popover open={isJoiningDatePopoverOpen} onOpenChange={setIsJoiningDatePopoverOpen}>
+                                  <PopoverTrigger asChild>
+                                      <FormControl>
+                                          <Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>
+                                              {field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}
+                                              <CalendarIcon className="ml-auto h-4 w-4" />
+                                          </Button>
+                                      </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                      <Calendar 
+                                          mode="single" 
+                                          selected={field.value} 
+                                          onSelect={(date) => {
+                                              field.onChange(date);
+                                              setIsJoiningDatePopoverOpen(false);
+                                          }} 
+                                          initialFocus 
+                                          disabled={(d) => d > new Date()}
+                                      />
+                                  </PopoverContent>
+                              </Popover>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
                       <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                     </div>
