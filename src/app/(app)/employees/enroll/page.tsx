@@ -51,6 +51,8 @@ const fileSchema = z.instanceof(File, { message: "This field is required." })
 const optionalFileSchema = fileSchema.optional();
 
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
+const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
+
 
 const enrollmentFormSchema = z.object({
   // Client Information
@@ -86,6 +88,9 @@ const enrollmentFormSchema = z.object({
   gender: z.enum(["Male", "Female", "Other"], { required_error: "Gender is required." }),
   maritalStatus: z.enum(["Married", "Unmarried"], { required_error: "Marital status is required." }),
   spouseName: z.string().optional(),
+  
+  educationalQualification: qualificationTypes,
+  otherQualification: z.string().optional(),
 
   // Location & Identification
   district: z.string({ required_error: "District is required." }),
@@ -139,6 +144,13 @@ const enrollmentFormSchema = z.object({
       path: ["addressProofType"],
     });
   }
+  if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please specify your qualification.",
+      path: ["otherQualification"],
+    });
+  }
 });
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
@@ -156,6 +168,8 @@ const keralaDistricts = [
 
 const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
 const maritalStatuses = ["Married", "Unmarried"];
+const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
+
 
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
 
@@ -265,6 +279,8 @@ export default function EnrollEmployeePage() {
         gender: undefined,
         maritalStatus: undefined,
         spouseName: '',
+        educationalQualification: undefined,
+        otherQualification: '',
         district: '',
         panNumber: '',
         identityProofType: undefined,
@@ -284,6 +300,7 @@ export default function EnrollEmployeePage() {
 
   const watchClientName = form.watch("clientName");
   const watchMaritalStatus = form.watch("maritalStatus");
+  const watchEducationalQualification = form.watch("educationalQualification");
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -503,6 +520,8 @@ export default function EnrollEmployeePage() {
             dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
             gender: data.gender,
             maritalStatus: data.maritalStatus,
+            educationalQualification: data.educationalQualification,
+            otherQualification: data.otherQualification || "",
             district: data.district,
             bankAccountNumber: data.bankAccountNumber,
             ifscCode: data.ifscCode.toUpperCase(),
@@ -784,6 +803,35 @@ export default function EnrollEmployeePage() {
                           <FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel>
                           <FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl>
                           <FormDescription>Your spouse's full name</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  <FormField
+                    control={form.control}
+                    name="educationalQualification"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Educational Qualification <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {watchEducationalQualification === "Any Other Qualification" && (
+                    <FormField
+                      control={form.control}
+                      name="otherQualification"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
