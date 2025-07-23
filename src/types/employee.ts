@@ -16,6 +16,10 @@ export interface Employee {
   district: string;
   panNumber?: string;
   
+  // Educational Qualification
+  educationalQualification?: 'Primary School' | 'High School' | 'Diploma' | 'Graduation' | 'Post Graduation' | 'Doctorate' | 'Any Other Qualification';
+  otherQualification?: string;
+
   // New Identity Proof Fields
   identityProofType?: string;
   identityProofNumber?: string;
@@ -79,6 +83,7 @@ export const mockEmployees: Employee[] = [
     spouseName: 'Priya Sharma',
     district: 'Thiruvananthapuram', 
     panNumber: 'ABCDE1234F',
+    educationalQualification: 'Graduation',
     identityProofType: 'PAN Card',
     identityProofNumber: 'ABCDE1234F',
     addressProofType: 'Aadhar Card',

@@ -45,11 +45,14 @@ const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
+const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
 interface ClientOption { id: string; name: string; }
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
 
 
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
+const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
+
 
 // Zod schema for validation
 const employeeUpdateSchema = z.object({
@@ -79,6 +82,8 @@ const employeeUpdateSchema = z.object({
   motherName: z.string().min(2, "Mother's name is required."),
   maritalStatus: z.enum(["Married", "Unmarried"]),
   spouseName: z.string().optional(),
+  educationalQualification: qualificationTypes,
+  otherQualification: z.string().optional(),
   district: z.string(),
   fullAddress: z.string().min(10, "Address is required."),
   phoneNumber: z.string().regex(/^\d{10}$/, "Must be 10 digits."),
@@ -107,6 +112,9 @@ const employeeUpdateSchema = z.object({
   }
   if (data.status === 'Exited' && !data.exitDate) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Exit date is required if status is Exited.", path: ["exitDate"] });
+  }
+  if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
   }
 });
 type EmployeeUpdateValues = z.infer<typeof employeeUpdateSchema>;
@@ -291,6 +299,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} />
           <DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />
           {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}
+          <DetailGridItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
           <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
           <DetailGridItem label="Email Address" value={employee.emailAddress?.toLowerCase()} />
           <DetailGridItem label="District" value={toTitleCase(employee.district)} />
@@ -487,6 +496,8 @@ export default function AdminEmployeeProfilePage() {
       motherName: "",
       maritalStatus: undefined,
       spouseName: "",
+      educationalQualification: undefined,
+      otherQualification: "",
       district: "",
       fullAddress: "",
       phoneNumber: "",
@@ -511,6 +522,8 @@ export default function AdminEmployeeProfilePage() {
   
   const watchStatus = form.watch('status');
   const watchMaritalStatus = form.watch('maritalStatus');
+  const watchEducationalQualification = form.watch("educationalQualification");
+
 
   const fetchEmployee = useCallback(async () => {
     setIsLoading(true);
@@ -566,6 +579,7 @@ export default function AdminEmployeeProfilePage() {
         panNumber: employee.panNumber || "",
         epfUanNumber: employee.epfUanNumber || "",
         esicNumber: employee.esicNumber || "",
+        otherQualification: employee.otherQualification || "",
         identityProofType: (employee.identityProofType || legacy.idProofType) as any,
         identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber),
         addressProofType: employee.addressProofType as any,
@@ -752,6 +766,10 @@ export default function AdminEmployeeProfilePage() {
         
         const fullName = `${data.firstName} ${data.lastName}`;
         formPayload.fullName = fullName.toUpperCase();
+        
+        if (data.educationalQualification !== "Any Other Qualification") {
+            formPayload.otherQualification = "";
+        }
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
@@ -1088,6 +1106,7 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="Mother's Name" value={employee.motherName} isName />
                     <DetailItem label="Marital Status" value={employee.maritalStatus} />
                     {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} isName />}
+                    <DetailItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
                     <DetailItem label="District" value={employee.district} isName />
                   </div>
                   <Separator className="my-6" />
@@ -1247,6 +1266,35 @@ export default function AdminEmployeeProfilePage() {
                       <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
+                       <FormField
+                        control={form.control}
+                        name="educationalQualification"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Educational Qualification</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                {educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {watchEducationalQualification === "Any Other Qualification" && (
+                        <FormField
+                          control={form.control}
+                          name="otherQualification"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Please Specify Qualification</FormLabel>
+                              <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                       <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />

@@ -30,18 +30,16 @@ import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserC
 import { cn } from "@/lib/utils";
 import { format, subYears, addYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React, { Suspense, useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { db, storage } from "@/lib/firebase";
-import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, getDocs } from "firebase/firestore";
-import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
+import { db, storage } from "@/lib/firebase"; 
+import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
+import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
 import QRCode from 'qrcode';
-import { Checkbox } from "@/components/ui/checkbox";
-import { verifyDocument } from "@/ai/flows/verify-document-flow";
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -55,10 +53,11 @@ const optionalFileSchema = fileSchema.optional();
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
 const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
 
+
 const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
-  clientName: z.string({ required_error: "Client name is required." }).min(1, {message: "Client name is required."}),
+  clientName: z.string({ required_error: "Client name is required." }),
   resourceIdNumber: z.string().optional(),
 
   // Personal Information
@@ -94,7 +93,7 @@ const enrollmentFormSchema = z.object({
   otherQualification: z.string().optional(),
 
   // Location & Identification
-  district: z.string({ required_error: "District is required." }).min(1, {message: "District is required."}),
+  district: z.string({ required_error: "District is required." }),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   
   identityProofType: proofTypes,
@@ -123,11 +122,6 @@ const enrollmentFormSchema = z.object({
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
   emailAddress: z.string().email({ message: "Invalid email address." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
-  
-  // Terms and Conditions
-  termsAndConditions: z.boolean().refine((val) => val === true, {
-    message: "You must accept the terms and conditions to proceed.",
-  }),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({
@@ -139,7 +133,7 @@ const enrollmentFormSchema = z.object({
   if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Spouse name is required if marital status is Married.",
+      message: "Spouse name is required if married.",
       path: ["spouseName"],
     });
   }
@@ -167,8 +161,8 @@ interface ClientOption {
 }
 
 const keralaDistricts = [
-  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
-  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
+  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
+  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
@@ -179,7 +173,14 @@ const educationOptions = ["Primary School", "High School", "Diploma", "Graduatio
 
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
 
-// Helper Functions
+
+const handleUploadError = (err: any, documentName: string): never => {
+  if (err.code === 'storage/unauthorized') {
+    throw new Error(`Permission Denied: Your admin account does not have permission to upload the ${documentName}. Please check your Firebase Storage security rules to allow writes for authenticated users.`);
+  }
+  throw new Error(`${documentName} processing failed: ${err.message}`);
+};
+
 const abbreviateClientName = (clientName: string): string => {
   if (!clientName) return "CLIENT";
   const upperCaseName = clientName.trim().toUpperCase();
@@ -224,50 +225,21 @@ const generateEmployeeId = (clientName: string): string => {
 const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
   const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
   try {
-    const dataUrl = await QRCode.toDataURL(dataString, {
+    return await QRCode.toDataURL(dataString, {
       errorCorrectionLevel: 'H',
       type: 'image/png',
       quality: 0.92,
       margin: 1,
       width: 256,
     });
-    return dataUrl;
   } catch (err) {
     console.error('QR code generation failed:', err);
     throw new Error('Failed to generate QR code.');
   }
 };
 
-interface ActualEnrollmentFormProps {
-  initialPhoneNumberFromQuery?: string | null;
-}
 
-const handlePublicUploadError = (err: any, documentName: string): never => {
-  if (err.code === 'storage/unauthorized') {
-    throw new Error(`Upload Permission Denied: The system is not configured to allow file uploads for new enrollments. Please contact an administrator and check the Firebase Storage security rules to allow unauthenticated writes.`);
-  }
-  throw new Error(`${documentName} processing failed: ${err.message}`);
-};
-
-const fileToDataUri = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        if (!file.type.startsWith('image/')) {
-            reject(new Error("File is not an image and cannot be converted to data URI for verification."));
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            resolve(reader.result as string);
-        };
-        reader.onerror = (error) => {
-            reject(error);
-        };
-        reader.readAsDataURL(file);
-    });
-};
-
-
-function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentFormProps) {
+export default function EnrollEmployeePage() {
   const { toast } = useToast();
   const router = useRouter();
 
@@ -290,14 +262,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
+  
   const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
   const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
 
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
-    defaultValues: {
+    defaultValues: { 
         clientName: '',
         resourceIdNumber: '',
         firstName: '',
@@ -323,7 +295,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         fullAddress: '',
         emailAddress: '',
         phoneNumber: '',
-        termsAndConditions: false,
      },
   });
 
@@ -331,11 +302,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const watchMaritalStatus = form.watch("maritalStatus");
   const watchEducationalQualification = form.watch("educationalQualification");
 
-  useEffect(() => {
-    if (initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery)) {
-      form.setValue('phoneNumber', initialPhoneNumberFromQuery, { shouldValidate: true });
-    }
-  }, [initialPhoneNumberFromQuery, form]);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -379,7 +345,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const openCamera = async (fieldName: CameraField) => {
     setActiveCameraField(fieldName);
     setCameraError(null);
-    setIsCameraDialogOpen(true);
+    setIsCameraDialogOpen(true); // Open dialog first
 
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
@@ -391,15 +357,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         setCameraStream(stream);
       } catch (err) {
         console.error("Error accessing camera:", err);
-        let errorMessage = "Could not access camera. Please ensure permission is granted in your browser settings.";
-        if (err instanceof Error && err.name === "NotAllowedError") {
-            errorMessage = "Camera access was denied. Please enable camera permissions in your browser settings.";
-        } else if (err instanceof Error && err.name === "NotFoundError") {
-            errorMessage = "No camera found. Please ensure a camera is connected and enabled.";
-        }
-        setCameraError(errorMessage);
-        toast({ variant: "destructive", title: "Camera Error", description: errorMessage });
-        setIsCameraDialogOpen(false);
+        setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
+        toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
+        setIsCameraDialogOpen(false); // Close dialog if camera access fails
         setCameraStream(null);
       }
     } else {
@@ -426,7 +386,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       canvas.height = videoRef.current.videoHeight;
       const context = canvas.getContext('2d');
       context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
 
       try {
         const fileName = `${activeCameraField}_capture_${Date.now()}.jpg`;
@@ -457,8 +417,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   };
 
   const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    fieldName: any,
+    event: React.ChangeEvent<HTMLInputElement>, 
+    fieldName: any, 
     setPreview: React.Dispatch<React.SetStateAction<string | null>>
   ) => {
     if (event.target.files && event.target.files[0]) {
@@ -466,7 +426,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       if (file.size > MAX_FILE_SIZE_BYTES) {
         form.setError(fieldName, { type: "manual", message: `File is too large. Max ${MAX_FILE_SIZE_MB}MB.` });
         setPreview(null);
-        if (event.target) event.target.value = "";
+        if (event.target) event.target.value = ""; 
         return;
       }
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
@@ -474,63 +434,39 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
          if (file.type.startsWith("image/")) {
             setPreview(URL.createObjectURL(file));
          } else if (file.type === "application/pdf") {
-             setPreview("/pdf-icon.png");
+             setPreview("/pdf-icon.png"); 
          }
       } else {
         form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP or PDF." });
         setPreview(null);
       }
     } else {
-      form.setValue(fieldName, undefined as any, { shouldValidate: true });
+      form.setValue(fieldName, undefined as any, { shouldValidate: true }); // Use 'as any' to bypass strict File type for undefined
       setPreview(null);
     }
     if (event.target) {
-        event.target.value = "";
+        event.target.value = ""; 
     }
   };
-
+  
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
-    toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
+    toast({ title: "Processing Registration...", description: "Please wait." });
 
-    // Step 1: AI Document Verification
-    try {
-        toast({ title: "Verifying Documents...", description: "AI is checking your uploaded proofs." });
-        
-        const verificationTasks = [
-            { docFile: data.identityProofUrlFront, docType: data.identityProofType, fieldName: 'identityProofUrlFront', label: 'Identity Proof' },
-            { docFile: data.addressProofUrlFront, docType: data.addressProofType, fieldName: 'addressProofUrlFront', label: 'Address Proof' },
-        ];
-        
-        for (const task of verificationTasks) {
-            if (task.docFile.type.startsWith('image/')) {
-                const dataUri = await fileToDataUri(task.docFile);
-                const result = await verifyDocument({ photoDataUri: dataUri, expectedType: task.docType });
-                if (!result.isMatch) {
-                    toast({
-                        variant: "destructive",
-                        title: `${task.label} Mismatch`,
-                        description: `The document you uploaded for ${task.label} does not appear to be a ${task.docType}. AI Reason: ${result.reason}`,
-                        duration: 9000
-                    });
-                    form.setError(task.fieldName as any, {type: 'manual', message: `AI verification failed: This does not seem to be a ${task.docType}.`});
-                    setIsLoading(false);
-                    return; // Stop submission
-                }
-            }
-        }
-        
-        toast({ title: "Documents Verified!", description: "All proofs match the selected types." });
-
-    } catch (error: any) {
-        console.error("AI Verification Error:", error);
-        toast({ variant: "destructive", title: "Document Verification Failed", description: "Could not verify documents with AI. Please try again.", duration: 8000 });
-        setIsLoading(false);
-        return; // Stop submission
-    }
-
-    const phoneNumber = data.phoneNumber.replace(/\D/g, "");
+    const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
     const fullName = `${data.firstName.toUpperCase()} ${data.lastName.toUpperCase()}`;
+    const newEmployeeId = generateEmployeeId(data.clientName);
+    const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
+    
+    const nameParts = fullName.split(' ').filter(Boolean);
+    const searchableFields = Array.from(new Set([
+        ...nameParts,
+        data.firstName.toUpperCase(),
+        data.lastName.toUpperCase(),
+        newEmployeeId.toUpperCase(),
+        data.phoneNumber,
+    ].filter(Boolean) as string[]));
+
     const uploadedUrls: { [key: string]: string | null } = {
         profilePictureUrl: null,
         identityProofUrlFront: null,
@@ -543,22 +479,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     };
 
     try {
-        toast({ title: "Generating Unique IDs...", description: "Creating Employee ID and QR code." });
-        const newEmployeeId = generateEmployeeId(data.clientName);
-        const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
-        
-        const nameParts = fullName.split(' ').filter(Boolean);
-        const searchableFields = Array.from(new Set([
-          ...nameParts,
-          data.firstName.toUpperCase(),
-          data.lastName.toUpperCase(),
-          newEmployeeId.toUpperCase(),
-          data.phoneNumber,
-        ].filter(Boolean) as string[]));
-
-        toast({ title: "IDs Generated", description: "Employee ID and QR code created successfully." });
-
-        const filesToUpload: { name: string; file?: File; path: string; isImage: boolean, key: keyof typeof uploadedUrls }[] = [
+      const filesToUpload: { name: string; file?: File; path: string; isImage: boolean, key: keyof typeof uploadedUrls }[] = [
             { name: "Profile Picture", file: data.profilePicture, path: `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, isImage: true, key: 'profilePictureUrl' },
             { name: "Identity Proof (Front)", file: data.identityProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_front.${data.identityProofUrlFront.name.split('.').pop()}`, isImage: data.identityProofUrlFront.type.startsWith("image/"), key: 'identityProofUrlFront' },
             { name: "Identity Proof (Back)", file: data.identityProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_back.${data.identityProofUrlBack.name.split('.').pop()}`, isImage: data.identityProofUrlBack.type.startsWith("image/"), key: 'identityProofUrlBack' },
@@ -569,7 +490,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             { name: "Police Certificate", file: data.policeClearanceCertificate, path: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${data.policeClearanceCertificate?.name.split('.').pop()}`, isImage: data.policeClearanceCertificate?.type.startsWith("image/") ?? false, key: 'policeClearanceCertificateUrl' },
         ];
 
-        for (const { name, file, path, isImage, key } of filesToUpload) {
+
+      for (const { name, file, path, isImage, key } of filesToUpload) {
             if (!file) continue;
             toast({ title: `Uploading ${name}...`});
             try {
@@ -579,18 +501,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 const url = await uploadFileToStorage(fileToUpload, path);
                 uploadedUrls[key] = url;
             } catch (err) {
-                handlePublicUploadError(err, name);
+                handleUploadError(err, name);
             }
         }
-        
-        toast({ title: "All Files Uploaded", description: "File uploads completed successfully."});
+      
+      toast({ title: "Saving Employee Data...", description: "Almost done."});
 
-        const requiredUploads: (keyof typeof uploadedUrls)[] = ['profilePictureUrl', 'identityProofUrlFront', 'identityProofUrlBack', 'addressProofUrlFront', 'addressProofUrlBack', 'signatureUrl', 'bankPassbookStatementUrl'];
-        for(const key of requiredUploads) {
-            if (!uploadedUrls[key]) throw new Error(`${key.replace('Url','')} URL is missing after upload attempt.`);
-        }
-
-        const employeeDataForFirestore = {
+      const employeeDataForFirestore = {
             employeeId: newEmployeeId,
             qrCodeUrl: newQrCodeUrl,
             searchableFields,
@@ -605,7 +522,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             gender: data.gender,
             maritalStatus: data.maritalStatus,
             educationalQualification: data.educationalQualification,
-            otherQualification: data.otherQualification,
+            otherQualification: data.otherQualification || "",
             district: data.district,
             bankAccountNumber: data.bankAccountNumber,
             ifscCode: data.ifscCode.toUpperCase(),
@@ -636,54 +553,52 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             ...(data.esicNumber && { esicNumber: data.esicNumber }),
             ...(uploadedUrls.policeClearanceCertificateUrl && { policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl }),
         };
-
-        toast({ title: "Finalizing Data...", description: "Saving to database..." });
-        const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
-
-        toast({
-            title: "Registration Successful!",
-            description: `${data.firstName} ${data.lastName}'s profile has been created. Employee ID: ${newEmployeeId}`,
-            action: <Check className="h-5 w-5 text-green-500" />,
-            duration: 7000,
-        });
-
-        form.reset();
-        // Reset all previews
-        setProfilePicPreview(null);
-        setIdentityProofUrlFrontPreview(null);
-        setIdentityProofUrlBackPreview(null);
-        setAddressProofUrlFrontPreview(null);
-        setAddressProofUrlBackPreview(null);
-        setSignatureUrlPreview(null);
-        setBankPassbookPreview(null);
-        setPoliceCertPreview(null);
-
-        router.push(`/profile/${docRef.id}`);
+      
+      const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
+      
+      toast({
+        title: "Registration Successful!",
+        description: `${data.firstName} ${data.lastName}'s registration (ID: ${newEmployeeId}) has been saved.`,
+        action: <Check className="h-5 w-5 text-green-500" />,
+      });
+      form.reset();
+      // Reset all previews
+      setProfilePicPreview(null);
+      setIdentityProofUrlFrontPreview(null);
+      setIdentityProofUrlBackPreview(null);
+      setAddressProofUrlFrontPreview(null);
+      setAddressProofUrlBackPreview(null);
+      setSignatureUrlPreview(null);
+      setBankPassbookPreview(null);
+      setPoliceCertPreview(null);
+      router.push(`/employees/${docRef.id}`);
 
     } catch (error: any) {
-        console.error("Detailed Registration or Upload Error: ", error, error.stack);
-        toast({
-            variant: "destructive",
-            title: "Registration Failed",
-            description: error.message || "An unexpected error occurred. Could not save employee data or upload files.",
-            duration: 9000,
-        });
+      console.error("Registration or Upload Error: ", error);
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: error.message || "Could not save employee data or upload files. Please check details and try again.",
+        duration: 9000
+      });
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-}
-
-
-  const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
+  }
   
   const fromYear = new Date().getFullYear() - 65;
   const toYear = new Date().getFullYear() - 18;
   const defaultCalendarMonth = new Date();
   defaultCalendarMonth.setFullYear(toYear - 10);
 
-
   return (
-    <>
+    <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="mb-6">
+        <Link href="/employees" className="flex items-center text-sm text-primary hover:underline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Employee Directory
+        </Link>
+      </div>
+
       <Card className="shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
@@ -692,7 +607,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-
+              
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -712,16 +627,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={(date) => {
+                            <Calendar mode="single" selected={field.value} onSelect={(date) => {
                                 field.onChange(date);
                                 setIsJoiningDatePopoverOpen(false);
-                              }}
-                              initialFocus
-                              disabled={(date) => date > new Date()}
-                            />
+                              }} 
+                              initialFocus disabled={(date) => date > new Date()} />
                           </PopoverContent>
                         </Popover>
                         <FormDescription>Your first day of employment</FormDescription>
@@ -753,9 +663,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     )}
                   />
                   {watchClientName === "TCS" && (
-                    <FormField
-                      control={form.control}
-                      name="resourceIdNumber"
+                    <FormField 
+                      control={form.control} 
+                      name="resourceIdNumber" 
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
                           <FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel>
@@ -763,7 +673,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                           <FormDescription>Required if client is TCS. E.g., TCS12345</FormDescription>
                           <FormMessage />
                         </FormItem>
-                      )}
+                      )} 
                     />
                   )}
                 </div>
@@ -774,7 +684,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 <FormField
                   control={form.control}
                   name="profilePicture"
-                  render={({ field }) => (
+                  render={({ field }) => ( 
                     <FormItem className="mb-6 text-center">
                       <FormLabel className="block mb-2 text-sm font-medium">Profile Picture <span className="text-destructive">*</span></FormLabel>
                        <div className="flex flex-col items-center gap-4">
@@ -794,11 +704,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                           </Button>
                         </div>
                         <FormControl>
-                           <Input
+                           <Input 
                             id="profilePictureInput"
-                            type="file"
-                            className="hidden"
-                            accept="image/jpeg,image/png,image/webp"
+                            type="file" 
+                            className="hidden" 
+                            accept="image/jpeg,image/png,image/webp" 
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
@@ -829,13 +739,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                             </FormControl>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
+                            <Calendar 
+                              mode="single" 
+                              selected={field.value} 
                               onSelect={(date) => {
                                 field.onChange(date);
                                 setIsDobPopoverOpen(false);
-                              }}
+                              }} 
                               captionLayout="dropdown-buttons"
                               fromYear={fromYear}
                               toYear={toYear}
@@ -930,7 +840,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   )}
                 </div>
               </section>
-
+              
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Identification Documents</h2>
                 
@@ -966,9 +876,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                      <FormField control={form.control} name="signatureUrl" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Employee Signature <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="signatureUrl" preview={signatureUrlPreview} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={openCamera} isSignature={true} /><FormDescription>Sign on a plain white paper and take a clear photo.</FormDescription><FormMessage /></FormItem> )} />
                 </div>
               </section>
-
+              
               <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Statutory & Other Details</h2>
+                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Statutory & Location Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
@@ -1019,61 +929,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel>
-                        <FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl>
-                        <FormDescription>Your primary contact number. {isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription>
-                        <FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Terms & Conditions</h2>
-                <div className="space-y-4">
-                  <div className="h-48 overflow-y-auto p-4 border rounded-md text-xs text-muted-foreground space-y-2">
-                    <p className="font-bold">I. General Eligibility and Compliance</p>
-                    <ul className="list-disc list-outside pl-4 space-y-1">
-                      <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
-                      <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
-                      <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
-                    </ul>
-                    <p className="font-bold">II. Employment Terms & Responsibilities</p>
-                    <ul className="list-disc list-outside pl-4 space-y-1">
-                      <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
-                      <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
-                      <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
-                      <li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li>
-                    </ul>
-                    <p className="font-bold">III. Disciplinary Action</p>
-                     <ul className="list-disc list-outside pl-4 space-y-1">
-                        <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
-                     </ul>
-                    <p className="font-bold">IV. Declaration</p>
-                    <p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="termsAndConditions"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>
-                            I have read, understood, and agree to the Terms and Conditions of Enrollment.
-                          </FormLabel>
-                          <FormMessage />
-                        </div>
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormDescription>Your primary contact number</FormDescription><FormMessage /></FormItem>)} />
                 </div>
               </section>
 
@@ -1093,9 +949,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
-             <ShadDialogDescription className="sr-only">
-              Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
-            </ShadDialogDescription>
           </DialogHeader>
           <div className="py-4">
             {cameraError && (
@@ -1105,9 +958,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 <AlertDescription>{cameraError}</AlertDescription>
               </Alert>
             )}
+            {/* Conditionally render video only when stream is available and no error */}
             {(cameraStream && !cameraError) && (
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-auto rounded-md border aspect-video bg-muted" />
             )}
+            {/* Show placeholder if stream is not ready but dialog is open and no error yet */}
             {(!cameraStream && isCameraDialogOpen && !cameraError) && (
                 <div className="w-full aspect-video bg-muted rounded-md flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -1125,9 +980,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+
+    </div>
   );
 }
+
 
 const ImagePreviewAndUpload: React.FC<{
   fieldName: any;
@@ -1152,43 +1009,3 @@ const ImagePreviewAndUpload: React.FC<{
         </div>
     );
 };
-
-
-function EnrollmentFormWrapper() {
-  const searchParams = useSearchParams();
-  const initialPhoneNumberFromQuery = searchParams.get('phone');
-  return <ActualEnrollmentForm initialPhoneNumberFromQuery={initialPhoneNumberFromQuery} />;
-}
-
-
-function EnrollmentPageSkeleton() {
-  return (
-    <Card className="shadow-xl">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
-        <CardDescription>Loading form...</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex justify-center items-center h-96">
-          <Loader2 className="h-16 w-16 animate-spin text-primary" />
-          <p className="ml-4 text-lg text-muted-foreground">Preparing enrollment form...</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function EnrollEmployeePage() {
-  return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-6">
-        <Link href="/" className="flex items-center text-sm text-primary hover:underline">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-        </Link>
-      </div>
-      <Suspense fallback={<EnrollmentPageSkeleton />}>
-        <EnrollmentFormWrapper />
-      </Suspense>
-    </div>
-  );
-}

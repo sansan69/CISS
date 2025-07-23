@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 // #region PDF Generation Components
@@ -116,6 +117,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
           <DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} />
           <DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />
           {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}
+          <DetailGridItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
           <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
           <DetailGridItem label="Email Address" value={employee.emailAddress?.toLowerCase()} />
           <DetailGridItem label="District" value={toTitleCase(employee.district)} />
@@ -283,6 +285,8 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
 );
 
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
+
 
 const ImageInputWithPreview: React.FC<{
     label: string;
@@ -344,6 +348,9 @@ export default function PublicEmployeeProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filesToUpload, setFilesToUpload] = useState<Record<string, File | null>>({});
   const [filePreviews, setFilePreviews] = useState<Record<string, string | null>>({});
+  
+  const [educationalQualification, setEducationalQualification] = useState<string | undefined>(undefined);
+  const [otherQualification, setOtherQualification] = useState<string | undefined>(undefined);
 
   // Camera state
   const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
@@ -371,6 +378,8 @@ export default function PublicEmployeeProfilePage() {
           id: employeeDocSnap.id,
         } as Employee;
         setEmployee(formattedData);
+        setEducationalQualification(formattedData.educationalQualification);
+        setOtherQualification(formattedData.otherQualification);
       } else {
         setError("Employee not found with the provided ID.");
         toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
@@ -460,15 +469,19 @@ export default function PublicEmployeeProfilePage() {
   };
   
   const handleSaveChanges = async () => {
-    if (!employee || Object.keys(filesToUpload).length === 0) {
-      toast({ title: "No files selected", description: "Please select at least one file to upload." });
+    if (!employee) return;
+    const hasFileUploads = Object.keys(filesToUpload).length > 0;
+    const hasQualificationUpdate = educationalQualification !== employee.educationalQualification || otherQualification !== employee.otherQualification;
+
+    if (!hasFileUploads && !hasQualificationUpdate) {
+      toast({ title: "No changes", description: "Please select a file to upload or update your qualification." });
       return;
     }
     
     setIsSubmitting(true);
-    toast({ title: "Uploading...", description: "Please wait while your documents are uploaded." });
+    toast({ title: "Saving...", description: "Please wait while your details are updated." });
     
-    const updatedUrls: { [key: string]: string } = {};
+    const updatePayload: Record<string, any> = {};
     const phoneNumber = employee.phoneNumber;
     
     const fileMap: Record<string, string> = {
@@ -482,24 +495,31 @@ export default function PublicEmployeeProfilePage() {
     };
 
     try {
-      for (const [fieldName, file] of Object.entries(filesToUpload)) {
-        if (file) {
-          const isImage = file.type.startsWith("image/");
-          const fileExtension = file.name.split('.').pop() || (isImage ? 'jpg' : 'bin');
-          const storagePath = `${fileMap[fieldName]}.${fileExtension}`;
-          
-          const fileToUpload = isImage ? await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 }) : file;
-          updatedUrls[fieldName] = await uploadFileToStorage(fileToUpload, storagePath);
+      if (hasFileUploads) {
+        for (const [fieldName, file] of Object.entries(filesToUpload)) {
+          if (file) {
+            const isImage = file.type.startsWith("image/");
+            const fileExtension = file.name.split('.').pop() || (isImage ? 'jpg' : 'bin');
+            const storagePath = `${fileMap[fieldName]}.${fileExtension}`;
+            
+            const fileToUpload = isImage ? await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 }) : file;
+            updatePayload[fieldName] = await uploadFileToStorage(fileToUpload, storagePath);
+          }
         }
       }
-
-      const employeeDocRef = doc(db, "employees", employee.id);
-      await updateDoc(employeeDocRef, {
-        ...updatedUrls,
-        updatedAt: serverTimestamp(),
-      });
       
-      toast({ title: "Upload Successful", description: "Your documents have been saved." });
+      if (hasQualificationUpdate) {
+          updatePayload.educationalQualification = educationalQualification;
+          updatePayload.otherQualification = (educationalQualification === 'Any Other Qualification' && otherQualification) ? otherQualification : "";
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        updatePayload.updatedAt = serverTimestamp();
+        const employeeDocRef = doc(db, "employees", employee.id);
+        await updateDoc(employeeDocRef, updatePayload);
+      }
+      
+      toast({ title: "Update Successful", description: "Your profile has been updated." });
       setIsUploadMode(false);
       setFilesToUpload({});
       setFilePreviews({});
@@ -507,7 +527,7 @@ export default function PublicEmployeeProfilePage() {
       
     } catch (error: any) {
       console.error("Error updating documents:", error);
-      toast({ variant: "destructive", title: "Upload Failed", description: error.message || "An error occurred while saving." });
+      toast({ variant: "destructive", title: "Update Failed", description: error.message || "An error occurred while saving." });
     } finally {
       setIsSubmitting(false);
     }
@@ -652,7 +672,7 @@ export default function PublicEmployeeProfilePage() {
                     Download Kit
                 </Button>
                  <Button onClick={() => setIsUploadMode(!isUploadMode)} className="flex-1">
-                    <Edit className="mr-2 h-4 w-4" /> {isUploadMode ? "Cancel Upload" : "Upload Documents"}
+                    <Edit className="mr-2 h-4 w-4" /> {isUploadMode ? "Cancel" : "Update Details"}
                 </Button>
             </div>
         </div>
@@ -678,10 +698,32 @@ export default function PublicEmployeeProfilePage() {
         {isUploadMode && (
           <Card>
               <CardHeader>
-                  <CardTitle>Upload Missing Documents</CardTitle>
-                  <CardDescription>Upload any missing documents below. Click "Save Changes" when you are done.</CardDescription>
+                  <CardTitle>Update Your Profile</CardTitle>
+                  <CardDescription>Upload any missing documents or update your educational qualification below. Click "Save Changes" when you are done.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {!employee.educationalQualification && (
+                    <div className="p-4 border rounded-lg space-y-4">
+                        <h3 className="text-lg font-semibold">Educational Qualification</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="qualification">Qualification Level</Label>
+                                <Select value={educationalQualification} onValueChange={setEducationalQualification}>
+                                    <SelectTrigger id="qualification"><SelectValue placeholder="Select qualification"/></SelectTrigger>
+                                    <SelectContent>
+                                        {educationOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {educationalQualification === 'Any Other Qualification' && (
+                                <div>
+                                    <Label htmlFor="other-qualification">Please Specify</Label>
+                                    <Input id="other-qualification" value={otherQualification} onChange={e => setOtherQualification(e.target.value)} placeholder="e.g., B.Tech"/>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {!hasIdProofFront && <ImageInputWithPreview label="Identity Proof (Front)" onFileSelect={(file) => handleFileSelect('identityProofUrlFront', file)} onCameraClick={() => openCamera('identityProofUrlFront')} preview={filePreviews.identityProofUrlFront} />}
                     {!hasIdProofBack && <ImageInputWithPreview label="Identity Proof (Back)" onFileSelect={(file) => handleFileSelect('identityProofUrlBack', file)} onCameraClick={() => openCamera('identityProofUrlBack')} preview={filePreviews.identityProofUrlBack} />}
@@ -691,10 +733,10 @@ export default function PublicEmployeeProfilePage() {
                     {!employee.bankPassbookStatementUrl && <ImageInputWithPreview label="Bank Document" onFileSelect={(file) => handleFileSelect('bankPassbookStatementUrl', file)} onCameraClick={() => openCamera('bankPassbookStatement')} preview={filePreviews.bankPassbookStatementUrl} />}
                     {!employee.policeClearanceCertificateUrl && <ImageInputWithPreview label="Police Clearance Certificate" onFileSelect={(file) => handleFileSelect('policeClearanceCertificateUrl', file)} onCameraClick={() => openCamera('policeClearanceCertificate')} preview={filePreviews.policeClearanceCertificateUrl} />}
                 </div>
-                 {Object.values(employee).every(v => v) && <p className="text-muted-foreground text-center">All documents have been uploaded.</p>}
+                 {hasIdProofFront && hasIdProofBack && employee.addressProofUrlFront && employee.addressProofUrlBack && employee.signatureUrl && employee.bankPassbookStatementUrl && employee.educationalQualification && <p className="text-muted-foreground text-center">All documents and qualifications are up to date.</p>}
               </CardContent>
               <CardFooter className="flex justify-end">
-                <Button onClick={handleSaveChanges} disabled={isSubmitting || Object.keys(filesToUpload).length === 0}>
+                <Button onClick={handleSaveChanges} disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Changes
                 </Button>
@@ -724,6 +766,7 @@ export default function PublicEmployeeProfilePage() {
                     <DetailItem label="Mother's Name" value={employee.motherName} isName />
                     <DetailItem label="Marital Status" value={employee.maritalStatus} />
                     {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} isName />}
+                    <DetailItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
                     <DetailItem label="District" value={employee.district} isName />
                 </div>
                 <Separator className="my-6" />
