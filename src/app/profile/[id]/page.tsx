@@ -592,6 +592,10 @@ export default function PublicEmployeeProfilePage() {
 
     return pages;
   };
+
+  const hasIdProofFront = !!(employee?.identityProofUrlFront || (employee as any)?.idProofDocumentUrlFront || (employee as any)?.idProofDocumentUrl);
+  const hasIdProofBack = !!(employee?.identityProofUrlBack || (employee as any)?.idProofDocumentUrlBack);
+
   
   if (isLoading) {
     return (
@@ -679,8 +683,8 @@ export default function PublicEmployeeProfilePage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {!employee.identityProofUrlFront && <ImageInputWithPreview label="Identity Proof (Front)" onFileSelect={(file) => handleFileSelect('identityProofUrlFront', file)} onCameraClick={() => openCamera('identityProofUrlFront')} preview={filePreviews.identityProofUrlFront} />}
-                    {!employee.identityProofUrlBack && <ImageInputWithPreview label="Identity Proof (Back)" onFileSelect={(file) => handleFileSelect('identityProofUrlBack', file)} onCameraClick={() => openCamera('identityProofUrlBack')} preview={filePreviews.identityProofUrlBack} />}
+                    {!hasIdProofFront && <ImageInputWithPreview label="Identity Proof (Front)" onFileSelect={(file) => handleFileSelect('identityProofUrlFront', file)} onCameraClick={() => openCamera('identityProofUrlFront')} preview={filePreviews.identityProofUrlFront} />}
+                    {!hasIdProofBack && <ImageInputWithPreview label="Identity Proof (Back)" onFileSelect={(file) => handleFileSelect('identityProofUrlBack', file)} onCameraClick={() => openCamera('identityProofUrlBack')} preview={filePreviews.identityProofUrlBack} />}
                     {!employee.addressProofUrlFront && <ImageInputWithPreview label="Address Proof (Front)" onFileSelect={(file) => handleFileSelect('addressProofUrlFront', file)} onCameraClick={() => openCamera('addressProofUrlFront')} preview={filePreviews.addressProofUrlFront} />}
                     {!employee.addressProofUrlBack && <ImageInputWithPreview label="Address Proof (Back)" onFileSelect={(file) => handleFileSelect('addressProofUrlBack', file)} onCameraClick={() => openCamera('addressProofUrlBack')} preview={filePreviews.addressProofUrlBack} />}
                     {!employee.signatureUrl && <ImageInputWithPreview label="Signature" onFileSelect={(file) => handleFileSelect('signatureUrl', file)} onCameraClick={() => openCamera('signatureUrl')} isSignature={true} preview={filePreviews.signatureUrl} />}
