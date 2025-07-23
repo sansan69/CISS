@@ -40,7 +40,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSearchParams, useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { Checkbox } from "@/components/ui/checkbox";
-import { verifyDocument } from "@/ai/flows/verify-document-flow";
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -49,7 +48,7 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const fileSchema = z.instanceof(File, { message: "This field is required." })
   .refine(file => file.size <= MAX_FILE_SIZE_BYTES, `Max file size is ${MAX_FILE_SIZE_MB}MB.`);
 
-const optionalFileSchema = fileSchema.optional();
+const optionalFileSchema = z.instanceof(File, { message: "This field is required." }).optional();
 
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
 const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
@@ -247,24 +246,6 @@ const handlePublicUploadError = (err: any, documentName: string): never => {
   }
   throw new Error(`${documentName} processing failed: ${err.message}`);
 };
-
-const fileToDataUri = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        if (!file.type.startsWith('image/')) {
-            reject(new Error("File is not an image and cannot be converted to data URI for verification."));
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            resolve(reader.result as string);
-        };
-        reader.onerror = (error) => {
-            reject(error);
-        };
-        reader.readAsDataURL(file);
-    });
-};
-
 
 function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentFormProps) {
   const { toast } = useToast();
@@ -491,42 +472,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
-
-    // Step 1: AI Document Verification
-    try {
-        toast({ title: "Verifying Documents...", description: "AI is checking your uploaded proofs." });
-        
-        const verificationTasks = [
-            { docFile: data.identityProofUrlFront, docType: data.identityProofType, fieldName: 'identityProofUrlFront', label: 'Identity Proof' },
-            { docFile: data.addressProofUrlFront, docType: data.addressProofType, fieldName: 'addressProofUrlFront', label: 'Address Proof' },
-        ];
-        
-        for (const task of verificationTasks) {
-            if (task.docFile.type.startsWith('image/')) {
-                const dataUri = await fileToDataUri(task.docFile);
-                const result = await verifyDocument({ photoDataUri: dataUri, expectedType: task.docType });
-                if (!result.isMatch) {
-                    toast({
-                        variant: "destructive",
-                        title: `${task.label} Mismatch`,
-                        description: `The document you uploaded for ${task.label} does not appear to be a ${task.docType}. AI Reason: ${result.reason}`,
-                        duration: 9000
-                    });
-                    form.setError(task.fieldName as any, {type: 'manual', message: `AI verification failed: This does not seem to be a ${task.docType}.`});
-                    setIsLoading(false);
-                    return; // Stop submission
-                }
-            }
-        }
-        
-        toast({ title: "Documents Verified!", description: "All proofs match the selected types." });
-
-    } catch (error: any) {
-        console.error("AI Verification Error:", error);
-        toast({ variant: "destructive", title: "Document Verification Failed", description: "Could not verify documents with AI. Please try again.", duration: 8000 });
-        setIsLoading(false);
-        return; // Stop submission
-    }
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, "");
     const fullName = `${data.firstName.toUpperCase()} ${data.lastName.toUpperCase()}`;
@@ -1088,7 +1033,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
             <ShadDialogDescription>
-              Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
+               Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
             </ShadDialogDescription>
           </DialogHeader>
           <div className="py-4">
