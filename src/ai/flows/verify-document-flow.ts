@@ -7,11 +7,13 @@
 
 import {ai} from '@/ai/genkit';
 import { VerifyDocumentInputSchema, VerifyDocumentOutputSchema, type VerifyDocumentInput, type VerifyDocumentOutput } from '@/ai/schemas/document-verification';
+import {googleAI} from '@genkit-ai/googleai';
 
 const verifyPrompt = ai.definePrompt({
     name: 'verifyDocumentPrompt',
     input: {schema: VerifyDocumentInputSchema},
     output: {schema: VerifyDocumentOutputSchema},
+    model: googleAI('gemini-1.5-flash'),
     prompt: `You are an expert document verification agent. Your task is to determine if the document in the provided image matches the expected document type.
 
 The user expects the document to be a '{{expectedType}}'.
