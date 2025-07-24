@@ -9,18 +9,115 @@ import { type Employee } from '@/types/employee';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, Home } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { db, auth, storage } from '@/lib/firebase';
+import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
+import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import QRCode from 'qrcode';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { ref, deleteObject } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// #region PDF Generation Components
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
+
+
+// Dropdown options
+const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
+const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
+const maritalStatuses = ["Married", "Unmarried"];
+const genderOptions = ["Male", "Female", "Other"];
+const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
+const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
+interface ClientOption { id: string; name: string; }
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+
+
+const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
+const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
+
+
+// Zod schema for validation
+const employeeUpdateSchema = z.object({
+  firstName: z.string().min(1, "First name is required."),
+  lastName: z.string().min(1, "Last name is required."),
+  dateOfBirth: z.date({ required_error: "Date of birth is required." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+            return age - 1 >= 18;
+        }
+        return age >= 18;
+    }, { message: "Must be at least 18 years old." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+             return age - 1 < 65;
+        }
+        return age < 65;
+    }, { message: "Must be under 65 years old." }),
+  gender: z.enum(["Male", "Female", "Other"]),
+  fatherName: z.string().min(2, "Father's name is required."),
+  motherName: z.string().min(2, "Mother's name is required."),
+  maritalStatus: z.enum(["Married", "Unmarried"]),
+  spouseName: z.string().optional(),
+  educationalQualification: qualificationTypes,
+  otherQualification: z.string().optional(),
+  district: z.string(),
+  fullAddress: z.string().min(10, "Address is required."),
+  phoneNumber: z.string().regex(/^\d{10}$/, "Must be 10 digits."),
+  emailAddress: z.string().email(),
+  clientName: z.string().min(1, "Client name is required."),
+  resourceIdNumber: z.string().optional(),
+  joiningDate: z.date({ required_error: "Joining date is required." }),
+  status: z.enum(['Active', 'Inactive', 'OnLeave', 'Exited']),
+  exitDate: z.date().optional().nullable(),
+  bankName: z.string().optional().or(z.literal('')),
+  bankAccountNumber: z.string().optional().or(z.literal('')),
+  ifscCode: z.string().optional().or(z.literal('')),
+  panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format.").optional().or(z.literal('')),
+  
+  identityProofType: proofTypes,
+  identityProofNumber: z.string().min(5, "ID Proof number is required."),
+  
+  addressProofType: proofTypes,
+  addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
+
+  epfUanNumber: z.string().optional(),
+  esicNumber: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Spouse name is required if married.", path: ["spouseName"] });
+  }
+  if (data.status === 'Exited' && !data.exitDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Exit date is required if status is Exited.", path: ["exitDate"] });
+  }
+  if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
+  }
+});
+type EmployeeUpdateValues = z.infer<typeof employeeUpdateSchema>;
 
 const toTitleCase = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -30,6 +127,98 @@ const toTitleCase = (str: string | null | undefined): string => {
     }
     return str.replace(/\b\w/g, char => char.toUpperCase());
 };
+
+const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean; isName?: boolean; isAddress?: boolean }> = ({ label, value, isDate, isName, isAddress }) => {
+  let displayValue: string | number = 'N/A';
+  if (value !== null && value !== undefined) {
+    if (value instanceof Timestamp) {
+      displayValue = format(value.toDate(), "dd-MM-yyyy");
+    } else if (isDate && (value instanceof Date || typeof value === 'string')) {
+       try {
+        displayValue = format(new Date(value), "dd-MM-yyyy");
+       } catch (e) {
+        displayValue = 'Invalid Date';
+       }
+    } else {
+      displayValue = String(value);
+      if (isName || isAddress) {
+          displayValue = toTitleCase(displayValue);
+      }
+    }
+  }
+  return (
+    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5">
+      <span className="text-sm text-muted-foreground sm:col-span-1">{label}</span>
+      <span className="text-sm font-medium sm:col-span-2">{displayValue}</span>
+    </div>
+  );
+};
+
+
+const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({ name, url, type }) => (
+    <div className="flex items-center justify-between p-3 border rounded-md">
+        <div className="flex items-center gap-3">
+            <FileUp className="h-5 w-5 text-primary" />
+            <div>
+                <p className="font-medium text-sm">{name}</p>
+                {type && <p className="text-xs text-muted-foreground">{type}</p>}
+            </div>
+        </div>
+        {url ? (
+            <Button variant="outline" size="sm" asChild>
+                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
+                    <Download className="mr-2 h-4 w-4" /> View/Download
+                </a>
+            </Button>
+        ) : (
+            <Badge variant="outline">Not Uploaded</Badge>
+        )}
+    </div>
+);
+
+// Employee ID Generation Logic
+const abbreviateClientName = (clientName: string): string => {
+  if (!clientName) return "CLIENT";
+  const upperCaseName = clientName.trim().toUpperCase();
+
+  const abbreviations: { [key: string]: string } = {
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "WIPRO": "WIPRO",
+  };
+  if (abbreviations[upperCaseName]) {
+    return abbreviations[upperCaseName];
+  }
+
+  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("");
+  }
+
+  if (upperCaseName.length <= 4) {
+    return upperCaseName;
+  }
+  return upperCaseName.substring(0, 4);
+};
+
+const getCurrentFinancialYear = (): string => {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  if (currentMonth >= 4) { // April or later
+    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+  } else { // Jan, Feb, March
+    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+  }
+};
+
+const generateEmployeeId = (clientName: string): string => {
+  const shortClientName = abbreviateClientName(clientName);
+  const financialYear = getCurrentFinancialYear();
+  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
+  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+};
+
+// #region PDF Generation Components
 
 const pageStyle: React.CSSProperties = {
   width: '210mm',
@@ -81,7 +270,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <div className="flex items-center gap-4">
         <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
         <div>
-          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{toTitleCase(employee.fullName)}</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-blue-800">{toTitleCase(employee.fullName)}</h1>
           <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
           <p className="text-gray-600">Client: {employee.clientName}</p>
         </div>
@@ -92,7 +281,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
             alt={employee.fullName || 'Profile photo'} 
             width={100} 
             height={120} 
-            className="rounded-lg border-2 border-gray-200 object-contain p-1 bg-gray-50" 
+            className="p-1 bg-gray-50 border-2 border-gray-200 rounded-lg object-contain" 
             crossOrigin="anonymous" 
             unoptimized={true}
             data-ai-hint="profile photo" 
@@ -102,7 +291,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
 
     <main className="flex-grow mt-8 space-y-8 text-sm">
       <section>
-        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
+        <h2 className="pb-2 mb-4 text-lg font-semibold text-blue-700 border-b">Personal & Contact Information</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <DetailGridItem label="Date of Birth" value={formatDateForPdf(employee.dateOfBirth)} />
           <DetailGridItem label="Gender" value={employee.gender} />
@@ -121,7 +310,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
+        <h2 className="pb-2 mb-4 text-lg font-semibold text-blue-700 border-b">Employment & Statutory Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <DetailGridItem label="Joining Date" value={formatDateForPdf(employee.joiningDate)} />
           <DetailGridItem label="Status" value={employee.status} />
@@ -133,7 +322,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
+        <h2 className="pb-2 mb-4 text-lg font-semibold text-blue-700 border-b">Bank & Identification Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
@@ -151,14 +340,14 @@ BiodataPage.displayName = 'BiodataPage';
 
 const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
   <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
-    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
+    <h1 className="mb-4 text-2xl font-bold">Employee QR Code</h1>
     <p className="mb-2 text-lg">{toTitleCase(employee.fullName)}</p>
     <p className="mb-8 text-gray-600">{employee.employeeId}</p>
     <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
       <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} data-ai-hint="qr code" />
     </div>
-    <div className="mt-8 text-gray-600 max-w-md">
-      <p className="font-semibold mb-2">Instructions:</p>
+    <div className="max-w-md mt-8 text-gray-600">
+      <p className="mb-2 font-semibold">Instructions:</p>
       <p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p>
     </div>
     <PageFooter pageNumber={pageNumber} />
@@ -170,19 +359,19 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
   const companyName = "CISS Services Ltd.";
   return (
     <div ref={ref} style={pageStyle}>
-      <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment</h1>
-      <div className="space-y-3 text-xs text-justify flex-grow">
+      <h1 className="mb-6 text-xl font-bold text-center">Terms and Conditions of Enrollment</h1>
+      <div className="flex-grow space-y-3 text-xs text-justify">
         <section>
-          <h2 className="text-sm font-bold mb-1">I. General Eligibility and Compliance</h2>
-          <ul className="list-disc list-outside space-y-1 pl-4">
+          <h2 className="mb-1 text-sm font-bold">I. General Eligibility and Compliance</h2>
+          <ul className="pl-4 space-y-1 list-disc list-outside">
             <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
             <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
             <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
           </ul>
         </section>
         <section>
-          <h2 className="text-sm font-bold mb-1">II. Employment Terms & Responsibilities</h2>
-          <ul className="list-disc list-outside space-y-1 pl-4">
+          <h2 className="mb-1 text-sm font-bold">II. Employment Terms & Responsibilities</h2>
+          <ul className="pl-4 space-y-1 list-disc list-outside">
             <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
             <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
             <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
@@ -190,32 +379,32 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
           </ul>
         </section>
         <section>
-          <h2 className="text-sm font-bold mb-1">III. Disciplinary Action</h2>
-          <ul className="list-disc list-outside space-y-1 pl-4">
+          <h2 className="mb-1 text-sm font-bold">III. Disciplinary Action</h2>
+          <ul className="pl-4 space-y-1 list-disc list-outside">
             <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
           </ul>
         </section>
       </div>
-      <section className="mt-8 pt-6 border-t-2 border-dashed border-gray-400">
-        <h2 className="text-base font-bold text-center mb-4">IV. Declaration</h2>
-        <p className="text-sm mb-6 text-justify">
+      <section className="pt-6 mt-8 border-t-2 border-gray-400 border-dashed">
+        <h2 className="mb-4 text-base font-bold text-center">IV. Declaration</h2>
+        <p className="mb-6 text-sm text-justify">
           I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
         </p>
-        <div className="flex justify-between items-end mt-12 pt-12 text-sm">
+        <div className="flex items-end justify-between pt-12 mt-12 text-sm">
             <div className="flex-1 space-y-2">
                 {employee.signatureUrl ? (
                     <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
                 ): (
                     <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
                 )}
-                <div className="border-t border-gray-400 pt-2 font-semibold">Signature of Security Guard</div>
+                <div className="pt-2 font-semibold border-t border-gray-400">Signature of Security Guard</div>
             </div>
             <div className="w-1/4 text-center">
-                <p className="border-b border-gray-400 pb-1">{formatDateForPdf(employee.joiningDate)}</p>
-                <div className="border-t border-gray-400 mt-2 pt-2 font-semibold">Date of Registration</div>
+                <p className="pb-1 border-b border-gray-400">{formatDateForPdf(employee.joiningDate)}</p>
+                <div className="pt-2 mt-2 font-semibold border-t border-gray-400">Date of Registration</div>
             </div>
         </div>
-        <div className="mt-8 pt-6 border-t border-gray-300">
+        <div className="pt-6 mt-8 border-t border-gray-300">
             <p className="text-sm">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></p>
         </div>
       </section>
@@ -225,72 +414,115 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
 });
 TermsPage.displayName = 'TermsPage';
 
+
 // #endregion
 
-
-const DetailItem: React.FC<{ label: string; value?: string | number | null | Date; isDate?: boolean; isName?: boolean; isAddress?: boolean; }> = ({ label, value, isDate, isName, isAddress }) => {
-  let displayValue: string | number = 'N/A';
-  if (value !== null && value !== undefined) {
-    if (isDate && value instanceof Date) {
-      displayValue = format(value, "dd-MM-yyyy");
-    } else if (isDate && typeof value === 'string') {
-      try {
-        displayValue = format(new Date(value), "dd-MM-yyyy");
-      } catch (e) {
-        displayValue = String(value);
-      }
-    } else if (value instanceof Timestamp) {
-      displayValue = format(value.toDate(), "dd-MM-yyyy");
-    } else {
-      displayValue = String(value);
-      if (isName || isAddress) {
-          displayValue = toTitleCase(displayValue);
-      }
-    }
-  }
-  return (
-    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5">
-      <span className="text-sm text-muted-foreground sm:col-span-1">{label}</span>
-      <span className="text-sm font-medium sm:col-span-2">{displayValue}</span>
-    </div>
-  );
-};
-
-const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({ name, url, type }) => (
-    <div className="flex items-center justify-between p-3 border rounded-md">
-        <div className="flex items-center gap-3">
-            <FileUp className="h-5 w-5 text-primary" />
-            <div>
-                <p className="text-sm font-medium">{name}</p>
-                {type && <p className="text-xs text-muted-foreground">{type}</p>}
-            </div>
-        </div>
-        {url ? (
-            <Button variant="outline" size="sm" asChild>
-                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
-                    <Download className="mr-2 h-4 w-4" /> View/Download
-                </a>
-            </Button>
-        ) : (
-            <Badge variant="outline">Not Uploaded</Badge>
-        )}
-    </div>
-);
-
-export default function PublicEmployeeProfilePage() {
+export default function AdminEmployeeProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
+  
+  const biodataPageRef = useRef<HTMLDivElement>(null);
+  const qrPageRef = useRef<HTMLDivElement>(null);
+  const termsPageRef = useRef<HTMLDivElement>(null);
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const [isUploadMode, setIsUploadMode] = useState(false);
+  const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
+  const [isRegeneratingId, setIsRegeneratingId] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
-  const biodataPageRef = useRef<HTMLDivElement>(null);
-  const qrPageRef = useRef<HTMLDivElement>(null);
-  const termsPageRef = useRef<HTMLDivElement>(null);
+  const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(true);
+  
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // State for new file uploads
+  const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
+  const [newIdentityProofUrlFront, setNewIdentityProofUrlFront] = useState<File | null>(null);
+  const [newIdentityProofUrlBack, setNewIdentityProofUrlBack] = useState<File | null>(null);
+  const [newAddressProofUrlFront, setNewAddressProofUrlFront] = useState<File | null>(null);
+  const [newAddressProofUrlBack, setNewAddressProofUrlBack] = useState<File | null>(null);
+  const [newSignatureUrl, setNewSignatureUrl] = useState<File | null>(null);
+  const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
+  const [newPoliceClearanceCertificate, setNewPoliceClearanceCertificate] = useState<File | null>(null);
+
+  // State for file previews
+  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+  const [identityProofUrlFrontPreview, setIdentityProofUrlFrontPreview] = useState<string | null>(null);
+  const [identityProofUrlBackPreview, setIdentityProofUrlBackPreview] = useState<string | null>(null);
+  const [addressProofUrlFrontPreview, setAddressProofUrlFrontPreview] = useState<string | null>(null);
+  const [addressProofUrlBackPreview, setAddressProofUrlBackPreview] = useState<string | null>(null);
+  const [signatureUrlPreview, setSignatureUrlPreview] = useState<string | null>(null);
+  const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
+  const [policeCertificatePreview, setPoliceCertificatePreview] = useState<string | null>(null);
+  
+  // State for camera dialog
+  const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
+  const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
+  const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isAdminView = false; // Public view logic only
+
+  const form = useForm<EmployeeUpdateValues>({
+    resolver: zodResolver(employeeUpdateSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      dateOfBirth: undefined,
+      gender: undefined,
+      fatherName: "",
+      motherName: "",
+      maritalStatus: undefined,
+      spouseName: "",
+      educationalQualification: undefined,
+      otherQualification: "",
+      district: "",
+      fullAddress: "",
+      phoneNumber: "",
+      emailAddress: "",
+      clientName: "",
+      resourceIdNumber: "",
+      joiningDate: undefined,
+      status: 'Active', // Default status for edits from public page
+      exitDate: null,
+      bankName: "",
+      bankAccountNumber: "",
+      ifscCode: "",
+      panNumber: "",
+      identityProofType: undefined,
+      identityProofNumber: "",
+      addressProofType: undefined,
+      addressProofNumber: "",
+      epfUanNumber: "",
+      esicNumber: "",
+    },
+  });
+  
+  const watchStatus = form.watch('status');
+  const watchMaritalStatus = form.watch('maritalStatus');
+  const watchEducationalQualification = form.watch("educationalQualification");
+
 
   useEffect(() => {
     const fetchEmployee = async () => {
@@ -302,6 +534,7 @@ export default function PublicEmployeeProfilePage() {
 
         if (employeeDocSnap.exists()) {
           const data = employeeDocSnap.data();
+          
           const formattedData: Employee = {
             ...data,
             id: employeeDocSnap.id,
@@ -313,13 +546,13 @@ export default function PublicEmployeeProfilePage() {
         }
       } catch (err: any) {
         console.error("Error fetching employee:", err);
-        setError(err.message || "Failed to fetch employee data.");
-        toast({ variant: "destructive", title: "Fetch Error", description: "Could not retrieve employee details."});
+        let message = "Failed to fetch employee data.";
+        setError(message);
+        toast({ variant: "destructive", title: "Fetch Error", description: message});
       } finally {
         setIsLoading(false);
       }
     };
-
     if (!employeeIdFromUrl) {
       setError("Employee ID not found in URL.");
       setIsLoading(false);
@@ -327,6 +560,232 @@ export default function PublicEmployeeProfilePage() {
     }
     fetchEmployee();
   }, [employeeIdFromUrl, toast]);
+
+  useEffect(() => {
+    if (employee) {
+      const legacy = employee as any;
+      const getInitialValue = (key: keyof Employee, fallback = "") => employee[key] || fallback;
+      const getInitialDate = (key: keyof Employee) => employee[key] ? (employee[key].toDate ? employee[key].toDate() : new Date(employee[key])) : undefined;
+
+      form.reset({
+        firstName: getInitialValue('firstName'),
+        lastName: getInitialValue('lastName'),
+        dateOfBirth: getInitialDate('dateOfBirth'),
+        gender: getInitialValue('gender') as any,
+        fatherName: getInitialValue('fatherName'),
+        motherName: getInitialValue('motherName'),
+        maritalStatus: getInitialValue('maritalStatus') as any,
+        spouseName: getInitialValue('spouseName'),
+        educationalQualification: getInitialValue('educationalQualification') as any,
+        otherQualification: getInitialValue('otherQualification'),
+        district: getInitialValue('district'),
+        fullAddress: getInitialValue('fullAddress'),
+        phoneNumber: getInitialValue('phoneNumber'),
+        emailAddress: getInitialValue('emailAddress'),
+        clientName: getInitialValue('clientName'),
+        resourceIdNumber: getInitialValue('resourceIdNumber'),
+        joiningDate: getInitialDate('joiningDate'),
+        status: getInitialValue('status') as any,
+        exitDate: getInitialDate('exitDate') || null,
+        bankName: getInitialValue('bankName'),
+        bankAccountNumber: getInitialValue('bankAccountNumber'),
+        ifscCode: getInitialValue('ifscCode'),
+        panNumber: getInitialValue('panNumber'),
+        identityProofType: (employee.identityProofType || legacy.idProofType) as any,
+        identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber),
+        addressProofType: employee.addressProofType as any,
+        addressProofNumber: getInitialValue('addressProofNumber'),
+        epfUanNumber: getInitialValue('epfUanNumber'),
+        esicNumber: getInitialValue('esicNumber'),
+      });
+    }
+  }, [employee, form]);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+        setIsLoadingClients(true);
+        try {
+            const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
+            const snapshot = await getDocs(clientsQuery);
+            const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+            setAvailableClients(fetchedClients);
+        } catch (error) {
+            console.error("Error fetching clients: ", error);
+        } finally {
+            setIsLoadingClients(false);
+        }
+    };
+    fetchClients();
+  }, []);
+
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    setFile: React.Dispatch<React.SetStateAction<File | null>>,
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ variant: "destructive", title: "File too large", description: "Please select a file smaller than 5MB." });
+        return;
+      }
+      setFile(file);
+      if (file.type.startsWith("image/")) {
+        setPreview(URL.createObjectURL(file));
+      } else if (file.type === "application/pdf") {
+        setPreview("/pdf-icon.png"); 
+      }
+    }
+  };
+
+  const openCamera = (fieldName: CameraField) => {
+    setActiveCameraField(fieldName);
+    setCameraError(null);
+    setIsCameraDialogOpen(true);
+  };
+
+  useEffect(() => {
+    async function getCameraStream() {
+      if (!isCameraDialogOpen) return;
+      try {
+        let facingMode: VideoFacingModeEnum = "user";
+        if (activeCameraField && activeCameraField !== 'profilePicture') {
+            facingMode = "environment";
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
+        setCameraStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        setCameraError("Could not access camera. Please ensure permission is granted.");
+        setIsCameraDialogOpen(false);
+      }
+    }
+    getCameraStream();
+  }, [isCameraDialogOpen, activeCameraField]);
+  
+  const closeCameraDialog = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+    setCameraStream(null);
+    setIsCameraDialogOpen(false);
+    setActiveCameraField(null);
+  };
+  
+  const handleCapturePhoto = async () => {
+    if (videoRef.current && canvasRef.current && activeCameraField) {
+      const canvas = canvasRef.current;
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const context = canvas.getContext('2d');
+      context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const file = await dataURLtoFile(dataUrl, `${activeCameraField}.jpg`);
+
+      const previewUrl = URL.createObjectURL(file);
+
+      switch (activeCameraField) {
+        case 'profilePicture': setNewProfilePicture(file); setProfilePicPreview(previewUrl); break;
+        case 'identityProofUrlFront': setNewIdentityProofUrlFront(file); setIdentityProofUrlFrontPreview(previewUrl); break;
+        case 'identityProofUrlBack': setNewIdentityProofUrlBack(file); setIdentityProofUrlBackPreview(previewUrl); break;
+        case 'addressProofUrlFront': setNewAddressProofUrlFront(file); setAddressProofUrlFrontPreview(previewUrl); break;
+        case 'addressProofUrlBack': setNewAddressProofUrlBack(file); setAddressProofUrlBackPreview(previewUrl); break;
+        case 'signatureUrl': setNewSignatureUrl(file); setSignatureUrlPreview(previewUrl); break;
+        case 'bankPassbookStatement': setNewBankPassbookStatement(file); setBankPassbookPreview(previewUrl); break;
+        case 'policeClearanceCertificate': setNewPoliceClearanceCertificate(file); setPoliceCertificatePreview(previewUrl); break;
+      }
+      closeCameraDialog();
+    }
+  };
+
+
+  async function handleSaveChanges(data: EmployeeUpdateValues) {
+    if (!employee) return;
+    
+    setIsSubmitting(true);
+    toast({ title: "Saving...", description: "Updating your profile." });
+
+    try {
+        const updatedUrls: { [key: string]: string | null } = {};
+
+        const uploadAndSetUrl = async (
+            newFile: File | null,
+            oldUrl: string | undefined,
+            filePath: string,
+            urlKey: keyof typeof updatedUrls,
+            isImage: boolean
+        ) => {
+            if (!newFile) return;
+            // In a public update, we assume an unauthenticated user,
+            // so deleting old files might fail due to permissions.
+            // A cleanup cloud function would be a better approach for orphaned files.
+            
+            const fileToUpload = isImage
+                ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+                : newFile;
+                
+            updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
+        };
+
+        const uploadJobs = [
+            { file: newProfilePicture, oldUrl: employee.profilePictureUrl, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
+            { file: newIdentityProofUrlFront, oldUrl: employee.identityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newIdentityProofUrlBack, oldUrl: employee.identityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newSignatureUrl, oldUrl: employee.signatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
+            { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
+            { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
+        ];
+
+        await Promise.all(uploadJobs.map(job => uploadAndSetUrl(job.file, job.oldUrl, job.path, job.key as any, job.isImage)));
+
+        const formPayload: Record<string, any> = {};
+        const original = employee;
+
+        (Object.keys(data) as Array<keyof EmployeeUpdateValues>).forEach(key => {
+            const formValue = data[key];
+            const originalValue = original[key as keyof Employee];
+            if (key === 'dateOfBirth' || key === 'joiningDate' || key === 'exitDate') {
+                const formDate = formValue as Date | null | undefined;
+                const originalDate = originalValue?.toDate ? originalValue.toDate() : (originalValue ? new Date(originalValue) : null);
+                if (formDate?.getTime() !== originalDate?.getTime()) {
+                    formPayload[key] = formValue ? Timestamp.fromDate(formValue) : (key === 'exitDate' ? deleteField() : originalValue);
+                }
+            } else if (formValue !== originalValue) {
+                formPayload[key] = formValue;
+            }
+        });
+        
+        const fullName = `${data.firstName} ${data.lastName}`;
+        formPayload.fullName = fullName.toUpperCase();
+
+        const finalPayload = { ...formPayload, ...updatedUrls };
+        
+        if (Object.keys(finalPayload).length > 0) {
+            finalPayload.updatedAt = serverTimestamp();
+            const employeeDocRef = doc(db, "employees", employee.id);
+            await updateDoc(employeeDocRef, finalPayload);
+            toast({ title: "Profile Updated", description: "Your details have been saved." });
+            setEmployee(prev => prev ? { ...prev, ...finalPayload } : null);
+            setIsUploadMode(false);
+        } else {
+            toast({ title: "No Changes", description: "No changes were detected to save." });
+            setIsUploadMode(false);
+        }
+    } catch (err: any) {
+        console.error("Error updating profile:", err);
+        let description = err.message || "An error occurred while saving.";
+        if (err.code === 'permission-denied') {
+            description = "Permission Denied. Your request to update the profile could not be authorized. Please contact support.";
+        }
+        toast({ variant: "destructive", title: "Update Failed", description });
+    } finally {
+        setIsSubmitting(false);
+    }
+  }
 
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
@@ -400,7 +859,7 @@ export default function PublicEmployeeProfilePage() {
         setIsDownloadingPdf(false);
     }
   };
-
+  
   const renderOffscreenPages = () => {
     if (!employee) return null;
 
@@ -420,7 +879,7 @@ export default function PublicEmployeeProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-[calc(100vh-100px)]">
+      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg text-muted-foreground">Loading employee profile...</p>
       </div>
@@ -435,7 +894,7 @@ export default function PublicEmployeeProfilePage() {
         <AlertDescription>
             {error}
             <Button onClick={() => router.push('/')} className="mt-4">
-              <Home className="mr-2 h-4 w-4" /> Back to Home
+              <Home className="mr-2 h-4 w-4" />Back to Home
             </Button>
         </AlertDescription>
       </Alert>
@@ -450,63 +909,75 @@ export default function PublicEmployeeProfilePage() {
             <AlertDescription>
                 The requested employee profile could not be found.
                 <Button onClick={() => router.push('/')} className="mt-4">
-                  <Home className="mr-2 h-4 w-4" /> Back to Home
+                   <Home className="mr-2 h-4 w-4" />Back to Home
                 </Button>
             </AlertDescription>
         </Alert>
     );
   }
 
+  const fromYear = new Date().getFullYear() - 65;
+  const toYear = new Date().getFullYear() - 18;
+  const defaultCalendarMonth = new Date(employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : employee.dateOfBirth);
+  if (isNaN(defaultCalendarMonth.getTime())) {
+      const fallbackDate = new Date();
+      fallbackDate.setFullYear(toYear - 10);
+      defaultCalendarMonth.setTime(fallbackDate.getTime());
+  }
+
   return (
     <>
-        <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
-            {renderOffscreenPages()}
-        </div>
-        <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 md:p-0">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-            <Button variant="outline" size="sm" onClick={() => router.push('/')}>
-            <Home className="mr-2 h-4 w-4" /> Back to Home
-            </Button>
-            <div className="flex gap-2 w-full sm:w-auto">
-                <Button onClick={handleDownloadProfile} variant="outline" className="flex-1" disabled={isDownloadingPdf}>
-                    {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                    Download Profile Kit
-                </Button>
-            </div>
+      <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
+        {renderOffscreenPages()}
+      </div>
+      <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" onClick={() => router.push('/')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />Back to Home
+          </Button>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-4">
             <Image
-                src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
-                alt={employee.fullName || 'Employee profile picture'}
-                width={100}
-                height={100}
-                className="rounded-full border-4 border-primary shadow-md object-cover"
-                data-ai-hint="profile picture"
+              src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
+              alt={employee.fullName || 'Employee profile picture'}
+              width={100}
+              height={100}
+              className="object-cover border-4 rounded-full shadow-md border-primary"
+              data-ai-hint="profile picture"
             />
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
-                <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
-                <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
+              <h1 className="text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
+              <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
+              <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
             </div>
+          </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
+                  {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Download Kit
+              </Button>
+              <Button onClick={() => setIsUploadMode(!isUploadMode)} className="flex-1 sm:flex-none">
+                  <Edit3 className="mr-2 h-4 w-4" /> {isUploadMode ? "Cancel" : "Update Details"}
+              </Button>
             </div>
         </div>
 
-        <Tabs defaultValue="personal">
-            <TabsList className="h-auto flex-wrap justify-start">
-            <TabsTrigger value="personal"><User className="mr-2 h-4 w-4 hidden md:inline-block" />Personal</TabsTrigger>
-            <TabsTrigger value="employment"><Briefcase className="mr-2 h-4 w-4 hidden md:inline-block" />Employment</TabsTrigger>
-            <TabsTrigger value="bank"><Banknote className="mr-2 h-4 w-4 hidden md:inline-block" />Bank</TabsTrigger>
-            <TabsTrigger value="identification"><ShieldCheck className="mr-2 h-4 w-4 hidden md:inline-block" />Identification</TabsTrigger>
-            <TabsTrigger value="qr"><QrCode className="mr-2 h-4 w-4 hidden md:inline-block" />QR & Docs</TabsTrigger>
+        {!isUploadMode && (
+          <Tabs defaultValue="personal">
+            <TabsList className="grid w-full h-auto grid-cols-2 md:grid-cols-5 gap-2">
+              <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
+              <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
+              <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
+              <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
+              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
             </TabsList>
-
             <Card className="mt-4">
-            <CardContent className="pt-6">
+              <CardContent className="pt-6">
                 <TabsContent value="personal">
-                <CardTitle className="mb-4">Personal Information</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                  <CardTitle className="mb-4">Personal Information</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="First Name" value={employee.firstName} isName />
                     <DetailItem label="Last Name" value={employee.lastName} isName />
                     <DetailItem label="Date of Birth" value={employee.dateOfBirth} isDate />
@@ -517,22 +988,26 @@ export default function PublicEmployeeProfilePage() {
                     {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} isName />}
                     <DetailItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
                     <DetailItem label="District" value={employee.district} isName />
-                </div>
-                <Separator className="my-6" />
-                <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                  </div>
+                  <Separator className="my-6" />
+                  <CardTitle className="mb-2 text-lg">Contact Details</CardTitle>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="Phone Number" value={employee.phoneNumber} />
                     <DetailItem label="Email Address" value={employee.emailAddress} />
-                    <div className="md:col-span-2">
+                     <div className="md:col-span-2">
                         <DetailItem label="Full Address" value={employee.fullAddress} isAddress />
-                    </div>
-                </div>
+                     </div>
+                  </div>
                 </TabsContent>
-
                 <TabsContent value="employment">
-                <CardTitle className="mb-4">Employment Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <DetailItem label="Employee ID" value={employee.employeeId} />
+                  <CardTitle className="mb-4">Employment Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <div className="flex flex-col items-start gap-1 py-1.5 sm:grid sm:grid-cols-3 sm:items-center sm:gap-2">
+                        <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
+                        <span className="flex items-center gap-2 text-sm font-medium sm:col-span-2">
+                            {employee.employeeId}
+                        </span>
+                    </div>
                     <DetailItem label="Client Name" value={employee.clientName} isName />
                     {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
                     <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
@@ -540,31 +1015,28 @@ export default function PublicEmployeeProfilePage() {
                     {employee.status === 'Exited' && employee.exitDate && (
                         <DetailItem label="Exit Date" value={employee.exitDate} isDate />
                     )}
-                </div>
+                  </div>
                 </TabsContent>
-
                 <TabsContent value="bank">
-                <CardTitle className="mb-4">Bank Account Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                  <CardTitle className="mb-4">Bank Account Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="Bank Name" value={employee.bankName} isName />
                     <DetailItem label="Account Number" value={employee.bankAccountNumber} />
                     <DetailItem label="IFSC Code" value={employee.ifscCode} />
-                </div>
+                  </div>
                 </TabsContent>
-
                 <TabsContent value="identification">
-                <CardTitle className="mb-4">Identification Details</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                  <CardTitle className="mb-4">Identification Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
                     <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
-                </div>
+                  </div>
                 </TabsContent>
-
                 <TabsContent value="qr">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <CardTitle className="mb-4">Employee QR Code</CardTitle>
                         <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
@@ -588,12 +1060,130 @@ export default function PublicEmployeeProfilePage() {
                             <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
                         </div>
                     </div>
-                </div>
+                  </div>
                 </TabsContent>
-            </CardContent>
+              </CardContent>
             </Card>
-        </Tabs>
-        </div>
+          </Tabs>
+        )}
+
+        {isUploadMode && (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSaveChanges)}>
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Update Profile Information</CardTitle>
+                  <CardDescription>Update your details below. Upload any missing documents. Click "Save Changes" when done.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  {/* Identification Documents Section */}
+                  <section>
+                    <h3 className="pb-2 mb-4 text-lg font-semibold border-b">Identification Documents</h3>
+                    <div className="p-4 mt-4 space-y-4 border rounded-lg">
+                        <h4 className="text-md font-medium">Identity Proof (Name, DOB, etc.)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2">
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
+                        </div>
+                    </div>
+
+                    <div className="p-4 mt-6 space-y-4 border rounded-lg">
+                        <h4 className="text-md font-medium">Address Proof</h4>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2">
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} />
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} />
+                        </div>
+                    </div>
+                  </section>
+
+                  {/* Other Documents Section */}
+                  <section>
+                      <h3 className="pb-2 mb-4 text-lg font-semibold border-b">Other Documents & Signature</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} />
+                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} />
+                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} />
+                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} />
+                      </div>
+                  </section>
+                </CardContent>
+                <CardFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" onClick={() => setIsUploadMode(false)} disabled={isSubmitting}>Cancel</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                  </Button>
+                </CardFooter>
+              </Card>
+            </form>
+          </Form>
+        )}
+
+      <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
+          <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
+              <DialogHeader>
+                  <DialogTitle>Take Photo</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                   {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
+                  <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto border rounded-md", { 'hidden': cameraError })} />
+                  <canvas ref={canvasRef} className="hidden" />
+              </div>
+              <DialogFooter>
+                  <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
+                  <Button onClick={handleCapturePhoto} disabled={!!cameraError || !cameraStream}>Capture</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+      </div>
     </>
   );
 }
+
+const ImageInputWithPreview: React.FC<{
+    label: string;
+    currentUrl?: string;
+    preview: string | null;
+    setFile: (file: File | null) => void;
+    setPreview: (preview: string | null) => void;
+    handleFileChange: (event: React.ChangeEvent<HTMLInputElement>, setFile: any, setPreview: any) => void;
+    openCamera: () => void;
+    isProfilePic?: boolean;
+    isSignature?: boolean;
+}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, isProfilePic, isSignature }) => {
+    const uniqueId = React.useId();
+    const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl) || "https://placehold.co/200x120.png";
+
+    return (
+        <div className="space-y-2">
+            <Label className="text-base">{label}<span className="text-destructive">*</span></Label>
+            <div className="p-4 space-y-2 text-center border rounded-md">
+                <Image
+                    src={finalPreview}
+                    alt={label}
+                    width={isProfilePic || isSignature ? 128 : 200}
+                    height={isProfilePic ? 128 : isSignature ? 64 : 120}
+                    className={cn(
+                        "object-contain justify-self-center mx-auto",
+                        isProfilePic ? 'rounded-full h-32 w-32' : 'h-32 w-full',
+                        isSignature && 'h-20'
+                    )}
+                    data-ai-hint={isProfilePic ? "profile picture" : isSignature ? "signature" : "id card"}
+                />
+                <div className="flex justify-center gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById(uniqueId)?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={openCamera}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                    <Input id={uniqueId} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setFile, setPreview)} />
+                </div>
+            </div>
+        </div>
+    );
+};
