@@ -93,9 +93,9 @@ const employeeUpdateSchema = z.object({
   joiningDate: z.date({ required_error: "Joining date is required." }),
   status: z.enum(['Active', 'Inactive', 'OnLeave', 'Exited']),
   exitDate: z.date().optional().nullable(),
-  bankName: z.string().min(2, "Bank name is required."),
-  bankAccountNumber: z.string().min(5, "Account number is required."),
-  ifscCode: z.string().length(11, "IFSC code must be 11 characters."),
+  bankName: z.string().optional().or(z.literal('')),
+  bankAccountNumber: z.string().optional().or(z.literal('')),
+  ifscCode: z.string().optional().or(z.literal('')),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format.").optional().or(z.literal('')),
   
   identityProofType: proofTypes,
@@ -694,15 +694,18 @@ export default function AdminEmployeeProfilePage() {
 
   async function handleSaveChanges(data: EmployeeUpdateValues) {
     if (!employee) return;
+    const legacy = employee as any;
     
-    // Custom check for mandatory file fields
+    // Custom check for mandatory file fields, considering legacy data
     if (!newProfilePicture && !employee.profilePictureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Profile Picture is required."}); return; }
-    if (!newIdentityProofUrlFront && !employee.identityProofUrlFront) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Front) is required."}); return; }
-    if (!newIdentityProofUrlBack && !employee.identityProofUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Back) is required."}); return; }
+    if (!newIdentityProofUrlFront && !employee.identityProofUrlFront && !legacy.idProofDocumentUrlFront && !legacy.idProofDocumentUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Front) is required."}); return; }
+    if (!newIdentityProofUrlBack && !employee.identityProofUrlBack && !legacy.idProofDocumentUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Back) is required."}); return; }
     if (!newAddressProofUrlFront && !employee.addressProofUrlFront) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Front) is required."}); return; }
     if (!newAddressProofUrlBack && !employee.addressProofUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Back) is required."}); return; }
     if (!newSignatureUrl && !employee.signatureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Signature is required."}); return; }
-    if (!newBankPassbookStatement && !employee.bankPassbookStatementUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Bank Document is required."}); return; }
+    
+    // Bank passbook is optional
+    // if (!newBankPassbookStatement && !employee.bankPassbookStatementUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Bank Document is required."}); return; }
 
     setIsSubmitting(true);
     toast({ title: "Saving...", description: "Updating employee profile." });
