@@ -34,7 +34,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { db, storage } from "@/lib/firebase"; 
-import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs, where } from "firebase/firestore";
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -451,6 +451,25 @@ export default function EnrollEmployeePage() {
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait." });
+    
+    // Check for duplicates before proceeding
+    const employeesRef = collection(db, "employees");
+    const phoneQuery = query(employeesRef, where("phoneNumber", "==", data.phoneNumber));
+    const emailQuery = query(employeesRef, where("emailAddress", "==", data.emailAddress.toLowerCase()));
+
+    const [phoneSnapshot, emailSnapshot] = await Promise.all([getDocs(phoneQuery), getDocs(emailQuery)]);
+
+    if (!phoneSnapshot.empty) {
+        toast({ variant: "destructive", title: "Duplicate Employee", description: "An employee with this phone number already exists." });
+        setIsLoading(false);
+        return;
+    }
+    if (!emailSnapshot.empty) {
+        toast({ variant: "destructive", title: "Duplicate Employee", description: "An employee with this email address already exists." });
+        setIsLoading(false);
+        return;
+    }
+
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
     const fullName = `${data.firstName.toUpperCase()} ${data.lastName.toUpperCase()}`;
