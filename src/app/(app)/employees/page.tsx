@@ -107,6 +107,7 @@ export default function EmployeeDirectoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot | null)[]>([null]);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [firstDoc, setFirstDoc] = useState<QueryDocumentSnapshot | null>(null);
 
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -180,16 +181,9 @@ export default function EmployeeDirectoryPage() {
         setCurrentPage(1);
       } else if (direction === 'next' && lastDoc) {
         finalQuery = query(baseQuery, startAfter(lastDoc), limit(ITEMS_PER_PAGE));
-        setPageHistory(prev => [...prev, lastDoc]);
         setCurrentPage(prev => prev + 1);
-      } else if (direction === 'prev' && currentPage > 1) {
-        const prevPageLastDoc = pageHistory[currentPage - 2] ?? null;
-        if(prevPageLastDoc) {
-            finalQuery = query(baseQuery, startAfter(prevPageLastDoc), limit(ITEMS_PER_PAGE));
-        } else {
-            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-        }
-        setPageHistory(prev => prev.slice(0, -1));
+      } else if (direction === 'prev' && firstDoc) {
+        finalQuery = query(baseQuery, endBefore(firstDoc), limitToLast(ITEMS_PER_PAGE));
         setCurrentPage(prev => prev - 1);
       } else {
         finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
@@ -204,7 +198,10 @@ export default function EmployeeDirectoryPage() {
       } as Employee));
       
       setEmployees(fetchedEmployees);
+      
+      const newFirstDoc = documentSnapshots.docs[0] || null;
       const newLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+      setFirstDoc(newFirstDoc);
       setLastDoc(newLastDoc);
       
       const stateToSave = {
@@ -212,7 +209,6 @@ export default function EmployeeDirectoryPage() {
         filterClient,
         filterStatus,
         filterDistrict,
-        // We don't save pagination state as it's complex and can lead to stale data.
       };
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
 
@@ -230,18 +226,23 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [buildBaseQuery, currentPage, lastDoc, pageHistory, toast, filterClient, filterDistrict, filterStatus, searchTerm]);
+  }, [buildBaseQuery, lastDoc, firstDoc, toast, filterClient, filterDistrict, filterStatus, searchTerm]);
 
 
     useEffect(() => {
         fetchClients();
         const savedStateJSON = sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (savedStateJSON) {
-            const savedState = JSON.parse(savedStateJSON);
-            setSearchTerm(savedState.searchTerm || '');
-            setFilterClient(savedState.filterClient || 'all');
-            setFilterStatus(savedState.filterStatus || 'all');
-            setFilterDistrict(savedState.filterDistrict || 'all');
+            try {
+              const savedState = JSON.parse(savedStateJSON);
+              setSearchTerm(savedState.searchTerm || '');
+              setFilterClient(savedState.filterClient || 'all');
+              setFilterStatus(savedState.filterStatus || 'all');
+              setFilterDistrict(savedState.filterDistrict || 'all');
+            } catch(e) {
+              console.error("Could not parse saved state from session storage", e);
+              sessionStorage.removeItem(SESSION_STORAGE_KEY);
+            }
         }
     }, [fetchClients]);
 
@@ -559,6 +560,7 @@ export default function EmployeeDirectoryPage() {
   
   const displayedEmployees = employees;
   const canShowNext = lastDoc !== null && employees.length === ITEMS_PER_PAGE;
+  const canShowPrev = currentPage > 1;
 
 
   if (isLoading) { 
@@ -808,7 +810,7 @@ export default function EmployeeDirectoryPage() {
                     variant="outline"
                     size="sm"
                     onClick={handlePreviousPage}
-                    disabled={isTableLoading || currentPage === 1}
+                    disabled={isTableLoading || !canShowPrev}
                 >
                     Previous
                 </Button>
