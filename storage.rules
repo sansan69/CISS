@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service firebase.storage {
@@ -9,14 +10,20 @@ service firebase.storage {
       // Allow write (create & update) if:
       // 1. The user is an authenticated admin (has an email in their token).
       // OR
-      // 2. The user is an employee verified via OTP, their phone number matches the path, and they are uploading valid files.
-      allow write: if (request.auth != null && request.auth.token.email != null) ||
-                     (request.auth != null && request.auth.token.phone_number == '+91' + phoneNumber &&
-                      documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
-                      request.resource.size < 5 * 1024 * 1024 &&
-                      (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'));
+      // 2. The request comes from a user authenticated via phone OTP, and they are writing to their own phone number's path.
+      // This is crucial for allowing new users to upload documents during their initial, public enrollment.
+      allow write: if (request.auth != null && (
+                        // Condition 1: Authenticated Admin
+                        request.auth.token.email != null ||
+                        // Condition 2: Verified Employee (for both new enrollments and profile updates)
+                        request.auth.token.phone_number == '+91' + phoneNumber
+                     )) &&
+                     // Universal constraints for any valid write operation
+                     documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
+                     request.resource.size < 5 * 1024 * 1024 &&
+                     (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
 
-      // Allow read/delete if the user is an admin.
+      // Allow read/delete ONLY if the user is an admin.
       // Public users do not need read access via rules; they get URLs from Firestore.
       allow read, delete: if request.auth != null && request.auth.token.email != null;
     }
