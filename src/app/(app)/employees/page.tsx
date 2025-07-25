@@ -105,12 +105,8 @@ export default function EmployeeDirectoryPage() {
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageDocs, setPageDocs] = useState<{
-    first: QueryDocumentSnapshot | null;
-    last: QueryDocumentSnapshot | null;
-  }>({ first: null, last: null });
   const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot | null)[]>([null]);
-
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
 
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -173,53 +169,52 @@ export default function EmployeeDirectoryPage() {
   const fetchEmployees = useCallback(async (direction: 'next' | 'prev' | 'initial' = 'initial') => {
     setIsTableLoading(true);
     setError(null);
-    let newPage = currentPage;
 
     try {
-        let baseQuery = buildBaseQuery();
-        let finalQuery: Query<DocumentData>;
+      let baseQuery = buildBaseQuery();
+      let finalQuery: Query<DocumentData>;
 
-        if (direction === 'initial') {
-            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-            newPage = 1;
-            setPageHistory([null]);
-        } else if (direction === 'next' && pageDocs.last) {
-            finalQuery = query(baseQuery, startAfter(pageDocs.last), limit(ITEMS_PER_PAGE));
-            newPage = currentPage + 1;
-        } else if (direction === 'prev' && currentPage > 1) {
-            const lastFirstDoc = pageHistory[currentPage - 2] ?? null;
-            finalQuery = query(baseQuery, startAfter(lastFirstDoc), limit(ITEMS_PER_PAGE));
-            newPage = currentPage - 1;
-            setPageHistory(prev => prev.slice(0, -1));
+      if (direction === 'initial') {
+        finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+        setPageHistory([null]);
+        setCurrentPage(1);
+      } else if (direction === 'next' && lastDoc) {
+        finalQuery = query(baseQuery, startAfter(lastDoc), limit(ITEMS_PER_PAGE));
+        setPageHistory(prev => [...prev, lastDoc]);
+        setCurrentPage(prev => prev + 1);
+      } else if (direction === 'prev' && currentPage > 1) {
+        const prevPageLastDoc = pageHistory[currentPage - 2] ?? null;
+        if(prevPageLastDoc) {
+            finalQuery = query(baseQuery, startAfter(prevPageLastDoc), limit(ITEMS_PER_PAGE));
         } else {
-            setIsTableLoading(false);
-            return;
+            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
         }
-        
-        const documentSnapshots = await getDocs(finalQuery);
-        const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({
-            id: docSnap.id,
-            ...docSnap.data(),
-        } as Employee));
-        
-        setEmployees(fetchedEmployees);
-        const firstVisible = documentSnapshots.docs[0] || null;
-        const lastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+        setPageHistory(prev => prev.slice(0, -1));
+        setCurrentPage(prev => prev - 1);
+      } else {
+        finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+        setPageHistory([null]);
+        setCurrentPage(1);
+      }
 
-        setPageDocs({ first: firstVisible, last: lastVisible });
-        setCurrentPage(newPage);
-
-        if (direction === 'next') {
-            setPageHistory(prev => [...prev, pageDocs.first]);
-        }
-
-        const stateToSave = {
-            searchTerm,
-            filterClient,
-            filterStatus,
-            filterDistrict,
-        };
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
+      const documentSnapshots = await getDocs(finalQuery);
+      const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as Employee));
+      
+      setEmployees(fetchedEmployees);
+      const newLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+      setLastDoc(newLastDoc);
+      
+      const stateToSave = {
+        searchTerm,
+        filterClient,
+        filterStatus,
+        filterDistrict,
+        // We don't save pagination state as it's complex and can lead to stale data.
+      };
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
 
     } catch (err: any) {
       console.error("Error fetching employees:", err);
@@ -235,7 +230,7 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [buildBaseQuery, currentPage, pageDocs.first, pageDocs.last, toast, filterClient, filterDistrict, filterStatus, searchTerm]);
+  }, [buildBaseQuery, currentPage, lastDoc, pageHistory, toast, filterClient, filterDistrict, filterStatus, searchTerm]);
 
 
     useEffect(() => {
@@ -253,11 +248,11 @@ export default function EmployeeDirectoryPage() {
     useEffect(() => {
         const debounceTimer = setTimeout(() => {
             fetchEmployees('initial');
-        }, 500); 
+        }, 500);
 
         return () => clearTimeout(debounceTimer);
     }, [searchTerm, filterClient, filterStatus, filterDistrict]);
-  
+
 
   const handleNextPage = () => {
     fetchEmployees('next');
@@ -563,7 +558,7 @@ export default function EmployeeDirectoryPage() {
 
   
   const displayedEmployees = employees;
-  const canShowNext = pageDocs.last !== null && employees.length === ITEMS_PER_PAGE;
+  const canShowNext = lastDoc !== null && employees.length === ITEMS_PER_PAGE;
 
 
   if (isLoading) { 
@@ -589,11 +584,18 @@ export default function EmployeeDirectoryPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Employee Directory</h1>
-        <Link href="/employees/enroll" passHref>
-          <Button>
-            <UserPlus className="mr-2 h-4 w-4" /> Enroll New Employee
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+           <Button variant="outline" asChild>
+              <Link href="/employees/ai-assistant">
+                AI Assistant
+              </Link>
+           </Button>
+            <Button asChild>
+                <Link href="/employees/enroll">
+                    <UserPlus className="mr-2 h-4 w-4" /> Enroll New Employee
+                </Link>
+            </Button>
+        </div>
       </div>
 
       <Card className="shadow">
@@ -1017,5 +1019,3 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
-
-    
