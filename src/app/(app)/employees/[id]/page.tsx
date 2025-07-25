@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -944,6 +944,39 @@ export default function AdminEmployeeProfilePage() {
     }
   };
   
+  const handleRemoveFile = async (
+    fileUrlKey: keyof Pick<Employee, 'profilePictureUrl' | 'identityProofUrlFront' | 'identityProofUrlBack' | 'addressProofUrlFront' | 'addressProofUrlBack' | 'signatureUrl' | 'bankPassbookStatementUrl' | 'policeClearanceCertificateUrl'>,
+    setFile: React.Dispatch<React.SetStateAction<File | null>>,
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>
+  ) => {
+    if (!employee) return;
+
+    // Clear local staged file if it exists
+    setFile(null);
+    setPreview(null);
+    
+    // Check if there's an existing file in the database
+    const existingUrl = employee[fileUrlKey];
+    if (existingUrl) {
+      const employeeDocRef = doc(db, "employees", employee.id);
+      try {
+        await deleteFileFromStorage(existingUrl);
+        await updateDoc(employeeDocRef, {
+            [fileUrlKey]: deleteField(),
+            updatedAt: serverTimestamp(),
+        });
+
+        // Update local state to reflect deletion
+        setEmployee(prev => prev ? { ...prev, [fileUrlKey]: undefined } : null);
+
+        toast({ title: "Document Removed", description: "The existing document has been deleted." });
+      } catch (error) {
+        console.error("Error removing file: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not remove the document." });
+      }
+    }
+  };
+
   const resetFileStates = () => {
       setNewProfilePicture(null);
       setNewIdentityProofUrlFront(null);
@@ -1366,8 +1399,8 @@ export default function AdminEmployeeProfilePage() {
                             <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} onRemove={() => handleRemoveFile('identityProofUrlFront', setNewIdentityProofUrlFront, setIdentityProofUrlFrontPreview)}/>
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} onRemove={() => handleRemoveFile('identityProofUrlBack', setNewIdentityProofUrlBack, setIdentityProofUrlBackPreview)} />
                         </div>
                     </div>
 
@@ -1378,8 +1411,8 @@ export default function AdminEmployeeProfilePage() {
                             <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} />
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} onRemove={() => handleRemoveFile('addressProofUrlFront', setNewAddressProofUrlFront, setAddressProofUrlFrontPreview)} />
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} onRemove={() => handleRemoveFile('addressProofUrlBack', setNewAddressProofUrlBack, setAddressProofUrlBackPreview)} />
                         </div>
                     </div>
                   </section>
@@ -1388,10 +1421,10 @@ export default function AdminEmployeeProfilePage() {
                   <section>
                       <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents & Signature</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} />
-                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} />
-                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} />
-                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} />
+                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} onRemove={() => handleRemoveFile('profilePictureUrl', setNewProfilePicture, setProfilePicPreview)} />
+                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} onRemove={() => handleRemoveFile('signatureUrl', setNewSignatureUrl, setSignatureUrlPreview)} />
+                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} onRemove={() => handleRemoveFile('bankPassbookStatementUrl', setNewBankPassbookStatement, setBankPassbookPreview)} />
+                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} onRemove={() => handleRemoveFile('policeClearanceCertificateUrl', setNewPoliceClearanceCertificate, setPoliceCertificatePreview)} />
                       </div>
                   </section>
                 </CardContent>
@@ -1436,31 +1469,59 @@ const ImageInputWithPreview: React.FC<{
     setPreview: (preview: string | null) => void;
     handleFileChange: (event: React.ChangeEvent<HTMLInputElement>, setFile: any, setPreview: any) => void;
     openCamera: () => void;
+    onRemove: () => void;
     isProfilePic?: boolean;
     isSignature?: boolean;
-}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, isProfilePic, isSignature }) => {
+}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, onRemove, isProfilePic, isSignature }) => {
     const uniqueId = React.useId();
-    const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl) || "https://placehold.co/200x120.png";
+    const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl);
+    const hasImage = !!finalPreview;
 
     return (
         <div className="space-y-2">
             <Label className="text-base">{label}<span className="text-destructive">*</span></Label>
-            <div className="p-4 border rounded-md text-center space-y-2">
-                <Image
-                    src={finalPreview}
-                    alt={label}
-                    width={isProfilePic || isSignature ? 128 : 200}
-                    height={isProfilePic ? 128 : isSignature ? 64 : 120}
-                    className={cn(
-                        "object-contain justify-self-center mx-auto",
-                        isProfilePic ? 'rounded-full h-32 w-32' : 'h-32 w-full',
-                        isSignature && 'h-20'
-                    )}
-                    data-ai-hint={isProfilePic ? "profile picture" : isSignature ? "signature" : "id card"}
-                />
+            <div className="p-4 border rounded-md text-center space-y-2 relative">
+                {hasImage ? (
+                     <Image
+                        src={finalPreview}
+                        alt={label}
+                        width={isProfilePic || isSignature ? 128 : 200}
+                        height={isProfilePic ? 128 : isSignature ? 64 : 120}
+                        className={cn(
+                            "object-contain justify-self-center mx-auto",
+                            isProfilePic ? 'rounded-full h-32 w-32' : 'h-32 w-full',
+                            isSignature && 'h-20'
+                        )}
+                        data-ai-hint={isProfilePic ? "profile picture" : isSignature ? "signature" : "id card"}
+                    />
+                ) : (
+                    <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div>
+                )}
+               
                 <div className="flex justify-center gap-2">
                     <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById(uniqueId)?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
                     <Button type="button" size="sm" variant="outline" onClick={openCamera}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
+                    {hasImage && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button type="button" size="sm" variant="destructive" title={`Remove ${label}`}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Removal</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Are you sure you want to remove the current {label.toLowerCase()}? This will permanently delete the existing file if you save your changes.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={onRemove}>Confirm & Remove</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
                     <Input id={uniqueId} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setFile, setPreview)} />
                 </div>
             </div>
