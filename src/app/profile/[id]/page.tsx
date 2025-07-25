@@ -554,7 +554,7 @@ export default function PublicEmployeeProfilePage() {
             
             const fileToUpload = isImage
                 ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : file;
+                : newFile;
                 
             updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
         };
