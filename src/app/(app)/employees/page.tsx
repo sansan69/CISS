@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { type Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
@@ -35,8 +35,8 @@ interface ClientOption {
 }
 
 const keralaDistricts = [
-  'all', "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
-  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
+  'all', "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
+  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
@@ -58,7 +58,7 @@ const getPendingDetails = (employee: Employee): string[] => {
     if (!employee.esicNumber) pending.push("ESIC Number");
     if (!employee.bankPassbookStatementUrl) pending.push("Bank Document");
     if (!employee.policeClearanceCertificateUrl) pending.push("Police Clearance Cert.");
-    
+
     return pending;
 };
 
@@ -83,17 +83,19 @@ export default function EmployeeDirectoryPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDistrict, setFilterDistrict] = useState('all');
-  
+
   const [clients, setClients] = useState<ClientOption[]>([]);
   const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited'];
-  
+
   const [page, setPage] = useState(1);
-  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [firstDocs, setFirstDocs] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
@@ -103,22 +105,22 @@ export default function EmployeeDirectoryPage() {
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
-  
+
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
   const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
   const [exitDate, setExitDate] = useState<Date | undefined>(undefined);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
 
-  const buildQuery = useCallback((forSearch: boolean) => {
+  const buildQuery = useCallback(() => {
     let q: Query = collection(db, "employees");
-    
-    if (forSearch && searchTerm.trim() !== '') {
+
+    if (searchTerm.trim() !== '') {
         q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
     }
 
@@ -126,57 +128,60 @@ export default function EmployeeDirectoryPage() {
     if (filterStatus !== 'all') q = query(q, where('status', '==', filterStatus));
     if (filterDistrict !== 'all') q = query(q, where('district', '==', filterDistrict));
 
-    if (!forSearch) {
-        q = query(q, orderBy('createdAt', 'desc'));
+    if (searchTerm.trim() === '') {
+       q = query(q, orderBy('createdAt', 'desc'));
     }
-    
+
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
 
-  const fetchData = useCallback(async (newPage: number, direction: 'next' | 'prev' | 'reset') => {
+  const fetchData = useCallback(async (direction: 'next' | 'prev' | 'reset' = 'reset') => {
     setIsLoading(true);
     setError(null);
+
     try {
-        const isSearchActive = searchTerm.trim() !== '';
-        let q = buildQuery(isSearchActive);
+        let q = buildQuery();
+        let newPage = page;
         
-        const lastDoc = pageHistory[newPage - 1];
-
-        if (direction === 'next' && lastDoc) {
+        if (direction === 'next') {
+            newPage = page + 1;
             q = query(q, startAfter(lastDoc), limit(ITEMS_PER_PAGE));
-        } else if (direction === 'prev' && newPage > 1 && pageHistory[newPage - 2]) {
-             q = query(q, endBefore(pageHistory[newPage-1]), limitToLast(ITEMS_PER_PAGE));
-        } else {
-             q = query(q, limit(ITEMS_PER_PAGE));
+        } else if (direction === 'prev' && page > 1) {
+            newPage = page - 1;
+            const prevPageFirstDoc = firstDocs[newPage -1];
+            q = query(q, startAfter(prevPageFirstDoc), limit(ITEMS_PER_PAGE));
+        } else { // reset
+            newPage = 1;
+            setFirstDocs([null]);
+            q = query(q, limit(ITEMS_PER_PAGE));
         }
-
+        
         const documentSnapshots = await getDocs(q);
+
         if (!documentSnapshots.empty) {
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
             setEmployees(fetchedEmployees);
             
-            const firstDoc = documentSnapshots.docs[0];
-            const lastDocVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+            const newFirstDoc = documentSnapshots.docs[0];
+            const newLastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
 
-            if (direction === 'reset') {
-                setPageHistory([null, lastDocVisible]);
-            } else if (direction === 'next') {
-                setPageHistory(prev => {
-                    const newHistory = [...prev];
-                    newHistory[newPage] = lastDocVisible;
-                    return newHistory;
-                });
+            setLastDoc(newLastDoc);
+            
+            if (direction === 'next') {
+                setFirstDocs(prev => [...prev, newFirstDoc]);
             }
-
         } else {
-            if (direction !== 'reset') {
-                 toast({ title: direction === 'next' ? "You are on the last page" : "You are on the first page" });
-                 setPage(p => p > 1 ? p -1 : 1);
-            } else {
+             if (direction === 'next') {
+                toast({ title: "You are on the last page" });
+                newPage = page; // don't increment page if no results
+            } else if (direction === 'reset') {
                 setEmployees([]);
+                toast({ title: "No employees found matching your criteria." });
             }
         }
+        setPage(newPage);
+
     } catch (err: any) {
         let message = err.message || "Failed to fetch employees.";
         if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
@@ -186,7 +191,24 @@ export default function EmployeeDirectoryPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [buildQuery, pageHistory, searchTerm, toast]);
+  }, [buildQuery, page, lastDoc, firstDocs, toast]);
+
+
+  const handleFilterOrSearch = () => {
+      setPage(1);
+      setLastDoc(null);
+      setFirstDocs([null]);
+      fetchData('reset');
+  }
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+        handleFilterOrSearch();
+    }, 500);
+    return () => clearTimeout(handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
+
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -197,35 +219,11 @@ export default function EmployeeDirectoryPage() {
       } catch (err: any) {
         toast({ variant: "destructive", title: "Error", description: "Could not fetch client list." });
       }
-      fetchData(1, 'reset');
+      setIsLoading(false);
     };
     fetchInitialData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-        setPage(1);
-        setPageHistory([null]);
-        fetchData(1, 'reset');
-    }, 500); 
-    return () => clearTimeout(handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
-
-
-  const handleNextPage = () => {
-    const newPage = page + 1;
-    setPage(newPage);
-    fetchData(newPage, 'next');
-  };
-
-  const handlePreviousPage = () => {
-    if (page <= 1) return;
-    const newPage = page - 1;
-    setPage(newPage);
-    fetchData(newPage, 'prev');
-  };
 
   const openStatusModal = (employee: Employee, status: Employee['status']) => {
     setSelectedEmployeeForStatusChange(employee);
@@ -288,7 +286,7 @@ export default function EmployeeDirectoryPage() {
         }
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-      fetchData(1, 'reset');
+      handleFilterOrSearch();
     } catch (err) {
       toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
     } finally {
@@ -320,7 +318,7 @@ export default function EmployeeDirectoryPage() {
             setUpdateProgress(((i + chunk.length) / totalDocs) * 100);
         }
         toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} records.` });
-        fetchData(1, 'reset');
+        handleFilterOrSearch();
     } catch (error) {
         toast({ variant: "destructive", title: "Update Failed", description: `An error occurred during the update.` });
     } finally {
@@ -346,7 +344,7 @@ export default function EmployeeDirectoryPage() {
           idProofDocumentUrl: deleteField(), idProofDocumentUrlFront: deleteField(), idProofDocumentUrlBack: deleteField(),
       };
   });
-  
+
   const handleScanForDuplicates = async () => {
     setIsScanningDuplicates(true);
     toast({ title: "Scanning for duplicates..." });
@@ -381,7 +379,7 @@ export default function EmployeeDirectoryPage() {
       toast({ title: "Duplicates Deleted", description: `${selectedForDeletion.length} record(s) removed.` });
       setShowDuplicatesDialog(false);
       setSelectedForDeletion([]);
-      fetchData(1, 'reset');
+      handleFilterOrSearch();
     } catch (error) {
       toast({ variant: "destructive", title: "Deletion Failed" });
     } finally {
@@ -461,7 +459,7 @@ export default function EmployeeDirectoryPage() {
                 <div className="text-center py-10">
                     <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
                     <p className="mt-4 text-lg text-destructive">{error}</p>
-                    <Button onClick={() => fetchData(1, 'reset')} className="mt-4">Try Again</Button>
+                    <Button onClick={() => handleFilterOrSearch()} className="mt-4">Try Again</Button>
                 </div>
             ) : (
                 <>
@@ -475,7 +473,7 @@ export default function EmployeeDirectoryPage() {
                             employees.map((emp) => {
                             const pendingItems = getPendingDetails(emp);
                             return (
-                                <TableRow key={emp.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/employees/${emp.id}`)}>
+                                <TableRow key={emp.id}>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                         <Avatar><AvatarImage src={emp.profilePictureUrl} /><AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('') || 'U'}</AvatarFallback></Avatar>
@@ -489,13 +487,12 @@ export default function EmployeeDirectoryPage() {
                                             <div className="flex items-center gap-2 text-green-600"><CheckCircle className="h-5 w-5" /> <span className="hidden lg:inline">Complete</span></div>
                                         ) : (
                                             <Popover>
-                                                <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="flex items-center gap-2 text-amber-600"><WarningIcon className="h-5 w-5" /> <span className="hidden lg:inline">{pendingItems.length} Pending</span></Button></PopoverTrigger>
-                                                <PopoverContent className="w-64" onClick={(e) => e.stopPropagation()}><div className="space-y-2"><h4 className="font-medium">Pending Items</h4><ul className="list-disc list-inside text-sm space-y-1">{pendingItems.map(item => <li key={item}>{item}</li>)}</ul></div></PopoverContent>
+                                                <PopoverTrigger asChild><Button variant="ghost" size="sm" className="flex items-center gap-2 text-amber-600"><WarningIcon className="h-5 w-5" /> <span className="hidden lg:inline">{pendingItems.length} Pending</span></Button></PopoverTrigger>
+                                                <PopoverContent className="w-64"><div className="space-y-2"><h4 className="font-medium">Pending Items</h4><ul className="list-disc list-inside text-sm space-y-1">{pendingItems.map(item => <li key={item}>{item}</li>)}</ul></div></PopoverContent>
                                             </Popover>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                    <div onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
@@ -509,7 +506,6 @@ export default function EmployeeDirectoryPage() {
                                             <DropdownMenuItem className="text-destructive" onClick={() => openDeleteDialog(emp)}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
                                         </DropdownMenuContent>
                                         </DropdownMenu>
-                                    </div>
                                     </TableCell>
                                 </TableRow>
                             )
@@ -520,15 +516,15 @@ export default function EmployeeDirectoryPage() {
                 <div className="flex justify-between items-center mt-4">
                     <span className="text-sm text-muted-foreground">Page {page}</span>
                     <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isLoading || page === 1}>Previous</Button>
-                    <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading}>Next</Button>
+                    <Button variant="outline" size="sm" onClick={() => fetchData('prev')} disabled={isLoading || page === 1}>Previous</Button>
+                    <Button variant="outline" size="sm" onClick={() => fetchData('next')} disabled={isLoading}>Next</Button>
                     </div>
                 </div>
                 </>
             )}
         </CardContent>
       </Card>
-      
+
       <Card>
         <CardHeader>
             <CardTitle>Data Maintenance</CardTitle>
