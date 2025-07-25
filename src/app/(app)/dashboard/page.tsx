@@ -4,7 +4,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Users, UserCheck, UserMinus, Clock, Activity, Loader2, AlertCircle as AlertIcon, ArrowRight, UserPlus } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import React, { useEffect, useState } from "react";
 import { db } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp, orderBy, limit } from "firebase/firestore";
@@ -15,9 +15,6 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const CHART_COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
-
-interface ClientDistributionData { name: string; value: number; fill: string; }
 interface DashboardStats { total: number; active: number; onLeave: number; inactiveOrExited: number; }
 interface NewHiresData { month: string; hires: number; }
 interface RecentActivity { id: string; type: 'enrollment' | 'status_change'; text: string; subtext: string; timestamp: Date; }
@@ -48,7 +45,6 @@ const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementTyp
 
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats | null>(null);
-    const [clientDistribution, setClientDistribution] = useState<ClientDistributionData[]>([]);
     const [newHiresData, setNewHiresData] = useState<NewHiresData[]>([]);
     const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
 
@@ -77,7 +73,6 @@ export default function DashboardPage() {
                     activeSnap,
                     onLeaveSnap,
                     inactiveSnap,
-                    allEmployeesSnap,
                     hiresSnapshot,
                     recentActivitySnapshot
                 ] = await Promise.all([
@@ -85,35 +80,17 @@ export default function DashboardPage() {
                     activeQuery,
                     onLeaveQuery,
                     inactiveQuery,
-                    getDocs(employeesRef),
                     getDocs(hiresQuery),
                     getDocs(recentActivityQuery)
                 ]);
                 
-                // Process Stats
-                const total = totalSnap.data().count;
-                const active = activeSnap.data().count;
                 setStats({
-                    total,
-                    active,
+                    total: totalSnap.data().count,
+                    active: activeSnap.data().count,
                     onLeave: onLeaveSnap.data().count,
                     inactiveOrExited: inactiveSnap.data().count,
                 });
 
-                // Process Client Distribution
-                const employeesData = allEmployeesSnap.docs.map(doc => doc.data() as Employee);
-                const countsByClient: { [key: string]: number } = {};
-                employeesData.forEach(emp => {
-                    const client = emp.clientName || "Unassigned";
-                    countsByClient[client] = (countsByClient[client] || 0) + 1;
-                });
-                setClientDistribution(Object.entries(countsByClient).map(([name, value], index) => ({
-                    name,
-                    value,
-                    fill: CHART_COLORS[index % CHART_COLORS.length],
-                })));
-                
-                // Process New Hires
                 const hiresByMonth: { [key: string]: number } = {};
                 for (let i = 0; i < 6; i++) {
                     hiresByMonth[format(subMonths(new Date(), i), 'MMM yyyy')] = 0;
@@ -127,7 +104,6 @@ export default function DashboardPage() {
                 });
                 setNewHiresData(Object.entries(hiresByMonth).map(([month, hires]) => ({ month, hires })).reverse());
 
-                // Process Recent Activity
                 setRecentActivity(recentActivitySnapshot.docs.map(doc => {
                     const data = doc.data() as Employee;
                     return {
@@ -152,8 +128,12 @@ export default function DashboardPage() {
         fetchDashboardData();
     }, []);
 
-    const newHiresChartConfig = { hires: { label: "New Hires" } };
-    const clientChartConfig = clientDistribution.reduce((acc, client) => ({ ...acc, [client.name]: { label: client.name, color: client.fill } }), {});
+    const newHiresChartConfig = {
+      hires: {
+        label: "New Hires",
+        color: "hsl(var(--primary))",
+      },
+    };
 
     if (error) {
         return (
@@ -182,15 +162,15 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="pl-2">
                         {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
-                        <ResponsiveContainer width="100%" height={300}>
-                             <BarChart data={newHiresData}>
+                        <ChartContainer config={newHiresChartConfig} className="w-full h-[300px]">
+                            <BarChart data={newHiresData} accessibilityLayer>
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} />
                                 <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent hideLabel />} />
-                                <Bar dataKey="hires" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="hires" fill="var(--color-hires)" radius={[4, 4, 0, 0]} />
                             </BarChart>
-                        </ResponsiveContainer>
+                        </ChartContainer>
                         }
                     </CardContent>
                 </Card>
