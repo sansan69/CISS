@@ -735,8 +735,8 @@ export default function AdminEmployeeProfilePage() {
             { file: newProfilePicture, oldUrl: employee.profilePictureUrl, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
             { file: newIdentityProofUrlFront, oldUrl: employee.identityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
             { file: newIdentityProofUrlBack, oldUrl: employee.identityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
             { file: newSignatureUrl, oldUrl: employee.signatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
             { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
             { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
@@ -785,6 +785,15 @@ export default function AdminEmployeeProfilePage() {
                 finalPayload.phoneNumber || employee.phoneNumber
              ].filter(Boolean)));
         }
+
+        // Update publicProfile object
+        finalPayload.publicProfile = {
+            fullName: finalPayload.fullName || employee.fullName,
+            employeeId: employee.employeeId,
+            clientName: finalPayload.clientName || employee.clientName,
+            profilePictureUrl: finalPayload.profilePictureUrl || employee.profilePictureUrl,
+            status: finalPayload.status || employee.status,
+        };
 
         if (Object.keys(finalPayload).length > 0) {
             finalPayload.updatedAt = serverTimestamp();

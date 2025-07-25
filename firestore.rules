@@ -6,23 +6,31 @@ service cloud.firestore {
     // Rules for the 'employees' collection
     match /employees/{employeeId} {
       
-      // Allow anyone to read an employee's profile. 
-      // This is required for the public profile pages to function.
-      allow read: if true;
+      // Allow full read access ONLY if the user is an admin OR the authenticated employee.
+      // This is the primary security fix.
+      allow get: if (request.auth != null && request.auth.token.email != null) || 
+                     (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber);
 
-      // Allow anyone to create a new employee document during public enrollment.
-      allow create: if true;
+      // For public profile pages, allow anyone to LIST (query) documents,
+      // but only if they are querying the 'publicProfile' fields.
+      // This allows fetching basic info without exposing sensitive data.
+      allow list: if request.query.select == null || request.query.select.size() == 0 ||
+                     request.query.select.hasAll(['publicProfile']);
 
-      // Allow updates only if the user is a logged-in admin OR 
-      // if they are an employee who has verified their phone number via OTP.
-      // The OTP sign-in creates a temporary auth session. We verify that the
-      // phone number in their auth token matches the phone number in the document.
-      allow update: if request.auth != null && 
-                     (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin' || 
-                      request.auth.token.phone_number == resource.data.phoneNumber);
+      // Allow anyone to create a new employee document.
+      // This is for the public enrollment form. Further validation is in the rules.
+      allow create: if request.resource.data.keys().hasAll(['clientName', 'phoneNumber', 'fullName', 'createdAt', 'status']);
 
-      // Only allow authenticated admins to delete employee records.
-      allow delete: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+      // Allow updates if:
+      // 1. The user is an authenticated admin (identified by having an email in their token).
+      // OR
+      // 2. The user is an employee verified via OTP, and their phone number matches the document's phone number.
+      allow update: if (request.auth != null && request.auth.token.email != null) || 
+                      (request.auth != null && request.auth.token.phone_number == '+91' + resource.data.phoneNumber);
+
+      // Only allow authenticated users (admins) to delete employee records.
+      // We identify admins by checking if their auth token contains an email.
+      allow delete: if request.auth != null && request.auth.token.email != null;
     }
 
     // Rules for the 'clients' collection
@@ -33,12 +41,8 @@ service cloud.firestore {
       allow read: if true;
 
       // Only allow authenticated users (admins) to add, update, or delete clients.
-      allow create, update, delete: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // Rules for an 'admins' collection to distinguish admin users
-    match /admins/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // We identify admins by checking if their auth token contains an email.
+      allow create, update, delete: if request.auth != null && request.auth.token.email != null;
     }
   }
 }

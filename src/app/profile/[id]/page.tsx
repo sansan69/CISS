@@ -554,7 +554,7 @@ export default function PublicEmployeeProfilePage() {
             
             const fileToUpload = isImage
                 ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : newFile;
+                : file;
                 
             updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
         };
@@ -582,6 +582,11 @@ export default function PublicEmployeeProfilePage() {
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
+        // Update publicProfile if relevant fields change
+        if (finalPayload.profilePictureUrl) {
+            finalPayload['publicProfile.profilePictureUrl'] = finalPayload.profilePictureUrl;
+        }
+
         if (Object.keys(finalPayload).length > 0) {
             finalPayload.updatedAt = serverTimestamp();
             const employeeDocRef = doc(db, "employees", employee.id);
