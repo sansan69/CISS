@@ -86,13 +86,6 @@ function MobileNav() {
                     </Link>
                     {navItems.map((item) => <NavLink key={item.href} item={item} />)}
                 </nav>
-                <div className="mt-auto">
-                    <Button asChild>
-                        <Link href="/employees/enroll">
-                            <UserPlus className="mr-2 h-4 w-4" /> Enroll Employee
-                        </Link>
-                    </Button>
-                </div>
             </SheetContent>
         </Sheet>
     );
@@ -179,13 +172,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {navItems.map((item) => <NavLink key={item.href} item={item} />)}
             </nav>
           </div>
-          <div className="mt-auto p-4">
-             <Button asChild size="sm" className="w-full">
-                <Link href="/employees/enroll">
-                    <UserPlus className="mr-2 h-4 w-4" /> Enroll New Employee
-                </Link>
-             </Button>
-          </div>
         </div>
       </div>
       <div className="flex flex-col">
@@ -206,5 +192,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
 }
 
 export default AppLayout;
-
-    
