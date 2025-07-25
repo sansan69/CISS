@@ -40,6 +40,22 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
+// Helper to safely format dates that might be Timestamps or strings
+const safeFormatDate = (dateValue: any, formatString: string) => {
+    if (!dateValue) return 'N/A';
+    try {
+        // Check if it's a Firestore Timestamp and convert it
+        if (typeof dateValue.toDate === 'function') {
+            return format(dateValue.toDate(), formatString);
+        }
+        // Otherwise, try to parse it (assuming it's a string or existing Date)
+        return format(new Date(dateValue), formatString);
+    } catch (e) {
+        console.error("Date formatting error:", e);
+        return "Invalid Date";
+    }
+};
+
 export default function EmployeeDirectoryPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -910,7 +926,7 @@ export default function EmployeeDirectoryPage() {
                                             <div>
                                                 <p className="font-medium">{emp.fullName} ({emp.employeeId})</p>
                                                 <p className="text-xs text-muted-foreground">{emp.clientName} | {emp.emailAddress}</p>
-                                                <p className="text-xs text-muted-foreground">Created: {emp.createdAt ? format(new Date(emp.createdAt), 'dd MMM yyyy') : 'N/A'}</p>
+                                                <p className="text-xs text-muted-foreground">Created: {safeFormatDate(emp.createdAt, 'dd MMM yyyy')}</p>
                                             </div>
                                         </div>
                                     </Label>
