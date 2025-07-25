@@ -154,7 +154,7 @@ export default function EmployeeDirectoryPage() {
 
     useEffect(() => {
         fetchData(1);
-    }, [memoizedQuery]);
+    }, [memoizedQuery, fetchData]);
 
     useEffect(() => {
         const fetchClients = async () => {
@@ -224,7 +224,7 @@ export default function EmployeeDirectoryPage() {
         <div className="flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Employee Directory</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Employee Directory</h1>
                     <p className="text-muted-foreground">Manage and view all employee profiles.</p>
                 </div>
                 <Button asChild><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
@@ -233,7 +233,7 @@ export default function EmployeeDirectoryPage() {
             <Card>
                 <CardHeader><CardTitle>Filters & Search</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    <div className="xl:col-span-2 relative">
+                    <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 relative">
                         <Label htmlFor="search-input" className="sr-only">Search</Label>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                         <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTermInput} onChange={(e) => setSearchTermInput(e.target.value)} className="pl-10" />

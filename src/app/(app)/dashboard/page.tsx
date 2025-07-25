@@ -2,8 +2,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Users, UserCheck, UserMinus, Clock, Activity, Loader2, AlertCircle as AlertIcon, ArrowRight, UserPlus } from "lucide-react";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Users, UserCheck, UserMinus, Clock, ArrowRight, UserPlus, Loader2, AlertCircle as AlertIcon } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import React, { useEffect, useState } from "react";
 import { db } from '@/lib/firebase';
@@ -13,7 +12,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, subMonths, startOfMonth } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+
 
 interface DashboardStats { total: number; active: number; onLeave: number; inactiveOrExited: number; }
 interface NewHiresData { month: string; hires: number; }

@@ -17,7 +17,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'CISS Workforce',
   description: 'CISS Workforce Employee Management System',
-  // manifest: '/manifest.json', // Removed to prevent 404s on icons within it
   applicationName: 'CISS Workforce',
   appleWebApp: {
     capable: true,
@@ -45,6 +44,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#3F51B5',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
