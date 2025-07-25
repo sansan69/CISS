@@ -59,7 +59,6 @@ const idValidation = {
     "PAN Card": /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
     "Voter ID": /^[A-Z]{3}[0-9]{7}$/,
     "Passport": /^[A-Z]{1}[0-9]{7}$/,
-    "Driving License": /^(([A-Z]{2}[0-9]{2})( )|([A-Z]{2}-[0-9]{2}))((19|20)[0-9]{2})[0-9]{7}$/,
 };
 
 const enrollmentFormSchema = z.object({
