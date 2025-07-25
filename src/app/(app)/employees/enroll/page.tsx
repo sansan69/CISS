@@ -26,7 +26,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, X, CheckCircle as CheckCircleIcon } from "lucide-react";
+import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, X, CheckCircle as CheckCircleIcon, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subYears, addYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -357,6 +357,21 @@ export default function EnrollEmployeePage() {
   const watchClientName = form.watch("clientName");
   const watchMaritalStatus = form.watch("maritalStatus");
   const watchEducationalQualification = form.watch("educationalQualification");
+  const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
+  const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
+
+  useEffect(() => {
+    if (!fullAddress || fullAddress.length < 15) {
+        setPinStatus('idle');
+        return;
+    }
+    const pinRegex = /\b\d{6}\b/;
+    if (pinRegex.test(fullAddress)) {
+        setPinStatus('found');
+    } else {
+        setPinStatus('not_found');
+    }
+  }, [fullAddress]);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -999,7 +1014,18 @@ export default function EnrollEmployeePage() {
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Contact Information</h2>
                  <div className="grid grid-cols-1 gap-6">
-                  <FormField control={form.control} name="fullAddress" render={({ field }) => ( <FormItem><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl><FormDescription>Include house number, street, area, PIN code</FormDescription><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="fullAddress" render={({ field }) => ( 
+                    <FormItem>
+                        <div className="flex justify-between items-center">
+                            <FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
+                            {pinStatus === 'found' && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
+                            {pinStatus === 'not_found' && <span className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
+                        </div>
+                        <FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl>
+                        <FormDescription>Include house number, street, area, and PIN code</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                  )} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                   <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
