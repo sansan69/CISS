@@ -252,7 +252,7 @@ export default function EmployeeDirectoryPage() {
         }, 500);
 
         return () => clearTimeout(debounceTimer);
-    }, [searchTerm, filterClient, filterStatus, filterDistrict]);
+    }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
 
 
   const handleNextPage = () => {
@@ -958,7 +958,7 @@ export default function EmployeeDirectoryPage() {
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isDeleting} onClick={() => setEmployeeToDelete(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={isDeleting} onClick={()={() => setEmployeeToDelete(null)}>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className={buttonVariants({ variant: "destructive" })}>
                       <span className="flex items-center justify-center">
                         {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -1021,3 +1021,5 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
+
+    
