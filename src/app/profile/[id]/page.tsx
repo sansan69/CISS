@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -20,7 +20,7 @@ import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import QRCode from 'qrcode';
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, type User as FirebaseUser, type ConfirmationResult } from 'firebase/auth';
 import { ref, deleteObject } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -34,10 +34,18 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
 
+
+// Add RecaptchaVerifier to window interface
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+    confirmationResult?: ConfirmationResult;
+  }
+}
 
 // Dropdown options
 const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
@@ -432,16 +440,18 @@ export default function AdminEmployeeProfilePage() {
   const [error, setError] = useState<string | null>(null);
   
   const [isUploadMode, setIsUploadMode] = useState(false);
-  const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
-  const [isRegeneratingId, setIsRegeneratingId] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // OTP Flow State
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
-  
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // State for new file uploads
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
@@ -473,16 +483,6 @@ export default function AdminEmployeeProfilePage() {
   
   const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
   const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setIsAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const isAdminView = false; // Public view logic only
 
   const form = useForm<EmployeeUpdateValues>({
     resolver: zodResolver(employeeUpdateSchema),
@@ -519,8 +519,6 @@ export default function AdminEmployeeProfilePage() {
     },
   });
   
-  const watchStatus = form.watch('status');
-  const watchMaritalStatus = form.watch('maritalStatus');
   const watchEducationalQualification = form.watch("educationalQualification");
 
 
@@ -784,8 +782,8 @@ export default function AdminEmployeeProfilePage() {
     } catch (err: any) {
         console.error("Error updating profile:", err);
         let description = err.message || "An error occurred while saving.";
-        if (err.code === 'permission-denied') {
-            description = "Permission Denied. Your request to update the profile could not be authorized. Please contact support.";
+        if (err.code === 'permission-denied' || err.code === 'PERMISSION_DENIED') {
+            description = "Permission Denied. Your request to update the profile could not be authorized. Please ensure you are correctly verified and try again.";
         }
         toast({ variant: "destructive", title: "Update Failed", description });
     } finally {
@@ -866,6 +864,66 @@ export default function AdminEmployeeProfilePage() {
     }
   };
   
+  const setupRecaptcha = () => {
+    if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+    }
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      'size': 'invisible',
+      'callback': (response: any) => {},
+    });
+    return verifier;
+  };
+  
+  const handleSendOtp = async () => {
+      if (!employee) return;
+      setIsSendingOtp(true);
+      try {
+          const fullPhoneNumber = `+91${employee.phoneNumber}`;
+          const appVerifier = setupRecaptcha();
+          const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
+          setConfirmationResult(result);
+          window.confirmationResult = result;
+          toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
+      } catch (error: any) {
+          console.error("Error sending OTP:", error);
+          let description = "Could not send OTP. Please try again later.";
+          if (error.code === 'auth/too-many-requests') description = "Too many requests. Please wait a while before trying again.";
+          toast({ variant: "destructive", title: "OTP Send Error", description });
+          setShowOtpDialog(false);
+      } finally {
+          setIsSendingOtp(false);
+      }
+  };
+
+  const handleVerifyOtp = async () => {
+      const resultToConfirm = confirmationResult || window.confirmationResult;
+      if (!resultToConfirm) {
+          toast({ variant: 'destructive', title: 'Verification Error', description: 'Could not find verification session. Please try again.' });
+          return;
+      }
+      setIsVerifyingOtp(true);
+      try {
+          await resultToConfirm.confirm(otp);
+          toast({ title: "Verification Successful", description: "You can now update your profile." });
+          setShowOtpDialog(false);
+          setIsUploadMode(true); // Unlock edit mode on success
+      } catch (error: any) {
+          console.error("Error verifying OTP:", error);
+          let description = "Failed to verify OTP.";
+          if (error.code === 'auth/invalid-verification-code') description = "The code is invalid. Please check and try again.";
+          if (error.code === 'auth/code-expired') description = "The code has expired. Please request a new one.";
+          toast({ variant: "destructive", title: "Verification Failed", description });
+      } finally {
+          setIsVerifyingOtp(false);
+      }
+  };
+
+  const handleUpdateDetailsClick = () => {
+      setShowOtpDialog(true);
+      handleSendOtp();
+  };
+
   const renderOffscreenPages = () => {
     if (!employee) return null;
 
@@ -933,10 +991,11 @@ export default function AdminEmployeeProfilePage() {
 
   return (
     <>
+      <div id="recaptcha-container" />
       <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
         {renderOffscreenPages()}
       </div>
-      <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+      <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4">
         <div className="mb-4">
           <Button variant="outline" size="sm" onClick={() => router.push('/')}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Home
@@ -964,8 +1023,8 @@ export default function AdminEmployeeProfilePage() {
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                   Download Kit
               </Button>
-              <Button onClick={() => setIsUploadMode(!isUploadMode)} className="flex-1 sm:flex-none">
-                  <Edit3 className="mr-2 h-4 w-4" /> {isUploadMode ? "Cancel" : "Update Details"}
+              <Button onClick={handleUpdateDetailsClick} className="flex-1 sm:flex-none">
+                  <Edit3 className="mr-2 h-4 w-4" /> Update Details
               </Button>
             </div>
         </div>
@@ -1167,6 +1226,43 @@ export default function AdminEmployeeProfilePage() {
           </Form>
         )}
 
+      <Dialog open={showOtpDialog} onOpenChange={setShowOtpDialog}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Verify Your Identity</DialogTitle>
+                <ShadDialogDescription>
+                    To protect your account, we've sent a one-time password (OTP) to your registered mobile number: ****{employee.phoneNumber.slice(-4)}.
+                </ShadDialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                        id="otp"
+                        type="tel"
+                        placeholder="Enter 6-digit OTP"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        maxLength={6}
+                        disabled={isVerifyingOtp}
+                        className="pl-10 text-lg tracking-widest text-center"
+                    />
+                </div>
+                 <Button onClick={handleVerifyOtp} className="w-full" disabled={otp.length < 6 || isVerifyingOtp}>
+                    {isVerifyingOtp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Verify and Proceed
+                </Button>
+            </div>
+            <DialogFooter className="text-xs text-muted-foreground justify-center">
+                Didn't receive the code? 
+                <Button variant="link" size="sm" className="p-0 h-auto" onClick={handleSendOtp} disabled={isSendingOtp}>
+                   {isSendingOtp ? 'Resending...' : 'Resend OTP'}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
           <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
               <DialogHeader>
@@ -1227,4 +1323,3 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
-

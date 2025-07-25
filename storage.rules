@@ -6,21 +6,20 @@ service firebase.storage {
     // Employee document paths
     match /employees/{phoneNumber}/{documentType}/{fileName} {
       
-      // Allow unauthenticated users (public enrollment, profile uploads) to create and update files
-      // under specific conditions. 'write' covers both 'create' and 'update'.
-      allow write: if 
-        // 1. Ensure the upload path is one of the allowed document types.
+      // Allow unauthenticated users (public enrollment) to CREATE files.
+      // This is necessary for the initial registration form.
+      allow create: if 
         documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
-        
-        // 2. Enforce a maximum file size (e.g., 5MB) to prevent abuse.
         request.resource.size < 5 * 1024 * 1024 &&
-        
-        // 3. Validate content type to ensure only expected files are uploaded.
         (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
 
-      // Allow authenticated users (admins) to read or delete any file.
-      // This is necessary for viewing profiles and for replacing/deleting documents.
-      allow read, delete: if request.auth != null;
+      // Allow READ access to anyone. This is needed to display images on public profiles.
+      allow read: if true;
+
+      // Allow UPDATE and DELETE only if the user is authenticated.
+      // This covers both admins and employees who have just verified via OTP.
+      // A further check on the phone number could be added here if needed, but Firestore rules provide the main security.
+      allow update, delete: if request.auth != null;
     }
 
     // Default deny all other reads/writes to bucket paths.

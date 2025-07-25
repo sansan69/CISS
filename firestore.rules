@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -11,35 +10,19 @@ service cloud.firestore {
       // This is required for the public profile pages to function.
       allow read: if true;
 
-      // Allow anyone to create a new employee document.
-      // This is the critical rule that fixes the public enrollment failure.
+      // Allow anyone to create a new employee document during public enrollment.
       allow create: if true;
 
-      // Allow authenticated users (admins) to update any field.
-      // Also allow any user (even unauthenticated) to update ONLY specific
-      // document URL fields, and only if those fields do not already exist.
-      // This securely enables the "upload missing documents" feature for public users.
-      allow update: if request.auth != null || (
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly([
-            'updatedAt', // Allow this to be set
-            'identityProofUrlFront', 'identityProofUrlBack', 
-            'addressProofUrlFront', 'addressProofUrlBack',
-            'signatureUrl', 'bankPassbookStatementUrl', 'policeClearanceCertificateUrl'
-          ]) && (
-            // For each key they are trying to write, check if it existed before.
-            (!('identityProofUrlFront' in resource.data) || !request.resource.data.keys().hasAny(['identityProofUrlFront'])) &&
-            (!('identityProofUrlBack' in resource.data) || !request.resource.data.keys().hasAny(['identityProofUrlBack'])) &&
-            (!('addressProofUrlFront' in resource.data) || !request.resource.data.keys().hasAny(['addressProofUrlFront'])) &&
-            (!('addressProofUrlBack' in resource.data) || !request.resource.data.keys().hasAny(['addressProofUrlBack'])) &&
-            (!('signatureUrl' in resource.data) || !request.resource.data.keys().hasAny(['signatureUrl'])) &&
-            (!('bankPassbookStatementUrl' in resource.data) || !request.resource.data.keys().hasAny(['bankPassbookStatementUrl'])) &&
-            (!('policeClearanceCertificateUrl' in resource.data) || !request.resource.data.keys().hasAny(['policeClearanceCertificateUrl']))
-          )
-      );
+      // Allow updates only if the user is a logged-in admin OR 
+      // if they are an employee who has verified their phone number via OTP.
+      // The OTP sign-in creates a temporary auth session. We verify that the
+      // phone number in their auth token matches the phone number in the document.
+      allow update: if request.auth != null && 
+                     (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin' || 
+                      request.auth.token.phone_number == resource.data.phoneNumber);
 
-      // Only allow authenticated users (admins) to delete employee records.
-      allow delete: if request.auth != null;
+      // Only allow authenticated admins to delete employee records.
+      allow delete: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
     }
 
     // Rules for the 'clients' collection
@@ -50,7 +33,12 @@ service cloud.firestore {
       allow read: if true;
 
       // Only allow authenticated users (admins) to add, update, or delete clients.
-      allow create, update, delete: if request.auth != null;
+      allow create, update, delete: if request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Rules for an 'admins' collection to distinguish admin users
+    match /admins/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
