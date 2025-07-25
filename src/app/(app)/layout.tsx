@@ -33,7 +33,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth'; 
 import { cn } from '@/lib/utils';
 import { Toaster } from "@/components/ui/toaster"
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 
 interface NavItem {
   href: string;
@@ -108,6 +108,7 @@ function MobileNav({ user, onLogout }: { user: User, onLogout: () => void }) {
                 </Button>
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col p-0">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                 <div className="flex h-16 items-center border-b px-4">
                      <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
                         <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
