@@ -2,15 +2,15 @@
 
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { type Employee } from '@/types/employee';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, KeyRound, Trash2 } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -18,7 +18,7 @@ import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import QRCode from 'qrcode';
-import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, type User as FirebaseUser, type ConfirmationResult } from 'firebase/auth';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { ref, deleteObject } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -32,26 +32,20 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-// Add RecaptchaVerifier to window interface
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-    confirmationResult?: ConfirmationResult;
-  }
-}
 
 // Dropdown options
 const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
 const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
+const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
+interface ClientOption { id: string; name: string; }
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
 
 
@@ -61,13 +55,63 @@ const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "
 
 // Zod schema for validation
 const employeeUpdateSchema = z.object({
+  firstName: z.string().min(1, "First name is required."),
+  lastName: z.string().min(1, "Last name is required."),
+  dateOfBirth: z.date({ required_error: "Date of birth is required." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+            return age - 1 >= 18;
+        }
+        return age >= 18;
+    }, { message: "Must be at least 18 years old." })
+    .refine(date => {
+        const today = new Date();
+        const age = today.getFullYear() - date.getFullYear();
+        const m = today.getMonth() - date.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+             return age - 1 < 65;
+        }
+        return age < 65;
+    }, { message: "Must be under 65 years old." }),
+  gender: z.enum(["Male", "Female", "Other"]),
+  fatherName: z.string().min(2, "Father's name is required."),
+  motherName: z.string().min(2, "Mother's name is required."),
+  maritalStatus: z.enum(["Married", "Unmarried"]),
+  spouseName: z.string().optional(),
   educationalQualification: qualificationTypes,
   otherQualification: z.string().optional(),
+  district: z.string(),
+  fullAddress: z.string().min(10, "Address is required."),
+  phoneNumber: z.string().regex(/^\d{10}$/, "Must be 10 digits."),
+  emailAddress: z.string().email(),
+  clientName: z.string().min(1, "Client name is required."),
+  resourceIdNumber: z.string().optional(),
+  joiningDate: z.date({ required_error: "Joining date is required." }),
+  status: z.enum(['Active', 'Inactive', 'OnLeave', 'Exited']),
+  exitDate: z.date().optional().nullable(),
+  bankName: z.string().optional().or(z.literal('')),
+  bankAccountNumber: z.string().optional().or(z.literal('')),
+  ifscCode: z.string().optional().or(z.literal('')),
+  panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format.").optional().or(z.literal('')),
+  
   identityProofType: proofTypes,
   identityProofNumber: z.string().min(5, "ID Proof number is required."),
+  
   addressProofType: proofTypes,
   addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
+
+  epfUanNumber: z.string().optional(),
+  esicNumber: z.string().optional(),
 }).superRefine((data, ctx) => {
+  if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Spouse name is required if married.", path: ["spouseName"] });
+  }
+  if (data.status === 'Exited' && !data.exitDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Exit date is required if status is Exited.", path: ["exitDate"] });
+  }
   if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
   }
@@ -130,6 +174,48 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
         )}
     </div>
 );
+
+// Employee ID Generation Logic
+const abbreviateClientName = (clientName: string): string => {
+  if (!clientName) return "CLIENT";
+  const upperCaseName = clientName.trim().toUpperCase();
+
+  const abbreviations: { [key: string]: string } = {
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "WIPRO": "WIPRO",
+  };
+  if (abbreviations[upperCaseName]) {
+    return abbreviations[upperCaseName];
+  }
+
+  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("");
+  }
+
+  if (upperCaseName.length <= 4) {
+    return upperCaseName;
+  }
+  return upperCaseName.substring(0, 4);
+};
+
+const getCurrentFinancialYear = (): string => {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  if (currentMonth >= 4) { // April or later
+    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
+  } else { // Jan, Feb, March
+    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
+  }
+};
+
+const generateEmployeeId = (clientName: string): string => {
+  const shortClientName = abbreviateClientName(clientName);
+  const financialYear = getCurrentFinancialYear();
+  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
+  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+};
 
 // #region PDF Generation Components
 
@@ -330,9 +416,10 @@ TermsPage.displayName = 'TermsPage';
 
 // #endregion
 
-export default function PublicEmployeeProfilePage() {
+export default function AdminEmployeeProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
   
@@ -344,16 +431,17 @@ export default function PublicEmployeeProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [isUploadMode, setIsUploadMode] = useState(false);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
+  const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
+  const [isRegeneratingId, setIsRegeneratingId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(true);
   
-  // OTP Flow State
-  const [showOtpDialog, setShowOtpDialog] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // State for new file uploads
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
@@ -382,72 +470,143 @@ export default function PublicEmployeeProfilePage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
+  const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isAdminView = !isAuthLoading && currentUser !== null;
 
   const form = useForm<EmployeeUpdateValues>({
     resolver: zodResolver(employeeUpdateSchema),
     defaultValues: {
+      firstName: "",
+      lastName: "",
+      dateOfBirth: undefined,
+      gender: undefined,
+      fatherName: "",
+      motherName: "",
+      maritalStatus: undefined,
+      spouseName: "",
       educationalQualification: undefined,
       otherQualification: "",
+      district: "",
+      fullAddress: "",
+      phoneNumber: "",
+      emailAddress: "",
+      clientName: "",
+      resourceIdNumber: "",
+      joiningDate: undefined,
+      status: undefined,
+      exitDate: null,
+      bankName: "",
+      bankAccountNumber: "",
+      ifscCode: "",
+      panNumber: "",
       identityProofType: undefined,
       identityProofNumber: "",
       addressProofType: undefined,
       addressProofNumber: "",
+      epfUanNumber: "",
+      esicNumber: "",
     },
   });
   
+  const watchStatus = form.watch('status');
+  const watchMaritalStatus = form.watch('maritalStatus');
   const watchEducationalQualification = form.watch("educationalQualification");
 
-  useEffect(() => {
-    const fetchEmployee = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
-        const employeeDocSnap = await getDoc(employeeDocRef);
 
-        if (employeeDocSnap.exists()) {
-          const data = employeeDocSnap.data();
-          
-          const formattedData: Employee = {
-            ...data,
-            id: employeeDocSnap.id,
-          } as Employee;
-          setEmployee(formattedData);
-        } else {
-          setError("Employee not found with the provided ID.");
-          toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
-        }
-      } catch (err: any) {
-        console.error("Error fetching employee:", err);
-        let message = "Failed to fetch employee data.";
-        setError(message);
-        toast({ variant: "destructive", title: "Fetch Error", description: message});
-      } finally {
-        setIsLoading(false);
+  const fetchEmployee = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
+      const employeeDocSnap = await getDoc(employeeDocRef);
+
+      if (employeeDocSnap.exists()) {
+        const data = employeeDocSnap.data();
+        
+        const formattedData: Employee = {
+          ...data,
+          id: employeeDocSnap.id,
+        } as Employee;
+        setEmployee(formattedData);
+      } else {
+        setError("Employee not found with the provided ID.");
+        toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
       }
-    };
+    } catch (err: any) {
+      console.error("Error fetching employee:", err);
+      let message = "Failed to fetch employee data.";
+      if(err.code === 'permission-denied') {
+          message = "Permission Denied. Please ensure Firestore rules allow admins to read employee documents.";
+      }
+      setError(message);
+      toast({ variant: "destructive", title: "Fetch Error", description: message});
+    } finally {
+      setIsLoading(false);
+    }
+  }, [employeeIdFromUrl, toast]);
+  
+  useEffect(() => {
     if (!employeeIdFromUrl) {
       setError("Employee ID not found in URL.");
       setIsLoading(false);
       return;
     }
     fetchEmployee();
-  }, [employeeIdFromUrl, toast]);
+  }, [employeeIdFromUrl, fetchEmployee]);
 
   useEffect(() => {
     if (employee) {
       const legacy = employee as any;
-      const getInitialValue = (key: keyof Employee, fallback = "") => employee[key] || fallback;
       form.reset({
-        educationalQualification: getInitialValue('educationalQualification') as any,
-        otherQualification: getInitialValue('otherQualification'),
+        ...employee,
+        joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
+        dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
+        exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
+        spouseName: employee.spouseName || "",
+        resourceIdNumber: employee.resourceIdNumber || "",
+        panNumber: employee.panNumber || "",
+        epfUanNumber: employee.epfUanNumber || "",
+        esicNumber: employee.esicNumber || "",
+        otherQualification: employee.otherQualification || "",
         identityProofType: (employee.identityProofType || legacy.idProofType) as any,
         identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber),
         addressProofType: employee.addressProofType as any,
-        addressProofNumber: getInitialValue('addressProofNumber'),
       });
     }
   }, [employee, form]);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      if (!isAdminView) { setIsLoadingClients(false); return; }
+        setIsLoadingClients(true);
+        try {
+            const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
+            const snapshot = await getDocs(clientsQuery);
+            const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+            setAvailableClients(fetchedClients);
+        } catch (error) {
+            console.error("Error fetching clients: ", error);
+        } finally {
+            setIsLoadingClients(false);
+        }
+    };
+    fetchClients();
+  }, [isAdminView]);
+
+  useEffect(() => {
+    setIsEditing(isAdminView && searchParams.get('edit') === 'true');
+  }, [searchParams, isAdminView]);
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -534,37 +693,50 @@ export default function PublicEmployeeProfilePage() {
 
   async function handleSaveChanges(data: EmployeeUpdateValues) {
     if (!employee) return;
+    const legacy = employee as any;
     
+    // Custom check for mandatory file fields, considering legacy data
+    if (!newProfilePicture && !employee.profilePictureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Profile Picture is required."}); return; }
+    if (!newIdentityProofUrlFront && !employee.identityProofUrlFront && !legacy.idProofDocumentUrlFront && !legacy.idProofDocumentUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Front) is required."}); return; }
+    if (!newIdentityProofUrlBack && !employee.identityProofUrlBack && !legacy.idProofDocumentUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Back) is required."}); return; }
+    if (!newAddressProofUrlFront && !employee.addressProofUrlFront) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Front) is required."}); return; }
+    if (!newAddressProofUrlBack && !employee.addressProofUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Back) is required."}); return; }
+    if (!newSignatureUrl && !employee.signatureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Signature is required."}); return; }
+    
+    // Bank passbook is optional
+    // if (!newBankPassbookStatement && !employee.bankPassbookStatementUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Bank Document is required."}); return; }
+
     setIsSubmitting(true);
-    toast({ title: "Saving...", description: "Updating your profile." });
+    toast({ title: "Saving...", description: "Updating employee profile." });
+
+    const updatedUrls: { [key: string]: string | null } = {};
+
+    const uploadAndSetUrl = async (
+        newFile: File | null,
+        oldUrl: string | undefined,
+        filePath: string,
+        urlKey: keyof typeof updatedUrls,
+        isImage: boolean
+    ) => {
+        if (!newFile) return;
+        if (oldUrl) {
+            await deleteFileFromStorage(oldUrl);
+        }
+        
+        const fileToUpload = isImage
+            ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
+            : newFile;
+            
+        updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
+    };
 
     try {
-        const updatedUrls: { [key: string]: string | null } = {};
-
-        const uploadAndSetUrl = async (
-            newFile: File | null,
-            oldUrl: string | undefined,
-            filePath: string,
-            urlKey: keyof typeof updatedUrls,
-            isImage: boolean
-        ) => {
-            if (!newFile) return;
-            // Public users cannot delete, so we just upload the new file.
-            // The storage rules prevent them from deleting.
-            
-            const fileToUpload = isImage
-                ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : newFile;
-                
-            updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
-        };
-
         const uploadJobs = [
             { file: newProfilePicture, oldUrl: employee.profilePictureUrl, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
             { file: newIdentityProofUrlFront, oldUrl: employee.identityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
             { file: newIdentityProofUrlBack, oldUrl: employee.identityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
             { file: newSignatureUrl, oldUrl: employee.signatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
             { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
             { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
@@ -574,33 +746,60 @@ export default function PublicEmployeeProfilePage() {
             await uploadAndSetUrl(job.file, job.oldUrl, job.path, job.key as any, job.isImage);
         }
 
-        const formPayload: Record<string, any> = { ...data };
+        const formPayload: Record<string, any> = {};
+        const original = employee;
 
+        (Object.keys(data) as Array<keyof EmployeeUpdateValues>).forEach(key => {
+            const formValue = data[key];
+            const originalValue = original[key as keyof Employee];
+            if (key === 'dateOfBirth' || key === 'joiningDate' || key === 'exitDate') {
+                const formDate = formValue as Date | null | undefined;
+                const originalDate = originalValue?.toDate ? originalValue.toDate() : (originalValue ? new Date(originalValue) : null);
+                if (formDate?.getTime() !== originalDate?.getTime()) {
+                    formPayload[key] = formValue ? Timestamp.fromDate(formValue) : (key === 'exitDate' ? deleteField() : originalValue);
+                }
+            } else if (formValue !== originalValue) {
+                formPayload[key] = formValue;
+            }
+        });
+
+        if (data.status !== 'Exited' && employee.exitDate) formPayload.exitDate = deleteField();
+        if (data.maritalStatus !== 'Married' && employee.spouseName) formPayload.spouseName = "";
+        
+        const fullName = `${data.firstName} ${data.lastName}`;
+        formPayload.fullName = fullName.toUpperCase();
+        
         if (data.educationalQualification !== "Any Other Qualification") {
             formPayload.otherQualification = "";
         }
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
+        if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId || finalPayload.firstName || finalPayload.lastName) {
+             const nameParts = (finalPayload.fullName || employee.fullName).toUpperCase().split(' ').filter(Boolean);
+             finalPayload.searchableFields = Array.from(new Set([
+                ...nameParts,
+                (finalPayload.firstName || employee.firstName).toUpperCase(),
+                (finalPayload.lastName || employee.lastName).toUpperCase(),
+                (finalPayload.employeeId || employee.employeeId).toUpperCase(),
+                finalPayload.phoneNumber || employee.phoneNumber
+             ].filter(Boolean)));
+        }
+
         if (Object.keys(finalPayload).length > 0) {
             finalPayload.updatedAt = serverTimestamp();
             const employeeDocRef = doc(db, "employees", employee.id);
             await updateDoc(employeeDocRef, finalPayload);
-            toast({ title: "Profile Updated", description: "Your details have been saved." });
-            // Manually update local state
-            setEmployee(prev => prev ? { ...prev, ...finalPayload, dateOfBirth: finalPayload.dateOfBirth || prev.dateOfBirth, joiningDate: finalPayload.joiningDate || prev.joiningDate } as Employee : null);
-            setIsUploadMode(false);
+            toast({ title: "Profile Updated", description: "Employee details have been saved." });
+            await fetchEmployee();
+            toggleEditMode(false);
         } else {
             toast({ title: "No Changes", description: "No changes were detected to save." });
-            setIsUploadMode(false);
+            toggleEditMode(false);
         }
     } catch (err: any) {
         console.error("Error updating profile:", err);
-        let description = err.message || "An error occurred while saving.";
-        if (err.code === 'permission-denied' || err.code === 'PERMISSION_DENIED') {
-            description = "Permission Denied. Your request to update the profile could not be authorized. Please ensure you are correctly verified and try again.";
-        }
-        toast({ variant: "destructive", title: "Update Failed", description });
+        toast({ variant: "destructive", title: "Update Failed", description: err.message || "An error occurred while saving." });
     } finally {
         setIsSubmitting(false);
     }
@@ -616,10 +815,32 @@ export default function PublicEmployeeProfilePage() {
     }
   };
 
+  const preloadImage = (src: string) => {
+    return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = src;
+    });
+};
+
   const handleDownloadProfile = async () => {
     if (!employee) return;
     setIsDownloadingPdf(true);
     toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
+
+    // Preload images to ensure they are cached
+    const imageUrlsToPreload = [];
+    if (employee.profilePictureUrl) imageUrlsToPreload.push(employee.profilePictureUrl);
+    if (employee.signatureUrl) imageUrlsToPreload.push(employee.signatureUrl);
+    if (employee.qrCodeUrl) imageUrlsToPreload.push(employee.qrCodeUrl);
+
+    try {
+        await Promise.all(imageUrlsToPreload.map(url => preloadImage(url)));
+    } catch (error) {
+        console.error("Failed to preload images for PDF, continuing anyway:", error);
+    }
 
     const pdf = new jsPDF('p', 'mm', 'a4');
     let pageCount = 0;
@@ -678,67 +899,145 @@ export default function PublicEmployeeProfilePage() {
         setIsDownloadingPdf(false);
     }
   };
-  
-  const setupRecaptcha = () => {
-    if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
+
+  const handleRegenerateQrCode = async () => {
+    if (!employee) return;
+    setIsRegeneratingQr(true);
+    try {
+      const dataString = `Employee ID: ${employee.employeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
+      const newQrDataUrl = await QRCode.toDataURL(dataString, {
+        errorCorrectionLevel: 'H',
+        type: 'image/png',
+        quality: 0.92,
+        margin: 1,
+        width: 256,
+      });
+
+      const employeeDocRef = doc(db, "employees", employee.id);
+      await updateDoc(employeeDocRef, {
+        qrCodeUrl: newQrDataUrl,
+        updatedAt: serverTimestamp(),
+      });
+
+      setEmployee(prev => prev ? { ...prev, qrCodeUrl: newQrDataUrl } : null);
+      toast({ title: "QR Code Regenerated", description: "Employee QR code has been updated." });
+
+    } catch (err) {
+      console.error("Error regenerating QR code:", err);
+      toast({ variant: "destructive", title: "QR Regeneration Failed", description: "Could not regenerate the QR code." });
+    } finally {
+      setIsRegeneratingQr(false);
     }
-    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      'size': 'invisible',
-      'callback': (response: any) => {},
-    });
-    return verifier;
+  };
+
+  const handleRegenerateEmployeeId = async () => {
+    if (!employee) return;
+    setIsRegeneratingId(true);
+    try {
+      const newEmployeeId = generateEmployeeId(employee.clientName);
+      const dataString = `Employee ID: ${newEmployeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
+      const newQrDataUrl = await QRCode.toDataURL(dataString, {
+        errorCorrectionLevel: 'H', type: 'image/png', quality: 0.92, margin: 1, width: 256,
+      });
+      
+       const nameParts = employee.fullName.toUpperCase().split(' ').filter(Boolean);
+       const newSearchableFields = Array.from(new Set([
+          ...nameParts,
+          newEmployeeId.toUpperCase(),
+          employee.phoneNumber
+      ].filter(Boolean)));
+
+      const employeeDocRef = doc(db, "employees", employee.id);
+      await updateDoc(employeeDocRef, {
+        employeeId: newEmployeeId,
+        qrCodeUrl: newQrDataUrl,
+        searchableFields: newSearchableFields,
+        updatedAt: serverTimestamp(),
+      });
+
+      setEmployee(prev => prev ? { ...prev, employeeId: newEmployeeId, qrCodeUrl: newQrDataUrl, searchableFields: newSearchableFields } : null);
+      toast({ title: "Employee ID Regenerated", description: `New ID is ${newEmployeeId}. QR code and search fields also updated.` });
+    } catch (err) {
+      console.error("Error regenerating Employee ID:", err);
+      toast({ variant: "destructive", title: "ID Regeneration Failed", description: "Could not regenerate the Employee ID." });
+    } finally {
+      setIsRegeneratingId(false);
+    }
   };
   
-  const handleSendOtp = async () => {
-      if (!employee) return;
-      setIsSendingOtp(true);
+  const handleRemoveFile = async (
+    fileUrlKey: keyof Pick<Employee, 'profilePictureUrl' | 'identityProofUrlFront' | 'identityProofUrlBack' | 'addressProofUrlFront' | 'addressProofUrlBack' | 'signatureUrl' | 'bankPassbookStatementUrl' | 'policeClearanceCertificateUrl'>,
+    setFile: React.Dispatch<React.SetStateAction<File | null>>,
+    setPreview: React.Dispatch<React.SetStateAction<string | null>>
+  ) => {
+    if (!employee || !isAdminView) {
+      toast({ variant: "destructive", title: "Unauthorized", description: "Only admins can remove documents." });
+      return;
+    }
+
+    // Clear local staged file if it exists
+    setFile(null);
+    setPreview(null);
+    
+    // Check if there's an existing file in the database
+    const existingUrl = employee[fileUrlKey];
+    if (existingUrl) {
+      const employeeDocRef = doc(db, "employees", employee.id);
       try {
-          const fullPhoneNumber = `+91${employee.phoneNumber}`;
-          const appVerifier = setupRecaptcha();
-          const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
-          setConfirmationResult(result);
-          window.confirmationResult = result;
-          toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
-      } catch (error: any) {
-          console.error("Error sending OTP:", error);
-          let description = "Could not send OTP. Please try again later.";
-          if (error.code === 'auth/too-many-requests') description = "Too many requests. Please wait a while before trying again.";
-          toast({ variant: "destructive", title: "OTP Send Error", description });
-          setShowOtpDialog(false);
-      } finally {
-          setIsSendingOtp(false);
+        await deleteFileFromStorage(existingUrl);
+        await updateDoc(employeeDocRef, {
+            [fileUrlKey]: deleteField(),
+            updatedAt: serverTimestamp(),
+        });
+
+        // Update local state to reflect deletion
+        setEmployee(prev => prev ? { ...prev, [fileUrlKey]: undefined } : null);
+
+        toast({ title: "Document Removed", description: "The existing document has been deleted." });
+      } catch (error) {
+        console.error("Error removing file: ", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not remove the document." });
       }
+    }
   };
 
-  const handleVerifyOtp = async () => {
-      const resultToConfirm = confirmationResult || window.confirmationResult;
-      if (!resultToConfirm) {
-          toast({ variant: 'destructive', title: 'Verification Error', description: 'Could not find verification session. Please try again.' });
-          return;
-      }
-      setIsVerifyingOtp(true);
-      try {
-          await resultToConfirm.confirm(otp);
-          toast({ title: "Verification Successful", description: "You can now update your profile." });
-          setShowOtpDialog(false);
-          setIsUploadMode(true); // Unlock edit mode on success
-      } catch (error: any) {
-          console.error("Error verifying OTP:", error);
-          let description = "Failed to verify OTP.";
-          if (error.code === 'auth/invalid-verification-code') description = "The code is invalid. Please check and try again.";
-          if (error.code === 'auth/code-expired') description = "The code has expired. Please request a new one.";
-          toast({ variant: "destructive", title: "Verification Failed", description });
-      } finally {
-          setIsVerifyingOtp(false);
-      }
-  };
+  const resetFileStates = () => {
+      setNewProfilePicture(null);
+      setNewIdentityProofUrlFront(null);
+      setNewIdentityProofUrlBack(null);
+      setNewAddressProofUrlFront(null);
+      setNewAddressProofUrlBack(null);
+      setNewSignatureUrl(null);
+      setNewBankPassbookStatement(null);
+      setNewPoliceClearanceCertificate(null);
 
-  const handleUpdateDetailsClick = () => {
-      setShowOtpDialog(true);
-      handleSendOtp();
-  };
+      setProfilePicPreview(null);
+      setIdentityProofUrlFrontPreview(null);
+      setIdentityProofUrlBackPreview(null);
+      setAddressProofUrlFrontPreview(null);
+      setAddressProofUrlBackPreview(null);
+      setSignatureUrlPreview(null);
+      setBankPassbookPreview(null);
+      setPoliceCertificatePreview(null);
+  }
 
+  const toggleEditMode = (forceState?: boolean) => {
+    const newEditState = forceState !== undefined ? forceState : !isEditing;
+    const path = `/employees/${employeeIdFromUrl}`;
+    if (newEditState) {
+      router.push(`${path}?edit=true`, { scroll: false });
+    } else {
+      resetFileStates();
+      form.reset(employee ? {
+          ...employee,
+          joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
+          dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
+          exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
+      } : {});
+      router.push(path, { scroll: false });
+    }
+  };
+  
   const renderOffscreenPages = () => {
     if (!employee) return null;
 
@@ -756,7 +1055,7 @@ export default function PublicEmployeeProfilePage() {
     return pages;
   };
 
-  if (isLoading) {
+  if (isLoading || isAuthLoading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -772,8 +1071,8 @@ export default function PublicEmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push('/')} className="mt-4">
-              <Home className="mr-2 h-4 w-4" />Back to Home
+            <Button onClick={() => router.push('/employees')} className="mt-4">
+              <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
             </Button>
         </AlertDescription>
       </Alert>
@@ -787,24 +1086,32 @@ export default function PublicEmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push('/')} className="mt-4">
-                   <Home className="mr-2 h-4 w-4" />Back to Home
+                <Button onClick={() => router.push('/employees')} className="mt-4">
+                   <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
                 </Button>
             </AlertDescription>
         </Alert>
     );
   }
 
+  const fromYear = new Date().getFullYear() - 65;
+  const toYear = new Date().getFullYear() - 18;
+  const defaultCalendarMonth = new Date(employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : employee.dateOfBirth);
+  if (isNaN(defaultCalendarMonth.getTime())) {
+      const fallbackDate = new Date();
+      fallbackDate.setFullYear(toYear - 10);
+      defaultCalendarMonth.setTime(fallbackDate.getTime());
+  }
+
   return (
     <>
-      <div id="recaptcha-container" />
       <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
         {renderOffscreenPages()}
       </div>
-      <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 sm:p-6 md:p-8">
-        <div className="flex justify-between items-center mb-4">
-          <Button variant="outline" size="sm" onClick={() => router.push('/')}>
-              <ArrowLeft className="mr-2 h-4 w-4" />Back to Home
+      <div className="flex flex-col gap-6">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" onClick={() => router.back()}>
+              <ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory
           </Button>
         </div>
 
@@ -819,24 +1126,26 @@ export default function PublicEmployeeProfilePage() {
               data-ai-hint="profile picture"
             />
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
               <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
               <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
             </div>
           </div>
-            <div className="flex w-full sm:w-auto gap-2">
+          {isAdminView && (
+            <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
               <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Download Kit
+                  Download Profile Kit
               </Button>
-              <Button onClick={handleUpdateDetailsClick} className="flex-1 sm:flex-none">
-                  <Edit3 className="mr-2 h-4 w-4" /> Update Details
+              <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
+                  <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
               </Button>
             </div>
+          )}
         </div>
 
-        {!isUploadMode && (
-          <Tabs defaultValue="personal" className="w-full">
+        {!isEditing && (
+          <Tabs defaultValue="personal">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
               <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
               <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
@@ -877,6 +1186,27 @@ export default function PublicEmployeeProfilePage() {
                         <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
                         <span className="text-sm font-medium sm:col-span-2 flex items-center gap-2">
                             {employee.employeeId}
+                            {isAdminView && (
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isRegeneratingId} title="Regenerate Employee ID">
+                                            {isRegeneratingId ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirm Employee ID Regeneration</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This will generate a new employee ID and a new QR code. This action cannot be undone. Are you sure?
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleRegenerateEmployeeId}>Confirm</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            )}
                         </span>
                     </div>
                     <DetailItem label="Client Name" value={employee.clientName} isName />
@@ -916,6 +1246,12 @@ export default function PublicEmployeeProfilePage() {
                             ) : (
                                 <p className="text-muted-foreground">QR Code not available.</p>
                             )}
+                             {isAdminView && (
+                                <Button onClick={handleRegenerateQrCode} variant="outline" size="sm" className="mt-4" disabled={isRegeneratingQr}>
+                                    {isRegeneratingQr ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
+                                    Regenerate QR Code
+                                </Button>
+                            )}
                         </div>
                     </div>
                     <div>
@@ -938,19 +1274,59 @@ export default function PublicEmployeeProfilePage() {
           </Tabs>
         )}
 
-        {isUploadMode && (
+        {isAdminView && isEditing && (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSaveChanges)}>
               <Card className="mt-6">
                 <CardHeader>
-                  <CardTitle>Update Profile Information</CardTitle>
-                  <CardDescription>Update your details below. Upload any missing documents. Click "Save Changes" when done.</CardDescription>
+                  <CardTitle>Edit Profile Information</CardTitle>
+                  <CardDescription>Update employee details below. Click "Save Changes" when done.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
+                  {/* Personal Information Section */}
                   <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal Details</h3>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal & Contact</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
+                      <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Date of Birth</FormLabel>
+                            <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <FormControl>
+                                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
+                                            {field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}
+                                            <CalendarIcon className="ml-auto h-4 w-4" />
+                                        </Button>
+                                    </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar 
+                                        mode="single" 
+                                        selected={field.value} 
+                                        onSelect={(date) => {
+                                            field.onChange(date);
+                                            setIsDobPopoverOpen(false);
+                                        }}
+                                        captionLayout="dropdown-buttons"
+                                        fromYear={fromYear}
+                                        toYear={toYear}
+                                        defaultMonth={defaultCalendarMonth}
+                                        disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <FormDescription>Age must be between 18 and 65.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="gender" render={({ field }) => (<FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{genderOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="maritalStatus" render={({ field }) => (<FormItem><FormLabel>Marital Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      {watchMaritalStatus === 'Married' && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />}
+                       <FormField
                         control={form.control}
                         name="educationalQualification"
                         render={({ field }) => (
@@ -979,8 +1355,64 @@ export default function PublicEmployeeProfilePage() {
                           )}
                         />
                       )}
+                      <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="fullAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Full Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                   </section>
+                  {/* Employment Information Section */}
+                  <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Employment</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
+                      <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="joiningDate" render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                              <FormLabel>Joining Date</FormLabel>
+                              <Popover open={isJoiningDatePopoverOpen} onOpenChange={setIsJoiningDatePopoverOpen}>
+                                  <PopoverTrigger asChild>
+                                      <FormControl>
+                                          <Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>
+                                              {field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick a date</span>}
+                                              <CalendarIcon className="ml-auto h-4 w-4" />
+                                          </Button>
+                                      </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                      <Calendar 
+                                          mode="single" 
+                                          selected={field.value} 
+                                          onSelect={(date) => {
+                                              field.onChange(date);
+                                              setIsJoiningDatePopoverOpen(false);
+                                          }} 
+                                          initialFocus 
+                                          disabled={(d) => d > new Date()}
+                                      />
+                                  </PopoverContent>
+                              </Popover>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
+                    </div>
+                  </section>
+                  {/* Bank & ID Section */}
+                  <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Statutory Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                  </section>
+                  
                   {/* Identification Documents Section */}
                   <section>
                     <h3 className="text-lg font-semibold mb-4 border-b pb-2">Identification Documents</h3>
@@ -991,8 +1423,8 @@ export default function PublicEmployeeProfilePage() {
                             <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} onRemove={() => handleRemoveFile('identityProofUrlFront', setNewIdentityProofUrlFront, setIdentityProofUrlFrontPreview)} canRemove={isAdminView}/>
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} onRemove={() => handleRemoveFile('identityProofUrlBack', setNewIdentityProofUrlBack, setIdentityProofUrlBackPreview)} canRemove={isAdminView}/>
                         </div>
                     </div>
 
@@ -1003,8 +1435,8 @@ export default function PublicEmployeeProfilePage() {
                             <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} />
+                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} onRemove={() => handleRemoveFile('addressProofUrlFront', setNewAddressProofUrlFront, setAddressProofUrlFrontPreview)} canRemove={isAdminView}/>
+                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} onRemove={() => handleRemoveFile('addressProofUrlBack', setNewAddressProofUrlBack, setAddressProofUrlBackPreview)} canRemove={isAdminView}/>
                         </div>
                     </div>
                   </section>
@@ -1013,15 +1445,15 @@ export default function PublicEmployeeProfilePage() {
                   <section>
                       <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents & Signature</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} />
-                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} />
-                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} />
-                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} />
+                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} onRemove={() => handleRemoveFile('profilePictureUrl', setNewProfilePicture, setProfilePicPreview)} canRemove={isAdminView}/>
+                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} onRemove={() => handleRemoveFile('signatureUrl', setNewSignatureUrl, setSignatureUrlPreview)} canRemove={isAdminView}/>
+                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} onRemove={() => handleRemoveFile('bankPassbookStatementUrl', setNewBankPassbookStatement, setBankPassbookPreview)} canRemove={isAdminView}/>
+                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} onRemove={() => handleRemoveFile('policeClearanceCertificateUrl', setNewPoliceClearanceCertificate, setPoliceCertificatePreview)} canRemove={isAdminView}/>
                       </div>
                   </section>
                 </CardContent>
                 <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsUploadMode(false)} disabled={isSubmitting}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => toggleEditMode(false)} disabled={isSubmitting}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Changes
@@ -1031,43 +1463,6 @@ export default function PublicEmployeeProfilePage() {
             </form>
           </Form>
         )}
-
-      <Dialog open={showOtpDialog} onOpenChange={setShowOtpDialog}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Verify Your Identity</DialogTitle>
-                <ShadDialogDescription>
-                    To protect your account, we've sent a one-time password (OTP) to your registered mobile number: ****{employee.phoneNumber.slice(-4)}.
-                </ShadDialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <div className="relative">
-                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input
-                        id="otp"
-                        type="tel"
-                        placeholder="Enter 6-digit OTP"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                        disabled={isVerifyingOtp}
-                        className="pl-10 text-lg tracking-widest text-center"
-                    />
-                </div>
-                 <Button onClick={handleVerifyOtp} className="w-full" disabled={otp.length < 6 || isVerifyingOtp}>
-                    {isVerifyingOtp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Verify and Proceed
-                </Button>
-            </div>
-            <DialogFooter className="text-xs text-muted-foreground justify-center">
-                Didn't receive the code? 
-                <Button variant="link" size="sm" className="p-0 h-auto" onClick={handleSendOtp} disabled={isSendingOtp}>
-                   {isSendingOtp ? 'Resending...' : 'Resend OTP'}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
 
       <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
           <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
@@ -1098,10 +1493,11 @@ const ImageInputWithPreview: React.FC<{
     setPreview: (preview: string | null) => void;
     handleFileChange: (event: React.ChangeEvent<HTMLInputElement>, setFile: any, setPreview: any) => void;
     openCamera: () => void;
+    onRemove: () => void;
     isProfilePic?: boolean;
     isSignature?: boolean;
     canRemove?: boolean;
-}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, isProfilePic, isSignature, canRemove = false }) => {
+}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, onRemove, isProfilePic, isSignature, canRemove = false }) => {
     const uniqueId = React.useId();
     const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl);
     const hasImage = !!finalPreview;
@@ -1146,10 +1542,7 @@ const ImageInputWithPreview: React.FC<{
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => {
-                                        // This button's functionality is handled outside for public/admin distinction
-                                        // This is a placeholder for triggering the parent's onRemove
-                                    }}>Confirm & Remove</AlertDialogAction>
+                                    <AlertDialogAction onClick={onRemove}>Confirm & Remove</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
