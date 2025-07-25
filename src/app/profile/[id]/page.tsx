@@ -718,9 +718,9 @@ export default function AdminEmployeeProfilePage() {
             isImage: boolean
         ) => {
             if (!newFile) return;
-            // In a public update, we assume an unauthenticated user,
-            // so deleting old files might fail due to permissions.
-            // A cleanup cloud function would be a better approach for orphaned files.
+            if (oldUrl) {
+                await deleteFileFromStorage(oldUrl);
+            }
             
             const fileToUpload = isImage
                 ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
@@ -740,7 +740,9 @@ export default function AdminEmployeeProfilePage() {
             { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
         ];
 
-        await Promise.all(uploadJobs.map(job => uploadAndSetUrl(job.file, job.oldUrl, job.path, job.key as any, job.isImage)));
+        for (const job of uploadJobs) {
+            await uploadAndSetUrl(job.file, job.oldUrl, job.path, job.key as any, job.isImage);
+        }
 
         const formPayload: Record<string, any> = {};
         const original = employee;
@@ -761,6 +763,10 @@ export default function AdminEmployeeProfilePage() {
         
         const fullName = `${data.firstName} ${data.lastName}`;
         formPayload.fullName = fullName.toUpperCase();
+
+        if (data.educationalQualification !== "Any Other Qualification") {
+            formPayload.otherQualification = "";
+        }
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
@@ -1221,3 +1227,4 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
+
