@@ -816,68 +816,90 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
-    const handleDownloadProfile = async () => {
-        if (!employee) return;
-        setIsDownloadingPdf(true);
-        toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
+  const preloadImage = (src: string) => {
+    return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = src;
+    });
+};
 
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        let pageCount = 0;
+  const handleDownloadProfile = async () => {
+    if (!employee) return;
+    setIsDownloadingPdf(true);
+    toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
 
-        const addPageToPdf = async (element: HTMLElement | null) => {
-            if (!element) return;
-            pageCount++;
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                logging: false,
-            });
-            const imgData = canvas.toDataURL('image/jpeg', 0.85);
-            
-            if (pageCount > 1) {
-                pdf.addPage();
-            }
-            
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasAspectRatio = canvas.width / canvas.height;
-            const pageAspectRatio = pdfWidth / pdfHeight;
-            let finalWidth, finalHeight;
-            
-            if (canvasAspectRatio > pageAspectRatio) {
-                finalWidth = pdfWidth;
-                finalHeight = pdfWidth / canvasAspectRatio;
-            } else {
-                finalHeight = pdfHeight;
-                finalWidth = pdfHeight * canvasAspectRatio;
-            }
+    // Preload images to ensure they are cached
+    const imageUrlsToPreload = [];
+    if (employee.profilePictureUrl) imageUrlsToPreload.push(employee.profilePictureUrl);
+    if (employee.signatureUrl) imageUrlsToPreload.push(employee.signatureUrl);
+    if (employee.qrCodeUrl) imageUrlsToPreload.push(employee.qrCodeUrl);
 
-            const xOffset = (pdfWidth - finalWidth) / 2;
-            const yOffset = (pdfHeight - finalHeight) / 2;
-            
-            pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
-        };
+    try {
+        await Promise.all(imageUrlsToPreload.map(url => preloadImage(url)));
+    } catch (error) {
+        console.error("Failed to preload images for PDF, continuing anyway:", error);
+    }
 
-        try {
-            const pagesToRender = [];
-            pagesToRender.push(biodataPageRef.current);
-            if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
-            pagesToRender.push(termsPageRef.current);
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    let pageCount = 0;
 
-            for (const pageElement of pagesToRender.filter(Boolean)) {
-                await addPageToPdf(pageElement);
-            }
-
-            pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
-            toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
-        } catch (error: any) {
-            console.error("Error generating PDF:", error);
-            toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
-        } finally {
-            setIsDownloadingPdf(false);
+    const addPageToPdf = async (element: HTMLElement | null) => {
+        if (!element) return;
+        pageCount++;
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        
+        if (pageCount > 1) {
+            pdf.addPage();
         }
+        
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasAspectRatio = canvas.width / canvas.height;
+        const pageAspectRatio = pdfWidth / pdfHeight;
+        let finalWidth, finalHeight;
+        
+        if (canvasAspectRatio > pageAspectRatio) {
+            finalWidth = pdfWidth;
+            finalHeight = pdfWidth / canvasAspectRatio;
+        } else {
+            finalHeight = pdfHeight;
+            finalWidth = pdfHeight * canvasAspectRatio;
+        }
+
+        const xOffset = (pdfWidth - finalWidth) / 2;
+        const yOffset = (pdfHeight - finalHeight) / 2;
+        
+        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
     };
+
+    try {
+        const pagesToRender = [];
+        pagesToRender.push(biodataPageRef.current);
+        if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
+        pagesToRender.push(termsPageRef.current);
+
+        for (const pageElement of pagesToRender.filter(Boolean)) {
+            await addPageToPdf(pageElement);
+        }
+
+        pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
+        toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
+    } catch (error: any) {
+        console.error("Error generating PDF:", error);
+        toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
+    } finally {
+        setIsDownloadingPdf(false);
+    }
+  };
 
   const handleRegenerateQrCode = async () => {
     if (!employee) return;
