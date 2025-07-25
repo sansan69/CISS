@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap } from 'lucide-react';
+import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap, ScanSearch } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
@@ -18,6 +18,8 @@ import { ref, deleteObject } from "firebase/storage";
 import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, collectionGroup, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription as ShadDialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -71,6 +73,13 @@ export default function EmployeeDirectoryPage() {
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
+
+  // State for duplicate scanning
+  const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<Record<string, Employee[]>>({});
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
 
 
   const fetchClients = useCallback(async () => {
@@ -335,7 +344,7 @@ export default function EmployeeDirectoryPage() {
             const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
 
             for (const docSnapshot of chunk) {
-                const employeeData = docSnapshot.data() as Employee;
+                const employeeData = {id: docSnapshot.id, ...docSnapshot.data()} as Employee;
                 const updates = updateLogic(employeeData);
                 if (Object.keys(updates).length > 0) {
                     batch.update(docSnapshot.ref, updates);
@@ -381,7 +390,6 @@ export default function EmployeeDirectoryPage() {
         where("idProofType", "!=", null)
     );
     runBatchUpdate("ID Proof Migration", oldRecordsQuery, (employeeData) => {
-        // If new field already exists, skip update for this record
         if (employeeData.identityProofType) {
             return {};
         }
@@ -389,9 +397,8 @@ export default function EmployeeDirectoryPage() {
         const updates: Record<string, any> = {
             identityProofType: employeeData.idProofType,
             identityProofNumber: employeeData.idProofNumber,
-            identityProofUrlFront: employeeData.idProofDocumentUrlFront || employeeData.idProofDocumentUrl, // Handle legacy field
+            identityProofUrlFront: employeeData.idProofDocumentUrlFront || employeeData.idProofDocumentUrl, 
             identityProofUrlBack: employeeData.idProofDocumentUrlBack,
-            // Now, mark old fields for deletion
             idProofType: deleteField(),
             idProofNumber: deleteField(),
             idProofDocumentUrl: deleteField(),
@@ -402,6 +409,98 @@ export default function EmployeeDirectoryPage() {
         return updates;
     });
   };
+
+  const handleScanForDuplicates = async () => {
+    setIsScanningDuplicates(true);
+    toast({ title: "Scanning for duplicates...", description: "This might take a moment for large datasets." });
+  
+    try {
+      const allEmployeesSnapshot = await getDocs(collection(db, "employees"));
+      const allEmployees = allEmployeesSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Employee));
+  
+      const duplicates: Record<string, Employee[]> = {};
+  
+      const checkAndAdd = (key: string, employee: Employee) => {
+        if (!duplicates[key]) {
+          duplicates[key] = [];
+        }
+        duplicates[key].push(employee);
+      };
+  
+      allEmployees.forEach(emp => {
+        if (emp.phoneNumber) checkAndAdd(`phone-${emp.phoneNumber}`, emp);
+        if (emp.emailAddress) checkAndAdd(`email-${emp.emailAddress.toLowerCase()}`, emp);
+      });
+  
+      const finalGroups = Object.fromEntries(
+        Object.entries(duplicates).filter(([_, group]) => group.length > 1)
+      );
+  
+      setDuplicateGroups(finalGroups);
+      if (Object.keys(finalGroups).length > 0) {
+        setShowDuplicatesDialog(true);
+      } else {
+        toast({ title: "No Duplicates Found", description: "The scan completed and no duplicates were identified." });
+      }
+    } catch (error) {
+      console.error("Error scanning for duplicates:", error);
+      toast({ variant: "destructive", title: "Scan Failed", description: "Could not complete the duplicate scan." });
+    } finally {
+      setIsScanningDuplicates(false);
+    }
+  };
+  
+  const handleToggleDeletion = (id: string) => {
+    setSelectedForDeletion(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelectedDuplicates = async () => {
+    if (selectedForDeletion.length === 0) {
+      toast({ variant: "destructive", title: "No Selection", description: "Please select at least one record to delete." });
+      return;
+    }
+  
+    setIsDeletingDuplicates(true);
+    const batch = writeBatch(db);
+  
+    const employeesToDelete = Object.values(duplicateGroups).flat().filter(e => selectedForDeletion.includes(e.id));
+  
+    for (const emp of employeesToDelete) {
+      batch.delete(doc(db, "employees", emp.id));
+    }
+  
+    try {
+      await batch.commit();
+  
+      // Now handle file deletions after successful DB deletion
+      for (const emp of employeesToDelete) {
+          const filesToDelete = [ emp.profilePictureUrl, emp.identityProofUrlFront, emp.identityProofUrlBack, emp.addressProofUrlFront, emp.addressProofUrlBack, emp.signatureUrl, emp.bankPassbookStatementUrl, emp.policeClearanceCertificateUrl ];
+          for (const url of filesToDelete) {
+              if (url) {
+                  try {
+                      await deleteObject(ref(storage, url));
+                  } catch (fileError) {
+                      console.warn(`Failed to delete file for deleted employee ${emp.id}: ${url}`, fileError);
+                  }
+              }
+          }
+      }
+  
+      toast({ title: "Duplicates Deleted", description: `${selectedForDeletion.length} record(s) have been removed.` });
+      setShowDuplicatesDialog(false);
+      setSelectedForDeletion([]);
+      // Refresh the main table and the duplicate scan
+      fetchEmployees(1, null);
+    } catch (error) {
+      console.error("Error deleting duplicates:", error);
+      toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the selected records." });
+    } finally {
+      setIsDeletingDuplicates(false);
+    }
+  };
+
 
   
   const displayedEmployees = employees;
@@ -660,10 +759,10 @@ export default function EmployeeDirectoryPage() {
             )}
 
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row gap-4">
-            <AlertDialog>
+        <CardFooter className="flex flex-col sm:flex-row gap-4 items-start">
+             <AlertDialog>
                 <AlertDialogTrigger asChild>
-                    <Button variant="secondary" disabled={isUpdating}>
+                    <Button variant="secondary" disabled={isUpdating || isScanningDuplicates}>
                         <DatabaseZap className="mr-2 h-4 w-4" />
                         Update Search Fields
                     </Button>
@@ -683,7 +782,7 @@ export default function EmployeeDirectoryPage() {
             </AlertDialog>
             <AlertDialog>
                 <AlertDialogTrigger asChild>
-                    <Button variant="secondary" disabled={isUpdating}>
+                    <Button variant="secondary" disabled={isUpdating || isScanningDuplicates}>
                         <DatabaseZap className="mr-2 h-4 w-4" />
                         Migrate Old ID Proofs
                     </Button>
@@ -701,6 +800,10 @@ export default function EmployeeDirectoryPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+             <Button variant="destructive" onClick={handleScanForDuplicates} disabled={isUpdating || isScanningDuplicates}>
+                {isScanningDuplicates ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanSearch className="mr-2 h-4 w-4" />}
+                Scan for Duplicates
+            </Button>
         </CardFooter>
       </Card>
 
@@ -777,6 +880,55 @@ export default function EmployeeDirectoryPage() {
             </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <Dialog open={showDuplicatesDialog} onOpenChange={setShowDuplicatesDialog}>
+        <DialogContent className="max-w-4xl">
+            <DialogHeader>
+                <DialogTitle>Duplicate Records Found</DialogTitle>
+                <ShadDialogDescription>
+                    The following groups of employees appear to be duplicates based on matching phone numbers or emails. Please select the records you wish to delete.
+                </ShadDialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto p-4 space-y-6">
+                {Object.keys(duplicateGroups).length > 0 ? Object.entries(duplicateGroups).map(([key, group]) => (
+                    <div key={key} className="p-4 border rounded-lg">
+                        <h3 className="font-semibold mb-2 border-b pb-2">Duplicate Key: <span className="text-primary font-mono">{key.split('-')[1]}</span> ({group.length} records)</h3>
+                        <div className="space-y-2">
+                            {group.map(emp => (
+                                <div key={emp.id} className="flex items-center gap-4 p-2 rounded-md hover:bg-muted/50">
+                                    <Checkbox
+                                        id={`delete-${emp.id}`}
+                                        checked={selectedForDeletion.includes(emp.id)}
+                                        onCheckedChange={() => handleToggleDeletion(emp.id)}
+                                    />
+                                    <Label htmlFor={`delete-${emp.id}`} className="flex-1 cursor-pointer">
+                                        <div className="flex items-center gap-3">
+                                            <Avatar>
+                                                <AvatarImage src={emp.profilePictureUrl} />
+                                                <AvatarFallback>{emp.fullName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-medium">{emp.fullName} ({emp.employeeId})</p>
+                                                <p className="text-xs text-muted-foreground">{emp.clientName} | {emp.emailAddress}</p>
+                                                <p className="text-xs text-muted-foreground">Created: {emp.createdAt ? format(new Date(emp.createdAt), 'dd MMM yyyy') : 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )) : <p className="text-muted-foreground text-center">No duplicates found.</p>}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDuplicatesDialog(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDeleteSelectedDuplicates} disabled={isDeletingDuplicates || selectedForDeletion.length === 0}>
+                    {isDeletingDuplicates ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4"/>}
+                    Delete Selected ({selectedForDeletion.length})
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
