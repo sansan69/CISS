@@ -59,6 +59,10 @@ export default function EmployeeDirectoryPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // State for the search term input, which updates immediately
+    const [searchTermInput, setSearchTermInput] = useState('');
+    
+    // State for the actual filters sent to the query, which is debounced
     const [filters, setFilters] = useState({
         searchTerm: '',
         client: 'all',
@@ -81,6 +85,18 @@ export default function EmployeeDirectoryPage() {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Debounce effect for search term
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            handleFilterChange('searchTerm', searchTermInput);
+        }, 500); // 500ms delay
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [searchTermInput]);
+
 
     const memoizedQuery = useMemo(() => {
         let q: Query = collection(db, "employees");
@@ -224,7 +240,7 @@ export default function EmployeeDirectoryPage() {
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                     <div className="xl:col-span-2">
                         <Label htmlFor="search-input">Search by Name/ID/Phone</Label>
-                        <Input id="search-input" type="search" placeholder="Search..." value={filters.searchTerm} onChange={(e) => handleFilterChange('searchTerm', e.target.value)} />
+                        <Input id="search-input" type="search" placeholder="Search..." value={searchTermInput} onChange={(e) => setSearchTermInput(e.target.value)} />
                     </div>
                     <div>
                         <Label htmlFor="client-filter">Client</Label>
