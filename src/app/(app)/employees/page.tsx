@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { type Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,6 @@ import { useRouter } from 'next/navigation';
 import { Progress } from '@/components/ui/progress';
 
 const ITEMS_PER_PAGE = 10;
-const SESSION_STORAGE_KEY = 'employeeDirectoryState';
 
 interface ClientOption {
   id: string;
@@ -81,10 +80,8 @@ export default function EmployeeDirectoryPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  // State Declarations
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isTableLoading, setIsTableLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,12 +92,11 @@ export default function EmployeeDirectoryPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited'];
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageDocHistory, setPageDocHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [page, setPage] = useState(1);
   const [isLastPage, setIsLastPage] = useState(false);
 
-  // Modal/Dialog State
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
   const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
@@ -111,19 +107,16 @@ export default function EmployeeDirectoryPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Batch Operations State
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
 
-  // Duplicate Scan State
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<Record<string, Employee[]>>({});
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
 
-  // Query Builder
-  const buildBaseQuery = useCallback(() => {
+  const buildQuery = useCallback(() => {
     let q: Query = collection(db, "employees");
     
     if (filterClient !== 'all') q = query(q, where('clientName', '==', filterClient));
@@ -139,55 +132,40 @@ export default function EmployeeDirectoryPage() {
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
-  // Data Fetching
-  const fetchPage = useCallback(async (page: number, direction: 'next' | 'prev' | 'initial') => {
-    setIsTableLoading(true);
+  const fetchData = useCallback(async (pageDirection?: 'next' | 'prev') => {
+    setIsLoading(true);
     setError(null);
     try {
-        const baseQuery = buildBaseQuery();
-        let finalQuery: Query;
-        const lastVisible = direction === 'next' ? pageDocHistory[page - 1] : null;
-        const firstDocOfPrevPage = direction === 'prev' ? pageDocHistory[page] : null;
-
-        if (direction === 'initial' || page === 1) {
-            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-        } else if (direction === 'next' && lastVisible) {
-            finalQuery = query(baseQuery, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
-        } else if (direction === 'prev' && firstDocOfPrevPage) {
-            finalQuery = query(baseQuery, endBefore(firstDocOfPrevPage), limitToLast(ITEMS_PER_PAGE));
+        let q = buildQuery();
+        
+        if (pageDirection === 'next' && lastVisible) {
+            q = query(q, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
+        } else if (pageDirection === 'prev' && firstVisible) {
+            q = query(q, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
         } else {
-            toast({ variant: 'destructive', title: "Pagination Error", description: "Cannot determine the correct page."});
-            setIsTableLoading(false);
-            return;
+            q = query(q, limit(ITEMS_PER_PAGE));
+            setPage(1);
         }
 
-        const documentSnapshots = await getDocs(finalQuery);
+        const documentSnapshots = await getDocs(q);
         const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
         
-        if (documentSnapshots.empty && direction !== 'initial') {
-            toast({ variant: 'default', title: "No More Records", description: "You've reached the end of the list."});
-            setIsLastPage(true);
-            setIsTableLoading(false);
-            return;
+        if (documentSnapshots.empty) {
+            if (pageDirection) {
+                // User tried to go next/prev on an empty/last page.
+                setIsLastPage(true);
+            } else {
+                setEmployees([]);
+            }
+        } else {
+            setEmployees(fetchedEmployees);
+            setFirstVisible(documentSnapshots.docs[0]);
+            setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+            // A simple check to see if we're on the last page
+            const nextQuery = query(buildQuery(), startAfter(documentSnapshots.docs[documentSnapshots.docs.length-1]), limit(1));
+            const nextSnap = await getDocs(nextQuery);
+            setIsLastPage(nextSnap.empty);
         }
-
-        setEmployees(fetchedEmployees);
-        setIsLastPage(fetchedEmployees.length < ITEMS_PER_PAGE);
-
-        const firstDoc = documentSnapshots.docs[0] || null;
-        const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
-        
-        setPageDocHistory(prev => {
-            const newHistory = [...prev];
-            newHistory[page - 1] = firstDoc; // Store first doc of the current page for 'prev'
-            newHistory[page] = lastDoc; // Store last doc of the current page for 'next'
-            return newHistory;
-        });
-
-        setCurrentPage(page);
-
-        const stateToSave = { searchTerm, filterClient, filterStatus, filterDistrict, page };
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
 
     } catch (err: any) {
         console.error("Error fetching employees:", err);
@@ -198,69 +176,45 @@ export default function EmployeeDirectoryPage() {
         toast({ variant: "destructive", title: "Data Fetch Error", description: message, duration: 9000 });
     } finally {
         setIsLoading(false);
-        setIsTableLoading(false);
     }
-  }, [buildBaseQuery, pageDocHistory, toast, searchTerm, filterClient, filterStatus, filterDistrict]);
+  }, [buildQuery, lastVisible, firstVisible, toast]);
 
-
-  // Initial load and filter changes effect
   useEffect(() => {
-    setIsLoading(true);
-    let pageToLoad = 1;
-    try {
-        const savedStateJSON = sessionStorage.getItem(SESSION_STORAGE_KEY);
-        if (savedStateJSON) {
-            const savedState = JSON.parse(savedStateJSON);
-            setSearchTerm(savedState.searchTerm || '');
-            setFilterClient(savedState.filterClient || 'all');
-            setFilterStatus(savedState.filterStatus || 'all');
-            setFilterDistrict(savedState.filterDistrict || 'all');
-            pageToLoad = savedState.page || 1;
-        }
-    } catch(e) {
-        sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    }
-    
     const fetchInitialData = async () => {
-        await fetchPage(pageToLoad, 'initial');
-        setIsLoading(false);
+      setIsLoading(true);
+      try {
+        const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
+        setClients([{ id: 'all', name: 'All Clients' }, ...clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string }))]);
+      } catch (err: any) {
+        toast({ variant: "destructive", title: "Error", description: "Could not fetch client list." });
+      }
+      fetchData();
     };
-    
-    const fetchClientsData = async () => {
-        try {
-            const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
-            setClients([{ id: 'all', name: 'All Clients' }, ...clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string }))]);
-        } catch (err: any) {
-            toast({ variant: "destructive", title: "Error", description: "Could not fetch client list." });
-        }
-    };
-
     fetchInitialData();
-    fetchClientsData();
-  }, []); // Only on initial mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handler = setTimeout(() => {
-        // This effect should only run for subsequent changes, not the initial load.
-        // The isLoading check prevents it from running on mount.
-        if (!isLoading) {
-           setPageDocHistory([null]); // Reset history on filter change
-           fetchPage(1, 'initial');
-        }
-    }, 500); // Debounce time
+        setFirstVisible(null);
+        setLastVisible(null);
+        fetchData();
+    }, 500); 
     return () => clearTimeout(handler);
-  }, [searchTerm, filterClient, filterStatus, filterDistrict, isLoading, fetchPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterClient, filterStatus, filterDistrict]);
 
-  // Event Handlers & Actions
+
   const handleNextPage = () => {
     if (isLastPage) return;
-    fetchPage(currentPage + 1, 'next');
+    setPage(p => p + 1);
+    fetchData('next');
   };
 
   const handlePreviousPage = () => {
-    if (currentPage <= 1) return;
-    setIsLastPage(false);
-    fetchPage(currentPage - 1, 'prev');
+    if (page <= 1) return;
+    setPage(p => p - 1);
+    fetchData('prev');
   };
 
   const openStatusModal = (employee: Employee, status: Employee['status']) => {
@@ -328,7 +282,7 @@ export default function EmployeeDirectoryPage() {
         }
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-      fetchPage(1, 'initial');
+      fetchData();
     } catch (err) {
       toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
     } finally {
@@ -362,7 +316,7 @@ export default function EmployeeDirectoryPage() {
             setUpdateProgress(((i + chunk.length) / totalDocs) * 100);
         }
         toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} records.` });
-        fetchPage(1, 'initial');
+        fetchData();
     } catch (error) {
         toast({ variant: "destructive", title: "Update Failed", description: `An error occurred during the update.` });
     } finally {
@@ -423,7 +377,7 @@ export default function EmployeeDirectoryPage() {
       toast({ title: "Duplicates Deleted", description: `${selectedForDeletion.length} record(s) removed.` });
       setShowDuplicatesDialog(false);
       setSelectedForDeletion([]);
-      fetchPage(1, 'initial');
+      fetchData();
     } catch (error) {
       toast({ variant: "destructive", title: "Deletion Failed" });
     } finally {
@@ -431,7 +385,6 @@ export default function EmployeeDirectoryPage() {
     }
   };
 
-  // Helper Functions
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
       case 'Active': return 'default';
@@ -442,25 +395,6 @@ export default function EmployeeDirectoryPage() {
     }
   };
 
-  // Render Logic
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error && employees.length === 0) {
-    return (
-      <div className="text-center py-10">
-        <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
-        <p className="mt-4 text-lg text-destructive">{error}</p>
-        <Button onClick={() => fetchPage(1, 'initial')} className="mt-4">Try Again</Button>
-      </div>
-    );
-  }
-  
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -517,67 +451,77 @@ export default function EmployeeDirectoryPage() {
             <CardTitle>Employee List</CardTitle>
         </CardHeader>
         <CardContent>
-            <div className="overflow-x-auto">
-            <Table>
-                <TableHeader><TableRow><TableHead>Employee</TableHead><TableHead className="hidden md:table-cell">Employee ID</TableHead><TableHead>Status</TableHead><TableHead>Profile Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                <TableBody>
-                {isTableLoading ? ( 
-                    <TableRow><TableCell colSpan={5} className="text-center h-24"><Loader2 className="mx-auto h-8 w-8 animate-spin" /></TableCell></TableRow>
-                ) : employees.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center h-24">No employees found.</TableCell></TableRow>
-                ) : (
-                    employees.map((emp) => {
-                     const pendingItems = getPendingDetails(emp);
-                     return (
-                        <TableRow key={emp.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/employees/${emp.id}`)}>
-                            <TableCell>
-                                <div className="flex items-center gap-3">
-                                <Avatar><AvatarImage src={emp.profilePictureUrl} /><AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('') || 'U'}</AvatarFallback></Avatar>
-                                <div><div className="font-medium">{emp.fullName}</div><div className="text-sm text-muted-foreground">{emp.clientName}</div></div>
-                                </div>
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">{emp.employeeId}</TableCell>
-                            <TableCell><Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge></TableCell>
-                            <TableCell>
-                                {pendingItems.length === 0 ? (
-                                    <div className="flex items-center gap-2 text-green-600"><CheckCircle className="h-5 w-5" /> <span className="hidden lg:inline">Complete</span></div>
-                                ) : (
-                                    <Popover>
-                                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="flex items-center gap-2 text-amber-600"><WarningIcon className="h-5 w-5" /> <span className="hidden lg:inline">{pendingItems.length} Pending</span></Button></PopoverTrigger>
-                                        <PopoverContent className="w-64" onClick={(e) => e.stopPropagation()}><div className="space-y-2"><h4 className="font-medium">Pending Items</h4><ul className="list-disc list-inside text-sm space-y-1">{pendingItems.map(item => <li key={item}>{item}</li>)}</ul></div></PopoverContent>
-                                    </Popover>
-                                )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div onClick={(e) => e.stopPropagation()}>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                      <DropdownMenuItem asChild><Link href={`/employees/${emp.id}`}><Eye className="mr-2 h-4 w-4" /> View Profile</Link></DropdownMenuItem>
-                                      <DropdownMenuItem asChild><Link href={`/employees/${emp.id}?edit=true`}><Edit className="mr-2 h-4 w-4" /> Edit</Link></DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      {emp.status !== 'Active' && <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}><UserCheck className="mr-2 h-4 w-4" /> Set Active</DropdownMenuItem>}
-                                      {emp.status !== 'Inactive' && emp.status !== 'Exited' && <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}><UserX className="mr-2 h-4 w-4" /> Set Inactive</DropdownMenuItem>}
-                                      {emp.status !== 'Exited' && <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}><LogOutIcon className="mr-2 h-4 w-4" /> Set Exited</DropdownMenuItem>}
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem className="text-destructive" onClick={() => openDeleteDialog(emp)}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </TableCell>
-                        </TableRow>
-                     )
-                    })}
-                </TableBody>
-            </Table>
-            </div>
-            <div className="flex justify-between items-center mt-4">
-                <span className="text-sm text-muted-foreground">Page {currentPage}</span>
-                <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isTableLoading || currentPage === 1}>Previous</Button>
-                <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isTableLoading || isLastPage}>Next</Button>
+            {isLoading && employees.length === 0 ? (
+                <div className="flex justify-center items-center h-64"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>
+            ) : error ? (
+                <div className="text-center py-10">
+                    <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
+                    <p className="mt-4 text-lg text-destructive">{error}</p>
+                    <Button onClick={() => fetchData()} className="mt-4">Try Again</Button>
                 </div>
-            </div>
+            ) : (
+                <>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Employee</TableHead><TableHead className="hidden md:table-cell">Employee ID</TableHead><TableHead>Status</TableHead><TableHead>Profile Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                        {employees.length === 0 ? (
+                            <TableRow><TableCell colSpan={5} className="text-center h-24">No employees found matching your criteria.</TableCell></TableRow>
+                        ) : (
+                            employees.map((emp) => {
+                            const pendingItems = getPendingDetails(emp);
+                            return (
+                                <TableRow key={emp.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/employees/${emp.id}`)}>
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                        <Avatar><AvatarImage src={emp.profilePictureUrl} /><AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('') || 'U'}</AvatarFallback></Avatar>
+                                        <div><div className="font-medium">{emp.fullName}</div><div className="text-sm text-muted-foreground">{emp.clientName}</div></div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell">{emp.employeeId}</TableCell>
+                                    <TableCell><Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge></TableCell>
+                                    <TableCell>
+                                        {pendingItems.length === 0 ? (
+                                            <div className="flex items-center gap-2 text-green-600"><CheckCircle className="h-5 w-5" /> <span className="hidden lg:inline">Complete</span></div>
+                                        ) : (
+                                            <Popover>
+                                                <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm" className="flex items-center gap-2 text-amber-600"><WarningIcon className="h-5 w-5" /> <span className="hidden lg:inline">{pendingItems.length} Pending</span></Button></PopoverTrigger>
+                                                <PopoverContent className="w-64" onClick={(e) => e.stopPropagation()}><div className="space-y-2"><h4 className="font-medium">Pending Items</h4><ul className="list-disc list-inside text-sm space-y-1">{pendingItems.map(item => <li key={item}>{item}</li>)}</ul></div></PopoverContent>
+                                            </Popover>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                        <DropdownMenu>
+                                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem asChild><Link href={`/employees/${emp.id}`}><Eye className="mr-2 h-4 w-4" /> View Profile</Link></DropdownMenuItem>
+                                            <DropdownMenuItem asChild><Link href={`/employees/${emp.id}?edit=true`}><Edit className="mr-2 h-4 w-4" /> Edit</Link></DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            {emp.status !== 'Active' && <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}><UserCheck className="mr-2 h-4 w-4" /> Set Active</DropdownMenuItem>}
+                                            {emp.status !== 'Inactive' && emp.status !== 'Exited' && <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}><UserX className="mr-2 h-4 w-4" /> Set Inactive</DropdownMenuItem>}
+                                            {emp.status !== 'Exited' && <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}><LogOutIcon className="mr-2 h-4 w-4" /> Set Exited</DropdownMenuItem>}
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem className="text-destructive" onClick={() => openDeleteDialog(emp)}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+                <div className="flex justify-between items-center mt-4">
+                    <span className="text-sm text-muted-foreground">Page {page}</span>
+                    <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isLoading || page === 1}>Previous</Button>
+                    <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || isLastPage}>Next</Button>
+                    </div>
+                </div>
+                </>
+            )}
         </CardContent>
       </Card>
       
