@@ -29,9 +29,11 @@ const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementTyp
         </CardHeader>
         <CardContent>
             {isLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <div className="h-8 flex items-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
             ) : error ? (
-                <div className="text-xs text-destructive flex items-center gap-1"><AlertIcon className="h-4 w-4" /> Error</div>
+                <div className="text-sm text-destructive flex items-center gap-1"><AlertIcon className="h-4 w-4" /> Error</div>
             ) : (
                 <>
                     <div className="text-2xl font-bold">{value?.toLocaleString() ?? 'N/A'}</div>
@@ -131,7 +133,7 @@ export default function DashboardPage() {
     const newHiresChartConfig = {
       hires: {
         label: "New Hires",
-        color: "hsl(var(--primary))",
+        color: "hsl(var(--chart-1))",
       },
     };
 
@@ -149,16 +151,17 @@ export default function DashboardPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard title="Total Employees" value={stats?.total} icon={Users} isLoading={isLoading} error={error} />
                 <StatCard title="Active Employees" value={stats?.active} icon={UserCheck} isLoading={isLoading} error={error} helpText={`${activePercentage} of total workforce`} />
                 <StatCard title="Inactive & Exited" value={stats?.inactiveOrExited} icon={UserMinus} isLoading={isLoading} error={error} />
                 <StatCard title="On Leave" value={stats?.onLeave} icon={Clock} isLoading={isLoading} error={error} />
             </div>
-            <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 <Card className="xl:col-span-2">
                     <CardHeader>
                         <CardTitle>New Hires - Last 6 Months</CardTitle>
+                        <CardDescription>A monthly breakdown of new employee enrollments.</CardDescription>
                     </CardHeader>
                     <CardContent className="pl-2">
                         {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
@@ -193,8 +196,8 @@ export default function DashboardPage() {
                         ) : recentActivity.length > 0 ? (
                             recentActivity.map((activity) => (
                                 <div key={activity.id} className="flex items-center gap-4">
-                                     <Avatar className="hidden h-9 w-9 sm:flex">
-                                        <AvatarFallback><Activity className="h-5 w-5" /></AvatarFallback>
+                                     <Avatar className="hidden h-10 w-10 sm:flex">
+                                        <AvatarFallback><UserPlus className="h-5 w-5" /></AvatarFallback>
                                     </Avatar>
                                     <div className="grid gap-1">
                                         <p className="text-sm font-medium leading-none">{activity.text}</p>
@@ -206,7 +209,7 @@ export default function DashboardPage() {
                                 </div>
                             ))
                         ) : (
-                             <p className="text-sm text-muted-foreground">No recent activity found.</p>
+                             <p className="text-sm text-center text-muted-foreground py-8">No recent activity found.</p>
                         )}
                     </CardContent>
                     <CardFooter>

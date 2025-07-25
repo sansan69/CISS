@@ -5,38 +5,21 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image'; 
 import { usePathname, useRouter } from 'next/navigation'; 
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarTrigger,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarInset,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  useSidebar,
-} from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   LayoutDashboard,
   Users,
-  UserPlus,
   CalendarCheck,
   Settings,
-  ChevronDown,
-  ChevronUp,
   LogOut,
-  QrCode,
+  Menu,
+  Briefcase,
   FileUp,
   BarChart3,
-  Briefcase,
+  QrCode,
   Loader2,
+  ChevronLeft
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -49,121 +32,122 @@ import {
 import React, { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase'; 
 import { onAuthStateChanged, User, signOut } from 'firebase/auth'; 
-
+import { cn } from '@/lib/utils';
+import { Toaster } from "@/components/ui/toaster"
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ElementType;
-  subItems?: NavItem[];
+  exact?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  {
-    href: '/employees',
-    label: 'Employees',
-    icon: Users,
-    subItems: [
-      { href: '/employees', label: 'Directory', icon: Users },
-      { href: '/employees/enroll', label: 'Enroll New', icon: UserPlus },
-    ],
-  },
-  { href: '/attendance-logs', label: 'Attendance Logs', icon: CalendarCheck },
-  {
-    href: '/settings',
-    label: 'Settings',
-    icon: Settings,
-    subItems: [
-        { href: '/settings/client-management', label: 'Client Management', icon: Briefcase },
-        { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
-        { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
-        { href: '/settings/qr-management', label: 'QR Management', icon: QrCode },
-    ]
-  },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { href: '/employees', label: 'Employees', icon: Users },
+  { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-function NavMenuItem({ item, depth = 0 }: { item: NavItem; depth?: number }) {
+const settingsSubItems: NavItem[] = [
+    { href: '/settings/client-management', label: 'Clients', icon: Briefcase },
+    { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
+    { href: '/settings/qr-management', label: 'QR Codes', icon: QrCode },
+    { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
+];
+
+function NavLink({ item }: { item: NavItem }) {
   const pathname = usePathname();
-  const { open: sidebarOpen, isMobile, setOpenMobile } = useSidebar();
-  const [isSubMenuOpen, setIsSubMenuOpen] = React.useState(pathname.startsWith(item.href) && item.href !== '/');
-
-  const handleNavigation = () => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  };
-
-  const isActive = item.subItems
-    ? pathname.startsWith(item.href)
-    : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href) && pathname.split('/').length === item.href.split('/').length);
-
-  const toggleSubMenu = () => setIsSubMenuOpen(!isSubMenuOpen);
-
-  if (item.subItems) {
-    return (
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          onClick={toggleSubMenu}
-          isActive={isActive && !isSubMenuOpen}
-          className="justify-between"
-          tooltip={sidebarOpen ? undefined : item.label}
-        >
-          <div className="flex items-center gap-2">
-            <item.icon />
-            <span>{item.label}</span>
-          </div>
-          {isSubMenuOpen ? <ChevronUp /> : <ChevronDown />}
-        </SidebarMenuButton>
-        {isSubMenuOpen && sidebarOpen && (
-          <SidebarMenuSub>
-            {item.subItems.map((subItem) => (
-              <SidebarMenuSubItem key={subItem.href}>
-                <Link href={subItem.href} passHref legacyBehavior>
-                  <SidebarMenuSubButton 
-                    onClick={handleNavigation}
-                    isActive={pathname === subItem.href || (subItem.href !== '/' && pathname.startsWith(subItem.href))}>
-                    <subItem.icon />
-                    <span>{subItem.label}</span>
-                  </SidebarMenuSubButton>
-                </Link>
-              </SidebarMenuSubItem>
-            ))}
-          </SidebarMenuSub>
-        )}
-      </SidebarMenuItem>
-    );
-  }
+  const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   return (
-    <SidebarMenuItem>
-      <Link href={item.href} passHref legacyBehavior>
-        <SidebarMenuButton 
-            onClick={handleNavigation}
-            isActive={isActive} 
-            tooltip={sidebarOpen ? undefined : item.label}>
-          <item.icon />
-          <span>{item.label}</span>
-        </SidebarMenuButton>
-      </Link>
-    </SidebarMenuItem>
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
+        isActive && "bg-primary/10 text-primary font-semibold"
+      )}
+    >
+      <item.icon className="h-4 w-4" />
+      {item.label}
+    </Link>
   );
 }
 
-// Helper component to close mobile sidebar on route change (e.g., back button)
-function MobileSidebarManager() {
-  const pathname = usePathname();
-  const { isMobile, setOpenMobile } = useSidebar();
 
-  useEffect(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  }, [pathname, isMobile, setOpenMobile]);
-
-  return null;
+function DesktopNav({isSettingsPage}: {isSettingsPage: boolean}) {
+    const items = isSettingsPage ? settingsSubItems : navItems;
+    return (
+        <nav className="grid items-start gap-1 p-4 text-sm font-medium">
+            {isSettingsPage && (
+                 <Link href="/dashboard" className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary mb-2">
+                    <ChevronLeft className="h-4 w-4" />
+                    Back to Main Menu
+                 </Link>
+            )}
+            {items.map((item) => <NavLink key={item.href} item={item} />)}
+        </nav>
+    );
 }
 
+function MobileNav({isSettingsPage}: {isSettingsPage: boolean}) {
+    const items = isSettingsPage ? settingsSubItems : navItems;
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="shrink-0 md:hidden">
+                    <Menu className="h-5 w-5" />
+                    <span className="sr-only">Toggle navigation menu</span>
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="flex flex-col p-0">
+                <div className="flex h-16 items-center border-b px-4">
+                     <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+                        <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
+                        <span className="text-lg">CISS Workforce</span>
+                    </Link>
+                </div>
+                <nav className="grid gap-2 p-4 text-base font-medium">
+                    {isSettingsPage && (
+                         <Link href="/dashboard" className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary mb-2">
+                            <ChevronLeft className="h-4 w-4" />
+                            Back to Main Menu
+                         </Link>
+                    )}
+                   {items.map((item) => <NavLink key={item.href} item={item} />)}
+                </nav>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+function UserNav({ user, onLogout }: { user: User, onLogout: () => void }) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon" className="rounded-full">
+                    <Avatar className="h-8 w-8">
+                         <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || user?.email || "User avatar"} />
+                        <AvatarFallback>{user?.email?.[0]?.toUpperCase() || 'A'}</AvatarFallback>
+                    </Avatar>
+                    <span className="sr-only">Toggle user menu</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled>Profile</DropdownMenuItem>
+                <DropdownMenuItem disabled>Support</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter(); 
@@ -171,33 +155,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  // Effect to listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
       setIsLoadingAuth(false);
+      if (!user) {
+        const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
+        const isPublicPath = publicPaths.some(path => pathname.startsWith(path) && path !== '/');
+        if (!isPublicPath) {
+          router.replace('/admin-login');
+        }
+      }
     });
     return () => unsubscribe();
-  }, []);
-
-  // Effect to handle redirection based on auth state
-  useEffect(() => {
-    if (isLoadingAuth) {
-      return; // Wait until auth state is determined
-    }
-
-    const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
-    
-    const isPublicPath = publicPaths.some(path => {
-        if (path === '/') return pathname === '/';
-        return pathname.startsWith(path);
-    });
-
-    if (!authUser && !isPublicPath) {
-      router.push('/admin-login');
-    }
-  }, [isLoadingAuth, authUser, pathname, router]);
-
+  }, [pathname, router]);
 
   const handleLogout = async () => {
     try {
@@ -207,112 +178,55 @@ export function AppLayout({ children }: { children: ReactNode }) {
       console.error("Error signing out: ", error);
     }
   };
-  
-  if (isLoadingAuth) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-  
+
   const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
-  const isPublicPath = publicPaths.some(path => {
-      if (path === '/') return pathname === '/';
-      return pathname.startsWith(path);
-  });
+  const isPublicPath = publicPaths.some(path => pathname.startsWith(path) && path !== '/');
   
   // This layout is only for authenticated admin pages
   if (isPublicPath) {
     return <>{children}</>;
   }
-  
-  if (!authUser) {
+
+  if (isLoadingAuth || !authUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4">Redirecting to login...</p>
+        <Loader2 className="h-10 w-10 animate-spin text-primary"/>
       </div>
     );
   }
   
+  const isSettingsPage = pathname.startsWith('/settings');
+
   return (
-    <SidebarProvider defaultOpen>
-      <MobileSidebarManager />
-      <Sidebar className="border-r">
-        <SidebarHeader className="p-4 flex items-center gap-3">
-          <Image 
-            src="/ciss-logo.png" 
-            alt="CISS Logo"
-            width={32}
-            height={32}
-            className="shrink-0"
-            data-ai-hint="company logo"
-            unoptimized={true}
-          />
-          <h1 className="text-xl font-semibold text-sidebar-primary truncate">CISS Workforce</h1>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => (
-              <NavMenuItem key={item.href} item={item} />
-            ))}
-          </SidebarMenu>
-        </SidebarContent>
-        <SidebarFooter className="p-4">
-           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start gap-2 p-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={authUser?.photoURL || undefined} alt={authUser?.displayName || authUser?.email || "User avatar"} data-ai-hint="user avatar" />
-                  <AvatarFallback>
-                    {authUser?.email?.[0]?.toUpperCase() || 'A'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="text-left truncate">
-                  <p className="text-sm font-medium text-sidebar-foreground truncate">
-                    {authUser?.displayName || authUser?.email?.split('@')[0] || 'Admin User'}
-                  </p>
-                  <p className="text-xs text-sidebar-foreground/70 truncate">
-                    {authUser?.email || 'admin@example.com'}
-                  </p>
-                </div>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
-                <UserPlus className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}> 
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:h-16 sm:px-6">
-          <SidebarTrigger className="md:hidden" />
-          <div className="flex-1">
-            {/* Breadcrumbs or page title can go here */}
+    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+      <div className="hidden border-r bg-muted/40 md:block">
+        <div className="flex h-full max-h-screen flex-col">
+          <div className="flex h-16 items-center border-b px-6">
+            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+              <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
+              <span className="text-xl">CISS Workforce</span>
+            </Link>
           </div>
-           <Button variant="outline" size="sm">
-            Help
-          </Button>
+          <div className="flex-1 overflow-y-auto">
+            <DesktopNav isSettingsPage={isSettingsPage} />
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col">
+        <header className="flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6 sticky top-0 z-30">
+            <MobileNav isSettingsPage={isSettingsPage}/>
+            <div className="w-full flex-1">
+                {/* Header content can go here */}
+            </div>
+            <UserNav user={authUser} onLogout={handleLogout} />
         </header>
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
+        <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6 bg-muted/30 overflow-auto">
           {children}
         </main>
-      </SidebarInset>
-    </SidebarProvider>
+        <Toaster />
+      </div>
+    </div>
   );
 }
+
+export default AppLayout;

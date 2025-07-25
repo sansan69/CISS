@@ -51,7 +51,7 @@ const fileSchema = z.instanceof(File, { message: "This field is required." })
 
 const optionalFileSchema = z.instanceof(File, { message: "This field is required." }).optional();
 
-const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
+const proofTypes = z.enum(["Aadhar Card", "PAN Card", "Voter ID", "Passport", "Driving License", "Birth Certificate", "School Certificate"]);
 const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
 
 const idValidation = {
@@ -130,7 +130,6 @@ const enrollmentFormSchema = z.object({
   emailAddress: z.string().email({ message: "Invalid email address." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
   
-  // Terms and Conditions
   termsAndConditions: z.boolean().refine((val) => val === true, {
     message: "You must accept the terms and conditions to proceed.",
   }),
@@ -342,7 +341,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
-    mode: 'onTouched', // Important for real-time feedback
+    mode: 'onTouched', 
     defaultValues: {
         clientName: '',
         resourceIdNumber: '',
@@ -380,7 +379,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
 
   useEffect(() => {
-    if (!fullAddress || fullAddress.length < 15) { // Don't check on very short strings
+    if (!fullAddress || fullAddress.length < 15) { 
         setPinStatus('idle');
         return;
     }
@@ -554,7 +553,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait. This may take a moment." });
 
-    // Check for duplicates before proceeding
     const employeesRef = collection(db, "employees");
     const phoneQuery = query(employeesRef, where("phoneNumber", "==", data.phoneNumber));
     const emailQuery = query(employeesRef, where("emailAddress", "==", data.emailAddress.toLowerCase()));
@@ -586,7 +584,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     };
 
     try {
-        toast({ title: "Generating Unique IDs...", description: "Creating Employee ID and QR code." });
         const newEmployeeId = generateEmployeeId(data.clientName);
         const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
         
@@ -598,8 +595,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           newEmployeeId.toUpperCase(),
           data.phoneNumber,
         ].filter(Boolean) as string[]));
-
-        toast({ title: "IDs Generated", description: "Employee ID and QR code created successfully." });
 
         const filesToUpload: { name: string; file?: File; path: string; isImage: boolean, key: keyof typeof uploadedUrls }[] = [
             { name: "Profile Picture", file: data.profilePicture, path: `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, isImage: true, key: 'profilePictureUrl' },
@@ -626,8 +621,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             }
         }
         
-        toast({ title: "All Files Uploaded", description: "File uploads completed successfully."});
-
         const employeeDataForFirestore = {
             employeeId: newEmployeeId,
             qrCodeUrl: newQrCodeUrl,
@@ -651,7 +644,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             status: 'Active',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-            // New proof fields
             identityProofType: data.identityProofType,
             identityProofNumber: data.identityProofNumber,
             identityProofUrlFront: uploadedUrls.identityProofUrlFront,
@@ -662,7 +654,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             addressProofUrlBack: uploadedUrls.addressProofUrlBack,
             signatureUrl: uploadedUrls.signatureUrl,
             profilePictureUrl: uploadedUrls.profilePictureUrl,
-            // Optional fields
             ...(data.bankAccountNumber && { bankAccountNumber: data.bankAccountNumber }),
             ...(data.ifscCode && { ifscCode: data.ifscCode.toUpperCase() }),
             ...(data.bankName && { bankName: data.bankName.toUpperCase() }),
@@ -675,27 +666,15 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             ...(uploadedUrls.policeClearanceCertificateUrl && { policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl }),
         };
 
-        toast({ title: "Finalizing Data...", description: "Saving to database..." });
         const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
 
         toast({
             title: "Registration Successful!",
-            description: `${data.firstName} ${data.lastName}'s profile has been created. Employee ID: ${newEmployeeId}`,
-            action: <Check className="h-5 w-5 text-green-500" />,
+            description: `${data.firstName} ${data.lastName}'s profile has been created. ID: ${newEmployeeId}`,
             duration: 7000,
         });
 
         form.reset();
-        // Reset all previews
-        setProfilePicPreview(null);
-        setIdentityProofUrlFrontPreview(null);
-        setIdentityProofUrlBackPreview(null);
-        setAddressProofUrlFrontPreview(null);
-        setAddressProofUrlBackPreview(null);
-        setSignatureUrlPreview(null);
-        setBankPassbookPreview(null);
-        setPoliceCertPreview(null);
-
         router.push(`/profile/${docRef.id}`);
 
     } catch (error: any) {
@@ -703,7 +682,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         toast({
             variant: "destructive",
             title: "Registration Failed",
-            description: error.message || "An unexpected error occurred. Could not save employee data or upload files.",
+            description: error.message || "An unexpected error occurred.",
             duration: 9000,
         });
     } finally {
@@ -722,258 +701,100 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   return (
     <>
-      <Card className="shadow-xl">
+      <Card className="w-full max-w-4xl mx-auto shadow-lg border-t-4 border-primary">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
-          <CardDescription>Complete your employee profile with accurate information</CardDescription>
+          <CardTitle className="text-3xl font-bold">Employee Registration</CardTitle>
+          <CardDescription>Please complete your profile with accurate information.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-12">
 
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
+              <FormSection title="Client Information">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="joiningDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Joining Date <span className="text-destructive">*</span></FormLabel>
+                  <FormField control={form.control} name="joiningDate" render={({ field }) => (
+                      <FormItem className="flex flex-col"><FormLabel>Joining Date <span className="text-destructive">*</span></FormLabel>
                         <Popover open={isJoiningDatePopoverOpen} onOpenChange={setIsJoiningDatePopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
-                                {field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={(date) => {
-                                field.onChange(date);
-                                setIsJoiningDatePopoverOpen(false);
-                              }}
-                              initialFocus
-                              disabled={(date) => date > new Date()}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormDescription>Your first day of employment</FormDescription>
-                        <FormMessage />
+                          <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(date) => { field.onChange(date); setIsJoiningDatePopoverOpen(false); }} initialFocus disabled={(date) => date > new Date()} /></PopoverContent>
+                        </Popover><FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="clientName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
+                  <FormField control={form.control} name="clientName" render={({ field }) => (
+                      <FormItem><FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}>
                           <FormControl><SelectTrigger><SelectValue placeholder={isLoadingClients ? "Loading clients..." : "Select client"} /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {isLoadingClients ? (
-                              <SelectItem value="loading" disabled>Loading...</SelectItem>
-                            ) : availableClients.length === 0 ? (
-                               <SelectItem value="no-clients" disabled>No clients available</SelectItem>
-                            ) : (
-                              availableClients.map(client => <SelectItem key={client.id} value={client.name}>{client.name}</SelectItem>)
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Client you are deployed with. (Managed by Admin)</FormDescription>
-                        <FormMessage />
+                          <SelectContent>{isLoadingClients ? (<SelectItem value="loading" disabled>Loading...</SelectItem>) : availableClients.length === 0 ? (<SelectItem value="no-clients" disabled>No clients available</SelectItem>) : (availableClients.map(client => <SelectItem key={client.id} value={client.name}>{client.name}</SelectItem>))}</SelectContent>
+                        </Select><FormMessage />
                       </FormItem>
                     )}
                   />
                   {watchClientName === "TCS" && (
-                    <FormField
-                      control={form.control}
-                      name="resourceIdNumber"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel>
-                          <FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl>
-                          <FormDescription>Required if client is TCS. E.g., TCS12345</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                    <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (
+                        <FormItem className="md:col-span-2"><FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} 
                     />
                   )}
                 </div>
-              </section>
+              </FormSection>
 
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Personal Information</h2>
-                <FormField
-                  control={form.control}
-                  name="profilePicture"
-                  render={({ field }) => (
-                    <FormItem className="mb-6 text-center">
-                      <FormLabel className="block mb-2 text-sm font-medium">Profile Picture <span className="text-destructive">*</span></FormLabel>
+              <FormSection title="Personal Information">
+                <FormField control={form.control} name="profilePicture" render={({ field }) => ( 
+                    <FormItem className="mb-6 text-center"><FormLabel className="block mb-2 font-semibold">Profile Picture <span className="text-destructive">*</span></FormLabel>
                        <div className="flex flex-col items-center gap-4">
-                        {profilePicPreview ? (
-                          <Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border" data-ai-hint="profile photo"/>
-                        ) : (
-                          <div className="flex items-center justify-center h-32 w-32 rounded-full bg-muted border">
-                            <UserCircle2 className="h-20 w-20 text-muted-foreground" />
-                          </div>
-                        )}
+                        {profilePicPreview ? (<Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border-2 border-primary" data-ai-hint="profile photo"/>) : (<div className="flex items-center justify-center h-32 w-32 rounded-full bg-muted border"><UserCircle2 className="h-20 w-20 text-muted-foreground" /></div>)}
                         <div className="flex gap-2">
-                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload
-                          </Button>
-                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("profilePicture")}>
-                            <Camera className="mr-2 h-4 w-4" /> Take Photo
-                          </Button>
+                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("profilePicture")}><Camera className="mr-2 h-4 w-4" /> Take Photo</Button>
                         </div>
-                        <FormControl>
-                           <Input
-                            id="profilePictureInput"
-                            type="file"
-                            className="hidden"
-                            accept="image/jpeg,image/png,image/webp"
-                            onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
-                          />
-                        </FormControl>
-                         <FormDescription>Upload or take a clear passport-sized photo (JPG, PNG, WEBP. Max 5MB).</FormDescription>
+                        <FormControl><Input id="profilePictureInput" type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}/></FormControl>
                         <FormMessage />
                        </div>
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormDescription>Your given name</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormDescription>Your family name</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter father's name" {...field} /></FormControl><FormDescription>Your father's full name</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter mother's name" {...field} /></FormControl><FormDescription>Your mother's full name</FormDescription><FormMessage /></FormItem>)} />
-                   <FormField
-                    control={form.control}
-                    name="dateOfBirth"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+                  <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter father's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter mother's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                   <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
+                      <FormItem className="flex flex-col"><FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
                         <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
-                                {field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
+                          <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger>
                           <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={(date) => {
-                                field.onChange(date);
-                                setIsDobPopoverOpen(false);
-                              }}
-                              captionLayout="dropdown-buttons"
-                              fromYear={fromYear}
-                              toYear={toYear}
-                              defaultMonth={defaultCalendarMonth}
-                              disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
-                            />
+                            <Calendar mode="single" selected={field.value} onSelect={(date) => { field.onChange(date); setIsDobPopoverOpen(false);}} captionLayout="dropdown-buttons" fromYear={fromYear} toYear={toYear} defaultMonth={defaultCalendarMonth} disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}/>
                           </PopoverContent>
-                        </Popover>
-                        <FormDescription>Your date of birth (Age must be between 18 and 65).</FormDescription>
-                        <FormMessage />
+                        </Popover><FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="gender"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="Male">Male</SelectItem>
-                            <SelectItem value="Female">Female</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Your gender</FormDescription>
-                        <FormMessage />
+                  <FormField control={form.control} name="gender" render={({ field }) => (
+                      <FormItem><FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage />
                       </FormItem>
                     )}
                   />
-                   <FormField
-                    control={form.control}
-                    name="maritalStatus"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Marital Status <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select marital status" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {maritalStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Your current marital status</FormDescription>
-                        <FormMessage />
+                   <FormField control={form.control} name="maritalStatus" render={({ field }) => (
+                      <FormItem><FormLabel>Marital Status <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select marital status" /></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select><FormMessage />
                       </FormItem>
                     )}
                   />
-                  {watchMaritalStatus === "Married" && (
-                    <FormField
-                      control={form.control}
-                      name="spouseName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel>
-                          <FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl>
-                          <FormDescription>Your spouse's full name</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  <FormField
-                    control={form.control}
-                    name="educationalQualification"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Educational Qualification <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
+                  {watchMaritalStatus === "Married" && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
+                  <FormField control={form.control} name="educationalQualification" render={({ field }) => (
+                      <FormItem><FormLabel>Educational Qualification <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl><SelectContent>{educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select><FormMessage />
                       </FormItem>
                     )}
                   />
-                  {watchEducationalQualification === "Any Other Qualification" && (
-                    <FormField
-                      control={form.control}
-                      name="otherQualification"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel>
-                          <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
+                  {watchEducationalQualification === "Any Other Qualification" && <FormField control={form.control} name="otherQualification" render={({ field }) => (<FormItem><FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
                 </div>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Identification Documents</h2>
-                
-                {/* Identity Proof */}
-                <div className="p-4 border rounded-lg mt-4 space-y-4">
+              </FormSection>
+              
+              <FormSection title="Identification Documents">
+                <div className="p-4 border rounded-lg mt-4 space-y-4 bg-muted/20">
                     <h3 className="font-medium text-lg">Identity Proof (Name, DOB, Father's Name)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -985,8 +806,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     </div>
                 </div>
 
-                {/* Address Proof */}
-                <div className="p-4 border rounded-lg mt-6 space-y-4">
+                <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
                     <h3 className="font-medium text-lg">Address Proof</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -998,139 +818,68 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     </div>
                 </div>
 
-                {/* Signature */}
-                 <div className="p-4 border rounded-lg mt-6 space-y-4">
+                 <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
                     <h3 className="font-medium text-lg">Signature</h3>
                      <FormField control={form.control} name="signatureUrl" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Employee Signature <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="signatureUrl" preview={signatureUrlPreview} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={openCamera} isSignature={true} /><FormDescription>Sign on a plain white paper and take a clear photo.</FormDescription><FormMessage /></FormItem> )} />
                 </div>
-              </section>
-
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Statutory & Other Details</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
-                 </div>
-                 <div className="grid grid-cols-1 mt-6">
-                    <FormField
-                        control={form.control}
-                        name="policeClearanceCertificate"
-                        render={({ field }) => ( 
-                        <FormItem className="text-center">
-                            <FormLabel className="block mb-2">Police Clearance Certificate</FormLabel>
-                            <ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
-                            <FormDescription>PCC document (optional). Max 5MB.</FormDescription>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                 </div>
-              </section>
+              </FormSection>
               
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Bank Account Details</h2>
+              <FormSection title="Statutory & Other Details">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 </div>
+                 <div className="grid grid-cols-1 mt-6"><FormField control={form.control} name="policeClearanceCertificate" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Police Clearance Certificate</FormLabel><ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormDescription>(Optional) Upload a valid PCC document.</FormDescription><FormMessage /></FormItem> )}/></div>
+              </FormSection>
+              
+              <FormSection title="Bank Account Details">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
                  </div>
-                 <FormField
-                    control={form.control}
-                    name="bankPassbookStatement"
-                    render={({ field }) => ( 
-                       <FormItem className="mt-6 text-center">
-                        <FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel>
-                        <ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
-                        <FormDescription>Upload or take photo of bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-              </section>
+                 <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormDescription>(Optional) Upload a clear copy of your passbook or statement.</FormDescription><FormMessage /></FormItem>)}/>
+              </FormSection>
 
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Contact Information</h2>
+              <FormSection title="Contact Information">
                  <div className="grid grid-cols-1 gap-6">
-                  <FormField control={form.control} name="fullAddress" render={({ field }) => (
-                     <FormItem>
-                        <div className="flex justify-between items-center">
-                            <FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
+                  <FormField control={form.control} name="fullAddress" render={({ field }) => ( 
+                    <FormItem>
+                        <div className="flex justify-between items-center"><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
                             {pinStatus === 'found' && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
                             {pinStatus === 'not_found' && <span className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
-                        </div>
-                        <FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl>
-                        <FormDescription>Include house number, street, area, and PIN code</FormDescription>
-                        <FormMessage />
+                        </div><FormControl><Textarea placeholder="Enter your complete residential address, including PIN code" {...field} /></FormControl><FormMessage />
                     </FormItem>
                   )} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel>
-                        <FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl>
-                        <FormDescription>Your primary contact number. {isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription>
-                        <FormMessage />
-                    </FormItem>
-                  )} />
+                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription><FormMessage /></FormItem>)}/>
                 </div>
-              </section>
+              </FormSection>
 
-              <section>
-                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Terms & Conditions</h2>
+              <FormSection title="Terms & Conditions">
                 <div className="space-y-4">
-                  <div className="h-48 overflow-y-auto p-4 border rounded-md text-xs text-muted-foreground space-y-2">
-                    <p className="font-bold">I. General Eligibility and Compliance</p>
-                    <ul className="list-disc list-outside pl-4 space-y-1">
-                      <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
-                      <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
-                      <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
-                    </ul>
-                    <p className="font-bold">II. Employment Terms & Responsibilities</p>
-                    <ul className="list-disc list-outside pl-4 space-y-1">
-                      <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
-                      <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
-                      <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
-                      <li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li>
-                    </ul>
-                    <p className="font-bold">III. Disciplinary Action</p>
-                     <ul className="list-disc list-outside pl-4 space-y-1">
-                        <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
-                     </ul>
-                    <p className="font-bold">IV. Declaration</p>
-                    <p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
+                  <div className="h-48 overflow-y-auto p-4 border rounded-md text-xs text-muted-foreground space-y-2 bg-muted/20">
+                    <p className="font-bold">I. General Eligibility and Compliance</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li><li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li><li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li></ul>
+                    <p className="font-bold">II. Employment Terms & Responsibilities</p><ul className="list-disc list-outside pl-4 space-y-1"><li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li><li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li><li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li><li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li></ul>
+                    <p className="font-bold">III. Disciplinary Action</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li></ul>
+                    <p className="font-bold">IV. Declaration</p><p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="termsAndConditions"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>
-                            I have read, understood, and agree to the Terms and Conditions of Enrollment.
-                          </FormLabel>
-                          <FormMessage />
-                        </div>
+                  <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
+                        <div className="space-y-1 leading-none"><FormLabel>I have read, understood, and agree to the Terms and Conditions of Enrollment.</FormLabel><FormMessage /></div>
                       </FormItem>
                     )}
                   />
                 </div>
-              </section>
+              </FormSection>
 
               <div className="flex justify-end pt-6">
-                <Button type="submit" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 text-base" disabled={isLoading || form.formState.isSubmitting}>
-                  {isLoading || form.formState.isSubmitting ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
-                  ) : "Complete Registration"}
+                <Button type="submit" className="w-full md:w-auto" size="lg" disabled={isLoading || form.formState.isSubmitting}>
+                  {isLoading || form.formState.isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>) : "Complete Registration"}
                 </Button>
               </div>
             </form>
@@ -1142,36 +891,15 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Take Photo for {activeCameraField?.replace(/([A-Z])/g, ' $1').trim()}</DialogTitle>
-            <ShadDialogDescription>
-               Use your device camera to capture a photo for the {activeCameraField?.replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field. This helps in verifying identity and documents for employee enrollment.
-            </ShadDialogDescription>
+            <ShadDialogDescription>Use your device camera to capture a clear photo.</ShadDialogDescription>
           </DialogHeader>
           <div className="py-4">
-            {cameraError && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Camera Error</AlertTitle>
-                <AlertDescription>{cameraError}</AlertDescription>
-              </Alert>
-            )}
-            {(cameraStream && !cameraError) && (
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-auto rounded-md border aspect-video bg-muted" />
-            )}
-            {(!cameraStream && isCameraDialogOpen && !cameraError) && (
-                <div className="w-full aspect-video bg-muted rounded-md flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="ml-2">Starting camera...</p>
-                </div>
-            )}
+            {cameraError && (<Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /><AlertTitle>Camera Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>)}
+            {(cameraStream && !cameraError) && (<video ref={videoRef} autoPlay muted playsInline className="w-full h-auto rounded-md border aspect-video bg-muted" />)}
+            {(!cameraStream && isCameraDialogOpen && !cameraError) && (<div className="w-full aspect-video bg-muted rounded-md flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /><p className="ml-2">Starting camera...</p></div>)}
             <canvas ref={canvasRef} className="hidden" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
-            <Button onClick={handleCapturePhoto} disabled={!cameraStream || !!cameraError || isLoading}>
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-              Capture Photo
-            </Button>
-          </DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={closeCameraDialog}>Cancel</Button><Button onClick={handleCapturePhoto} disabled={!cameraStream || !!cameraError || isLoading}>{isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}Capture Photo</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>
@@ -1189,18 +917,32 @@ const ImagePreviewAndUpload: React.FC<{
     return (
         <div>
             {preview && (preview === "/pdf-icon.png" ? 
-                <Image src={preview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="document pdf"/> :
-                <Image src={preview} alt={`${fieldName} Preview`} width={200} height={isSignature ? 100 : 120} className="mx-auto mb-2 border object-contain h-32" data-ai-hint="id document"/>
+                <Image src={preview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32 bg-white rounded" data-ai-hint="document pdf"/> :
+                <Image src={preview} alt={`${fieldName} Preview`} width={200} height={isSignature ? 100 : 120} className="mx-auto mb-2 border object-contain h-32 rounded" data-ai-hint="id document"/>
             )}
-            {!preview && <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+            {!preview && <div className="flex items-center justify-center h-32 w-full bg-slate-200 dark:bg-slate-800 border-2 border-dashed rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
             <div className="flex justify-center gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`${fieldName}Input`)?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Camera</Button>
             </div>
             <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
         </div>
     );
 };
+
+const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <section className="space-y-6 pt-6">
+    <div className="relative">
+      <div className="absolute inset-0 flex items-center" aria-hidden="true">
+        <div className="w-full border-t border-dashed" />
+      </div>
+      <div className="relative flex justify-center">
+        <span className="bg-card px-3 text-xl font-semibold text-primary">{title}</span>
+      </div>
+    </div>
+    {children}
+  </section>
+);
 
 
 function EnrollmentFormWrapper() {
@@ -1229,15 +971,19 @@ function EnrollmentPageSkeleton() {
 
 export default function EnrollEmployeePage() {
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-6">
-        <Link href="/" className="flex items-center text-sm text-primary hover:underline">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-        </Link>
-      </div>
-      <Suspense fallback={<EnrollmentPageSkeleton />}>
-        <EnrollmentFormWrapper />
-      </Suspense>
+    <div className="w-full bg-muted/30">
+        <div className="max-w-4xl mx-auto py-8 sm:py-12 px-4">
+          <div className="mb-6">
+            <Button asChild variant="ghost" size="sm">
+                <Link href="/" className="flex items-center text-sm text-primary hover:underline">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
+                </Link>
+            </Button>
+          </div>
+          <Suspense fallback={<EnrollmentPageSkeleton />}>
+            <EnrollmentFormWrapper />
+          </Suspense>
+        </div>
     </div>
   );
 }

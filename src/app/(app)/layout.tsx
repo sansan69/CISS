@@ -10,14 +10,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   LayoutDashboard,
   Users,
-  UserPlus,
   CalendarCheck,
   Settings,
   LogOut,
-  ChevronLeft,
   Menu,
   Briefcase,
   FileUp,
+  BarChart3,
+  QrCode,
+  Loader2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,8 +34,6 @@ import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { Toaster } from "@/components/ui/toaster"
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { useIsMobile } from '@/hooks/use-mobile';
-
 
 interface NavItem {
   href: string;
@@ -47,19 +46,31 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/employees', label: 'Employees', icon: Users },
   { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  {
+    href: '/settings',
+    label: 'Settings',
+    icon: Settings
+  },
 ];
 
-function NavLink({ item }: { item: NavItem }) {
+const settingsSubItems: NavItem[] = [
+    { href: '/settings/client-management', label: 'Clients', icon: Briefcase },
+    { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
+    { href: '/settings/qr-management', label: 'QR Codes', icon: QrCode },
+    { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
+]
+
+function NavLink({ item, isSettingsPage = false }: { item: NavItem, isSettingsPage?: boolean }) {
   const pathname = usePathname();
   const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const items = isSettingsPage ? settingsSubItems : navItems;
 
   return (
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
-        isActive && "bg-muted text-primary"
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
+        isActive && "bg-muted text-primary font-semibold"
       )}
     >
       <item.icon className="h-4 w-4" />
@@ -68,8 +79,26 @@ function NavLink({ item }: { item: NavItem }) {
   );
 }
 
+function MainNavLinks() {
+    return (
+        <>
+        {navItems.map((item) => <NavLink key={item.href} item={item} />)}
+        </>
+    )
+}
 
-function MobileNav() {
+function SettingsNavLinks() {
+     return (
+        <>
+        {settingsSubItems.map((item) => <NavLink key={item.href} item={item} isSettingsPage />)}
+        </>
+    )
+}
+
+function MobileNav({ user, onLogout }: { user: User, onLogout: () => void }) {
+    const pathname = usePathname();
+    const isSettingsPage = pathname.startsWith('/settings');
+
     return (
         <Sheet>
             <SheetTrigger asChild>
@@ -78,20 +107,33 @@ function MobileNav() {
                     <span className="sr-only">Toggle navigation menu</span>
                 </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="flex flex-col">
-                <nav className="grid gap-2 text-lg font-medium">
-                    <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold mb-4">
+            <SheetContent side="left" className="flex flex-col p-0">
+                <div className="flex h-16 items-center border-b px-4">
+                     <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
                         <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
-                        <span>CISS Workforce</span>
+                        <span className="text-lg">CISS Workforce</span>
                     </Link>
-                    {navItems.map((item) => <NavLink key={item.href} item={item} />)}
+                </div>
+                <nav className="grid gap-2 p-4 text-base font-medium">
+                   {isSettingsPage ? <SettingsNavLinks /> : <MainNavLinks />}
                 </nav>
+                 <div className="mt-auto flex flex-col gap-4 p-4 border-t">
+                    <UserNav user={user} onLogout={onLogout} isMobile={true}/>
+                </div>
             </SheetContent>
         </Sheet>
     );
 }
 
-function UserNav({ user, onLogout }: { user: User, onLogout: () => void }) {
+function UserNav({ user, onLogout, isMobile = false }: { user: User, onLogout: () => void, isMobile?: boolean }) {
+    if (isMobile) {
+        return (
+             <Button onClick={onLogout} variant="ghost" className="justify-start gap-3 px-3 py-2">
+                <LogOut className="h-4 w-4" />
+                Logout
+            </Button>
+        )
+    }
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -104,7 +146,7 @@ function UserNav({ user, onLogout }: { user: User, onLogout: () => void }) {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem disabled>Profile</DropdownMenuItem>
                 <DropdownMenuItem disabled>Support</DropdownMenuItem>
@@ -129,7 +171,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       setAuthUser(user);
       setIsLoadingAuth(false);
       if (!user) {
-        // Redirect to login if not authenticated and not on a public page
         const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
         const isPublicPath = publicPaths.some(path => pathname.startsWith(path) && path !== '/');
         if (!isPublicPath) {
@@ -152,37 +193,39 @@ export function AppLayout({ children }: { children: ReactNode }) {
   if (isLoadingAuth || !authUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} className="animate-pulse" unoptimized={true} />
+        <Loader2 className="h-10 w-10 animate-spin text-primary"/>
       </div>
     );
   }
+  
+  const isSettingsPage = pathname.startsWith('/settings');
 
   return (
     <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
       <div className="hidden border-r bg-muted/40 md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
-          <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+          <div className="flex h-16 items-center border-b px-6">
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
               <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
-              <span className="">CISS Workforce</span>
+              <span className="text-xl">CISS Workforce</span>
             </Link>
           </div>
           <div className="flex-1">
-            <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
-              {navItems.map((item) => <NavLink key={item.href} item={item} />)}
+            <nav className="grid items-start gap-1 p-4 text-sm font-medium">
+               {isSettingsPage ? <SettingsNavLinks /> : <MainNavLinks />}
             </nav>
           </div>
         </div>
       </div>
       <div className="flex flex-col">
-        <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
-            <MobileNav />
+        <header className="flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6">
+            <MobileNav user={authUser} onLogout={handleLogout}/>
             <div className="w-full flex-1">
-                {/* Header content like a global search can go here */}
+                {/* Header content can go here */}
             </div>
             <UserNav user={authUser} onLogout={handleLogout} />
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
+        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-muted/40 overflow-auto">
           {children}
         </main>
         <Toaster />
