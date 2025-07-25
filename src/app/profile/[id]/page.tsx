@@ -160,7 +160,7 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
         <div className="flex items-center gap-3">
             <FileUp className="h-5 w-5 text-primary" />
             <div>
-                <p className="font-medium text-sm">{name}</p>
+                <p className="text-sm font-medium">{name}</p>
                 {type && <p className="text-xs text-muted-foreground">{type}</p>}
             </div>
         </div>
@@ -270,7 +270,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       <div className="flex items-center gap-4">
         <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-blue-800">{toTitleCase(employee.fullName)}</h1>
+          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{toTitleCase(employee.fullName)}</h1>
           <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
           <p className="text-gray-600">Client: {employee.clientName}</p>
         </div>
@@ -281,7 +281,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
             alt={employee.fullName || 'Profile photo'} 
             width={100} 
             height={120} 
-            className="p-1 bg-gray-50 border-2 border-gray-200 rounded-lg object-contain" 
+            className="rounded-lg border-2 border-gray-200 object-contain p-1 bg-gray-50" 
             crossOrigin="anonymous" 
             unoptimized={true}
             data-ai-hint="profile photo" 
@@ -291,7 +291,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
 
     <main className="flex-grow mt-8 space-y-8 text-sm">
       <section>
-        <h2 className="pb-2 mb-4 text-lg font-semibold text-blue-700 border-b">Personal & Contact Information</h2>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <DetailGridItem label="Date of Birth" value={formatDateForPdf(employee.dateOfBirth)} />
           <DetailGridItem label="Gender" value={employee.gender} />
@@ -310,7 +310,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       </section>
 
       <section>
-        <h2 className="pb-2 mb-4 text-lg font-semibold text-blue-700 border-b">Employment & Statutory Details</h2>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <DetailGridItem label="Joining Date" value={formatDateForPdf(employee.joiningDate)} />
           <DetailGridItem label="Status" value={employee.status} />
@@ -322,7 +322,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
       </section>
 
       <section>
-        <h2 className="pb-2 mb-4 text-lg font-semibold text-blue-700 border-b">Bank & Identification Details</h2>
+        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
           <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
@@ -340,14 +340,14 @@ BiodataPage.displayName = 'BiodataPage';
 
 const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
   <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
-    <h1 className="mb-4 text-2xl font-bold">Employee QR Code</h1>
+    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
     <p className="mb-2 text-lg">{toTitleCase(employee.fullName)}</p>
     <p className="mb-8 text-gray-600">{employee.employeeId}</p>
     <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
       <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} data-ai-hint="qr code" />
     </div>
-    <div className="max-w-md mt-8 text-gray-600">
-      <p className="mb-2 font-semibold">Instructions:</p>
+    <div className="mt-8 text-gray-600 max-w-md">
+      <p className="font-semibold mb-2">Instructions:</p>
       <p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p>
     </div>
     <PageFooter pageNumber={pageNumber} />
@@ -359,19 +359,19 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
   const companyName = "CISS Services Ltd.";
   return (
     <div ref={ref} style={pageStyle}>
-      <h1 className="mb-6 text-xl font-bold text-center">Terms and Conditions of Enrollment</h1>
-      <div className="flex-grow space-y-3 text-xs text-justify">
+      <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment</h1>
+      <div className="space-y-3 text-xs text-justify flex-grow">
         <section>
-          <h2 className="mb-1 text-sm font-bold">I. General Eligibility and Compliance</h2>
-          <ul className="pl-4 space-y-1 list-disc list-outside">
+          <h2 className="text-sm font-bold mb-1">I. General Eligibility and Compliance</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
             <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
             <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
             <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
           </ul>
         </section>
         <section>
-          <h2 className="mb-1 text-sm font-bold">II. Employment Terms & Responsibilities</h2>
-          <ul className="pl-4 space-y-1 list-disc list-outside">
+          <h2 className="text-sm font-bold mb-1">II. Employment Terms & Responsibilities</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
             <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
             <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
             <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
@@ -379,32 +379,32 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
           </ul>
         </section>
         <section>
-          <h2 className="mb-1 text-sm font-bold">III. Disciplinary Action</h2>
-          <ul className="pl-4 space-y-1 list-disc list-outside">
+          <h2 className="text-sm font-bold mb-1">III. Disciplinary Action</h2>
+          <ul className="list-disc list-outside space-y-1 pl-4">
             <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
           </ul>
         </section>
       </div>
-      <section className="pt-6 mt-8 border-t-2 border-gray-400 border-dashed">
-        <h2 className="mb-4 text-base font-bold text-center">IV. Declaration</h2>
-        <p className="mb-6 text-sm text-justify">
+      <section className="mt-8 pt-6 border-t-2 border-dashed border-gray-400">
+        <h2 className="text-base font-bold text-center mb-4">IV. Declaration</h2>
+        <p className="text-sm mb-6 text-justify">
           I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
         </p>
-        <div className="flex items-end justify-between pt-12 mt-12 text-sm">
+        <div className="flex justify-between items-end mt-12 pt-12 text-sm">
             <div className="flex-1 space-y-2">
                 {employee.signatureUrl ? (
                     <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
                 ): (
                     <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
                 )}
-                <div className="pt-2 font-semibold border-t border-gray-400">Signature of Security Guard</div>
+                <div className="border-t border-gray-400 pt-2 font-semibold">Signature of Security Guard</div>
             </div>
             <div className="w-1/4 text-center">
-                <p className="pb-1 border-b border-gray-400">{formatDateForPdf(employee.joiningDate)}</p>
-                <div className="pt-2 mt-2 font-semibold border-t border-gray-400">Date of Registration</div>
+                <p className="border-b border-gray-400 pb-1">{formatDateForPdf(employee.joiningDate)}</p>
+                <div className="border-t border-gray-400 mt-2 pt-2 font-semibold">Date of Registration</div>
             </div>
         </div>
-        <div className="pt-6 mt-8 border-t border-gray-300">
+        <div className="mt-8 pt-6 border-t border-gray-300">
             <p className="text-sm">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></p>
         </div>
       </section>
@@ -944,7 +944,7 @@ export default function AdminEmployeeProfilePage() {
               alt={employee.fullName || 'Employee profile picture'}
               width={100}
               height={100}
-              className="object-cover border-4 rounded-full shadow-md border-primary"
+              className="rounded-full border-4 border-primary shadow-md object-cover"
               data-ai-hint="profile picture"
             />
             <div>
@@ -953,7 +953,7 @@ export default function AdminEmployeeProfilePage() {
               <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
             </div>
           </div>
-            <div className="flex w-full gap-2 sm:w-auto">
+            <div className="flex w-full sm:w-auto gap-2">
               <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                   Download Kit
@@ -966,7 +966,7 @@ export default function AdminEmployeeProfilePage() {
 
         {!isUploadMode && (
           <Tabs defaultValue="personal">
-            <TabsList className="grid w-full h-auto grid-cols-2 md:grid-cols-5 gap-2">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
               <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
               <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
               <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
@@ -990,7 +990,7 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="District" value={employee.district} isName />
                   </div>
                   <Separator className="my-6" />
-                  <CardTitle className="mb-2 text-lg">Contact Details</CardTitle>
+                  <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="Phone Number" value={employee.phoneNumber} />
                     <DetailItem label="Email Address" value={employee.emailAddress} />
@@ -1002,9 +1002,9 @@ export default function AdminEmployeeProfilePage() {
                 <TabsContent value="employment">
                   <CardTitle className="mb-4">Employment Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <div className="flex flex-col items-start gap-1 py-1.5 sm:grid sm:grid-cols-3 sm:items-center sm:gap-2">
+                    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5 items-start sm:items-center">
                         <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
-                        <span className="flex items-center gap-2 text-sm font-medium sm:col-span-2">
+                        <span className="text-sm font-medium sm:col-span-2 flex items-center gap-2">
                             {employee.employeeId}
                         </span>
                     </div>
@@ -1076,28 +1076,62 @@ export default function AdminEmployeeProfilePage() {
                   <CardDescription>Update your details below. Upload any missing documents. Click "Save Changes" when done.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
+                  <section>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="educationalQualification"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Educational Qualification</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                {educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {watchEducationalQualification === "Any Other Qualification" && (
+                        <FormField
+                          control={form.control}
+                          name="otherQualification"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Please Specify Qualification</FormLabel>
+                              <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+                  </section>
                   {/* Identification Documents Section */}
                   <section>
-                    <h3 className="pb-2 mb-4 text-lg font-semibold border-b">Identification Documents</h3>
-                    <div className="p-4 mt-4 space-y-4 border rounded-lg">
-                        <h4 className="text-md font-medium">Identity Proof (Name, DOB, etc.)</h4>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Identification Documents</h3>
+                    <div className="p-4 border rounded-lg mt-4 space-y-4">
+                        <h4 className="font-medium text-md">Identity Proof (Name, DOB, etc.)</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
-                        <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                            <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
                            <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
                         </div>
                     </div>
 
-                    <div className="p-4 mt-6 space-y-4 border rounded-lg">
-                        <h4 className="text-md font-medium">Address Proof</h4>
+                    <div className="p-4 border rounded-lg mt-6 space-y-4">
+                        <h4 className="font-medium text-md">Address Proof</h4>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
-                        <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                            <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} />
                            <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} />
                         </div>
@@ -1106,7 +1140,7 @@ export default function AdminEmployeeProfilePage() {
 
                   {/* Other Documents Section */}
                   <section>
-                      <h3 className="pb-2 mb-4 text-lg font-semibold border-b">Other Documents & Signature</h3>
+                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents & Signature</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} />
                           <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} />
@@ -1115,7 +1149,7 @@ export default function AdminEmployeeProfilePage() {
                       </div>
                   </section>
                 </CardContent>
-                <CardFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setIsUploadMode(false)} disabled={isSubmitting}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1134,7 +1168,7 @@ export default function AdminEmployeeProfilePage() {
               </DialogHeader>
               <div className="py-4">
                    {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
-                  <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto border rounded-md", { 'hidden': cameraError })} />
+                  <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto rounded-md border", { 'hidden': cameraError })} />
                   <canvas ref={canvasRef} className="hidden" />
               </div>
               <DialogFooter>
@@ -1165,7 +1199,7 @@ const ImageInputWithPreview: React.FC<{
     return (
         <div className="space-y-2">
             <Label className="text-base">{label}<span className="text-destructive">*</span></Label>
-            <div className="p-4 space-y-2 text-center border rounded-md">
+            <div className="p-4 border rounded-md text-center space-y-2">
                 <Image
                     src={finalPreview}
                     alt={label}
