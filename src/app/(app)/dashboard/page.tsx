@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Users, UserCheck, UserMinus, Clock, Activity, Loader2, AlertCircle as AlertIcon, ArrowRight, UserPlus } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -239,5 +239,3 @@ export default function DashboardPage() {
         </div>
     );
 }
-
-    
