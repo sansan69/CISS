@@ -2,7 +2,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, Edit } from "lucide-react";
+import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, X, CheckCircle as CheckCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subYears, addYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +53,14 @@ const optionalFileSchema = z.instanceof(File, { message: "This field is required
 
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
 const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
+
+const idValidation = {
+    "Aadhar Card": /^\d{12}$/,
+    "PAN Card": /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
+    "Voter ID": /^[A-Z]{3}[0-9]{7}$/,
+    "Passport": /^[A-Z]{1}[0-9]{7}$/,
+    "Driving License": /^(([A-Z]{2}[0-9]{2})( )|([A-Z]{2}-[0-9]{2}))((19|20)[0-9]{2})[0-9]{7}$/,
+};
 
 const enrollmentFormSchema = z.object({
   // Client Information
@@ -97,12 +105,12 @@ const enrollmentFormSchema = z.object({
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   
   identityProofType: proofTypes,
-  identityProofNumber: z.string().min(5, { message: "ID proof number is required." }),
+  identityProofNumber: z.string().min(1, { message: "ID proof number is required." }),
   identityProofUrlFront: fileSchema,
   identityProofUrlBack: fileSchema,
   
   addressProofType: proofTypes,
-  addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
+  addressProofNumber: z.string().min(1, { message: "Address proof number is required." }),
   addressProofUrlFront: fileSchema,
   addressProofUrlBack: fileSchema,
   
@@ -129,32 +137,41 @@ const enrollmentFormSchema = z.object({
   }),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Resource ID number is required for TCS client.",
-      path: ["resourceIdNumber"],
-    });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource ID number is required for TCS client.", path: ["resourceIdNumber"] });
   }
   if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Spouse name is required if marital status is Married.",
-      path: ["spouseName"],
-    });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Spouse name is required if marital status is Married.", path: ["spouseName"] });
   }
   if (data.identityProofType && data.addressProofType && data.identityProofType === data.addressProofType) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Identity and Address proof types cannot be the same.",
-      path: ["addressProofType"],
-    });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Identity and Address proof types cannot be the same.", path: ["addressProofType"] });
   }
   if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify your qualification.",
-      path: ["otherQualification"],
-    });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
+  }
+
+  // --- Zod Level Validation for ID Numbers ---
+  const { identityProofType, identityProofNumber } = data;
+  if (identityProofType in idValidation) {
+    const regex = idValidation[identityProofType as keyof typeof idValidation];
+    if (!regex.test(identityProofNumber)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid format for ${identityProofType}.`,
+        path: ["identityProofNumber"],
+      });
+    }
+  }
+
+  const { addressProofType, addressProofNumber } = data;
+   if (addressProofType in idValidation) {
+    const regex = idValidation[addressProofType as keyof typeof idValidation];
+    if (!regex.test(addressProofNumber)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid format for ${addressProofType}.`,
+        path: ["addressProofNumber"],
+      });
+    }
   }
 });
 
@@ -171,7 +188,7 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
-const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
+const idProofOptions = ["Aadhar Card", "PAN Card", "Voter ID", "Passport", "Driving License", "Birth Certificate", "School Certificate"];
 const maritalStatuses = ["Married", "Unmarried"];
 const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
 
@@ -248,6 +265,54 @@ const handlePublicUploadError = (err: any, documentName: string): never => {
   throw new Error(`${documentName} processing failed: ${err.message}`);
 };
 
+const IdNumberInput = ({
+    control,
+    name,
+    label
+} : {
+    control: any,
+    name: "identityProofNumber" | "addressProofNumber",
+    label: string
+}) => {
+    const typeFieldName = name === "identityProofNumber" ? "identityProofType" : "addressProofType";
+    const number = useWatch({ control, name: name });
+    const type = useWatch({ control, name: typeFieldName });
+
+    const [isValid, setIsValid] = React.useState<boolean | null>(null);
+
+    React.useEffect(() => {
+        if (!number || !type || !(type in idValidation)) {
+            setIsValid(null);
+            return;
+        }
+        const regex = idValidation[type as keyof typeof idValidation];
+        setIsValid(regex.test(number));
+    }, [number, type]);
+
+    return (
+        <FormField
+            control={control}
+            name={name}
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>{label} <span className="text-destructive">*</span></FormLabel>
+                    <div className="relative">
+                        <FormControl>
+                            <Input placeholder={`Enter ${label}`} {...field} />
+                        </FormControl>
+                        <div className="absolute inset-y-0 right-3 flex items-center">
+                            {isValid === true && <CheckCircleIcon className="h-5 w-5 text-green-500" />}
+                            {isValid === false && <X className="h-5 w-5 text-destructive" />}
+                        </div>
+                    </div>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+    );
+};
+
+
 function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentFormProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -278,6 +343,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
+    mode: 'onTouched', // Important for real-time feedback
     defaultValues: {
         clientName: '',
         resourceIdNumber: '',
@@ -897,7 +963,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <h3 className="font-medium text-lg">Identity Proof (Name, DOB, Father's Name)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter ID proof number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                         <FormField control={form.control} name="identityProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlFront" preview={identityProofUrlFrontPreview} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
@@ -910,7 +976,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <h3 className="font-medium text-lg">Address Proof</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter address proof number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                         <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                         <FormField control={form.control} name="addressProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlFront" preview={addressProofUrlFrontPreview} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
