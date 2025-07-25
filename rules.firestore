@@ -10,27 +10,32 @@ service cloud.firestore {
       // This is required for the public profile pages to function.
       allow read: if true;
 
-      // Allow anyone to create a new employee document during public enrollment.
+      // Allow anyone to create a new employee document.
+      // This is for the public enrollment form.
       allow create: if true;
 
-      // Allow an update ONLY if:
-      // 1. The user is an authenticated admin.
-      // 2. OR the user has verified via OTP and their phone number matches the document.
-      allow update: if (request.auth != null && request.auth.token.email_verified == true) || 
-                     (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber);
-      
-      // Only allow admins to delete.
-      allow delete: if request.auth != null && request.auth.token.email_verified == true;
+      // Allow updates if:
+      // 1. The user is an authenticated admin (identified by having an email in their token).
+      // OR
+      // 2. The user is an employee verified via OTP, and their phone number matches the document's phone number.
+      allow update: if (request.auth != null && request.auth.token.email != null) || 
+                      (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber);
+
+      // Only allow authenticated users (admins) to delete employee records.
+      // We identify admins by checking if their auth token contains an email.
+      allow delete: if request.auth != null && request.auth.token.email != null;
     }
 
     // Rules for the 'clients' collection
     match /clients/{clientId} {
 
-      // Allow anyone to read the list of clients for enrollment forms. 
+      // Allow anyone to read the list of clients. 
+      // This is required for the client dropdown on the enrollment forms to work.
       allow read: if true;
 
       // Only allow authenticated users (admins) to add, update, or delete clients.
-      allow create, update, delete: if request.auth != null && request.auth.token.email_verified == true;
+      // We identify admins by checking if their auth token contains an email.
+      allow create, update, delete: if request.auth != null && request.auth.token.email != null;
     }
   }
 }

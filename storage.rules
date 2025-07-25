@@ -6,20 +6,19 @@ service firebase.storage {
     // Employee document paths
     match /employees/{phoneNumber}/{documentType}/{fileName} {
       
-      // Allow unauthenticated users (public enrollment) to CREATE files.
-      // This is necessary for the initial registration form.
-      allow create: if 
-        documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
-        request.resource.size < 5 * 1024 * 1024 &&
-        (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      // Allow write (create & update) if:
+      // 1. The user is an authenticated admin (has an email in their token).
+      // OR
+      // 2. The user is an employee verified via OTP, their phone number matches the path, and they are uploading valid files.
+      allow write: if (request.auth != null && request.auth.token.email != null) ||
+                     (request.auth != null && request.auth.token.phone_number == '+91' + phoneNumber &&
+                      documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
+                      request.resource.size < 5 * 1024 * 1024 &&
+                      (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf'));
 
-      // Allow READ access to anyone. This is needed to display images on public profiles.
-      allow read: if true;
-
-      // Allow UPDATE and DELETE only if the user is authenticated.
-      // This covers both admins and employees who have just verified via OTP.
-      // A further check on the phone number could be added here if needed, but Firestore rules provide the main security.
-      allow update, delete: if request.auth != null;
+      // Allow read/delete if the user is an admin.
+      // Public users do not need read access via rules; they get URLs from Firestore.
+      allow read, delete: if request.auth != null && request.auth.token.email != null;
     }
 
     // Default deny all other reads/writes to bucket paths.
