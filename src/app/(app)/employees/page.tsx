@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap, ScanSearch } from 'lucide-react';
+import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap, ScanSearch, CheckCircle, AlertTriangle as WarningIcon, FileWarning } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
@@ -42,16 +42,44 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
+// Helper to get pending items for an employee profile
+const getPendingDetails = (employee: Employee): string[] => {
+    const pending: string[] = [];
+    const legacy = employee as any;
+
+    // Essential Documents
+    if (!employee.profilePictureUrl) pending.push("Profile Picture");
+    if (!employee.signatureUrl) pending.push("Signature");
+    if (!employee.identityProofUrlFront && !legacy.idProofDocumentUrlFront && !legacy.idProofDocumentUrl) pending.push("Identity Proof (Front)");
+    if (!employee.identityProofUrlBack && !legacy.idProofDocumentUrlBack) pending.push("Identity Proof (Back)");
+    if (!employee.addressProofUrlFront) pending.push("Address Proof (Front)");
+    if (!employee.addressProofUrlBack) pending.push("Address Proof (Back)");
+
+    // Essential Details
+    if (!employee.panNumber) pending.push("PAN Number");
+    if (!employee.bankAccountNumber) pending.push("Bank Account Number");
+    if (!employee.ifscCode) pending.push("IFSC Code");
+    if (!employee.bankName) pending.push("Bank Name");
+
+    // Optional but good to have
+    if (!employee.epfUanNumber) pending.push("EPF/UAN Number");
+    if (!employee.esicNumber) pending.push("ESIC Number");
+    if (!employee.bankPassbookStatementUrl) pending.push("Bank Document");
+    if (!employee.policeClearanceCertificateUrl) pending.push("Police Clearance Cert.");
+    
+    return pending;
+};
+
+
 // Helper to safely format dates that might be Timestamps or strings
 const safeFormatDate = (dateValue: any, formatString: string) => {
     if (!dateValue) return 'N/A';
     try {
-        // Check if it's a Firestore Timestamp and convert it
-        if (typeof dateValue.toDate === 'function') {
-            return format(dateValue.toDate(), formatString);
+        const date = dateValue.toDate ? dateValue.toDate() : new Date(dateValue);
+        if (isNaN(date.getTime())) {
+            return "Invalid Date";
         }
-        // Otherwise, try to parse it (assuming it's a string or existing Date)
-        return format(new Date(dateValue), formatString);
+        return format(date, formatString);
     } catch (e) {
         console.error("Date formatting error:", e);
         return "Invalid Date";
@@ -649,9 +677,8 @@ export default function EmployeeDirectoryPage() {
                 <TableRow>
                     <TableHead>Employee</TableHead>
                     <TableHead className="hidden md:table-cell">Employee ID</TableHead>
-                    <TableHead className="hidden lg:table-cell">Client</TableHead>
-                    <TableHead className="hidden sm:table-cell">Mobile</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Profile Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
@@ -669,76 +696,103 @@ export default function EmployeeDirectoryPage() {
                     </TableCell>
                     </TableRow>
                 ) : (
-                    displayedEmployees.map((emp) => (
-                    <TableRow 
-                      key={emp.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/employees/${emp.id}`)}
-                    >
-                    <TableCell>
-                        <div className="flex items-center gap-3">
-                        <Avatar>
-                            <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName || 'Employee avatar'} data-ai-hint="profile avatar"/>
-                            <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <div className="font-medium">{emp.fullName}</div>
-                            <div className="text-sm text-muted-foreground sm:hidden">{emp.phoneNumber}</div>
-                            <div className="text-sm text-muted-foreground hidden sm:block">{emp.emailAddress}</div>
-                        </div>
-                        </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">{emp.employeeId}</TableCell>
-                    <TableCell className="hidden lg:table-cell">{emp.clientName}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{emp.phoneNumber}</TableCell>
-                    <TableCell>
-                        <Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                              <Link href={`/employees/${emp.id}`}>
-                                  <Eye className="mr-2 h-4 w-4" /> View Profile
-                              </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                              <Link href={`/employees/${emp.id}?edit=true`}> 
-                                  <Edit className="mr-2 h-4 w-4" /> Edit
-                              </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {emp.status !== 'Active' && (
-                              <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}>
-                                  <UserCheck className="mr-2 h-4 w-4" /> Set Active
-                              </DropdownMenuItem>
-                              )}
-                              {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
-                              <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
-                                  <UserX className="mr-2 h-4 w-4" /> Set Inactive
-                              </DropdownMenuItem>
-                              )}
-                              {emp.status !== 'Exited' && (
-                              <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}>
-                                  <LogOutIcon className="mr-2 h-4 w-4" /> Set Exited
-                              </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
-                              </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                    </TableRow>
-                )))}
+                    displayedEmployees.map((emp) => {
+                     const pendingItems = getPendingDetails(emp);
+                     return (
+                        <TableRow 
+                          key={emp.id} 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => router.push(`/employees/${emp.id}`)}
+                        >
+                        <TableCell>
+                            <div className="flex items-center gap-3">
+                            <Avatar>
+                                <AvatarImage src={emp.profilePictureUrl} alt={emp.fullName || 'Employee avatar'} data-ai-hint="profile avatar"/>
+                                <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <div className="font-medium">{emp.fullName}</div>
+                                <div className="text-sm text-muted-foreground sm:hidden">{emp.phoneNumber}</div>
+                                <div className="text-sm text-muted-foreground hidden sm:block">{emp.clientName}</div>
+                            </div>
+                            </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">{emp.employeeId}</TableCell>
+                        <TableCell>
+                            <Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                            {pendingItems.length === 0 ? (
+                                <div className="flex items-center gap-2 text-green-600">
+                                    <CheckCircle className="h-5 w-5" />
+                                    <span className="hidden lg:inline">Complete</span>
+                                </div>
+                            ) : (
+                                <Popover>
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <Button variant="ghost" size="sm" className="flex items-center gap-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 h-auto p-1">
+                                            <WarningIcon className="h-5 w-5" />
+                                            <span className="hidden lg:inline">{pendingItems.length} Pending</span>
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64" onClick={(e) => e.stopPropagation()}>
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium leading-none">Pending Items</h4>
+                                            <p className="text-sm text-muted-foreground">The following items are missing from this profile:</p>
+                                            <ul className="list-disc list-inside text-sm space-y-1 pt-2">
+                                                {pendingItems.map(item => <li key={item}>{item}</li>)}
+                                            </ul>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                  <DropdownMenuItem asChild>
+                                  <Link href={`/employees/${emp.id}`}>
+                                      <Eye className="mr-2 h-4 w-4" /> View Profile
+                                  </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                  <Link href={`/employees/${emp.id}?edit=true`}> 
+                                      <Edit className="mr-2 h-4 w-4" /> Edit
+                                  </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  {emp.status !== 'Active' && (
+                                  <DropdownMenuItem onClick={() => openStatusModal(emp, 'Active')}>
+                                      <UserCheck className="mr-2 h-4 w-4" /> Set Active
+                                  </DropdownMenuItem>
+                                  )}
+                                  {emp.status !== 'Inactive' && emp.status !== 'Exited' && ( 
+                                  <DropdownMenuItem onClick={() => openStatusModal(emp, 'Inactive')}>
+                                      <UserX className="mr-2 h-4 w-4" /> Set Inactive
+                                  </DropdownMenuItem>
+                                  )}
+                                  {emp.status !== 'Exited' && (
+                                  <DropdownMenuItem onClick={() => openStatusModal(emp, 'Exited')}>
+                                      <LogOutIcon className="mr-2 h-4 w-4" /> Set Exited
+                                  </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onClick={() => openDeleteDialog(emp)}>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                  </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                        </TableRow>
+                     )
+                    })}
                 </TableBody>
             </Table>
             </div>
