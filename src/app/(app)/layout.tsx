@@ -60,14 +60,14 @@ const settingsSubItems: NavItem[] = [
     { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
 ]
 
-function NavLink({ item, isSettingsPage = false }: { item: NavItem, isSettingsPage?: boolean }) {
+function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const pathname = usePathname();
   const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-  const items = isSettingsPage ? settingsSubItems : navItems;
 
   return (
     <Link
       href={item.href}
+      onClick={onClick}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
         isActive && "bg-muted text-primary font-semibold"
@@ -79,28 +79,32 @@ function NavLink({ item, isSettingsPage = false }: { item: NavItem, isSettingsPa
   );
 }
 
-function MainNavLinks() {
+function MainNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
     return (
         <>
-        {navItems.map((item) => <NavLink key={item.href} item={item} />)}
+        {navItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
         </>
     )
 }
 
-function SettingsNavLinks() {
+function SettingsNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
      return (
         <>
-        {settingsSubItems.map((item) => <NavLink key={item.href} item={item} isSettingsPage />)}
+        {settingsSubItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
         </>
     )
 }
 
-function MobileNav({ user, onLogout }: { user: User, onLogout: () => void }) {
+function MobileNav({ user, onLogout, isOpen, onOpenChange }: { user: User; onLogout: () => void; isOpen: boolean; onOpenChange: (open: boolean) => void; }) {
     const pathname = usePathname();
     const isSettingsPage = pathname.startsWith('/settings');
 
+    const handleLinkClick = () => {
+        onOpenChange(false);
+    };
+
     return (
-        <Sheet>
+        <Sheet open={isOpen} onOpenChange={onOpenChange}>
             <SheetTrigger asChild>
                 <Button variant="outline" size="icon" className="shrink-0 md:hidden">
                     <Menu className="h-5 w-5" />
@@ -110,13 +114,13 @@ function MobileNav({ user, onLogout }: { user: User, onLogout: () => void }) {
             <SheetContent side="left" className="flex flex-col p-0">
                 <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                 <div className="flex h-16 items-center border-b px-4">
-                     <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+                     <Link href="/dashboard" onClick={handleLinkClick} className="flex items-center gap-2 font-semibold">
                         <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
                         <span className="text-lg">CISS Workforce</span>
                     </Link>
                 </div>
                 <nav className="grid gap-2 p-4 text-base font-medium">
-                   {isSettingsPage ? <SettingsNavLinks /> : <MainNavLinks />}
+                   {isSettingsPage ? <SettingsNavLinks onLinkClick={handleLinkClick} /> : <MainNavLinks onLinkClick={handleLinkClick} />}
                 </nav>
                  <div className="mt-auto flex flex-col gap-4 p-4 border-t">
                     <UserNav user={user} onLogout={onLogout} isMobile={true}/>
@@ -166,6 +170,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -220,7 +225,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
       <div className="flex flex-col">
         <header className="flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6">
-            <MobileNav user={authUser} onLogout={handleLogout}/>
+            <MobileNav user={authUser} onLogout={handleLogout} isOpen={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}/>
             <div className="w-full flex-1">
                 {/* Header content can go here */}
             </div>
