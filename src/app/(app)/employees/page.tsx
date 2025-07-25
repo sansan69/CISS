@@ -10,12 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap, ScanSearch, CheckCircle, AlertTriangle as WarningIcon, FileWarning } from 'lucide-react';
+import { MoreHorizontal, Search, Filter, UserPlus, Edit, Trash2, Eye, UserCheck, UserX, LogOutIcon, CalendarDays, Loader2, AlertCircle, DatabaseZap, ScanSearch, CheckCircle, AlertTriangle as WarningIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, collectionGroup, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, getCountFromServer, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription as ShadDialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -30,7 +30,6 @@ import { Progress } from '@/components/ui/progress';
 const ITEMS_PER_PAGE = 10;
 const SESSION_STORAGE_KEY = 'employeeDirectoryState';
 
-
 interface ClientOption {
   id: string;
   name: string;
@@ -42,26 +41,20 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
-// Helper to get pending items for an employee profile
 const getPendingDetails = (employee: Employee): string[] => {
     const pending: string[] = [];
     const legacy = employee as any;
 
-    // Essential Documents
     if (!employee.profilePictureUrl) pending.push("Profile Picture");
     if (!employee.signatureUrl) pending.push("Signature");
     if (!employee.identityProofUrlFront && !legacy.idProofDocumentUrlFront && !legacy.idProofDocumentUrl) pending.push("Identity Proof (Front)");
     if (!employee.identityProofUrlBack && !legacy.idProofDocumentUrlBack) pending.push("Identity Proof (Back)");
     if (!employee.addressProofUrlFront) pending.push("Address Proof (Front)");
     if (!employee.addressProofUrlBack) pending.push("Address Proof (Back)");
-
-    // Essential Details
     if (!employee.panNumber) pending.push("PAN Number");
     if (!employee.bankAccountNumber) pending.push("Bank Account Number");
     if (!employee.ifscCode) pending.push("IFSC Code");
     if (!employee.bankName) pending.push("Bank Name");
-
-    // Optional but good to have
     if (!employee.epfUanNumber) pending.push("EPF/UAN Number");
     if (!employee.esicNumber) pending.push("ESIC Number");
     if (!employee.bankPassbookStatementUrl) pending.push("Bank Document");
@@ -70,8 +63,6 @@ const getPendingDetails = (employee: Employee): string[] => {
     return pending;
 };
 
-
-// Helper to safely format dates that might be Timestamps or strings
 const safeFormatDate = (dateValue: any, formatString: string) => {
     if (!dateValue) return 'N/A';
     try {
@@ -103,10 +94,8 @@ export default function EmployeeDirectoryPage() {
   
   const [isTableLoading, setIsTableLoading] = useState(false);
   
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageDocHistory, setPageDocHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-
 
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -121,7 +110,6 @@ export default function EmployeeDirectoryPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
 
-  // State for duplicate scanning
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<Record<string, Employee[]>>({});
   const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
@@ -149,16 +137,26 @@ export default function EmployeeDirectoryPage() {
     setError(null);
     try {
         const baseQuery = buildBaseQuery();
-        let finalQuery: Query<DocumentData>;
+        let finalQuery: Query;
 
-        if (direction === 'initial') {
+        if (direction === 'initial' || page === 1) {
             finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
         } else if (direction === 'next') {
             const lastVisible = pageDocHistory[page - 1];
+            if (!lastVisible) {
+              setIsTableLoading(false);
+              toast({ title: "No more records" });
+              return;
+            }
             finalQuery = query(baseQuery, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
         } else { // prev
-            const firstVisible = pageDocHistory[page - 1];
-            finalQuery = query(baseQuery, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
+            const firstDocOfCurrentPage = pageDocHistory[page];
+            if (!firstDocOfCurrentPage) {
+                // This case is tricky, might need to re-fetch to get context
+                setIsTableLoading(false);
+                return;
+            }
+            finalQuery = query(baseQuery, endBefore(firstDocOfCurrentPage), limitToLast(ITEMS_PER_PAGE));
         }
 
         const documentSnapshots = await getDocs(finalQuery);
@@ -170,27 +168,25 @@ export default function EmployeeDirectoryPage() {
         if (fetchedEmployees.length === 0 && direction !== 'initial') {
             toast({ variant: 'default', title: "No More Records", description: "You've reached the end of the list."});
             setIsTableLoading(false);
+            setCurrentPage(page - 1); // Go back to previous page
             return;
         }
 
         setEmployees(fetchedEmployees);
-        setCurrentPage(page);
 
-        // Update page history
-        const firstDoc = documentSnapshots.docs[0] || null;
         const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
-
+        const firstDoc = documentSnapshots.docs[0] || null;
+        
         setPageDocHistory(prev => {
             const newHistory = [...prev];
-            if (direction === 'next') {
-                newHistory[page] = lastDoc;
-            } else if (direction === 'initial') {
-                 return [null, lastDoc];
-            }
+            newHistory[page] = lastDoc;
+            newHistory[page - 1] = firstDoc;
             return newHistory;
         });
 
-        const stateToSave = { searchTerm, filterClient, filterStatus, filterDistrict };
+        setCurrentPage(page);
+
+        const stateToSave = { searchTerm, filterClient, filterStatus, filterDistrict, page };
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
 
     } catch (err: any) {
@@ -204,7 +200,17 @@ export default function EmployeeDirectoryPage() {
         setIsLoading(false);
         setIsTableLoading(false);
     }
-  }, [buildBaseQuery, pageDocHistory, toast, filterClient, filterStatus, filterDistrict, searchTerm]);
+  }, [buildBaseQuery, pageDocHistory, toast, searchTerm, filterClient, filterStatus, filterDistrict]);
+
+  const handleNextPage = () => {
+    if (employees.length < ITEMS_PER_PAGE) return;
+    fetchPage(currentPage + 1, 'next');
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage === 1) return;
+    fetchPage(currentPage - 1, 'prev');
+  };
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -220,6 +226,8 @@ export default function EmployeeDirectoryPage() {
   }, [toast]);
   
   useEffect(() => {
+    let pageToLoad = 1;
+    let shouldFetch = true;
     const savedStateJSON = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (savedStateJSON) {
         try {
@@ -228,13 +236,19 @@ export default function EmployeeDirectoryPage() {
             setFilterClient(savedState.filterClient || 'all');
             setFilterStatus(savedState.filterStatus || 'all');
             setFilterDistrict(savedState.filterDistrict || 'all');
+            pageToLoad = savedState.page || 1;
+            // if all filters are default, don't fetch yet, let the other effect handle it.
+            if(savedState.searchTerm === '' && savedState.filterClient === 'all' && savedState.filterStatus === 'all' && savedState.filterDistrict === 'all') {
+                shouldFetch = false;
+            }
         } catch(e) {
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
         }
     }
-    // This effect should only run once on mount.
-    // The dependency array is intentionally empty.
-  }, []);
+    if(shouldFetch) {
+        fetchPage(pageToLoad, 'initial');
+    }
+  }, []); // Only on initial mount
 
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
@@ -242,23 +256,7 @@ export default function EmployeeDirectoryPage() {
     }, 500);
 
     return () => clearTimeout(debounceTimer);
-    // This effect runs when filters change
   }, [searchTerm, filterClient, filterStatus, filterDistrict]);
-
-
-  const handleNextPage = () => {
-    fetchPage(currentPage + 1, 'next');
-  };
-
-  const handlePreviousPage = () => {
-    // Navigate back to the previous page's data using its last known doc.
-    const prevPage = currentPage - 1;
-    if (prevPage > 0) {
-      router.back(); // Simplest way to handle browser history
-      fetchPage(prevPage, 'prev'); // Re-fetch for that state. This might need more refinement based on exact UX needs.
-    }
-  };
-
 
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
@@ -418,7 +416,6 @@ export default function EmployeeDirectoryPage() {
     }
   };
 
-
   const handleUpdateSearchFields = () => {
     const allEmployeesQuery = query(collection(db, "employees"));
     runBatchUpdate("Search Fields", allEmployeesQuery, (employeeData) => {
@@ -525,7 +522,6 @@ export default function EmployeeDirectoryPage() {
     try {
       await batch.commit();
   
-      // Now handle file deletions after successful DB deletion
       for (const emp of employeesToDelete) {
           const filesToDelete = [ emp.profilePictureUrl, emp.identityProofUrlFront, emp.identityProofUrlBack, emp.addressProofUrlFront, emp.addressProofUrlBack, emp.signatureUrl, emp.bankPassbookStatementUrl, emp.policeClearanceCertificateUrl ];
           for (const url of filesToDelete) {
@@ -542,7 +538,6 @@ export default function EmployeeDirectoryPage() {
       toast({ title: "Duplicates Deleted", description: `${selectedForDeletion.length} record(s) have been removed.` });
       setShowDuplicatesDialog(false);
       setSelectedForDeletion([]);
-      // Refresh the main table and the duplicate scan
       fetchPage(1, 'initial');
     } catch (error) {
       console.error("Error deleting duplicates:", error);
@@ -678,13 +673,13 @@ export default function EmployeeDirectoryPage() {
                 <TableBody>
                 {isTableLoading ? ( 
                     <TableRow>
-                    <TableCell colSpan={6} className="text-center h-24">
+                    <TableCell colSpan={5} className="text-center h-24">
                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                     </TableCell>
                     </TableRow>
                 ) : employees.length === 0 ? (
                     <TableRow>
-                    <TableCell colSpan={6} className="text-center h-24">
+                    <TableCell colSpan={5} className="text-center h-24">
                         No employees found matching your criteria.
                     </TableCell>
                     </TableRow>
@@ -798,7 +793,7 @@ export default function EmployeeDirectoryPage() {
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => fetchPage(currentPage - 1, 'prev')}
+                    onClick={handlePreviousPage}
                     disabled={isTableLoading || currentPage === 1}
                 >
                     Previous
@@ -806,8 +801,8 @@ export default function EmployeeDirectoryPage() {
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => fetchPage(currentPage + 1, 'next')}
-                    disabled={isTableLoading || employees.length &lt; ITEMS_PER_PAGE}
+                    onClick={handleNextPage}
+                    disabled={isTableLoading || employees.length < ITEMS_PER_PAGE}
                 >
                     Next
                 </Button>
@@ -885,7 +880,7 @@ export default function EmployeeDirectoryPage() {
         </CardFooter>
       </Card>
 
-      {selectedEmployeeForStatusChange &amp;&amp; (
+      {selectedEmployeeForStatusChange && (
         <AlertDialog open={isStatusModalOpen} onOpenChange={setIsStatusModalOpen}>
             <AlertDialogContent>
                 <AlertDialogHeader>
@@ -893,11 +888,11 @@ export default function EmployeeDirectoryPage() {
                 <AlertDialogDescription>
                   <span>
                     You are about to change the status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{newStatus}</Badge>.
-                    {newStatus === 'Exited' &amp;&amp; " Please provide the date of exit."}
+                    {newStatus === 'Exited' && " Please provide the date of exit."}
                   </span>
                 </AlertDialogDescription>
                 </AlertDialogHeader>
-                {newStatus === 'Exited' &amp;&amp; (
+                {newStatus === 'Exited' && (
                 <div className="grid gap-2 py-2">
                     <Label htmlFor="exitDate">Date of Exit</Label>
                     <Popover>
@@ -925,7 +920,7 @@ export default function EmployeeDirectoryPage() {
                 )}
                 <AlertDialogFooter>
                 <AlertDialogCancel disabled={isUpdatingStatus}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmStatusUpdate} disabled={isUpdatingStatus || (newStatus === 'Exited' &amp;&amp; !exitDate)}>
+                <AlertDialogAction onClick={handleConfirmStatusUpdate} disabled={isUpdatingStatus || (newStatus === 'Exited' && !exitDate)}>
                   <span className="flex items-center justify-center">
                     {isUpdatingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Confirm Update
@@ -936,7 +931,7 @@ export default function EmployeeDirectoryPage() {
         </AlertDialog>
       )}
 
-      {employeeToDelete &amp;&amp; (
+      {employeeToDelete && (
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
             <AlertDialogContent>
                 <AlertDialogHeader>
@@ -1010,4 +1005,3 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
-    
