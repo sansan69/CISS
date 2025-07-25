@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { type Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, storage } from '@/lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, Query, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, endBefore, limitToLast, type QueryDocumentSnapshot, type DocumentData, deleteField, deleteDoc, type Query, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription as ShadDialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -91,12 +91,19 @@ export default function EmployeeDirectoryPage() {
   
   const [clients, setClients] = useState<ClientOption[]>([]);
   const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited'];
-
-  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  
   const [page, setPage] = useState(1);
-  const [isLastPage, setIsLastPage] = useState(false);
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
 
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+
+  const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<Record<string, Employee[]>>({});
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
+  
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
   const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
@@ -107,77 +114,79 @@ export default function EmployeeDirectoryPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateProgress, setUpdateProgress] = useState(0);
 
-  const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
-  const [duplicateGroups, setDuplicateGroups] = useState<Record<string, Employee[]>>({});
-  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
-  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
-  const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
-
-  const buildQuery = useCallback(() => {
+  const buildQuery = useCallback((forSearch: boolean) => {
     let q: Query = collection(db, "employees");
     
+    if (forSearch && searchTerm.trim() !== '') {
+        q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
+    }
+
     if (filterClient !== 'all') q = query(q, where('clientName', '==', filterClient));
     if (filterStatus !== 'all') q = query(q, where('status', '==', filterStatus));
     if (filterDistrict !== 'all') q = query(q, where('district', '==', filterDistrict));
-    
-    if (searchTerm.trim() !== '') {
-        q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
-    } else {
+
+    if (!forSearch) {
         q = query(q, orderBy('createdAt', 'desc'));
     }
-
+    
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
-  const fetchData = useCallback(async (pageDirection?: 'next' | 'prev') => {
+
+  const fetchData = useCallback(async (newPage: number, direction: 'next' | 'prev' | 'reset') => {
     setIsLoading(true);
     setError(null);
     try {
-        let q = buildQuery();
+        const isSearchActive = searchTerm.trim() !== '';
+        let q = buildQuery(isSearchActive);
         
-        if (pageDirection === 'next' && lastVisible) {
-            q = query(q, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
-        } else if (pageDirection === 'prev' && firstVisible) {
-            q = query(q, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
+        const lastDoc = pageHistory[newPage - 1];
+
+        if (direction === 'next' && lastDoc) {
+            q = query(q, startAfter(lastDoc), limit(ITEMS_PER_PAGE));
+        } else if (direction === 'prev' && newPage > 1 && pageHistory[newPage - 2]) {
+             q = query(q, endBefore(pageHistory[newPage-1]), limitToLast(ITEMS_PER_PAGE));
         } else {
-            q = query(q, limit(ITEMS_PER_PAGE));
-            setPage(1);
+             q = query(q, limit(ITEMS_PER_PAGE));
         }
 
         const documentSnapshots = await getDocs(q);
-        const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
-        
-        if (documentSnapshots.empty) {
-            if (pageDirection) {
-                // User tried to go next/prev on an empty/last page.
-                setIsLastPage(true);
+        if (!documentSnapshots.empty) {
+            const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
+            setEmployees(fetchedEmployees);
+            
+            const firstDoc = documentSnapshots.docs[0];
+            const lastDocVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+
+            if (direction === 'reset') {
+                setPageHistory([null, lastDocVisible]);
+            } else if (direction === 'next') {
+                setPageHistory(prev => {
+                    const newHistory = [...prev];
+                    newHistory[newPage] = lastDocVisible;
+                    return newHistory;
+                });
+            }
+
+        } else {
+            if (direction !== 'reset') {
+                 toast({ title: direction === 'next' ? "You are on the last page" : "You are on the first page" });
+                 setPage(p => p > 1 ? p -1 : 1);
             } else {
                 setEmployees([]);
             }
-        } else {
-            setEmployees(fetchedEmployees);
-            setFirstVisible(documentSnapshots.docs[0]);
-            setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
-            // A simple check to see if we're on the last page
-            const nextQuery = query(buildQuery(), startAfter(documentSnapshots.docs[documentSnapshots.docs.length-1]), limit(1));
-            const nextSnap = await getDocs(nextQuery);
-            setIsLastPage(nextSnap.empty);
         }
-
     } catch (err: any) {
-        console.error("Error fetching employees:", err);
         let message = err.message || "Failed to fetch employees.";
         if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
-        if (err.code === 'failed-precondition') message = "A required database index is missing. Please check the browser's developer console for a link to create the required index in your Firebase project.";
+        if (err.code === 'failed-precondition') message = "A required database index is missing. Please check the browser's developer console for a link to create the required index in Firebase.";
         setError(message);
         toast({ variant: "destructive", title: "Data Fetch Error", description: message, duration: 9000 });
     } finally {
         setIsLoading(false);
     }
-  }, [buildQuery, lastVisible, firstVisible, toast]);
+  }, [buildQuery, pageHistory, searchTerm, toast]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -188,33 +197,34 @@ export default function EmployeeDirectoryPage() {
       } catch (err: any) {
         toast({ variant: "destructive", title: "Error", description: "Could not fetch client list." });
       }
-      fetchData();
+      fetchData(1, 'reset');
     };
     fetchInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const handler = setTimeout(() => {
-        setFirstVisible(null);
-        setLastVisible(null);
-        fetchData();
+        setPage(1);
+        setPageHistory([null]);
+        fetchData(1, 'reset');
     }, 500); 
     return () => clearTimeout(handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, filterClient, filterStatus, filterDistrict]);
 
 
   const handleNextPage = () => {
-    if (isLastPage) return;
-    setPage(p => p + 1);
-    fetchData('next');
+    const newPage = page + 1;
+    setPage(newPage);
+    fetchData(newPage, 'next');
   };
 
   const handlePreviousPage = () => {
     if (page <= 1) return;
-    setPage(p => p - 1);
-    fetchData('prev');
+    const newPage = page - 1;
+    setPage(newPage);
+    fetchData(newPage, 'prev');
   };
 
   const openStatusModal = (employee: Employee, status: Employee['status']) => {
@@ -227,12 +237,10 @@ export default function EmployeeDirectoryPage() {
 
   const handleConfirmStatusUpdate = async () => {
     if (!selectedEmployeeForStatusChange || !newStatus) return;
-
     setIsUpdatingStatus(true);
     try {
       const employeeDocRef = doc(db, "employees", selectedEmployeeForStatusChange.id);
       const updateData: any = { status: newStatus, updatedAt: serverTimestamp() };
-
       if (newStatus === 'Exited') {
         if (!exitDate) {
           toast({ variant: "destructive", title: "Error", description: "Exit date is required." });
@@ -243,7 +251,6 @@ export default function EmployeeDirectoryPage() {
       } else {
         updateData.exitDate = deleteField();
       }
-
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       setEmployees(prev => prev.map(emp => emp.id === selectedEmployeeForStatusChange.id ? { ...emp, status: newStatus, exitDate: newStatus === 'Exited' ? exitDate : undefined } : emp));
@@ -271,7 +278,6 @@ export default function EmployeeDirectoryPage() {
         employeeToDelete.addressProofUrlBack, employeeToDelete.signatureUrl,
         employeeToDelete.bankPassbookStatementUrl, employeeToDelete.policeClearanceCertificateUrl,
       ];
-
       for (const fileUrl of filesToDelete) {
         if (fileUrl && fileUrl.startsWith("https://firebasestorage.googleapis.com/")) {
           try {
@@ -282,7 +288,7 @@ export default function EmployeeDirectoryPage() {
         }
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-      fetchData();
+      fetchData(1, 'reset');
     } catch (err) {
       toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
     } finally {
@@ -295,7 +301,6 @@ export default function EmployeeDirectoryPage() {
     setIsUpdating(true);
     setUpdateProgress(0);
     toast({ title: `Starting: ${title}`, description: "Fetching all relevant records..." });
-
     try {
         const snapshot = await getDocs(queryToRun);
         const totalDocs = snapshot.size;
@@ -303,7 +308,6 @@ export default function EmployeeDirectoryPage() {
             toast({ title: "No Records to Update" });
             return;
         }
-
         const BATCH_SIZE = 400;
         for (let i = 0; i < totalDocs; i += BATCH_SIZE) {
             const batch = writeBatch(db);
@@ -316,7 +320,7 @@ export default function EmployeeDirectoryPage() {
             setUpdateProgress(((i + chunk.length) / totalDocs) * 100);
         }
         toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} records.` });
-        fetchData();
+        fetchData(1, 'reset');
     } catch (error) {
         toast({ variant: "destructive", title: "Update Failed", description: `An error occurred during the update.` });
     } finally {
@@ -377,7 +381,7 @@ export default function EmployeeDirectoryPage() {
       toast({ title: "Duplicates Deleted", description: `${selectedForDeletion.length} record(s) removed.` });
       setShowDuplicatesDialog(false);
       setSelectedForDeletion([]);
-      fetchData();
+      fetchData(1, 'reset');
     } catch (error) {
       toast({ variant: "destructive", title: "Deletion Failed" });
     } finally {
@@ -457,7 +461,7 @@ export default function EmployeeDirectoryPage() {
                 <div className="text-center py-10">
                     <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
                     <p className="mt-4 text-lg text-destructive">{error}</p>
-                    <Button onClick={() => fetchData()} className="mt-4">Try Again</Button>
+                    <Button onClick={() => fetchData(1, 'reset')} className="mt-4">Try Again</Button>
                 </div>
             ) : (
                 <>
@@ -517,7 +521,7 @@ export default function EmployeeDirectoryPage() {
                     <span className="text-sm text-muted-foreground">Page {page}</span>
                     <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isLoading || page === 1}>Previous</Button>
-                    <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || isLastPage}>Next</Button>
+                    <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading}>Next</Button>
                     </div>
                 </div>
                 </>
