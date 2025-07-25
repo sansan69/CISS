@@ -72,13 +72,18 @@ export default function EmployeeDirectoryPage() {
   
   const [clients, setClients] = useState<ClientOption[]>([]);
   const statuses = ['all', 'Active', 'Inactive', 'OnLeave', 'Exited'];
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [lastVisibleDoc, setLastVisibleDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-
+  
   const [isTableLoading, setIsTableLoading] = useState(false);
   
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageDocs, setPageDocs] = useState<{
+    first: QueryDocumentSnapshot | null;
+    last: QueryDocumentSnapshot | null;
+  }>({ first: null, last: null });
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot | null)[]>([null]);
+
+
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
   const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
@@ -137,48 +142,54 @@ export default function EmployeeDirectoryPage() {
     return q;
   }, [filterClient, filterStatus, filterDistrict, searchTerm]);
 
-  const fetchEmployees = useCallback(async (page: number, startAfterDoc: QueryDocumentSnapshot<DocumentData> | null) => {
+  const fetchEmployees = useCallback(async (direction: 'next' | 'prev' | 'initial' = 'initial') => {
     setIsTableLoading(true);
     setError(null);
+    let newPage = currentPage;
 
     try {
-        let finalQuery = buildBaseQuery();
-        
-        if (startAfterDoc) {
-            finalQuery = query(finalQuery, startAfter(startAfterDoc), limit(ITEMS_PER_PAGE));
+        let baseQuery = buildBaseQuery();
+        let finalQuery: Query<DocumentData>;
+
+        if (direction === 'initial') {
+            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+            newPage = 1;
+            setPageHistory([null]);
+        } else if (direction === 'next' && pageDocs.last) {
+            finalQuery = query(baseQuery, startAfter(pageDocs.last), limit(ITEMS_PER_PAGE));
+            newPage = currentPage + 1;
+        } else if (direction === 'prev' && currentPage > 1) {
+            const lastFirstDoc = pageHistory[currentPage - 2] ?? null;
+            finalQuery = query(baseQuery, startAfter(lastFirstDoc), limit(ITEMS_PER_PAGE));
+            newPage = currentPage - 1;
+            setPageHistory(prev => prev.slice(0, -1));
         } else {
-            finalQuery = query(finalQuery, limit(ITEMS_PER_PAGE));
+            setIsTableLoading(false);
+            return;
         }
         
         const documentSnapshots = await getDocs(finalQuery);
-      
-        const fetchedEmployees = documentSnapshots.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                ...data,
-                joiningDate: data.joiningDate instanceof Timestamp ? data.joiningDate.toDate().toISOString() : data.joiningDate,
-                dateOfBirth: data.dateOfBirth instanceof Timestamp ? data.dateOfBirth.toDate().toISOString() : data.dateOfBirth,
-                exitDate: data.exitDate instanceof Timestamp ? data.exitDate.toDate().toISOString() : (data.exitDate || null),
-                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-            } as Employee;
-        });
-
-        setEmployees(fetchedEmployees);
+        const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+        } as Employee));
         
-        const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
-        setLastVisibleDoc(newLastVisible);
+        setEmployees(fetchedEmployees);
+        const firstVisible = documentSnapshots.docs[0] || null;
+        const lastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+
+        setPageDocs({ first: firstVisible, last: lastVisible });
+        setCurrentPage(newPage);
+
+        if (direction === 'next') {
+            setPageHistory(prev => [...prev, pageDocs.first]);
+        }
 
         const stateToSave = {
-            currentPage: page,
             searchTerm,
             filterClient,
             filterStatus,
             filterDistrict,
-            // We can't serialize the doc, so we won't save it. The user will lose their exact spot
-            // but will be on the correct page number. A more advanced implementation might store doc IDs.
-            pageHistoryCount: pageHistory.length
         };
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
 
@@ -196,11 +207,11 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery, searchTerm, filterClient, filterStatus, filterDistrict, pageHistory.length]);
+  }, [buildBaseQuery, currentPage, pageDocs.first, pageDocs.last, toast, filterClient, filterDistrict, filterStatus, searchTerm]);
+
 
     useEffect(() => {
         fetchClients();
-
         const savedStateJSON = sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (savedStateJSON) {
             const savedState = JSON.parse(savedStateJSON);
@@ -208,42 +219,24 @@ export default function EmployeeDirectoryPage() {
             setFilterClient(savedState.filterClient || 'all');
             setFilterStatus(savedState.filterStatus || 'all');
             setFilterDistrict(savedState.filterDistrict || 'all');
-            // We are not restoring the page number here to avoid complex snapshot logic
-            // The filters being restored is the primary goal. The page will reset to 1 on filter change.
         }
     }, [fetchClients]);
 
     useEffect(() => {
         const debounceTimer = setTimeout(() => {
-            setCurrentPage(1);
-            setPageHistory([null]);
-            setLastVisibleDoc(null);
-            fetchEmployees(1, null);
+            fetchEmployees('initial');
         }, 500); 
 
         return () => clearTimeout(debounceTimer);
-    }, [searchTerm, filterClient, filterStatus, filterDistrict, fetchEmployees]);
+    }, [searchTerm, filterClient, filterStatus, filterDistrict]);
   
 
   const handleNextPage = () => {
-    if (!lastVisibleDoc) return;
-
-    const nextPage = currentPage + 1;
-    setPageHistory(prev => [...prev, lastVisibleDoc]);
-    fetchEmployees(nextPage, lastVisibleDoc);
-    setCurrentPage(nextPage);
+    fetchEmployees('next');
   };
 
   const handlePreviousPage = () => {
-      if (currentPage === 1) return;
-      const prevPage = currentPage - 1;
-      
-      const prevHistory = pageHistory.slice(0, -1);
-      const startAfterDoc = prevHistory[prevPage -1] ?? null;
-      
-      setPageHistory(prevHistory);
-      fetchEmployees(prevPage, startAfterDoc);
-      setCurrentPage(prevPage);
+    fetchEmployees('prev');
   };
 
 
@@ -293,8 +286,7 @@ export default function EmployeeDirectoryPage() {
       await updateDoc(employeeDocRef, updateData);
       toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
       
-      const currentStartDoc = pageHistory[currentPage - 1] ?? null;
-      fetchEmployees(currentPage, currentStartDoc);
+      setEmployees(prev => prev.map(emp => emp.id === selectedEmployeeForStatusChange.id ? { ...emp, status: newStatus, exitDate: newStatus === 'Exited' ? exitDate : undefined } : emp));
       
       setIsStatusModalOpen(false);
       setSelectedEmployeeForStatusChange(null);
@@ -345,10 +337,7 @@ export default function EmployeeDirectoryPage() {
       }
       toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed from the directory.` });
       
-      setCurrentPage(1);
-      setPageHistory([null]);
-      setLastVisibleDoc(null);
-      fetchEmployees(1, null);
+      fetchEmployees('initial');
       
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
@@ -399,7 +388,7 @@ export default function EmployeeDirectoryPage() {
         }
         
         toast({ title: "Update Complete!", description: `Successfully updated ${totalDocs} employee records for ${updateTitle}.`, duration: 5000 });
-        fetchEmployees(1, null);
+        fetchEmployees('initial');
 
     } catch (error) {
         console.error(`Error during ${updateTitle}:`, error);
@@ -534,7 +523,7 @@ export default function EmployeeDirectoryPage() {
       setShowDuplicatesDialog(false);
       setSelectedForDeletion([]);
       // Refresh the main table and the duplicate scan
-      fetchEmployees(1, null);
+      fetchEmployees('initial');
     } catch (error) {
       console.error("Error deleting duplicates:", error);
       toast({ variant: "destructive", title: "Deletion Failed", description: "Could not delete the selected records." });
@@ -546,7 +535,7 @@ export default function EmployeeDirectoryPage() {
 
   
   const displayedEmployees = employees;
-  const canShowNext = lastVisibleDoc !== null && employees.length === ITEMS_PER_PAGE;
+  const canShowNext = pageDocs.last !== null && employees.length === ITEMS_PER_PAGE;
 
 
   if (isLoading) { 
@@ -563,7 +552,7 @@ export default function EmployeeDirectoryPage() {
       <div className="text-center py-10">
         <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
         <p className="mt-4 text-lg text-destructive">{error}</p>
-        <Button onClick={() => fetchEmployees(1, null)} className="mt-4">Try Again</Button>
+        <Button onClick={() => fetchEmployees('initial')} className="mt-4">Try Again</Button>
       </div>
     );
   }
@@ -974,3 +963,5 @@ export default function EmployeeDirectoryPage() {
     </div>
   );
 }
+
+    
