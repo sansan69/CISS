@@ -28,6 +28,8 @@ import { useRouter } from 'next/navigation';
 import { Progress } from '@/components/ui/progress';
 
 const ITEMS_PER_PAGE = 10;
+const SESSION_STORAGE_KEY = 'employeeDirectoryState';
+
 
 interface ClientOption {
   id: string;
@@ -167,6 +169,19 @@ export default function EmployeeDirectoryPage() {
         
         const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
         setLastVisibleDoc(newLastVisible);
+
+        const stateToSave = {
+            currentPage: page,
+            searchTerm,
+            filterClient,
+            filterStatus,
+            filterDistrict,
+            // We can't serialize the doc, so we won't save it. The user will lose their exact spot
+            // but will be on the correct page number. A more advanced implementation might store doc IDs.
+            pageHistoryCount: pageHistory.length
+        };
+        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
+
     } catch (err: any) {
       console.error("Error fetching employees:", err);
       let message = err.message || "Failed to fetch employees.";
@@ -181,10 +196,21 @@ export default function EmployeeDirectoryPage() {
       setIsLoading(false);
       setIsTableLoading(false);
     }
-  }, [toast, buildBaseQuery]);
+  }, [toast, buildBaseQuery, searchTerm, filterClient, filterStatus, filterDistrict, pageHistory.length]);
 
     useEffect(() => {
         fetchClients();
+
+        const savedStateJSON = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (savedStateJSON) {
+            const savedState = JSON.parse(savedStateJSON);
+            setSearchTerm(savedState.searchTerm || '');
+            setFilterClient(savedState.filterClient || 'all');
+            setFilterStatus(savedState.filterStatus || 'all');
+            setFilterDistrict(savedState.filterDistrict || 'all');
+            // We are not restoring the page number here to avoid complex snapshot logic
+            // The filters being restored is the primary goal. The page will reset to 1 on filter change.
+        }
     }, [fetchClients]);
 
     useEffect(() => {

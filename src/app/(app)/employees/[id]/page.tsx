@@ -1086,7 +1086,7 @@ export default function AdminEmployeeProfilePage() {
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
-          <Button variant="outline" size="sm" onClick={() => router.push('/employees')}>
+          <Button variant="outline" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory
           </Button>
         </div>
