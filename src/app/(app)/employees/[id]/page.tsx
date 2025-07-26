@@ -568,20 +568,26 @@ export default function AdminEmployeeProfilePage() {
   useEffect(() => {
     if (employee) {
       const legacy = employee as any;
+      const getInitialValue = (key: keyof Employee, fallback: any = "") => employee[key] ?? fallback;
+  
       form.reset({
         ...employee,
         joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
         dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
         exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-        spouseName: employee.spouseName || "",
-        resourceIdNumber: employee.resourceIdNumber || "",
-        panNumber: employee.panNumber || "",
-        epfUanNumber: employee.epfUanNumber || "",
-        esicNumber: employee.esicNumber || "",
-        otherQualification: employee.otherQualification || "",
+        spouseName: getInitialValue('spouseName'),
+        resourceIdNumber: getInitialValue('resourceIdNumber'),
+        panNumber: getInitialValue('panNumber'),
+        epfUanNumber: getInitialValue('epfUanNumber'),
+        esicNumber: getInitialValue('esicNumber'),
+        otherQualification: getInitialValue('otherQualification'),
         identityProofType: (employee.identityProofType || legacy.idProofType) as any,
-        identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber),
+        identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber) ?? '',
         addressProofType: employee.addressProofType as any,
+        addressProofNumber: getInitialValue('addressProofNumber'),
+        bankName: getInitialValue('bankName'),
+        bankAccountNumber: getInitialValue('bankAccountNumber'),
+        ifscCode: getInitialValue('ifscCode'),
       });
     }
   }, [employee, form]);
@@ -1562,3 +1568,4 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
+
