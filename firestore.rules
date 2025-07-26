@@ -6,29 +6,36 @@ service cloud.firestore {
     // Rules for the 'employees' collection
     match /employees/{employeeId} {
       
-      // READ Rules:
-      // Allow a user to read their own document if they are authenticated via phone.
-      // Allow an authenticated admin to read any document.
-      allow get: if (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber) || 
-                   (request.auth != null && request.auth.token.email != null);
-                   
-      // LIST Rule:
-      // Only allow authenticated admins to list/query the collection.
-      // This is crucial for the main employee directory view.
-      allow list: if request.auth != null && request.auth.token.email != null;
+      // Allow read access to an employee document if:
+      // 1. The user is an authenticated admin (has an email).
+      // OR
+      // 2. The user is authenticated with a phone number that matches the document's phone number.
+      allow read: if request.auth != null && 
+                    (
+                      request.auth.token.email != null ||
+                      request.auth.token.phone_number == resource.data.phoneNumber
+                    );
 
-      // CREATE Rule:
-      // Allow anyone to create a new employee document for public enrollment.
-      // Data validation should be handled in the application logic before submission.
-      allow create: if true;
+      // Allow a user to create a new employee document if:
+      // 1. They are authenticated (e.g., via phone OTP).
+      // 2. The phone number in their auth token matches the phone number in the document being created.
+      allow create: if request.auth != null && 
+                      request.auth.token.phone_number == request.resource.data.phoneNumber;
 
-      // UPDATE Rule:
-      // Allow updates if the user is an admin OR if the user is updating their own
-      // document, verified by matching the phone number.
-      allow update: if (request.auth != null && request.auth.token.email != null) ||
-                      (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber);
-      
-      // DELETE Rule:
+      // Allow updates if:
+      // 1. The user is an authenticated admin (identified by having an email in their token).
+      // OR
+      // 2. The user is an employee verified via OTP, their phone number matches the document's phone number,
+      //    and they are not trying to change their own phone number.
+      allow update: if request.auth != null && 
+                      (
+                        request.auth.token.email != null ||
+                        (
+                          request.auth.token.phone_number == resource.data.phoneNumber &&
+                          request.resource.data.phoneNumber == resource.data.phoneNumber
+                        )
+                      );
+
       // Only allow authenticated admins to delete employee records.
       allow delete: if request.auth != null && request.auth.token.email != null;
     }
@@ -36,7 +43,8 @@ service cloud.firestore {
     // Rules for the 'clients' collection
     match /clients/{clientId} {
 
-      // Allow anyone to read the list of clients for dropdowns.
+      // Allow anyone to read the list of clients. 
+      // This is required for the client dropdown on the enrollment forms to work.
       allow read: if true;
 
       // Only allow authenticated admins to add, update, or delete clients.
