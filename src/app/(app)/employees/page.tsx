@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ const getPendingDetails = (employee: Employee): string[] => {
 
 export default function EmployeeDirectoryPage() {
     const { toast } = useToast();
+    const router = useRouter();
 
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -300,7 +302,11 @@ export default function EmployeeDirectoryPage() {
                                     employees.map((emp) => {
                                         const pendingItems = getPendingDetails(emp);
                                         return (
-                                            <TableRow key={emp.id} className="hover:bg-muted/50">
+                                            <TableRow 
+                                                key={emp.id} 
+                                                className="hover:bg-muted/50 cursor-pointer"
+                                                onClick={() => router.push(`/employees/${emp.id}`)}
+                                            >
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
                                                         <Avatar>
@@ -321,7 +327,7 @@ export default function EmployeeDirectoryPage() {
                                                     ) : (
                                                         <Popover>
                                                             <PopoverTrigger asChild>
-                                                                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 text-amber-600 px-2 h-auto py-1">
+                                                                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 text-amber-600 px-2 h-auto py-1" onClick={(e) => e.stopPropagation()}>
                                                                     <WarningIcon className="h-4 w-4" /> <span className="text-xs">{pendingItems.length} Pending</span>
                                                                 </Button>
                                                             </PopoverTrigger>
@@ -337,11 +343,11 @@ export default function EmployeeDirectoryPage() {
                                                         </Popover>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem asChild><Link href={`/employees/${emp.id}`}><Eye className="mr-2 h-4 w-4" /> View / Edit</Link></DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}`)}><Eye className="mr-2 h-4 w-4" /> View / Edit</DropdownMenuItem>
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Active'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Active</DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Exited'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Exited</DropdownMenuItem>
