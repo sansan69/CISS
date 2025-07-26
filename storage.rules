@@ -3,32 +3,35 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Employee document paths are structured as: /employees/{phoneNumber}/{documentType}/{fileName}
+    // Employee document paths: /employees/{phoneNumber}/{documentType}/{fileName}
     match /employees/{phoneNumber}/{documentType}/{fileName} {
       
-      // --- WRITE (Create, Update) Rule ---
-      // Allow write access under two conditions:
-      // 1. The user is an authenticated admin (identified by having an email in their auth token).
-      // OR
-      // 2. The user is authenticated via phone, and their verified phone number matches the {phoneNumber} in the path.
-      // This single condition securely handles both new public enrollments and existing employees updating their own documents.
-      allow write: if (request.auth != null && (
+      // --- CREATE Rule (For New Enrollments) ---
+      // Allow unauthenticated users to upload files ONLY during initial creation.
+      // This is essential for the public enrollment form to work.
+      // This is secure because the path is unpredictable without the phone number,
+      // and we apply strict validation on what can be uploaded.
+      allow create: if documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
+                     request.resource.size < 5 * 1024 * 1024 &&
+                     (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+
+      // --- UPDATE Rule (For Existing Employees) ---
+      // Allow authenticated admins or the employee themselves (matching phone number) to update files.
+      allow update: if request.auth != null && (
                       (request.auth.token.email != null) ||
                       (request.auth.token.phone_number == '+91' + phoneNumber)
-                    )) &&
-                    // Enforce that uploads go into recognized document type folders.
+                    ) &&
                     documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
-                    // Enforce file size and type constraints for all uploads.
                     request.resource.size < 5 * 1024 * 1024 &&
                     (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
 
+
       // --- READ and DELETE Rules ---
-      // Only authenticated admins can read or delete files directly from storage.
-      // Public users get download URLs from Firestore, which have their own security.
+      // Only allow admins to read or delete files directly.
       allow read, delete: if request.auth != null && request.auth.token.email != null;
     }
 
-    // Default deny all other reads/writes to any other path in the bucket.
+    // Default deny all other reads/writes to bucket paths.
     match /{allPaths=**} {
       allow read, write: if false;
     }

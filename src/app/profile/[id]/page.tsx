@@ -34,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
+import { compressImage, uploadFileToStorage, deleteFileFromStorage } from "@/lib/storageUtils";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -511,7 +511,11 @@ export default function PublicEmployeeProfilePage() {
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const context = canvas.getContext('2d');
-      context?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      if (!context) {
+        toast({variant: 'destructive', title: 'Error', description: 'Could not get camera context.'});
+        return;
+      }
+      context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
       const file = await dataURLtoFile(dataUrl, `${activeCameraField}.jpg`);
 
@@ -543,35 +547,32 @@ export default function PublicEmployeeProfilePage() {
 
         const uploadAndSetUrl = async (
             newFile: File | null,
-            oldUrl: string | undefined,
             filePath: string,
             urlKey: keyof typeof updatedUrls,
             isImage: boolean
         ) => {
             if (!newFile) return;
-            // Public users cannot delete, so we just upload the new file.
-            // The storage rules prevent them from deleting.
             
             const fileToUpload = isImage
                 ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : file;
+                : newFile;
                 
             updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
         };
 
         const uploadJobs = [
-            { file: newProfilePicture, oldUrl: employee.profilePictureUrl, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
-            { file: newIdentityProofUrlFront, oldUrl: employee.identityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
-            { file: newIdentityProofUrlBack, oldUrl: employee.identityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlFront, oldUrl: employee.addressProofUrlFront, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlBack, oldUrl: employee.addressProofUrlBack, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
-            { file: newSignatureUrl, oldUrl: employee.signatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
-            { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
-            { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
+            { file: newProfilePicture, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
+            { file: newIdentityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newIdentityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlFront, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
+            { file: newAddressProofUrlBack, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
+            { file: newSignatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
+            { file: newBankPassbookStatement, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
+            { file: newPoliceClearanceCertificate, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
         ];
 
         for (const job of uploadJobs) {
-            await uploadAndSetUrl(job.file, job.oldUrl, job.path, job.key as any, job.isImage);
+            await uploadAndSetUrl(job.file, job.path, job.key as any, job.isImage);
         }
 
         const formPayload: Record<string, any> = { ...data };
@@ -582,7 +583,6 @@ export default function PublicEmployeeProfilePage() {
 
         const finalPayload = { ...formPayload, ...updatedUrls };
         
-        // Update publicProfile if relevant fields change
         if (finalPayload.profilePictureUrl) {
             finalPayload['publicProfile.profilePictureUrl'] = finalPayload.profilePictureUrl;
         }
@@ -592,8 +592,7 @@ export default function PublicEmployeeProfilePage() {
             const employeeDocRef = doc(db, "employees", employee.id);
             await updateDoc(employeeDocRef, finalPayload);
             toast({ title: "Profile Updated", description: "Your details have been saved." });
-            // Manually update local state
-            setEmployee(prev => prev ? { ...prev, ...finalPayload, dateOfBirth: finalPayload.dateOfBirth || prev.dateOfBirth, joiningDate: finalPayload.joiningDate || prev.joiningDate } as Employee : null);
+            setEmployee(prev => prev ? { ...prev, ...finalPayload } : null);
             setIsUploadMode(false);
         } else {
             toast({ title: "No Changes", description: "No changes were detected to save." });
@@ -603,7 +602,7 @@ export default function PublicEmployeeProfilePage() {
         console.error("Error updating profile:", err);
         let description = err.message || "An error occurred while saving.";
         if (err.code === 'permission-denied' || err.code === 'PERMISSION_DENIED') {
-            description = "Permission Denied. Your request to update the profile could not be authorized. Please ensure you are correctly verified and try again.";
+            description = "Permission Denied. Your request to update could not be authorized. Please ensure you are correctly verified.";
         }
         toast({ variant: "destructive", title: "Update Failed", description });
     } finally {

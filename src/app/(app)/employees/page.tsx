@@ -98,17 +98,21 @@ export default function EmployeeDirectoryPage() {
     
     const memoizedQuery = useMemo(() => {
         let q: Query = collection(db, "employees");
+        
+        // Always apply base ordering for consistent pagination, unless searching.
+        // If a search term is present, Firestore's array-contains limitation means
+        // we can't easily combine it with other inequality filters or a different orderBy.
+        // For this app, search takes precedence.
         if (filters.searchTerm.trim() !== '') {
             q = query(q, where('searchableFields', 'array-contains', filters.searchTerm.trim().toUpperCase()));
+        } else {
+             q = query(q, orderBy('createdAt', 'desc'));
         }
+
         if (filters.client !== 'all') q = query(q, where('clientName', '==', filters.client));
         if (filters.status !== 'all') q = query(q, where('status', '==', filters.status));
         if (filters.district !== 'all') q = query(q, where('district', '==', filters.district));
 
-        if (filters.searchTerm.trim() === '') {
-            q = query(q, orderBy('createdAt', 'desc'));
-        }
-        
         return q;
     }, [filters]);
 
@@ -154,7 +158,8 @@ export default function EmployeeDirectoryPage() {
 
     useEffect(() => {
         fetchData(1);
-    }, [memoizedQuery, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [memoizedQuery]);
 
     useEffect(() => {
         const fetchClients = async () => {

@@ -256,9 +256,9 @@ interface ActualEnrollmentFormProps {
   initialPhoneNumberFromQuery?: string | null;
 }
 
-const handlePublicUploadError = (err: any, documentName: string): never => {
+const handleUploadError = (err: any, documentName: string): never => {
   if (err.code === 'storage/unauthorized') {
-    throw new Error(`Upload Permission Denied: The system is not configured to allow file uploads for new enrollments. Please contact an administrator and check the Firebase Storage security rules to allow unauthenticated writes.`);
+    throw new Error(`Upload Permission Denied: The system is not configured to allow file uploads. Please contact an administrator to check the Firebase Storage security rules.`);
   }
   throw new Error(`${documentName} processing failed: ${err.message}`);
 };
@@ -617,7 +617,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 const url = await uploadFileToStorage(fileToUpload, path);
                 uploadedUrls[key] = url;
             } catch (err) {
-                handlePublicUploadError(err, name);
+                handleUploadError(err, name);
             }
         }
         
