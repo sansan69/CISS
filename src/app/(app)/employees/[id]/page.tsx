@@ -1087,7 +1087,7 @@ export default function AdminEmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push('/employees?' + searchParams.toString())} className="mt-4">
+            <Button onClick={() => router.push(`/employees?${searchParams.toString()}`)} className="mt-4">
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
             </Button>
         </AlertDescription>
@@ -1102,7 +1102,7 @@ export default function AdminEmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push('/employees?' + searchParams.toString())} className="mt-4">
+                <Button onClick={() => router.push(`/employees?${searchParams.toString()}`)} className="mt-4">
                    <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
                 </Button>
             </AlertDescription>
@@ -1126,7 +1126,7 @@ export default function AdminEmployeeProfilePage() {
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
-          <Button variant="outline" size="sm" onClick={() => router.push('/employees?' + searchParams.toString())}>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/employees?${searchParams.toString()}`)}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory
           </Button>
         </div>
@@ -1365,7 +1365,7 @@ export default function AdminEmployeeProfilePage() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Please Specify Qualification</FormLabel>
-                              <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl>
+                              <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} value={field.value ?? ''} /></FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -1383,7 +1383,7 @@ export default function AdminEmployeeProfilePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormItem><FormLabel>Employee ID</FormLabel><FormControl><Input value={employee.employeeId} disabled /></FormControl><FormDescription>Employee ID cannot be changed here. Regenerate it from the view mode.</FormDescription></FormItem>
                       <FormField control={form.control} name="clientName" render={({ field }) => (<FormItem><FormLabel>Client Name</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{availableClients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (<FormItem><FormLabel>Resource ID</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="joiningDate" render={({ field }) => (
                           <FormItem className="flex flex-col">
                               <FormLabel>Joining Date</FormLabel>
@@ -1420,12 +1420,12 @@ export default function AdminEmployeeProfilePage() {
                   <section>
                     <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Statutory Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Number</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                   </section>
                   
@@ -1569,5 +1569,6 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
+
 
 

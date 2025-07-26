@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type Employee } from '@/types/employee';
@@ -24,7 +24,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
-import { DateRange } from 'react-day-picker';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
@@ -54,20 +53,21 @@ export default function EmployeeDirectoryPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    const [searchTermInput, setSearchTermInput] = useState(searchParams.get('searchTerm') || '');
-
-    const [filters, setFilters] = useState({
-        searchTerm: searchParams.get('searchTerm') || '',
-        client: searchParams.get('client') || 'all',
-        status: searchParams.get('status') || 'all',
-        district: searchParams.get('district') || 'all',
-    });
     
     const [clients, setClients] = useState<ClientOption[]>([]);
     
-    const [page, setPage] = useState(parseInt(searchParams.get('page') || '1'));
-    const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+    const [page, setPage] = useState(1);
+    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [pageCursors, setPageCursors] = useState<{ [key: number]: QueryDocumentSnapshot<DocumentData> | null }>({ 1: null });
+    const [hasNextPage, setHasNextPage] = useState(true);
+
+    const [searchTermInput, setSearchTermInput] = useState('');
+    const [filters, setFilters] = useState({
+        searchTerm: '',
+        client: 'all',
+        status: 'all',
+        district: 'all',
+    });
     
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -78,100 +78,99 @@ export default function EmployeeDirectoryPage() {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    
-    const hasNextPage = useRef(true);
 
-    const updateUrlParams = (newFilters: typeof filters, newPage: number) => {
-        const params = new URLSearchParams();
-        if (newPage > 1) params.set('page', newPage.toString());
-        if (newFilters.searchTerm) params.set('searchTerm', newFilters.searchTerm);
-        if (newFilters.client !== 'all') params.set('client', newFilters.client);
-        if (newFilters.status !== 'all') params.set('status', newFilters.status);
-        if (newFilters.district !== 'all') params.set('district', newFilters.district);
+    // This effect synchronizes the URL parameters with the component's state on initial load and when URL changes.
+    useEffect(() => {
+        const pageFromUrl = parseInt(searchParams.get('page') || '1');
+        const searchTermFromUrl = searchParams.get('searchTerm') || '';
+        const clientFromUrl = searchParams.get('client') || 'all';
+        const statusFromUrl = searchParams.get('status') || 'all';
+        const districtFromUrl = searchParams.get('district') || 'all';
+
+        setPage(pageFromUrl);
+        setSearchTermInput(searchTermFromUrl);
+        setFilters({
+            searchTerm: searchTermFromUrl,
+            client: clientFromUrl,
+            status: statusFromUrl,
+            district: districtFromUrl
+        });
+    }, [searchParams]);
+
+    const updateUrlParams = useCallback((newParams: { [key: string]: string | number }) => {
+        const params = new URLSearchParams(searchParams.toString());
+        Object.entries(newParams).forEach(([key, value]) => {
+            if (value && value !== 'all' && value !== 1) {
+                params.set(key, String(value));
+            } else {
+                params.delete(key);
+            }
+        });
         router.replace(`/employees?${params.toString()}`, { scroll: false });
-    };
+    }, [router, searchParams]);
 
-    // Debounce effect for search term
+    // Debounce search term input
     useEffect(() => {
         const handler = setTimeout(() => {
-            if (searchTermInput !== filters.searchTerm) {
-                setFilters(prev => ({...prev, searchTerm: searchTermInput}));
-            }
+            setFilters(prev => ({ ...prev, searchTerm: searchTermInput }));
         }, 500);
         return () => clearTimeout(handler);
-    }, [searchTermInput, filters.searchTerm]);
+    }, [searchTermInput]);
 
 
-    const memoizedQuery = useMemo(() => {
-        let q: Query = collection(db, "employees");
-        
-        if (filters.searchTerm.trim() !== '') {
-            q = query(q, where('searchableFields', 'array-contains', filters.searchTerm.trim().toUpperCase()));
-        } else {
-             q = query(q, orderBy('createdAt', 'desc'));
-        }
-
-        if (filters.client !== 'all') q = query(q, where('clientName', '==', filters.client));
-        if (filters.status !== 'all') q = query(q, where('status', '==', filters.status));
-        if (filters.district !== 'all') q = query(q, where('district', '==', filters.district));
-
-        return q;
-    }, [filters]);
-
-    const fetchData = useCallback(async (newPage: number, resetPaging = false) => {
+    const fetchData = useCallback(async (targetPage: number) => {
         setIsLoading(true);
         setError(null);
 
-        let currentPage = resetPaging ? 1 : newPage;
-        let currentCursors = resetPaging ? [null] : [...pageCursors];
-
         try {
-            let paginatedQuery = memoizedQuery;
-            const cursor = currentCursors[currentPage - 1];
+            let q: Query = collection(db, "employees");
 
-            if (cursor) {
-                paginatedQuery = query(paginatedQuery, startAfter(cursor));
+            // Apply filters
+            if (filters.searchTerm.trim() !== '') {
+                q = query(q, where('searchableFields', 'array-contains', filters.searchTerm.trim().toUpperCase()));
+            } else {
+                q = query(q, orderBy('createdAt', 'desc'));
+            }
+
+            if (filters.client !== 'all') q = query(q, where('clientName', '==', filters.client));
+            if (filters.status !== 'all') q = query(q, where('status', '==', filters.status));
+            if (filters.district !== 'all') q = query(q, where('district', '==', filters.district));
+
+            // Handle pagination
+            const cursor = pageCursors[targetPage];
+            if (targetPage > 1 && cursor) {
+                q = query(q, startAfter(cursor));
             }
             
-            paginatedQuery = query(paginatedQuery, limit(ITEMS_PER_PAGE));
-            const documentSnapshots = await getDocs(paginatedQuery);
+            q = query(q, limit(ITEMS_PER_PAGE));
+            const documentSnapshots = await getDocs(q);
 
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
             setEmployees(fetchedEmployees);
             
-            hasNextPage.current = fetchedEmployees.length === ITEMS_PER_PAGE;
+            setHasNextPage(fetchedEmployees.length === ITEMS_PER_PAGE);
 
-            const lastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-            if (lastVisible) {
-                const newCursors = [...currentCursors];
-                if (newCursors.length <= currentPage) {
-                   newCursors.length = currentPage + 1;
-                }
-                newCursors[currentPage] = lastVisible;
-                setPageCursors(newCursors);
+            const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+            if (newLastVisible) {
+                setPageCursors(prev => ({...prev, [targetPage + 1]: newLastVisible}));
             }
-            setPage(currentPage);
-            if(resetPaging) {
-                 updateUrlParams(filters, 1);
-            }
-
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
             if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
-            if (err.code === 'failed-precondition') message = "A required database index is missing. Please check the browser's developer console for a link to create it.";
+            if (err.code === 'failed-precondition') message = "A required database index is missing. Check browser console.";
             setError(message);
         } finally {
             setIsLoading(false);
         }
-    }, [memoizedQuery, pageCursors, filters]);
+    }, [filters, pageCursors]);
     
-    // Initial fetch and filter change fetch
+    // Fetch data when page or filters change
     useEffect(() => {
-        fetchData(page, true);
+        fetchData(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [memoizedQuery]);
-
-
+    }, [page, filters]);
+    
+    // Fetch clients on initial render
     useEffect(() => {
         const fetchClients = async () => {
             try {
@@ -184,6 +183,32 @@ export default function EmployeeDirectoryPage() {
         fetchClients();
     }, [toast]);
     
+    const handleFilterChange = (filterType: keyof typeof filters, value: string) => {
+        setFilters(prev => ({...prev, [filterType]: value}));
+        setPage(1); // Reset to page 1 on filter change
+        setPageCursors({ 1: null }); // Reset cursors
+        updateUrlParams({ page: 1, [filterType]: value, searchTerm: searchTermInput, client: filters.client, status: filters.status, district: filters.district });
+    };
+    
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTermInput(e.target.value);
+        updateUrlParams({ searchTerm: e.target.value, page: 1 });
+    };
+
+    const handleNextPage = () => {
+        if (!hasNextPage) return;
+        const newPage = page + 1;
+        setPage(newPage);
+        updateUrlParams({ page: newPage });
+    };
+
+    const handlePreviousPage = () => {
+        if (page === 1) return;
+        const newPage = page - 1;
+        setPage(newPage);
+        updateUrlParams({ page: newPage });
+    };
+
     const handleConfirmDelete = async () => {
         if (!employeeToDelete) return;
         setIsDeleting(true);
@@ -197,18 +222,6 @@ export default function EmployeeDirectoryPage() {
             setIsDeleting(false);
             setIsDeleteDialogOpen(false);
         }
-    };
-
-    const handleNextPage = () => {
-        const newPage = page + 1;
-        fetchData(newPage);
-        updateUrlParams(filters, newPage);
-    };
-
-    const handlePreviousPage = () => {
-        const newPage = page - 1;
-        fetchData(newPage);
-        updateUrlParams(filters, newPage);
     };
     
     const handleConfirmStatusUpdate = async () => {
@@ -264,19 +277,19 @@ export default function EmployeeDirectoryPage() {
                     <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 relative">
                         <Label htmlFor="search-input" className="sr-only">Search</Label>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTermInput} onChange={(e) => setSearchTermInput(e.target.value)} className="pl-10" />
+                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTermInput} onChange={handleSearchChange} className="pl-10" />
                     </div>
                     <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>
-                        <Select value={filters.client} onValueChange={(val) => setFilters(prev => ({...prev, client: val}))}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
+                        <Select value={filters.client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
                     </div>
                      <div>
                         <Label htmlFor="district-filter" className="sr-only">District</Label>
-                        <Select value={filters.district} onValueChange={(val) => setFilters(prev => ({...prev, district: val}))}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+                        <Select value={filters.district} onValueChange={(val) => handleFilterChange('district', val)}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
                     </div>
                     <div>
                         <Label htmlFor="status-filter" className="sr-only">Status</Label>
-                        <Select value={filters.status} onValueChange={(val) => setFilters(prev => ({...prev, status: val}))}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                        <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
                     </div>
                 </CardContent>
             </Card>
@@ -392,7 +405,7 @@ export default function EmployeeDirectoryPage() {
                             <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isLoading || page === 1}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || !hasNextPage.current}>
+                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || !hasNextPage}>
                                 Next <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>
