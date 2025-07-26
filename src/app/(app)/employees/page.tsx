@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -27,6 +26,12 @@ import { Label } from '@/components/ui/label';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
+interface Filters {
+    searchTerm: string;
+    client: string;
+    status: string;
+    district: string;
+}
 
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
@@ -56,19 +61,14 @@ export default function EmployeeDirectoryPage() {
     
     const [clients, setClients] = useState<ClientOption[]>([]);
     
+    // State for pagination and filters
     const [page, setPage] = useState(1);
-    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [pageCursors, setPageCursors] = useState<{ [key: number]: QueryDocumentSnapshot<DocumentData> | null }>({ 1: null });
     const [hasNextPage, setHasNextPage] = useState(true);
-
+    const [filters, setFilters] = useState<Filters>({ searchTerm: '', client: 'all', status: 'all', district: 'all' });
     const [searchTermInput, setSearchTermInput] = useState('');
-    const [filters, setFilters] = useState({
-        searchTerm: '',
-        client: 'all',
-        status: 'all',
-        district: 'all',
-    });
-    
+
+    // State for modals
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
     const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
@@ -78,8 +78,78 @@ export default function EmployeeDirectoryPage() {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    const updateUrlParams = useCallback((newParams: { [key: string]: string | number }) => {
+        const params = new URLSearchParams(searchParams.toString());
+        Object.entries(newParams).forEach(([key, value]) => {
+            if (value && value !== 'all' && value !== 1 && String(value).length > 0) {
+                params.set(key, String(value));
+            } else {
+                params.delete(key);
+            }
+        });
+        // Use router.push to ensure the page re-renders and useEffects trigger correctly
+        router.push(`/employees?${params.toString()}`, { scroll: false });
+    }, [router, searchParams]);
 
-    // This effect synchronizes the URL parameters with the component's state on initial load and when URL changes.
+
+    const fetchData = useCallback(async (pageToFetch: number, currentFilters: Filters, cursors: typeof pageCursors) => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            let q: Query = collection(db, "employees");
+            let baseQuery = q;
+
+            // Apply filters
+            if (currentFilters.searchTerm.trim()) {
+                baseQuery = query(baseQuery, where('searchableFields', 'array-contains', currentFilters.searchTerm.trim().toUpperCase()));
+            }
+            if (currentFilters.client !== 'all') {
+                baseQuery = query(baseQuery, where('clientName', '==', currentFilters.client));
+            }
+            if (currentFilters.status !== 'all') {
+                baseQuery = query(baseQuery, where('status', '==', currentFilters.status));
+            }
+            if (currentFilters.district !== 'all') {
+                baseQuery = query(baseQuery, where('district', '==', currentFilters.district));
+            }
+
+            // Apply sorting. Must be the last field in a compound query.
+            if (!currentFilters.searchTerm.trim()) {
+                baseQuery = query(baseQuery, orderBy('createdAt', 'desc'));
+            }
+
+            // Handle pagination
+            const cursorDoc = cursors[pageToFetch];
+            if (pageToFetch > 1 && cursorDoc) {
+                baseQuery = query(baseQuery, startAfter(cursorDoc));
+            }
+            
+            const finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+            const documentSnapshots = await getDocs(finalQuery);
+            const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
+            
+            setEmployees(fetchedEmployees);
+            
+            const lastVisibleDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+            setHasNextPage(fetchedEmployees.length === ITEMS_PER_PAGE);
+
+            if (lastVisibleDoc) {
+                setPageCursors(prev => ({ ...prev, [pageToFetch + 1]: lastVisibleDoc }));
+            }
+
+        } catch (err: any) {
+            let message = err.message || "Failed to fetch employees.";
+            if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
+            if (err.code === 'failed-precondition') message = "A required database index is missing. Check browser console for a link to create it.";
+            setError(message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    // Effect to synchronize state from URL and fetch data
     useEffect(() => {
         const pageFromUrl = parseInt(searchParams.get('page') || '1');
         const searchTermFromUrl = searchParams.get('searchTerm') || '';
@@ -87,89 +157,29 @@ export default function EmployeeDirectoryPage() {
         const statusFromUrl = searchParams.get('status') || 'all';
         const districtFromUrl = searchParams.get('district') || 'all';
 
-        setPage(pageFromUrl);
-        setSearchTermInput(searchTermFromUrl);
-        setFilters({
+        const newFilters = {
             searchTerm: searchTermFromUrl,
             client: clientFromUrl,
             status: statusFromUrl,
-            district: districtFromUrl
-        });
-    }, [searchParams]);
+            district: districtFromUrl,
+        };
 
-    const updateUrlParams = useCallback((newParams: { [key: string]: string | number }) => {
-        const params = new URLSearchParams(searchParams.toString());
-        Object.entries(newParams).forEach(([key, value]) => {
-            if (value && value !== 'all' && value !== 1) {
-                params.set(key, String(value));
-            } else {
-                params.delete(key);
-            }
-        });
-        router.replace(`/employees?${params.toString()}`, { scroll: false });
-    }, [router, searchParams]);
-
-    // Debounce search term input
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setFilters(prev => ({ ...prev, searchTerm: searchTermInput }));
-        }, 500);
-        return () => clearTimeout(handler);
-    }, [searchTermInput]);
-
-
-    const fetchData = useCallback(async (targetPage: number) => {
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            let q: Query = collection(db, "employees");
-
-            // Apply filters
-            if (filters.searchTerm.trim() !== '') {
-                q = query(q, where('searchableFields', 'array-contains', filters.searchTerm.trim().toUpperCase()));
-            } else {
-                q = query(q, orderBy('createdAt', 'desc'));
-            }
-
-            if (filters.client !== 'all') q = query(q, where('clientName', '==', filters.client));
-            if (filters.status !== 'all') q = query(q, where('status', '==', filters.status));
-            if (filters.district !== 'all') q = query(q, where('district', '==', filters.district));
-
-            // Handle pagination
-            const cursor = pageCursors[targetPage];
-            if (targetPage > 1 && cursor) {
-                q = query(q, startAfter(cursor));
-            }
-            
-            q = query(q, limit(ITEMS_PER_PAGE));
-            const documentSnapshots = await getDocs(q);
-
-            const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
-            setEmployees(fetchedEmployees);
-            
-            setHasNextPage(fetchedEmployees.length === ITEMS_PER_PAGE);
-
-            const newLastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-            if (newLastVisible) {
-                setPageCursors(prev => ({...prev, [targetPage + 1]: newLastVisible}));
-            }
-        } catch (err: any) {
-            let message = err.message || "Failed to fetch employees.";
-            if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
-            if (err.code === 'failed-precondition') message = "A required database index is missing. Check browser console.";
-            setError(message);
-        } finally {
-            setIsLoading(false);
+        // If filters have changed, reset pagination
+        if (JSON.stringify(newFilters) !== JSON.stringify(filters) || pageFromUrl === 1) {
+             setPageCursors({ 1: null });
+             setPage(pageFromUrl);
+             setFilters(newFilters);
+             setSearchTermInput(searchTermFromUrl);
+             fetchData(pageFromUrl, newFilters, {1: null});
+        } else {
+             setPage(pageFromUrl);
+             setFilters(newFilters);
+             setSearchTermInput(searchTermFromUrl);
+             fetchData(pageFromUrl, newFilters, pageCursors);
         }
-    }, [filters, pageCursors]);
-    
-    // Fetch data when page or filters change
-    useEffect(() => {
-        fetchData(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, filters]);
-    
+    }, [searchParams, fetchData]);
+
     // Fetch clients on initial render
     useEffect(() => {
         const fetchClients = async () => {
@@ -183,30 +193,29 @@ export default function EmployeeDirectoryPage() {
         fetchClients();
     }, [toast]);
     
-    const handleFilterChange = (filterType: keyof typeof filters, value: string) => {
-        setFilters(prev => ({...prev, [filterType]: value}));
-        setPage(1); // Reset to page 1 on filter change
-        setPageCursors({ 1: null }); // Reset cursors
-        updateUrlParams({ page: 1, [filterType]: value, searchTerm: searchTermInput, client: filters.client, status: filters.status, district: filters.district });
+    // Debounce search input
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            if (searchTermInput !== filters.searchTerm) {
+                updateUrlParams({ searchTerm: searchTermInput, page: 1, client: 'all', status: 'all', district: 'all' });
+            }
+        }, 500);
+        return () => clearTimeout(handler);
+    }, [searchTermInput, filters.searchTerm, updateUrlParams]);
+
+    const handleFilterChange = (filterType: keyof Filters, value: string) => {
+        const newFilters = { ...filters, [filterType]: value };
+        updateUrlParams({ ...newFilters, page: 1 });
     };
     
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchTermInput(e.target.value);
-        updateUrlParams({ searchTerm: e.target.value, page: 1 });
-    };
-
     const handleNextPage = () => {
         if (!hasNextPage) return;
-        const newPage = page + 1;
-        setPage(newPage);
-        updateUrlParams({ page: newPage });
+        updateUrlParams({ ...filters, page: page + 1 });
     };
 
     const handlePreviousPage = () => {
         if (page === 1) return;
-        const newPage = page - 1;
-        setPage(newPage);
-        updateUrlParams({ page: newPage });
+        updateUrlParams({ ...filters, page: page - 1 });
     };
 
     const handleConfirmDelete = async () => {
@@ -215,7 +224,7 @@ export default function EmployeeDirectoryPage() {
         try {
             await deleteDoc(doc(db, "employees", employeeToDelete.id));
             toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-            fetchData(page);
+            fetchData(page, filters, pageCursors);
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
         } finally {
@@ -277,7 +286,7 @@ export default function EmployeeDirectoryPage() {
                     <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 relative">
                         <Label htmlFor="search-input" className="sr-only">Search</Label>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTermInput} onChange={handleSearchChange} className="pl-10" />
+                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTermInput} onChange={(e) => setSearchTermInput(e.target.value)} className="pl-10" />
                     </div>
                     <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>

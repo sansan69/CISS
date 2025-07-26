@@ -431,7 +431,7 @@ export default function AdminEmployeeProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [isEditing, setIsEditing] = useState(searchParams.get('edit') === 'true');
+  const [isEditing, setIsEditing] = useState(false);
   const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
   const [isRegeneratingId, setIsRegeneratingId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -564,11 +564,18 @@ export default function AdminEmployeeProfilePage() {
     }
     fetchEmployee();
   }, [employeeIdFromUrl, fetchEmployee]);
+  
+  useEffect(() => {
+    setIsEditing(isAdminView && searchParams.get('edit') === 'true');
+  }, [searchParams, isAdminView]);
 
   useEffect(() => {
     if (employee) {
       const legacy = employee as any;
-      const getInitialValue = (key: keyof Employee, fallback: any = "") => employee[key] ?? fallback;
+      const getInitialValue = (key: keyof Employee, fallback: any = "") => {
+          const value = employee[key];
+          return value === undefined || value === null ? fallback : value;
+      };
   
       form.reset({
         ...employee,
@@ -609,10 +616,6 @@ export default function AdminEmployeeProfilePage() {
     };
     fetchClients();
   }, [isAdminView]);
-
-  useEffect(() => {
-    setIsEditing(isAdminView && searchParams.get('edit') === 'true');
-  }, [searchParams, isAdminView]);
 
   const handleFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -1044,12 +1047,24 @@ export default function AdminEmployeeProfilePage() {
     } else {
         url.searchParams.delete('edit');
         resetFileStates();
-        form.reset(employee ? {
-            ...employee,
-            joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
-            dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
-            exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-        } : {});
+        if(employee) {
+          form.reset({
+             ...employee,
+             joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
+             dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
+             exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
+             spouseName: employee.spouseName ?? '',
+             resourceIdNumber: employee.resourceIdNumber ?? '',
+             panNumber: employee.panNumber ?? '',
+             epfUanNumber: employee.epfUanNumber ?? '',
+             esicNumber: employee.esicNumber ?? '',
+             otherQualification: employee.otherQualification ?? '',
+             addressProofNumber: employee.addressProofNumber ?? '',
+             bankName: employee.bankName ?? '',
+             bankAccountNumber: employee.bankAccountNumber ?? '',
+             ifscCode: employee.ifscCode ?? '',
+          });
+        }
     }
     router.replace(url.toString(), { scroll: false });
   };
@@ -1569,6 +1584,7 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
+
 
 
 
