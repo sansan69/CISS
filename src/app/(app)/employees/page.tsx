@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { MoreHorizontal, Search, UserPlus, Edit, Trash2, Eye, Loader2, AlertCircle, CheckCircle, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MoreHorizontal, Search, UserPlus, Eye, Loader2, AlertCircle, CheckCircle, Trash2, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
@@ -26,12 +26,6 @@ import { Label } from '@/components/ui/label';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
-interface Filters {
-    searchTerm: string;
-    client: string;
-    status: string;
-    district: string;
-}
 
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
@@ -55,20 +49,22 @@ export default function EmployeeDirectoryPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    // URL is the single source of truth
+    const page = parseInt(searchParams.get('page') || '1');
+    const searchTerm = searchParams.get('searchTerm') || '';
+    const client = searchParams.get('client') || 'all';
+    const status = searchParams.get('status') || 'all';
+    const district = searchParams.get('district') || 'all';
+    
+    // Component state
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [clients, setClients] = useState<ClientOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
-    const [clients, setClients] = useState<ClientOption[]>([]);
-    
-    // State for pagination and filters
-    const [page, setPage] = useState(1);
-    const [pageCursors, setPageCursors] = useState<{ [key: number]: QueryDocumentSnapshot<DocumentData> | null }>({ 1: null });
-    const [hasNextPage, setHasNextPage] = useState(true);
-    const [filters, setFilters] = useState<Filters>({ searchTerm: '', client: 'all', status: 'all', district: 'all' });
-    const [searchTermInput, setSearchTermInput] = useState('');
+    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [hasNextPage, setHasNextPage] = useState(false);
 
-    // State for modals
+    // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
     const [newStatus, setNewStatus] = useState<Employee['status'] | ''>('');
@@ -78,109 +74,27 @@ export default function EmployeeDirectoryPage() {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    
-    const updateUrlParams = useCallback((newParams: { [key: string]: string | number }) => {
+
+    const updateUrlParams = useCallback((newParams: Record<string, string | number | null>) => {
         const params = new URLSearchParams(searchParams.toString());
-        Object.entries(newParams).forEach(([key, value]) => {
-            if (value && value !== 'all' && value !== 1 && String(value).length > 0) {
-                params.set(key, String(value));
-            } else {
+        for (const [key, value] of Object.entries(newParams)) {
+            if (value === null || value === '' || value === 'all' || value === 1) {
                 params.delete(key);
+            } else {
+                params.set(key, String(value));
             }
-        });
-        // Use router.push to ensure the page re-renders and useEffects trigger correctly
+        }
         router.push(`/employees?${params.toString()}`, { scroll: false });
     }, [router, searchParams]);
+    
+    const handleFilterChange = (filterType: string, value: string) => {
+        updateUrlParams({ [filterType]: value, page: null });
+    };
 
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        updateUrlParams({ searchTerm: e.target.value, page: null });
+    };
 
-    const fetchData = useCallback(async (pageToFetch: number, currentFilters: Filters, cursors: typeof pageCursors) => {
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            let q: Query = collection(db, "employees");
-            let baseQuery = q;
-
-            // Apply filters
-            if (currentFilters.searchTerm.trim()) {
-                baseQuery = query(baseQuery, where('searchableFields', 'array-contains', currentFilters.searchTerm.trim().toUpperCase()));
-            }
-            if (currentFilters.client !== 'all') {
-                baseQuery = query(baseQuery, where('clientName', '==', currentFilters.client));
-            }
-            if (currentFilters.status !== 'all') {
-                baseQuery = query(baseQuery, where('status', '==', currentFilters.status));
-            }
-            if (currentFilters.district !== 'all') {
-                baseQuery = query(baseQuery, where('district', '==', currentFilters.district));
-            }
-
-            // Apply sorting. Must be the last field in a compound query.
-            if (!currentFilters.searchTerm.trim()) {
-                baseQuery = query(baseQuery, orderBy('createdAt', 'desc'));
-            }
-
-            // Handle pagination
-            const cursorDoc = cursors[pageToFetch];
-            if (pageToFetch > 1 && cursorDoc) {
-                baseQuery = query(baseQuery, startAfter(cursorDoc));
-            }
-            
-            const finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-            const documentSnapshots = await getDocs(finalQuery);
-            const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
-            
-            setEmployees(fetchedEmployees);
-            
-            const lastVisibleDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-            setHasNextPage(fetchedEmployees.length === ITEMS_PER_PAGE);
-
-            if (lastVisibleDoc) {
-                setPageCursors(prev => ({ ...prev, [pageToFetch + 1]: lastVisibleDoc }));
-            }
-
-        } catch (err: any) {
-            let message = err.message || "Failed to fetch employees.";
-            if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
-            if (err.code === 'failed-precondition') message = "A required database index is missing. Check browser console for a link to create it.";
-            setError(message);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    // Effect to synchronize state from URL and fetch data
-    useEffect(() => {
-        const pageFromUrl = parseInt(searchParams.get('page') || '1');
-        const searchTermFromUrl = searchParams.get('searchTerm') || '';
-        const clientFromUrl = searchParams.get('client') || 'all';
-        const statusFromUrl = searchParams.get('status') || 'all';
-        const districtFromUrl = searchParams.get('district') || 'all';
-
-        const newFilters = {
-            searchTerm: searchTermFromUrl,
-            client: clientFromUrl,
-            status: statusFromUrl,
-            district: districtFromUrl,
-        };
-
-        // If filters have changed, reset pagination
-        if (JSON.stringify(newFilters) !== JSON.stringify(filters) || pageFromUrl === 1) {
-             setPageCursors({ 1: null });
-             setPage(pageFromUrl);
-             setFilters(newFilters);
-             setSearchTermInput(searchTermFromUrl);
-             fetchData(pageFromUrl, newFilters, {1: null});
-        } else {
-             setPage(pageFromUrl);
-             setFilters(newFilters);
-             setSearchTermInput(searchTermFromUrl);
-             fetchData(pageFromUrl, newFilters, pageCursors);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams, fetchData]);
-
-    // Fetch clients on initial render
     useEffect(() => {
         const fetchClients = async () => {
             try {
@@ -192,31 +106,71 @@ export default function EmployeeDirectoryPage() {
         };
         fetchClients();
     }, [toast]);
-    
-    // Debounce search input
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            if (searchTermInput !== filters.searchTerm) {
-                updateUrlParams({ searchTerm: searchTermInput, page: 1, client: 'all', status: 'all', district: 'all' });
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            let q: Query = collection(db, "employees");
+            
+            if (searchTerm) {
+                q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
             }
-        }, 500);
-        return () => clearTimeout(handler);
-    }, [searchTermInput, filters.searchTerm, updateUrlParams]);
+            if (client !== 'all') {
+                q = query(q, where('clientName', '==', client));
+            }
+            if (status !== 'all') {
+                q = query(q, where('status', '==', status));
+            }
+            if (district !== 'all') {
+                q = query(q, where('district', '==', district));
+            }
 
-    const handleFilterChange = (filterType: keyof Filters, value: string) => {
-        const newFilters = { ...filters, [filterType]: value };
-        updateUrlParams({ ...newFilters, page: 1 });
-    };
-    
-    const handleNextPage = () => {
-        if (!hasNextPage) return;
-        updateUrlParams({ ...filters, page: page + 1 });
-    };
+            if (!searchTerm.trim()) {
+                q = query(q, orderBy('createdAt', 'desc'));
+            }
 
-    const handlePreviousPage = () => {
-        if (page === 1) return;
-        updateUrlParams({ ...filters, page: page - 1 });
-    };
+            let finalQuery = q;
+            if (page > 1) {
+                // To get to page N, we need to fetch N * ITEMS_PER_PAGE documents
+                const snapshot = await getDocs(query(q, limit( (page -1) * ITEMS_PER_PAGE)));
+                const lastDoc = snapshot.docs[snapshot.docs.length-1];
+                if (lastDoc) {
+                    finalQuery = query(q, startAfter(lastDoc), limit(ITEMS_PER_PAGE));
+                }
+            } else {
+                finalQuery = query(q, limit(ITEMS_PER_PAGE));
+            }
+
+            const documentSnapshots = await getDocs(finalQuery);
+            const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
+            setEmployees(fetchedEmployees);
+            
+            const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+            setLastVisible(lastDoc || null);
+
+            // Check if there is a next page
+            if(lastDoc) {
+                const nextQuery = query(q, startAfter(lastDoc), limit(1));
+                const nextSnapshot = await getDocs(nextQuery);
+                setHasNextPage(!nextSnapshot.empty);
+            } else {
+                setHasNextPage(false);
+            }
+
+        } catch (err: any) {
+            let message = err.message || "Failed to fetch employees.";
+            if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
+            if (err.code === 'failed-precondition') message = "A required database index is missing. Check browser console for a link to create it.";
+            setError(message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [page, searchTerm, client, status, district]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const handleConfirmDelete = async () => {
         if (!employeeToDelete) return;
@@ -224,12 +178,13 @@ export default function EmployeeDirectoryPage() {
         try {
             await deleteDoc(doc(db, "employees", employeeToDelete.id));
             toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-            fetchData(page, filters, pageCursors);
+            fetchData(); // Refetch current page
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
         } finally {
             setIsDeleting(false);
             setIsDeleteDialogOpen(false);
+            setEmployeeToDelete(null);
         }
     };
     
@@ -252,11 +207,12 @@ export default function EmployeeDirectoryPage() {
           await updateDoc(employeeDocRef, updateData);
           toast({ title: "Status Updated", description: `${selectedEmployeeForStatusChange.fullName}'s status updated to ${newStatus}.` });
           setEmployees(prev => prev.map(emp => emp.id === selectedEmployeeForStatusChange.id ? { ...emp, status: newStatus, exitDate: newStatus === 'Exited' ? exitDate : undefined } : emp));
-          setIsStatusModalOpen(false);
         } catch (err) {
           toast({ variant: "destructive", title: "Error", description: "Could not update employee status." });
         } finally {
           setIsUpdatingStatus(false);
+          setIsStatusModalOpen(false);
+          setSelectedEmployeeForStatusChange(null);
         }
       };
 
@@ -286,19 +242,19 @@ export default function EmployeeDirectoryPage() {
                     <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 relative">
                         <Label htmlFor="search-input" className="sr-only">Search</Label>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTermInput} onChange={(e) => setSearchTermInput(e.target.value)} className="pl-10" />
+                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." defaultValue={searchTerm} onChange={handleSearchChange} className="pl-10" />
                     </div>
                     <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>
-                        <Select value={filters.client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
+                        <Select value={client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
                     </div>
                      <div>
                         <Label htmlFor="district-filter" className="sr-only">District</Label>
-                        <Select value={filters.district} onValueChange={(val) => handleFilterChange('district', val)}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+                        <Select value={district} onValueChange={(val) => handleFilterChange('district', val)}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
                     </div>
                     <div>
                         <Label htmlFor="status-filter" className="sr-only">Status</Label>
-                        <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                        <Select value={status} onValueChange={(val) => handleFilterChange('status', val)}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
                     </div>
                 </CardContent>
             </Card>
@@ -306,9 +262,7 @@ export default function EmployeeDirectoryPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Employee List</CardTitle>
-                    <CardDescription>
-                        A directory of all personnel in the system.
-                    </CardDescription>
+                    <CardDescription>A directory of all personnel in the system.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
@@ -411,10 +365,10 @@ export default function EmployeeDirectoryPage() {
                     <div className="flex justify-between items-center w-full">
                         <span className="text-sm text-muted-foreground">Page {page}</span>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isLoading || page === 1}>
+                            <Button variant="outline" size="sm" onClick={() => updateUrlParams({page: page - 1})} disabled={isLoading || page <= 1}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || !hasNextPage}>
+                            <Button variant="outline" size="sm" onClick={() => updateUrlParams({page: page + 1})} disabled={isLoading || !hasNextPage}>
                                 Next <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>
@@ -477,3 +431,5 @@ export default function EmployeeDirectoryPage() {
         </div>
     );
 }
+
+    
