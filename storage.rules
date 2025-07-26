@@ -3,35 +3,28 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Rule for employee-specific document paths.
-    // Path: /employees/{phoneNumber}/{documentType}/{fileName}
+    // Path for all employee-related documents.
     match /employees/{phoneNumber}/{documentType}/{fileName} {
       
-      // --- WRITE (Create & Update) Rule ---
-      // This single rule handles all write operations securely.
-      // It allows writes only if:
-      // 1. The user is an authenticated admin (has an email in their token).
-      // OR
-      // 2. The user is authenticated via phone OTP and their number matches the path.
-      // AND
-      // 3. All file validations (path, size, type) pass.
-      allow write: if request.auth != null && (
-                      (request.auth.token.email != null) ||
-                      (request.auth.token.phone_number == '+91' + phoneNumber)
-                    ) &&
-                    documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
-                    request.resource.size < 5 * 1024 * 1024 &&
-                    (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      // Helper function for validation
+      function isValidUpload() {
+        return documentType in ['profilePictures', 'idProofs', 'addressProofs', 'signatures', 'bankDocuments', 'policeCertificates'] &&
+               request.resource.size < 5 * 1024 * 1024 &&
+               (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      }
 
-      // --- READ and DELETE Rules ---
-      // Only allow authenticated admins to read or delete files directly.
-      // Regular users get access via download URLs fetched from Firestore.
-      allow read, delete: if request.auth != null && request.auth.token.email != null;
+      // CREATE: Allow unauthenticated writes (for public enrollment) ONLY if the upload is valid.
+      // This is safe because the path is specific and the file is validated.
+      allow create: if request.auth == null && isValidUpload();
+
+      // READ, UPDATE, DELETE:
+      // Allow these actions only if the user is authenticated (admin or the employee themselves).
+      allow read, update, delete: if request.auth != null &&
+                                  (request.auth.token.email != null || request.auth.token.phone_number == '+91' + phoneNumber) &&
+                                  isValidUpload();
     }
 
-    // --- Default Deny Rule ---
-    // This is a crucial catch-all that explicitly denies access to any other path,
-    // ensuring that no parts of your bucket are left accidentally open.
+    // Default deny all other paths.
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -34,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { compressImage, uploadFileToStorage, deleteFileFromStorage } from "@/lib/storageUtils";
+import { compressImage, uploadFileToStorage, deleteFileFromStorage, dataURLtoFile } from "@/lib/storageUtils";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -601,9 +601,6 @@ export default function PublicEmployeeProfilePage() {
     } catch (err: any) {
         console.error("Error updating profile:", err);
         let description = err.message || "An error occurred while saving.";
-        if (err.code === 'permission-denied' || err.code === 'PERMISSION_DENIED') {
-            description = "Permission Denied. Your request to update could not be authorized. Please ensure you are correctly verified.";
-        }
         toast({ variant: "destructive", title: "Update Failed", description });
     } finally {
         setIsSubmitting(false);

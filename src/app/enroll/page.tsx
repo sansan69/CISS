@@ -256,13 +256,6 @@ interface ActualEnrollmentFormProps {
   initialPhoneNumberFromQuery?: string | null;
 }
 
-const handleUploadError = (err: any, documentName: string): never => {
-  if (err.code === 'storage/unauthorized') {
-    throw new Error(`Upload Permission Denied: The system is not configured to allow file uploads. Please contact an administrator to check the Firebase Storage security rules.`);
-  }
-  throw new Error(`${documentName} processing failed: ${err.message}`);
-};
-
 const IdNumberInput = ({
     control,
     name,
@@ -616,8 +609,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     : file;
                 const url = await uploadFileToStorage(fileToUpload, path);
                 uploadedUrls[key] = url;
-            } catch (err) {
-                handleUploadError(err, name);
+            } catch (err: any) {
+                 throw new Error(`Upload failed for ${name}: ${err.message}`);
             }
         }
         
