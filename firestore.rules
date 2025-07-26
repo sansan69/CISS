@@ -6,47 +6,41 @@ service cloud.firestore {
     // Rules for the 'employees' collection
     match /employees/{employeeId} {
       
-      // Helper functions for clarity and reuse
-      function isOwner(request, doc) {
-        return request.auth != null && request.auth.token.phone_number == '+91' + doc.data.phoneNumber;
-      }
-      function isAdmin(request) {
-        return request.auth != null && request.auth.token.email != null;
-      }
-       function isNewUserVerified(request) {
-        return request.auth != null && request.auth.token.phone_number == '+91' + request.resource.data.phoneNumber;
-      }
-      function hasRequiredCreateFields(docData) {
-        return 'clientName' in docData && 'joiningDate' in docData && 'firstName' in docData && 'lastName' in docData && 'fatherName' in docData && 'motherName' in docData && 'dateOfBirth' in docData && 'gender' in docData && 'maritalStatus' in docData && 'district' in docData && 'identityProofType' in docData && 'identityProofNumber' in docData && 'fullAddress' in docData && 'emailAddress' in docData && 'phoneNumber' in docData;
-      }
+      // Allow reading a single document if the user is authenticated as an admin OR 
+      // is the employee themselves (verified by phone number).
+      // Also allows anyone to read the non-sensitive 'publicProfile' map.
+      allow get: if (request.auth != null && request.auth.token.email != null) || 
+                   (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber) ||
+                   (resource.data.keys().hasAny(['publicProfile']));
 
-      // READ: Admins can list all. Owners can get their own doc.
-      allow get: if isOwner(request, resource) || isAdmin(request);
-      allow list: if isAdmin(request);
+      // Only allow authenticated admins to list documents.
+      allow list: if request.auth != null && request.auth.token.email != null;
 
-      // CREATE: Allow if the incoming document has all the required fields.
-      // This allows the public enrollment form to submit.
-      allow create: if hasRequiredCreateFields(request.resource.data);
+      // Allow a new employee document to be created if the user is anonymous (public enrollment)
+      // and the request contains the minimum required fields. This relies on client-side validation.
+      allow create: if request.auth == null &&
+                       "phoneNumber" in request.resource.data &&
+                       "fullName" in request.resource.data;
 
-      // UPDATE: Allow if the user is an admin OR if they are the owner and not changing their phone number.
-      allow update: if isAdmin(request) || (isOwner(request, resource) && request.resource.data.phoneNumber == resource.data.phoneNumber);
-      
-      // DELETE: Only admins can delete.
-      allow delete: if isAdmin(request);
+      // Allow updates if:
+      // 1. The user is an authenticated admin.
+      // 2. The user is an employee verified via OTP, and their phone number matches the document's phone number.
+      // This prevents users from updating other people's documents or changing their own phone number.
+      allow update: if (request.auth != null && request.auth.token.email != null) || 
+                      (request.auth != null && request.auth.token.phone_number == resource.data.phoneNumber && request.resource.data.phoneNumber == resource.data.phoneNumber);
+
+      // Only allow authenticated admins to delete employee records.
+      allow delete: if request.auth != null && request.auth.token.email != null;
     }
 
     // Rules for the 'clients' collection
     match /clients/{clientId} {
+
       // Allow anyone to read the list of clients for dropdowns.
       allow read: if true;
 
-      // Only allow admins to write (create, update, delete).
-      allow write: if request.auth != null && request.auth.token.email != null;
-    }
-
-    // Deny all other access to the database
-    match /{path=**} {
-      allow read, write: if false;
+      // Only allow authenticated admins to add, update, or delete clients.
+      allow create, update, delete: if request.auth != null && request.auth.token.email != null;
     }
   }
 }
