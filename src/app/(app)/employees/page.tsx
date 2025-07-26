@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type Employee } from '@/types/employee';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -48,22 +48,24 @@ const getPendingDetails = (employee: Employee): string[] => {
 export default function EmployeeDirectoryPage() {
     const { toast } = useToast();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [searchTermInput, setSearchTermInput] = useState('');
+    const [searchTermInput, setSearchTermInput] = useState(searchParams.get('searchTerm') || '');
+
     const [filters, setFilters] = useState({
-        searchTerm: '',
-        client: 'all',
-        status: 'all',
-        district: 'all',
+        searchTerm: searchParams.get('searchTerm') || '',
+        client: searchParams.get('client') || 'all',
+        status: searchParams.get('status') || 'all',
+        district: searchParams.get('district') || 'all',
     });
     
     const [clients, setClients] = useState<ClientOption[]>([]);
     
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(parseInt(searchParams.get('page') || '1'));
     const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
     
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -78,33 +80,30 @@ export default function EmployeeDirectoryPage() {
     
     const hasNextPage = useRef(true);
 
+    const updateUrlParams = (newFilters: typeof filters, newPage: number) => {
+        const params = new URLSearchParams();
+        if (newPage > 1) params.set('page', newPage.toString());
+        if (newFilters.searchTerm) params.set('searchTerm', newFilters.searchTerm);
+        if (newFilters.client !== 'all') params.set('client', newFilters.client);
+        if (newFilters.status !== 'all') params.set('status', newFilters.status);
+        if (newFilters.district !== 'all') params.set('district', newFilters.district);
+        router.replace(`/employees?${params.toString()}`, { scroll: false });
+    };
+
     // Debounce effect for search term
     useEffect(() => {
         const handler = setTimeout(() => {
             if (searchTermInput !== filters.searchTerm) {
-                handleFilterChange('searchTerm', searchTermInput);
+                setFilters(prev => ({...prev, searchTerm: searchTermInput}));
             }
-        }, 500); // 500ms delay
-
-        return () => {
-            clearTimeout(handler);
-        };
+        }, 500);
+        return () => clearTimeout(handler);
     }, [searchTermInput, filters.searchTerm]);
 
-    const handleFilterChange = (key: keyof typeof filters, value: any) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-        setPage(1);
-        setPageCursors([null]);
-        hasNextPage.current = true; 
-    };
-    
+
     const memoizedQuery = useMemo(() => {
         let q: Query = collection(db, "employees");
         
-        // Always apply base ordering for consistent pagination, unless searching.
-        // If a search term is present, Firestore's array-contains limitation means
-        // we can't easily combine it with other inequality filters or a different orderBy.
-        // For this app, search takes precedence.
         if (filters.searchTerm.trim() !== '') {
             q = query(q, where('searchableFields', 'array-contains', filters.searchTerm.trim().toUpperCase()));
         } else {
@@ -118,13 +117,16 @@ export default function EmployeeDirectoryPage() {
         return q;
     }, [filters]);
 
-    const fetchData = useCallback(async (newPage: number) => {
+    const fetchData = useCallback(async (newPage: number, resetPaging = false) => {
         setIsLoading(true);
         setError(null);
 
+        let currentPage = resetPaging ? 1 : newPage;
+        let currentCursors = resetPaging ? [null] : pageCursors;
+
         try {
             let paginatedQuery = memoizedQuery;
-            const cursor = pageCursors[newPage - 1];
+            const cursor = currentCursors[currentPage - 1];
 
             if (cursor) {
                 paginatedQuery = query(paginatedQuery, startAfter(cursor));
@@ -140,13 +142,12 @@ export default function EmployeeDirectoryPage() {
 
             const lastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
             if (lastVisible) {
-                setPageCursors(prev => {
-                    const newCursors = [...prev];
-                    newCursors[newPage] = lastVisible;
-                    return newCursors;
-                });
+                const newCursors = [...currentCursors];
+                newCursors[currentPage] = lastVisible;
+                setPageCursors(newCursors);
             }
-            setPage(newPage);
+            setPage(currentPage);
+            updateUrlParams(filters, currentPage);
 
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
@@ -156,12 +157,15 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [memoizedQuery, pageCursors]);
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [memoizedQuery, pageCursors, filters]);
+    
+    // Initial fetch and filter change fetch
     useEffect(() => {
-        fetchData(1);
+        fetchData(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [memoizedQuery]);
+
 
     useEffect(() => {
         const fetchClients = async () => {
@@ -181,7 +185,7 @@ export default function EmployeeDirectoryPage() {
         try {
             await deleteDoc(doc(db, "employees", employeeToDelete.id));
             toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-            fetchData(1);
+            fetchData(page);
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
         } finally {
@@ -247,15 +251,15 @@ export default function EmployeeDirectoryPage() {
                     </div>
                     <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>
-                        <Select value={filters.client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
+                        <Select value={filters.client} onValueChange={(val) => setFilters(prev => ({...prev, client: val}))}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
                     </div>
                      <div>
                         <Label htmlFor="district-filter" className="sr-only">District</Label>
-                        <Select value={filters.district} onValueChange={(val) => handleFilterChange('district', val)}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+                        <Select value={filters.district} onValueChange={(val) => setFilters(prev => ({...prev, district: val}))}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
                     </div>
                     <div>
                         <Label htmlFor="status-filter" className="sr-only">Status</Label>
-                        <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                        <Select value={filters.status} onValueChange={(val) => setFilters(prev => ({...prev, status: val}))}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
                     </div>
                 </CardContent>
             </Card>
@@ -305,7 +309,7 @@ export default function EmployeeDirectoryPage() {
                                             <TableRow 
                                                 key={emp.id} 
                                                 className="hover:bg-muted/50 cursor-pointer"
-                                                onClick={() => router.push(`/employees/${emp.id}`)}
+                                                onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}
                                             >
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
@@ -347,7 +351,7 @@ export default function EmployeeDirectoryPage() {
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}`)}><Eye className="mr-2 h-4 w-4" /> View / Edit</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> View / Edit</DropdownMenuItem>
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Active'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Active</DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Exited'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Exited</DropdownMenuItem>

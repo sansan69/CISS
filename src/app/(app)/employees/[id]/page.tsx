@@ -1038,19 +1038,20 @@ export default function AdminEmployeeProfilePage() {
 
   const toggleEditMode = (forceState?: boolean) => {
     const newEditState = forceState !== undefined ? forceState : !isEditing;
-    const path = `/employees/${employeeIdFromUrl}`;
+    const url = new URL(window.location.href);
     if (newEditState) {
-      router.push(`${path}?edit=true`, { scroll: false });
+        url.searchParams.set('edit', 'true');
     } else {
-      resetFileStates();
-      form.reset(employee ? {
-          ...employee,
-          joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
-          dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
-          exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-      } : {});
-      router.push(path, { scroll: false });
+        url.searchParams.delete('edit');
+        resetFileStates();
+        form.reset(employee ? {
+            ...employee,
+            joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
+            dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
+            exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
+        } : {});
     }
+    router.replace(url.toString(), { scroll: false });
   };
   
   const renderOffscreenPages = () => {
@@ -1086,7 +1087,7 @@ export default function AdminEmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push('/employees')} className="mt-4">
+            <Button onClick={() => router.push('/employees' + searchParams.toString())} className="mt-4">
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
             </Button>
         </AlertDescription>
@@ -1101,7 +1102,7 @@ export default function AdminEmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push('/employees')} className="mt-4">
+                <Button onClick={() => router.push('/employees' + searchParams.toString())} className="mt-4">
                    <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
                 </Button>
             </AlertDescription>
@@ -1125,7 +1126,7 @@ export default function AdminEmployeeProfilePage() {
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
-          <Button variant="outline" size="sm" onClick={() => router.back()}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/employees' + `?${searchParams.toString()}`)}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory
           </Button>
         </div>
