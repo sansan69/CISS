@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -122,7 +123,7 @@ export default function EmployeeDirectoryPage() {
         setError(null);
 
         let currentPage = resetPaging ? 1 : newPage;
-        let currentCursors = resetPaging ? [null] : pageCursors;
+        let currentCursors = resetPaging ? [null] : [...pageCursors];
 
         try {
             let paginatedQuery = memoizedQuery;
@@ -143,11 +144,16 @@ export default function EmployeeDirectoryPage() {
             const lastVisible = documentSnapshots.docs[documentSnapshots.docs.length - 1];
             if (lastVisible) {
                 const newCursors = [...currentCursors];
+                if (newCursors.length <= currentPage) {
+                   newCursors.length = currentPage + 1;
+                }
                 newCursors[currentPage] = lastVisible;
                 setPageCursors(newCursors);
             }
             setPage(currentPage);
-            updateUrlParams(filters, currentPage);
+            if(resetPaging) {
+                 updateUrlParams(filters, 1);
+            }
 
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
@@ -157,12 +163,11 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [memoizedQuery, pageCursors, filters]);
     
     // Initial fetch and filter change fetch
     useEffect(() => {
-        fetchData(1, true);
+        fetchData(page, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [memoizedQuery]);
 
@@ -192,6 +197,18 @@ export default function EmployeeDirectoryPage() {
             setIsDeleting(false);
             setIsDeleteDialogOpen(false);
         }
+    };
+
+    const handleNextPage = () => {
+        const newPage = page + 1;
+        fetchData(newPage);
+        updateUrlParams(filters, newPage);
+    };
+
+    const handlePreviousPage = () => {
+        const newPage = page - 1;
+        fetchData(newPage);
+        updateUrlParams(filters, newPage);
     };
     
     const handleConfirmStatusUpdate = async () => {
@@ -372,10 +389,10 @@ export default function EmployeeDirectoryPage() {
                     <div className="flex justify-between items-center w-full">
                         <span className="text-sm text-muted-foreground">Page {page}</span>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => fetchData(page - 1)} disabled={isLoading || page === 1}>
+                            <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={isLoading || page === 1}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => fetchData(page + 1)} disabled={isLoading || !hasNextPage.current}>
+                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || !hasNextPage.current}>
                                 Next <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>

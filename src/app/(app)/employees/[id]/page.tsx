@@ -575,19 +575,19 @@ export default function AdminEmployeeProfilePage() {
         joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
         dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
         exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-        spouseName: getInitialValue('spouseName'),
-        resourceIdNumber: getInitialValue('resourceIdNumber'),
-        panNumber: getInitialValue('panNumber'),
-        epfUanNumber: getInitialValue('epfUanNumber'),
-        esicNumber: getInitialValue('esicNumber'),
-        otherQualification: getInitialValue('otherQualification'),
+        spouseName: getInitialValue('spouseName', ''),
+        resourceIdNumber: getInitialValue('resourceIdNumber', ''),
+        panNumber: getInitialValue('panNumber', ''),
+        epfUanNumber: getInitialValue('epfUanNumber', ''),
+        esicNumber: getInitialValue('esicNumber', ''),
+        otherQualification: getInitialValue('otherQualification', ''),
         identityProofType: (employee.identityProofType || legacy.idProofType) as any,
         identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber) ?? '',
         addressProofType: employee.addressProofType as any,
-        addressProofNumber: getInitialValue('addressProofNumber'),
-        bankName: getInitialValue('bankName'),
-        bankAccountNumber: getInitialValue('bankAccountNumber'),
-        ifscCode: getInitialValue('ifscCode'),
+        addressProofNumber: getInitialValue('addressProofNumber', ''),
+        bankName: getInitialValue('bankName', ''),
+        bankAccountNumber: getInitialValue('bankAccountNumber', ''),
+        ifscCode: getInitialValue('ifscCode', ''),
       });
     }
   }, [employee, form]);
@@ -1087,7 +1087,7 @@ export default function AdminEmployeeProfilePage() {
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
             {error}
-            <Button onClick={() => router.push('/employees' + searchParams.toString())} className="mt-4">
+            <Button onClick={() => router.push('/employees?' + searchParams.toString())} className="mt-4">
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
             </Button>
         </AlertDescription>
@@ -1102,7 +1102,7 @@ export default function AdminEmployeeProfilePage() {
             <AlertTitle>Employee Not Found</AlertTitle>
             <AlertDescription>
                 The requested employee profile could not be found.
-                <Button onClick={() => router.push('/employees' + searchParams.toString())} className="mt-4">
+                <Button onClick={() => router.push('/employees?' + searchParams.toString())} className="mt-4">
                    <ArrowLeft className="mr-2 h-4 w-4" />Back to Directory
                 </Button>
             </AlertDescription>
@@ -1126,7 +1126,7 @@ export default function AdminEmployeeProfilePage() {
       </div>
       <div className="flex flex-col gap-6">
         <div className="mb-4">
-          <Button variant="outline" size="sm" onClick={() => router.push('/employees' + `?${searchParams.toString()}`)}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/employees?' + searchParams.toString())}>
               <ArrowLeft className="mr-2 h-4 w-4" />Back to Employee Directory
           </Button>
         </div>
@@ -1569,4 +1569,5 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
+
 
