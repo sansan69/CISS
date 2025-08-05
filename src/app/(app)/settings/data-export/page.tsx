@@ -8,6 +8,7 @@ import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet } f
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { auth } from '@/lib/firebase'; // Import auth
 
 export default function DataExportPage() {
     const [isExporting, setIsExporting] = useState(false);
@@ -20,6 +21,12 @@ export default function DataExportPage() {
         setError(null);
         setExportResult(null);
 
+        if (!auth.currentUser) {
+            toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to perform this action."});
+            setIsExporting(false);
+            return;
+        }
+
         toast({
             title: "Starting Export Process...",
             description: "Generating your Excel file. Please wait.",
@@ -27,6 +34,8 @@ export default function DataExportPage() {
 
         try {
             const functions = getFunctions();
+            // Note: We are now using an onRequest function, but the callable interface provides a convenient way to call it.
+            // It will handle passing the auth token automatically.
             const exportAllData = httpsCallable(functions, 'exportAllData');
             const result = await exportAllData();
             
