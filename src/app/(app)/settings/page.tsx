@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud } from "lucide-react";
 import Link from "next/link";
 
 const settingsOptions = [
@@ -30,6 +30,12 @@ const settingsOptions = [
     description: "Generate and download detailed attendance reports for analysis.",
     icon: BarChart3,
     href: "/settings/reports",
+  },
+  {
+    title: "Export All Data",
+    description: "Download all employee data and documents from the database.",
+    icon: DownloadCloud,
+    href: "/settings/data-export",
   },
 ];
 
@@ -67,5 +73,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
