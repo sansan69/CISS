@@ -10,69 +10,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, KeyRound, Trash2 } from 'lucide-react';
+import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, ArrowLeft, Home } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db, auth, storage } from '@/lib/firebase';
-import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
-import { format, subYears, addYears } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import QRCode from 'qrcode';
-import { RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, type User as FirebaseUser, type ConfirmationResult } from 'firebase/auth';
-import { ref, deleteObject } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { compressImage, uploadFileToStorage, deleteFileFromStorage, dataURLtoFile } from "@/lib/storageUtils";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-
-// Add RecaptchaVerifier to window interface
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-    confirmationResult?: ConfirmationResult;
-  }
-}
-
-// Dropdown options
-const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
-const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
-const maritalStatuses = ["Married", "Unmarried"];
-const genderOptions = ["Male", "Female", "Other"];
-const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
-type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
-
-
-const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
-const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
-
-
-// Zod schema for validation
-const employeeUpdateSchema = z.object({
-  educationalQualification: qualificationTypes,
-  otherQualification: z.string().optional(),
-  identityProofType: proofTypes,
-  identityProofNumber: z.string().min(5, "ID Proof number is required."),
-  addressProofType: proofTypes,
-  addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
-}).superRefine((data, ctx) => {
-  if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
-  }
-});
-type EmployeeUpdateValues = z.infer<typeof employeeUpdateSchema>;
 
 const toTitleCase = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -344,58 +290,7 @@ export default function PublicEmployeeProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [isUploadMode, setIsUploadMode] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // OTP Flow State
-  const [showOtpDialog, setShowOtpDialog] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-
-  // State for new file uploads
-  const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
-  const [newIdentityProofUrlFront, setNewIdentityProofUrlFront] = useState<File | null>(null);
-  const [newIdentityProofUrlBack, setNewIdentityProofUrlBack] = useState<File | null>(null);
-  const [newAddressProofUrlFront, setNewAddressProofUrlFront] = useState<File | null>(null);
-  const [newAddressProofUrlBack, setNewAddressProofUrlBack] = useState<File | null>(null);
-  const [newSignatureUrl, setNewSignatureUrl] = useState<File | null>(null);
-  const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
-  const [newPoliceClearanceCertificate, setNewPoliceClearanceCertificate] = useState<File | null>(null);
-
-  // State for file previews
-  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
-  const [identityProofUrlFrontPreview, setIdentityProofUrlFrontPreview] = useState<string | null>(null);
-  const [identityProofUrlBackPreview, setIdentityProofUrlBackPreview] = useState<string | null>(null);
-  const [addressProofUrlFrontPreview, setAddressProofUrlFrontPreview] = useState<string | null>(null);
-  const [addressProofUrlBackPreview, setAddressProofUrlBackPreview] = useState<string | null>(null);
-  const [signatureUrlPreview, setSignatureUrlPreview] = useState<string | null>(null);
-  const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
-  const [policeCertificatePreview, setPoliceCertificatePreview] = useState<string | null>(null);
-  
-  // State for camera dialog
-  const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
-  const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const form = useForm<EmployeeUpdateValues>({
-    resolver: zodResolver(employeeUpdateSchema),
-    defaultValues: {
-      educationalQualification: undefined,
-      otherQualification: "",
-      identityProofType: undefined,
-      identityProofNumber: "",
-      addressProofType: undefined,
-      addressProofNumber: "",
-    },
-  });
-  
-  const watchEducationalQualification = form.watch("educationalQualification");
 
   useEffect(() => {
     const fetchEmployee = async () => {
@@ -434,178 +329,6 @@ export default function PublicEmployeeProfilePage() {
     fetchEmployee();
   }, [employeeIdFromUrl, toast]);
 
-  useEffect(() => {
-    if (employee) {
-      const legacy = employee as any;
-      const getInitialValue = (key: keyof Employee, fallback = "") => employee[key] || fallback;
-      form.reset({
-        educationalQualification: getInitialValue('educationalQualification') as any,
-        otherQualification: getInitialValue('otherQualification'),
-        identityProofType: (employee.identityProofType || legacy.idProofType) as any,
-        identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber),
-        addressProofType: employee.addressProofType as any,
-        addressProofNumber: getInitialValue('addressProofNumber'),
-      });
-    }
-  }, [employee, form]);
-
-  const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    setFile: React.Dispatch<React.SetStateAction<File | null>>,
-    setPreview: React.Dispatch<React.SetStateAction<string | null>>
-  ) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast({ variant: "destructive", title: "File too large", description: "Please select a file smaller than 5MB." });
-        return;
-      }
-      setFile(file);
-      if (file.type.startsWith("image/")) {
-        setPreview(URL.createObjectURL(file));
-      } else if (file.type === "application/pdf") {
-        setPreview("/pdf-icon.png"); 
-      }
-    }
-  };
-
-  const openCamera = (fieldName: CameraField) => {
-    setActiveCameraField(fieldName);
-    setCameraError(null);
-    setIsCameraDialogOpen(true);
-  };
-
-  useEffect(() => {
-    async function getCameraStream() {
-      if (!isCameraDialogOpen) return;
-      try {
-        let facingMode: VideoFacingModeEnum = "user";
-        if (activeCameraField && activeCameraField !== 'profilePicture') {
-            facingMode = "environment";
-        }
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
-        setCameraStream(stream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        setCameraError("Could not access camera. Please ensure permission is granted.");
-        setIsCameraDialogOpen(false);
-      }
-    }
-    getCameraStream();
-  }, [isCameraDialogOpen, activeCameraField]);
-  
-  const closeCameraDialog = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-    }
-    setCameraStream(null);
-    setIsCameraDialogOpen(false);
-    setActiveCameraField(null);
-  };
-  
-  const handleCapturePhoto = async () => {
-    if (videoRef.current && canvasRef.current && activeCameraField) {
-      const canvas = canvasRef.current;
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        toast({variant: 'destructive', title: 'Error', description: 'Could not get camera context.'});
-        return;
-      }
-      context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      const file = await dataURLtoFile(dataUrl, `${activeCameraField}.jpg`);
-
-      const previewUrl = URL.createObjectURL(file);
-
-      switch (activeCameraField) {
-        case 'profilePicture': setNewProfilePicture(file); setProfilePicPreview(previewUrl); break;
-        case 'identityProofUrlFront': setNewIdentityProofUrlFront(file); setIdentityProofUrlFrontPreview(previewUrl); break;
-        case 'identityProofUrlBack': setNewIdentityProofUrlBack(file); setIdentityProofUrlBackPreview(previewUrl); break;
-        case 'addressProofUrlFront': setNewAddressProofUrlFront(file); setAddressProofUrlFrontPreview(previewUrl); break;
-        case 'addressProofUrlBack': setNewAddressProofUrlBack(file); setAddressProofUrlBackPreview(previewUrl); break;
-        case 'signatureUrl': setNewSignatureUrl(file); setSignatureUrlPreview(previewUrl); break;
-        case 'bankPassbookStatement': setNewBankPassbookStatement(file); setBankPassbookPreview(previewUrl); break;
-        case 'policeClearanceCertificate': setNewPoliceClearanceCertificate(file); setPoliceCertificatePreview(previewUrl); break;
-      }
-      closeCameraDialog();
-    }
-  };
-
-
-  async function handleSaveChanges(data: EmployeeUpdateValues) {
-    if (!employee) return;
-    
-    setIsSubmitting(true);
-    toast({ title: "Saving...", description: "Updating your profile." });
-
-    try {
-        const updatedUrls: { [key: string]: string | null } = {};
-
-        const uploadAndSetUrl = async (
-            newFile: File | null,
-            filePath: string,
-            urlKey: keyof typeof updatedUrls,
-            isImage: boolean
-        ) => {
-            if (!newFile) return;
-            
-            const fileToUpload = isImage
-                ? await compressImage(newFile, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                : newFile;
-                
-            updatedUrls[urlKey] = await uploadFileToStorage(fileToUpload, filePath);
-        };
-
-        const uploadJobs = [
-            { file: newProfilePicture, path: `employees/${employee.phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, key: 'profilePictureUrl', isImage: true },
-            { file: newIdentityProofUrlFront, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_front.${newIdentityProofUrlFront?.name.split('.').pop()}`, key: 'identityProofUrlFront', isImage: newIdentityProofUrlFront?.type.startsWith("image/") ?? false },
-            { file: newIdentityProofUrlBack, path: `employees/${employee.phoneNumber}/idProofs/${Date.now()}_id_back.${newIdentityProofUrlBack?.name.split('.').pop()}`, key: 'identityProofUrlBack', isImage: newIdentityProofUrlBack?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlFront, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_front.${newAddressProofUrlFront?.name.split('.').pop()}`, key: 'addressProofUrlFront', isImage: newAddressProofUrlFront?.type.startsWith("image/") ?? false },
-            { file: newAddressProofUrlBack, path: `employees/${employee.phoneNumber}/addressProofs/${Date.now()}_addr_back.${newAddressProofUrlBack?.name.split('.').pop()}`, key: 'addressProofUrlBack', isImage: newAddressProofUrlBack?.type.startsWith("image/") ?? false },
-            { file: newSignatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
-            { file: newBankPassbookStatement, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
-            { file: newPoliceClearanceCertificate, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
-        ];
-
-        for (const job of uploadJobs) {
-            await uploadAndSetUrl(job.file, job.path, job.key as any, job.isImage);
-        }
-
-        const formPayload: Record<string, any> = { ...data };
-
-        if (data.educationalQualification !== "Any Other Qualification") {
-            formPayload.otherQualification = "";
-        }
-
-        const finalPayload = { ...formPayload, ...updatedUrls };
-        
-        if (finalPayload.profilePictureUrl) {
-            finalPayload['publicProfile.profilePictureUrl'] = finalPayload.profilePictureUrl;
-        }
-
-        if (Object.keys(finalPayload).length > 0) {
-            finalPayload.updatedAt = serverTimestamp();
-            const employeeDocRef = doc(db, "employees", employee.id);
-            await updateDoc(employeeDocRef, finalPayload);
-            toast({ title: "Profile Updated", description: "Your details have been saved." });
-            setEmployee(prev => prev ? { ...prev, ...finalPayload } : null);
-            setIsUploadMode(false);
-        } else {
-            toast({ title: "No Changes", description: "No changes were detected to save." });
-            setIsUploadMode(false);
-        }
-    } catch (err: any) {
-        console.error("Error updating profile:", err);
-        let description = err.message || "An error occurred while saving.";
-        toast({ variant: "destructive", title: "Update Failed", description });
-    } finally {
-        setIsSubmitting(false);
-    }
-  }
 
   const getStatusBadgeVariant = (status?: Employee['status']) => {
     switch (status) {
@@ -680,66 +403,6 @@ export default function PublicEmployeeProfilePage() {
     }
   };
   
-  const setupRecaptcha = () => {
-    if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-    }
-    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      'size': 'invisible',
-      'callback': (response: any) => {},
-    });
-    return verifier;
-  };
-  
-  const handleSendOtp = async () => {
-      if (!employee) return;
-      setIsSendingOtp(true);
-      try {
-          const fullPhoneNumber = `+91${employee.phoneNumber}`;
-          const appVerifier = setupRecaptcha();
-          const result = await signInWithPhoneNumber(auth, fullPhoneNumber, appVerifier);
-          setConfirmationResult(result);
-          window.confirmationResult = result;
-          toast({ title: "OTP Sent", description: "Please check your phone for the verification code." });
-      } catch (error: any) {
-          console.error("Error sending OTP:", error);
-          let description = "Could not send OTP. Please try again later.";
-          if (error.code === 'auth/too-many-requests') description = "Too many requests. Please wait a while before trying again.";
-          toast({ variant: "destructive", title: "OTP Send Error", description });
-          setShowOtpDialog(false);
-      } finally {
-          setIsSendingOtp(false);
-      }
-  };
-
-  const handleVerifyOtp = async () => {
-      const resultToConfirm = confirmationResult || window.confirmationResult;
-      if (!resultToConfirm) {
-          toast({ variant: 'destructive', title: 'Verification Error', description: 'Could not find verification session. Please try again.' });
-          return;
-      }
-      setIsVerifyingOtp(true);
-      try {
-          await resultToConfirm.confirm(otp);
-          toast({ title: "Verification Successful", description: "You can now update your profile." });
-          setShowOtpDialog(false);
-          setIsUploadMode(true); // Unlock edit mode on success
-      } catch (error: any) {
-          console.error("Error verifying OTP:", error);
-          let description = "Failed to verify OTP.";
-          if (error.code === 'auth/invalid-verification-code') description = "The code is invalid. Please check and try again.";
-          if (error.code === 'auth/code-expired') description = "The code has expired. Please request a new one.";
-          toast({ variant: "destructive", title: "Verification Failed", description });
-      } finally {
-          setIsVerifyingOtp(false);
-      }
-  };
-
-  const handleUpdateDetailsClick = () => {
-      setShowOtpDialog(true);
-      handleSendOtp();
-  };
-
   const renderOffscreenPages = () => {
     if (!employee) return null;
 
@@ -798,7 +461,6 @@ export default function PublicEmployeeProfilePage() {
 
   return (
     <>
-      <div id="recaptcha-container" />
       <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
         {renderOffscreenPages()}
       </div>
@@ -830,23 +492,19 @@ export default function PublicEmployeeProfilePage() {
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                   Download Kit
               </Button>
-              <Button onClick={handleUpdateDetailsClick} className="flex-1 sm:flex-none">
-                  <Edit3 className="mr-2 h-4 w-4" /> Update Details
-              </Button>
             </div>
         </div>
 
-        {!isUploadMode && (
-          <Tabs defaultValue="personal" className="w-full">
+        <Tabs defaultValue="personal" className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
-              <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
-              <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
-              <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
-              <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
-              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
+                <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
+                <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
+                <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
+                <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
+                <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
             </TabsList>
             <Card className="mt-4">
-              <CardContent className="pt-6">
+                <CardContent className="pt-6">
                 <TabsContent value="personal">
                   <CardTitle className="mb-4">Personal Information</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
@@ -934,230 +592,10 @@ export default function PublicEmployeeProfilePage() {
                     </div>
                   </div>
                 </TabsContent>
-              </CardContent>
-            </Card>
-          </Tabs>
-        )}
-
-        {isUploadMode && (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSaveChanges)}>
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Update Profile Information</CardTitle>
-                  <CardDescription>Update your details below. Upload any missing documents. Click "Save Changes" when done.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-8">
-                  <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal Details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="educationalQualification"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Educational Qualification</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                {educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {watchEducationalQualification === "Any Other Qualification" && (
-                        <FormField
-                          control={form.control}
-                          name="otherQualification"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Please Specify Qualification</FormLabel>
-                              <FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </div>
-                  </section>
-                  {/* Identification Documents Section */}
-                  <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Identification Documents</h3>
-                    <div className="p-4 border rounded-lg mt-4 space-y-4">
-                        <h4 className="font-medium text-md">Identity Proof (Name, DOB, etc.)</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                            <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} preview={identityProofUrlFrontPreview} setFile={setNewIdentityProofUrlFront} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} preview={identityProofUrlBackPreview} setFile={setNewIdentityProofUrlBack} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('identityProofUrlBack')} />
-                        </div>
-                    </div>
-
-                    <div className="p-4 border rounded-lg mt-6 space-y-4">
-                        <h4 className="font-medium text-md">Address Proof</h4>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                            <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                           <ImageInputWithPreview label="Front Page" currentUrl={employee.addressProofUrlFront} preview={addressProofUrlFrontPreview} setFile={setNewAddressProofUrlFront} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlFront')} />
-                           <ImageInputWithPreview label="Back Page" currentUrl={employee.addressProofUrlBack} preview={addressProofUrlBackPreview} setFile={setNewAddressProofUrlBack} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('addressProofUrlBack')} />
-                        </div>
-                    </div>
-                  </section>
-
-                  {/* Other Documents Section */}
-                  <section>
-                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents & Signature</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} />
-                          <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} />
-                          <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} />
-                          <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} />
-                      </div>
-                  </section>
                 </CardContent>
-                <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsUploadMode(false)} disabled={isSubmitting}>Cancel</Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Changes
-                  </Button>
-                </CardFooter>
-              </Card>
-            </form>
-          </Form>
-        )}
-
-      <Dialog open={showOtpDialog} onOpenChange={setShowOtpDialog}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Verify Your Identity</DialogTitle>
-                <ShadDialogDescription>
-                    To protect your account, we've sent a one-time password (OTP) to your registered mobile number: ****{employee.phoneNumber.slice(-4)}.
-                </ShadDialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <div className="relative">
-                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input
-                        id="otp"
-                        type="tel"
-                        placeholder="Enter 6-digit OTP"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                        disabled={isVerifyingOtp}
-                        className="pl-10 text-lg tracking-widest text-center"
-                    />
-                </div>
-                 <Button onClick={handleVerifyOtp} className="w-full" disabled={otp.length < 6 || isVerifyingOtp}>
-                    {isVerifyingOtp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Verify and Proceed
-                </Button>
-            </div>
-            <DialogFooter className="text-xs text-muted-foreground justify-center">
-                Didn't receive the code? 
-                <Button variant="link" size="sm" className="p-0 h-auto" onClick={handleSendOtp} disabled={isSendingOtp}>
-                   {isSendingOtp ? 'Resending...' : 'Resend OTP'}
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-
-      <Dialog open={isCameraDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) closeCameraDialog(); }}>
-          <DialogContent className="sm:max-w-[calc(100vw-2rem)] md:max-w-[600px]">
-              <DialogHeader>
-                  <DialogTitle>Take Photo</DialogTitle>
-              </DialogHeader>
-              <div className="py-4">
-                   {cameraError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{cameraError}</AlertDescription></Alert>}
-                  <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-auto rounded-md border", { 'hidden': cameraError })} />
-                  <canvas ref={canvasRef} className="hidden" />
-              </div>
-              <DialogFooter>
-                  <Button variant="outline" onClick={closeCameraDialog}>Cancel</Button>
-                  <Button onClick={handleCapturePhoto} disabled={!!cameraError || !cameraStream}>Capture</Button>
-              </DialogFooter>
-          </DialogContent>
-      </Dialog>
+            </Card>
+        </Tabs>
       </div>
     </>
   );
 }
-
-const ImageInputWithPreview: React.FC<{
-    label: string;
-    currentUrl?: string;
-    preview: string | null;
-    setFile: (file: File | null) => void;
-    setPreview: (preview: string | null) => void;
-    handleFileChange: (event: React.ChangeEvent<HTMLInputElement>, setFile: any, setPreview: any) => void;
-    openCamera: () => void;
-    isProfilePic?: boolean;
-    isSignature?: boolean;
-    canRemove?: boolean;
-}> = ({ label, currentUrl, preview, setFile, setPreview, handleFileChange, openCamera, isProfilePic, isSignature, canRemove = false }) => {
-    const uniqueId = React.useId();
-    const finalPreview = preview || (currentUrl?.includes('.pdf') ? '/pdf-icon.png' : currentUrl);
-    const hasImage = !!finalPreview;
-
-    return (
-        <div className="space-y-2">
-            <Label className="text-base">{label}<span className="text-destructive">*</span></Label>
-            <div className="p-4 border rounded-md text-center space-y-2 relative">
-                {hasImage ? (
-                     <Image
-                        src={finalPreview}
-                        alt={label}
-                        width={isProfilePic || isSignature ? 128 : 200}
-                        height={isProfilePic ? 128 : isSignature ? 64 : 120}
-                        className={cn(
-                            "object-contain justify-self-center mx-auto",
-                            isProfilePic ? 'rounded-full h-32 w-32' : 'h-32 w-full',
-                            isSignature && 'h-20'
-                        )}
-                        data-ai-hint={isProfilePic ? "profile picture" : isSignature ? "signature" : "id card"}
-                    />
-                ) : (
-                    <div className="flex items-center justify-center h-32 w-full bg-muted border rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div>
-                )}
-               
-                <div className="flex justify-center gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById(uniqueId)?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
-                    <Button type="button" size="sm" variant="outline" onClick={openCamera}><Camera className="mr-2 h-4 w-4" /> Camera</Button>
-                    {hasImage && canRemove && (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button type="button" size="sm" variant="destructive" title={`Remove ${label}`}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Removal</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Are you sure you want to remove the current {label.toLowerCase()}? This will permanently delete the existing file if you save your changes.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => {
-                                        // This button's functionality is handled outside for public/admin distinction
-                                        // This is a placeholder for triggering the parent's onRemove
-                                    }}>Confirm & Remove</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    )}
-                    <Input id={uniqueId} type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setFile, setPreview)} />
-                </div>
-            </div>
-        </div>
-    );
-};
