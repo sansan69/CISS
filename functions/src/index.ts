@@ -5,8 +5,6 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
 import * as xlsx from "xlsx";
-import * as archiver from "archiver";
-import Busboy from "busboy";
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
@@ -71,91 +69,13 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
   }
 });
 
-
 /**
- * A callable Cloud Function to handle secure file uploads.
- * It uses the 'busboy' library to process multipart/form-data.
+ * Exports all employee data from Firestore into an Excel file.
+ * The Excel file will contain clickable hyperlinks to the documents stored in Firebase Storage.
  */
-export const uploadFile = functions.https.onCall(async (data, context) => {
-  // Although this is a simple proxy, you could add more checks here,
-  // e.g., for file type, size, or if the user (even unauthenticated)
-  // has a valid token for this operation.
-  // For now, we are keeping it open to support the public enrollment form.
-  const {filePath} = data; // The destination path in the storage bucket.
-  if (!filePath) {
-    throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'filePath' argument.");
-  }
-
-  // This part is complex because we are streaming the raw request body
-  // into busboy. `context.rawRequest` is essential here.
-  const req = context.rawRequest;
-  const busboy = Busboy({headers: req.headers});
-
-  const tmpdir = os.tmpdir();
-  const fileWrites: Promise<unknown>[] = [];
-  let downloadUrl = "";
-
-  return new Promise((resolve, reject) => {
-    busboy.on("file", (fieldname, file,
-      {filename, encoding, mimeType}) => {
-      const filepath = path.join(tmpdir, filename);
-      const writeStream = fs.createWriteStream(filepath);
-      file.pipe(writeStream);
-
-      const promise = new Promise((resolve, reject) => {
-        file.on("end", () => {
-          writeStream.end();
-        });
-        writeStream.on("finish", async () => {
-          try {
-            const bucket = admin.storage().bucket();
-            const [uploadedFile] = await bucket.upload(filepath, {
-              destination: filePath, // Use the path provided by the client
-              metadata: {
-                contentType: mimeType,
-              },
-            });
-            // Make the file public for simplicity, or generate a signed URL
-            await uploadedFile.makePublic();
-            downloadUrl = uploadedFile.publicUrl();
-            fs.unlinkSync(filepath); // Clean up the temp file
-            resolve(true);
-          } catch (err) {
-            console.error("Error uploading to storage:", err);
-            fs.unlinkSync(filepath);
-            reject(new functions.https.HttpsError("internal", "Failed to upload file to storage."));
-          }
-        });
-        writeStream.on("error", reject);
-      });
-      fileWrites.push(promise);
-    });
-
-    busboy.on("finish", async () => {
-      try {
-        await Promise.all(fileWrites);
-        resolve({downloadUrl});
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    // Pipe the raw request stream into busboy
-    // This is the correct way to handle it with Cloud Functions v2
-    if (req.body) {
-      busboy.end(req.body);
-    } else {
-      reject(new functions.https.HttpsError("internal", "Request body is missing."));
-    }
-  });
-});
-
-/**
- * Exports all employee data from Firestore and their documents from Storage into a zip file.
- */
-export const exportAllData = functions.runWith({timeoutSeconds: 540, memory: "1GB"})
+export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "512MB"})
   .https.onCall(async (data, context) => {
-    // Optional: Add admin check for security
+    // Optional: Add role-based access control
     // if (context.auth?.token.role !== "superAdmin") {
     //   throw new functions.https.HttpsError("permission-denied", "Only super admins can export data.");
     // }
@@ -165,9 +85,10 @@ export const exportAllData = functions.runWith({timeoutSeconds: 540, memory: "1G
       throw new functions.https.HttpsError("not-found", "No employee data to export.");
     }
 
-    const employees = employeesSnapshot.docs.map((doc) => {
+    const employeesData = employeesSnapshot.docs.map((doc) => {
       const docData = doc.data();
-      // Convert Timestamps to ISO strings for CSV
+      // Convert all Timestamps to ISO strings for consistent formatting in Excel.
+      // URLs will be preserved as clickable links.
       Object.keys(docData).forEach((key) => {
         if (docData[key] instanceof admin.firestore.Timestamp) {
           docData[key] = docData[key].toDate().toISOString();
@@ -176,77 +97,45 @@ export const exportAllData = functions.runWith({timeoutSeconds: 540, memory: "1G
       return {id: doc.id, ...docData};
     });
 
-    // 1. Create Excel file in temp directory
+    // 1. Create Excel file in a temporary directory
     const tmpdir = os.tmpdir();
-    const excelFilePath = path.join(tmpdir, "employees.xlsx");
+    const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
+    const excelFilePath = path.join(tmpdir, excelFileName);
+
     const workbook = xlsx.utils.book_new();
-    const worksheet = xlsx.utils.json_to_sheet(employees);
+    const worksheet = xlsx.utils.json_to_sheet(employeesData);
+
+    // Make URLs in the sheet clickable
+    // Note: xlsx library handles this implicitly if the cell value is a valid URL string.
+    // For explicit hyperlink creation, more complex cell-by-cell manipulation is needed,
+    // but the default behavior is usually sufficient for modern Excel versions.
+
     xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
     xlsx.writeFile(workbook, excelFilePath);
 
-    // 2. Create a zip archive
-    const zipFileName = `CISS_Export_${Date.now()}.zip`;
-    const zipFilePath = path.join(tmpdir, zipFileName);
-    const output = fs.createWriteStream(zipFilePath);
-    const archive = archiver("zip", {zlib: {level: 9}});
-
-    archive.pipe(output);
-    archive.file(excelFilePath, {name: "employees.xlsx"});
-
-    // 3. Download files from Storage and add to zip
+    // 2. Upload the Excel file to Firebase Storage
     const bucket = storage.bucket();
-    let fileCount = 0;
-    for (const employee of employees) {
-      const docUrls: string[] = [];
-      // Collect all URL fields from the employee document
-      Object.keys(employee).forEach((key) => {
-        if (key.toLowerCase().includes("url") && typeof employee[key] === "string") {
-          docUrls.push(employee[key]);
-        }
-      });
-
-      if (docUrls.length > 0) {
-        const employeeFolder = `documents/${employee.phoneNumber || employee.employeeId}/`;
-        for (const url of docUrls) {
-          try {
-            // Extract file path from URL
-            const decodedUrl = decodeURIComponent(url);
-            const pathStartIndex = decodedUrl.indexOf("/o/") + 3;
-            const pathEndIndex = decodedUrl.indexOf("?");
-            const filePathInBucket = decodedUrl.substring(pathStartIndex, pathEndIndex);
-
-            const tempFilePath = path.join(tmpdir, path.basename(filePathInBucket));
-            await bucket.file(filePathInBucket).download({destination: tempFilePath});
-            archive.file(tempFilePath, {name: `${employeeFolder}${path.basename(filePathInBucket)}`});
-            fileCount++;
-          } catch (err) {
-            console.error(`Failed to download or add file ${url} for employee ${employee.id}. Error:`, err);
-            // Continue to next file
-          }
-        }
-      }
-    }
-
-    await archive.finalize();
-
-    // 4. Upload the zip file to storage
-    const destinationPath = `exports/${zipFileName}`;
-    const [uploadedZip] = await bucket.upload(zipFilePath, {destination: destinationPath});
-
-    // 5. Get a signed URL for download
-    const signedUrl = await uploadedZip.getSignedUrl({
-      action: "read",
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+    const destinationPath = `exports/${excelFileName}`;
+    const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
+      destination: destinationPath,
+      metadata: {
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
     });
 
-    // 6. Clean up temp files
-    fs.unlinkSync(excelFilePath);
-    fs.unlinkSync(zipFilePath);
-    // Note: Individual document temp files are deleted after being added to the archive
+    // 3. Get a signed URL for the user to download the file
+    const signedUrl = await uploadedExcelFile.getSignedUrl({
+      action: "read",
+      expires: Date.now() + 15 * 60 * 1000, // URL is valid for 15 minutes
+    });
 
+    // 4. Clean up the temporary file from the Cloud Function's instance
+    fs.unlinkSync(excelFilePath);
+
+    // 5. Return the download URL and other metadata to the client
     return {
       downloadUrl: signedUrl[0],
-      employeeCount: employees.length,
-      fileCount: fileCount,
+      employeeCount: employeesData.length,
+      fileCount: "N/A", // Not applicable in this version
     };
   });

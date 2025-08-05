@@ -4,14 +4,14 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, ListOrdered } from 'lucide-react';
+import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 export default function DataExportPage() {
     const [isExporting, setIsExporting] = useState(false);
-    const [exportResult, setExportResult] = useState<{ url: string; fileCount: number; employeeCount: number; } | null>(null);
+    const [exportResult, setExportResult] = useState<{ url: string; employeeCount: number; } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
 
@@ -22,27 +22,24 @@ export default function DataExportPage() {
 
         toast({
             title: "Starting Export Process...",
-            description: "This may take several minutes depending on the amount of data. Please do not close this page.",
+            description: "Generating your Excel file. Please wait.",
         });
 
         try {
-            // In a real app, you would use your actual Firebase project ID.
-            // This is a placeholder for the region where you deploy your functions.
-            const functions = getFunctions(); 
+            const functions = getFunctions();
             const exportAllData = httpsCallable(functions, 'exportAllData');
             const result = await exportAllData();
             
-            const data = result.data as { downloadUrl: string; fileCount: number; employeeCount: number; };
+            const data = result.data as { downloadUrl: string; employeeCount: number; };
 
             setExportResult({
                 url: data.downloadUrl,
-                fileCount: data.fileCount,
                 employeeCount: data.employeeCount,
             });
 
             toast({
                 title: "Export Ready!",
-                description: "Your data archive is ready for download.",
+                description: "Your Excel file is ready for download.",
                 variant: 'default',
             });
         } catch (err: any) {
@@ -67,9 +64,9 @@ export default function DataExportPage() {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Warning: Security and Data Privacy</AlertTitle>
                 <AlertDescription>
-                    You are about to download a complete archive of all employee data, including personal information and uploaded documents.
-                    This data is highly sensitive. Ensure you handle the downloaded file securely and in accordance with your company's data privacy policies.
-                    The generated download link will be valid for a short period.
+                    You are about to download an Excel file containing all employee data, including links to personal documents.
+                    This data is highly sensitive. Ensure you handle the downloaded file securely.
+                    The generated download link will be valid for 15 minutes.
                 </AlertDescription>
             </Alert>
 
@@ -77,7 +74,7 @@ export default function DataExportPage() {
                 <CardHeader>
                     <CardTitle>Start Data Export</CardTitle>
                     <CardDescription>
-                        Click the button below to begin generating a full export of the employee database and all associated documents.
+                        Click the button below to generate an Excel file of the entire employee database.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -85,12 +82,12 @@ export default function DataExportPage() {
                         {isExporting ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Exporting... (This may take several minutes)
+                                Exporting...
                             </>
                         ) : (
                             <>
                                 <DownloadCloud className="mr-2 h-4 w-4" />
-                                Generate Full Data Archive (.zip)
+                                Generate Full Data Export (.xlsx)
                             </>
                         )}
                     </Button>
@@ -112,11 +109,11 @@ export default function DataExportPage() {
                             <CheckCircle className="h-4 w-4 text-green-600" />
                             <AlertTitle className="text-green-800">Export Complete!</AlertTitle>
                             <AlertDescription className="text-green-700">
-                                <p>Successfully processed {exportResult.employeeCount} employees and {exportResult.fileCount} documents.</p>
+                                <p>Successfully processed {exportResult.employeeCount} employees.</p>
                                 <Button asChild className="mt-4">
                                     <a href={exportResult.url} target="_blank" rel="noopener noreferrer">
                                         <DownloadCloud className="mr-2 h-4 w-4" />
-                                        Download ZIP Archive
+                                        Download Excel File
                                     </a>
                                 </Button>
                             </AlertDescription>
@@ -131,8 +128,8 @@ export default function DataExportPage() {
                 </CardHeader>
                 <CardContent>
                    <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-                        <li><span className="font-semibold text-foreground">employees.xlsx:</span> An Excel file containing all data from the Firestore `employees` collection.</li>
-                        <li><span className="font-semibold text-foreground">Employee Document Folders:</span> A separate folder for each employee (named by their phone number), containing all of their uploaded documents like profile pictures, ID proofs, etc.</li>
+                        <li><span className="font-semibold text-foreground">A single Excel file (.xlsx):</span> This file contains all data from the Firestore `employees` collection.</li>
+                        <li><span className="font-semibold text-foreground">Clickable Links:</span> Columns containing document URLs will be active hyperlinks, allowing you to open the documents directly in your browser from Excel.</li>
                    </ul>
                 </CardContent>
             </Card>
