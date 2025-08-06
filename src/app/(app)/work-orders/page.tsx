@@ -6,14 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, UserPlus, ClipboardList, User, Users } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db, storage, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes } from "firebase/storage";
+import { db, auth } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, serverTimestamp, doc, Timestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface WorkOrder {
     id: string;
@@ -30,7 +29,7 @@ interface WorkOrder {
 
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
     
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
@@ -102,8 +101,8 @@ export default function WorkOrderPage() {
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             const selectedFile = event.target.files[0];
-            const validTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'];
-            if (validTypes.includes(selectedFile.type)) {
+            const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'];
+            if (validTypes.some(type => selectedFile.type.includes(type))) {
                 setFile(selectedFile);
             } else {
                 toast({
@@ -114,42 +113,98 @@ export default function WorkOrderPage() {
             }
         }
     };
-    
-    // The template download is no longer necessary as we upload the client's file directly.
-    // I am keeping the function here in case it's needed for reference, but removing the button.
-    const handleDownloadTemplate = () => {
-        const templateData = [
-            ['Client Name', 'Site Name', 'Date', 'Manpower Required']
-        ];
-        const ws = XLSX.utils.aoa_to_sheet(templateData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Work Order Template");
-        XLSX.writeFile(wb, "CISS_WorkOrder_Template.xlsx");
-    };
 
-    const handleUpload = async () => {
+    const handleUploadAndProcess = async () => {
         if (!file) {
             toast({ variant: 'destructive', title: 'No File Selected' });
             return;
         }
-        setIsUploading(true);
-        toast({ title: 'Uploading File...', description: 'Your file is being uploaded and will be processed in the background.' });
+        setIsProcessing(true);
+        toast({ title: 'Processing File...', description: 'Please wait while we read the work order data.' });
         
-        try {
-            const storageRef = ref(storage, `work-order-uploads/${Date.now()}_${file.name}`);
-            await uploadBytes(storageRef, file);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-            toast({
-                title: 'Upload Complete',
-                description: 'The file has been uploaded successfully. Processing will begin shortly.',
-            });
-            setFile(null);
-        } catch (error: any) {
-            console.error("Error uploading file: ", error);
-            toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload the file. Please try again.' });
-        } finally {
-            setIsUploading(false);
-        }
+                if (jsonData.length < 2) throw new Error("File is empty or has only a header.");
+                
+                const headers = jsonData[0];
+                const dateHeaderIndex = headers.findIndex((h: string) => h && h.match(/^\d{2}-[A-Za-z]{3}-\d{2}$/));
+                if (dateHeaderIndex === -1) throw new Error("A date column (e.g., 03-Aug-25) was not found in the header.");
+                
+                const dateString = headers[dateHeaderIndex];
+                const workDate = new Date(dateString);
+                if (isNaN(workDate.getTime())) throw new Error(`Invalid date in header: ${dateString}`);
+                const firestoreTimestamp = Timestamp.fromDate(workDate);
+
+                const columnMapping: {[key: string]: string} = { "CITY": "district", "TC CODE": "siteId", "CENTER": "siteName", "MALE": "maleGuardsRequired", "FEMALE": "femaleGuardsRequired" };
+                const mappedHeaders = headers.map((h: string) => columnMapping[h] || h);
+
+                const rows = jsonData.slice(1);
+                const sitesSnapshot = await getDocs(collection(db, "sites"));
+                const sitesMap = new Map(sitesSnapshot.docs.map(doc => [String(doc.data().siteId), {id: doc.id, ...doc.data()}]));
+
+                const batch = writeBatch(db);
+                let operationsCount = 0;
+
+                for (const row of rows) {
+                    const rowData: {[key: string]: any} = {};
+                    mappedHeaders.forEach((key: string, index: number) => { rowData[key] = row[index]; });
+
+                    const { siteId, maleGuardsRequired, femaleGuardsRequired } = rowData;
+                    if (!siteId || maleGuardsRequired === undefined || femaleGuardsRequired === undefined) continue;
+                    
+                    const site = sitesMap.get(String(siteId));
+                    if (!site) {
+                        console.warn(`Site not found for TC CODE "${siteId}". Skipping.`);
+                        continue;
+                    }
+
+                    const maleCount = Number(maleGuardsRequired) || 0;
+                    const femaleCount = Number(femaleGuardsRequired) || 0;
+                    const totalManpower = maleCount + femaleCount;
+                    if (totalManpower === 0) continue;
+
+                    const workOrderId = `${site.id}_${dateString.replace(/-/g, "")}`;
+                    const workOrderRef = doc(db, "workOrders", workOrderId);
+                    
+                    batch.set(workOrderRef, {
+                        siteId: site.id,
+                        siteName: site.siteName,
+                        clientName: site.clientName,
+                        district: site.district,
+                        date: firestoreTimestamp,
+                        maleGuardsRequired: maleCount,
+                        femaleGuardsRequired: femaleCount,
+                        totalManpower: totalManpower,
+                        assignedGuards: {},
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    });
+                    operationsCount++;
+                }
+
+                if (operationsCount > 0) {
+                    await batch.commit();
+                    toast({ title: 'Success', description: `Processed and committed ${operationsCount} work order entries for ${dateString}.` });
+                } else {
+                    toast({ variant: 'default', title: 'No New Data', description: 'No new work order entries were found to import.' });
+                }
+
+            } catch (error: any) {
+                console.error("Error processing file:", error);
+                toast({ variant: 'destructive', title: 'Processing Failed', description: error.message || 'Could not process the file.' });
+            } finally {
+                setIsProcessing(false);
+                setFile(null);
+            }
+        };
+        reader.readAsArrayBuffer(file);
     };
 
     return (
@@ -160,7 +215,7 @@ export default function WorkOrderPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Upload Work Order</CardTitle>
-                        <CardDescription>Upload the work order file received from the client. The system will process it in the background.</CardDescription>
+                        <CardDescription>Upload the work order file received from the client. The system will process it directly.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -175,9 +230,9 @@ export default function WorkOrderPage() {
                         )}
                     </CardContent>
                     <CardFooter>
-                         <Button onClick={handleUpload} disabled={isUploading || !file}>
-                            {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                            {isUploading ? 'Uploading...' : 'Upload & Process File'}
+                         <Button onClick={handleUploadAndProcess} disabled={isProcessing || !file}>
+                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                            {isProcessing ? 'Processing...' : 'Upload & Process File'}
                         </Button>
                     </CardFooter>
                 </Card>
@@ -245,5 +300,4 @@ export default function WorkOrderPage() {
             </Card>
         </div>
     );
-
-    
+}
