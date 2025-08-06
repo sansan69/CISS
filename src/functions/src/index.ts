@@ -1,19 +1,11 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as path from "path";
-import * as os from "os";
-import * as fs from "fs";
-import * as xlsx from "xlsx";
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
-
-const db = admin.firestore();
-const storage = admin.storage();
-
 
 /**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
@@ -77,118 +69,4 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
   }
 });
 
-/**
- * Exports employee data from Firestore into an Excel file.
- * This function streams data for memory efficiency.
- * Triggered by a new document in the 'exportJobs' collection.
- * Supports filtering by clientName, district, and joiningDate range.
- */
-export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, memory: "1GB"})
-  .firestore.document("exportJobs/{jobId}")
-  .onCreate(async (snap, context) => {
-    const jobId = context.params.jobId;
-    const jobData = snap.data();
-    const jobDocRef = db.collection("exportJobs").doc(jobId);
-
-    await jobDocRef.update({
-      status: "processing",
-    });
-
-    try {
-      let employeesQuery: admin.firestore.Query = db.collection("employees");
-
-      // Apply filters if they exist
-      const filters = jobData.filters || {};
-      if (filters.clientName) {
-        employeesQuery = employeesQuery.where("clientName", "==", filters.clientName);
-      }
-      if (filters.district) {
-        employeesQuery = employeesQuery.where("district", "==", filters.district);
-      }
-      if (filters.startDate) {
-        employeesQuery = employeesQuery.where("joiningDate", ">=", new Date(filters.startDate));
-      }
-      if (filters.endDate) {
-        const inclusiveEndDate = new Date(filters.endDate);
-        inclusiveEndDate.setDate(inclusiveEndDate.getDate() + 1);
-        employeesQuery = employeesQuery.where("joiningDate", "<", inclusiveEndDate);
-      }
-
-
-      const employeesData: any[] = await new Promise((resolve, reject) => {
-        const data: any[] = [];
-        const stream = employeesQuery.stream();
-        stream.on("data", (doc) => {
-          const docData = doc.data();
-          const cleanData: {[key: string]: any} = {};
-
-          // Iterate over keys and exclude URL fields and specific arrays
-          Object.keys(docData).forEach((key) => {
-            if (!key.toLowerCase().includes("url") && key !== "searchableFields" && key !== "publicProfile") {
-              // Convert Firestore Timestamps to a readable date format (YYYY-MM-DD)
-              if (docData[key] instanceof admin.firestore.Timestamp) {
-                cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
-              } else {
-                 cleanData[key] = docData[key];
-              }
-            }
-          });
-          data.push({id: doc.id, ...cleanData});
-        });
-        stream.on("end", () => resolve(data));
-        stream.on("error", (err) => reject(err));
-      });
-
-
-      if (employeesData.length === 0) {
-        throw new Error("No employee data found for the selected filters.");
-      }
-
-      // Create Excel file in a temporary directory
-      const tmpdir = os.tmpdir();
-      const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
-      const excelFilePath = path.join(tmpdir, excelFileName);
-
-      const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.json_to_sheet(employeesData);
-      xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
-      xlsx.writeFile(workbook, excelFilePath);
-
-      // Upload to Firebase Storage
-      const bucket = storage.bucket();
-      const destinationPath = `exports/${excelFileName}`;
-      const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
-        destination: destinationPath,
-        metadata: {
-          contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          metadata: {
-            owner: jobData.userId,
-            jobId: jobId,
-          },
-        },
-      });
-
-      // Get a long-lived download URL
-      const downloadUrl = await uploadedExcelFile.getSignedUrl({
-        action: "read",
-        expires: "03-17-2025", // A future date
-      });
-
-      // Update job document with success status and download URL
-      await jobDocRef.update({
-        status: "complete",
-        downloadUrl: downloadUrl[0],
-        employeeCount: employeesData.length,
-        exportedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      // Clean up the temporary file
-      fs.unlinkSync(excelFilePath);
-    } catch (error: any) {
-      console.error(`Error processing export job ${jobId}:`, error);
-      await jobDocRef.update({
-        status: "error",
-        error: error.message || "An unknown error occurred.",
-      });
-    }
-});
+    

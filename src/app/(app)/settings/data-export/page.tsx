@@ -4,42 +4,27 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet, CalendarIcon, Filter } from 'lucide-react';
+import { DownloadCloud, AlertTriangle, Loader2, FileSpreadsheet, CalendarIcon, Filter, CheckCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
-import { auth, db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, doc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { Label } from '@/components/ui/label';
-
-
-// Represents the state of an export job stored in Firestore
-interface ExportJob {
-  status: 'pending' | 'processing' | 'complete' | 'error';
-  downloadUrl?: string;
-  error?: string;
-  createdAt: any;
-  userId: string;
-  employeeCount?: number;
-  filters?: {
-    clientName?: string;
-    startDate?: string;
-    endDate?: string;
-    district?: string;
-  }
-}
+import * as XLSX from 'xlsx';
 
 interface ClientOption { id: string; name: string; }
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 
-
 export default function DataExportPage() {
-    const [isRequesting, setIsRequesting] = useState(false);
-    const [activeJob, setActiveJob] = useState<{ id: string; data: ExportJob } | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'complete' | 'error'>('idle');
+    const [processedCount, setProcessedCount] = useState(0);
+
     const { toast } = useToast();
 
     // Filters State
@@ -61,112 +46,95 @@ export default function DataExportPage() {
         fetchClients();
     }, [toast]);
 
-
-    // Subscribe to real-time updates for the active export job
-    useEffect(() => {
-        if (!activeJob?.id) return;
-
-        const unsub = onSnapshot(doc(db, "exportJobs", activeJob.id), (doc) => {
-            if (doc.exists()) {
-                const jobData = doc.data() as ExportJob;
-                setActiveJob({ id: doc.id, data: jobData });
-
-                if(jobData.status === 'complete' || jobData.status === 'error') {
-                    setIsRequesting(false); // Stop the main loading spinner
-                }
-
-                if (jobData.status === 'error') {
-                     toast({
-                        variant: "destructive",
-                        title: "Export Failed",
-                        description: jobData.error || "An unknown error occurred in the background.",
-                    });
-                }
-            }
-        });
-
-        // Cleanup subscription on component unmount or when job changes
-        return () => unsub();
-
-    }, [activeJob?.id, toast]);
-
-
-    const handleStartExport = async () => {
-        setIsRequesting(true);
-        setActiveJob(null);
-
-        const user = auth.currentUser;
-        if (!user) {
-            toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to perform this action."});
-            setIsRequesting(false);
-            return;
-        }
+    const handleClientSideExport = async () => {
+        setIsGenerating(true);
+        setGenerationStatus('generating');
+        setProcessedCount(0);
+        toast({ title: "Generating Export...", description: "Fetching employee data from the database." });
 
         try {
-            // Create the job payload
-            const jobPayload: any = {
-                userId: user.uid,
-                status: 'pending',
-                createdAt: serverTimestamp(),
-                filters: {}
-            };
+            let employeesQuery = query(collection(db, "employees"));
 
+            // Apply filters
             if (selectedClient !== 'all') {
-                jobPayload.filters.clientName = selectedClient;
+                employeesQuery = query(employeesQuery, where('clientName', '==', selectedClient));
             }
             if (selectedDistrict !== 'all') {
-                jobPayload.filters.district = selectedDistrict;
+                employeesQuery = query(employeesQuery, where('district', '==', selectedDistrict));
             }
             if (dateRange?.from) {
-                jobPayload.filters.startDate = dateRange.from.toISOString();
+                employeesQuery = query(employeesQuery, where('joiningDate', '>=', Timestamp.fromDate(dateRange.from)));
             }
             if (dateRange?.to) {
-                jobPayload.filters.endDate = dateRange.to.toISOString();
+                const toDate = new Date(dateRange.to);
+                toDate.setHours(23, 59, 59, 999); // Include the whole day
+                employeesQuery = query(employeesQuery, where('joiningDate', '<=', Timestamp.fromDate(toDate)));
+            }
+            
+            const querySnapshot = await getDocs(employeesQuery);
+
+            if (querySnapshot.empty) {
+                toast({ variant: 'default', title: "No Data", description: "No employees found for the selected filters." });
+                setGenerationStatus('error');
+                setIsGenerating(false);
+                return;
             }
 
-            // Create a new job document in Firestore to trigger the background function
-            const jobsCollection = collection(db, "exportJobs");
-            const newJobDoc = await addDoc(jobsCollection, jobPayload);
+            toast({ title: "Processing Data...", description: `Found ${querySnapshot.size} records to export.` });
 
-            // Set the active job to start listening for updates
-            setActiveJob({
-                id: newJobDoc.id,
-                data: {
-                    userId: user.uid,
-                    status: 'pending',
-                    createdAt: new Date(),
-                    filters: jobPayload.filters,
-                }
-            });
+            const employeesData: any[] = [];
+            querySnapshot.forEach((doc) => {
+                const docData = doc.data();
+                const cleanData: {[key: string]: any} = {};
 
-            toast({
-                title: "Export Requested",
-                description: "Your data export is being processed in the background. You'll be notified when it's ready.",
+                Object.keys(docData).forEach((key) => {
+                    // Exclude URLs and internal fields
+                    if (!key.toLowerCase().includes('url') && key !== 'searchableFields' && key !== 'publicProfile') {
+                        if (docData[key] instanceof Timestamp) {
+                            cleanData[key] = docData[key].toDate().toISOString().split("T")[0]; // Format as YYYY-MM-DD
+                        } else {
+                            cleanData[key] = docData[key];
+                        }
+                    }
+                });
+                employeesData.push({id: doc.id, ...cleanData});
             });
-        } catch (err: any) {
-            console.error("Error requesting export job:", err);
-            const errorMessage = err.message || "Could not start the export job.";
-            toast({
-                variant: "destructive",
-                title: "Request Failed",
-                description: errorMessage,
-            });
-            setIsRequesting(false);
+            
+            setProcessedCount(employeesData.length);
+
+            // Create Excel file
+            const workbook = XLSX.utils.book_new();
+            const worksheet = XLSX.utils.json_to_sheet(employeesData);
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+            
+            // Trigger download
+            XLSX.writeFile(workbook, `CISS_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            setGenerationStatus('complete');
+            toast({ variant: 'default', title: "Export Ready!", description: `Successfully exported ${employeesData.length} records.` });
+
+        } catch (error: any) {
+            console.error("Error during client-side export:", error);
+            let message = "An error occurred during export.";
+            if (error.code === 'permission-denied') {
+                message = "Permission Denied. You do not have access to read this data."
+            }
+            toast({ variant: "destructive", title: "Export Failed", description: message });
+            setGenerationStatus('error');
+        } finally {
+            setIsGenerating(false);
         }
     };
-
+    
     const getStatusContent = () => {
-        if (!activeJob) return null;
-
-        switch (activeJob.data.status) {
-            case 'pending':
-            case 'processing':
+        switch (generationStatus) {
+            case 'generating':
                 return (
                      <Alert variant="default">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <AlertTitle>Processing...</AlertTitle>
                         <AlertDescription>
-                            Your export is being generated in the background. This may take a few minutes. The download link will appear here automatically when ready.
+                            Your export is being generated. This may take a few moments.
                         </AlertDescription>
                     </Alert>
                 );
@@ -176,13 +144,7 @@ export default function DataExportPage() {
                         <CheckCircle className="h-4 w-4 text-green-600" />
                         <AlertTitle className="text-green-800">Export Complete!</AlertTitle>
                         <AlertDescription className="text-green-700">
-                            <p>Successfully processed {activeJob.data.employeeCount || 'all'} employees.</p>
-                            <Button asChild className="mt-4">
-                                <a href={activeJob.data.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                    <DownloadCloud className="mr-2 h-4 w-4" />
-                                    Download Excel File
-                                </a>
-                            </Button>
+                           Successfully processed {processedCount} employees. Your download should begin shortly.
                         </AlertDescription>
                     </Alert>
                 );
@@ -190,8 +152,8 @@ export default function DataExportPage() {
                  return (
                      <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Export Error</AlertTitle>
-                        <AlertDescription>{activeJob.data.error || 'An unexpected error occurred.'}</AlertDescription>
+                        <AlertTitle>Export Error or No Data</AlertTitle>
+                        <AlertDescription>The export could not be completed. Please check the filters and try again.</AlertDescription>
                     </Alert>
                 );
             default:
@@ -202,7 +164,7 @@ export default function DataExportPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <h1 className="text-3xl font-bold tracking-tight">Export All Employee Data</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Export Employee Data</h1>
 
             <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
@@ -216,7 +178,7 @@ export default function DataExportPage() {
                 <CardHeader>
                     <CardTitle>Start Data Export</CardTitle>
                     <CardDescription>
-                        Optionally apply filters, then click the button below to generate an Excel file. The process runs in the background.
+                        Optionally apply filters, then click the button below to generate an Excel file directly in your browser.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -256,22 +218,22 @@ export default function DataExportPage() {
                             </Popover>
                         </div>
                     </div>
-                     <Button onClick={handleStartExport} disabled={isRequesting}>
-                        {isRequesting ? (
+                     <Button onClick={handleClientSideExport} disabled={isGenerating}>
+                        {isGenerating ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Requesting Export...
+                                Generating Export...
                             </>
                         ) : (
                             <>
                                 <DownloadCloud className="mr-2 h-4 w-4" />
-                                Generate Full Data Export (.xlsx)
+                                Generate and Download Export (.xlsx)
                             </>
                         )}
                     </Button>
                 </CardContent>
 
-                {activeJob && (
+                {generationStatus !== 'idle' && (
                     <CardFooter>
                        {getStatusContent()}
                     </CardFooter>
@@ -280,3 +242,5 @@ export default function DataExportPage() {
         </div>
     );
 }
+
+    
