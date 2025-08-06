@@ -209,15 +209,13 @@ export default function FieldOfficerManagementPage() {
     setIsSubmitting(true);
     try {
         if (editingOfficer) {
-            // Update existing officer (only name and districts)
-            const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.uid);
+            const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.id);
             await updateDoc(officerDocRef, {
                 name: officerData.name,
                 assignedDistricts: officerData.assignedDistricts,
             });
             toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
         } else {
-            // This is a simplified approach. For production, secondary app instance is recommended.
             const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
             const newOfficerUid = userCredential.user.uid;
 
@@ -252,9 +250,7 @@ export default function FieldOfficerManagementPage() {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
     try {
-      // Just delete the Firestore document.
-      // This revokes their access based on our planned security rules.
-      await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.uid));
+      await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
       toast({
         title: "Officer Record Deleted",
         description: `Access for "${deletingOfficer.name}" has been revoked. Their login account still exists.`,
@@ -416,4 +412,3 @@ export default function FieldOfficerManagementPage() {
     </>
   );
 }
-
