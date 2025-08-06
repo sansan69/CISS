@@ -1,11 +1,19 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import * as path from "path";
+import * as os from "os";
+import * as fs from "fs";
+import * as xlsx from "xlsx";
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
+
+const db = admin.firestore();
+const storage = admin.storage();
+
 
 /**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
@@ -68,5 +76,3 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "An error occurred while setting the super admin role.");
   }
 });
-
-    
