@@ -1,12 +1,11 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as os from "os";
 import * as path from "path";
+import * as os from "os";
 import * as fs from "fs";
 import * as xlsx from "xlsx";
 import * as cors from "cors";
-// import * as corsConfig from "../cors-config.json"; // No longer needed, handled in code
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
@@ -24,18 +23,19 @@ const corsHandler = cors({
       "https://ciss-workforce.web.app",
       "https://ciss-workforce.firebaseapp.com",
     ],
-    methods: ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    methods: ["GET", "POST", "HEAD", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
 });
 
 
 /**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
- * This function can only be called by an existing admin.
+ * This function can only be called by an existing superAdmin.
  */
 export const createStateAdmin = functions.https.onCall(async (data, context) => {
-  // Check if the caller is an admin
-  if (context.auth?.token.admin !== true) {
-    throw new functions.https.HttpsError("permission-denied", "Must be an admin to create other admins.");
+  // Check if the caller is a super admin
+  if (context.auth?.token.role !== "superAdmin") {
+    throw new functions.https.HttpsError("permission-denied", "Must be a super admin to create other admins.");
   }
 
   const {email, state} = data;
@@ -49,6 +49,9 @@ export const createStateAdmin = functions.https.onCall(async (data, context) => 
     return {result: `Successfully made ${email} a state admin for ${state}.`};
   } catch (error) {
     console.error("Error setting custom claim:", error);
+    if (error instanceof Error && (error as any).code === "auth/user-not-found") {
+       throw new functions.https.HttpsError("not-found", `User with email ${email} not found.`);
+    }
     throw new functions.https.HttpsError("internal", "An error occurred while setting the user role.");
   }
 });
@@ -59,12 +62,14 @@ export const createStateAdmin = functions.https.onCall(async (data, context) => 
  * This function is designed to be run only once to secure the system.
  */
 export const setSuperAdmin = functions.https.onCall(async (data, context) => {
-  // Check if a super admin already exists to prevent misuse.
   const listUsersResult = await admin.auth().listUsers(1000);
   const superAdminExists = listUsersResult.users.some((user) => user.customClaims?.role === "superAdmin");
 
   if (superAdminExists) {
-    throw new functions.https.HttpsError("already-exists", "A super admin already exists for this project.");
+    // If a super admin already exists, only an existing super admin can create another one.
+    if (context.auth?.token.role !== "superAdmin") {
+        throw new functions.https.HttpsError("already-exists", "A super admin already exists. Only another super admin can create more.");
+    }
   }
 
   const {email} = data;
@@ -78,6 +83,9 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
     return {result: `Successfully made ${email} a super admin.`};
   } catch (error) {
     console.error("Error setting super admin claim:", error);
+    if (error instanceof Error && (error as any).code === "auth/user-not-found") {
+       throw new functions.https.HttpsError("not-found", `User with email ${email} not found.`);
+    }
     throw new functions.https.HttpsError("internal", "An error occurred while setting the super admin role.");
   }
 });
@@ -88,24 +96,23 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
  */
 export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "512MB"})
   .https.onRequest((req, res) => {
-    // This is the crucial change: we wrap the entire logic in the cors handler
-    // This ensures that the preflight 'OPTIONS' request is handled correctly.
     corsHandler(req, res, async () => {
-      // The rest of the function logic only runs if CORS is successful.
-      if (req.method !== 'POST') {
-        res.status(405).send({error: 'Method Not Allowed'});
+      if (req.method !== "POST") {
+        res.status(405).send({error: "Method Not Allowed"});
         return;
       }
       try {
+        console.log("Starting exportAllData function execution.");
         const employeesSnapshot = await db.collection("employees").get();
         if (employeesSnapshot.empty) {
+          console.log("No employee data found to export.");
           res.status(404).send({error: "No employee data to export."});
           return;
         }
 
+        console.log(`Found ${employeesSnapshot.size} employee documents.`);
         const employeesData = employeesSnapshot.docs.map((doc) => {
           const docData = doc.data();
-          // Convert all Timestamps to ISO strings for consistent formatting in Excel.
           Object.keys(docData).forEach((key) => {
             if (docData[key] instanceof admin.firestore.Timestamp) {
               docData[key] = docData[key].toDate().toISOString();
@@ -117,15 +124,16 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
         const tmpdir = os.tmpdir();
         const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
         const excelFilePath = path.join(tmpdir, excelFileName);
+        console.log(`Creating Excel file at: ${excelFilePath}`);
 
         const workbook = xlsx.utils.book_new();
         const worksheet = xlsx.utils.json_to_sheet(employeesData);
-
         xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
         xlsx.writeFile(workbook, excelFilePath);
 
         const bucket = storage.bucket();
         const destinationPath = `exports/${excelFileName}`;
+        console.log(`Uploading Excel file to Storage at: ${destinationPath}`);
         const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
           destination: destinationPath,
           metadata: {
@@ -133,16 +141,19 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
           },
         });
 
-        const signedUrl = await uploadedExcelFile.getSignedUrl({
-          action: "read",
+        const signedUrlConfig = {
+          action: "read" as const,
           expires: Date.now() + 15 * 60 * 1000, // URL is valid for 15 minutes
-        });
+        };
+        console.log("Generating signed URL for the uploaded file.");
+        const [signedUrl] = await uploadedExcelFile.getSignedUrl(signedUrlConfig);
 
         fs.unlinkSync(excelFilePath);
+        console.log("Cleaned up temporary file and sending success response.");
 
         res.status(200).send({
           data: {
-            downloadUrl: signedUrl[0],
+            downloadUrl: signedUrl,
             employeeCount: employeesData.length,
           },
         });
@@ -152,3 +163,5 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
       }
     });
   });
+
+    
