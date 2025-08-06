@@ -6,7 +6,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as xlsx from "xlsx";
 import * as cors from "cors";
-import * as corsConfig from "../cors-config.json";
+// import * as corsConfig from "../cors-config.json"; // No longer needed, handled in code
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
@@ -16,7 +16,16 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 const storage = admin.storage();
 
-const corsHandler = cors({origin: true});
+// Explicitly create a cors handler with your origins
+const corsHandler = cors({
+    origin: [
+      "https://6000-firebase-studio-1747976322032.cluster-44kx2eiocbhe2tyk3zoyo3ryuo.cloudworkstations.dev",
+      "http://localhost:3000",
+      "https://ciss-workforce.web.app",
+      "https://ciss-workforce.firebaseapp.com",
+    ],
+    methods: ["GET", "HEAD", "PUT", "POST", "DELETE"],
+});
 
 
 /**
@@ -79,14 +88,15 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
  */
 export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "512MB"})
   .https.onRequest((req, res) => {
-    // Correctly wrap the entire function logic with the CORS handler
+    // This is the crucial change: we wrap the entire logic in the cors handler
+    // This ensures that the preflight 'OPTIONS' request is handled correctly.
     corsHandler(req, res, async () => {
+      // The rest of the function logic only runs if CORS is successful.
+      if (req.method !== 'POST') {
+        res.status(405).send({error: 'Method Not Allowed'});
+        return;
+      }
       try {
-        if (req.method !== 'POST') {
-          res.status(405).send({error: 'Method Not Allowed'});
-          return;
-        }
-
         const employeesSnapshot = await db.collection("employees").get();
         if (employeesSnapshot.empty) {
           res.status(404).send({error: "No employee data to export."});
