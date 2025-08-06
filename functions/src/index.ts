@@ -16,6 +16,60 @@ const storage = admin.storage();
 
 
 /**
+ * Creates a new Field Officer user, sets their custom claims, and stores their info in Firestore.
+ * This function can only be called by an existing superAdmin.
+ */
+export const createFieldOfficer = functions.https.onCall(async (data, context) => {
+  // 1. Authentication & Authorization
+  // Check if the caller is a super admin
+  if (context.auth?.token.superAdmin !== true) {
+    throw new functions.https.HttpsError("permission-denied", "Must be a super admin to create a field officer.");
+  }
+
+  // 2. Input Validation
+  const {email, password, name, assignedDistricts} = data;
+  if (!email || !password || !name || !assignedDistricts) {
+    throw new functions.https.HttpsError("invalid-argument", "The function must be called with email, password, name, and assignedDistricts.");
+  }
+  if (password.length < 6) {
+    throw new functions.https.HttpsError("invalid-argument", "Password must be at least 6 characters long.");
+  }
+
+  try {
+    // 3. Create Firebase Auth User
+    const userRecord = await admin.auth().createUser({
+      email: email,
+      password: password,
+      displayName: name,
+    });
+
+    // 4. Set Custom Claims
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+        role: "fieldOfficer",
+        districts: assignedDistricts, // Store assigned districts in the token
+    });
+
+    // 5. Create Firestore Document for the officer
+    await db.collection("fieldOfficers").add({
+      name: name,
+      email: email,
+      uid: userRecord.uid, // Link to the auth user
+      assignedDistricts: assignedDistricts,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {result: `Successfully created field officer ${name} with email ${email}.`};
+  } catch (error: any) {
+    console.error("Error creating field officer:", error);
+    if (error.code === "auth/email-already-exists") {
+      throw new functions.https.HttpsError("already-exists", "An account with this email address already exists.");
+    }
+    throw new functions.https.HttpsError("internal", "An error occurred while creating the field officer.");
+  }
+});
+
+
+/**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
  * This function can only be called by an existing superAdmin.
  */
@@ -115,32 +169,27 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         employeesQuery = employeesQuery.where('joiningDate', '<=', inclusiveEndDate);
       }
 
-      // Stream data for memory efficiency
-      const employeesStream = await employeesQuery.stream();
       const employeesData: any[] = [];
-
-      employeesStream.on('data', (doc) => {
-        const docData = doc.data();
-        const cleanData: {[key: string]: any} = {};
-
-        // Iterate over keys and exclude URL fields and specific arrays
-        Object.keys(docData).forEach((key) => {
-          if (!key.toLowerCase().includes('url') && key !== 'searchableFields' && key !== 'publicProfile') {
-            // Convert Firestore Timestamps to a readable date format (YYYY-MM-DD)
-            if (docData[key] instanceof admin.firestore.Timestamp) {
-              cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
-            } else {
-               cleanData[key] = docData[key];
-            }
-          }
-        });
-        employeesData.push({id: doc.id, ...cleanData});
-      });
-
-      // Wait for the stream to finish
+      
+      const stream = employeesQuery.stream();
+      
       await new Promise((resolve, reject) => {
-        employeesStream.on('end', resolve);
-        employeesStream.on('error', reject);
+          stream.on('data', (doc) => {
+            const docData = doc.data();
+            const cleanData: {[key: string]: any} = {};
+            Object.keys(docData).forEach((key) => {
+              if (!key.toLowerCase().includes('url') && key !== 'searchableFields' && key !== 'publicProfile') {
+                if (docData[key] instanceof admin.firestore.Timestamp) {
+                  cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
+                } else {
+                   cleanData[key] = docData[key];
+                }
+              }
+            });
+            employeesData.push({id: doc.id, ...cleanData});
+          });
+          stream.on('end', resolve);
+          stream.on('error', reject);
       });
 
       if (employeesData.length === 0) {

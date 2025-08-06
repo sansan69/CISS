@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Users, UserCheck, UserMinus, Clock, ArrowRight, UserPlus, Loader2, AlertCircle as AlertIcon } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import React, { useEffect, useState } from "react";
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp, orderBy, limit } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { onAuthStateChanged, type User } from 'firebase/auth';
 
 
 interface DashboardStats { total: number; active: number; onLeave: number; inactiveOrExited: number; }
@@ -53,13 +54,43 @@ export default function DashboardPage() {
 
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+
 
     useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                setCurrentUser(user);
+                const tokenResult = await user.getIdTokenResult();
+                const claims = tokenResult.claims;
+                setUserRole(claims.role as string || null);
+                setAssignedDistricts(claims.districts as string[] || []);
+            } else {
+                setCurrentUser(null);
+                setUserRole(null);
+                setAssignedDistricts([]);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (!userRole) { // Wait until we know the user's role
+            return;
+        }
+
         const fetchDashboardData = async () => {
             setIsLoading(true);
             setError(null);
             try {
-                const employeesRef = collection(db, "employees");
+                let employeesRef: any = collection(db, "employees");
+
+                // If field officer, filter by their assigned districts
+                if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+                    employeesRef = query(employeesRef, where('district', 'in', assignedDistricts));
+                }
 
                 const totalQuery = getCountFromServer(employeesRef);
                 const activeQuery = getCountFromServer(query(employeesRef, where('status', '==', 'Active')));
@@ -67,9 +98,9 @@ export default function DashboardPage() {
                 const inactiveQuery = getCountFromServer(query(employeesRef, where('status', 'in', ['Inactive', 'Exited'])));
                 
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-                const hiresQuery = query(collection(db, "employees"), where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
+                const hiresQuery = query(employeesRef, where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
                 
-                const recentActivityQuery = query(collection(db, "employees"), orderBy("createdAt", "desc"), limit(5));
+                const recentActivityQuery = query(employeesRef, orderBy("createdAt", "desc"), limit(5));
 
                 const [
                     totalSnap,
@@ -129,7 +160,7 @@ export default function DashboardPage() {
             }
         };
         fetchDashboardData();
-    }, []);
+    }, [userRole, assignedDistricts]);
 
     const newHiresChartConfig = {
       hires: {

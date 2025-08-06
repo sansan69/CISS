@@ -14,7 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { MoreHorizontal, Search, UserPlus, Eye, Loader2, AlertCircle, CheckCircle, Trash2, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -49,7 +50,11 @@ export default function EmployeeDirectoryPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    // URL is the single source of truth
+    // User auth state
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    
+    // URL is the single source of truth for filters
     const page = parseInt(searchParams.get('page') || '1');
     const searchTerm = searchParams.get('searchTerm') || '';
     const client = searchParams.get('client') || 'all';
@@ -61,7 +66,6 @@ export default function EmployeeDirectoryPage() {
     const [clients, setClients] = useState<ClientOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [hasNextPage, setHasNextPage] = useState(false);
 
     // Modals state
@@ -74,6 +78,21 @@ export default function EmployeeDirectoryPage() {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const tokenResult = await user.getIdTokenResult();
+                const claims = tokenResult.claims;
+                setUserRole(claims.role as string || null);
+                setAssignedDistricts(claims.districts as string[] || []);
+            } else {
+                setUserRole(null);
+                setAssignedDistricts([]);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     const updateUrlParams = useCallback((newParams: Record<string, string | number | null>) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -108,11 +127,18 @@ export default function EmployeeDirectoryPage() {
     }, [toast]);
 
     const fetchData = useCallback(async () => {
+        if (userRole === null) return; // Don't fetch until we know the user's role
+
         setIsLoading(true);
         setError(null);
         try {
             let q: Query = collection(db, "employees");
             
+            // Apply role-based filtering first
+            if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+                q = query(q, where('district', 'in', assignedDistricts));
+            }
+
             if (searchTerm) {
                 q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
             }
@@ -122,7 +148,7 @@ export default function EmployeeDirectoryPage() {
             if (status !== 'all') {
                 q = query(q, where('status', '==', status));
             }
-            if (district !== 'all') {
+            if (district !== 'all' && userRole !== 'fieldOfficer') { // Field officers are already filtered by their districts
                 q = query(q, where('district', '==', district));
             }
 
@@ -132,7 +158,6 @@ export default function EmployeeDirectoryPage() {
 
             let finalQuery = q;
             if (page > 1) {
-                // To get to page N, we need to fetch N * ITEMS_PER_PAGE documents
                 const snapshot = await getDocs(query(q, limit( (page -1) * ITEMS_PER_PAGE)));
                 const lastDoc = snapshot.docs[snapshot.docs.length-1];
                 if (lastDoc) {
@@ -147,7 +172,6 @@ export default function EmployeeDirectoryPage() {
             setEmployees(fetchedEmployees);
             
             const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-            setLastVisible(lastDoc || null);
 
             // Check if there is a next page
             if(lastDoc) {
@@ -166,7 +190,7 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [page, searchTerm, client, status, district]);
+    }, [page, searchTerm, client, status, district, userRole, assignedDistricts]);
 
     useEffect(() => {
         fetchData();
@@ -233,7 +257,9 @@ export default function EmployeeDirectoryPage() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Employee Directory</h1>
                     <p className="text-muted-foreground">Manage and view all employee profiles.</p>
                 </div>
-                <Button asChild><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
+                {userRole !== 'fieldOfficer' && (
+                  <Button asChild><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
+                )}
             </div>
 
             <Card>
@@ -250,7 +276,14 @@ export default function EmployeeDirectoryPage() {
                     </div>
                      <div>
                         <Label htmlFor="district-filter" className="sr-only">District</Label>
-                        <Select value={district} onValueChange={(val) => handleFilterChange('district', val)}><SelectTrigger id="district-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Districts</SelectItem>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select>
+                        <Select value={district} onValueChange={(val) => handleFilterChange('district', val)} disabled={userRole === 'fieldOfficer'}>
+                            <SelectTrigger id="district-filter"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Districts</SelectItem>
+                                { (userRole === 'fieldOfficer' ? assignedDistricts : keralaDistricts).map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        {userRole === 'fieldOfficer' && <p className="text-xs text-muted-foreground mt-1">Filtered by your assigned districts.</p>}
                     </div>
                     <div>
                         <Label htmlFor="status-filter" className="sr-only">Status</Label>
@@ -345,11 +378,15 @@ export default function EmployeeDirectoryPage() {
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> View / Edit</DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Active'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Active</DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Exited'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Exited</DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem className="text-destructive" onClick={() => { setEmployeeToDelete(emp); setIsDeleteDialogOpen(true); }}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                                                            {userRole !== 'fieldOfficer' && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Active'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Active</DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Exited'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Exited</DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem className="text-destructive" onClick={() => { setEmployeeToDelete(emp); setIsDeleteDialogOpen(true); }}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                                                                </>
+                                                            )}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </TableCell>
@@ -431,5 +468,3 @@ export default function EmployeeDirectoryPage() {
         </div>
     );
 }
-
-    
