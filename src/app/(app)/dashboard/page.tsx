@@ -2,24 +2,32 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Users, UserCheck, UserMinus, Clock, ArrowRight, UserPlus, Loader2, AlertCircle as AlertIcon } from "lucide-react";
+import { Users, UserCheck, UserMinus, Clock, ArrowRight, UserPlus, Loader2, AlertCircle as AlertIcon, CalendarClock } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import React, { useEffect, useState } from "react";
 import { db, auth } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp, orderBy, limit } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { format, subMonths, startOfMonth } from 'date-fns';
+import { format, subMonths, startOfMonth, startOfToday, endOfToday, addDays } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { Badge } from "@/components/ui/badge";
 
 
 interface DashboardStats { total: number; active: number; onLeave: number; inactiveOrExited: number; }
 interface NewHiresData { month: string; hires: number; }
 interface RecentActivity { id: string; type: 'enrollment' | 'status_change'; text: string; subtext: string; timestamp: Date; }
+interface UpcomingDuty {
+  id: string;
+  siteName: string;
+  clientName: string;
+  date: Date;
+  totalManpower: number;
+}
 
 
 const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementType; isLoading: boolean; error: string | null; helpText?: string }> = 
@@ -51,6 +59,7 @@ export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [newHiresData, setNewHiresData] = useState<NewHiresData[]>([]);
     const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+    const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
 
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -107,10 +116,12 @@ export default function DashboardPage() {
                     setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0 });
                     setNewHiresData([]);
                     setRecentActivity([]);
+                    setUpcomingDuties([]);
                     setIsLoading(false);
                     return;
                 }
 
+                // --- Common Queries for all roles ---
                 const totalQuery = getCountFromServer(employeesRef);
                 const activeQuery = getCountFromServer(query(employeesRef, where('status', '==', 'Active')));
                 const onLeaveQuery = getCountFromServer(query(employeesRef, where('status', '==', 'OnLeave')));
@@ -121,22 +132,44 @@ export default function DashboardPage() {
                 
                 const recentActivityQuery = query(employeesRef, orderBy("createdAt", "desc"), limit(5));
 
+                const queriesToRun = [
+                    totalQuery,
+                    activeQuery,
+                    onLeaveQuery,
+                    inactiveQuery,
+                    getDocs(hiresQuery),
+                    getDocs(recentActivityQuery),
+                ];
+
+                // --- Field Officer Specific Query ---
+                let dutiesQueryPromise: Promise<any> | null = null;
+                if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+                    const today = startOfToday();
+                    const nextWeek = endOfToday(addDays(today, 7));
+                    const dutiesQuery = query(
+                        collection(db, "workOrders"),
+                        where("district", "in", assignedDistricts),
+                        where("date", ">=", Timestamp.fromDate(today)),
+                        where("date", "<=", Timestamp.fromDate(nextWeek)),
+                        orderBy("date", "asc"),
+                        limit(10)
+                    );
+                    dutiesQueryPromise = getDocs(dutiesQuery);
+                    queriesToRun.push(dutiesQueryPromise);
+                }
+
+
                 const [
                     totalSnap,
                     activeSnap,
                     onLeaveSnap,
                     inactiveSnap,
                     hiresSnapshot,
-                    recentActivitySnapshot
-                ] = await Promise.all([
-                    totalQuery,
-                    activeQuery,
-                    onLeaveQuery,
-                    inactiveQuery,
-                    getDocs(hiresQuery),
-                    getDocs(recentActivityQuery)
-                ]);
+                    recentActivitySnapshot,
+                    dutiesSnapshot
+                ] = await Promise.all(queriesToRun);
                 
+                // --- Process Common Data ---
                 setStats({
                     total: totalSnap.data().count,
                     active: activeSnap.data().count,
@@ -148,7 +181,7 @@ export default function DashboardPage() {
                 for (let i = 0; i < 6; i++) {
                     hiresByMonth[format(subMonths(new Date(), i), 'MMM yyyy')] = 0;
                 }
-                hiresSnapshot.docs.forEach(doc => {
+                hiresSnapshot.docs.forEach((doc: any) => {
                     const data = doc.data();
                     if (data.joiningDate) {
                         const monthKey = format((data.joiningDate as Timestamp).toDate(), 'MMM yyyy');
@@ -157,7 +190,7 @@ export default function DashboardPage() {
                 });
                 setNewHiresData(Object.entries(hiresByMonth).map(([month, hires]) => ({ month, hires })).reverse());
 
-                setRecentActivity(recentActivitySnapshot.docs.map(doc => {
+                setRecentActivity(recentActivitySnapshot.docs.map((doc: any) => {
                     const data = doc.data() as Employee;
                     return {
                         id: doc.id,
@@ -167,6 +200,20 @@ export default function DashboardPage() {
                         timestamp: (data.createdAt as Timestamp).toDate()
                     };
                 }));
+
+                // --- Process Field Officer Data ---
+                if (dutiesSnapshot) {
+                    setUpcomingDuties(dutiesSnapshot.docs.map((doc: any) => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            siteName: data.siteName,
+                            clientName: data.clientName,
+                            date: (data.date as Timestamp).toDate(),
+                            totalManpower: data.totalManpower,
+                        }
+                    }))
+                }
 
             } catch (err: any) {
                 console.error("Error fetching dashboard data:", err);
@@ -208,6 +255,40 @@ export default function DashboardPage() {
                 <StatCard title="Inactive & Exited" value={stats?.inactiveOrExited} icon={UserMinus} isLoading={isLoading} error={error} />
                 <StatCard title="On Leave" value={stats?.onLeave} icon={Clock} isLoading={isLoading} error={error} />
             </div>
+
+            {userRole === 'fieldOfficer' && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Upcoming Duties - Next 7 Days</CardTitle>
+                        <CardDescription>A summary of guard requirements in your assigned districts.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? (
+                            <div className="h-24 flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                        ) : upcomingDuties.length > 0 ? (
+                            <div className="space-y-3">
+                                {upcomingDuties.map(duty => (
+                                    <div key={duty.id} className="flex items-center justify-between p-3 border rounded-md">
+                                        <div>
+                                            <p className="font-semibold">{duty.siteName} <span className="font-normal text-muted-foreground">({duty.clientName})</span></p>
+                                            <p className="text-sm text-muted-foreground">{format(duty.date, "EEEE, dd MMM yyyy")}</p>
+                                        </div>
+                                        <Badge>Total Required: {duty.totalManpower}</Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-muted-foreground py-6">No upcoming duties found in your districts for the next 7 days.</p>
+                        )}
+                    </CardContent>
+                    <CardFooter>
+                         <Button asChild size="sm" className="w-full">
+                            <Link href="/work-orders"><CalendarClock className="mr-2 h-4 w-4" />View All Work Orders</Link>
+                        </Button>
+                    </CardFooter>
+                </Card>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 <Card className="xl:col-span-2">
                     <CardHeader>
