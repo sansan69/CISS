@@ -79,8 +79,9 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
 
 /**
  * Exports employee data from Firestore into an Excel file.
+ * This function streams data for memory efficiency.
  * Triggered by a new document in the 'exportJobs' collection.
- * Supports filtering by clientName and joiningDate range.
+ * Supports filtering by clientName, district, and joiningDate range.
  */
 export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, memory: "1GB"})
   .firestore.document("exportJobs/{jobId}")
@@ -99,42 +100,48 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       // Apply filters if they exist
       const filters = jobData.filters || {};
       if (filters.clientName) {
-        employeesQuery = employeesQuery.where('clientName', '==', filters.clientName);
+        employeesQuery = employeesQuery.where("clientName", "==", filters.clientName);
       }
       if (filters.district) {
-        employeesQuery = employeesQuery.where('district', '==', filters.district);
+        employeesQuery = employeesQuery.where("district", "==", filters.district);
       }
       if (filters.startDate) {
-        employeesQuery = employeesQuery.where('joiningDate', '>=', new Date(filters.startDate));
+        employeesQuery = employeesQuery.where("joiningDate", ">=", new Date(filters.startDate));
       }
       if (filters.endDate) {
-        // Add 1 day to the end date to make the range inclusive
         const inclusiveEndDate = new Date(filters.endDate);
-        inclusiveEndDate.setDate(inclusiveEndDate.getDate() + 1);
-        employeesQuery = employeesQuery.where('joiningDate', '<=', inclusiveEndDate);
+        inclusiveEndDate.setHours(23, 59, 59, 999); // Set to end of the day
+        employeesQuery = employeesQuery.where("joiningDate", "<=", inclusiveEndDate);
       }
 
-      const employeesSnapshot = await employeesQuery.get();
-      if (employeesSnapshot.empty) {
-        throw new Error("No employee data found for the selected filters.");
-      }
+      const employeesData: any[] = [];
+      const queryStream = employeesQuery.stream();
 
-      const employeesData = employeesSnapshot.docs.map((doc) => {
+      // Use for-await-of loop for reliable stream processing
+      for await (const doc of queryStream) {
         const docData = doc.data();
         const cleanData: {[key: string]: any} = {};
 
+        // Iterate over keys and exclude URL fields and specific arrays
         Object.keys(docData).forEach((key) => {
-          if (!key.toLowerCase().includes('url')) {
+          if (!key.toLowerCase().includes("url") && key !== "searchableFields" && key !== "publicProfile") {
+            // Convert Firestore Timestamps to a readable date format (YYYY-MM-DD)
             if (docData[key] instanceof admin.firestore.Timestamp) {
               cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
-            } else if (key !== 'searchableFields' && key !== 'publicProfile') {
+            } else {
                cleanData[key] = docData[key];
             }
           }
         });
-        return {id: doc.id, ...cleanData};
-      });
+        employeesData.push({id: doc.id, ...cleanData});
+      }
 
+
+      if (employeesData.length === 0) {
+        throw new Error("No employee data found for the selected filters.");
+      }
+
+      // Create Excel file in a temporary directory
       const tmpdir = os.tmpdir();
       const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
       const excelFilePath = path.join(tmpdir, excelFileName);
@@ -144,6 +151,7 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
       xlsx.writeFile(workbook, excelFilePath);
 
+      // Upload to Firebase Storage
       const bucket = storage.bucket();
       const destinationPath = `exports/${excelFileName}`;
       const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
@@ -157,11 +165,13 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         },
       });
 
+      // Get a long-lived download URL
       const downloadUrl = await uploadedExcelFile.getSignedUrl({
         action: "read",
         expires: "03-17-2025",
       });
 
+      // Update job document with success status and download URL
       await jobDocRef.update({
         status: "complete",
         downloadUrl: downloadUrl[0],
@@ -169,6 +179,7 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         exportedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Clean up the temporary file
       fs.unlinkSync(excelFilePath);
     } catch (error: any) {
       console.error(`Error processing export job ${jobId}:`, error);
