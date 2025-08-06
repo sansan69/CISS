@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase'; 
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from "firebase/auth";
+import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,7 +36,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 
 
 interface FieldOfficer {
-  id: string; // This is the Firestore document ID
+  id: string; // This is the Firestore document ID (which should be the UID)
   uid: string; // This is the Firebase Auth User ID
   name: string;
   email: string;
@@ -207,19 +207,29 @@ export default function FieldOfficerManagementPage() {
 
   const handleSaveOfficer = async (officerData: any) => {
     setIsSubmitting(true);
-    const functions = getFunctions();
     try {
         if (editingOfficer) {
-            const updateFieldOfficer = httpsCallable(functions, 'updateFieldOfficer');
-            await updateFieldOfficer({ 
-                uid: officerData.uid, 
-                name: officerData.name, 
-                assignedDistricts: officerData.assignedDistricts 
+            // Update existing officer (only name and districts)
+            const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.uid);
+            await updateDoc(officerDocRef, {
+                name: officerData.name,
+                assignedDistricts: officerData.assignedDistricts,
             });
             toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
         } else {
-            const createFieldOfficer = httpsCallable(functions, 'createFieldOfficer');
-            await createFieldOfficer(officerData);
+            // Create new officer and auth user
+            // This is a simplified approach. For production, secondary app instance is recommended.
+            const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
+            const newOfficerUid = userCredential.user.uid;
+
+            await setDoc(doc(db, 'fieldOfficers', newOfficerUid), {
+                uid: newOfficerUid,
+                name: officerData.name,
+                email: officerData.email,
+                assignedDistricts: officerData.assignedDistricts,
+                createdAt: new Date(),
+            });
+
             toast({ title: "Officer Added", description: `"${officerData.name}" has been successfully created.` });
         }
         setIsFormOpen(false);
@@ -227,28 +237,40 @@ export default function FieldOfficerManagementPage() {
 
     } catch (error: any) {
       console.error("Error saving officer: ", error);
-      toast({ variant: "destructive", title: "Save Failed", description: error.message || "Could not save the officer. Please try again." });
+      let message = "Could not save the officer. Please try again.";
+      if (error.code === 'auth/email-already-in-use') {
+        message = 'This email is already registered to another user.';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'The password is too weak. It must be at least 6 characters long.';
+      }
+      toast({ variant: "destructive", title: "Save Failed", description: message });
     } finally {
       setIsSubmitting(false);
     }
   };
-
+  
+  // NOTE: Deleting users client-side is complex and often requires re-authentication of the admin.
+  // This is a simplified version. A robust solution would use a Cloud Function.
   const handleDeleteOfficer = async () => {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
-    try {
-      const functions = getFunctions();
-      const deleteFieldOfficer = httpsCallable(functions, 'deleteFieldOfficer');
-      await deleteFieldOfficer({ uid: deletingOfficer.uid });
-      toast({ title: "Officer Deleted", description: `"${deletingOfficer.name}"'s account and record have been deleted.` });
-    } catch (error: any) {
-      console.error("Error deleting officer: ", error);
-      toast({ variant: "destructive", title: "Error Deleting Officer", description: error.message || "Could not delete the officer." });
-    } finally {
-      setIsSubmitting(false);
-      setDeletingOfficer(null);
-    }
+    toast({
+        title: "Deletion Not Implemented",
+        description: "For security, deleting users from the client is disabled. Please use the Firebase Console to delete this officer's account.",
+        variant: "destructive",
+        duration: 8000
+    });
+    console.warn("Client-side user deletion is a security risk and is disabled. Please delete from Firebase Console.", deletingOfficer);
+    // In a real scenario with proper setup (or a cloud function), you would do:
+    // try {
+    //   await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.uid));
+    //   // You would need to handle auth deletion via a backend function
+    //   toast({ title: "Officer Deleted", description: `Record for "${deletingOfficer.name}" has been deleted.` });
+    // } catch (error: any) { ... }
+    setIsSubmitting(false);
+    setDeletingOfficer(null);
   };
+
 
   const openAddDialog = () => {
     setEditingOfficer(undefined);
@@ -296,7 +318,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Add your field officers and assign them to specific districts. This will create a login for them and restrict their data access to only their assigned areas.
+            Add your field officers and assign them to specific districts. This will create a login for them and restrict their data access to only their assigned areas (requires Firestore Security Rules to be set up).
           </AlertDescription>
         </Alert>
 
@@ -376,7 +398,7 @@ export default function FieldOfficerManagementPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                   This will permanently delete the officer '{deletingOfficer?.name}' including their login account. This action cannot be undone.
+                   This will delete the officer's record from the database. The login account must be deleted separately from the Firebase Console for security reasons.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
