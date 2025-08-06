@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, AlertCircle, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 interface Client {
   id: string;
@@ -122,7 +123,16 @@ export default function ClientManagementPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold tracking-tight">Client Management</h1>
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" asChild>
+          <Link href="/settings">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Back to Settings</span>
+          </Link>
+        </Button>
+        <h1 className="text-3xl font-bold tracking-tight">Client Management</h1>
+      </div>
+
 
       <Alert>
         <AlertCircle className="h-4 w-4" />

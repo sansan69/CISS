@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, AlertTriangle, CheckCircle, Users, RefreshCw, Loader2 } from 'lucide-react';
+import { QrCode, AlertTriangle, CheckCircle, Users, RefreshCw, Loader2, ChevronLeft } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import Link from 'next/link';
 
 export default function QrManagementPage() {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -59,7 +60,15 @@ export default function QrManagementPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold tracking-tight">QR Code Management</h1>
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" asChild>
+          <Link href="/settings">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Back to Settings</span>
+          </Link>
+        </Button>
+        <h1 className="text-3xl font-bold tracking-tight">QR Code Management</h1>
+      </div>
       
       <Alert variant="default">
         <QrCode className="h-4 w-4" />

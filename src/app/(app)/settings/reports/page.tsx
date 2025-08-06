@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart3, Download, CalendarIcon, AlertCircle, CheckCircle, Loader2, Filter } from 'lucide-react';
+import { BarChart3, Download, CalendarIcon, AlertCircle, CheckCircle, Loader2, Filter, ChevronLeft } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, subDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useToast } from '@/hooks/use-toast';
 import { mockEmployees } from '@/types/employee'; // For department list
+import Link from 'next/link';
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<string>("daily_summary");
@@ -60,7 +61,15 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold tracking-tight">Attendance Reports</h1>
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" asChild>
+          <Link href="/settings">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Back to Settings</span>
+          </Link>
+        </Button>
+        <h1 className="text-3xl font-bold tracking-tight">Attendance Reports</h1>
+      </div>
       
       <Alert>
         <BarChart3 className="h-4 w-4" />

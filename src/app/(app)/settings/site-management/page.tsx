@@ -6,12 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle } from 'lucide-react';
+import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, serverTimestamp, GeoPoint, doc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 interface ProcessedRecord {
     data: any;
@@ -163,7 +164,15 @@ export default function SiteManagementPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <h1 className="text-3xl font-bold tracking-tight">Bulk Site Import</h1>
+            <div className="flex items-center gap-4">
+                <Button variant="outline" size="icon" asChild>
+                    <Link href="/settings">
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="sr-only">Back to Settings</span>
+                    </Link>
+                </Button>
+                <h1 className="text-3xl font-bold tracking-tight">Bulk Site Import</h1>
+            </div>
 
             <Alert>
                 <AlertTriangle className="h-4 w-4" />
@@ -243,4 +252,3 @@ export default function SiteManagementPage() {
         </div>
     );
 }
-

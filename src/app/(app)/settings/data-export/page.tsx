@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DownloadCloud, AlertTriangle, Loader2, FileSpreadsheet, CalendarIcon, Filter, CheckCircle } from 'lucide-react';
+import { DownloadCloud, AlertTriangle, Loader2, FileSpreadsheet, CalendarIcon, Filter, CheckCircle, ChevronLeft } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -17,6 +17,7 @@ import { DateRange } from "react-day-picker";
 import { Label } from '@/components/ui/label';
 import * as XLSX from 'xlsx';
 import type { Employee } from '@/types/employee';
+import Link from 'next/link';
 
 interface ClientOption { id: string; name: string; }
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
@@ -181,7 +182,16 @@ export default function DataExportPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <h1 className="text-3xl font-bold tracking-tight">Export Employee Data</h1>
+            <div className="flex items-center gap-4">
+                <Button variant="outline" size="icon" asChild>
+                    <Link href="/settings">
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="sr-only">Back to Settings</span>
+                    </Link>
+                </Button>
+                <h1 className="text-3xl font-bold tracking-tight">Export Employee Data</h1>
+            </div>
+
 
             <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
