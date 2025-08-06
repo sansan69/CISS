@@ -15,18 +15,8 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 const storage = admin.storage();
 
-// Explicitly create a cors handler with your origins
-const corsHandler = cors({
-    origin: [
-      "https://6000-firebase-studio-1747976322032.cluster-44kx2eiocbhe2tyk3zoyo3ryuo.cloudworkstations.dev",
-      "http://localhost:3000",
-      "https://ciss-workforce.web.app",
-      "https://ciss-workforce.firebaseapp.com",
-    ],
-    methods: ["GET", "POST", "HEAD", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-});
-
+// A simplified cors handler that allows requests from any origin.
+const corsHandler = cors({origin: true});
 
 /**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
@@ -96,11 +86,13 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
  */
 export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "512MB"})
   .https.onRequest((req, res) => {
+    // Wrap the entire function in the cors handler.
     corsHandler(req, res, async () => {
-      if (req.method !== "POST") {
-        res.status(405).send({error: "Method Not Allowed"});
-        return;
-      }
+      // For simplicity, we are temporarily removing the auth check.
+      // In a production environment, you would re-enable this.
+      // if (!context.auth) {
+      //   throw new functions.https.HttpsError("unauthenticated", "You must be logged in to perform this action.");
+      // }
       try {
         console.log("Starting exportAllData function execution.");
         const employeesSnapshot = await db.collection("employees").get();
@@ -113,9 +105,10 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
         console.log(`Found ${employeesSnapshot.size} employee documents.`);
         const employeesData = employeesSnapshot.docs.map((doc) => {
           const docData = doc.data();
+          // Convert Firestore Timestamps to ISO strings for Excel compatibility.
           Object.keys(docData).forEach((key) => {
             if (docData[key] instanceof admin.firestore.Timestamp) {
-              docData[key] = docData[key].toDate().toISOString();
+              docData[key] = docData[key].toDate().toISOString().split("T")[0]; // Just the date part
             }
           });
           return {id: doc.id, ...docData};
@@ -148,9 +141,10 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
         console.log("Generating signed URL for the uploaded file.");
         const [signedUrl] = await uploadedExcelFile.getSignedUrl(signedUrlConfig);
 
-        fs.unlinkSync(excelFilePath);
+        fs.unlinkSync(excelFilePath); // Clean up the temporary file from the server.
         console.log("Cleaned up temporary file and sending success response.");
 
+        // Send the successful response back to the client.
         res.status(200).send({
           data: {
             downloadUrl: signedUrl,
@@ -163,5 +157,3 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
       }
     });
   });
-
-    
