@@ -13,6 +13,7 @@ import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, ser
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { onAuthStateChanged } from 'firebase/auth';
+import Link from 'next/link';
 
 interface WorkOrder {
     id: string;
@@ -146,7 +147,7 @@ export default function WorkOrderPage() {
                 const dateColumns: { date: Date, maleIndex: number, femaleIndex: number }[] = [];
                 for (let i = 6; i < dateHeader.length; i++) {
                     const dateValue = dateHeader[i];
-                    if (dateValue instanceof Date && genderHeader[i] === 'MALE') {
+                    if (dateValue instanceof Date && String(genderHeader[i]).toUpperCase() === 'MALE') {
                         dateColumns.push({
                             date: dateValue,
                             maleIndex: i,
@@ -284,9 +285,11 @@ export default function WorkOrderPage() {
                                             <h3 className="font-semibold text-lg">{siteInfo.siteName}</h3>
                                             <p className="text-sm text-muted-foreground">{siteInfo.clientName} - <Badge variant="secondary">{siteInfo.district}</Badge></p>
                                         </div>
-                                         <Button size="sm" variant="outline">
-                                            <UserPlus className="mr-2 h-4 w-4" />
-                                            Assign Guards
+                                         <Button size="sm" variant="outline" asChild>
+                                            <Link href={`/work-orders/${siteId}`}>
+                                                <UserPlus className="mr-2 h-4 w-4" />
+                                                Assign Guards
+                                            </Link>
                                         </Button>
                                     </div>
                                     <div className="mt-4">
@@ -322,5 +325,3 @@ export default function WorkOrderPage() {
         </div>
     );
 }
-
-    
