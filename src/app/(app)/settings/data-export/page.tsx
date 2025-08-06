@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { Label } from '@/components/ui/label';
 import * as XLSX from 'xlsx';
+import type { Employee } from '@/types/employee';
 
 interface ClientOption { id: string; name: string; }
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
@@ -83,21 +84,37 @@ export default function DataExportPage() {
             toast({ title: "Processing Data...", description: `Found ${querySnapshot.size} records to export.` });
 
             const employeesData: any[] = [];
-            querySnapshot.forEach((doc) => {
-                const docData = doc.data();
-                const cleanData: {[key: string]: any} = {};
+            const desiredOrder = [
+                'fullName', 'dateOfBirth', 'fatherName', 'motherName', 'phoneNumber', 'resourceIdNumber', 
+                'identityProofType', 'identityProofNumber', 'addressProofType', 'addressProofNumber'
+            ];
 
-                Object.keys(docData).forEach((key) => {
-                    // Exclude URLs and internal fields
-                    if (!key.toLowerCase().includes('url') && key !== 'searchableFields' && key !== 'publicProfile') {
-                        if (docData[key] instanceof Timestamp) {
-                            cleanData[key] = docData[key].toDate().toISOString().split("T")[0]; // Format as YYYY-MM-DD
-                        } else {
-                            cleanData[key] = docData[key];
-                        }
+            querySnapshot.forEach((doc) => {
+                const docData = doc.data() as Employee;
+                const processedRecord: {[key: string]: any} = {};
+
+                // Add fields in desired order
+                desiredOrder.forEach(key => {
+                    if (docData[key as keyof Employee] !== undefined) {
+                        processedRecord[key] = docData[key as keyof Employee];
                     }
                 });
-                employeesData.push({id: doc.id, ...cleanData});
+
+                // Add remaining fields, excluding those already added and internal ones
+                Object.keys(docData).forEach((key) => {
+                    if (!desiredOrder.includes(key) && key !== 'searchableFields' && key !== 'publicProfile') {
+                        processedRecord[key] = docData[key as keyof Employee];
+                    }
+                });
+
+                // Convert Timestamps to readable dates
+                Object.keys(processedRecord).forEach(key => {
+                    if (processedRecord[key] instanceof Timestamp) {
+                        processedRecord[key] = processedRecord[key].toDate().toISOString().split("T")[0]; // Format as YYYY-MM-DD
+                    }
+                });
+                
+                employeesData.push({id: doc.id, ...processedRecord});
             });
             
             setProcessedCount(employeesData.length);
@@ -242,5 +259,3 @@ export default function DataExportPage() {
         </div>
     );
 }
-
-    
