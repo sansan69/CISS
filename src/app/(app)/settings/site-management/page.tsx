@@ -21,8 +21,10 @@ interface ProcessedRecord {
 }
 
 const requiredFields = [
-    'Client Name', 'Site Name', 'Site Address', 'Geolocation'
+    'Client Name', 'Site Name', 'Site Address', 'Geolocation', 'District'
 ];
+
+const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 
 export default function SiteManagementPage() {
     const [file, setFile] = useState<File | null>(null);
@@ -47,8 +49,8 @@ export default function SiteManagementPage() {
     };
 
     const handleDownloadTemplate = () => {
-        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation'];
-        const templateExampleRow = ['Example Client Inc.', 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432'];
+        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District'];
+        const templateExampleRow = ['Example Client Inc.', 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam'];
         const templateData = [templateHeaders, templateExampleRow];
         const ws = XLSX.utils.aoa_to_sheet(templateData);
         const wb = XLSX.utils.book_new();
@@ -91,6 +93,11 @@ export default function SiteManagementPage() {
                         localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Missing required fields: ${missingFields.join(', ')}` });
                         return;
                     }
+                    
+                    if (!keralaDistricts.includes(row['District'])) {
+                        localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Invalid District "${row['District']}". Please use a valid Kerala district.` });
+                        return;
+                    }
 
                     // Geolocation validation and conversion
                     const geoString = String(row.Geolocation).trim();
@@ -110,6 +117,7 @@ export default function SiteManagementPage() {
                       siteName: row['Site Name'],
                       siteId: row['Site ID'] || null,
                       siteAddress: row['Site Address'],
+                      district: row['District'],
                       geolocation: new GeoPoint(latitude, longitude),
                       createdAt: serverTimestamp(),
                       updatedAt: serverTimestamp(),
@@ -180,8 +188,9 @@ export default function SiteManagementPage() {
                 <AlertDescription>
                     <ul className="list-disc list-inside space-y-1">
                         <li>Download the template Excel file to ensure your data is correctly formatted.</li>
-                        <li>Do not change the column headers in the template file. Column headers are: <strong>Client Name, Site Name, Site ID, Site Address, Geolocation</strong>.</li>
+                        <li>Do not change the column headers in the template file. Headers are: <strong>Client Name, Site Name, Site ID, Site Address, Geolocation, District</strong>.</li>
                         <li><strong>Geolocation</strong> format must be: <code>latitude,longitude</code> (e.g., <code>10.1234,76.5432</code>).</li>
+                        <li><strong>District</strong> must be one of the 14 official districts of Kerala.</li>
                         <li>This tool is for adding new sites only. It does not update existing records.</li>
                     </ul>
                 </AlertDescription>
