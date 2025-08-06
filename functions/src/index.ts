@@ -78,40 +78,76 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * Exports all employee data from Firestore into an Excel file when a job is created.
+ * Exports employee data from Firestore into an Excel file.
+ * This function streams data for memory efficiency.
  * Triggered by a new document in the 'exportJobs' collection.
+ * Supports filtering by clientName, district, and joiningDate range.
  */
 export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, memory: "1GB"})
   .firestore.document("exportJobs/{jobId}")
   .onCreate(async (snap, context) => {
     const jobId = context.params.jobId;
     const jobData = snap.data();
+    const jobDocRef = db.collection("exportJobs").doc(jobId);
 
-    // 1. Acknowledge the job has started
-    await db.collection("exportJobs").doc(jobId).update({
+    await jobDocRef.update({
       status: "processing",
     });
 
     try {
-      // 2. Fetch all employee data
-      const employeesSnapshot = await db.collection("employees").get();
-      if (employeesSnapshot.empty) {
-        throw new Error("No employee data found to export.");
+      let employeesQuery: admin.firestore.Query = db.collection("employees");
+
+      // Apply filters if they exist
+      const filters = jobData.filters || {};
+      if (filters.clientName) {
+        employeesQuery = employeesQuery.where('clientName', '==', filters.clientName);
+      }
+      if (filters.district) {
+        employeesQuery = employeesQuery.where('district', '==', filters.district);
+      }
+      if (filters.startDate) {
+        employeesQuery = employeesQuery.where('joiningDate', '>=', new Date(filters.startDate));
+      }
+      if (filters.endDate) {
+        // Add 1 day to the end date to make the range inclusive for 'less than or equal to' logic
+        const inclusiveEndDate = new Date(filters.endDate);
+        inclusiveEndDate.setDate(inclusiveEndDate.getDate() + 1);
+        employeesQuery = employeesQuery.where('joiningDate', '<=', inclusiveEndDate);
       }
 
-      // 3. Process data for Excel
-      const employeesData = employeesSnapshot.docs.map((doc) => {
+      // Stream data for memory efficiency
+      const employeesStream = await employeesQuery.stream();
+      const employeesData: any[] = [];
+
+      employeesStream.on('data', (doc) => {
         const docData = doc.data();
-        // Convert Firestore Timestamps to ISO strings for Excel compatibility.
+        const cleanData: {[key: string]: any} = {};
+
+        // Iterate over keys and exclude URL fields and specific arrays
         Object.keys(docData).forEach((key) => {
-          if (docData[key] instanceof admin.firestore.Timestamp) {
-            docData[key] = docData[key].toDate().toISOString().split("T")[0]; // Just the date part
+          if (!key.toLowerCase().includes('url') && key !== 'searchableFields' && key !== 'publicProfile') {
+            // Convert Firestore Timestamps to a readable date format (YYYY-MM-DD)
+            if (docData[key] instanceof admin.firestore.Timestamp) {
+              cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
+            } else {
+               cleanData[key] = docData[key];
+            }
           }
         });
-        return {id: doc.id, ...docData};
+        employeesData.push({id: doc.id, ...cleanData});
       });
 
-      // 4. Create Excel file in memory
+      // Wait for the stream to finish
+      await new Promise((resolve, reject) => {
+        employeesStream.on('end', resolve);
+        employeesStream.on('error', reject);
+      });
+
+      if (employeesData.length === 0) {
+        throw new Error("No employee data found for the selected filters.");
+      }
+
+      // Create Excel file in a temporary directory
       const tmpdir = os.tmpdir();
       const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
       const excelFilePath = path.join(tmpdir, excelFileName);
@@ -119,18 +155,15 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       const workbook = xlsx.utils.book_new();
       const worksheet = xlsx.utils.json_to_sheet(employeesData);
       xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
-
-      // Use writeFile instead of write to buffer directly in memory if possible with xlsx
       xlsx.writeFile(workbook, excelFilePath);
 
-      // 5. Upload to Firebase Storage
+      // Upload to Firebase Storage
       const bucket = storage.bucket();
       const destinationPath = `exports/${excelFileName}`;
       const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
         destination: destinationPath,
         metadata: {
           contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          // Associate the file with the user who requested it.
           metadata: {
             owner: jobData.userId,
             jobId: jobId,
@@ -138,27 +171,25 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         },
       });
 
-      // 6. Get a long-lived download URL (no expiry)
+      // Get a long-lived download URL
       const downloadUrl = await uploadedExcelFile.getSignedUrl({
         action: "read",
-        expires: "03-17-2025", // Set a far-future expiration date
+        expires: "03-17-2025",
       });
 
-
-      // 7. Update job document with success status and download URL
-      await db.collection("exportJobs").doc(jobId).update({
+      // Update job document with success status and download URL
+      await jobDocRef.update({
         status: "complete",
         downloadUrl: downloadUrl[0],
         employeeCount: employeesData.length,
         exportedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // 8. Clean up the temporary file
+      // Clean up the temporary file
       fs.unlinkSync(excelFilePath);
     } catch (error: any) {
       console.error(`Error processing export job ${jobId}:`, error);
-      // Update job document with error status
-      await db.collection("exportJobs").doc(jobId).update({
+      await jobDocRef.update({
         status: "error",
         error: error.message || "An unknown error occurred.",
       });
