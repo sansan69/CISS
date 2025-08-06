@@ -101,6 +101,9 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       if (filters.clientName) {
         employeesQuery = employeesQuery.where('clientName', '==', filters.clientName);
       }
+      if (filters.district) {
+        employeesQuery = employeesQuery.where('district', '==', filters.district);
+      }
       if (filters.startDate) {
         employeesQuery = employeesQuery.where('joiningDate', '>=', new Date(filters.startDate));
       }

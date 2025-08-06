@@ -29,10 +29,13 @@ interface ExportJob {
     clientName?: string;
     startDate?: string;
     endDate?: string;
+    district?: string;
   }
 }
 
 interface ClientOption { id: string; name: string; }
+const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
+
 
 export default function DataExportPage() {
     const [isRequesting, setIsRequesting] = useState(false);
@@ -42,6 +45,7 @@ export default function DataExportPage() {
     // Filters State
     const [clients, setClients] = useState<ClientOption[]>([]);
     const [selectedClient, setSelectedClient] = useState<string>('all');
+    const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
     // Fetch clients for the filter dropdown
@@ -109,6 +113,9 @@ export default function DataExportPage() {
 
             if (selectedClient !== 'all') {
                 jobPayload.filters.clientName = selectedClient;
+            }
+            if (selectedDistrict !== 'all') {
+                jobPayload.filters.district = selectedDistrict;
             }
             if (dateRange?.from) {
                 jobPayload.filters.startDate = dateRange.from.toISOString();
@@ -213,7 +220,7 @@ export default function DataExportPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                            <Label htmlFor="client-filter">Filter by Client</Label>
                            <Select value={selectedClient} onValueChange={setSelectedClient}>
@@ -221,6 +228,16 @@ export default function DataExportPage() {
                                <SelectContent>
                                    <SelectItem value="all">All Clients</SelectItem>
                                    {clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                               </SelectContent>
+                           </Select>
+                        </div>
+                         <div className="space-y-2">
+                           <Label htmlFor="district-filter">Filter by District</Label>
+                           <Select value={selectedDistrict} onValueChange={setSelectedDistrict}>
+                               <SelectTrigger id="district-filter"><SelectValue /></SelectTrigger>
+                               <SelectContent>
+                                   <SelectItem value="all">All Districts</SelectItem>
+                                   {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                                </SelectContent>
                            </Select>
                         </div>
