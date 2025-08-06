@@ -9,14 +9,14 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, serverTimestamp, GeoPoint, doc } from 'firebase/firestore';
+import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 
 interface ProcessedRecord {
     data: any;
-    status: 'success' | 'error';
+    status: 'success' | 'error' | 'duplicate';
     message: string;
 }
 
@@ -84,6 +84,14 @@ export default function SiteManagementPage() {
                     throw new Error("The file is empty or does not contain data rows.");
                 }
 
+                // Fetch existing sites to check for duplicates
+                toast({ title: "Checking for duplicates...", description: "Comparing with existing site data." });
+                const existingSitesSnapshot = await getDocs(collection(db, 'sites'));
+                const existingSites = new Set(existingSitesSnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return `${data.clientName?.toLowerCase()}_${data.siteName?.toLowerCase()}`;
+                }));
+
                 let validRecords: any[] = [];
                 let localProcessedRecords: ProcessedRecord[] = [];
 
@@ -91,6 +99,15 @@ export default function SiteManagementPage() {
                     let missingFields = requiredFields.filter(field => !row[field]);
                     if (missingFields.length > 0) {
                         localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Missing required fields: ${missingFields.join(', ')}` });
+                        return;
+                    }
+
+                    const clientName = row['Client Name'];
+                    const siteName = row['Site Name'];
+                    
+                    const uniqueKey = `${clientName?.toLowerCase()}_${siteName?.toLowerCase()}`;
+                    if (existingSites.has(uniqueKey)) {
+                        localProcessedRecords.push({ data: row, status: 'duplicate', message: `Row ${index + 2}: This site already exists and was skipped.` });
                         return;
                     }
                     
@@ -113,8 +130,8 @@ export default function SiteManagementPage() {
                     }
                     
                     const siteData = {
-                      clientName: row['Client Name'],
-                      siteName: row['Site Name'],
+                      clientName: clientName,
+                      siteName: siteName,
                       siteId: row['Site ID'] || null,
                       siteAddress: row['Site Address'],
                       district: row['District'],
@@ -130,19 +147,19 @@ export default function SiteManagementPage() {
 
                 if (validRecords.length === 0) {
                     if (localProcessedRecords.length > 0) {
-                        throw new Error("All records contained errors. Please check the results below and try again.");
+                        throw new Error("No new sites to import. All records were either duplicates or contained errors.");
                     } else {
                         throw new Error("No valid records found to import.");
                     }
                 }
 
-                toast({ title: "Uploading...", description: `Importing ${validRecords.length} valid site records.` });
+                toast({ title: "Uploading...", description: `Importing ${validRecords.length} new site records.` });
 
                 const batch = writeBatch(db);
                 const sitesRef = collection(db, "sites");
 
                 validRecords.forEach(record => {
-                    const siteDocRef = doc(sitesRef); // Create new doc ref
+                    const siteDocRef = doc(sitesRef); // Create new doc ref for a new site
                     batch.set(siteDocRef, record);
                 });
 
@@ -168,6 +185,7 @@ export default function SiteManagementPage() {
 
     const successCount = processedRecords.filter(r => r.status === 'success').length;
     const errorCount = processedRecords.filter(r => r.status === 'error').length;
+    const duplicateCount = processedRecords.filter(r => r.status === 'duplicate').length;
 
 
     return (
@@ -189,9 +207,9 @@ export default function SiteManagementPage() {
                     <ul className="list-disc list-inside space-y-1">
                         <li>Download the template Excel file to ensure your data is correctly formatted.</li>
                         <li>Do not change the column headers in the template file. Headers are: <strong>Client Name, Site Name, Site ID, Site Address, Geolocation, District</strong>.</li>
+                        <li><strong>This tool will not overwrite or update existing sites.</strong> It skips any site where the Client Name and Site Name combination already exists.</li>
                         <li><strong>Geolocation</strong> format must be: <code>latitude,longitude</code> (e.g., <code>10.1234,76.5432</code>).</li>
                         <li><strong>District</strong> must be one of the 14 official districts of Kerala.</li>
-                        <li>This tool is for adding new sites only. It does not update existing records.</li>
                     </ul>
                 </AlertDescription>
             </Alert>
@@ -237,19 +255,20 @@ export default function SiteManagementPage() {
                  <Card>
                     <CardHeader>
                         <CardTitle>Import Results</CardTitle>
-                        <CardDescription className="flex flex-col sm:flex-row gap-4">
+                        <CardDescription className="flex flex-col sm:flex-row flex-wrap gap-x-4 gap-y-2">
                             <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-4 w-4"/>Successful: {successCount}</span>
+                            <span className="flex items-center gap-1 text-yellow-600"><AlertTriangle className="h-4 w-4"/>Duplicates (Skipped): {duplicateCount}</span>
                             <span className="flex items-center gap-1 text-red-600"><AlertTriangle className="h-4 w-4"/>Failed: {errorCount}</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="max-h-96 overflow-y-auto">
                        <div className="space-y-2">
                             {processedRecords.map((record, index) => (
-                                <div key={index} className={`p-3 border rounded-md ${record.status === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                <div key={index} className={`p-3 border rounded-md ${record.status === 'success' ? 'bg-green-50 border-green-200' : record.status === 'duplicate' ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
                                     <p className="font-semibold text-sm">
-                                        {record.status === 'success' ? `${record.data.siteName} (${record.data.clientName})` : `Row ${index + 2}`}
+                                        {record.data['Site Name']} ({record.data['Client Name']})
                                     </p>
-                                    <p className={`text-xs ${record.status === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+                                    <p className={`text-xs ${record.status === 'success' ? 'text-green-700' : record.status === 'duplicate' ? 'text-yellow-700' : 'text-red-700'}`}>
                                         {record.message}
                                     </p>
                                 </div>
