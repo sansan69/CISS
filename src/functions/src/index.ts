@@ -16,13 +16,13 @@ const ADMIN_EMAIL = "admin@cisskerala.app";
  */
 export const createFieldOfficer = functions.https.onCall(async (data, context) => {
   // 1. Authentication & Authorization
-  if (context.auth?.token.email !== ADMIN_EMAIL) {
+  if (!context.auth || context.auth.token.email !== ADMIN_EMAIL) {
     throw new functions.https.HttpsError("permission-denied", "Must be the designated admin to create a field officer.");
   }
 
   // 2. Input Validation
   const {email, password, name, assignedDistricts} = data;
-  if (!email || !password || !name || !assignedDistricts) {
+  if (!email || !password || !name || !Array.isArray(assignedDistricts)) {
     throw new functions.https.HttpsError("invalid-argument", "The function must be called with email, password, name, and assignedDistricts.");
   }
   if (password.length < 6) {
@@ -43,9 +43,9 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
         districts: assignedDistricts,
     });
 
-    // 5. Create Firestore Document for the officer using the auth UID as the document ID
-    await db.collection("fieldOfficers").doc(userRecord.uid).set({
-      uid: userRecord.uid, // Storing uid is good practice
+    // 5. Create Firestore Document for the officer
+    await db.collection("fieldOfficers").add({
+      uid: userRecord.uid,
       name: name,
       email: email,
       assignedDistricts: assignedDistricts,
@@ -68,13 +68,13 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
  */
 export const updateFieldOfficer = functions.https.onCall(async (data, context) => {
     // 1. Authentication & Authorization
-    if (context.auth?.token.email !== ADMIN_EMAIL) {
+    if (!context.auth || context.auth.token.email !== ADMIN_EMAIL) {
         throw new functions.https.HttpsError("permission-denied", "Must be the designated admin to update a field officer.");
     }
 
     // 2. Input Validation
     const {uid, name, assignedDistricts} = data;
-    if (!uid || !name || !assignedDistricts) {
+    if (!uid || !name || !Array.isArray(assignedDistricts)) {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with uid, name, and assignedDistricts.");
     }
 
@@ -86,7 +86,11 @@ export const updateFieldOfficer = functions.https.onCall(async (data, context) =
         });
 
         // 4. Update Firestore Document
-        const officerDocRef = db.collection("fieldOfficers").doc(uid);
+        const querySnapshot = await db.collection("fieldOfficers").where("uid", "==", uid).limit(1).get();
+        if (querySnapshot.empty) {
+            throw new functions.https.HttpsError("not-found", "Field officer document not found in Firestore.");
+        }
+        const officerDocRef = querySnapshot.docs[0].ref;
         await officerDocRef.update({
             name: name,
             assignedDistricts: assignedDistricts,
@@ -106,7 +110,7 @@ export const updateFieldOfficer = functions.https.onCall(async (data, context) =
  */
 export const deleteFieldOfficer = functions.https.onCall(async (data, context) => {
     // 1. Authentication & Authorization
-    if (context.auth?.token.email !== ADMIN_EMAIL) {
+    if (!context.auth || context.auth.token.email !== ADMIN_EMAIL) {
         throw new functions.https.HttpsError("permission-denied", "Must be the designated admin to delete a field officer.");
     }
 
@@ -117,23 +121,20 @@ export const deleteFieldOfficer = functions.https.onCall(async (data, context) =
     }
 
     try {
-        // 3. Delete Firebase Auth User
+        const querySnapshot = await db.collection("fieldOfficers").where("uid", "==", uid).limit(1).get();
+        if (!querySnapshot.empty) {
+            const officerDocRef = querySnapshot.docs[0].ref;
+            await officerDocRef.delete();
+        }
+        
+        // Always try to delete auth user, even if DB record is missing
         await admin.auth().deleteUser(uid);
-
-        // 4. Delete Firestore Document
-        await db.collection("fieldOfficers").doc(uid).delete();
 
         return {result: "Successfully deleted field officer."};
     } catch (error: any) {
         console.error("Error deleting field officer:", error);
         if (error.code === "auth/user-not-found") {
-            try {
-                // If auth user is already gone, still try to delete the DB record
-                await db.collection("fieldOfficers").doc(uid).delete();
-                return {result: "Field officer Auth account not found, but Firestore record was deleted."};
-            } catch (fsError) {
-                 throw new functions.https.HttpsError("internal", "Auth user not found and failed to delete Firestore record.");
-            }
+           return {result: "Field officer Auth account not found, but Firestore record was deleted if it existed."};
         }
         throw new functions.https.HttpsError("internal", "An error occurred while deleting the field officer.");
     }

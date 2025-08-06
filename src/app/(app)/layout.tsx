@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import React, { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase'; 
-import { onAuthStateChanged, User, signOut } from 'firebase/auth'; 
+import { onAuthStateChanged, User, signOut, getIdTokenResult } from 'firebase/auth'; 
 import { cn } from '@/lib/utils';
 import { Toaster } from "@/components/ui/toaster"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -52,7 +52,7 @@ interface NavItem {
 const allNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/employees', label: 'Employees', icon: Users },
-  { href: '/work-orders', label: 'Work Orders', icon: ClipboardList, adminOnly: true },
+  { href: '/work-orders', label: 'Work Orders', icon: ClipboardList },
   { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, adminOnly: true },
   { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
   { href: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
@@ -191,13 +191,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
       if (user) {
         setAuthUser(user);
         try {
-            const tokenResult = await user.getIdTokenResult();
+            const tokenResult = await getIdTokenResult(user);
             const claims = tokenResult.claims;
-            // The main admin has no custom claims, so we identify them by email
             if (user.email === 'admin@cisskerala.app') {
                 setUserRole('admin');
             } else {
-                setUserRole(claims.role as string || 'user'); // Can be 'fieldOfficer' or default to 'user'
+                setUserRole(claims.role as string || 'user'); 
             }
         } catch (e) {
             console.error("Error fetching user claims, defaulting to 'user' role.", e);
@@ -206,16 +205,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
       } else {
         setAuthUser(null);
         setUserRole(null);
-        const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
-        const isPublicPath = publicPaths.some(path => pathname.startsWith(path) && path !== '/');
-        if (!isPublicPath) {
-          router.replace('/admin-login');
-        }
+        router.replace('/admin-login');
       }
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [pathname, router]);
+  }, [router]);
 
   const handleLogout = async () => {
     try {

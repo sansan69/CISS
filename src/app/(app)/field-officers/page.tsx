@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db, auth } from '@/lib/firebase'; 
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -209,7 +209,7 @@ export default function FieldOfficerManagementPage() {
         return;
     }
     setIsLoading(true);
-    const officersQuery = query(collection(db, 'fieldOfficers'), orderBy('name', 'asc'));
+    const officersQuery = query(collection(db, 'fieldOfficers'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(officersQuery, (snapshot) => {
       const fetchedOfficers = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -231,52 +231,37 @@ export default function FieldOfficerManagementPage() {
   }, [toast, authStatus]);
   
     const allAssignedDistricts = useMemo(() => {
-        // When editing, we want to exclude the current officer's districts from the "unavailable" list
         const otherOfficers = editingOfficer ? officers.filter(o => o.id !== editingOfficer.id) : officers;
         return otherOfficers.flatMap(officer => officer.assignedDistricts);
     }, [officers, editingOfficer]);
 
   const handleSaveOfficer = async (officerData: any) => {
     setIsSubmitting(true);
+    const functions = getFunctions(auth.app);
+    
     try {
       if (officerData.id) { // Update existing officer
-        const officerDocRef = doc(db, 'fieldOfficers', officerData.id);
-        await updateDoc(officerDocRef, {
+        const updateOfficer = httpsCallable(functions, 'updateFieldOfficer');
+        await updateOfficer({ 
+            uid: officerData.uid, 
+            name: officerData.name, 
+            assignedDistricts: officerData.assignedDistricts 
+        });
+        toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
+      } else { // Create new officer
+        const createOfficer = httpsCallable(functions, 'createFieldOfficer');
+        await createOfficer({
+            email: officerData.email,
+            password: officerData.password,
             name: officerData.name,
             assignedDistricts: officerData.assignedDistricts,
         });
-        toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
-
-      } else { // Create new officer
-        // NOTE: This approach requires a second, temporary Firebase project instance 
-        // to create a user without signing in the current admin. This is a complex
-        // setup and for now we will rely on Firestore rules to manage access.
-        // A more robust solution would be a Cloud Function, but we are avoiding that.
-        // This is a placeholder for a non-functional user creation on client.
-         toast({
-            variant: "destructive",
-            title: "Feature Incomplete",
-            description: "Direct user creation from the client is disabled for security. Please use Firebase Console to create user accounts for now.",
-         });
-         // The following code would be used with a secondary app instance.
-         /*
-            const batch = writeBatch(db);
-            const newOfficerRef = doc(collection(db, "fieldOfficers"));
-            batch.set(newOfficerRef, {
-                // uid will be set after user creation
-                name: officerData.name,
-                email: officerData.email,
-                assignedDistricts: officerData.assignedDistricts,
-                createdAt: serverTimestamp(),
-            });
-            await batch.commit();
-         */
+        toast({ title: "Officer Created", description: `Login credentials sent to "${officerData.email}".` });
       }
       closeFormDialog();
-
     } catch (error: any) {
       console.error("Error saving officer: ", error);
-      let message = "Could not save the officer. Please try again.";
+      let message = error.message || "Could not save the officer. Please try again.";
       toast({ variant: "destructive", title: "Save Failed", description: message });
     } finally {
       setIsSubmitting(false);
@@ -286,20 +271,21 @@ export default function FieldOfficerManagementPage() {
   const handleDeleteOfficer = async () => {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
+    const functions = getFunctions(auth.app);
+
     try {
-      // Just delete the Firestore document.
-      // This revokes their access based on our planned security rules.
-      await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
+      const deleteOfficer = httpsCallable(functions, 'deleteFieldOfficer');
+      await deleteOfficer({ uid: deletingOfficer.uid });
       toast({
-        title: "Officer Record Deleted",
-        description: `Access for "${deletingOfficer.name}" has been revoked. Their login account still exists.`,
+        title: "Officer Deleted",
+        description: `Login and records for "${deletingOfficer.name}" have been permanently deleted.`,
       });
     } catch (error: any) {
-      console.error("Error deleting officer record:", error);
+      console.error("Error deleting officer:", error);
       toast({
         variant: "destructive",
         title: "Deletion Failed",
-        description: "Could not delete the officer's Firestore record. Please try again.",
+        description: error.message || "Could not delete the officer. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -354,7 +340,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Add or edit your field officers and assign them to specific districts. Their access to employee data will be limited based on these assignments via Firestore Security Rules.
+            Add new Field Officers with their own logins. Assign them to specific districts to control which employees and sites they can see and manage.
           </AlertDescription>
         </Alert>
 
@@ -433,18 +419,18 @@ export default function FieldOfficerManagementPage() {
     <AlertDialog open={!!deletingOfficer} onOpenChange={(isOpen) => !isOpen && setDeletingOfficer(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure you want to delete this officer's record?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure you want to delete this officer?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This will delete the officer's record from the database, and they will lose all access to assigned districts. 
+                    This will permanently delete the officer's login account and their record from the database. 
                     <br/><br/>
-                    <span className="font-bold">Important:</span> This action does NOT delete their login account. To fully remove them, you must also delete their user from the Firebase Authentication console.
+                    <span className="font-bold">This action cannot be undone.</span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDeleteOfficer} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm & Delete Record
+                    Confirm & Delete Officer
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
