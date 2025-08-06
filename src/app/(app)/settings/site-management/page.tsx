@@ -6,10 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight } from 'lucide-react';
+import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type QueryDocumentSnapshot, endBefore, limitToLast } from 'firebase/firestore';
+import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
@@ -45,6 +45,17 @@ interface Site {
     geolocation: GeoPoint;
 }
 
+interface ClientOption {
+    id: string;
+    name: string;
+}
+interface FieldOfficerOption {
+    id: string;
+    name: string;
+    assignedDistricts: string[];
+}
+
+
 interface ProcessedRecord {
     data: any;
     status: 'success' | 'error' | 'duplicate';
@@ -70,7 +81,6 @@ const SiteEditForm: React.FC<{
     const handleSave = () => {
         const changes: Partial<Site> = {};
         (Object.keys(formData) as Array<keyof Site>).forEach(key => {
-            // Check if there is a change
             if (key === 'geolocation') {
                 if (formData.geolocation?.latitude !== site.geolocation?.latitude || formData.geolocation?.longitude !== site.geolocation?.longitude) {
                     changes[key] = formData[key];
@@ -83,7 +93,7 @@ const SiteEditForm: React.FC<{
         if (Object.keys(changes).length > 0) {
             onSave(changes);
         } else {
-            onClose(); // No changes to save
+            onClose(); 
         }
     };
 
@@ -135,25 +145,68 @@ export default function SiteManagementPage() {
     const [deletingSite, setDeletingSite] = useState<Site | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // Filters
+    const [clients, setClients] = useState<ClientOption[]>([]);
+    const [fieldOfficers, setFieldOfficers] = useState<FieldOfficerOption[]>([]);
+    const [selectedClient, setSelectedClient] = useState<string>('all');
+    const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
+    const [selectedOfficer, setSelectedOfficer] = useState<string>('all');
+    const [isFilterDataLoading, setIsFilterDataLoading] = useState(true);
+
     const [currentPage, setCurrentPage] = useState(1);
     const [firstDoc, setFirstDoc] = useState<QueryDocumentSnapshot | null>(null);
     const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
     const [hasNextPage, setHasNextPage] = useState(false);
 
+    useEffect(() => {
+        const fetchFilterData = async () => {
+            setIsFilterDataLoading(true);
+            try {
+                const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
+                setClients(clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
+
+                const officersSnapshot = await getDocs(query(collection(db, 'fieldOfficers'), orderBy('name')));
+                setFieldOfficers(officersSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, assignedDistricts: doc.data().assignedDistricts })));
+
+            } catch (error) {
+                toast({ variant: "destructive", title: "Error", description: "Could not load data for filters." });
+            } finally {
+                setIsFilterDataLoading(false);
+            }
+        };
+        fetchFilterData();
+    }, [toast]);
+
+
     const fetchSites = useCallback(async (pageDirection: 'next' | 'prev' | 'first' = 'first') => {
         setIsLoadingSites(true);
         try {
-            let q = query(collection(db, 'sites'), orderBy('clientName', 'asc'), orderBy('siteName', 'asc'));
+            let q: Query = collection(db, "sites");
             
-            if (pageDirection === 'next' && lastDoc) {
-                q = query(q, startAfter(lastDoc), limit(SITES_PER_PAGE));
-            } else if (pageDirection === 'prev' && firstDoc) {
-                q = query(q, endBefore(firstDoc), limitToLast(SITES_PER_PAGE));
-            } else {
-                 q = query(q, limit(SITES_PER_PAGE));
+            // --- Apply Filters ---
+            const officer = fieldOfficers.find(fo => fo.id === selectedOfficer);
+            if (officer && officer.assignedDistricts.length > 0) {
+                q = query(q, where('district', 'in', officer.assignedDistricts));
+            } else if (selectedDistrict !== 'all') {
+                q = query(q, where('district', '==', selectedDistrict));
             }
 
-            const documentSnapshots = await getDocs(q);
+            if (selectedClient !== 'all') {
+                q = query(q, where('clientName', '==', selectedClient));
+            }
+
+            q = query(q, orderBy('clientName', 'asc'), orderBy('siteName', 'asc'));
+            
+            let finalQuery = q;
+            if (pageDirection === 'next' && lastDoc) {
+                finalQuery = query(q, startAfter(lastDoc), limit(SITES_PER_PAGE));
+            } else if (pageDirection === 'prev' && firstDoc) {
+                finalQuery = query(q, endBefore(firstDoc), limitToLast(SITES_PER_PAGE));
+            } else {
+                 finalQuery = query(q, limit(SITES_PER_PAGE));
+            }
+
+            const documentSnapshots = await getDocs(finalQuery);
             const fetchedSites = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Site));
             
             if (!documentSnapshots.empty) {
@@ -161,34 +214,41 @@ export default function SiteManagementPage() {
                 setFirstDoc(documentSnapshots.docs[0]);
                 setLastDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
 
-                 // Check for next page
-                const nextQuery = query(collection(db, 'sites'), orderBy('clientName', 'asc'), orderBy('siteName', 'asc'), startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), limit(1));
+                const nextQuery = query(q, startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), limit(1));
                 const nextSnapshot = await getDocs(nextQuery);
                 setHasNextPage(!nextSnapshot.empty);
             } else {
-                if (pageDirection === 'next') {
-                    // You are on the last page, no more results
+                 if (pageDirection === 'next') {
                     setHasNextPage(false);
                 } else if (pageDirection === 'prev' && currentPage > 1) {
-                    // Went back to a page that now has no items, go to first page
                      fetchSites('first');
                      setCurrentPage(1);
                 }
                  else {
-                     setSites([]); // No sites at all
+                     setSites([]);
+                     setHasNextPage(false);
+                     setFirstDoc(null);
+                     setLastDoc(null);
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error fetching sites: ", error);
-            toast({ variant: "destructive", title: "Error", description: "Could not load site data." });
+            let message = "Could not load site data.";
+            if (error.code === 'failed-precondition') {
+                message = "The query requires an index. Please check the browser console for a link to create it in Firebase.";
+            }
+            toast({ variant: "destructive", title: "Error", description: message });
+            setSites([]);
         } finally {
             setIsLoadingSites(false);
         }
-    }, [lastDoc, firstDoc, currentPage, toast]);
+    }, [lastDoc, firstDoc, currentPage, toast, selectedClient, selectedDistrict, selectedOfficer, fieldOfficers]);
 
     useEffect(() => {
         fetchSites('first');
-    }, []); // Initial fetch
+        setCurrentPage(1); // Reset page number on filter change
+    }, [selectedClient, selectedDistrict, selectedOfficer]); // Re-fetch when filters change
+
 
     const handleNextPage = () => {
         if (hasNextPage) {
@@ -335,7 +395,7 @@ export default function SiteManagementPage() {
 
                 await batch.commit();
                 
-                fetchSites('first'); // Refresh the list to show new data
+                fetchSites('first');
                 setCurrentPage(1);
 
                 toast({
@@ -366,7 +426,7 @@ export default function SiteManagementPage() {
                 updatedAt: serverTimestamp(),
             });
             toast({ title: "Site Updated", description: "The site details have been saved." });
-            fetchSites(currentPage === 1 ? 'first' : 'next'); // A simple refresh, might need refinement
+            fetchSites(currentPage === 1 ? 'first' : 'next');
         } catch (error) {
             toast({ variant: "destructive", title: "Update Failed", description: "Could not update the site." });
         } finally {
@@ -381,7 +441,7 @@ export default function SiteManagementPage() {
         try {
             await deleteDoc(doc(db, 'sites', deletingSite.id));
             toast({ title: "Site Deleted", description: "The site has been removed." });
-            fetchSites(currentPage === 1 ? 'first' : 'next'); // Refresh list
+            fetchSites(currentPage === 1 ? 'first' : 'next');
         } catch (error) {
             toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the site." });
         } finally {
@@ -483,13 +543,45 @@ export default function SiteManagementPage() {
                     <CardTitle>Existing Sites</CardTitle>
                     <CardDescription>A list of all currently managed sites in the system.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                 <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 border-b">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="client-filter">Filter by Client</Label>
+                            <Select value={selectedClient} onValueChange={setSelectedClient} disabled={isFilterDataLoading}>
+                                <SelectTrigger id="client-filter"><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Clients</SelectItem>
+                                    {clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="district-filter">Filter by District</Label>
+                            <Select value={selectedDistrict} onValueChange={setSelectedDistrict} disabled={isFilterDataLoading || selectedOfficer !== 'all'}>
+                                <SelectTrigger id="district-filter"><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Districts</SelectItem>
+                                    {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="officer-filter">Filter by Field Officer</Label>
+                            <Select value={selectedOfficer} onValueChange={setSelectedOfficer} disabled={isFilterDataLoading}>
+                                <SelectTrigger id="officer-filter"><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Officers</SelectItem>
+                                    {fieldOfficers.map(fo => <SelectItem key={fo.id} value={fo.id}>{fo.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
                      {isLoadingSites ? (
-                        <div className="flex justify-center items-center h-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                     ) : sites.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-4">No sites found. Use the bulk import feature to add sites.</p>
+                        <p className="text-center text-muted-foreground py-10">No sites found for the selected filters.</p>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-3 mt-4">
                             {sites.map(site => (
                                 <div key={site.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg shadow-sm">
                                     <div className="flex-1 mb-2 sm:mb-0">
