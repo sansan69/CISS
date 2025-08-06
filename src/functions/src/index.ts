@@ -13,16 +13,16 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 const storage = admin.storage();
-
+const ADMIN_EMAIL = "admin@cisskerala.app";
 
 /**
  * Creates a new Field Officer user, sets their custom claims, and stores their info in Firestore.
- * This function can only be called by an existing superAdmin.
+ * This function can only be called by the designated admin.
  */
 export const createFieldOfficer = functions.https.onCall(async (data, context) => {
   // 1. Authentication & Authorization
-  if (context.auth?.token.superAdmin !== true) {
-    throw new functions.https.HttpsError("permission-denied", "Must be a super admin to create a field officer.");
+  if (context.auth?.token.email !== ADMIN_EMAIL) {
+    throw new functions.https.HttpsError("permission-denied", "Must be the designated admin to create a field officer.");
   }
 
   // 2. Input Validation
@@ -49,7 +49,6 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
     });
 
     // 5. Create Firestore Document for the officer
-    // Using the UID as the document ID links Auth and Firestore records
     await db.collection("fieldOfficers").doc(userRecord.uid).set({
       uid: userRecord.uid,
       name: name,
@@ -70,12 +69,12 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
 
 /**
  * Updates an existing field officer's details and custom claims.
- * This function can only be called by an existing superAdmin.
+ * This function can only be called by the designated admin.
  */
 export const updateFieldOfficer = functions.https.onCall(async (data, context) => {
     // 1. Authentication & Authorization
-    if (context.auth?.token.superAdmin !== true) {
-        throw new functions.https.HttpsError("permission-denied", "Must be a super admin to update a field officer.");
+    if (context.auth?.token.email !== ADMIN_EMAIL) {
+        throw new functions.https.HttpsError("permission-denied", "Must be the designated admin to update a field officer.");
     }
 
     // 2. Input Validation
@@ -108,12 +107,12 @@ export const updateFieldOfficer = functions.https.onCall(async (data, context) =
 
 /**
  * Deletes a field officer's Auth account and their Firestore record.
- * This function can only be called by an existing superAdmin.
+ * This function can only be called by the designated admin.
  */
 export const deleteFieldOfficer = functions.https.onCall(async (data, context) => {
     // 1. Authentication & Authorization
-    if (context.auth?.token.superAdmin !== true) {
-        throw new functions.https.HttpsError("permission-denied", "Must be a super admin to delete a field officer.");
+    if (context.auth?.token.email !== ADMIN_EMAIL) {
+        throw new functions.https.HttpsError("permission-denied", "Must be the designated admin to delete a field officer.");
     }
 
     // 2. Input Validation
@@ -133,7 +132,6 @@ export const deleteFieldOfficer = functions.https.onCall(async (data, context) =
     } catch (error: any) {
         console.error("Error deleting field officer:", error);
         if (error.code === "auth/user-not-found") {
-            // If user doesn't exist in Auth, still try to delete from Firestore
             try {
                 await db.collection("fieldOfficers").doc(uid).delete();
                 return {result: "Field officer Auth account not found, but Firestore record was deleted."};
@@ -143,69 +141,6 @@ export const deleteFieldOfficer = functions.https.onCall(async (data, context) =
         }
         throw new functions.https.HttpsError("internal", "An error occurred while deleting the field officer.");
     }
-});
-
-
-/**
- * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
- * This function can only be called by an existing superAdmin.
- */
-export const createStateAdmin = functions.https.onCall(async (data, context) => {
-  // Check if the caller is a super admin
-  if (context.auth?.token.superAdmin !== true) {
-    throw new functions.https.HttpsError("permission-denied", "Must be a super admin to create other admins.");
-  }
-
-  const {email, state} = data;
-  if (!email || !state) {
-    throw new functions.https.HttpsError("invalid-argument", "The function must be called with arguments 'email' and 'state'.");
-  }
-
-  try {
-    const user = await admin.auth().getUserByEmail(email);
-    await admin.auth().setCustomUserClaims(user.uid, {role: "stateAdmin", state: state});
-    return {result: `Successfully made ${email} a state admin for ${state}.`};
-  } catch (error) {
-    console.error("Error setting custom claim:", error);
-    if (error instanceof Error && (error as any).code === "auth/user-not-found") {
-       throw new functions.https.HttpsError("not-found", `User with email ${email} not found.`);
-    }
-    throw new functions.https.HttpsError("internal", "An error occurred while setting the user role.");
-  }
-});
-
-
-/**
- * Sets the first super admin for the project.
- * This function is designed to be run only once to secure the system.
- */
-export const setSuperAdmin = functions.https.onCall(async (data, context) => {
-  const listUsersResult = await admin.auth().listUsers(1000);
-  const superAdminExists = listUsersResult.users.some((user) => user.customClaims?.superAdmin === true);
-
-  if (superAdminExists) {
-    // If a super admin already exists, only an existing super admin can create another one.
-    if (context.auth?.token.superAdmin !== true) {
-        throw new functions.https.HttpsError("already-exists", "A super admin already exists. Only another super admin can create more.");
-    }
-  }
-
-  const {email} = data;
-  if (!email) {
-    throw new functions.https.HttpsError("invalid-argument", "The function must be called with an 'email' argument.");
-  }
-
-  try {
-    const user = await admin.auth().getUserByEmail(email);
-    await admin.auth().setCustomUserClaims(user.uid, {superAdmin: true, role: "superAdmin"});
-    return {result: `Successfully made ${email} a super admin.`};
-  } catch (error) {
-    console.error("Error setting super admin claim:", error);
-    if (error instanceof Error && (error as any).code === "auth/user-not-found") {
-       throw new functions.https.HttpsError("not-found", `User with email ${email} not found.`);
-    }
-    throw new functions.https.HttpsError("internal", "An error occurred while setting the super admin role.");
-  }
 });
 
 /**

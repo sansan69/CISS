@@ -28,7 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -164,24 +163,23 @@ export default function FieldOfficerManagementPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOfficer, setEditingOfficer] = useState<FieldOfficer | undefined>(undefined);
   const [deletingOfficer, setDeletingOfficer] = useState<FieldOfficer | null>(null);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const tokenResult = await user.getIdTokenResult();
-        setIsSuperAdmin(tokenResult.claims.superAdmin === true);
+        setIsAdmin(user.email === 'admin@cisskerala.app');
       } else {
-        setIsSuperAdmin(false);
+        setIsAdmin(false);
       }
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!isSuperAdmin) {
+    if (!isAdmin) {
         setIsLoading(false);
         return;
     }
@@ -205,7 +203,7 @@ export default function FieldOfficerManagementPage() {
     });
 
     return () => unsubscribe();
-  }, [toast, isSuperAdmin]);
+  }, [toast, isAdmin]);
 
   const handleSaveOfficer = async (officerData: any) => {
     setIsSubmitting(true);
@@ -275,12 +273,12 @@ export default function FieldOfficerManagementPage() {
        )
   }
 
-  if (!isSuperAdmin) {
+  if (!isAdmin) {
     return (
         <Alert variant="destructive">
             <AlertIcon className="h-4 w-4" />
             <AlertTitle>Permission Denied</AlertTitle>
-            <AlertDescription>You must be a super admin to manage field officers.</AlertDescription>
+            <AlertDescription>You do not have permission to manage field officers.</AlertDescription>
         </Alert>
     );
   }
