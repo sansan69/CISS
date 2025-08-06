@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase'; 
 import { createUserWithEmailAndPassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from "firebase/auth";
-import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -217,7 +217,6 @@ export default function FieldOfficerManagementPage() {
             });
             toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
         } else {
-            // Create new officer and auth user
             // This is a simplified approach. For production, secondary app instance is recommended.
             const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
             const newOfficerUid = userCredential.user.uid;
@@ -227,7 +226,7 @@ export default function FieldOfficerManagementPage() {
                 name: officerData.name,
                 email: officerData.email,
                 assignedDistricts: officerData.assignedDistricts,
-                createdAt: new Date(),
+                createdAt: serverTimestamp(),
             });
 
             toast({ title: "Officer Added", description: `"${officerData.name}" has been successfully created.` });
@@ -249,26 +248,28 @@ export default function FieldOfficerManagementPage() {
     }
   };
   
-  // NOTE: Deleting users client-side is complex and often requires re-authentication of the admin.
-  // This is a simplified version. A robust solution would use a Cloud Function.
   const handleDeleteOfficer = async () => {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
-    toast({
-        title: "Deletion Not Implemented",
-        description: "For security, deleting users from the client is disabled. Please use the Firebase Console to delete this officer's account.",
+    try {
+      // Just delete the Firestore document.
+      // This revokes their access based on our planned security rules.
+      await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.uid));
+      toast({
+        title: "Officer Record Deleted",
+        description: `Access for "${deletingOfficer.name}" has been revoked. Their login account still exists.`,
+      });
+    } catch (error: any) {
+      console.error("Error deleting officer record:", error);
+      toast({
         variant: "destructive",
-        duration: 8000
-    });
-    console.warn("Client-side user deletion is a security risk and is disabled. Please delete from Firebase Console.", deletingOfficer);
-    // In a real scenario with proper setup (or a cloud function), you would do:
-    // try {
-    //   await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.uid));
-    //   // You would need to handle auth deletion via a backend function
-    //   toast({ title: "Officer Deleted", description: `Record for "${deletingOfficer.name}" has been deleted.` });
-    // } catch (error: any) { ... }
-    setIsSubmitting(false);
-    setDeletingOfficer(null);
+        title: "Deletion Failed",
+        description: "Could not delete the officer's Firestore record. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+      setDeletingOfficer(null);
+    }
   };
 
 
@@ -396,9 +397,11 @@ export default function FieldOfficerManagementPage() {
     <AlertDialog open={!!deletingOfficer} onOpenChange={() => setDeletingOfficer(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure you want to delete this officer's record?</AlertDialogTitle>
                 <AlertDialogDescription>
-                   This will delete the officer's record from the database. The login account must be deleted separately from the Firebase Console for security reasons.
+                    This will delete the officer's record from the database, and they will lose all access to assigned districts. 
+                    <br/><br/>
+                    <span className="font-bold">Important:</span> This action does NOT delete their login account. To fully remove them, you must also delete their user from the Firebase Authentication console.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -413,3 +416,4 @@ export default function FieldOfficerManagementPage() {
     </>
   );
 }
+
