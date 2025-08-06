@@ -6,22 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, UserPlus, ClipboardList } from 'lucide-react';
+import { UploadCloud, Download, Loader2, FileCheck2, UserPlus, ClipboardList, User, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { ref, uploadBytes } from "firebase/storage";
 import * as XLSX from 'xlsx';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-
-interface Site {
-    id: string;
-    clientName: string;
-    siteName: string;
-    district: string;
-}
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
 interface WorkOrder {
     id: string;
@@ -30,7 +22,9 @@ interface WorkOrder {
     clientName: string;
     district: string;
     date: any; 
-    manpowerRequired: number;
+    maleGuardsRequired: number;
+    femaleGuardsRequired: number;
+    totalManpower: number;
     assignedGuards: any;
 }
 
@@ -120,7 +114,9 @@ export default function WorkOrderPage() {
             }
         }
     };
-
+    
+    // The template download is no longer necessary as we upload the client's file directly.
+    // I am keeping the function here in case it's needed for reference, but removing the button.
     const handleDownloadTemplate = () => {
         const templateData = [
             ['Client Name', 'Site Name', 'Date', 'Manpower Required']
@@ -164,15 +160,12 @@ export default function WorkOrderPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Upload Work Order</CardTitle>
-                        <CardDescription>Upload the completed work order file. The system will process it in the background.</CardDescription>
+                        <CardDescription>Upload the work order file received from the client. The system will process it in the background.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <Button onClick={handleDownloadTemplate} variant="outline">
-                            <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
-                        </Button>
                         <div className="grid w-full max-w-sm items-center gap-1.5">
-                            <Label htmlFor="work-order-file">Work Order File</Label>
-                            <Input id="work-order-file" type="file" accept=".csv, .xlsx" onChange={handleFileChange} />
+                            <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
+                            <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
                         </div>
                          {file && (
                             <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
@@ -184,7 +177,7 @@ export default function WorkOrderPage() {
                     <CardFooter>
                          <Button onClick={handleUpload} disabled={isUploading || !file}>
                             {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                            {isUploading ? 'Uploading...' : 'Upload File'}
+                            {isUploading ? 'Uploading...' : 'Upload & Process File'}
                         </Button>
                     </CardFooter>
                 </Card>
@@ -208,7 +201,6 @@ export default function WorkOrderPage() {
                         <div className="space-y-4">
                             {Object.entries(workOrdersBySite).map(([siteId, orders]) => {
                                 const siteInfo = orders[0];
-                                const totalManpower = orders.reduce((sum, o) => sum + o.manpowerRequired, 0);
                                 return (
                                 <div key={siteId} className="p-4 border rounded-lg">
                                     <div className="flex justify-between items-start">
@@ -222,12 +214,25 @@ export default function WorkOrderPage() {
                                         </Button>
                                     </div>
                                     <div className="mt-4">
-                                        <h4 className="text-sm font-medium mb-2">Required Manpower ({orders.length} days):</h4>
+                                        <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
                                         <div className="flex flex-wrap gap-2">
                                             {orders.map(order => (
-                                                <div key={order.id} className="p-2 border rounded-md text-center bg-muted/50">
+                                                <div key={order.id} className="p-2 border rounded-md text-center bg-muted/50 w-32">
                                                     <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB')}</p>
-                                                    <p className="text-lg font-bold">{order.manpowerRequired}</p>
+                                                    <div className="flex justify-around items-center mt-1">
+                                                        <div className="text-center">
+                                                            <p className="text-lg font-bold">{order.maleGuardsRequired}</p>
+                                                            <p className="text-xs text-muted-foreground">Male</p>
+                                                        </div>
+                                                         <div className="text-center">
+                                                            <p className="text-lg font-bold">{order.femaleGuardsRequired}</p>
+                                                            <p className="text-xs text-muted-foreground">Female</p>
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <p className="text-lg font-bold">{order.totalManpower}</p>
+                                                            <p className="text-xs text-muted-foreground">Total</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -240,4 +245,5 @@ export default function WorkOrderPage() {
             </Card>
         </div>
     );
-}
+
+    

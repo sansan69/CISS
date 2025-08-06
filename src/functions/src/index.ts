@@ -153,10 +153,14 @@ export const onWorkOrderUploaded = functions.runWith({timeoutSeconds: 540, memor
     const contentType = object.contentType;
 
     // Exit if this is not a work order file in the correct folder
-    if (!filePath || !filePath.startsWith("work-order-uploads/") || !contentType?.includes("sheet")) {
-      functions.logger.log("Not a work order file, skipping.", {filePath, contentType});
+    if (!filePath || !filePath.startsWith("work-order-uploads/")) {
+      functions.logger.log("Not a work order file, skipping.", {filePath});
       return;
     }
+     if (!contentType?.includes("sheet") && !contentType?.includes("csv")) {
+       functions.logger.log("Not an excel or csv file, skipping", {contentType});
+       return;
+     }
 
     const fileBucket = object.bucket;
     const bucket = storage.bucket(fileBucket);
@@ -170,52 +174,82 @@ export const onWorkOrderUploaded = functions.runWith({timeoutSeconds: 540, memor
       const workbook = xlsx.readFile(tempFilePath);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      // Convert sheet to JSON, assuming first row is headers
-      const workOrderData: any[] = xlsx.utils.sheet_to_json(worksheet);
 
-      if (workOrderData.length === 0) {
-        functions.logger.warn("Work order file is empty.");
+      const jsonData: any[] = xlsx.utils.sheet_to_json(worksheet, {header: 1});
+
+      if (jsonData.length < 2) {
+        functions.logger.warn("Work order file is empty or contains only a header row.");
         return;
       }
+      
+      const headers = jsonData[0];
+      const dateHeaderIndex = headers.findIndex((h: string) => h.match(/^\d{2}-[A-Za-z]{3}-\d{2}$/));
+      if (dateHeaderIndex === -1) {
+          throw new Error("Date column (e.g., 03-Aug-25) not found in header row.");
+      }
+      const dateString = headers[dateHeaderIndex];
+      const workDate = new Date(dateString);
+      if (isNaN(workDate.getTime())) {
+          throw new Error(`Invalid date format in header: ${dateString}`);
+      }
+      const firestoreTimestamp = admin.firestore.Timestamp.fromDate(workDate);
 
+      const rows = jsonData.slice(1);
       const batch = db.batch();
       let operationsCount = 0;
 
-      // Fetch all sites once to avoid multiple reads inside the loop
       const sitesSnapshot = await db.collection("sites").get();
       const sitesMap = new Map();
       sitesSnapshot.forEach((doc) => {
         const siteData = doc.data();
-        const key = `${siteData.clientName?.toLowerCase()}_${siteData.siteName?.toLowerCase()}`;
-        sitesMap.set(key, {id: doc.id, ...siteData});
+        sitesMap.set(siteData.siteId, {id: doc.id, ...siteData});
       });
+      
+      const columnMapping: {[key: string]: string} = {
+          "CITY": "district",
+          "TC CODE": "siteId",
+          "CENTER": "siteName",
+          "TC Address": "siteAddress",
+          "MALE": "maleGuardsRequired",
+          "FEMALE": "femaleGuardsRequired",
+      };
+      
+      const mappedHeaders = headers.map((h: string) => columnMapping[h] || h);
 
-      for (const row of workOrderData) {
-        const clientName = row["Client Name"];
-        const siteName = row["Site Name"];
-        const date = row["Date"];
-        const manpowerRequired = parseInt(row["Manpower Required"], 10);
+      for (const row of rows) {
+        const rowData: {[key: string]: any} = {};
+        mappedHeaders.forEach((key: string, index: number) => {
+            rowData[key] = row[index];
+        });
 
-        if (!clientName || !siteName || !date || isNaN(manpowerRequired)) {
-          functions.logger.warn("Skipping invalid row:", row);
+        const {
+            siteId,
+            maleGuardsRequired,
+            femaleGuardsRequired,
+        } = rowData;
+
+        if (!siteId || maleGuardsRequired === undefined || femaleGuardsRequired === undefined) {
+          functions.logger.warn("Skipping row with missing required data:", rowData);
           continue;
         }
-        
-        const siteKey = `${clientName.toLowerCase()}_${siteName.toLowerCase()}`;
-        const site = sitesMap.get(siteKey);
+
+        const site = sitesMap.get(String(siteId));
 
         if (!site) {
-          functions.logger.warn(`Site not found for client "${clientName}" and site "${siteName}". Skipping.`);
+          functions.logger.warn(`Site not found for TC CODE "${siteId}". Skipping.`);
           continue;
         }
 
-        // Convert Excel date serial number to JS Date if necessary
-        const workDate = xlsx.SSF.parse_date_code(date);
-        const firestoreTimestamp = admin.firestore.Timestamp.fromDate(new Date(workDate.y, workDate.m - 1, workDate.d));
+        const maleCount = Number(maleGuardsRequired) || 0;
+        const femaleCount = Number(femaleGuardsRequired) || 0;
+        const totalManpower = maleCount + femaleCount;
+        
+        if (totalManpower === 0) {
+            functions.logger.log(`Skipping site ${site.siteName} as manpower is zero.`);
+            continue;
+        }
 
-        // Create a unique ID for the work order document to prevent duplicates
-        const workOrderId = `${site.id}_${workDate.y}-${String(workDate.m).padStart(2, "0")}-${String(workDate.d).padStart(2, "0")}`;
-
+        const workOrderId = `${site.id}_${dateString.replace(/-/g, "")}`;
         const workOrderRef = db.collection("workOrders").doc(workOrderId);
 
         batch.set(workOrderRef, {
@@ -224,8 +258,10 @@ export const onWorkOrderUploaded = functions.runWith({timeoutSeconds: 540, memor
           clientName: site.clientName,
           district: site.district,
           date: firestoreTimestamp,
-          manpowerRequired: manpowerRequired,
-          assignedGuards: {}, // Initialize as empty map
+          maleGuardsRequired: maleCount,
+          femaleGuardsRequired: femaleCount,
+          totalManpower: totalManpower,
+          assignedGuards: {},
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -234,14 +270,15 @@ export const onWorkOrderUploaded = functions.runWith({timeoutSeconds: 540, memor
 
       if (operationsCount > 0) {
         await batch.commit();
-        functions.logger.log(`Successfully processed and committed ${operationsCount} work order entries.`);
+        functions.logger.log(`Successfully processed and committed ${operationsCount} work order entries for date ${dateString}.`);
       } else {
         functions.logger.log("No new work order entries to commit.");
       }
     } catch (error) {
       functions.logger.error("Error processing work order file:", error);
     } finally {
-      // Clean up the temporary file
       fs.unlinkSync(tempFilePath);
     }
 });
+
+    
