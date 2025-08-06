@@ -40,7 +40,7 @@ export const createStateAdmin = functions.https.onCall(async (data, context) => 
   } catch (error) {
     console.error("Error setting custom claim:", error);
     if (error instanceof Error && (error as any).code === "auth/user-not-found") {
-       throw new functions.httpss.HttpsError("not-found", `User with email ${email} not found.`);
+       throw new functions.https.HttpsError("not-found", `User with email ${email} not found.`);
     }
     throw new functions.https.HttpsError("internal", "An error occurred while setting the user role.");
   }
@@ -102,17 +102,26 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         throw new Error("No employee data found to export.");
       }
 
-      // 3. Process data for Excel
+      // 3. Process data for Excel, excluding document URLs
       const employeesData = employeesSnapshot.docs.map((doc) => {
         const docData = doc.data();
-        // Convert Firestore Timestamps to ISO strings for Excel compatibility.
+        const cleanData: {[key: string]: any} = {};
+
         Object.keys(docData).forEach((key) => {
-          if (docData[key] instanceof admin.firestore.Timestamp) {
-            docData[key] = docData[key].toDate().toISOString().split("T")[0]; // Just the date part
+          // Exclude keys that end with 'Url' or contain 'Url' to remove document links
+          if (!key.toLowerCase().includes('url')) {
+            if (docData[key] instanceof admin.firestore.Timestamp) {
+              // Convert Firestore Timestamps to just the date part for Excel
+              cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
+            } else if (key !== 'searchableFields' && key !== 'publicProfile') {
+               // Exclude complex objects/arrays that are not useful in the export
+               cleanData[key] = docData[key];
+            }
           }
         });
-        return {id: doc.id, ...docData};
+        return {id: doc.id, ...cleanData};
       });
+
 
       // 4. Create Excel file in memory
       const tmpdir = os.tmpdir();
@@ -123,7 +132,6 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       const worksheet = xlsx.utils.json_to_sheet(employeesData);
       xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
 
-      // Use writeFile instead of write to buffer directly in memory if possible with xlsx
       xlsx.writeFile(workbook, excelFilePath);
 
       // 5. Upload to Firebase Storage
@@ -133,7 +141,6 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         destination: destinationPath,
         metadata: {
           contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          // Associate the file with the user who requested it.
           metadata: {
             owner: jobData.userId,
             jobId: jobId,
@@ -141,10 +148,10 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
         },
       });
 
-      // 6. Get a long-lived download URL (no expiry)
+      // 6. Get a long-lived download URL
       const downloadUrl = await uploadedExcelFile.getSignedUrl({
         action: "read",
-        expires: "03-17-2025", // Set a far-future expiration date
+        expires: "03-17-2025",
       });
 
 
@@ -160,7 +167,6 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       fs.unlinkSync(excelFilePath);
     } catch (error: any) {
       console.error(`Error processing export job ${jobId}:`, error);
-      // Update job document with error status
       await db.collection("exportJobs").doc(jobId).update({
         status: "error",
         error: error.message || "An unknown error occurred.",
