@@ -134,7 +134,7 @@ export default function WorkOrderPage() {
                 if (jsonData.length < 2) throw new Error("File is empty or has only a header.");
                 
                 const headers = jsonData[0];
-                const dateHeaderIndex = headers.findIndex((h: string) => h && h.match(/^\d{2}-[A-Za-z]{3}-\d{2}$/));
+                const dateHeaderIndex = headers.findIndex((h: any) => h && String(h).match(/^\d{2}-[A-Za-z]{3}-\d{2}$/));
                 if (dateHeaderIndex === -1) throw new Error("A date column (e.g., 03-Aug-25) was not found in the header.");
                 
                 const dateString = headers[dateHeaderIndex];
