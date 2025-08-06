@@ -36,8 +36,8 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 
 
 interface FieldOfficer {
-  id: string; // This is the Firestore document ID (which should be the UID)
-  uid: string; // This is the Firebase Auth User ID
+  id: string;
+  uid: string;
   name: string;
   email: string;
   assignedDistricts: string[];
@@ -148,7 +148,7 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
                 <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Officer
+                    {isEditing ? 'Update Officer' : 'Create Officer'}
                 </Button>
             </DialogFooter>
         </div>
@@ -163,23 +163,28 @@ export default function FieldOfficerManagementPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOfficer, setEditingOfficer] = useState<FieldOfficer | undefined>(undefined);
   const [deletingOfficer, setDeletingOfficer] = useState<FieldOfficer | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   
+  const [authStatus, setAuthStatus] = useState<'loading' | 'admin' | 'other'>('loading');
+
   const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        setIsAdmin(user.email === 'admin@cisskerala.app');
+        if (user.email === 'admin@cisskerala.app') {
+            setAuthStatus('admin');
+        } else {
+            setAuthStatus('other');
+        }
       } else {
-        setIsAdmin(false);
+        setAuthStatus('other');
       }
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (authStatus !== 'admin') {
         setIsLoading(false);
         return;
     }
@@ -203,34 +208,34 @@ export default function FieldOfficerManagementPage() {
     });
 
     return () => unsubscribe();
-  }, [toast, isAdmin]);
+  }, [toast, authStatus]);
 
   const handleSaveOfficer = async (officerData: any) => {
     setIsSubmitting(true);
     try {
-        if (editingOfficer) {
-            const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.id);
-            await updateDoc(officerDocRef, {
-                name: officerData.name,
-                assignedDistricts: officerData.assignedDistricts,
-            });
-            toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
-        } else {
-            const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
-            const newOfficerUid = userCredential.user.uid;
+      if (editingOfficer) { // Update existing officer
+        const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.id);
+        await updateDoc(officerDocRef, {
+            name: officerData.name,
+            assignedDistricts: officerData.assignedDistricts,
+        });
+        toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
 
-            await setDoc(doc(db, 'fieldOfficers', newOfficerUid), {
-                uid: newOfficerUid,
-                name: officerData.name,
-                email: officerData.email,
-                assignedDistricts: officerData.assignedDistricts,
-                createdAt: serverTimestamp(),
-            });
+      } else { // Create new officer
+        const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
+        const newOfficerUid = userCredential.user.uid;
 
-            toast({ title: "Officer Added", description: `"${officerData.name}" has been successfully created.` });
-        }
-        setIsFormOpen(false);
-        setEditingOfficer(undefined);
+        // Use the UID as the document ID for a strong link
+        await setDoc(doc(db, 'fieldOfficers', newOfficerUid), {
+            uid: newOfficerUid,
+            name: officerData.name,
+            email: officerData.email,
+            assignedDistricts: officerData.assignedDistricts,
+            createdAt: serverTimestamp(),
+        });
+        toast({ title: "Officer Added", description: `"${officerData.name}" has been successfully created.` });
+      }
+      closeFormDialog();
 
     } catch (error: any) {
       console.error("Error saving officer: ", error);
@@ -238,7 +243,9 @@ export default function FieldOfficerManagementPage() {
       if (error.code === 'auth/email-already-in-use') {
         message = 'This email is already registered to another user.';
       } else if (error.code === 'auth/weak-password') {
-        message = 'The password is too weak. It must be at least 6 characters long.';
+        message = 'The password must be at least 6 characters long.';
+      } else if (error.code === 'permission-denied') {
+        message = 'Permission denied. Ensure Firestore rules allow admins to write to "fieldOfficers".';
       }
       toast({ variant: "destructive", title: "Save Failed", description: message });
     } finally {
@@ -250,6 +257,8 @@ export default function FieldOfficerManagementPage() {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
     try {
+      // Just delete the Firestore document.
+      // This revokes their access based on our planned security rules.
       await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
       toast({
         title: "Officer Record Deleted",
@@ -280,11 +289,12 @@ export default function FieldOfficerManagementPage() {
   }
   
   const closeFormDialog = () => {
+      if(isSubmitting) return;
       setIsFormOpen(false);
       setEditingOfficer(undefined);
   }
 
-  if (isLoading) {
+  if (authStatus === 'loading' || isLoading) {
        return (
         <div className="flex justify-center items-center h-40">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -292,7 +302,7 @@ export default function FieldOfficerManagementPage() {
        )
   }
 
-  if (!isAdmin) {
+  if (authStatus !== 'admin') {
     return (
         <Alert variant="destructive">
             <AlertIcon className="h-4 w-4" />
@@ -301,7 +311,6 @@ export default function FieldOfficerManagementPage() {
         </Alert>
     );
   }
-
 
   return (
     <>
@@ -315,7 +324,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Add your field officers and assign them to specific districts. This will create a login for them and restrict their data access to only their assigned areas (requires Firestore Security Rules to be set up).
+            Add your field officers and assign them to specific districts. This will create a login for them. Their data access will be restricted based on their assigned districts via Firestore Security Rules.
           </AlertDescription>
         </Alert>
 
@@ -325,11 +334,7 @@ export default function FieldOfficerManagementPage() {
             <CardDescription>A list of all registered field officers and their assigned districts.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center items-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : officers.length === 0 ? (
+            {officers.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-muted-foreground">No field officers found.</p>
                 <Button onClick={openAddDialog} variant="secondary" className="mt-4">Add your first officer</Button>
@@ -371,8 +376,8 @@ export default function FieldOfficerManagementPage() {
       </div>
 
     {/* Add/Edit Dialog */}
-    <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+    <Dialog open={isFormOpen} onOpenChange={closeFormDialog}>
+        <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if(isSubmitting) e.preventDefault(); }} onEscapeKeyDown={(e) => { if(isSubmitting) e.preventDefault(); }}>
             <DialogHeader>
             <DialogTitle>{editingOfficer ? 'Edit Field Officer' : 'Add New Field Officer'}</DialogTitle>
             <DialogDescription>
@@ -390,7 +395,7 @@ export default function FieldOfficerManagementPage() {
 
 
     {/* Delete Confirmation Dialog */}
-    <AlertDialog open={!!deletingOfficer} onOpenChange={() => setDeletingOfficer(null)}>
+    <AlertDialog open={!!deletingOfficer} onOpenChange={(isOpen) => !isOpen && setDeletingOfficer(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure you want to delete this officer's record?</AlertDialogTitle>
@@ -404,7 +409,7 @@ export default function FieldOfficerManagementPage() {
                 <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDeleteOfficer} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm Delete
+                    Confirm & Delete Record
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
