@@ -101,7 +101,7 @@ export default function WorkOrderPage() {
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             const selectedFile = event.target.files[0];
-            const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'];
+            const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv', 'application/vnd.ms-excel'];
             if (validTypes.some(type => selectedFile.type.includes(type))) {
                 setFile(selectedFile);
             } else {
@@ -120,85 +120,106 @@ export default function WorkOrderPage() {
             return;
         }
         setIsProcessing(true);
-        toast({ title: 'Processing File...', description: 'Please wait while we read the work order data.' });
+        toast({ title: 'Processing File...', description: 'Reading work order data. This may take a moment.' });
         
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
                 const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
 
-                if (jsonData.length < 2) throw new Error("File is empty or has only a header.");
+                if (jsonData.length < 3) throw new Error("File must have at least 3 rows (2 header rows and 1 data row).");
                 
-                const headers = jsonData[0];
-                const dateHeaderIndex = headers.findIndex((h: any) => h && String(h).match(/^\d{2}-[A-Za-z]{3}-\d{2}$/));
-                if (dateHeaderIndex === -1) throw new Error("A date column (e.g., 03-Aug-25) was not found in the header.");
+                const dateHeader = jsonData[0];
+                const genderHeader = jsonData[1];
+                const siteDataRows = jsonData.slice(2);
+
+                const columnMapping: {[key: string]: string} = { "S.No": "sNo", "ZONE": "zone", "STATE": "state", "CITY": "city", "TC CODE": "siteId", "CENTER": "siteName" };
                 
-                const dateString = headers[dateHeaderIndex];
-                const workDate = new Date(dateString);
-                if (isNaN(workDate.getTime())) throw new Error(`Invalid date in header: ${dateString}`);
-                const firestoreTimestamp = Timestamp.fromDate(workDate);
+                // Map static columns
+                const staticHeaders: string[] = jsonData[1].slice(0, 6).map((h:any, i: number) => columnMapping[jsonData[0][i]] || jsonData[0][i]);
 
-                const columnMapping: {[key: string]: string} = { "CITY": "district", "TC CODE": "siteId", "CENTER": "siteName", "MALE": "maleGuardsRequired", "FEMALE": "femaleGuardsRequired" };
-                const mappedHeaders = headers.map((h: string) => columnMapping[h] || h);
+                // Parse date columns
+                const dateColumns: { date: Date, maleIndex: number, femaleIndex: number }[] = [];
+                for (let i = 6; i < dateHeader.length; i++) {
+                    const dateValue = dateHeader[i];
+                    if (dateValue instanceof Date && genderHeader[i] === 'MALE') {
+                        dateColumns.push({
+                            date: dateValue,
+                            maleIndex: i,
+                            femaleIndex: i + 1,
+                        });
+                    }
+                }
+                
+                if (dateColumns.length === 0) throw new Error("No valid date columns found in the file's header.");
 
-                const rows = jsonData.slice(1);
+                toast({ title: 'Matching Sites...', description: 'Comparing with database...' });
                 const sitesSnapshot = await getDocs(collection(db, "sites"));
-                const sitesMap = new Map(sitesSnapshot.docs.map(doc => [String(doc.data().siteId), {id: doc.id, ...doc.data()}]));
+                const sitesMap = new Map(sitesSnapshot.docs.map(doc => [String(doc.data().siteId).trim(), {id: doc.id, ...doc.data()}]));
 
                 const batch = writeBatch(db);
                 let operationsCount = 0;
+                let skippedSites = new Set<string>();
 
-                for (const row of rows) {
+                for (const row of siteDataRows) {
                     const rowData: {[key: string]: any} = {};
-                    mappedHeaders.forEach((key: string, index: number) => { rowData[key] = row[index]; });
-
-                    const { siteId, maleGuardsRequired, femaleGuardsRequired } = rowData;
-                    if (!siteId || maleGuardsRequired === undefined || femaleGuardsRequired === undefined) continue;
+                    staticHeaders.forEach((key, index) => { rowData[key] = row[index]; });
                     
-                    const site = sitesMap.get(String(siteId));
+                    const siteId = String(rowData.siteId).trim();
+                    if (!siteId) continue;
+
+                    const site = sitesMap.get(siteId);
                     if (!site) {
-                        console.warn(`Site not found for TC CODE "${siteId}". Skipping.`);
+                        skippedSites.add(siteId);
                         continue;
                     }
 
-                    const maleCount = Number(maleGuardsRequired) || 0;
-                    const femaleCount = Number(femaleGuardsRequired) || 0;
-                    const totalManpower = maleCount + femaleCount;
-                    if (totalManpower === 0) continue;
-
-                    const workOrderId = `${site.id}_${dateString.replace(/-/g, "")}`;
-                    const workOrderRef = doc(db, "workOrders", workOrderId);
-                    
-                    batch.set(workOrderRef, {
-                        siteId: site.id,
-                        siteName: site.siteName,
-                        clientName: site.clientName,
-                        district: site.district,
-                        date: firestoreTimestamp,
-                        maleGuardsRequired: maleCount,
-                        femaleGuardsRequired: femaleCount,
-                        totalManpower: totalManpower,
-                        assignedGuards: {},
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                    });
-                    operationsCount++;
+                    for (const { date, maleIndex, femaleIndex } of dateColumns) {
+                        const maleGuardsRequired = Number(row[maleIndex]) || 0;
+                        const femaleGuardsRequired = Number(row[femaleIndex]) || 0;
+                        const totalManpower = maleGuardsRequired + femaleGuardsRequired;
+                        
+                        if (totalManpower > 0) {
+                            const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format for ID
+                            const workOrderId = `${site.id}_${dateString}`;
+                            const workOrderRef = doc(db, "workOrders", workOrderId);
+                            
+                            batch.set(workOrderRef, {
+                                siteId: site.id,
+                                siteName: site.siteName,
+                                clientName: site.clientName,
+                                district: site.district,
+                                date: Timestamp.fromDate(date),
+                                maleGuardsRequired: maleGuardsRequired,
+                                femaleGuardsRequired: femaleGuardsRequired,
+                                totalManpower: totalManpower,
+                                assignedGuards: {},
+                                createdAt: serverTimestamp(),
+                                updatedAt: serverTimestamp(),
+                            });
+                            operationsCount++;
+                        }
+                    }
                 }
 
                 if (operationsCount > 0) {
                     await batch.commit();
-                    toast({ title: 'Success', description: `Processed and committed ${operationsCount} work order entries for ${dateString}.` });
+                    toast({ title: 'Success', description: `Processed and committed ${operationsCount} daily work orders.` });
                 } else {
                     toast({ variant: 'default', title: 'No New Data', description: 'No new work order entries were found to import.' });
+                }
+                
+                if (skippedSites.size > 0) {
+                    toast({ variant: 'destructive', title: 'Skipped Sites', description: `Skipped ${skippedSites.size} sites not found in the database. TC Codes: ${Array.from(skippedSites).join(', ')}`, duration: 10000 });
                 }
 
             } catch (error: any) {
                 console.error("Error processing file:", error);
-                toast({ variant: 'destructive', title: 'Processing Failed', description: error.message || 'Could not process the file.' });
+                toast({ variant: 'destructive', title: 'Processing Failed', description: error.message || 'Could not process the file.', duration: 8000 });
             } finally {
                 setIsProcessing(false);
                 setFile(null);
@@ -215,7 +236,7 @@ export default function WorkOrderPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Upload Work Order</CardTitle>
-                        <CardDescription>Upload the work order file received from the client. The system will process it directly.</CardDescription>
+                        <CardDescription>Upload the work order Excel file from the client. The system will process multiple dates from one file.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -272,18 +293,18 @@ export default function WorkOrderPage() {
                                         <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
                                         <div className="flex flex-wrap gap-2">
                                             {orders.map(order => (
-                                                <div key={order.id} className="p-2 border rounded-md text-center bg-muted/50 w-32">
-                                                    <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB')}</p>
-                                                    <div className="flex justify-around items-center mt-1">
-                                                        <div className="text-center">
+                                                <div key={order.id} className="p-2 border rounded-md text-center bg-muted/50 min-w-[120px]">
+                                                    <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                    <div className="flex justify-around items-center mt-1 pt-1 border-t">
+                                                        <div className="text-center px-1">
                                                             <p className="text-lg font-bold">{order.maleGuardsRequired}</p>
                                                             <p className="text-xs text-muted-foreground">Male</p>
                                                         </div>
-                                                         <div className="text-center">
+                                                         <div className="text-center px-1">
                                                             <p className="text-lg font-bold">{order.femaleGuardsRequired}</p>
                                                             <p className="text-xs text-muted-foreground">Female</p>
                                                         </div>
-                                                        <div className="text-center">
+                                                        <div className="text-center px-1">
                                                             <p className="text-lg font-bold">{order.totalManpower}</p>
                                                             <p className="text-xs text-muted-foreground">Total</p>
                                                         </div>
@@ -301,3 +322,5 @@ export default function WorkOrderPage() {
         </div>
     );
 }
+
+    
