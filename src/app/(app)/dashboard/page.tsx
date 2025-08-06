@@ -66,8 +66,13 @@ export default function DashboardPage() {
                 try {
                     const tokenResult = await user.getIdTokenResult();
                     const claims = tokenResult.claims;
-                    setUserRole(claims.role as string || 'user'); // Default to 'user' if no role
-                    setAssignedDistricts(claims.districts as string[] || []);
+                    if (user.email === 'admin@cisskerala.app') {
+                        setUserRole('admin');
+                        setAssignedDistricts([]);
+                    } else {
+                        setUserRole(claims.role as string || 'user'); 
+                        setAssignedDistricts(claims.districts as string[] || []);
+                    }
                 } catch (e) {
                     console.error("Error getting user claims:", e);
                     setUserRole('user');

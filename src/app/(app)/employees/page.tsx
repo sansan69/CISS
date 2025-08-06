@@ -82,14 +82,19 @@ export default function EmployeeDirectoryPage() {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                 if (user.email === 'admin@cisskerala.app') {
-                    setUserRole('admin');
-                    setAssignedDistricts([]);
-                } else {
+                try {
                     const tokenResult = await user.getIdTokenResult();
                     const claims = tokenResult.claims;
-                    setUserRole(claims.role as string || 'user');
-                    setAssignedDistricts(claims.districts as string[] || []);
+                    if (user.email === 'admin@cisskerala.app') {
+                        setUserRole('admin');
+                        setAssignedDistricts([]);
+                    } else {
+                        setUserRole(claims.role as string || 'user'); 
+                        setAssignedDistricts(claims.districts as string[] || []);
+                    }
+                } catch (e) {
+                    setUserRole('user');
+                    setAssignedDistricts([]);
                 }
             } else {
                 setUserRole(null);
