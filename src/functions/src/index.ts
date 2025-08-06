@@ -100,41 +100,47 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       // Apply filters if they exist
       const filters = jobData.filters || {};
       if (filters.clientName) {
-        employeesQuery = employeesQuery.where("clientName", "==", filters.clientName);
+        employeesQuery = employeesQuery.where('clientName', '==', filters.clientName);
       }
       if (filters.district) {
-        employeesQuery = employeesQuery.where("district", "==", filters.district);
+        employeesQuery = employeesQuery.where('district', '==', filters.district);
       }
       if (filters.startDate) {
-        employeesQuery = employeesQuery.where("joiningDate", ">=", new Date(filters.startDate));
+        employeesQuery = employeesQuery.where('joiningDate', '>=', new Date(filters.startDate));
       }
       if (filters.endDate) {
+        // Add 1 day to the end date to make the range inclusive for 'less than or equal to' logic
         const inclusiveEndDate = new Date(filters.endDate);
-        inclusiveEndDate.setHours(23, 59, 59, 999); // Set to end of the day
-        employeesQuery = employeesQuery.where("joiningDate", "<=", inclusiveEndDate);
+        inclusiveEndDate.setDate(inclusiveEndDate.getDate() + 1);
+        employeesQuery = employeesQuery.where('joiningDate', '<=', inclusiveEndDate);
       }
 
+      // Stream data for memory efficiency
+      const employeesStream = employeesQuery.stream();
       const employeesData: any[] = [];
-      const queryStream = employeesQuery.stream();
 
-      // Use for-await-of loop for reliable stream processing
-      for await (const doc of queryStream) {
-        const docData = doc.data();
-        const cleanData: {[key: string]: any} = {};
+      await new Promise((resolve, reject) => {
+        employeesStream.on('data', (doc) => {
+          const docData = doc.data();
+          const cleanData: {[key: string]: any} = {};
 
-        // Iterate over keys and exclude URL fields and specific arrays
-        Object.keys(docData).forEach((key) => {
-          if (!key.toLowerCase().includes("url") && key !== "searchableFields" && key !== "publicProfile") {
-            // Convert Firestore Timestamps to a readable date format (YYYY-MM-DD)
-            if (docData[key] instanceof admin.firestore.Timestamp) {
-              cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
-            } else {
-               cleanData[key] = docData[key];
+          // Iterate over keys and exclude URL fields and specific arrays
+          Object.keys(docData).forEach((key) => {
+            if (!key.toLowerCase().includes('url') && key !== 'searchableFields' && key !== 'publicProfile') {
+              // Convert Firestore Timestamps to a readable date format (YYYY-MM-DD)
+              if (docData[key] instanceof admin.firestore.Timestamp) {
+                cleanData[key] = docData[key].toDate().toISOString().split("T")[0];
+              } else {
+                 cleanData[key] = docData[key];
+              }
             }
-          }
+          });
+          employeesData.push({id: doc.id, ...cleanData});
         });
-        employeesData.push({id: doc.id, ...cleanData});
-      }
+
+        employeesStream.on('end', resolve);
+        employeesStream.on('error', reject); // Properly reject on stream error
+      });
 
 
       if (employeesData.length === 0) {
