@@ -1,9 +1,9 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '@/lib/firebase'; 
-import { createUserWithEmailAndPassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,13 @@ const keralaDistricts = [
 ];
 
 
-const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any) => Promise<void>; isSaving: boolean; onClose: () => void; }> = ({ officer, onSave, isSaving, onClose }) => {
+const OfficerForm: React.FC<{ 
+    officer?: FieldOfficer; 
+    onSave: (officerData: any) => Promise<void>; 
+    isSaving: boolean; 
+    onClose: () => void;
+    unavailableDistricts: string[];
+}> = ({ officer, onSave, isSaving, onClose, unavailableDistricts }) => {
     const [name, setName] = useState(officer?.name || '');
     const [email, setEmail] = useState(officer?.email || '');
     const [password, setPassword] = useState('');
@@ -62,6 +68,16 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
     const [passwordError, setPasswordError] = useState<string | null>(null);
     
     const isEditing = !!officer;
+
+    const availableDistricts = useMemo(() => {
+        if (isEditing) {
+            // In edit mode, the user can see their own districts plus any unassigned ones
+            return keralaDistricts.filter(d => !unavailableDistricts.includes(d) || assignedDistricts.includes(d));
+        }
+        // In add mode, they can only see unassigned districts
+        return keralaDistricts.filter(d => !unavailableDistricts.includes(d));
+    }, [unavailableDistricts, isEditing, assignedDistricts]);
+
 
     const validate = () => {
         let isValid = true;
@@ -130,7 +146,7 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
             <div className="grid gap-2">
                 <Label>Assign Districts</Label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-4 border rounded-md max-h-64 overflow-y-auto">
-                    {keralaDistricts.map(district => (
+                    {availableDistricts.length > 0 ? availableDistricts.map(district => (
                         <div key={district} className="flex items-center space-x-2">
                             <Checkbox
                                 id={district}
@@ -141,7 +157,7 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
                                 {district}
                             </label>
                         </div>
-                    ))}
+                    )) : <p className="text-sm text-muted-foreground col-span-full">All districts are currently assigned.</p>}
                 </div>
             </div>
             <DialogFooter>
@@ -185,7 +201,7 @@ export default function FieldOfficerManagementPage() {
 
   useEffect(() => {
     if (authStatus !== 'admin') {
-        setIsLoading(false);
+        if(authStatus !== 'loading') setIsLoading(false);
         return;
     }
     setIsLoading(true);
@@ -209,12 +225,18 @@ export default function FieldOfficerManagementPage() {
 
     return () => unsubscribe();
   }, [toast, authStatus]);
+  
+    const allAssignedDistricts = useMemo(() => {
+        // When editing, we want to exclude the current officer's districts from the "unavailable" list
+        const otherOfficers = editingOfficer ? officers.filter(o => o.id !== editingOfficer.id) : officers;
+        return otherOfficers.flatMap(officer => officer.assignedDistricts);
+    }, [officers, editingOfficer]);
 
   const handleSaveOfficer = async (officerData: any) => {
     setIsSubmitting(true);
     try {
-      if (editingOfficer) { // Update existing officer
-        const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.id);
+      if (officerData.id) { // Update existing officer
+        const officerDocRef = doc(db, 'fieldOfficers', officerData.id);
         await updateDoc(officerDocRef, {
             name: officerData.name,
             assignedDistricts: officerData.assignedDistricts,
@@ -225,7 +247,6 @@ export default function FieldOfficerManagementPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
         const newOfficerUid = userCredential.user.uid;
 
-        // Use the UID as the document ID for a strong link
         await setDoc(doc(db, 'fieldOfficers', newOfficerUid), {
             uid: newOfficerUid,
             name: officerData.name,
@@ -257,8 +278,6 @@ export default function FieldOfficerManagementPage() {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
     try {
-      // Just delete the Firestore document.
-      // This revokes their access based on our planned security rules.
       await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
       toast({
         title: "Officer Record Deleted",
@@ -294,7 +313,7 @@ export default function FieldOfficerManagementPage() {
       setEditingOfficer(undefined);
   }
 
-  if (authStatus === 'loading' || isLoading) {
+  if (isLoading) {
        return (
         <div className="flex justify-center items-center h-40">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -389,6 +408,7 @@ export default function FieldOfficerManagementPage() {
                 onSave={handleSaveOfficer}
                 isSaving={isSubmitting}
                 onClose={closeFormDialog}
+                unavailableDistricts={allAssignedDistricts}
             />
         </DialogContent>
     </Dialog>
