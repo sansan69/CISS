@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, Users } from "lucide-react";
 import Link from "next/link";
 
 const settingsOptions = [
@@ -18,6 +18,12 @@ const settingsOptions = [
     description: "Bulk upload and manage site locations and details.",
     icon: Landmark,
     href: "/settings/site-management",
+  },
+  {
+    title: "Field Officer Management",
+    description: "Add, edit, and assign districts to field officers.",
+    icon: Users,
+    href: "/settings/field-officers",
   },
   {
     title: "Bulk Employee Import",
@@ -53,7 +59,7 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Manage system-wide configurations and data.</p>
       </div>
       
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {settingsOptions.map((option) => (
           <Card key={option.title} className="flex flex-col">
             <CardHeader>
