@@ -20,7 +20,8 @@ import {
   QrCode,
   Loader2,
   Landmark,
-  DownloadCloud
+  DownloadCloud,
+  ChevronLeft
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -94,6 +95,10 @@ function MainNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
 function SettingsNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
      return (
         <>
+        <Link href="/dashboard" onClick={onLinkClick} className="flex items-center gap-3 rounded-lg px-3 py-2 text-primary transition-all hover:bg-muted mb-2 font-semibold border">
+            <ChevronLeft className="h-4 w-4" />
+            Back to Main Menu
+        </Link>
         {settingsSubItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
         </>
     )
