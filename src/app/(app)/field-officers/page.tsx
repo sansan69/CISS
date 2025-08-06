@@ -247,6 +247,7 @@ export default function FieldOfficerManagementPage() {
         const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
         const newOfficerUid = userCredential.user.uid;
 
+        // Use the auth UID as the document ID for a strong link
         await setDoc(doc(db, 'fieldOfficers', newOfficerUid), {
             uid: newOfficerUid,
             name: officerData.name,
@@ -278,6 +279,8 @@ export default function FieldOfficerManagementPage() {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
     try {
+      // Just delete the Firestore document.
+      // This revokes their access based on our planned security rules.
       await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
       toast({
         title: "Officer Record Deleted",
@@ -343,7 +346,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Add your field officers and assign them to specific districts. This will create a login for them. Their data access will be restricted based on their assigned districts via Firestore Security Rules.
+            Add your field officers and assign them to specific districts. This will create a login for them and limit their data access via Firestore Security Rules.
           </AlertDescription>
         </Alert>
 
@@ -437,3 +440,5 @@ export default function FieldOfficerManagementPage() {
     </>
   );
 }
+
+    
