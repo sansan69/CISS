@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark } from "lucide-react";
 import Link from "next/link";
 
 const settingsOptions = [
@@ -12,6 +12,12 @@ const settingsOptions = [
     description: "Add, remove, or update client company names for enrollment.",
     icon: Briefcase,
     href: "/settings/client-management",
+  },
+   {
+    title: "Site Management",
+    description: "Bulk upload and manage site locations and details.",
+    icon: Landmark,
+    href: "/settings/site-management",
   },
   {
     title: "Bulk Employee Import",

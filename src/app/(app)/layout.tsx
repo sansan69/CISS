@@ -18,7 +18,9 @@ import {
   FileUp,
   BarChart3,
   QrCode,
-  Loader2
+  Loader2,
+  Landmark,
+  DownloadCloud
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -55,7 +57,9 @@ const navItems: NavItem[] = [
 
 const settingsSubItems: NavItem[] = [
     { href: '/settings/client-management', label: 'Clients', icon: Briefcase },
+    { href: '/settings/site-management', label: 'Site Management', icon: Landmark },
     { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
+    { href: '/settings/data-export', label: 'Data Export', icon: DownloadCloud },
     { href: '/settings/qr-management', label: 'QR Codes', icon: QrCode },
     { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
 ]
