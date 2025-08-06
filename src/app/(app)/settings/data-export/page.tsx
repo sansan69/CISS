@@ -16,12 +16,21 @@ export default function DataExportPage() {
     const [error, setError] = useState<string | null>(null);
     const { toast } = useToast();
 
+    const getFunctionUrl = (name: string) => {
+        if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+            throw new Error("Firebase project ID is not configured in environment variables.");
+        }
+        // Assuming the function is deployed in us-central1, which is the default.
+        return `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net/${name}`;
+    }
+
     const handleStartExport = async () => {
         setIsExporting(true);
         setError(null);
         setExportResult(null);
 
-        if (!auth.currentUser) {
+        const user = auth.currentUser;
+        if (!user) {
             toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to perform this action."});
             setIsExporting(false);
             return;
@@ -29,16 +38,28 @@ export default function DataExportPage() {
 
         toast({
             title: "Starting Export Process...",
-            description: "Generating your Excel file. Please wait.",
+            description: "Generating your Excel file. Please wait, this might take a minute.",
         });
 
         try {
-            const functions = getFunctions();
-            // Note: We are now using an onRequest function, but the callable interface provides a convenient way to call it.
-            // It will handle passing the auth token automatically.
-            const exportAllData = httpsCallable(functions, 'exportAllData');
-            const result = await exportAllData();
+            // Get the user's ID token to authenticate the request
+            const idToken = await user.getIdToken(true);
+            const functionUrl = getFunctionUrl('exportAllData');
             
+            const response = await fetch(functionUrl, {
+                method: 'POST', // or 'GET' if your function supports it
+                headers: {
+                    'Authorization': `Bearer ${idToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Function returned status ${response.status}`);
+            }
+            
+            const result = await response.json();
             const data = result.data as { downloadUrl: string; employeeCount: number; };
 
             setExportResult({
