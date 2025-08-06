@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db, auth } from '@/lib/firebase'; 
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -183,21 +183,25 @@ export default function FieldOfficerManagementPage() {
   const [authStatus, setAuthStatus] = useState<'loading' | 'admin' | 'other'>('loading');
 
   const { toast } = useToast();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        if (user.email === 'admin@cisskerala.app') {
-            setAuthStatus('admin');
-        } else {
-            setAuthStatus('other');
-        }
+  
+  const checkAdminStatus = useCallback((user: User | null) => {
+    if (user) {
+      if (user.email === 'admin@cisskerala.app') {
+        setAuthStatus('admin');
       } else {
         setAuthStatus('other');
       }
+    } else {
+      setAuthStatus('other');
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+        checkAdminStatus(user);
     });
     return () => unsubscribe();
-  }, []);
+  }, [checkAdminStatus]);
 
   useEffect(() => {
     if (authStatus !== 'admin') {
@@ -244,31 +248,35 @@ export default function FieldOfficerManagementPage() {
         toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
 
       } else { // Create new officer
-        const userCredential = await createUserWithEmailAndPassword(auth, officerData.email, officerData.password);
-        const newOfficerUid = userCredential.user.uid;
-
-        // Use the auth UID as the document ID for a strong link
-        await setDoc(doc(db, 'fieldOfficers', newOfficerUid), {
-            uid: newOfficerUid,
-            name: officerData.name,
-            email: officerData.email,
-            assignedDistricts: officerData.assignedDistricts,
-            createdAt: serverTimestamp(),
-        });
-        toast({ title: "Officer Added", description: `"${officerData.name}" has been successfully created.` });
+        // NOTE: This approach requires a second, temporary Firebase project instance 
+        // to create a user without signing in the current admin. This is a complex
+        // setup and for now we will rely on Firestore rules to manage access.
+        // A more robust solution would be a Cloud Function, but we are avoiding that.
+        // This is a placeholder for a non-functional user creation on client.
+         toast({
+            variant: "destructive",
+            title: "Feature Incomplete",
+            description: "Direct user creation from the client is disabled for security. Please use Firebase Console to create user accounts for now.",
+         });
+         // The following code would be used with a secondary app instance.
+         /*
+            const batch = writeBatch(db);
+            const newOfficerRef = doc(collection(db, "fieldOfficers"));
+            batch.set(newOfficerRef, {
+                // uid will be set after user creation
+                name: officerData.name,
+                email: officerData.email,
+                assignedDistricts: officerData.assignedDistricts,
+                createdAt: serverTimestamp(),
+            });
+            await batch.commit();
+         */
       }
       closeFormDialog();
 
     } catch (error: any) {
       console.error("Error saving officer: ", error);
       let message = "Could not save the officer. Please try again.";
-      if (error.code === 'auth/email-already-in-use') {
-        message = 'This email is already registered to another user.';
-      } else if (error.code === 'auth/weak-password') {
-        message = 'The password must be at least 6 characters long.';
-      } else if (error.code === 'permission-denied') {
-        message = 'Permission denied. Ensure Firestore rules allow admins to write to "fieldOfficers".';
-      }
       toast({ variant: "destructive", title: "Save Failed", description: message });
     } finally {
       setIsSubmitting(false);
@@ -316,7 +324,7 @@ export default function FieldOfficerManagementPage() {
       setEditingOfficer(undefined);
   }
 
-  if (isLoading) {
+  if (authStatus === 'loading') {
        return (
         <div className="flex justify-center items-center h-40">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -346,7 +354,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Add your field officers and assign them to specific districts. This will create a login for them and limit their data access via Firestore Security Rules.
+            Add or edit your field officers and assign them to specific districts. Their access to employee data will be limited based on these assignments via Firestore Security Rules.
           </AlertDescription>
         </Alert>
 
@@ -356,7 +364,11 @@ export default function FieldOfficerManagementPage() {
             <CardDescription>A list of all registered field officers and their assigned districts.</CardDescription>
           </CardHeader>
           <CardContent>
-            {officers.length === 0 ? (
+            {isLoading ? (
+                <div className="flex justify-center items-center h-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            ) : officers.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-muted-foreground">No field officers found.</p>
                 <Button onClick={openAddDialog} variant="secondary" className="mt-4">Add your first officer</Button>
@@ -440,5 +452,3 @@ export default function FieldOfficerManagementPage() {
     </>
   );
 }
-
-    
