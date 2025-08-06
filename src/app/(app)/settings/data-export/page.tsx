@@ -4,11 +4,18 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet } from 'lucide-react';
+import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet, CalendarIcon, Filter } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
 import { auth, db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
+import { Label } from '@/components/ui/label';
+
 
 // Represents the state of an export job stored in Firestore
 interface ExportJob {
@@ -18,12 +25,38 @@ interface ExportJob {
   createdAt: any;
   userId: string;
   employeeCount?: number;
+  filters?: {
+    clientName?: string;
+    startDate?: string;
+    endDate?: string;
+  }
 }
+
+interface ClientOption { id: string; name: string; }
 
 export default function DataExportPage() {
     const [isRequesting, setIsRequesting] = useState(false);
     const [activeJob, setActiveJob] = useState<{ id: string; data: ExportJob } | null>(null);
     const { toast } = useToast();
+
+    // Filters State
+    const [clients, setClients] = useState<ClientOption[]>([]);
+    const [selectedClient, setSelectedClient] = useState<string>('all');
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+    // Fetch clients for the filter dropdown
+    useEffect(() => {
+        const fetchClients = async () => {
+            try {
+                const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
+                setClients(clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string })));
+            } catch (err) {
+                toast({ variant: "destructive", title: "Error", description: "Could not fetch client list for filters." });
+            }
+        };
+        fetchClients();
+    }, [toast]);
+
 
     // Subscribe to real-time updates for the active export job
     useEffect(() => {
@@ -66,13 +99,27 @@ export default function DataExportPage() {
         }
 
         try {
-            // Create a new job document in Firestore to trigger the background function
-            const jobsCollection = collection(db, "exportJobs");
-            const newJobDoc = await addDoc(jobsCollection, {
+            // Create the job payload
+            const jobPayload: any = {
                 userId: user.uid,
                 status: 'pending',
                 createdAt: serverTimestamp(),
-            });
+                filters: {}
+            };
+
+            if (selectedClient !== 'all') {
+                jobPayload.filters.clientName = selectedClient;
+            }
+            if (dateRange?.from) {
+                jobPayload.filters.startDate = dateRange.from.toISOString();
+            }
+            if (dateRange?.to) {
+                jobPayload.filters.endDate = dateRange.to.toISOString();
+            }
+
+            // Create a new job document in Firestore to trigger the background function
+            const jobsCollection = collection(db, "exportJobs");
+            const newJobDoc = await addDoc(jobsCollection, jobPayload);
 
             // Set the active job to start listening for updates
             setActiveJob({
@@ -81,6 +128,7 @@ export default function DataExportPage() {
                     userId: user.uid,
                     status: 'pending',
                     createdAt: new Date(),
+                    filters: jobPayload.filters,
                 }
             });
 
@@ -153,8 +201,7 @@ export default function DataExportPage() {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Warning: Security and Data Privacy</AlertTitle>
                 <AlertDescription>
-                    You are about to generate an Excel file containing all employee data, including links to personal documents.
-                    This data is highly sensitive. Ensure you handle the downloaded file securely.
+                    You are about to generate an Excel file containing employee data. This data is sensitive. Ensure you handle the downloaded file securely.
                 </AlertDescription>
             </Alert>
 
@@ -162,11 +209,37 @@ export default function DataExportPage() {
                 <CardHeader>
                     <CardTitle>Start Data Export</CardTitle>
                     <CardDescription>
-                        Click the button below to generate an Excel file of the entire employee database. The process runs in the background.
+                        Optionally apply filters, then click the button below to generate an Excel file. The process runs in the background.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Button onClick={handleStartExport} disabled={isRequesting}>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                           <Label htmlFor="client-filter">Filter by Client</Label>
+                           <Select value={selectedClient} onValueChange={setSelectedClient}>
+                               <SelectTrigger id="client-filter"><SelectValue /></SelectTrigger>
+                               <SelectContent>
+                                   <SelectItem value="all">All Clients</SelectItem>
+                                   {clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                               </SelectContent>
+                           </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="date-range">Filter by Joining Date</Label>
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button id="date-range" variant={"outline"} className="w-full justify-start text-left font-normal">
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {dateRange?.from ? ( dateRange.to ? (<> {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")} </>) : (format(dateRange.from, "LLL dd, y"))) : (<span>Pick a date range</span>) }
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </div>
+                     <Button onClick={handleStartExport} disabled={isRequesting}>
                         {isRequesting ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -186,18 +259,6 @@ export default function DataExportPage() {
                        {getStatusContent()}
                     </CardFooter>
                 )}
-            </Card>
-
-             <Card>
-                <CardHeader>
-                    <CardTitle>What's Included in the Export?</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-                        <li><span className="font-semibold text-foreground">A single Excel file (.xlsx):</span> This file contains all data from the Firestore `employees` collection.</li>
-                        <li><span className="font-semibold text-foreground">Clickable Links:</span> Columns containing document URLs will be active hyperlinks, allowing you to open the documents directly in your browser from Excel.</li>
-                   </ul>
-                </CardContent>
             </Card>
         </div>
     );
