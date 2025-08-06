@@ -21,7 +21,8 @@ import {
   Loader2,
   Landmark,
   DownloadCloud,
-  ChevronLeft
+  ChevronLeft,
+  ShieldAlert
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -43,18 +44,16 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   exact?: boolean;
+  adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+// Define all possible navigation items
+const allNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/employees', label: 'Employees', icon: Users },
-  { href: '/field-officers', label: 'Field Officers', icon: Users },
+  { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, adminOnly: true },
   { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
-  {
-    href: '/settings',
-    label: 'Settings',
-    icon: Settings
-  },
+  { href: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
 ];
 
 const settingsSubItems: NavItem[] = [
@@ -64,7 +63,7 @@ const settingsSubItems: NavItem[] = [
     { href: '/settings/data-export', label: 'Data Export', icon: DownloadCloud },
     { href: '/settings/qr-management', label: 'QR Codes', icon: QrCode },
     { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
-]
+];
 
 function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const pathname = usePathname();
@@ -85,10 +84,11 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   );
 }
 
-function MainNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
+function MainNavLinks({ onLinkClick, userRole }: { onLinkClick?: () => void; userRole: string | null }) {
+    const visibleItems = allNavItems.filter(item => !item.adminOnly || userRole === 'admin');
     return (
         <>
-        {navItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
+        {visibleItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
         </>
     )
 }
@@ -105,7 +105,7 @@ function SettingsNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
     )
 }
 
-function MobileNav({ user, onLogout, isOpen, onOpenChange }: { user: User; onLogout: () => void; isOpen: boolean; onOpenChange: (open: boolean) => void; }) {
+function MobileNav({ user, userRole, onLogout, isOpen, onOpenChange }: { user: User; userRole: string | null; onLogout: () => void; isOpen: boolean; onOpenChange: (open: boolean) => void; }) {
     const pathname = usePathname();
     const isSettingsPage = pathname.startsWith('/settings');
 
@@ -130,7 +130,7 @@ function MobileNav({ user, onLogout, isOpen, onOpenChange }: { user: User; onLog
                     </Link>
                 </div>
                 <nav className="grid gap-2 p-4 text-base font-medium">
-                   {isSettingsPage ? <SettingsNavLinks onLinkClick={handleLinkClick} /> : <MainNavLinks onLinkClick={handleLinkClick} />}
+                   {isSettingsPage ? <SettingsNavLinks onLinkClick={handleLinkClick} /> : <MainNavLinks onLinkClick={handleLinkClick} userRole={userRole} />}
                 </nav>
                  <div className="mt-auto flex flex-col gap-4 p-4 border-t">
                     <UserNav user={user} onLogout={onLogout} isMobile={true}/>
@@ -179,20 +179,38 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter(); 
   const pathname = usePathname();
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null); // 'admin', 'fieldOfficer', or 'user'
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setAuthUser(user);
-      setIsLoadingAuth(false);
-      if (!user) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setIsLoadingAuth(true);
+      if (user) {
+        setAuthUser(user);
+        try {
+            const tokenResult = await user.getIdTokenResult();
+            const claims = tokenResult.claims;
+            // The main admin has no custom claims, so we identify them by email
+            if (user.email === 'admin@cisskerala.app') {
+                setUserRole('admin');
+            } else {
+                setUserRole(claims.role as string || 'user'); // Can be 'fieldOfficer' or default to 'user'
+            }
+        } catch (e) {
+            console.error("Error fetching user claims, defaulting to 'user' role.", e);
+            setUserRole('user'); // Default to lowest permission on error
+        }
+      } else {
+        setAuthUser(null);
+        setUserRole(null);
         const publicPaths = ['/admin-login', '/', '/enroll', '/profile', '/attendance'];
         const isPublicPath = publicPaths.some(path => pathname.startsWith(path) && path !== '/');
         if (!isPublicPath) {
           router.replace('/admin-login');
         }
       }
+      setIsLoadingAuth(false);
     });
     return () => unsubscribe();
   }, [pathname, router]);
@@ -228,14 +246,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex-1">
             <nav className="grid items-start gap-1 p-4 text-sm font-medium">
-               {isSettingsPage ? <SettingsNavLinks /> : <MainNavLinks />}
+               {isSettingsPage ? <SettingsNavLinks /> : <MainNavLinks userRole={userRole} />}
             </nav>
           </div>
         </div>
       </div>
       <div className="flex flex-col">
         <header className="flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6">
-            <MobileNav user={authUser} onLogout={handleLogout} isOpen={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}/>
+            <MobileNav user={authUser} userRole={userRole} onLogout={handleLogout} isOpen={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}/>
             <div className="w-full flex-1">
                 {/* Header content can go here */}
             </div>
@@ -251,5 +269,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
 }
 
 export default AppLayout;
-
-    

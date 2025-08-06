@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { MoreHorizontal, Search, UserPlus, Eye, Loader2, AlertCircle, CheckCircle, Trash2, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MoreHorizontal, Search, UserPlus, Eye, Loader2, AlertCircle, CheckCircle, Trash2, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db, auth } from '@/lib/firebase';
@@ -82,10 +82,15 @@ export default function EmployeeDirectoryPage() {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                const tokenResult = await user.getIdTokenResult();
-                const claims = tokenResult.claims;
-                setUserRole(claims.role as string || 'user');
-                setAssignedDistricts(claims.districts as string[] || []);
+                 if (user.email === 'admin@cisskerala.app') {
+                    setUserRole('admin');
+                    setAssignedDistricts([]);
+                } else {
+                    const tokenResult = await user.getIdTokenResult();
+                    const claims = tokenResult.claims;
+                    setUserRole(claims.role as string || 'user');
+                    setAssignedDistricts(claims.districts as string[] || []);
+                }
             } else {
                 setUserRole(null);
                 setAssignedDistricts([]);
@@ -263,7 +268,7 @@ export default function EmployeeDirectoryPage() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Employee Directory</h1>
                     <p className="text-muted-foreground">Manage and view all employee profiles.</p>
                 </div>
-                {userRole !== 'fieldOfficer' && (
+                {userRole === 'admin' && (
                   <Button asChild><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
                 )}
             </div>
@@ -384,7 +389,7 @@ export default function EmployeeDirectoryPage() {
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> View / Edit</DropdownMenuItem>
-                                                            {userRole !== 'fieldOfficer' && (
+                                                            {userRole === 'admin' && (
                                                                 <>
                                                                     <DropdownMenuSeparator />
                                                                     <DropdownMenuItem onClick={() => { setSelectedEmployeeForStatusChange(emp); setNewStatus('Active'); setExitDate(undefined); setIsStatusModalOpen(true); }}>Set Active</DropdownMenuItem>
