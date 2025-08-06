@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { auth } from '@/lib/firebase'; // Import auth
 
 export default function DataExportPage() {
@@ -47,7 +46,7 @@ export default function DataExportPage() {
             const functionUrl = getFunctionUrl('exportAllData');
             
             const response = await fetch(functionUrl, {
-                method: 'POST', // or 'GET' if your function supports it
+                method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${idToken}`,
                     'Content-Type': 'application/json',
@@ -55,7 +54,12 @@ export default function DataExportPage() {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
+                let errorData;
+                try {
+                     errorData = await response.json();
+                } catch(e) {
+                    throw new Error(`Function returned status ${response.status} with non-JSON response.`);
+                }
                 throw new Error(errorData.error || `Function returned status ${response.status}`);
             }
             
