@@ -48,9 +48,9 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
         districts: assignedDistricts,
     });
 
-    // 5. Create Firestore Document for the officer
+    // 5. Create Firestore Document for the officer using the auth UID as the document ID
     await db.collection("fieldOfficers").doc(userRecord.uid).set({
-      uid: userRecord.uid,
+      uid: userRecord.uid, // Storing uid is good practice
       name: name,
       email: email,
       assignedDistricts: assignedDistricts,
@@ -133,6 +133,7 @@ export const deleteFieldOfficer = functions.https.onCall(async (data, context) =
         console.error("Error deleting field officer:", error);
         if (error.code === "auth/user-not-found") {
             try {
+                // If auth user is already gone, still try to delete the DB record
                 await db.collection("fieldOfficers").doc(uid).delete();
                 return {result: "Field officer Auth account not found, but Firestore record was deleted."};
             } catch (fsError) {
@@ -142,6 +143,7 @@ export const deleteFieldOfficer = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError("internal", "An error occurred while deleting the field officer.");
     }
 });
+
 
 /**
  * Exports employee data from Firestore into an Excel file.
