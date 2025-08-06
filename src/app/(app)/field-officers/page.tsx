@@ -4,12 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase'; 
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Trash2, Edit, Loader2, UserPlus, Users, Eye, ShieldCheck, AlertCircle as AlertIcon } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -37,12 +37,12 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 
 
 interface FieldOfficer {
-  id: string;
+  id: string; // This is the Firestore document ID
+  uid: string; // This is the Firebase Auth User ID
   name: string;
   email: string;
   assignedDistricts: string[];
   createdAt?: any;
-  uid?: string;
 }
 
 const keralaDistricts = [
@@ -52,7 +52,7 @@ const keralaDistricts = [
 ];
 
 
-const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any) => Promise<void>; isSaving: boolean; }> = ({ officer, onSave, isSaving }) => {
+const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any) => Promise<void>; isSaving: boolean; onClose: () => void; }> = ({ officer, onSave, isSaving, onClose }) => {
     const [name, setName] = useState(officer?.name || '');
     const [email, setEmail] = useState(officer?.email || '');
     const [password, setPassword] = useState('');
@@ -95,7 +95,8 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
         const officerData = {
           name: name.trim(),
           assignedDistricts,
-          ...(!isEditing && { email: email.trim(), password })
+          ...(!isEditing && { email: email.trim(), password }),
+          ...(isEditing && { uid: officer.uid, id: officer.id })
         };
         
         onSave(officerData);
@@ -114,19 +115,18 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
                 />
                 {nameError && <p className="text-sm text-destructive">{nameError}</p>}
             </div>
+             <div className="grid gap-2">
+                <Label htmlFor="email">Login Email</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="officer@email.com" className={emailError ? 'border-destructive' : ''} disabled={isEditing} />
+                {isEditing && <p className="text-xs text-muted-foreground">Email cannot be changed after creation.</p>}
+                {emailError && <p className="text-sm text-destructive">{emailError}</p>}
+            </div>
             {!isEditing && (
-              <>
-                <div className="grid gap-2">
-                    <Label htmlFor="email">Login Email</Label>
-                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="officer@email.com" className={emailError ? 'border-destructive' : ''} />
-                    {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" className={passwordError ? 'border-destructive' : ''} />
-                    {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
-                </div>
-              </>
+              <div className="grid gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" className={passwordError ? 'border-destructive' : ''} />
+                  {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+              </div>
             )}
             <div className="grid gap-2">
                 <Label>Assign Districts</Label>
@@ -146,9 +146,7 @@ const OfficerForm: React.FC<{ officer?: FieldOfficer; onSave: (officerData: any)
                 </div>
             </div>
             <DialogFooter>
-                <DialogClose asChild>
-                    <Button type="button" variant="secondary">Cancel</Button>
-                </DialogClose>
+                <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Officer
@@ -183,6 +181,10 @@ export default function FieldOfficerManagementPage() {
   }, []);
 
   useEffect(() => {
+    if (!isSuperAdmin) {
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     const officersQuery = query(collection(db, 'fieldOfficers'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(officersQuery, (snapshot) => {
@@ -203,23 +205,21 @@ export default function FieldOfficerManagementPage() {
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [toast, isSuperAdmin]);
 
-  const handleSaveOfficer = async (officerData: {name: string, email?: string, password?: string, assignedDistricts: string[]}) => {
+  const handleSaveOfficer = async (officerData: any) => {
     setIsSubmitting(true);
+    const functions = getFunctions();
     try {
         if (editingOfficer) {
-            // Update existing officer's name and districts
-            const officerDocRef = doc(db, 'fieldOfficers', editingOfficer.id);
-            await updateDoc(officerDocRef, {
-                name: officerData.name,
-                assignedDistricts: officerData.assignedDistricts,
-                updatedAt: serverTimestamp(),
+            const updateFieldOfficer = httpsCallable(functions, 'updateFieldOfficer');
+            await updateFieldOfficer({ 
+                uid: officerData.uid, 
+                name: officerData.name, 
+                assignedDistricts: officerData.assignedDistricts 
             });
             toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
         } else {
-            // Add new officer by calling the Cloud Function
-            const functions = getFunctions();
             const createFieldOfficer = httpsCallable(functions, 'createFieldOfficer');
             await createFieldOfficer(officerData);
             toast({ title: "Officer Added", description: `"${officerData.name}" has been successfully created.` });
@@ -239,13 +239,13 @@ export default function FieldOfficerManagementPage() {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
     try {
-      // Note: This only deletes the Firestore record. The Auth user still exists.
-      // A proper implementation would require another Cloud Function to delete the Auth user.
-      await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
-      toast({ title: "Officer Record Deleted", description: `"${deletingOfficer.name}"'s record has been deleted.` });
-    } catch (error) {
+      const functions = getFunctions();
+      const deleteFieldOfficer = httpsCallable(functions, 'deleteFieldOfficer');
+      await deleteFieldOfficer({ uid: deletingOfficer.uid });
+      toast({ title: "Officer Deleted", description: `"${deletingOfficer.name}"'s account and record have been deleted.` });
+    } catch (error: any) {
       console.error("Error deleting officer: ", error);
-      toast({ variant: "destructive", title: "Error Deleting Officer", description: "Could not delete the officer. Please try again." });
+      toast({ variant: "destructive", title: "Error Deleting Officer", description: error.message || "Could not delete the officer." });
     } finally {
       setIsSubmitting(false);
       setDeletingOfficer(null);
@@ -260,6 +260,19 @@ export default function FieldOfficerManagementPage() {
   const openEditDialog = (officer: FieldOfficer) => {
     setEditingOfficer(officer);
     setIsFormOpen(true);
+  }
+  
+  const closeFormDialog = () => {
+      setIsFormOpen(false);
+      setEditingOfficer(undefined);
+  }
+
+  if (isLoading) {
+       return (
+        <div className="flex justify-center items-center h-40">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+       )
   }
 
   if (!isSuperAdmin) {
@@ -308,7 +321,7 @@ export default function FieldOfficerManagementPage() {
               <div className="space-y-4">
                 {officers.map((officer) => (
                   <div key={officer.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg shadow-sm">
-                    <div className="flex-1">
+                    <div className="flex-1 mb-3 sm:mb-0">
                       <h3 className="font-semibold text-lg">{officer.name}</h3>
                       <p className="text-sm text-muted-foreground">{officer.email}</p>
                       <div className="flex flex-wrap gap-1 mt-2">
@@ -319,7 +332,7 @@ export default function FieldOfficerManagementPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-3 sm:mt-0">
+                    <div className="flex gap-2 self-start sm:self-center">
                         <Button variant="outline" size="sm" onClick={() => openEditDialog(officer)}>
                             <Edit className="mr-1 h-4 w-4" /> Edit
                         </Button>
@@ -341,8 +354,8 @@ export default function FieldOfficerManagementPage() {
       </div>
 
     {/* Add/Edit Dialog */}
-    <Dialog open={isFormOpen} onOpenChange={(open) => { if (!open) { setIsFormOpen(false); setEditingOfficer(undefined); }}}>
-        <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
             <DialogHeader>
             <DialogTitle>{editingOfficer ? 'Edit Field Officer' : 'Add New Field Officer'}</DialogTitle>
             <DialogDescription>
@@ -353,6 +366,7 @@ export default function FieldOfficerManagementPage() {
                 officer={editingOfficer}
                 onSave={handleSaveOfficer}
                 isSaving={isSubmitting}
+                onClose={closeFormDialog}
             />
         </DialogContent>
     </Dialog>
@@ -364,7 +378,7 @@ export default function FieldOfficerManagementPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This action will delete the field officer's record from this list. It will NOT delete their login credentials. This must be done manually in the Firebase console for security reasons.
+                   This will permanently delete the officer '{deletingOfficer?.name}' including their login account. This action cannot be undone.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

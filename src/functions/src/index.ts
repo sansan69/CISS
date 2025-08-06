@@ -21,7 +21,6 @@ const storage = admin.storage();
  */
 export const createFieldOfficer = functions.https.onCall(async (data, context) => {
   // 1. Authentication & Authorization
-  // Check if the caller is a super admin
   if (context.auth?.token.superAdmin !== true) {
     throw new functions.https.HttpsError("permission-denied", "Must be a super admin to create a field officer.");
   }
@@ -43,17 +42,18 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
       displayName: name,
     });
 
-    // 4. Set Custom Claims
+    // 4. Set Custom Claims for role-based access
     await admin.auth().setCustomUserClaims(userRecord.uid, {
         role: "fieldOfficer",
-        districts: assignedDistricts, // Store assigned districts in the token
+        districts: assignedDistricts,
     });
 
     // 5. Create Firestore Document for the officer
+    // Using the UID as the document ID links Auth and Firestore records
     await db.collection("fieldOfficers").doc(userRecord.uid).set({
+      uid: userRecord.uid,
       name: name,
       email: email,
-      uid: userRecord.uid, // Link to the auth user
       assignedDistricts: assignedDistricts,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -66,6 +66,83 @@ export const createFieldOfficer = functions.https.onCall(async (data, context) =
     }
     throw new functions.https.HttpsError("internal", "An error occurred while creating the field officer.");
   }
+});
+
+/**
+ * Updates an existing field officer's details and custom claims.
+ * This function can only be called by an existing superAdmin.
+ */
+export const updateFieldOfficer = functions.https.onCall(async (data, context) => {
+    // 1. Authentication & Authorization
+    if (context.auth?.token.superAdmin !== true) {
+        throw new functions.https.HttpsError("permission-denied", "Must be a super admin to update a field officer.");
+    }
+
+    // 2. Input Validation
+    const {uid, name, assignedDistricts} = data;
+    if (!uid || !name || !assignedDistricts) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with uid, name, and assignedDistricts.");
+    }
+
+    try {
+        // 3. Update Custom Claims for role-based access
+        await admin.auth().setCustomUserClaims(uid, {
+            role: "fieldOfficer",
+            districts: assignedDistricts,
+        });
+
+        // 4. Update Firestore Document
+        const officerDocRef = db.collection("fieldOfficers").doc(uid);
+        await officerDocRef.update({
+            name: name,
+            assignedDistricts: assignedDistricts,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return {result: `Successfully updated field officer ${name}.`};
+    } catch (error: any) {
+        console.error("Error updating field officer:", error);
+        throw new functions.https.HttpsError("internal", "An error occurred while updating the field officer.");
+    }
+});
+
+/**
+ * Deletes a field officer's Auth account and their Firestore record.
+ * This function can only be called by an existing superAdmin.
+ */
+export const deleteFieldOfficer = functions.https.onCall(async (data, context) => {
+    // 1. Authentication & Authorization
+    if (context.auth?.token.superAdmin !== true) {
+        throw new functions.https.HttpsError("permission-denied", "Must be a super admin to delete a field officer.");
+    }
+
+    // 2. Input Validation
+    const {uid} = data;
+    if (!uid) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a uid.");
+    }
+
+    try {
+        // 3. Delete Firebase Auth User
+        await admin.auth().deleteUser(uid);
+
+        // 4. Delete Firestore Document
+        await db.collection("fieldOfficers").doc(uid).delete();
+
+        return {result: "Successfully deleted field officer."};
+    } catch (error: any) {
+        console.error("Error deleting field officer:", error);
+        if (error.code === "auth/user-not-found") {
+            // If user doesn't exist in Auth, still try to delete from Firestore
+            try {
+                await db.collection("fieldOfficers").doc(uid).delete();
+                return {result: "Field officer Auth account not found, but Firestore record was deleted."};
+            } catch (fsError) {
+                 throw new functions.https.HttpsError("internal", "Auth user not found and failed to delete Firestore record.");
+            }
+        }
+        throw new functions.https.HttpsError("internal", "An error occurred while deleting the field officer.");
+    }
 });
 
 
