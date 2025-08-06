@@ -1,94 +1,149 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DownloadCloud, AlertTriangle, Loader2, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase'; // Import auth
+import { auth, db } from '@/lib/firebase';
+import { collection, addDoc, onSnapshot, doc, serverTimestamp } from 'firebase/firestore';
+
+// Represents the state of an export job stored in Firestore
+interface ExportJob {
+  status: 'pending' | 'processing' | 'complete' | 'error';
+  downloadUrl?: string;
+  error?: string;
+  createdAt: any;
+  userId: string;
+  employeeCount?: number;
+}
 
 export default function DataExportPage() {
-    const [isExporting, setIsExporting] = useState(false);
-    const [exportResult, setExportResult] = useState<{ url: string; employeeCount: number; } | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [isRequesting, setIsRequesting] = useState(false);
+    const [activeJob, setActiveJob] = useState<{ id: string; data: ExportJob } | null>(null);
     const { toast } = useToast();
 
-    const getFunctionUrl = (name: string) => {
-        if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
-            throw new Error("Firebase project ID is not configured in environment variables.");
-        }
-        // Assuming the function is deployed in us-central1, which is the default.
-        return `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net/${name}`;
-    }
+    // Subscribe to real-time updates for the active export job
+    useEffect(() => {
+        if (!activeJob?.id) return;
+
+        const unsub = onSnapshot(doc(db, "exportJobs", activeJob.id), (doc) => {
+            if (doc.exists()) {
+                const jobData = doc.data() as ExportJob;
+                setActiveJob({ id: doc.id, data: jobData });
+
+                if(jobData.status === 'complete' || jobData.status === 'error') {
+                    setIsRequesting(false); // Stop the main loading spinner
+                }
+
+                if (jobData.status === 'error') {
+                     toast({
+                        variant: "destructive",
+                        title: "Export Failed",
+                        description: jobData.error || "An unknown error occurred in the background.",
+                    });
+                }
+            }
+        });
+
+        // Cleanup subscription on component unmount or when job changes
+        return () => unsub();
+
+    }, [activeJob?.id, toast]);
+
 
     const handleStartExport = async () => {
-        setIsExporting(true);
-        setError(null);
-        setExportResult(null);
+        setIsRequesting(true);
+        setActiveJob(null);
 
         const user = auth.currentUser;
         if (!user) {
             toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to perform this action."});
-            setIsExporting(false);
+            setIsRequesting(false);
             return;
         }
 
-        toast({
-            title: "Starting Export Process...",
-            description: "Generating your Excel file. Please wait, this might take a minute.",
-        });
-
         try {
-            const idToken = await user.getIdToken(true);
-            const functionUrl = getFunctionUrl('exportAllData');
-            
-            const response = await fetch(functionUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${idToken}`,
-                    'Content-Type': 'application/json',
-                },
+            // Create a new job document in Firestore to trigger the background function
+            const jobsCollection = collection(db, "exportJobs");
+            const newJobDoc = await addDoc(jobsCollection, {
+                userId: user.uid,
+                status: 'pending',
+                createdAt: serverTimestamp(),
             });
 
-            if (!response.ok) {
-                let errorData;
-                try {
-                     errorData = await response.json();
-                } catch(e) {
-                    throw new Error(`The export function returned an error (status ${response.status}).`);
+            // Set the active job to start listening for updates
+            setActiveJob({
+                id: newJobDoc.id,
+                data: {
+                    userId: user.uid,
+                    status: 'pending',
+                    createdAt: new Date(),
                 }
-                // Use the detailed error message from the function if available
-                throw new Error(errorData.error || `The export function failed with status ${response.status}.`);
-            }
-            
-            const result = await response.json();
-            const data = result.data as { downloadUrl: string; employeeCount: number; };
-
-            setExportResult({
-                url: data.downloadUrl,
-                employeeCount: data.employeeCount,
             });
 
             toast({
-                title: "Export Ready!",
-                description: "Your Excel file is ready for download.",
-                variant: 'default',
+                title: "Export Requested",
+                description: "Your data export is being processed in the background. You'll be notified when it's ready.",
             });
         } catch (err: any) {
-            console.error("Error calling export function:", err);
-            const errorMessage = err.message || "An unknown error occurred during the export.";
-            setError(errorMessage);
+            console.error("Error requesting export job:", err);
+            const errorMessage = err.message || "Could not start the export job.";
             toast({
                 variant: "destructive",
-                title: "Export Failed",
+                title: "Request Failed",
                 description: errorMessage,
             });
-        } finally {
-            setIsExporting(false);
+            setIsRequesting(false);
         }
     };
+
+    const getStatusContent = () => {
+        if (!activeJob) return null;
+
+        switch (activeJob.data.status) {
+            case 'pending':
+            case 'processing':
+                return (
+                     <Alert variant="default">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <AlertTitle>Processing...</AlertTitle>
+                        <AlertDescription>
+                            Your export is being generated in the background. This may take a few minutes. The download link will appear here automatically when ready.
+                        </AlertDescription>
+                    </Alert>
+                );
+            case 'complete':
+                return (
+                    <Alert variant="default" className="bg-green-50 border-green-200">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <AlertTitle className="text-green-800">Export Complete!</AlertTitle>
+                        <AlertDescription className="text-green-700">
+                            <p>Successfully processed {activeJob.data.employeeCount || 'all'} employees.</p>
+                            <Button asChild className="mt-4">
+                                <a href={activeJob.data.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                    <DownloadCloud className="mr-2 h-4 w-4" />
+                                    Download Excel File
+                                </a>
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                );
+            case 'error':
+                 return (
+                     <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Export Error</AlertTitle>
+                        <AlertDescription>{activeJob.data.error || 'An unexpected error occurred.'}</AlertDescription>
+                    </Alert>
+                );
+            default:
+                return null;
+        }
+    }
+
 
     return (
         <div className="flex flex-col gap-6">
@@ -98,9 +153,8 @@ export default function DataExportPage() {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Warning: Security and Data Privacy</AlertTitle>
                 <AlertDescription>
-                    You are about to download an Excel file containing all employee data, including links to personal documents.
+                    You are about to generate an Excel file containing all employee data, including links to personal documents.
                     This data is highly sensitive. Ensure you handle the downloaded file securely.
-                    The generated download link will be valid for 15 minutes.
                 </AlertDescription>
             </Alert>
 
@@ -108,15 +162,15 @@ export default function DataExportPage() {
                 <CardHeader>
                     <CardTitle>Start Data Export</CardTitle>
                     <CardDescription>
-                        Click the button below to generate an Excel file of the entire employee database.
+                        Click the button below to generate an Excel file of the entire employee database. The process runs in the background.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Button onClick={handleStartExport} disabled={isExporting}>
-                        {isExporting ? (
+                    <Button onClick={handleStartExport} disabled={isRequesting}>
+                        {isRequesting ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Exporting...
+                                Requesting Export...
                             </>
                         ) : (
                             <>
@@ -127,31 +181,9 @@ export default function DataExportPage() {
                     </Button>
                 </CardContent>
 
-                {error && (
+                {activeJob && (
                     <CardFooter>
-                         <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Export Error</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    </CardFooter>
-                )}
-                
-                {exportResult && (
-                    <CardFooter>
-                        <Alert variant="default" className="bg-green-50 border-green-200">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <AlertTitle className="text-green-800">Export Complete!</AlertTitle>
-                            <AlertDescription className="text-green-700">
-                                <p>Successfully processed {exportResult.employeeCount} employees.</p>
-                                <Button asChild className="mt-4">
-                                    <a href={exportResult.url} target="_blank" rel="noopener noreferrer">
-                                        <DownloadCloud className="mr-2 h-4 w-4" />
-                                        Download Excel File
-                                    </a>
-                                </Button>
-                            </AlertDescription>
-                        </Alert>
+                       {getStatusContent()}
                     </CardFooter>
                 )}
             </Card>

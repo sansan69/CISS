@@ -5,7 +5,6 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 import * as xlsx from "xlsx";
-import * as cors from "cors";
 
 // Initialize Firebase Admin SDK if not already initialized
 if (admin.apps.length === 0) {
@@ -15,8 +14,6 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 const storage = admin.storage();
 
-// A simplified cors handler that allows requests from any origin.
-const corsHandler = cors({origin: true});
 
 /**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
@@ -24,7 +21,7 @@ const corsHandler = cors({origin: true});
  */
 export const createStateAdmin = functions.https.onCall(async (data, context) => {
   // Check if the caller is a super admin
-  if (context.auth?.token.role !== "superAdmin") {
+  if (context.auth?.token.superAdmin !== true) {
     throw new functions.https.HttpsError("permission-denied", "Must be a super admin to create other admins.");
   }
 
@@ -53,11 +50,11 @@ export const createStateAdmin = functions.https.onCall(async (data, context) => 
  */
 export const setSuperAdmin = functions.https.onCall(async (data, context) => {
   const listUsersResult = await admin.auth().listUsers(1000);
-  const superAdminExists = listUsersResult.users.some((user) => user.customClaims?.role === "superAdmin");
+  const superAdminExists = listUsersResult.users.some((user) => user.customClaims?.superAdmin === true);
 
   if (superAdminExists) {
     // If a super admin already exists, only an existing super admin can create another one.
-    if (context.auth?.token.role !== "superAdmin") {
+    if (context.auth?.token.superAdmin !== true) {
         throw new functions.https.HttpsError("already-exists", "A super admin already exists. Only another super admin can create more.");
     }
   }
@@ -69,7 +66,7 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
 
   try {
     const user = await admin.auth().getUserByEmail(email);
-    await admin.auth().setCustomUserClaims(user.uid, {role: "superAdmin"});
+    await admin.auth().setCustomUserClaims(user.uid, {superAdmin: true, role: "superAdmin"});
     return {result: `Successfully made ${email} a super admin.`};
   } catch (error) {
     console.error("Error setting super admin claim:", error);
@@ -81,79 +78,89 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * Exports all employee data from Firestore into an Excel file.
- * The Excel file will contain clickable hyperlinks to the documents stored in Firebase Storage.
+ * Exports all employee data from Firestore into an Excel file when a job is created.
+ * Triggered by a new document in the 'exportJobs' collection.
  */
-export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "512MB"})
-  .https.onRequest((req, res) => {
-    // Wrap the entire function in the cors handler.
-    corsHandler(req, res, async () => {
-      // For simplicity, we are temporarily removing the auth check.
-      // In a production environment, you would re-enable this.
-      // if (!context.auth) {
-      //   throw new functions.https.HttpsError("unauthenticated", "You must be logged in to perform this action.");
-      // }
-      try {
-        console.log("Starting exportAllData function execution.");
-        const employeesSnapshot = await db.collection("employees").get();
-        if (employeesSnapshot.empty) {
-          console.log("No employee data found to export.");
-          res.status(404).send({error: "No employee data to export."});
-          return;
-        }
+export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, memory: "1GB"})
+  .firestore.document("exportJobs/{jobId}")
+  .onCreate(async (snap, context) => {
+    const jobId = context.params.jobId;
+    const jobData = snap.data();
 
-        console.log(`Found ${employeesSnapshot.size} employee documents.`);
-        const employeesData = employeesSnapshot.docs.map((doc) => {
-          const docData = doc.data();
-          // Convert Firestore Timestamps to ISO strings for Excel compatibility.
-          Object.keys(docData).forEach((key) => {
-            if (docData[key] instanceof admin.firestore.Timestamp) {
-              docData[key] = docData[key].toDate().toISOString().split("T")[0]; // Just the date part
-            }
-          });
-          return {id: doc.id, ...docData};
-        });
-
-        const tmpdir = os.tmpdir();
-        const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
-        const excelFilePath = path.join(tmpdir, excelFileName);
-        console.log(`Creating Excel file at: ${excelFilePath}`);
-
-        const workbook = xlsx.utils.book_new();
-        const worksheet = xlsx.utils.json_to_sheet(employeesData);
-        xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
-        xlsx.writeFile(workbook, excelFilePath);
-
-        const bucket = storage.bucket();
-        const destinationPath = `exports/${excelFileName}`;
-        console.log(`Uploading Excel file to Storage at: ${destinationPath}`);
-        const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
-          destination: destinationPath,
-          metadata: {
-            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          },
-        });
-
-        const signedUrlConfig = {
-          action: "read" as const,
-          expires: Date.now() + 15 * 60 * 1000, // URL is valid for 15 minutes
-        };
-        console.log("Generating signed URL for the uploaded file.");
-        const [signedUrl] = await uploadedExcelFile.getSignedUrl(signedUrlConfig);
-
-        fs.unlinkSync(excelFilePath); // Clean up the temporary file from the server.
-        console.log("Cleaned up temporary file and sending success response.");
-
-        // Send the successful response back to the client.
-        res.status(200).send({
-          data: {
-            downloadUrl: signedUrl,
-            employeeCount: employeesData.length,
-          },
-        });
-      } catch (error: any) {
-          console.error("Error exporting data:", error);
-          res.status(500).send({error: "An internal error occurred while exporting data.", details: error.message});
-      }
+    // 1. Acknowledge the job has started
+    await db.collection("exportJobs").doc(jobId).update({
+      status: "processing",
     });
-  });
+
+    try {
+      // 2. Fetch all employee data
+      const employeesSnapshot = await db.collection("employees").get();
+      if (employeesSnapshot.empty) {
+        throw new Error("No employee data found to export.");
+      }
+
+      // 3. Process data for Excel
+      const employeesData = employeesSnapshot.docs.map((doc) => {
+        const docData = doc.data();
+        // Convert Firestore Timestamps to ISO strings for Excel compatibility.
+        Object.keys(docData).forEach((key) => {
+          if (docData[key] instanceof admin.firestore.Timestamp) {
+            docData[key] = docData[key].toDate().toISOString().split("T")[0]; // Just the date part
+          }
+        });
+        return {id: doc.id, ...docData};
+      });
+
+      // 4. Create Excel file in memory
+      const tmpdir = os.tmpdir();
+      const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
+      const excelFilePath = path.join(tmpdir, excelFileName);
+
+      const workbook = xlsx.utils.book_new();
+      const worksheet = xlsx.utils.json_to_sheet(employeesData);
+      xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
+
+      // Use writeFile instead of write to buffer directly in memory if possible with xlsx
+      xlsx.writeFile(workbook, excelFilePath);
+
+      // 5. Upload to Firebase Storage
+      const bucket = storage.bucket();
+      const destinationPath = `exports/${excelFileName}`;
+      const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
+        destination: destinationPath,
+        metadata: {
+          contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          // Associate the file with the user who requested it.
+          metadata: {
+            owner: jobData.userId,
+            jobId: jobId,
+          },
+        },
+      });
+
+      // 6. Get a long-lived download URL (no expiry)
+      const downloadUrl = await uploadedExcelFile.getSignedUrl({
+        action: "read",
+        expires: "03-17-2025", // Set a far-future expiration date
+      });
+
+
+      // 7. Update job document with success status and download URL
+      await db.collection("exportJobs").doc(jobId).update({
+        status: "complete",
+        downloadUrl: downloadUrl[0],
+        employeeCount: employeesData.length,
+        exportedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 8. Clean up the temporary file
+      fs.unlinkSync(excelFilePath);
+    } catch (error: any) {
+      console.error(`Error processing export job ${jobId}:`, error);
+      // Update job document with error status
+      await db.collection("exportJobs").doc(jobId).update({
+        status: "error",
+        error: error.message || "An unknown error occurred.",
+      });
+    }
+});
