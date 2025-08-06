@@ -1,18 +1,49 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft } from 'lucide-react';
+import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+
+
+interface Site {
+    id: string;
+    clientName: string;
+    siteName: string;
+    siteId?: string;
+    siteAddress: string;
+    district: string;
+    geolocation: GeoPoint;
+}
 
 interface ProcessedRecord {
     data: any;
@@ -26,11 +57,98 @@ const requiredFields = [
 
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 
+
+const SiteEditForm: React.FC<{ 
+    site: Site; 
+    onSave: (siteData: Partial<Site>) => Promise<void>; 
+    isSaving: boolean; 
+    onClose: () => void;
+}> = ({ site, onSave, isSaving, onClose }) => {
+    const [formData, setFormData] = useState<Partial<Site>>(site);
+
+    const handleSave = () => {
+        const changes: Partial<Site> = {};
+        (Object.keys(formData) as Array<keyof Site>).forEach(key => {
+            // Check if there is a change
+            if (key === 'geolocation') {
+                if (formData.geolocation?.latitude !== site.geolocation?.latitude || formData.geolocation?.longitude !== site.geolocation?.longitude) {
+                    changes[key] = formData[key];
+                }
+            } else if (formData[key] !== site[key]) {
+                changes[key] = formData[key];
+            }
+        });
+        
+        if (Object.keys(changes).length > 0) {
+            onSave(changes);
+        } else {
+            onClose(); // No changes to save
+        }
+    };
+
+    return (
+        <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+                <Label htmlFor="clientName">Client Name</Label>
+                <Input id="clientName" value={formData.clientName || ''} onChange={(e) => setFormData({...formData, clientName: e.target.value})} />
+            </div>
+             <div className="grid gap-2">
+                <Label htmlFor="siteName">Site Name</Label>
+                <Input id="siteName" value={formData.siteName || ''} onChange={(e) => setFormData({...formData, siteName: e.target.value})} />
+            </div>
+             <div className="grid gap-2">
+                <Label htmlFor="siteAddress">Site Address</Label>
+                <Input id="siteAddress" value={formData.siteAddress || ''} onChange={(e) => setFormData({...formData, siteAddress: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="district">District</Label>
+                 <Select value={formData.district} onValueChange={(value) => setFormData({...formData, district: value})}>
+                    <SelectTrigger><SelectValue placeholder="Select a district" /></SelectTrigger>
+                    <SelectContent>
+                        {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+            </div>
+            <DialogFooter>
+                <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                </Button>
+            </DialogFooter>
+        </div>
+    );
+};
+
+
 export default function SiteManagementPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processedRecords, setProcessedRecords] = useState<ProcessedRecord[]>([]);
     const { toast } = useToast();
+    
+    // State for CRUD
+    const [sites, setSites] = useState<Site[]>([]);
+    const [isLoadingSites, setIsLoadingSites] = useState(true);
+    const [editingSite, setEditingSite] = useState<Site | null>(null);
+    const [deletingSite, setDeletingSite] = useState<Site | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        setIsLoadingSites(true);
+        const sitesQuery = query(collection(db, 'sites'), orderBy('clientName', 'asc'), orderBy('siteName', 'asc'));
+        const unsubscribe = onSnapshot(sitesQuery, (snapshot) => {
+          const fetchedSites = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Site));
+          setSites(fetchedSites);
+          setIsLoadingSites(false);
+        }, (error) => {
+          console.error("Error fetching sites: ", error);
+          toast({ variant: "destructive", title: "Error", description: "Could not load site data." });
+          setIsLoadingSites(false);
+        });
+        return () => unsubscribe();
+    }, [toast]);
+
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -84,7 +202,6 @@ export default function SiteManagementPage() {
                     throw new Error("The file is empty or does not contain data rows.");
                 }
 
-                // Fetch existing sites to check for duplicates
                 toast({ title: "Checking for duplicates...", description: "Comparing with existing site data." });
                 const existingSitesSnapshot = await getDocs(collection(db, 'sites'));
                 const existingSites = new Set(existingSitesSnapshot.docs.map(doc => {
@@ -116,7 +233,6 @@ export default function SiteManagementPage() {
                         return;
                     }
 
-                    // Geolocation validation and conversion
                     const geoString = String(row.Geolocation).trim();
                     const geoParts = geoString.split(',').map(part => parseFloat(part.trim()));
                     if (geoParts.length !== 2 || isNaN(geoParts[0]) || isNaN(geoParts[1])) {
@@ -159,7 +275,7 @@ export default function SiteManagementPage() {
                 const sitesRef = collection(db, "sites");
 
                 validRecords.forEach(record => {
-                    const siteDocRef = doc(sitesRef); // Create new doc ref for a new site
+                    const siteDocRef = doc(sitesRef);
                     batch.set(siteDocRef, record);
                 });
 
@@ -183,6 +299,38 @@ export default function SiteManagementPage() {
         reader.readAsArrayBuffer(file);
     };
 
+    const handleUpdateSite = async (updatedData: Partial<Site>) => {
+        if (!editingSite) return;
+        setIsSubmitting(true);
+        try {
+            const siteDocRef = doc(db, 'sites', editingSite.id);
+            await updateDoc(siteDocRef, {
+                ...updatedData,
+                updatedAt: serverTimestamp(),
+            });
+            toast({ title: "Site Updated", description: "The site details have been saved." });
+        } catch (error) {
+            toast({ variant: "destructive", title: "Update Failed", description: "Could not update the site." });
+        } finally {
+            setIsSubmitting(false);
+            setEditingSite(null);
+        }
+    };
+
+    const handleDeleteSite = async () => {
+        if (!deletingSite) return;
+        setIsSubmitting(true);
+        try {
+            await deleteDoc(doc(db, 'sites', deletingSite.id));
+            toast({ title: "Site Deleted", description: "The site has been removed." });
+        } catch (error) {
+            toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the site." });
+        } finally {
+            setIsSubmitting(false);
+            setDeletingSite(null);
+        }
+    };
+
     const successCount = processedRecords.filter(r => r.status === 'success').length;
     const errorCount = processedRecords.filter(r => r.status === 'error').length;
     const duplicateCount = processedRecords.filter(r => r.status === 'duplicate').length;
@@ -197,7 +345,7 @@ export default function SiteManagementPage() {
                         <span className="sr-only">Back to Settings</span>
                     </Link>
                 </Button>
-                <h1 className="text-3xl font-bold tracking-tight">Bulk Site Import</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Site Management</h1>
             </div>
 
             <Alert>
@@ -205,43 +353,36 @@ export default function SiteManagementPage() {
                 <AlertTitle>Instructions & Important Notes</AlertTitle>
                 <AlertDescription>
                     <ul className="list-disc list-inside space-y-1">
-                        <li>Download the template Excel file to ensure your data is correctly formatted.</li>
-                        <li>Do not change the column headers in the template file. Headers are: <strong>Client Name, Site Name, Site ID, Site Address, Geolocation, District</strong>.</li>
-                        <li><strong>This tool will not overwrite or update existing sites.</strong> It skips any site where the Client Name and Site Name combination already exists.</li>
-                        <li><strong>Geolocation</strong> format must be: <code>latitude,longitude</code> (e.g., <code>10.1234,76.5432</code>).</li>
-                        <li><strong>District</strong> must be one of the 14 official districts of Kerala.</li>
+                        <li>Use the forms below to import sites in bulk or manage existing sites individually.</li>
+                        <li>**Bulk Import**: Download the template, fill it, and upload. This tool will not overwrite existing sites based on Client and Site Name.</li>
+                        <li>**Geolocation** format must be: <code>latitude,longitude</code> (e.g., <code>10.1234,76.5432</code>).</li>
                     </ul>
                 </AlertDescription>
             </Alert>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Step 1: Download Template</CardTitle>
-                    <CardDescription>Get the Excel template file to fill in your site data.</CardDescription>
+                    <CardTitle>Bulk Site Import</CardTitle>
+                    <CardDescription>Upload an Excel file to add multiple new sites at once.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Button onClick={handleDownloadTemplate} variant="outline">
-                        <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
-                    </Button>
-                </CardContent>
-            </Card>
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>Step 2: Upload File</CardTitle>
-                    <CardDescription>Upload the completed Excel file to begin the import process.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col sm:flex-row gap-4 items-center">
-                    <div className="grid w-full max-w-sm items-center gap-1.5">
-                        <Label htmlFor="site-file">Site Data File</Label>
-                        <Input id="site-file" type="file" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleFileChange} />
+                <CardContent className="space-y-4">
+                    <div className="flex gap-4">
+                        <Button onClick={handleDownloadTemplate} variant="outline">
+                            <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
+                        </Button>
                     </div>
-                    {file && (
-                        <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
-                            <FileCheck2 className="h-5 w-5 text-green-500" />
-                            <span>{file.name}</span>
+                     <div className="flex flex-col sm:flex-row gap-4 items-center">
+                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                            <Label htmlFor="site-file">Upload Completed File</Label>
+                            <Input id="site-file" type="file" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleFileChange} />
                         </div>
-                    )}
+                        {file && (
+                            <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
+                                <FileCheck2 className="h-5 w-5 text-green-500" />
+                                <span>{file.name}</span>
+                            </div>
+                        )}
+                    </div>
                 </CardContent>
                 <CardFooter>
                     <Button onClick={processAndUpload} disabled={isProcessing || !file}>
@@ -277,6 +418,69 @@ export default function SiteManagementPage() {
                     </CardContent>
                 </Card>
             )}
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Existing Sites</CardTitle>
+                    <CardDescription>A list of all currently managed sites in the system.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                     {isLoadingSites ? (
+                        <div className="flex justify-center items-center h-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                    ) : sites.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4">No sites found. Use the bulk import feature to add sites.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {sites.map(site => (
+                                <div key={site.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg shadow-sm">
+                                    <div className="flex-1 mb-2 sm:mb-0">
+                                        <h3 className="font-semibold">{site.siteName}</h3>
+                                        <p className="text-sm text-muted-foreground">{site.clientName}</p>
+                                        <p className="text-xs text-muted-foreground mt-1">{site.siteAddress}</p>
+                                        <Badge variant="outline" className="mt-2">{site.district}</Badge>
+                                    </div>
+                                    <div className="flex gap-2 self-start sm:self-center">
+                                        <Button variant="outline" size="sm" onClick={() => setEditingSite(site)}><Edit className="mr-2 h-4 w-4"/>Edit</Button>
+                                        <Button variant="destructive" size="sm" onClick={() => setDeletingSite(site)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+                <CardFooter>
+                    <p className="text-xs text-muted-foreground">Total sites: {sites.length}</p>
+                </CardFooter>
+            </Card>
+
+            {/* Edit Dialog */}
+            <Dialog open={!!editingSite} onOpenChange={(isOpen) => !isOpen && setEditingSite(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Site</DialogTitle>
+                        <DialogDescription>Update the details for "{editingSite?.siteName}".</DialogDescription>
+                    </DialogHeader>
+                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} />}
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Dialog */}
+            <AlertDialog open={!!deletingSite} onOpenChange={(isOpen) => !isOpen && setDeletingSite(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the site "{deletingSite?.siteName}". This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteSite} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
