@@ -6,10 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2 } from 'lucide-react';
+import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type QueryDocumentSnapshot, endBefore, limitToLast } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
@@ -56,6 +56,7 @@ const requiredFields = [
 ];
 
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
+const SITES_PER_PAGE = 10;
 
 
 const SiteEditForm: React.FC<{ 
@@ -127,28 +128,81 @@ export default function SiteManagementPage() {
     const [processedRecords, setProcessedRecords] = useState<ProcessedRecord[]>([]);
     const { toast } = useToast();
     
-    // State for CRUD
+    // State for CRUD and Pagination
     const [sites, setSites] = useState<Site[]>([]);
     const [isLoadingSites, setIsLoadingSites] = useState(true);
     const [editingSite, setEditingSite] = useState<Site | null>(null);
     const [deletingSite, setDeletingSite] = useState<Site | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const [currentPage, setCurrentPage] = useState(1);
+    const [firstDoc, setFirstDoc] = useState<QueryDocumentSnapshot | null>(null);
+    const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+    const [hasNextPage, setHasNextPage] = useState(false);
+
+    const fetchSites = useCallback(async (pageDirection: 'next' | 'prev' | 'first' = 'first') => {
+        setIsLoadingSites(true);
+        try {
+            let q = query(collection(db, 'sites'), orderBy('clientName', 'asc'), orderBy('siteName', 'asc'));
+            
+            if (pageDirection === 'next' && lastDoc) {
+                q = query(q, startAfter(lastDoc), limit(SITES_PER_PAGE));
+            } else if (pageDirection === 'prev' && firstDoc) {
+                q = query(q, endBefore(firstDoc), limitToLast(SITES_PER_PAGE));
+            } else {
+                 q = query(q, limit(SITES_PER_PAGE));
+            }
+
+            const documentSnapshots = await getDocs(q);
+            const fetchedSites = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Site));
+            
+            if (!documentSnapshots.empty) {
+                setSites(fetchedSites);
+                setFirstDoc(documentSnapshots.docs[0]);
+                setLastDoc(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+
+                 // Check for next page
+                const nextQuery = query(collection(db, 'sites'), orderBy('clientName', 'asc'), orderBy('siteName', 'asc'), startAfter(documentSnapshots.docs[documentSnapshots.docs.length - 1]), limit(1));
+                const nextSnapshot = await getDocs(nextQuery);
+                setHasNextPage(!nextSnapshot.empty);
+            } else {
+                if (pageDirection === 'next') {
+                    // You are on the last page, no more results
+                    setHasNextPage(false);
+                } else if (pageDirection === 'prev' && currentPage > 1) {
+                    // Went back to a page that now has no items, go to first page
+                     fetchSites('first');
+                     setCurrentPage(1);
+                }
+                 else {
+                     setSites([]); // No sites at all
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching sites: ", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not load site data." });
+        } finally {
+            setIsLoadingSites(false);
+        }
+    }, [lastDoc, firstDoc, currentPage, toast]);
 
     useEffect(() => {
-        setIsLoadingSites(true);
-        const sitesQuery = query(collection(db, 'sites'), orderBy('clientName', 'asc'), orderBy('siteName', 'asc'));
-        const unsubscribe = onSnapshot(sitesQuery, (snapshot) => {
-          const fetchedSites = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Site));
-          setSites(fetchedSites);
-          setIsLoadingSites(false);
-        }, (error) => {
-          console.error("Error fetching sites: ", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not load site data." });
-          setIsLoadingSites(false);
-        });
-        return () => unsubscribe();
-    }, [toast]);
+        fetchSites('first');
+    }, []); // Initial fetch
 
+    const handleNextPage = () => {
+        if (hasNextPage) {
+            setCurrentPage(prev => prev + 1);
+            fetchSites('next');
+        }
+    };
+
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(prev => prev - 1);
+            fetchSites('prev');
+        }
+    };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -280,6 +334,9 @@ export default function SiteManagementPage() {
                 });
 
                 await batch.commit();
+                
+                fetchSites('first'); // Refresh the list to show new data
+                setCurrentPage(1);
 
                 toast({
                     title: 'Import Successful',
@@ -309,6 +366,7 @@ export default function SiteManagementPage() {
                 updatedAt: serverTimestamp(),
             });
             toast({ title: "Site Updated", description: "The site details have been saved." });
+            fetchSites(currentPage === 1 ? 'first' : 'next'); // A simple refresh, might need refinement
         } catch (error) {
             toast({ variant: "destructive", title: "Update Failed", description: "Could not update the site." });
         } finally {
@@ -323,6 +381,7 @@ export default function SiteManagementPage() {
         try {
             await deleteDoc(doc(db, 'sites', deletingSite.id));
             toast({ title: "Site Deleted", description: "The site has been removed." });
+            fetchSites(currentPage === 1 ? 'first' : 'next'); // Refresh list
         } catch (error) {
             toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the site." });
         } finally {
@@ -448,8 +507,18 @@ export default function SiteManagementPage() {
                         </div>
                     )}
                 </CardContent>
-                <CardFooter>
-                    <p className="text-xs text-muted-foreground">Total sites: {sites.length}</p>
+                 <CardFooter>
+                    <div className="flex justify-between items-center w-full">
+                        <span className="text-sm text-muted-foreground">Page {currentPage}</span>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={isLoadingSites || currentPage <= 1}>
+                                <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoadingSites || !hasNextPage}>
+                                Next <ChevronRight className="ml-1 h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
                 </CardFooter>
             </Card>
 
