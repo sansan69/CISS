@@ -22,7 +22,8 @@ import {
   Landmark,
   DownloadCloud,
   ChevronLeft,
-  ShieldAlert
+  ShieldAlert,
+  ClipboardList, // New Icon
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -51,6 +52,7 @@ interface NavItem {
 const allNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/employees', label: 'Employees', icon: Users },
+  { href: '/work-orders', label: 'Work Orders', icon: ClipboardList, adminOnly: true },
   { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, adminOnly: true },
   { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
   { href: '/settings', label: 'Settings', icon: Settings, adminOnly: true },

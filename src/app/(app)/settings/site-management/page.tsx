@@ -163,10 +163,10 @@ export default function SiteManagementPage() {
             setIsFilterDataLoading(true);
             try {
                 const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
-                setClients(clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
+                setClients(clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name } as ClientOption)));
 
                 const officersSnapshot = await getDocs(query(collection(db, 'fieldOfficers'), orderBy('name')));
-                setFieldOfficers(officersSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, assignedDistricts: doc.data().assignedDistricts })));
+                setFieldOfficers(officersSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, assignedDistricts: doc.data().assignedDistricts } as FieldOfficerOption)));
 
             } catch (error) {
                 toast({ variant: "destructive", title: "Error", description: "Could not load data for filters." });
@@ -247,6 +247,7 @@ export default function SiteManagementPage() {
     useEffect(() => {
         fetchSites('first');
         setCurrentPage(1); // Reset page number on filter change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedClient, selectedDistrict, selectedOfficer]); // Re-fetch when filters change
 
 

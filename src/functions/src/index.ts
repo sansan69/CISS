@@ -258,3 +258,106 @@ export const onDataExportRequested = functions.runWith({timeoutSeconds: 540, mem
       });
     }
 });
+
+
+/**
+ * Processes an uploaded work order Excel file from a specific Storage path.
+ */
+export const onWorkOrderUploaded = functions.runWith({timeoutSeconds: 540, memory: "1GB"})
+  .storage.object().onFinalize(async (object) => {
+    const filePath = object.name;
+    const contentType = object.contentType;
+
+    // Exit if this is not a work order file in the correct folder
+    if (!filePath || !filePath.startsWith("work-order-uploads/") || !contentType?.includes("sheet")) {
+      functions.logger.log("Not a work order file, skipping.", {filePath, contentType});
+      return;
+    }
+
+    const fileBucket = object.bucket;
+    const bucket = storage.bucket(fileBucket);
+    const tmpdir = os.tmpdir();
+    const tempFilePath = path.join(tmpdir, path.basename(filePath));
+
+    await bucket.file(filePath).download({destination: tempFilePath});
+    functions.logger.log("Work order file downloaded to", tempFilePath);
+
+    try {
+      const workbook = xlsx.readFile(tempFilePath);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      // Convert sheet to JSON, assuming first row is headers
+      const workOrderData: any[] = xlsx.utils.sheet_to_json(worksheet);
+
+      if (workOrderData.length === 0) {
+        functions.logger.warn("Work order file is empty.");
+        return;
+      }
+
+      const batch = db.batch();
+      let operationsCount = 0;
+
+      // Fetch all sites once to avoid multiple reads inside the loop
+      const sitesSnapshot = await db.collection("sites").get();
+      const sitesMap = new Map();
+      sitesSnapshot.forEach((doc) => {
+        const siteData = doc.data();
+        const key = `${siteData.clientName?.toLowerCase()}_${siteData.siteName?.toLowerCase()}`;
+        sitesMap.set(key, {id: doc.id, ...siteData});
+      });
+
+      for (const row of workOrderData) {
+        const clientName = row["Client Name"];
+        const siteName = row["Site Name"];
+        const date = row["Date"];
+        const manpowerRequired = parseInt(row["Manpower Required"], 10);
+
+        if (!clientName || !siteName || !date || isNaN(manpowerRequired)) {
+          functions.logger.warn("Skipping invalid row:", row);
+          continue;
+        }
+        
+        const siteKey = `${clientName.toLowerCase()}_${siteName.toLowerCase()}`;
+        const site = sitesMap.get(siteKey);
+
+        if (!site) {
+          functions.logger.warn(`Site not found for client "${clientName}" and site "${siteName}". Skipping.`);
+          continue;
+        }
+
+        // Convert Excel date serial number to JS Date if necessary
+        const workDate = xlsx.SSF.parse_date_code(date);
+        const firestoreTimestamp = admin.firestore.Timestamp.fromDate(new Date(workDate.y, workDate.m - 1, workDate.d));
+
+        // Create a unique ID for the work order document to prevent duplicates
+        const workOrderId = `${site.id}_${workDate.y}-${String(workDate.m).padStart(2, "0")}-${String(workDate.d).padStart(2, "0")}`;
+
+        const workOrderRef = db.collection("workOrders").doc(workOrderId);
+
+        batch.set(workOrderRef, {
+          siteId: site.id,
+          siteName: site.siteName,
+          clientName: site.clientName,
+          district: site.district,
+          date: firestoreTimestamp,
+          manpowerRequired: manpowerRequired,
+          assignedGuards: {}, // Initialize as empty map
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        operationsCount++;
+      }
+
+      if (operationsCount > 0) {
+        await batch.commit();
+        functions.logger.log(`Successfully processed and committed ${operationsCount} work order entries.`);
+      } else {
+        functions.logger.log("No new work order entries to commit.");
+      }
+    } catch (error) {
+      functions.logger.error("Error processing work order file:", error);
+    } finally {
+      // Clean up the temporary file
+      fs.unlinkSync(tempFilePath);
+    }
+});
