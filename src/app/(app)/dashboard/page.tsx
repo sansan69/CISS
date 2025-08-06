@@ -63,10 +63,17 @@ export default function DashboardPage() {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 setCurrentUser(user);
-                const tokenResult = await user.getIdTokenResult();
-                const claims = tokenResult.claims;
-                setUserRole(claims.role as string || null);
-                setAssignedDistricts(claims.districts as string[] || []);
+                try {
+                    const tokenResult = await user.getIdTokenResult();
+                    const claims = tokenResult.claims;
+                    setUserRole(claims.role as string || 'user'); // Default to 'user' if no role
+                    setAssignedDistricts(claims.districts as string[] || []);
+                } catch (e) {
+                    console.error("Error getting user claims:", e);
+                    setUserRole('user');
+                    setAssignedDistricts([]);
+                    setError("Could not verify user role.");
+                }
             } else {
                 setCurrentUser(null);
                 setUserRole(null);
@@ -77,7 +84,7 @@ export default function DashboardPage() {
     }, []);
 
     useEffect(() => {
-        if (!userRole) { // Wait until we know the user's role
+        if (userRole === null) { // Wait until we know the user's role
             return;
         }
 
@@ -90,6 +97,13 @@ export default function DashboardPage() {
                 // If field officer, filter by their assigned districts
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                     employeesRef = query(employeesRef, where('district', 'in', assignedDistricts));
+                } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+                    // Field officer has no assigned districts, so they see nothing.
+                    setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0 });
+                    setNewHiresData([]);
+                    setRecentActivity([]);
+                    setIsLoading(false);
+                    return;
                 }
 
                 const totalQuery = getCountFromServer(employeesRef);

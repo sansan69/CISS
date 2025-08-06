@@ -84,7 +84,7 @@ export default function EmployeeDirectoryPage() {
             if (user) {
                 const tokenResult = await user.getIdTokenResult();
                 const claims = tokenResult.claims;
-                setUserRole(claims.role as string || null);
+                setUserRole(claims.role as string || 'user');
                 setAssignedDistricts(claims.districts as string[] || []);
             } else {
                 setUserRole(null);
@@ -137,6 +137,12 @@ export default function EmployeeDirectoryPage() {
             // Apply role-based filtering first
             if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                 q = query(q, where('district', 'in', assignedDistricts));
+            } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+                 // If a field officer has no districts assigned, they should see no employees.
+                setEmployees([]);
+                setHasNextPage(false);
+                setIsLoading(false);
+                return;
             }
 
             if (searchTerm) {
