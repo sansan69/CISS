@@ -41,7 +41,6 @@ export default function DataExportPage() {
         });
 
         try {
-            // Get the user's ID token to authenticate the request
             const idToken = await user.getIdToken(true);
             const functionUrl = getFunctionUrl('exportAllData');
             
@@ -58,9 +57,10 @@ export default function DataExportPage() {
                 try {
                      errorData = await response.json();
                 } catch(e) {
-                    throw new Error(`Function returned status ${response.status} with non-JSON response.`);
+                    throw new Error(`The export function returned an error (status ${response.status}).`);
                 }
-                throw new Error(errorData.error || `Function returned status ${response.status}`);
+                // Use the detailed error message from the function if available
+                throw new Error(errorData.error || `The export function failed with status ${response.status}.`);
             }
             
             const result = await response.json();

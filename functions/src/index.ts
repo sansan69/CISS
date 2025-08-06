@@ -16,7 +16,8 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 const storage = admin.storage();
 
-const corsHandler = cors({origin: corsConfig.map((c) => c.origin).flat()});
+const corsHandler = cors({origin: true});
+
 
 /**
  * Sets a user's role (e.g., 'stateAdmin') as a custom claim.
@@ -78,77 +79,66 @@ export const setSuperAdmin = functions.https.onCall(async (data, context) => {
  */
 export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "512MB"})
   .https.onRequest((req, res) => {
+    // Correctly wrap the entire function logic with the CORS handler
     corsHandler(req, res, async () => {
-    // Optional: Add role-based access control here if needed.
-    // For onRequest, you would need to verify the user's ID token manually.
-    // Example: const idToken = req.headers.authorization?.split('Bearer ')[1];
-    // This example keeps it open for simplicity as per the original onCall structure.
+      try {
+        if (req.method !== 'POST') {
+          res.status(405).send({error: 'Method Not Allowed'});
+          return;
+        }
 
-    if (req.method !== 'POST') {
-        res.status(405).send({error: 'Method Not Allowed'});
-        return;
-    }
+        const employeesSnapshot = await db.collection("employees").get();
+        if (employeesSnapshot.empty) {
+          res.status(404).send({error: "No employee data to export."});
+          return;
+        }
 
-    try {
-      const employeesSnapshot = await db.collection("employees").get();
-      if (employeesSnapshot.empty) {
-        res.status(404).send({error: "No employee data to export."});
-        return;
-      }
-
-      const employeesData = employeesSnapshot.docs.map((doc) => {
-        const docData = doc.data();
-        // Convert all Timestamps to ISO strings for consistent formatting in Excel.
-        // URLs will be preserved as clickable links.
-        Object.keys(docData).forEach((key) => {
-          if (docData[key] instanceof admin.firestore.Timestamp) {
-            docData[key] = docData[key].toDate().toISOString();
-          }
+        const employeesData = employeesSnapshot.docs.map((doc) => {
+          const docData = doc.data();
+          // Convert all Timestamps to ISO strings for consistent formatting in Excel.
+          Object.keys(docData).forEach((key) => {
+            if (docData[key] instanceof admin.firestore.Timestamp) {
+              docData[key] = docData[key].toDate().toISOString();
+            }
+          });
+          return {id: doc.id, ...docData};
         });
-        return {id: doc.id, ...docData};
-      });
 
-      // 1. Create Excel file in a temporary directory
-      const tmpdir = os.tmpdir();
-      const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
-      const excelFilePath = path.join(tmpdir, excelFileName);
+        const tmpdir = os.tmpdir();
+        const excelFileName = `CISS_Export_${Date.now()}.xlsx`;
+        const excelFilePath = path.join(tmpdir, excelFileName);
 
-      const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.json_to_sheet(employeesData);
+        const workbook = xlsx.utils.book_new();
+        const worksheet = xlsx.utils.json_to_sheet(employeesData);
 
-      xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
-      xlsx.writeFile(workbook, excelFilePath);
+        xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
+        xlsx.writeFile(workbook, excelFilePath);
 
-      // 2. Upload the Excel file to Firebase Storage
-      const bucket = storage.bucket();
-      const destinationPath = `exports/${excelFileName}`;
-      const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
-        destination: destinationPath,
-        metadata: {
-          contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        },
-      });
+        const bucket = storage.bucket();
+        const destinationPath = `exports/${excelFileName}`;
+        const [uploadedExcelFile] = await bucket.upload(excelFilePath, {
+          destination: destinationPath,
+          metadata: {
+            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          },
+        });
 
-      // 3. Get a signed URL for the user to download the file
-      const signedUrl = await uploadedExcelFile.getSignedUrl({
-        action: "read",
-        expires: Date.now() + 15 * 60 * 1000, // URL is valid for 15 minutes
-      });
+        const signedUrl = await uploadedExcelFile.getSignedUrl({
+          action: "read",
+          expires: Date.now() + 15 * 60 * 1000, // URL is valid for 15 minutes
+        });
 
-      // 4. Clean up the temporary file from the Cloud Function's instance
-      fs.unlinkSync(excelFilePath);
+        fs.unlinkSync(excelFilePath);
 
-      // 5. Return the download URL and other metadata to the client
-      res.status(200).send({
-        data: {
-          downloadUrl: signedUrl[0],
-          employeeCount: employeesData.length,
-          fileCount: "N/A",
-        },
-      });
-    } catch (error: any) {
-        console.error("Error exporting data:", error);
-        res.status(500).send({error: "An internal error occurred while exporting data.", details: error.message});
-    }
+        res.status(200).send({
+          data: {
+            downloadUrl: signedUrl[0],
+            employeeCount: employeesData.length,
+          },
+        });
+      } catch (error: any) {
+          console.error("Error exporting data:", error);
+          res.status(500).send({error: "An internal error occurred while exporting data.", details: error.message});
+      }
+    });
   });
-});
