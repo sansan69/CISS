@@ -48,6 +48,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/employees', label: 'Employees', icon: Users },
+  { href: '/field-officers', label: 'Field Officers', icon: Users },
   { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
   {
     href: '/settings',
@@ -250,3 +251,5 @@ export function AppLayout({ children }: { children: ReactNode }) {
 }
 
 export default AppLayout;
+
+    

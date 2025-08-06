@@ -20,12 +20,6 @@ const settingsOptions = [
     href: "/settings/site-management",
   },
   {
-    title: "Field Officer Management",
-    description: "Add, edit, and assign districts to field officers.",
-    icon: Users,
-    href: "/settings/field-officers",
-  },
-  {
     title: "Bulk Employee Import",
     description: "Upload a CSV file to add multiple new employees at once.",
     icon: FileUp,
@@ -85,3 +79,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    

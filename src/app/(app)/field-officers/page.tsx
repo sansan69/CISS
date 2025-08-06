@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Trash2, Edit, Loader2, AlertCircle, ChevronLeft, UserPlus, Users } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Loader2, UserPlus, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -31,7 +31,6 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
@@ -209,15 +208,7 @@ export default function FieldOfficerManagementPage() {
     <>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <Button variant="outline" size="icon" asChild>
-                    <Link href="/settings">
-                        <ChevronLeft className="h-4 w-4" />
-                        <span className="sr-only">Back to Settings</span>
-                    </Link>
-                </Button>
-                <h1 className="text-3xl font-bold tracking-tight">Field Officer Management</h1>
-            </div>
+            <h1 className="text-3xl font-bold tracking-tight">Field Officer Management</h1>
             <Button onClick={openAddDialog}><UserPlus className="mr-2 h-4 w-4" /> Add New Officer</Button>
         </div>
 
@@ -318,3 +309,5 @@ export default function FieldOfficerManagementPage() {
     </>
   );
 }
+
+    
