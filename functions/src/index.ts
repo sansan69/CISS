@@ -84,6 +84,11 @@ export const exportAllData = functions.runWith({timeoutSeconds: 300, memory: "51
     // Example: const idToken = req.headers.authorization?.split('Bearer ')[1];
     // This example keeps it open for simplicity as per the original onCall structure.
 
+    if (req.method !== 'POST') {
+        res.status(405).send({error: 'Method Not Allowed'});
+        return;
+    }
+
     try {
       const employeesSnapshot = await db.collection("employees").get();
       if (employeesSnapshot.empty) {
