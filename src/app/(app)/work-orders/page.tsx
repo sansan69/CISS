@@ -12,7 +12,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, serverTimestamp, doc, Timestamp } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
 interface WorkOrder {
@@ -48,10 +48,21 @@ export default function WorkOrderPage() {
                         setUserRole('admin');
                         setAssignedDistricts([]);
                     } else {
-                        setUserRole(claims.role as string || 'user'); 
-                        setAssignedDistricts(claims.districts as string[] || []);
+                        // Check if the user is a field officer from our DB
+                        const officersRef = collection(db, "fieldOfficers");
+                        const q = query(officersRef, where("uid", "==", user.uid));
+                        const snapshot = await getDocs(q);
+                        if (!snapshot.empty) {
+                            const officerData = snapshot.docs[0].data();
+                            setUserRole('fieldOfficer');
+                            setAssignedDistricts(officerData.assignedDistricts || []);
+                        } else {
+                            setUserRole('user'); // Or another default role
+                            setAssignedDistricts([]);
+                        }
                     }
                 } catch (e) {
+                    console.error("Error getting user role:", e);
                     setUserRole('user');
                     setAssignedDistricts([]);
                 }
@@ -67,11 +78,12 @@ export default function WorkOrderPage() {
         if (userRole === null) return;
         
         setIsLoading(true);
-        let q = query(collection(db, "workOrders"), orderBy("date", "asc"));
+        let q = query(collection(db, "workOrders"), where("date", ">=", Timestamp.fromDate(new Date())), orderBy("date", "asc"));
 
         if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
             q = query(q, where("district", "in", assignedDistricts));
         } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+            // Field officer has no assigned districts, so they see nothing.
             setIsLoading(false);
             setWorkOrdersBySite({});
             return;
@@ -140,10 +152,8 @@ export default function WorkOrderPage() {
 
                 const columnMapping: {[key: string]: string} = { "S.No": "sNo", "ZONE": "zone", "STATE": "state", "CITY": "city", "TC CODE": "siteId", "CENTER": "siteName" };
                 
-                // Map static columns
                 const staticHeaders: string[] = jsonData[1].slice(0, 6).map((h:any, i: number) => columnMapping[jsonData[0][i]] || jsonData[0][i]);
 
-                // Parse date columns
                 const dateColumns: { date: Date, maleIndex: number, femaleIndex: number }[] = [];
                 for (let i = 6; i < dateHeader.length; i++) {
                     const dateValue = dateHeader[i];
@@ -228,10 +238,12 @@ export default function WorkOrderPage() {
         };
         reader.readAsArrayBuffer(file);
     };
+    
+    const pageTitle = userRole === 'fieldOfficer' ? "Upcoming Duty Schedules" : "Work Order Management";
 
     return (
         <div className="flex flex-col gap-6">
-            <h1 className="text-3xl font-bold tracking-tight">Work Order Management</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
 
             {userRole === 'admin' && (
                 <Card>
@@ -262,9 +274,9 @@ export default function WorkOrderPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Active Work Orders</CardTitle>
+                    <CardTitle>Active Duty Sites</CardTitle>
                     <CardDescription>
-                        {userRole === 'admin' ? 'List of all sites with active work orders.' : 'List of sites in your assigned districts with active work orders.'}
+                        {userRole === 'admin' ? 'List of all sites with upcoming work orders.' : 'List of sites in your assigned districts with upcoming duties.'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -273,15 +285,15 @@ export default function WorkOrderPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
                     ) : Object.keys(workOrdersBySite).length === 0 ? (
-                        <p className="text-center text-muted-foreground py-10">No active work orders found.</p>
+                        <p className="text-center text-muted-foreground py-10">No upcoming duties found.</p>
                     ) : (
                         <div className="space-y-4">
                             {Object.entries(workOrdersBySite).map(([siteId, orders]) => {
                                 const siteInfo = orders[0];
                                 return (
                                 <div key={siteId} className="p-4 border rounded-lg">
-                                    <div className="flex justify-between items-start">
-                                        <div>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                        <div className='flex-1'>
                                             <h3 className="font-semibold text-lg">{siteInfo.siteName}</h3>
                                             <p className="text-sm text-muted-foreground">{siteInfo.clientName} - <Badge variant="secondary">{siteInfo.district}</Badge></p>
                                         </div>
@@ -325,3 +337,5 @@ export default function WorkOrderPage() {
         </div>
     );
 }
+
+    

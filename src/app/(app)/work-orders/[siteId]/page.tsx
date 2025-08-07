@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,17 +44,30 @@ export default function AssignGuardsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [userRole, setUserRole] = useState<string | null>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    const [userRole, setUserRole] = useState<string | null>(null);
 
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                try {
-                    const tokenResult = await user.getIdTokenResult();
-                    const claims = tokenResult.claims;
-                    setUserRole(claims.role as string || 'user');
-                    setAssignedDistricts(claims.districts as string[] || []);
+                setUser(user);
+                 try {
+                    if (user.email === 'admin@cisskerala.app') {
+                        setUserRole('admin');
+                        setAssignedDistricts([]);
+                    } else {
+                        const officersRef = collection(db, "fieldOfficers");
+                        const q = query(officersRef, where("uid", "==", user.uid));
+                        const snapshot = await getDocs(q);
+                        if (!snapshot.empty) {
+                            const officerData = snapshot.docs[0].data();
+                            setUserRole('fieldOfficer');
+                            setAssignedDistricts(officerData.assignedDistricts || []);
+                        } else {
+                            setUserRole('user');
+                        }
+                    }
                 } catch (e) {
                     setUserRole('user');
                     setAssignedDistricts([]);
@@ -120,11 +133,11 @@ export default function AssignGuardsPage() {
     }, [siteId, userRole, assignedDistricts]);
     
 
-    if (isLoading) {
+    if (isLoading || userRole === null) {
         return (
             <div className="flex justify-center items-center h-40">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2">Loading Site Work Orders...</p>
+                <p className="ml-2">Loading Site Duty Schedules...</p>
             </div>
         );
     }
@@ -136,7 +149,7 @@ export default function AssignGuardsPage() {
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
                 <Button asChild variant="secondary" className="mt-4">
-                    <Link href="/work-orders"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Work Orders</Link>
+                    <Link href="/work-orders"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Schedules</Link>
                 </Button>
             </Alert>
          )
@@ -163,7 +176,7 @@ export default function AssignGuardsPage() {
                 </CardHeader>
                 <CardContent>
                     {workOrders.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-10">No work orders found for this site.</p>
+                        <p className="text-center text-muted-foreground py-10">No upcoming duties found for this site.</p>
                     ) : (
                         <div className="space-y-4">
                            {workOrders.map(order => (
@@ -189,3 +202,5 @@ export default function AssignGuardsPage() {
         </div>
     )
 }
+
+    

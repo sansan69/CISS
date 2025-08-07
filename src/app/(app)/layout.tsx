@@ -23,7 +23,7 @@ import {
   DownloadCloud,
   ChevronLeft,
   ShieldAlert,
-  ClipboardList, // New Icon
+  ClipboardList,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -44,6 +44,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/s
 interface NavItem {
   href: string;
   label: string;
+  fieldOfficerLabel?: string;
   icon: React.ElementType;
   exact?: boolean;
   adminOnly?: boolean;
@@ -53,7 +54,7 @@ interface NavItem {
 const allNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/employees', label: 'Employees', icon: Users },
-  { href: '/work-orders', label: 'Work Orders', icon: ClipboardList },
+  { href: '/work-orders', label: 'Work Orders', fieldOfficerLabel: 'Upcoming Duty Schedules', icon: ClipboardList },
   { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, adminOnly: true },
   { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
   { href: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
@@ -68,9 +69,10 @@ const settingsSubItems: NavItem[] = [
     { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
 ];
 
-function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
+function NavLink({ item, userRole }: { item: NavItem; onClick?: () => void; userRole: string | null }) {
   const pathname = usePathname();
   const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const label = (userRole === 'fieldOfficer' && item.fieldOfficerLabel) ? item.fieldOfficerLabel : item.label;
 
   return (
     <Link
@@ -82,7 +84,7 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
       )}
     >
       <item.icon className="h-4 w-4" />
-      {item.label}
+      {label}
     </Link>
   );
 }
@@ -91,19 +93,19 @@ function MainNavLinks({ onLinkClick, userRole }: { onLinkClick?: () => void; use
     const visibleItems = allNavItems.filter(item => !item.adminOnly || userRole === 'admin');
     return (
         <>
-        {visibleItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
+        {visibleItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} userRole={userRole} />)}
         </>
     )
 }
 
-function SettingsNavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
+function SettingsNavLinks({ onLinkClick, userRole }: { onLinkClick?: () => void, userRole: string | null }) {
      return (
         <>
         <Link href="/dashboard" onClick={onLinkClick} className="flex items-center gap-3 rounded-lg px-3 py-2 text-primary transition-all hover:bg-muted mb-2 font-semibold border">
             <ChevronLeft className="h-4 w-4" />
             Back to Main Menu
         </Link>
-        {settingsSubItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} />)}
+        {settingsSubItems.map((item) => <NavLink key={item.href} item={item} onClick={onLinkClick} userRole={userRole} />)}
         </>
     )
 }
@@ -133,7 +135,7 @@ function MobileNav({ user, userRole, onLogout, isOpen, onOpenChange }: { user: U
                     </Link>
                 </div>
                 <nav className="grid gap-2 p-4 text-base font-medium">
-                   {isSettingsPage ? <SettingsNavLinks onLinkClick={handleLinkClick} /> : <MainNavLinks onLinkClick={handleLinkClick} userRole={userRole} />}
+                   {isSettingsPage ? <SettingsNavLinks onLinkClick={handleLinkClick} userRole={userRole} /> : <MainNavLinks onLinkClick={handleLinkClick} userRole={userRole} />}
                 </nav>
                  <div className="mt-auto flex flex-col gap-4 p-4 border-t">
                     <UserNav user={user} onLogout={onLogout} isMobile={true}/>
@@ -191,20 +193,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
       setIsLoadingAuth(true);
       if (user) {
         setAuthUser(user);
-        // This is a temporary client-side check. For real security,
-        // you would rely on Firestore rules driven by these claims.
+        
         if (user.email === 'admin@cisskerala.app') {
             setUserRole('admin');
         } else {
-            // A simplified check for non-admin users. 
-            // In a real app, you'd check a custom claim.
             const fieldOfficersCollection = collection(db, 'fieldOfficers');
             const q = query(fieldOfficersCollection, where("uid", "==", user.uid));
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
                 setUserRole('fieldOfficer');
             } else {
-                setUserRole('user'); // Or some other default role
+                setUserRole('user'); 
             }
         }
       } else {
@@ -248,7 +247,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex-1">
             <nav className="grid items-start gap-1 p-4 text-sm font-medium">
-               {isSettingsPage ? <SettingsNavLinks /> : <MainNavLinks userRole={userRole} />}
+               {isSettingsPage ? <SettingsNavLinks userRole={userRole} /> : <MainNavLinks userRole={userRole} />}
             </nav>
           </div>
         </div>
@@ -271,3 +270,5 @@ export function AppLayout({ children }: { children: ReactNode }) {
 }
 
 export default AppLayout;
+
+    
