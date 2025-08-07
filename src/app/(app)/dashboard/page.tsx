@@ -8,7 +8,7 @@ import { db, auth } from '@/lib/firebase';
 import { collection, getCountFromServer, getDocs, query, where, Timestamp, orderBy, limit } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { format, subMonths, startOfMonth, startOfToday, endOfToday, addDays } from 'date-fns';
+import { format, subMonths, startOfMonth, startOfToday, addDays, endOfDay } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -79,8 +79,18 @@ export default function DashboardPage() {
                         setUserRole('admin');
                         setAssignedDistricts([]);
                     } else {
-                        setUserRole(claims.role as string || 'user'); 
-                        setAssignedDistricts(claims.districts as string[] || []);
+                        // For non-admins, check if they are a field officer
+                        const officersRef = collection(db, "fieldOfficers");
+                        const q = query(officersRef, where("uid", "==", user.uid));
+                        const snapshot = await getDocs(q);
+                        if (!snapshot.empty) {
+                            const officerData = snapshot.docs[0].data();
+                            setUserRole('fieldOfficer');
+                            setAssignedDistricts(officerData.assignedDistricts || []);
+                        } else {
+                            setUserRole('user'); // Or another default role
+                            setAssignedDistricts([]);
+                        }
                     }
                 } catch (e) {
                     console.error("Error getting user claims:", e);
@@ -106,11 +116,11 @@ export default function DashboardPage() {
             setIsLoading(true);
             setError(null);
             try {
-                let employeesRef: any = collection(db, "employees");
+                let employeesQueryBuilder: any = collection(db, "employees");
 
                 // If field officer, filter by their assigned districts
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
-                    employeesRef = query(employeesRef, where('district', 'in', assignedDistricts));
+                    employeesQueryBuilder = query(employeesQueryBuilder, where('district', 'in', assignedDistricts));
                 } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
                     // Field officer has no assigned districts, so they see nothing.
                     setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0 });
@@ -122,17 +132,17 @@ export default function DashboardPage() {
                 }
 
                 // --- Common Queries for all roles ---
-                const totalQuery = getCountFromServer(employeesRef);
-                const activeQuery = getCountFromServer(query(employeesRef, where('status', '==', 'Active')));
-                const onLeaveQuery = getCountFromServer(query(employeesRef, where('status', '==', 'OnLeave')));
-                const inactiveQuery = getCountFromServer(query(employeesRef, where('status', 'in', ['Inactive', 'Exited'])));
+                const totalQuery = getCountFromServer(employeesQueryBuilder);
+                const activeQuery = getCountFromServer(query(employeesQueryBuilder, where('status', '==', 'Active')));
+                const onLeaveQuery = getCountFromServer(query(employeesQueryBuilder, where('status', '==', 'OnLeave')));
+                const inactiveQuery = getCountFromServer(query(employeesQueryBuilder, where('status', 'in', ['Inactive', 'Exited'])));
                 
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-                const hiresQuery = query(employeesRef, where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
+                const hiresQuery = query(employeesQueryBuilder, where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
                 
-                const recentActivityQuery = query(employeesRef, orderBy("createdAt", "desc"), limit(5));
+                const recentActivityQuery = query(employeesQueryBuilder, orderBy("createdAt", "desc"), limit(5));
 
-                const queriesToRun = [
+                const queriesToRun: Promise<any>[] = [
                     totalQuery,
                     activeQuery,
                     onLeaveQuery,
@@ -145,7 +155,7 @@ export default function DashboardPage() {
                 let dutiesQueryPromise: Promise<any> | null = null;
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                     const today = startOfToday();
-                    const nextWeek = endOfToday(addDays(today, 7));
+                    const nextWeek = endOfDay(addDays(today, 6)); // end of 7th day from today
                     const dutiesQuery = query(
                         collection(db, "workOrders"),
                         where("district", "in", assignedDistricts),

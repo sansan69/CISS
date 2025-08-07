@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, endBefore, limitToLast } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -66,9 +66,9 @@ export default function EmployeeDirectoryPage() {
     const [clients, setClients] = useState<ClientOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [hasNextPage, setHasNextPage] = useState(false);
+    const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-
+    const [totalCount, setTotalCount] = useState(0);
 
     // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -81,18 +81,25 @@ export default function EmployeeDirectoryPage() {
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     
-    useEffect(() => {
+     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 try {
-                    const tokenResult = await user.getIdTokenResult();
-                    const claims = tokenResult.claims;
                     if (user.email === 'admin@cisskerala.app') {
                         setUserRole('admin');
                         setAssignedDistricts([]);
                     } else {
-                        setUserRole(claims.role as string || 'user'); 
-                        setAssignedDistricts(claims.districts as string[] || []);
+                        const officersRef = collection(db, "fieldOfficers");
+                        const q = query(officersRef, where("uid", "==", user.uid));
+                        const snapshot = await getDocs(q);
+                        if (!snapshot.empty) {
+                            const officerData = snapshot.docs[0].data();
+                            setUserRole('fieldOfficer');
+                            setAssignedDistricts(officerData.assignedDistricts || []);
+                        } else {
+                            setUserRole('user');
+                            setAssignedDistricts([]);
+                        }
                     }
                 } catch (e) {
                     setUserRole('user');
@@ -119,11 +126,14 @@ export default function EmployeeDirectoryPage() {
     }, [router, searchParams]);
     
     const handleFilterChange = (filterType: string, value: string) => {
-        updateUrlParams({ [filterType]: value, page: null });
+        updateUrlParams({ [filterType]: value, page: '1' });
     };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        updateUrlParams({ searchTerm: e.target.value, page: null });
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('searchTerm', e.target.value);
+        params.delete('page');
+        router.push(`/employees?${params.toString()}`, { scroll: false });
     };
 
     useEffect(() => {
@@ -138,8 +148,8 @@ export default function EmployeeDirectoryPage() {
         fetchClients();
     }, [toast]);
 
-    const fetchData = useCallback(async () => {
-        if (userRole === null) return; // Don't fetch until we know the user's role
+    const fetchData = useCallback(async (pageDirection: 'next' | 'prev' | 'first' = 'first') => {
+        if (userRole === null) return;
 
         setIsLoading(true);
         setError(null);
@@ -150,33 +160,28 @@ export default function EmployeeDirectoryPage() {
             if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                 q = query(q, where('district', 'in', assignedDistricts));
             } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
-                 // If a field officer has no districts assigned, they should see no employees.
                 setEmployees([]);
-                setHasNextPage(false);
+                setTotalCount(0);
                 setIsLoading(false);
                 return;
             }
-
-            if (searchTerm) {
-                q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
-            }
-            if (client !== 'all') {
-                q = query(q, where('clientName', '==', client));
-            }
-            if (status !== 'all') {
-                q = query(q, where('status', '==', status));
-            }
-            if (district !== 'all' && userRole !== 'fieldOfficer') { // Field officers are already filtered by their districts
-                q = query(q, where('district', '==', district));
-            }
-
-            if (!searchTerm.trim()) {
-                q = query(q, orderBy('createdAt', 'desc'));
-            }
-
+            
+            if (searchTerm) q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
+            if (client !== 'all') q = query(q, where('clientName', '==', client));
+            if (status !== 'all') q = query(q, where('status', '==', status));
+            if (district !== 'all' && userRole !== 'fieldOfficer') q = query(q, where('district', '==', district));
+            
+            const countSnap = await getCountFromServer(q);
+            setTotalCount(countSnap.data().count);
+            
+            if (!searchTerm.trim()) q = query(q, orderBy('createdAt', 'desc'));
+            
             let finalQuery = q;
-            if (page > 1 && lastVisible) {
+
+            if (pageDirection === 'next' && lastVisible) {
                  finalQuery = query(q, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
+            } else if (pageDirection === 'prev' && firstVisible) {
+                 finalQuery = query(q, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
             } else {
                 finalQuery = query(q, limit(ITEMS_PER_PAGE));
             }
@@ -185,17 +190,8 @@ export default function EmployeeDirectoryPage() {
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
             setEmployees(fetchedEmployees);
             
+            setFirstVisible(documentSnapshots.docs[0]);
             setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
-
-            // Check if there is a next page
-            const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
-            if(lastDoc) {
-                const nextQuery = query(q, startAfter(lastDoc), limit(1));
-                const nextSnapshot = await getDocs(nextQuery);
-                setHasNextPage(!nextSnapshot.empty);
-            } else {
-                setHasNextPage(false);
-            }
 
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
@@ -205,12 +201,15 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [page, searchTerm, client, status, district, userRole, assignedDistricts, lastVisible]);
-
+    }, [client, district, firstVisible, lastVisible, searchTerm, status, userRole, assignedDistricts]);
+    
     useEffect(() => {
-        fetchData();
+        if (userRole !== null) {
+            fetchData('first');
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, searchTerm, client, status, district, userRole, assignedDistricts]);
+    }, [page, searchTerm, client, status, district, userRole]);
+
 
     const handleConfirmDelete = async () => {
         if (!employeeToDelete) return;
@@ -218,7 +217,7 @@ export default function EmployeeDirectoryPage() {
         try {
             await deleteDoc(doc(db, "employees", employeeToDelete.id));
             toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-            fetchData(); // Refetch current page
+            fetchData('first'); 
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
         } finally {
@@ -265,6 +264,8 @@ export default function EmployeeDirectoryPage() {
             default: return 'outline';
         }
     };
+
+    const hasNextPage = page * ITEMS_PER_PAGE < totalCount;
 
     return (
         <div className="flex flex-col gap-6">
@@ -415,8 +416,10 @@ export default function EmployeeDirectoryPage() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <div className="flex justify-between items-center w-full">
-                        <span className="text-sm text-muted-foreground">Page {page}</span>
+                     <div className="flex justify-between items-center w-full">
+                        <span className="text-sm text-muted-foreground">
+                            Showing {Math.min(page * ITEMS_PER_PAGE - ITEMS_PER_PAGE + 1, totalCount)}-{Math.min(page * ITEMS_PER_PAGE, totalCount)} of {totalCount} employees.
+                        </span>
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={() => updateUrlParams({page: page - 1})} disabled={isLoading || page <= 1}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
