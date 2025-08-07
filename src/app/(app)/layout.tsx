@@ -34,8 +34,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import React, { useEffect, useState } from 'react';
-import { auth } from '@/lib/firebase'; 
-import { onAuthStateChanged, User, signOut, getIdTokenResult } from 'firebase/auth'; 
+import { auth, db } from '@/lib/firebase'; 
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { cn } from '@/lib/utils';
 import { Toaster } from "@/components/ui/toaster"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -127,7 +128,7 @@ function MobileNav({ user, userRole, onLogout, isOpen, onOpenChange }: { user: U
                 <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                 <div className="flex h-16 items-center border-b px-4">
                      <Link href="/dashboard" onClick={handleLinkClick} className="flex items-center gap-2 font-semibold">
-                        <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
+                        <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} data-ai-hint="company logo"/>
                         <span className="text-lg">CISS Workforce</span>
                     </Link>
                 </div>
@@ -241,7 +242,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-16 items-center border-b px-6">
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-              <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} />
+              <Image src="/ciss-logo.png" alt="CISS Logo" width={32} height={32} unoptimized={true} data-ai-hint="company logo"/>
               <span className="text-xl">CISS Workforce</span>
             </Link>
           </div>
