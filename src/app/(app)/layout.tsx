@@ -190,17 +190,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
       setIsLoadingAuth(true);
       if (user) {
         setAuthUser(user);
-        try {
-            const tokenResult = await getIdTokenResult(user);
-            const claims = tokenResult.claims;
-            if (user.email === 'admin@cisskerala.app') {
-                setUserRole('admin');
+        // This is a temporary client-side check. For real security,
+        // you would rely on Firestore rules driven by these claims.
+        if (user.email === 'admin@cisskerala.app') {
+            setUserRole('admin');
+        } else {
+            // A simplified check for non-admin users. 
+            // In a real app, you'd check a custom claim.
+            const fieldOfficersCollection = collection(db, 'fieldOfficers');
+            const q = query(fieldOfficersCollection, where("uid", "==", user.uid));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                setUserRole('fieldOfficer');
             } else {
-                setUserRole(claims.role as string || 'user'); 
+                setUserRole('user'); // Or some other default role
             }
-        } catch (e) {
-            console.error("Error fetching user claims, defaulting to 'user' role.", e);
-            setUserRole('user'); // Default to lowest permission on error
         }
       } else {
         setAuthUser(null);

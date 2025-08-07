@@ -67,6 +67,8 @@ export default function EmployeeDirectoryPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [hasNextPage, setHasNextPage] = useState(false);
+    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+
 
     // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -173,12 +175,8 @@ export default function EmployeeDirectoryPage() {
             }
 
             let finalQuery = q;
-            if (page > 1) {
-                const snapshot = await getDocs(query(q, limit( (page -1) * ITEMS_PER_PAGE)));
-                const lastDoc = snapshot.docs[snapshot.docs.length-1];
-                if (lastDoc) {
-                    finalQuery = query(q, startAfter(lastDoc), limit(ITEMS_PER_PAGE));
-                }
+            if (page > 1 && lastVisible) {
+                 finalQuery = query(q, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
             } else {
                 finalQuery = query(q, limit(ITEMS_PER_PAGE));
             }
@@ -187,9 +185,10 @@ export default function EmployeeDirectoryPage() {
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
             setEmployees(fetchedEmployees);
             
-            const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+            setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
 
             // Check if there is a next page
+            const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
             if(lastDoc) {
                 const nextQuery = query(q, startAfter(lastDoc), limit(1));
                 const nextSnapshot = await getDocs(nextQuery);
@@ -206,11 +205,12 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [page, searchTerm, client, status, district, userRole, assignedDistricts]);
+    }, [page, searchTerm, client, status, district, userRole, assignedDistricts, lastVisible]);
 
     useEffect(() => {
         fetchData();
-    }, [fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, searchTerm, client, status, district, userRole, assignedDistricts]);
 
     const handleConfirmDelete = async () => {
         if (!employeeToDelete) return;
@@ -474,7 +474,7 @@ export default function EmployeeDirectoryPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                            <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
                                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Delete
                             </AlertDialogAction>
                         </AlertDialogFooter>

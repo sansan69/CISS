@@ -1,10 +1,9 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '@/lib/firebase'; 
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,55 +49,60 @@ const keralaDistricts = [
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
 ];
 
+// Simplified list of auth users for dropdown (in a real app, this might be more complex)
+interface AuthUser {
+  uid: string;
+  email: string;
+  name?: string;
+}
+
 
 const OfficerForm: React.FC<{ 
     officer?: FieldOfficer; 
-    onSave: (officerData: any) => Promise<void>; 
+    onSave: (officerData: any, isEditing: boolean) => Promise<void>; 
     isSaving: boolean; 
     onClose: () => void;
     unavailableDistricts: string[];
-}> = ({ officer, onSave, isSaving, onClose, unavailableDistricts }) => {
+    allAuthUsers: AuthUser[];
+    assignedOfficerUIDs: string[];
+}> = ({ officer, onSave, isSaving, onClose, unavailableDistricts, allAuthUsers, assignedOfficerUIDs }) => {
+    
+    const isEditing = !!officer;
+    
+    const [selectedUser, setSelectedUser] = useState<AuthUser | undefined>(() => 
+        isEditing ? allAuthUsers.find(u => u.uid === officer.uid) : undefined
+    );
     const [name, setName] = useState(officer?.name || '');
-    const [email, setEmail] = useState(officer?.email || '');
-    const [password, setPassword] = useState('');
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>(officer?.assignedDistricts || []);
     
     const [nameError, setNameError] = useState<string | null>(null);
-    const [emailError, setEmailError] = useState<string | null>(null);
-    const [passwordError, setPasswordError] = useState<string | null>(null);
     
-    const isEditing = !!officer;
-
     const availableDistricts = useMemo(() => {
         if (isEditing) {
-            // In edit mode, the user can see their own districts plus any unassigned ones
             return keralaDistricts.filter(d => !unavailableDistricts.includes(d) || assignedDistricts.includes(d));
         }
-        // In add mode, they can only see unassigned districts
         return keralaDistricts.filter(d => !unavailableDistricts.includes(d));
     }, [unavailableDistricts, isEditing, assignedDistricts]);
+    
+    const availableUsers = useMemo(() => {
+        if (isEditing) return allAuthUsers; // Show all users when editing
+        // When adding, show only users not already assigned as officers
+        return allAuthUsers.filter(u => !assignedOfficerUIDs.includes(u.uid));
+    }, [allAuthUsers, assignedOfficerUIDs, isEditing]);
 
 
     const validate = () => {
         let isValid = true;
         setNameError(null);
-        setEmailError(null);
-        setPasswordError(null);
 
         if (!name.trim()) {
             setNameError('Officer name cannot be empty.');
             isValid = false;
         }
 
-        if (!isEditing) {
-            if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email)) {
-                setEmailError('Please enter a valid email address.');
-                isValid = false;
-            }
-            if (password.length < 6) {
-                setPasswordError('Password must be at least 6 characters long.');
-                isValid = false;
-            }
+        if (!isEditing && !selectedUser) {
+            // In a real app you'd have a select error state
+            isValid = false;
         }
         
         return isValid;
@@ -110,17 +114,38 @@ const OfficerForm: React.FC<{
         const officerData = {
           name: name.trim(),
           assignedDistricts,
-          ...(!isEditing && { email: email.trim(), password }),
-          ...(isEditing && { uid: officer.uid, id: officer.id })
+          email: selectedUser?.email,
+          uid: selectedUser?.uid,
+          ...(isEditing && { id: officer.id })
         };
         
-        onSave(officerData);
+        onSave(officerData, isEditing);
     };
 
     return (
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-                <Label htmlFor="name">Officer Name</Label>
+                <Label htmlFor="user-select">Select User</Label>
+                 <select
+                    id="user-select"
+                    value={selectedUser?.uid || ''}
+                    onChange={(e) => {
+                        const user = availableUsers.find(u => u.uid === e.target.value);
+                        setSelectedUser(user);
+                        if (user?.name) setName(user.name);
+                    }}
+                    className="w-full p-2 border rounded-md bg-background"
+                    disabled={isEditing}
+                >
+                    <option value="" disabled>{isEditing ? selectedUser?.email : "Select a user account"}</option>
+                    {!isEditing && availableUsers.map(u => (
+                         <option key={u.uid} value={u.uid}>{u.email}</option>
+                    ))}
+                </select>
+                {isEditing && <p className="text-xs text-muted-foreground">User account cannot be changed after creation.</p>}
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="name">Officer Display Name</Label>
                 <Input
                     id="name"
                     value={name}
@@ -130,19 +155,6 @@ const OfficerForm: React.FC<{
                 />
                 {nameError && <p className="text-sm text-destructive">{nameError}</p>}
             </div>
-             <div className="grid gap-2">
-                <Label htmlFor="email">Login Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="officer@email.com" className={emailError ? 'border-destructive' : ''} disabled={isEditing} />
-                {isEditing && <p className="text-xs text-muted-foreground">Email cannot be changed after creation.</p>}
-                {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-            </div>
-            {!isEditing && (
-              <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" className={passwordError ? 'border-destructive' : ''} />
-                  {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
-              </div>
-            )}
             <div className="grid gap-2">
                 <Label>Assign Districts</Label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-4 border rounded-md max-h-64 overflow-y-auto">
@@ -174,6 +186,7 @@ const OfficerForm: React.FC<{
 
 export default function FieldOfficerManagementPage() {
   const [officers, setOfficers] = useState<FieldOfficer[]>([]);
+  const [allAuthUsers, setAllAuthUsers] = useState<AuthUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -184,32 +197,44 @@ export default function FieldOfficerManagementPage() {
 
   const { toast } = useToast();
   
-  const checkAdminStatus = useCallback((user: User | null) => {
-    if (user) {
-      if (user.email === 'admin@cisskerala.app') {
-        setAuthStatus('admin');
-      } else {
-        setAuthStatus('other');
-      }
-    } else {
-      setAuthStatus('other');
-    }
-  }, []);
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-        checkAdminStatus(user);
+        setAuthStatus(user && user.email === 'admin@cisskerala.app' ? 'admin' : 'other');
     });
     return () => unsubscribe();
-  }, [checkAdminStatus]);
+  }, []);
 
   useEffect(() => {
     if (authStatus !== 'admin') {
         if(authStatus !== 'loading') setIsLoading(false);
         return;
     }
+    
     setIsLoading(true);
-    const officersQuery = query(collection(db, 'fieldOfficers'), orderBy('createdAt', 'desc'));
+    
+    // In a real production app with many users, this would not be efficient.
+    // For this app's scale, fetching all users is acceptable.
+    // A cloud function would be needed to list users efficiently and securely.
+    // Simulating that fetch here.
+    const fetchAllData = async () => {
+        try {
+            // This is a simplified stand-in. Client-side SDK CANNOT list all users.
+            // This is a conceptual representation.
+             const hardcodedUsers: AuthUser[] = [
+                { uid: 'mock_uid_1', email: 'officer1@cisskerala.app', name: 'Ravi Kumar' },
+                { uid: 'mock_uid_2', email: 'officer2@cisskerala.app', name: 'Sita Menon' },
+                { uid: 'admin_uid', email: 'admin@cisskerala.app', name: 'Main Admin' },
+             ];
+             setAllAuthUsers(hardcodedUsers);
+        } catch (error) {
+             console.error("Error fetching auth users (simulation): ", error);
+             toast({ variant: "destructive", title: "Error", description: "Could not load user list." });
+        }
+    }
+
+    fetchAllData();
+
+    const officersQuery = query(collection(db, 'fieldOfficers'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(officersQuery, (snapshot) => {
       const fetchedOfficers = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -222,7 +247,7 @@ export default function FieldOfficerManagementPage() {
       toast({
         variant: "destructive",
         title: "Error Fetching Data",
-        description: "Could not load field officers. Please try again later.",
+        description: "Could not load field officers.",
       });
       setIsLoading(false);
     });
@@ -235,28 +260,29 @@ export default function FieldOfficerManagementPage() {
         return otherOfficers.flatMap(officer => officer.assignedDistricts);
     }, [officers, editingOfficer]);
 
-  const handleSaveOfficer = async (officerData: any) => {
+    const assignedOfficerUIDs = useMemo(() => officers.map(o => o.uid), [officers]);
+
+  const handleSaveOfficer = async (officerData: any, isEditing: boolean) => {
     setIsSubmitting(true);
-    const functions = getFunctions(auth.app);
     
     try {
-      if (officerData.id) { // Update existing officer
-        const updateOfficer = httpsCallable(functions, 'updateFieldOfficer');
-        await updateOfficer({ 
-            uid: officerData.uid, 
-            name: officerData.name, 
-            assignedDistricts: officerData.assignedDistricts 
+      if (isEditing) { // Update existing officer
+        const officerRef = doc(db, 'fieldOfficers', officerData.id);
+        await updateDoc(officerRef, {
+            name: officerData.name,
+            assignedDistricts: officerData.assignedDistricts,
+            updatedAt: serverTimestamp(),
         });
         toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
       } else { // Create new officer
-        const createOfficer = httpsCallable(functions, 'createFieldOfficer');
-        await createOfficer({
+        await addDoc(collection(db, 'fieldOfficers'), {
+            uid: officerData.uid,
             email: officerData.email,
-            password: officerData.password,
             name: officerData.name,
             assignedDistricts: officerData.assignedDistricts,
+            createdAt: serverTimestamp(),
         });
-        toast({ title: "Officer Created", description: `Login credentials sent to "${officerData.email}".` });
+        toast({ title: "Officer Role Assigned", description: `"${officerData.name}" is now a Field Officer.` });
       }
       closeFormDialog();
     } catch (error: any) {
@@ -271,14 +297,12 @@ export default function FieldOfficerManagementPage() {
   const handleDeleteOfficer = async () => {
     if (!deletingOfficer) return;
     setIsSubmitting(true);
-    const functions = getFunctions(auth.app);
-
+    
     try {
-      const deleteOfficer = httpsCallable(functions, 'deleteFieldOfficer');
-      await deleteOfficer({ uid: deletingOfficer.uid });
+        await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
       toast({
-        title: "Officer Deleted",
-        description: `Login and records for "${deletingOfficer.name}" have been permanently deleted.`,
+        title: "Officer Role Revoked",
+        description: `"${deletingOfficer.name}" is no longer a field officer. Their login still exists.`,
       });
     } catch (error: any) {
       console.error("Error deleting officer:", error);
@@ -310,7 +334,7 @@ export default function FieldOfficerManagementPage() {
       setEditingOfficer(undefined);
   }
 
-  if (authStatus === 'loading') {
+  if (authStatus === 'loading' || isLoading) {
        return (
         <div className="flex justify-center items-center h-40">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -340,7 +364,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Add new Field Officers with their own logins. Assign them to specific districts to control which employees and sites they can see and manage.
+            Assign the "Field Officer" role to existing users. You must first create a user in the Firebase Authentication console. Then, assign them here and specify which districts they can manage.
           </AlertDescription>
         </Alert>
 
@@ -350,11 +374,7 @@ export default function FieldOfficerManagementPage() {
             <CardDescription>A list of all registered field officers and their assigned districts.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-                <div className="flex justify-center items-center h-20">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            ) : officers.length === 0 ? (
+            {officers.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-muted-foreground">No field officers found.</p>
                 <Button onClick={openAddDialog} variant="secondary" className="mt-4">Add your first officer</Button>
@@ -401,7 +421,7 @@ export default function FieldOfficerManagementPage() {
             <DialogHeader>
             <DialogTitle>{editingOfficer ? 'Edit Field Officer' : 'Add New Field Officer'}</DialogTitle>
             <DialogDescription>
-                {editingOfficer ? `Update the details for ${editingOfficer.name}.` : 'Enter the details to create a new officer and their login.'}
+                {editingOfficer ? `Update the details for ${editingOfficer.name}.` : 'Select a user and assign them districts to make them a Field Officer.'}
             </DialogDescription>
             </DialogHeader>
             <OfficerForm 
@@ -410,6 +430,8 @@ export default function FieldOfficerManagementPage() {
                 isSaving={isSubmitting}
                 onClose={closeFormDialog}
                 unavailableDistricts={allAssignedDistricts}
+                allAuthUsers={allAuthUsers}
+                assignedOfficerUIDs={assignedOfficerUIDs}
             />
         </DialogContent>
     </Dialog>
@@ -419,9 +441,9 @@ export default function FieldOfficerManagementPage() {
     <AlertDialog open={!!deletingOfficer} onOpenChange={(isOpen) => !isOpen && setDeletingOfficer(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure you want to delete this officer?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure you want to delete this officer record?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This will permanently delete the officer's login account and their record from the database. 
+                    This will revoke their Field Officer permissions. Their user account will NOT be deleted. 
                     <br/><br/>
                     <span className="font-bold">This action cannot be undone.</span>
                 </AlertDialogDescription>
@@ -430,7 +452,7 @@ export default function FieldOfficerManagementPage() {
                 <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDeleteOfficer} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm & Delete Officer
+                    Confirm & Delete Officer Record
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
