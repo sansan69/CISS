@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, arrayUnion, arrayRemove, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
@@ -57,11 +57,12 @@ const AssignGuardsDialog: React.FC<{
 }> = ({ workOrder, isOpen, onClose, availableGuards }) => {
     const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedGuards, setSelectedGuards] = useState(workOrder.assignedGuards || []);
+    // Ensure selectedGuards is always an array
+    const [selectedGuards, setSelectedGuards] = useState(Array.isArray(workOrder.assignedGuards) ? workOrder.assignedGuards : []);
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        setSelectedGuards(workOrder.assignedGuards || []);
+        setSelectedGuards(Array.isArray(workOrder.assignedGuards) ? workOrder.assignedGuards : []);
     }, [workOrder]);
 
     const filteredGuards = useMemo(() => {
@@ -304,9 +305,16 @@ export default function AssignGuardsPage() {
         setIsLoadingGuards(true);
 
         try {
+            const districtsToQuery = userRole === 'admin' ? [workOrder.district] : assignedDistricts;
+            if (districtsToQuery.length === 0) {
+                 setAvailableGuards([]);
+                 setIsLoadingGuards(false);
+                 return;
+            }
+
             const guardsQuery = query(
                 collection(db, "employees"),
-                where("district", "in", assignedDistricts.length > 0 ? assignedDistricts : [workOrder.district]),
+                where("district", "in", districtsToQuery),
                 where("status", "==", "Active")
             );
             const snapshot = await getDocs(guardsQuery);
@@ -374,7 +382,7 @@ export default function AssignGuardsPage() {
                                             <span>Male Required: <Badge>{order.maleGuardsRequired}</Badge></span>
                                             <span>Female Required: <Badge>{order.femaleGuardsRequired}</Badge></span>
                                             <span>Total: <Badge variant="secondary">{order.totalManpower}</Badge></span>
-                                            <span>Assigned: <Badge variant="default">{order.assignedGuards?.length || 0}</Badge></span>
+                                            <span>Assigned: <Badge variant="default">{Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0}</Badge></span>
                                         </div>
                                     </div>
                                     <Button onClick={() => handleOpenAssignDialog(order)}>

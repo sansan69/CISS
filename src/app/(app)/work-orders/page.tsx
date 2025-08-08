@@ -25,7 +25,7 @@ interface WorkOrder {
     maleGuardsRequired: number;
     femaleGuardsRequired: number;
     totalManpower: number;
-    assignedGuards: any;
+    assignedGuards: any[];
 }
 
 export default function WorkOrderPage() {
@@ -208,7 +208,7 @@ export default function WorkOrderPage() {
                                 maleGuardsRequired: maleGuardsRequired,
                                 femaleGuardsRequired: femaleGuardsRequired,
                                 totalManpower: totalManpower,
-                                assignedGuards: {},
+                                assignedGuards: [],
                                 createdAt: serverTimestamp(),
                                 updatedAt: serverTimestamp(),
                             });
@@ -337,5 +337,3 @@ export default function WorkOrderPage() {
         </div>
     );
 }
-
-    
