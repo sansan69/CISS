@@ -69,7 +69,7 @@ const settingsSubItems: NavItem[] = [
     { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
 ];
 
-function NavLink({ item, userRole }: { item: NavItem; onClick?: () => void; userRole: string | null }) {
+function NavLink({ item, onClick, userRole }: { item: NavItem; onClick?: () => void; userRole: string | null }) {
   const pathname = usePathname();
   const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
   const label = (userRole === 'fieldOfficer' && item.fieldOfficerLabel) ? item.fieldOfficerLabel : item.label;
@@ -270,5 +270,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
 }
 
 export default AppLayout;
-
-    
