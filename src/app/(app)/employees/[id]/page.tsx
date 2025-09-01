@@ -413,6 +413,23 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
 });
 TermsPage.displayName = 'TermsPage';
 
+const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
+  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center'}}>
+      <h1 className="text-2xl font-bold mb-4 absolute top-[15mm]">{title}</h1>
+      <Image 
+          src={imageUrl} 
+          alt={title} 
+          layout="fill"
+          objectFit="contain"
+          className="p-[30mm]" // Add padding around image within the page
+          unoptimized={true} 
+          crossOrigin='anonymous'
+          data-ai-hint="identity proof document"
+      />
+      <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+DocumentPage.displayName = 'DocumentPage';
 
 // #endregion
 
@@ -426,6 +443,8 @@ export default function AdminEmployeeProfilePage() {
   const biodataPageRef = useRef<HTMLDivElement>(null);
   const qrPageRef = useRef<HTMLDivElement>(null);
   const termsPageRef = useRef<HTMLDivElement>(null);
+  const idFrontPageRef = useRef<HTMLDivElement>(null);
+  const idBackPageRef = useRef<HTMLDivElement>(null);
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -853,6 +872,9 @@ export default function AdminEmployeeProfilePage() {
     if (employee.profilePictureUrl) imageUrlsToPreload.push(employee.profilePictureUrl);
     if (employee.signatureUrl) imageUrlsToPreload.push(employee.signatureUrl);
     if (employee.qrCodeUrl) imageUrlsToPreload.push(employee.qrCodeUrl);
+    if (employee.identityProofUrlFront) imageUrlsToPreload.push(employee.identityProofUrlFront);
+    if (employee.identityProofUrlBack) imageUrlsToPreload.push(employee.identityProofUrlBack);
+
 
     try {
         await Promise.all(imageUrlsToPreload.map(url => preloadImage(url)));
@@ -903,6 +925,8 @@ export default function AdminEmployeeProfilePage() {
         pagesToRender.push(biodataPageRef.current);
         if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
         pagesToRender.push(termsPageRef.current);
+        if (employee.identityProofUrlFront) pagesToRender.push(idFrontPageRef.current);
+        if (employee.identityProofUrlBack) pagesToRender.push(idBackPageRef.current);
 
         for (const pageElement of pagesToRender.filter(Boolean)) {
             await addPageToPdf(pageElement);
@@ -1082,6 +1106,13 @@ export default function AdminEmployeeProfilePage() {
     }
 
     pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
+
+    if (employee.identityProofUrlFront) {
+        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="Identity Proof (Front)" imageUrl={employee.identityProofUrlFront} pageNumber={pageNumber++} />);
+    }
+    if (employee.identityProofUrlBack) {
+        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="Identity Proof (Back)" imageUrl={employee.identityProofUrlBack} pageNumber={pageNumber++} />);
+    }
 
     return pages;
   };
