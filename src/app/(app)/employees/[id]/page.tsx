@@ -343,7 +343,7 @@ const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber
     <p className="mb-2 text-lg">{toTitleCase(employee.fullName)}</p>
     <p className="mb-8 text-gray-600">{employee.employeeId}</p>
     <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
-      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} data-ai-hint="qr code" />
+      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} crossOrigin="anonymous" data-ai-hint="qr code" />
     </div>
     <div className="mt-8 text-gray-600 max-w-md">
       <p className="font-semibold mb-2">Instructions:</p>
