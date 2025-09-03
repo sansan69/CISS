@@ -127,7 +127,7 @@ const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageN
   <div ref={ref} style={pageStyle}>
     <header className="flex justify-between items-start pb-4 border-b border-gray-300">
       <div className="flex items-center gap-4">
-        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} data-ai-hint="company logo"/>
+        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} crossOrigin="anonymous" data-ai-hint="company logo"/>
         <div>
           <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{toTitleCase(employee.fullName)}</h1>
           <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
@@ -354,7 +354,7 @@ export default function PublicEmployeeProfilePage() {
         const canvas = await html2canvas(element, {
             scale: 2,
             useCORS: true,
-            allowTaint: true,
+            allowTaint: false,
             logging: false,
         });
         const imgData = canvas.toDataURL('image/jpeg', 0.85);
@@ -479,6 +479,8 @@ export default function PublicEmployeeProfilePage() {
               width={100}
               height={100}
               className="rounded-full border-4 border-primary shadow-md object-cover"
+              unoptimized={true}
+              crossOrigin="anonymous"
               data-ai-hint="profile picture"
             />
             <div>

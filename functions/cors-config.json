@@ -1,3 +1,4 @@
+
 [
   {
     "origin": [
@@ -5,7 +6,8 @@
       "http://localhost:3000",
       "https://ciss-workforce.web.app",
       "https://ciss-workforce.firebaseapp.com",
-      "https://cisskerala.site"
+      "https://cisskerala.site",
+      "https://www.cisskerala.site"
     ],
     "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
