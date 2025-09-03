@@ -3,7 +3,8 @@
     "origin": [
       "http://localhost:3000",
       "https://ciss-workforce.web.app",
-      "https://ciss-workforce.firebaseapp.com"
+      "https://ciss-workforce.firebaseapp.com",
+      "https://cisskerala.site"
     ],
     "method": ["GET"],
     "maxAgeSeconds": 3600

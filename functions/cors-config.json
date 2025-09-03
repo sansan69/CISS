@@ -4,7 +4,8 @@
       "https://6000-firebase-studio-1747976322032.cluster-44kx2eiocbhe2tyk3zoyo3ryuo.cloudworkstations.dev",
       "http://localhost:3000",
       "https://ciss-workforce.web.app",
-      "https://ciss-workforce.firebaseapp.com"
+      "https://ciss-workforce.firebaseapp.com",
+      "https://cisskerala.site"
     ],
     "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
