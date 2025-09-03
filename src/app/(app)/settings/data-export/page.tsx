@@ -121,6 +121,24 @@ const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber
   </div>
 ));
 QrPage.displayName = 'QrPage';
+
+const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
+  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center'}}>
+      <h1 className="text-2xl font-bold mb-4 absolute top-[15mm]">{title}</h1>
+      <Image 
+          src={imageUrl} 
+          alt={title} 
+          layout="fill"
+          objectFit="contain"
+          className="p-[30mm]"
+          unoptimized={true} 
+          crossOrigin='anonymous'
+          data-ai-hint="identity proof document"
+      />
+      <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+DocumentPage.displayName = 'DocumentPage';
 // #endregion
 
 export default function DataExportPage() {
@@ -246,10 +264,12 @@ export default function DataExportPage() {
             const employee = employeesToExport[i];
             setCurrentEmployeeForPdf(employee);
             
-            await sleep(500); // Wait for state to update and component to render
+            await sleep(500);
 
             const biodataElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#biodata-page');
             const qrElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#qr-page');
+            const idFrontElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#id-front-page');
+            const idBackElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#id-back-page');
 
             if (!biodataElement) {
                 console.error(`Could not find biodata element for ${employee.fullName}`);
@@ -273,10 +293,16 @@ export default function DataExportPage() {
                 if (employee.qrCodeUrl && qrElement) {
                     await addPageToPdf(qrElement);
                 }
+                if (employee.identityProofUrlFront && idFrontElement) {
+                    await addPageToPdf(idFrontElement);
+                }
+                if (employee.identityProofUrlBack && idBackElement) {
+                    await addPageToPdf(idBackElement);
+                }
                 
                 pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
                 toast({ title: `Generated Kit for ${employee.fullName} (${i+1}/${employeesToExport.length})` });
-                await sleep(1000); // Throttle downloads
+                await sleep(1000);
 
             } catch (err: any) {
                 console.error(`Failed to generate PDF for ${employee.fullName}:`, err);
@@ -296,6 +322,8 @@ export default function DataExportPage() {
                     <div ref={offscreenContainerRef}>
                         <div id="biodata-page"><BiodataPage employee={currentEmployeeForPdf} pageNumber={1} /></div>
                         {currentEmployeeForPdf.qrCodeUrl && <div id="qr-page"><QrPage employee={currentEmployeeForPdf} pageNumber={2} /></div>}
+                        {currentEmployeeForPdf.identityProofUrlFront && <div id="id-front-page"><DocumentPage title="Identity Proof (Front)" imageUrl={currentEmployeeForPdf.identityProofUrlFront} pageNumber={3} /></div>}
+                        {currentEmployeeForPdf.identityProofUrlBack && <div id="id-back-page"><DocumentPage title="Identity Proof (Back)" imageUrl={currentEmployeeForPdf.identityProofUrlBack} pageNumber={4} /></div>}
                     </div>
                 )}
             </div>
@@ -386,4 +414,3 @@ export default function DataExportPage() {
         </>
     );
 }
-
