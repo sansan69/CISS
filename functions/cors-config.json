@@ -7,7 +7,9 @@
       "https://ciss-workforce.web.app",
       "https://ciss-workforce.firebaseapp.com",
       "https://cisskerala.site",
-      "https://www.cisskerala.site"
+      "https://www.cisskerala.site",
+      "https://fo.cisskerala.site",
+      "https://ciss-id9zwfa0i-sansan69s-projects.vercel.app"
     ],
     "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
