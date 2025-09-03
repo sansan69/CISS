@@ -16,6 +16,10 @@
       ]
     }
   ],
+  "storage": {
+    "rules": "storage.rules",
+    "cors": "cors.json"
+  },
   "hosting": {
     "public": "public",
     "ignore": [
