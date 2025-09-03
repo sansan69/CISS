@@ -866,14 +866,19 @@ export default function AdminEmployeeProfilePage() {
     if (!employee) return;
     setIsDownloadingPdf(true);
     toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
+    const legacy = employee as any;
 
     // Preload images to ensure they are cached
-    const imageUrlsToPreload = [];
-    if (employee.profilePictureUrl) imageUrlsToPreload.push(employee.profilePictureUrl);
-    if (employee.signatureUrl) imageUrlsToPreload.push(employee.signatureUrl);
-    if (employee.qrCodeUrl) imageUrlsToPreload.push(employee.qrCodeUrl);
-    if (employee.identityProofUrlFront) imageUrlsToPreload.push(employee.identityProofUrlFront);
-    if (employee.identityProofUrlBack) imageUrlsToPreload.push(employee.identityProofUrlBack);
+    const imageUrlsToPreload = [
+        employee.profilePictureUrl,
+        employee.signatureUrl,
+        employee.qrCodeUrl,
+        employee.identityProofUrlFront,
+        legacy.idProofDocumentUrlFront,
+        legacy.idProofDocumentUrl,
+        employee.identityProofUrlBack,
+        legacy.idProofDocumentUrlBack,
+    ].filter(Boolean);
 
 
     try {
@@ -925,8 +930,8 @@ export default function AdminEmployeeProfilePage() {
         pagesToRender.push(biodataPageRef.current);
         if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
         pagesToRender.push(termsPageRef.current);
-        if (employee.identityProofUrlFront) pagesToRender.push(idFrontPageRef.current);
-        if (employee.identityProofUrlBack) pagesToRender.push(idBackPageRef.current);
+        if (employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl) pagesToRender.push(idFrontPageRef.current);
+        if (employee.identityProofUrlBack || legacy.idProofDocumentUrlBack) pagesToRender.push(idBackPageRef.current);
 
         for (const pageElement of pagesToRender.filter(Boolean)) {
             await addPageToPdf(pageElement);
@@ -1095,6 +1100,10 @@ export default function AdminEmployeeProfilePage() {
   
   const renderOffscreenPages = () => {
     if (!employee) return null;
+    const legacy = employee as any;
+    
+    const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
+    const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
 
     const pages = [];
     let pageNumber = 1;
@@ -1107,11 +1116,11 @@ export default function AdminEmployeeProfilePage() {
 
     pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
 
-    if (employee.identityProofUrlFront) {
-        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="Identity Proof (Front)" imageUrl={employee.identityProofUrlFront} pageNumber={pageNumber++} />);
+    if (idProofFrontUrl) {
+        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="Identity Proof (Front)" imageUrl={idProofFrontUrl} pageNumber={pageNumber++} />);
     }
-    if (employee.identityProofUrlBack) {
-        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="Identity Proof (Back)" imageUrl={employee.identityProofUrlBack} pageNumber={pageNumber++} />);
+    if (idProofBackUrl) {
+        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="Identity Proof (Back)" imageUrl={idProofBackUrl} pageNumber={pageNumber++} />);
     }
 
     return pages;
@@ -1185,6 +1194,8 @@ export default function AdminEmployeeProfilePage() {
               width={100}
               height={100}
               className="rounded-full border-4 border-primary shadow-md object-cover"
+              unoptimized={true}
+              crossOrigin="anonymous"
               data-ai-hint="profile picture"
             />
             <div>

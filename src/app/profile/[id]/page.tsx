@@ -273,6 +273,23 @@ const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNum
 });
 TermsPage.displayName = 'TermsPage';
 
+const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
+  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center'}}>
+      <h1 className="text-2xl font-bold mb-4 absolute top-[15mm]">{title}</h1>
+      <Image 
+          src={imageUrl} 
+          alt={title} 
+          layout="fill"
+          objectFit="contain"
+          className="p-[30mm]"
+          unoptimized={true} 
+          crossOrigin='anonymous'
+          data-ai-hint="identity proof document"
+      />
+      <PageFooter pageNumber={pageNumber} />
+  </div>
+));
+DocumentPage.displayName = 'DocumentPage';
 
 // #endregion
 
@@ -285,6 +302,9 @@ export default function PublicEmployeeProfilePage() {
   const biodataPageRef = useRef<HTMLDivElement>(null);
   const qrPageRef = useRef<HTMLDivElement>(null);
   const termsPageRef = useRef<HTMLDivElement>(null);
+  const idFrontPageRef = useRef<HTMLDivElement>(null);
+  const idBackPageRef = useRef<HTMLDivElement>(null);
+
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -339,11 +359,39 @@ export default function PublicEmployeeProfilePage() {
       default: return 'outline';
     }
   };
+  
+  const preloadImage = (src: string) => {
+    return new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = src;
+    });
+  };
 
   const handleDownloadProfile = async () => {
     if (!employee) return;
     setIsDownloadingPdf(true);
     toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
+    const legacy = employee as any;
+
+    const imageUrlsToPreload = [
+        employee.profilePictureUrl,
+        employee.signatureUrl,
+        employee.qrCodeUrl,
+        employee.identityProofUrlFront,
+        legacy.idProofDocumentUrlFront,
+        legacy.idProofDocumentUrl,
+        employee.identityProofUrlBack,
+        legacy.idProofDocumentUrlBack,
+    ].filter(Boolean);
+
+    try {
+        await Promise.all(imageUrlsToPreload.map(url => preloadImage(url as string)));
+    } catch (error) {
+        console.error("Failed to preload images for PDF, continuing anyway:", error);
+    }
 
     const pdf = new jsPDF('p', 'mm', 'a4');
     let pageCount = 0;
@@ -389,6 +437,12 @@ export default function PublicEmployeeProfilePage() {
         if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
         pagesToRender.push(termsPageRef.current);
 
+        const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
+        if (idProofFrontUrl) pagesToRender.push(idFrontPageRef.current);
+        
+        const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
+        if (idProofBackUrl) pagesToRender.push(idBackPageRef.current);
+
         for (const pageElement of pagesToRender.filter(Boolean)) {
             await addPageToPdf(pageElement);
         }
@@ -406,6 +460,10 @@ export default function PublicEmployeeProfilePage() {
   const renderOffscreenPages = () => {
     if (!employee) return null;
 
+    const legacy = employee as any;
+    const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
+    const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
+
     const pages = [];
     let pageNumber = 1;
 
@@ -416,6 +474,14 @@ export default function PublicEmployeeProfilePage() {
     }
 
     pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
+
+    if (idProofFrontUrl) {
+        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="Identity Proof (Front)" imageUrl={idProofFrontUrl} pageNumber={pageNumber++} />);
+    }
+    if (idProofBackUrl) {
+        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="Identity Proof (Back)" imageUrl={idProofBackUrl} pageNumber={pageNumber++} />);
+    }
+
 
     return pages;
   };

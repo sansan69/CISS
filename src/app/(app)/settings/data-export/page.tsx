@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -262,15 +263,19 @@ export default function DataExportPage() {
         
         for (let i = 0; i < employeesToExport.length; i++) {
             const employee = employeesToExport[i];
+            const legacy = employee as any;
+
+            // Set current employee for offscreen rendering
             setCurrentEmployeeForPdf(employee);
             
+            // Wait for React to render the offscreen components with the new employee data
             await sleep(500);
 
             const biodataElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#biodata-page');
             const qrElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#qr-page');
             const idFrontElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#id-front-page');
             const idBackElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#id-back-page');
-
+            
             if (!biodataElement) {
                 console.error(`Could not find biodata element for ${employee.fullName}`);
                 continue;
@@ -293,11 +298,15 @@ export default function DataExportPage() {
                 if (employee.qrCodeUrl && qrElement) {
                     await addPageToPdf(qrElement);
                 }
-                if (employee.identityProofUrlFront && idFrontElement) {
-                    await addPageToPdf(idFrontElement);
+                
+                const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
+                if (idProofFrontUrl && idFrontElement) {
+                     await addPageToPdf(idFrontElement);
                 }
-                if (employee.identityProofUrlBack && idBackElement) {
-                    await addPageToPdf(idBackElement);
+
+                const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
+                if (idProofBackUrl && idBackElement) {
+                     await addPageToPdf(idBackElement);
                 }
                 
                 pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
@@ -322,8 +331,12 @@ export default function DataExportPage() {
                     <div ref={offscreenContainerRef}>
                         <div id="biodata-page"><BiodataPage employee={currentEmployeeForPdf} pageNumber={1} /></div>
                         {currentEmployeeForPdf.qrCodeUrl && <div id="qr-page"><QrPage employee={currentEmployeeForPdf} pageNumber={2} /></div>}
-                        {currentEmployeeForPdf.identityProofUrlFront && <div id="id-front-page"><DocumentPage title="Identity Proof (Front)" imageUrl={currentEmployeeForPdf.identityProofUrlFront} pageNumber={3} /></div>}
-                        {currentEmployeeForPdf.identityProofUrlBack && <div id="id-back-page"><DocumentPage title="Identity Proof (Back)" imageUrl={currentEmployeeForPdf.identityProofUrlBack} pageNumber={4} /></div>}
+                        
+                        {(currentEmployeeForPdf.identityProofUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrl) && 
+                            <div id="id-front-page"><DocumentPage title="Identity Proof (Front)" imageUrl={currentEmployeeForPdf.identityProofUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrl} pageNumber={3} /></div>}
+                        
+                        {(currentEmployeeForPdf.identityProofUrlBack || (currentEmployeeForPdf as any).idProofDocumentUrlBack) && 
+                            <div id="id-back-page"><DocumentPage title="Identity Proof (Back)" imageUrl={currentEmployeeForPdf.identityProofUrlBack || (currentEmployeeForPdf as any).idProofDocumentUrlBack} pageNumber={4} /></div>}
                     </div>
                 )}
             </div>
