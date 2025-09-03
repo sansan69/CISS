@@ -249,6 +249,9 @@ export default function DataExportPage() {
         
         toast({ title: "Fetching Employees...", description: `Getting all employees for ${selectedClient}.` });
         let employeesQuery = query(collection(db, "employees"), where('clientName', '==', selectedClient));
+        if (selectedDistrict !== 'all') {
+            employeesQuery = query(employeesQuery, where('district', '==', selectedDistrict));
+        }
         const querySnapshot = await getDocs(employeesQuery);
 
         if (querySnapshot.empty) {
@@ -288,7 +291,7 @@ export default function DataExportPage() {
                 const addPageToPdf = async (element: HTMLElement | null) => {
                     if (!element) return;
                     pageCount++;
-                    const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: false });
+                    const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: false, logging: false });
                     const imgData = canvas.toDataURL('image/jpeg', 0.85);
                     if (pageCount > 1) pdf.addPage();
                     pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
@@ -427,3 +430,4 @@ export default function DataExportPage() {
         </>
     );
 }
+
