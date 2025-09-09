@@ -240,7 +240,7 @@ export default function DataExportPage() {
                     startY -= 25;
 
                     const col1X = margin;
-                    const col2X = margin + 180;
+                    const col2X = margin + 280;
                     
                     for (let i = 0; i < items.length; i++) {
                         const item = items[i];
@@ -284,7 +284,7 @@ export default function DataExportPage() {
                     { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
                     { label: "Status", value: employee.status },
                     { label: "Resource ID (if any)", value: employee.resourceIdNumber },
-                    ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : []),
+                    ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : [{ label: "Exit Date", value: "N/A" }]),
                 ];
                 y = drawSection("Employment Details", employmentItems, y);
                 
@@ -306,16 +306,42 @@ export default function DataExportPage() {
                     try {
                         const qrPage = pdfDoc.addPage();
                         const qrImageBytes = await fetchImageBytes(employee.qrCodeUrl);
+
                         if (qrImageBytes) {
-                            const qrImage = await pdfDoc.embedPng(qrImageBytes);
-                            const qrDims = qrImage.scaleToFit(qrPage.getWidth() - margin * 4, qrPage.getHeight() - margin * 4);
-                            qrPage.drawText("Employee QR Code", { x: margin, y: qrPage.getHeight() - margin, font: helveticaBoldFont, size: 14 });
+                            let qrImage;
+                            // It's a data URL from qrcode library, which is PNG
+                            if (employee.qrCodeUrl.startsWith('data:image/png')) {
+                                qrImage = await pdfDoc.embedPng(qrImageBytes);
+                            } else { // Fallback for other potential types, though unlikely for QR
+                                qrImage = await pdfDoc.embedJpg(qrImageBytes);
+                            }
+                            
+                            qrPage.drawText("Employee QR Code for Attendance", { x: margin, y: qrPage.getHeight() - margin - 20, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
+                            
+                            const qrDims = qrImage.scaleToFit(300, 300);
                             qrPage.drawImage(qrImage, {
                                 x: (qrPage.getWidth() - qrDims.width) / 2,
-                                y: (qrPage.getHeight() - qrDims.height) / 2,
+                                y: qrPage.getHeight() - margin - 220,
                                 width: qrDims.width,
                                 height: qrDims.height,
                             });
+
+                            qrPage.drawRectangle({
+                                x: (qrPage.getWidth() - qrDims.width) / 2 - 10,
+                                y: qrPage.getHeight() - margin - 230,
+                                width: qrDims.width + 20,
+                                height: qrDims.height + 20,
+                                borderColor: rgb(0.8, 0.8, 0.8),
+                                borderWidth: 1,
+                            });
+
+                            const instructionsY = qrPage.getHeight() - margin - 280;
+                            qrPage.drawText("How to Use:", { x: margin, y: instructionsY, font: helveticaBoldFont, size: 12 });
+                            qrPage.drawText("1. Open the attendance marking page on the official CISS Workforce app or portal.", { x: margin, y: instructionsY - 20, font: helveticaFont, size: 10, lineHeight: 14 });
+                            qrPage.drawText("2. Select the 'Scan QR & Verify' option.", { x: margin, y: instructionsY - 40, font: helveticaFont, size: 10, lineHeight: 14 });
+                            qrPage.drawText("3. Point your device camera at this QR code.", { x: margin, y: instructionsY - 60, font: helveticaFont, size: 10, lineHeight: 14 });
+                            qrPage.drawText("4. Follow the on-screen instructions to capture your photo and location to complete check-in/out.", { x: margin, y: instructionsY - 80, font: helveticaFont, size: 10, lineHeight: 14 });
+
                         }
                     } catch (qrError) {
                         console.error("Could not embed QR code:", qrError);
@@ -367,33 +393,35 @@ export default function DataExportPage() {
                 let tcY = tcPage.getHeight() - margin;
 
                 const drawTcTitle = (text: string) => {
-                    tcPage.drawText(text, { x: margin, y: tcY, font: helveticaBoldFont, size: 12 });
+                    tcPage.drawText(text, { x: margin, y: tcY, font: helveticaBoldFont, size: 11 });
                     tcY -= 20;
                 };
                 const drawTcText = (text: string) => {
-                    tcPage.drawText(text, { x: margin + 15, y: tcY, font: helveticaFont, size: 10, lineHeight: 14, maxWidth: width - (margin * 2) - 15});
-                    const textHeight = helveticaFont.heightAtSize(10, {lineHeight: 14}) * text.split('\n').length;
-                    tcY -= textHeight + 5;
+                    const lines = text.split('\n');
+                    for(const line of lines) {
+                        tcPage.drawText(line, { x: margin + 15, y: tcY, font: helveticaFont, size: 9.5, lineHeight: 14 });
+                        tcY -= 14;
+                    }
                 };
 
                 tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: margin, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
-                tcY -= 30;
+                tcY -= 40;
 
                 drawTcTitle("I. General Eligibility and Compliance");
-                drawTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.\n• I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.\n• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.");
+                drawTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65),\n  physical fitness, and Indian citizenship.\n• I understand my enrollment is provisional and subject to a successful background and character verification by the\n  relevant authorities.\n• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.");
                 tcY -= 15;
                 
                 drawTcTitle("II. Employment Terms & Responsibilities");
-                drawTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.\n• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.\n• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.\n• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.");
+                drawTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.\n• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.\n• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.\n• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force,\n  or abandon my post without proper relief.");
                 tcY -= 15;
 
                 drawTcTitle("III. Disciplinary Action");
-                drawTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.");
+                drawTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to\n  and including termination of employment.");
                 tcY -= 15;
                 
                 drawTcTitle("IV. Declaration");
-                drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.");
-                tcY -= 40;
+                drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my\nenrollment. I confirm that all information and documents provided by me are true and correct to the best of my\nknowledge.");
+                tcY -= 70;
 
                 // Add Signature
                 const signatureBytes = await fetchImageBytes(employee.signatureUrl);
@@ -405,17 +433,15 @@ export default function DataExportPage() {
                         } else {
                             signatureImage = await pdfDoc.embedJpg(signatureBytes);
                         }
-                        const sigDims = signatureImage.scaleToFit(120, 60);
+                        const sigDims = signatureImage.scaleToFit(120, 50);
                         tcPage.drawImage(signatureImage, {
                             x: width - margin - sigDims.width,
-                            y: tcY,
+                            y: tcY + 20,
                             width: sigDims.width,
                             height: sigDims.height,
                         });
-                        tcY -= (sigDims.height + 5);
-                         tcPage.drawLine({ start: { x: width - margin - 120, y: tcY }, end: { x: width - margin, y: tcY }, thickness: 0.5 });
-                         tcY -= 15;
-                         tcPage.drawText("Signature of Applicant", { x: width - margin - 120, y: tcY, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
+                        tcPage.drawLine({ start: { x: width - margin - 130, y: tcY + 15 }, end: { x: width - margin, y: tcY + 15 }, thickness: 0.5 });
+                        tcPage.drawText("Signature of Applicant", { x: width - margin - 125, y: tcY, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
 
                     } catch (sigError) {
                          console.error("Could not embed signature", sigError);
