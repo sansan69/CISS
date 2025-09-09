@@ -324,13 +324,6 @@ export default function DataExportPage() {
                                 size: 16,
                                 color: rgb(0.05, 0.2, 0.45)
                             });
-
-                            qrPage.drawImage(qrImage, {
-                                x: (pageW - qrDims.width) / 2,
-                                y: pageH - margin - 80 - qrDims.height,
-                                width: qrDims.width,
-                                height: qrDims.height,
-                            });
                             
                             qrPage.drawRectangle({
                                 x: (pageW - qrDims.width) / 2 - 10,
@@ -339,6 +332,13 @@ export default function DataExportPage() {
                                 height: qrDims.height + 20,
                                 borderColor: rgb(0.8, 0.8, 0.8),
                                 borderWidth: 1,
+                            });
+
+                            qrPage.drawImage(qrImage, {
+                                x: (pageW - qrDims.width) / 2,
+                                y: pageH - margin - 80 - qrDims.height,
+                                width: qrDims.width,
+                                height: qrDims.height,
                             });
                             
                             let instructionsY = pageH - margin - 80 - qrDims.height - 50;
@@ -482,7 +482,13 @@ export default function DataExportPage() {
                 const blobUrl = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = blobUrl;
-                a.download = `CISS_ProfileKit_${employee.employeeId}.pdf`;
+                
+                const formattedJoiningDate = format(employee.joiningDate.toDate(), 'yyyy-MM-dd');
+                const cleanFullName = employee.fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+                const cleanClientName = employee.clientName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+                const fileName = `ProfileKit_${cleanFullName}_${cleanClientName}_${formattedJoiningDate}.pdf`;
+                a.download = fileName;
+        
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
