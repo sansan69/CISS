@@ -10,11 +10,11 @@ export const dynamic = 'force-dynamic';
 async function fetchImageBytes(filePath: string | undefined): Promise<Uint8Array | null> {
     if (!filePath) return null;
     try {
-        // Extract path from gs:// or https:// URL
         const url = new URL(filePath);
+        // Extracts path from gs:// or https:// URL
         const path = url.protocol === 'gs:' 
             ? url.pathname.substring(1) 
-            : url.pathname.split('/').slice(3).join('/');
+            : decodeURIComponent(url.pathname.split('/o/')[1].split('?')[0]);
             
         const file = bucket.file(path);
         const [buffer] = await file.download();
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest, { params }: { params: { employeeId: 
         page.drawImage(qrImage, { x: width - margin - 120, y: margin, width: 120, height: 120 });
 
         const documents = [
-            { title: 'Identity Proof (Front)', url: employeeData.identityProofUrlFront || employeeData.idProofDocumentUrlFront },
+            { title: 'Identity Proof (Front)', url: employeeData.identityProofUrlFront || employeeData.idProofDocumentUrlFront || employeeData.idProofDocumentUrl },
             { title: 'Identity Proof (Back)', url: employeeData.identityProofUrlBack || employeeData.idProofDocumentUrlBack },
             { title: 'Address Proof (Front)', url: employeeData.addressProofUrlFront },
             { title: 'Address Proof (Back)', url: employeeData.addressProofUrlBack },

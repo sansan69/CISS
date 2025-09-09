@@ -140,22 +140,32 @@ export default function PublicEmployeeProfilePage() {
     if (!employee) return;
     setIsDownloadingPdf(true);
     toast({ title: "Generating PDF...", description: "Your download will start shortly." });
+    
     try {
         const response = await fetch(`/api/kit/${employee.id}`);
-        
+
         if (!response.ok) {
-            let errorDetails = "Failed to generate PDF. The server returned an error.";
-            // Try to parse a JSON error response from the server
-            try {
+            const contentType = response.headers.get("content-type");
+            let errorDetails = "An unexpected error occurred on the server.";
+
+            if (contentType && contentType.includes("application/json")) {
                 const errorJson = await response.json();
-                errorDetails = errorJson.details || errorJson.error || errorDetails;
-            } catch {
-                // If the response is not JSON, use the raw text.
-                errorDetails = await response.text();
+                errorDetails = errorJson.details || errorJson.error || "Failed to generate PDF.";
+            } else {
+                const errorText = await response.text();
+                errorDetails = `The server returned an error page. (Status: ${response.status})`;
+                console.error("Server returned non-JSON error:", errorText.slice(0, 500));
             }
             throw new Error(errorDetails);
         }
 
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/pdf")) {
+            const responseText = await response.text();
+            console.error("Expected PDF, but got different content type:", contentType, responseText.slice(0, 500));
+            throw new Error("Received an invalid file format from the server instead of a PDF.");
+        }
+        
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -166,13 +176,19 @@ export default function PublicEmployeeProfilePage() {
         a.remove();
         window.URL.revokeObjectURL(url);
         toast({ title: "Download Started", description: "Your PDF profile kit is downloading." });
+
     } catch (error: any) {
-        console.error("Error generating PDF:", error);
-        toast({ variant: "destructive", title: "PDF Generation Failed", description: error.message });
+        console.error("Error during PDF download process:", error);
+        toast({
+            variant: "destructive",
+            title: "PDF Generation Failed",
+            description: error.message || "Could not download the profile kit.",
+            duration: 7000
+        });
     } finally {
         setIsDownloadingPdf(false);
     }
-  };
+};
 
   if (isLoading) {
     return (
