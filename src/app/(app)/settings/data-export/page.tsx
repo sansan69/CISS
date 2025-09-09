@@ -28,13 +28,25 @@ const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Ala
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.warn(`Could not fetch image at path: ${url}, status: ${response.status}`);
-            return null;
+        const storageRef = ref(storage, url);
+        const bytes = await getBytes(storageRef);
+        return new Uint8Array(bytes);
+    } catch (error: any) {
+        if (error.code === 'storage/object-not-found') {
+            console.warn(`Image not found at path: ${url}. Attempting direct fetch.`);
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    console.error(`Direct fetch failed for ${url}: ${response.statusText}`);
+                    return null;
+                }
+                const blob = await response.blob();
+                return new Uint8Array(await blob.arrayBuffer());
+            } catch (fetchError) {
+                console.error(`Direct fetch also failed for ${url}:`, fetchError);
+                return null;
+            }
         }
-        return new Uint8Array(await response.arrayBuffer());
-    } catch (error) {
         console.warn(`Could not fetch image at path: ${url}`, error);
         return null;
     }
@@ -187,10 +199,10 @@ export default function DataExportPage() {
                 // --- Page 1: Biodata ---
                 const page = pdfDoc.addPage();
                 const { width, height } = page.getSize();
-                const margin = 50;
+                const margin = 40;
 
                 const drawText = (text: string, x: number, y: number, font: PDFFont, size: number, color = rgb(0, 0, 0)) => {
-                    page.drawText(text || 'N/A', { x, y, font, size, color, maxWidth: 160, wordBreaks: [' '] });
+                    page.drawText(text || 'N/A', { x, y, font, size, color });
                 };
                 
                 // Header
@@ -204,14 +216,18 @@ export default function DataExportPage() {
                 const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
                 if (profilePicBytes) {
                     let image;
-                    if (employee.profilePictureUrl?.toLowerCase().includes('.png')) {
-                        image = await pdfDoc.embedPng(profilePicBytes);
-                    } else {
-                        image = await pdfDoc.embedJpg(profilePicBytes);
+                    try {
+                        if (employee.profilePictureUrl?.toLowerCase().includes('.png') || (profilePicBytes[0] === 0x89 && profilePicBytes[1] === 0x50)) {
+                            image = await pdfDoc.embedPng(profilePicBytes);
+                        } else {
+                            image = await pdfDoc.embedJpg(profilePicBytes);
+                        }
+                        const imgDims = image.scaleToFit(80, 100);
+                        page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
+                        page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
+                    } catch (e) {
+                        console.error("Error embedding profile picture:", e);
                     }
-                    const imgDims = image.scaleToFit(80, 100);
-                    page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
-                    page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
                 }
                 
                 let y = height - margin - 120;
@@ -225,27 +241,22 @@ export default function DataExportPage() {
 
                     const col1X = margin;
                     const col2X = margin + 180;
-                    const col3X = margin + 360;
                     
                     for (let i = 0; i < items.length; i++) {
                         const item = items[i];
-                        const col = i % 3;
-                        const x = col === 0 ? col1X : col === 1 ? col2X : col3X;
+                        const col = i % 2;
+                        const x = col === 0 ? col1X : col2X;
+                        
+                         if (i > 0 && i % 2 === 0) {
+                             startY -= 40;
+                        }
                         
                         drawText(item.label, x, startY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-                        drawText(toTitleCase(item.value) || 'N/A', x, startY - 15, helveticaFont, 11);
-
-                        if ((i + 1) % 3 === 0) {
-                            startY -= 45;
-                        }
+                        drawText(toTitleCase(String(item.value)) || 'N/A', x, startY - 15, helveticaFont, 11);
                     }
-                    if (items.length % 3 !== 0) {
-                        startY -= 45;
-                    }
+                    startY -= 50;
                     
-                    startY -= 10;
-                    page.drawLine({ start: { x: margin, y: startY + 5 }, end: { x: width - margin, y: startY + 5 }, thickness: 0.2, color: rgb(0.85, 0.85, 0.85) });
-                    startY -= 5;
+                    page.drawLine({ start: { x: margin, y: startY + 15 }, end: { x: width - margin, y: startY + 15 }, thickness: 0.2, color: rgb(0.85, 0.85, 0.85) });
                     
                     return startY;
                 };
@@ -253,25 +264,29 @@ export default function DataExportPage() {
                 const personalItems = [
                     { label: 'Date of Birth', value: format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy') },
                     { label: 'Gender', value: employee.gender },
-                    { label: 'Marital Status', value: employee.maritalStatus },
                     { label: "Father's Name", value: employee.fatherName },
                     { label: "Mother's Name", value: employee.motherName },
-                    ...(employee.maritalStatus === 'Married' ? [{ label: "Spouse's Name", value: employee.spouseName }] : []),
+                    { label: 'Marital Status', value: employee.maritalStatus },
+                    ...(employee.maritalStatus === 'Married' ? [{ label: "Spouse's Name", value: employee.spouseName }] : [{label: "Spouse's Name", value: 'N/A'}]),
                     { label: "Educational Qualification", value: employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification },
-                    { label: "Phone Number", value: employee.phoneNumber },
-                    { label: "Email Address", value: employee.emailAddress },
-                    { label: "District", value: employee.district },
-                    { label: "Full Address", value: employee.fullAddress },
                 ];
-                y = drawSection("Personal & Contact Information", personalItems, y);
+                y = drawSection("Personal Information", personalItems, y);
+
+                const contactItems = [
+                     { label: "Phone Number", value: employee.phoneNumber },
+                     { label: "Email Address", value: employee.emailAddress },
+                     { label: "District", value: employee.district },
+                     { label: "Full Address", value: employee.fullAddress },
+                ]
+                y = drawSection("Contact Information", contactItems, y);
 
                 const employmentItems = [
                     { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
                     { label: "Status", value: employee.status },
-                    ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : []),
                     { label: "Resource ID (if any)", value: employee.resourceIdNumber },
+                    ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : []),
                 ];
-                y = drawSection("Employment & Status", employmentItems, y);
+                y = drawSection("Employment Details", employmentItems, y);
                 
                 const statutoryItems = [
                     { label: "PAN Number", value: employee.panNumber },
@@ -284,6 +299,7 @@ export default function DataExportPage() {
                     { label: "Address Proof", value: `${employee.addressProofType} - ${employee.addressProofNumber}`},
                 ];
                 y = drawSection("Bank & Statutory Details", statutoryItems, y);
+
 
                 // --- Page 2: QR Code ---
                 if (employee.qrCodeUrl) {
@@ -384,7 +400,7 @@ export default function DataExportPage() {
                 if (signatureBytes) {
                     let signatureImage;
                     try {
-                        if (employee.signatureUrl?.toLowerCase().includes('.png') || (signatureBytes[0] === 0x89 && signatureBytes[1] === 0x50 && signatureBytes[2] === 0x4E && signatureBytes[3] === 0x47)) {
+                        if (employee.signatureUrl?.toLowerCase().includes('.png') || (signatureBytes[0] === 0x89 && signatureBytes[1] === 0x50)) {
                             signatureImage = await pdfDoc.embedPng(signatureBytes);
                         } else {
                             signatureImage = await pdfDoc.embedJpg(signatureBytes);
