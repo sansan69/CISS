@@ -3,11 +3,11 @@ import * as admin from 'firebase-admin';
 
 // This module is server-only and should not be imported into client-side components.
 
-const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+const serviceAccountKey = process.env.FIREBASE_ADMIN_SDK_CONFIG;
 
 if (!admin.apps.length) {
   if (!serviceAccountKey) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set. This is required for server-side admin operations.');
+    throw new Error('FIREBASE_ADMIN_SDK_CONFIG environment variable is not set. This is required for server-side admin operations.');
   }
 
   try {
@@ -19,7 +19,7 @@ if (!admin.apps.length) {
     console.error('Firebase Admin Initialization Error:', error);
     // Provide a more helpful error message if parsing fails
     if (error.code === 'app/invalid-credential') {
-        throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Make sure it is a valid JSON string.');
+        throw new Error('Failed to parse FIREBASE_ADMIN_SDK_CONFIG. Make sure it is a valid JSON string.');
     }
     throw error;
   }
