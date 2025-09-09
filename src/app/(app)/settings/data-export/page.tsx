@@ -312,7 +312,6 @@ export default function DataExportPage() {
                     { url: employee.identityProofUrlBack || legacy.idProofDocumentUrlBack, title: "Identity Proof (Back)"},
                     { url: employee.addressProofUrlFront, title: "Address Proof (Front)" },
                     { url: employee.addressProofUrlBack, title: "Address Proof (Back)"},
-                    { url: employee.signatureUrl, title: "Signature" },
                     { url: employee.bankPassbookStatementUrl, title: "Bank Document" },
                     { url: employee.policeClearanceCertificateUrl, title: "Police Clearance Certificate" },
                 ];
@@ -344,6 +343,66 @@ export default function DataExportPage() {
                             width: dims.width,
                             height: dims.height,
                         });
+                    }
+                }
+                
+                // --- Last Page: Terms and Conditions ---
+                const tcPage = pdfDoc.addPage();
+                let tcY = tcPage.getHeight() - margin;
+
+                const drawTcTitle = (text: string) => {
+                    tcPage.drawText(text, { x: margin, y: tcY, font: helveticaBoldFont, size: 12 });
+                    tcY -= 20;
+                };
+                const drawTcText = (text: string) => {
+                    tcPage.drawText(text, { x: margin + 15, y: tcY, font: helveticaFont, size: 10, lineHeight: 14, maxWidth: width - (margin * 2) - 15});
+                    const textHeight = helveticaFont.heightAtSize(10, {lineHeight: 14}) * text.split('\n').length;
+                    tcY -= textHeight + 5;
+                };
+
+                tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: margin, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
+                tcY -= 30;
+
+                drawTcTitle("I. General Eligibility and Compliance");
+                drawTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.\n• I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.\n• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.");
+                tcY -= 15;
+                
+                drawTcTitle("II. Employment Terms & Responsibilities");
+                drawTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.\n• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.\n• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.\n• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.");
+                tcY -= 15;
+
+                drawTcTitle("III. Disciplinary Action");
+                drawTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.");
+                tcY -= 15;
+                
+                drawTcTitle("IV. Declaration");
+                drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.");
+                tcY -= 40;
+
+                // Add Signature
+                const signatureBytes = await fetchImageBytes(employee.signatureUrl);
+                if (signatureBytes) {
+                    let signatureImage;
+                    try {
+                        if (employee.signatureUrl?.toLowerCase().includes('.png') || (signatureBytes[0] === 0x89 && signatureBytes[1] === 0x50 && signatureBytes[2] === 0x4E && signatureBytes[3] === 0x47)) {
+                            signatureImage = await pdfDoc.embedPng(signatureBytes);
+                        } else {
+                            signatureImage = await pdfDoc.embedJpg(signatureBytes);
+                        }
+                        const sigDims = signatureImage.scaleToFit(120, 60);
+                        tcPage.drawImage(signatureImage, {
+                            x: width - margin - sigDims.width,
+                            y: tcY,
+                            width: sigDims.width,
+                            height: sigDims.height,
+                        });
+                        tcY -= (sigDims.height + 5);
+                         tcPage.drawLine({ start: { x: width - margin - 120, y: tcY }, end: { x: width - margin, y: tcY }, thickness: 0.5 });
+                         tcY -= 15;
+                         tcPage.drawText("Signature of Applicant", { x: width - margin - 120, y: tcY, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
+
+                    } catch (sigError) {
+                         console.error("Could not embed signature", sigError);
                     }
                 }
 
