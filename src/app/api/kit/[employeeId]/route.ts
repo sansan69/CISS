@@ -21,7 +21,8 @@ async function fetchImageBytes(filePath: string | undefined): Promise<Uint8Array
         return buffer;
     } catch (error) {
         console.warn(`Could not fetch image at path: ${filePath}`, error);
-        return null; // Gracefully fail if an image is missing
+        // Gracefully fail if an image is missing or another error occurs during download
+        return null; 
     }
 }
 
