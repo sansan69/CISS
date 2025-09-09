@@ -5,7 +5,7 @@ import * as admin from 'firebase-admin';
 // local development and hosting providers like Vercel.
 function initializeAdmin() {
   if (admin.apps.length > 0) {
-    return admin.apps[0];
+    return admin.apps[0]!;
   }
 
   let credential;
@@ -44,7 +44,12 @@ function initializeAdmin() {
   // 4. Fallback to Application Default Credentials (for Google Cloud environments)
   else {
      console.info("No explicit service account found, attempting to use Application Default Credentials.");
-     credential = admin.credential.applicationDefault();
+     try {
+        credential = admin.credential.applicationDefault();
+     } catch (e) {
+        console.error("Application Default Credentials failed. Please set up server-side Firebase authentication credentials.");
+        throw new Error("Server authentication setup is incomplete.");
+     }
   }
 
   return admin.initializeApp({
