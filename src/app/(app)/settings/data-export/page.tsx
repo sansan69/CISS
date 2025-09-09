@@ -277,12 +277,34 @@ export default function DataExportPage() {
                      { label: "Email Address", value: employee.emailAddress },
                      { label: "District", value: employee.district },
                 ];
-                y = drawSection("Contact Information", contactItems, y);
                 
-                const fullAddressY = y + 25;
-                drawText("Full Address", margin, fullAddressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-                drawText(toTitleCase(employee.fullAddress), margin, fullAddressY - 15, helveticaFont, 11);
-                y -= 40;
+                y = drawSection("Contact Information", contactItems, y);
+
+                const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, font: PDFFont, size: number, color = rgb(0,0,0)): number => {
+                    const words = text.split(' ');
+                    let line = '';
+                    let currentY = y;
+                    const lineHeight = size * 1.2;
+
+                    for (const word of words) {
+                        const testLine = line + word + ' ';
+                        const testWidth = font.widthOfTextAtSize(testLine, size);
+                        if (testWidth > maxWidth && line !== '') {
+                            page.drawText(line, { x, y: currentY, font, size, color });
+                            currentY -= lineHeight;
+                            line = word + ' ';
+                        } else {
+                            line = testLine;
+                        }
+                    }
+                    page.drawText(line, { x, y: currentY, font, size, color });
+                    return currentY - lineHeight;
+                };
+
+                const addressY = y + 25;
+                drawText("Full Address", margin, addressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
+                const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
+                y = addressTextHeight - 25;
 
                 const employmentItems = [
                     { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
@@ -329,9 +351,10 @@ export default function DataExportPage() {
                                 color: rgb(0.05, 0.2, 0.45)
                             });
                             
+                            const qrBoxY = pageH - margin - 80 - qrDims.height - 10;
                             qrPage.drawRectangle({
                                 x: (pageW - qrDims.width) / 2 - 10,
-                                y: pageH - margin - 80 - qrDims.height - 10,
+                                y: qrBoxY,
                                 width: qrDims.width + 20,
                                 height: qrDims.height + 20,
                                 borderColor: rgb(0.8, 0.8, 0.8),
@@ -340,12 +363,12 @@ export default function DataExportPage() {
 
                             qrPage.drawImage(qrImage, {
                                 x: (pageW - qrDims.width) / 2,
-                                y: pageH - margin - 80 - qrDims.height,
+                                y: qrBoxY + 10,
                                 width: qrDims.width,
                                 height: qrDims.height,
                             });
                             
-                            let instructionsY = pageH - margin - 80 - qrDims.height - 50;
+                            let instructionsY = qrBoxY - 40;
                             
                             const howToUse = "How to Use:";
                             const howToUseWidth = helveticaBoldFont.widthOfTextAtSize(howToUse, 12);
