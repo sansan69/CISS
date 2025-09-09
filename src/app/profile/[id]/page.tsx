@@ -12,11 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
 import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, ArrowLeft, Home } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { getBytes, ref } from 'firebase/storage';
+import QRCode from 'qrcode';
+
 
 const toTitleCase = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -74,6 +78,17 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
         )}
     </div>
 );
+
+async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
+    if (!url) return null;
+    try {
+        const storageRef = ref(storage, url);
+        return await getBytes(storageRef);
+    } catch (error) {
+        console.warn(`Could not fetch image at path: ${url}`, error);
+        return null; // Gracefully fail if an image is missing
+    }
+}
 
 
 export default function PublicEmployeeProfilePage() {
@@ -139,34 +154,84 @@ export default function PublicEmployeeProfilePage() {
   const handleDownloadProfile = async () => {
     if (!employee) return;
     setIsDownloadingPdf(true);
-    toast({ title: "Generating PDF...", description: "Your download will start shortly." });
-    
+    toast({ title: "Generating PDF...", description: "Please wait, this may take a moment." });
+
     try {
-        const response = await fetch(`/api/kit/${employee.id}`);
+        const pdfDoc = await PDFDocument.create();
+        const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+        const timesRomanBoldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
-        if (!response.ok) {
-            const contentType = response.headers.get("content-type");
-            let errorDetails = "An unexpected error occurred on the server.";
+        // --- Page 1: Biodata ---
+        let page = pdfDoc.addPage();
+        const { width, height } = page.getSize();
+        const margin = 50;
+        let y = height - margin;
 
-            if (contentType && contentType.includes("application/json")) {
-                const errorJson = await response.json();
-                errorDetails = errorJson.details || errorJson.error || "Failed to generate PDF.";
-            } else {
-                const errorText = await response.text();
-                errorDetails = `The server returned an error page. (Status: ${response.status})`;
-                console.error("Server returned non-JSON error:", errorText.slice(0, 500));
-            }
-            throw new Error(errorDetails);
-        }
-
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/pdf")) {
-            const responseText = await response.text();
-            console.error("Expected PDF, but got different content type:", contentType, responseText.slice(0, 500));
-            throw new Error("Received an invalid file format from the server instead of a PDF.");
+        const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
+        if (profilePicBytes) {
+            const image = await pdfDoc.embedPng(profilePicBytes);
+            page.drawImage(image, { x: width - margin - 100, y: height - margin - 120, width: 100, height: 120 });
         }
         
-        const blob = await response.blob();
+        page.drawText(employee.fullName, { x: margin, y: y, font: timesRomanBoldFont, size: 22 });
+        y -= 40;
+        page.drawText(`Employee ID: ${employee.employeeId}`, { x: margin, y, font: timesRomanFont, size: 12 });
+        y -= 15;
+        page.drawText(`Client: ${employee.clientName}`, { x: margin, y, font: timesRomanFont, size: 12 });
+        y -= 30;
+
+        page.drawText('Personal Details', { x: margin, y, font: timesRomanBoldFont, size: 14 });
+        y -= 20;
+        page.drawText(`Date of Birth: ${format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy')}`, { x: margin, y, font: timesRomanFont, size: 11 });
+        y -= 15;
+        page.drawText(`Phone: ${employee.phoneNumber}`, { x: margin, y, font: timesRomanFont, size: 11 });
+        y -= 15;
+        page.drawText(`Address: ${employee.fullAddress}`, { x: margin, y, font: timesRomanFont, size: 11, maxWidth: width - margin * 2 - 130 });
+        y -= 30;
+
+        const qrDataURL = await QRCode.toDataURL(`${window.location.origin}/profile/${employee.id}`);
+        const qrBytes = Buffer.from(qrDataURL.split(',')[1], 'base64');
+        const qrImage = await pdfDoc.embedPng(qrBytes);
+        page.drawImage(qrImage, { x: width - margin - 120, y: margin, width: 120, height: 120 });
+
+        // --- Subsequent Pages: Documents ---
+        const documents = [
+            { url: employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl },
+            { url: employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack },
+            { url: employee.addressProofUrlFront },
+            { url: employee.addressProofUrlBack },
+            { url: employee.signatureUrl },
+            { url: employee.bankPassbookStatementUrl },
+        ];
+
+        for (const doc of documents) {
+            if (!doc.url) continue;
+            const imageBytes = await fetchImageBytes(doc.url);
+            if (imageBytes) {
+                page = pdfDoc.addPage();
+                let image;
+                 try {
+                    image = await pdfDoc.embedJpg(imageBytes);
+                } catch {
+                    try {
+                        image = await pdfDoc.embedPng(imageBytes);
+                    } catch (e) {
+                         console.warn(`Could not embed image for ${doc.url}`); continue;
+                    }
+                }
+                const scale = 0.85;
+                const imgWidth = page.getWidth() * scale;
+                const imgHeight = page.getHeight() * scale;
+                const aspectRatio = image.width / image.height;
+                let finalWidth = imgWidth;
+                let finalHeight = finalWidth / aspectRatio;
+                if (finalHeight > imgHeight) { finalHeight = imgHeight; finalWidth = finalHeight * aspectRatio; }
+                page.drawImage(image, { x: (page.getWidth() - finalWidth) / 2, y: (page.getHeight() - finalHeight) / 2, width: finalWidth, height: finalHeight });
+            }
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -176,13 +241,12 @@ export default function PublicEmployeeProfilePage() {
         a.remove();
         window.URL.revokeObjectURL(url);
         toast({ title: "Download Started", description: "Your PDF profile kit is downloading." });
-
     } catch (error: any) {
-        console.error("Error during PDF download process:", error);
+        console.error("Error during PDF generation:", error);
         toast({
             variant: "destructive",
             title: "PDF Generation Failed",
-            description: error.message || "Could not download the profile kit.",
+            description: error.message || "Could not generate the profile kit.",
             duration: 7000
         });
     } finally {
