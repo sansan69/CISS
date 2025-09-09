@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DownloadCloud, AlertTriangle, Loader2, FileSpreadsheet, CalendarIcon, Filter, CheckCircle, ChevronLeft, FileText } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,56 +19,22 @@ import { Label } from '@/components/ui/label';
 import * as XLSX from 'xlsx';
 import type { Employee } from '@/types/employee';
 import Link from 'next/link';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import Image from 'next/image';
+import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
+import { getBytes, ref } from 'firebase/storage';
 
 interface ClientOption { id: string; name: string; }
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 
-// #region PDF Generation Components
-const pageStyle: React.CSSProperties = {
-  width: '210mm',
-  minHeight: '297mm',
-  padding: '15mm',
-  backgroundColor: 'white',
-  color: 'black',
-  fontFamily: 'Arial, sans-serif',
-  display: 'flex',
-  flexDirection: 'column',
-  position: 'relative',
-  boxSizing: 'border-box'
-};
-
-const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
-  <footer style={{
-    position: 'absolute',
-    bottom: '10mm',
-    left: '15mm',
-    right: '15mm',
-    textAlign: 'center',
-    fontSize: '9px',
-    color: '#666',
-    borderTop: '1px solid #ccc',
-    paddingTop: '5px'
-  }}>
-    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "dd-MM-yyyy")}
-  </footer>
-);
-
-const DetailGridItem = ({ label, value }: { label: string; value?: string | number | null }) => (
-  <div>
-    <p className="text-xs text-gray-500">{label}</p>
-    <p className="font-medium text-gray-800">{value || 'N/A'}</p>
-  </div>
-);
-
-const formatDateForPdf = (date: any) => {
-  if (!date) return 'N/A';
-  const dateObj = date.toDate ? date.toDate() : new Date(date);
-  if (isNaN(dateObj.getTime())) return 'N/A';
-  return format(dateObj, "dd-MM-yyyy");
-};
+async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
+    if (!url) return null;
+    try {
+        const storageRef = ref(storage, url);
+        return await getBytes(storageRef);
+    } catch (error) {
+        console.warn(`Could not fetch image at path: ${url}`, error);
+        return null;
+    }
+}
 
 const toTitleCase = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -79,79 +45,13 @@ const toTitleCase = (str: string | null | undefined): string => {
     return str.replace(/\b\w/g, char => char.toUpperCase());
 };
 
-const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
-  <div ref={ref} style={pageStyle}>
-     <header className="flex justify-between items-start pb-4 border-b border-gray-300">
-      <div className="flex items-center gap-4">
-        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} crossOrigin="anonymous" data-ai-hint="company logo"/>
-        <div>
-          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{toTitleCase(employee.fullName)}</h1>
-          <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
-          <p className="text-gray-600">Client: {employee.clientName}</p>
-        </div>
-      </div>
-      {employee.profilePictureUrl && (
-        <Image 
-            src={employee.profilePictureUrl} 
-            alt={employee.fullName || 'Profile photo'} 
-            width={100} 
-            height={120} 
-            className="rounded-lg border-2 border-gray-200 object-contain p-1 bg-gray-50" 
-            crossOrigin="anonymous" 
-            unoptimized={true}
-            data-ai-hint="profile photo" 
-        />
-      )}
-    </header>
-    <main className="flex-grow mt-8 space-y-8 text-sm">
-      <section><h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2><div className="grid grid-cols-3 gap-x-6 gap-y-4"><DetailGridItem label="Date of Birth" value={formatDateForPdf(employee.dateOfBirth)} /><DetailGridItem label="Gender" value={employee.gender} /><DetailGridItem label="Marital Status" value={employee.maritalStatus} /><DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} /><DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />{employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}<DetailGridItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} /><DetailGridItem label="Phone Number" value={employee.phoneNumber} /><DetailGridItem label="Email Address" value={employee.emailAddress?.toLowerCase()} /><DetailGridItem label="District" value={toTitleCase(employee.district)} /><div className="col-span-3"><DetailGridItem label="Full Address" value={toTitleCase(employee.fullAddress)} /></div></div></section>
-      <section><h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2><div className="grid grid-cols-3 gap-x-6 gap-y-4"><DetailGridItem label="Joining Date" value={formatDateForPdf(employee.joiningDate)} /><DetailGridItem label="Status" value={employee.status} />{employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}<DetailGridItem label="PAN Number" value={employee.panNumber} /><DetailGridItem label="EPF/UAN Number" value={employee.epfUanNumber} /><DetailGridItem label="ESIC Number" value={employee.esicNumber} /></div></section>
-      <section><h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2><div className="grid grid-cols-3 gap-x-6 gap-y-4"><DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} /><DetailGridItem label="Account Number" value={employee.bankAccountNumber} /><DetailGridItem label="IFSC Code" value={employee.ifscCode} /><DetailGridItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} /><DetailGridItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} /></div></section>
-    </main>
-    <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-BiodataPage.displayName = 'BiodataPage';
-
-const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
-  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
-    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1><p className="mb-2 text-lg">{toTitleCase(employee.fullName)}</p><p className="mb-8 text-gray-600">{employee.employeeId}</p>
-    <div className="p-4 bg-white border-4 border-gray-200 rounded-lg"><Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} crossOrigin="anonymous" data-ai-hint="qr code" /></div>
-    <div className="mt-8 text-gray-600 max-w-md"><p className="font-semibold mb-2">Instructions:</p><p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p></div>
-    <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-QrPage.displayName = 'QrPage';
-
-const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
-  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center'}}>
-      <h1 className="text-2xl font-bold mb-4 absolute top-[15mm]">{title}</h1>
-      <Image 
-          src={imageUrl} 
-          alt={title} 
-          layout="fill"
-          objectFit="contain"
-          className="p-[30mm]"
-          unoptimized={true} 
-          crossOrigin='anonymous'
-          data-ai-hint="identity proof document"
-      />
-      <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-DocumentPage.displayName = 'DocumentPage';
-// #endregion
-
 export default function DataExportPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'complete' | 'error'>('idle');
     const [processedCount, setProcessedCount] = useState(0);
+    const [totalCount, setTotalCount] = useState(0);
 
     const { toast } = useToast();
-
-    // Refs for offscreen rendering
-    const offscreenContainerRef = useRef<HTMLDivElement>(null);
-    const [currentEmployeeForPdf, setCurrentEmployeeForPdf] = useState<Employee | null>(null);
 
     // Filters State
     const [exportType, setExportType] = useState<'xlsx' | 'pdf'>('xlsx');
@@ -176,6 +76,7 @@ export default function DataExportPage() {
         setIsGenerating(true);
         setGenerationStatus('generating');
         setProcessedCount(0);
+        setTotalCount(0);
         
         if (exportType === 'xlsx') {
             await handleXlsxExport();
@@ -200,6 +101,7 @@ export default function DataExportPage() {
             }
             
             const querySnapshot = await getDocs(employeesQuery);
+            setTotalCount(querySnapshot.size);
 
             if (querySnapshot.empty) {
                 toast({ variant: 'default', title: "No Data", description: "No employees found for the selected filters." });
@@ -219,10 +121,10 @@ export default function DataExportPage() {
                         processedRecord[key] = docData[key];
                     }
                 });
+                setProcessedCount(prev => prev + 1);
                 return { id: doc.id, ...processedRecord };
             });
             
-            setProcessedCount(employeesData.length);
             const workbook = XLSX.utils.book_new();
             const worksheet = XLSX.utils.json_to_sheet(employeesData);
             XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
@@ -253,6 +155,7 @@ export default function DataExportPage() {
             employeesQuery = query(employeesQuery, where('district', '==', selectedDistrict));
         }
         const querySnapshot = await getDocs(employeesQuery);
+        setTotalCount(querySnapshot.size);
 
         if (querySnapshot.empty) {
              toast({ variant: 'default', title: "No Data", description: `No employees found for client: ${selectedClient}.` });
@@ -261,60 +164,136 @@ export default function DataExportPage() {
         }
 
         const employeesToExport = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
-        setProcessedCount(employeesToExport.length);
         toast({ title: `Starting PDF Generation for ${employeesToExport.length} Employees`, description: "This may take some time. Please keep this tab open and approve the multiple file downloads." });
         
         for (let i = 0; i < employeesToExport.length; i++) {
             const employee = employeesToExport[i];
             const legacy = employee as any;
-
-            // Set current employee for offscreen rendering
-            setCurrentEmployeeForPdf(employee);
-            
-            // Wait for React to render the offscreen components with the new employee data
-            await sleep(500);
-
-            const biodataElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#biodata-page');
-            const qrElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#qr-page');
-            const idFrontElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#id-front-page');
-            const idBackElement = offscreenContainerRef.current?.querySelector<HTMLDivElement>('#id-back-page');
-            
-            if (!biodataElement) {
-                console.error(`Could not find biodata element for ${employee.fullName}`);
-                continue;
-            }
+            setProcessedCount(prev => prev + 1);
 
             try {
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                let pageCount = 0;
+                const pdfDoc = await PDFDocument.create();
+                const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+                
+                const cissLogoUrl = '/ciss-logo.png';
+                const logoBytes = await fetch(cissLogoUrl).then(res => res.arrayBuffer());
+                const logoImage = await pdfDoc.embedPng(logoBytes);
 
-                const addPageToPdf = async (element: HTMLElement | null) => {
-                    if (!element) return;
-                    pageCount++;
-                    const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: false, logging: false });
-                    const imgData = canvas.toDataURL('image/jpeg', 0.85);
-                    if (pageCount > 1) pdf.addPage();
-                    pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+                // --- Page 1: Biodata ---
+                const page = pdfDoc.addPage();
+                const { width, height } = page.getSize();
+                const margin = 50;
+
+                const drawText = (text: string, x: number, y: number, font: PDFFont, size: number, color = rgb(0, 0, 0)) => {
+                    page.drawText(text, { x, y, font, size, color });
                 };
-
-                await addPageToPdf(biodataElement);
-                if (employee.qrCodeUrl && qrElement) {
-                    await addPageToPdf(qrElement);
+                
+                // Header
+                logoImage.scaleToFit(50, 50);
+                page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
+                
+                drawText(toTitleCase(employee.fullName), margin + 65, height - margin - 25, helveticaBoldFont, 22, rgb(0.05, 0.2, 0.45));
+                drawText(`Employee ID: ${employee.employeeId}`, margin + 65, height - margin - 45, helveticaFont, 10, rgb(0.3, 0.3, 0.3));
+                drawText(`Client: ${employee.clientName}`, margin + 65, height - margin - 60, helveticaFont, 10, rgb(0.3, 0.3, 0.3));
+                
+                const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
+                if (profilePicBytes) {
+                    let image;
+                     if (profilePicBytes[0] === 0x89 && profilePicBytes[1] === 0x50 && profilePicBytes[2] === 0x4E && profilePicBytes[3] === 0x47) {
+                         image = await pdfDoc.embedPng(profilePicBytes);
+                    } else {
+                         image = await pdfDoc.embedJpg(profilePicBytes);
+                    }
+                    const imgDims = image.scaleToFit(80, 100);
+                    page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
+                    page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
                 }
                 
-                const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
-                if (idProofFrontUrl && idFrontElement) {
-                     await addPageToPdf(idFrontElement);
+                let y = height - margin - 110;
+                page.drawLine({ start: { x: margin, y: y }, end: { x: width - margin, y: y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+                y -= 30;
+
+                drawText('Personal & Contact Information', margin, y, helveticaBoldFont, 14, rgb(0.05, 0.2, 0.45));
+                y -= 25;
+
+                const col1X = margin;
+                const col2X = margin + 170;
+                const col3X = margin + 340;
+                
+                const drawGridItem = (label: string, value: string, x: number, yPos: number) => {
+                    drawText(label, x, yPos, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
+                    drawText(toTitleCase(value) || 'N/A', x, yPos - 15, helveticaFont, 11);
+                };
+                
+                drawGridItem('Date of Birth', format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy'), col1X, y);
+                drawGridItem('Gender', employee.gender, col2X, y);
+                drawGridItem('Marital Status', employee.maritalStatus, col3X, y);
+                y -= 45;
+
+                drawGridItem("Father's Name", employee.fatherName, col1X, y);
+                drawGridItem("Mother's Name", employee.motherName, col2X, y);
+                drawGridItem("Educational Qualification", employee.educationalQualification === 'Any Other Qualification' ? (employee.otherQualification || 'N/A') : (employee.educationalQualification || 'N/A'), col3X, y);
+                y -= 45;
+                
+                drawGridItem("Phone Number", employee.phoneNumber, col1X, y);
+                drawGridItem("Email Address", employee.emailAddress, col2X, y);
+                drawGridItem("District", employee.district, col3X, y);
+                y -= 45;
+                
+                drawGridItem("Full Address", employee.fullAddress, col1X, y);
+
+                // --- Documents ---
+                 const documents = [
+                    { url: employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl, title: "Identity Proof (Front)"},
+                    { url: employee.identityProofUrlBack || legacy.idProofDocumentUrlBack, title: "Identity Proof (Back)"},
+                    { url: employee.addressProofUrlFront, title: "Address Proof (Front)" },
+                    { url: employee.addressProofUrlBack, title: "Address Proof (Back)"},
+                    { url: employee.signatureUrl, title: "Signature" },
+                    { url: employee.bankPassbookStatementUrl, title: "Bank Document" },
+                ];
+
+                for (const doc of documents) {
+                    if (!doc.url) continue;
+                    const imageBytes = await fetchImageBytes(doc.url);
+                    if (imageBytes) {
+                        const docPage = pdfDoc.addPage();
+                        let image;
+                         try {
+                            if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
+                                image = await pdfDoc.embedPng(imageBytes);
+                            } else {
+                                image = await pdfDoc.embedJpg(imageBytes);
+                            }
+                        } catch (e) {
+                             console.warn(`Could not embed image for ${doc.url}:`, e); continue;
+                        }
+                        
+                        docPage.drawText(doc.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
+                        const { width: pageWidth, height: pageHeight } = docPage.getSize();
+                        const dims = image.scaleToFit(pageWidth - margin * 2, pageHeight - margin * 2 - 50);
+                        docPage.drawImage(image, {
+                            x: (pageWidth - dims.width) / 2,
+                            y: (pageHeight - dims.height - 50) / 2,
+                            width: dims.width,
+                            height: dims.height,
+                        });
+                    }
                 }
 
-                const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
-                if (idProofBackUrl && idBackElement) {
-                     await addPageToPdf(idBackElement);
-                }
-                
-                pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `CISS_ProfileKit_${employee.employeeId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(blobUrl);
+
                 toast({ title: `Generated Kit for ${employee.fullName} (${i+1}/${employeesToExport.length})` });
-                await sleep(1000);
+                await sleep(500); // Small delay between downloads
 
             } catch (err: any) {
                 console.error(`Failed to generate PDF for ${employee.fullName}:`, err);
@@ -322,27 +301,12 @@ export default function DataExportPage() {
             }
         }
         
-        setCurrentEmployeeForPdf(null);
         setGenerationStatus('complete');
         toast({ variant: 'default', title: "Bulk Export Complete!", description: `Finished processing all selected employees.` });
     };
 
     return (
         <>
-            <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1 }}>
-                {currentEmployeeForPdf && (
-                    <div ref={offscreenContainerRef}>
-                        <div id="biodata-page"><BiodataPage employee={currentEmployeeForPdf} pageNumber={1} /></div>
-                        {currentEmployeeForPdf.qrCodeUrl && <div id="qr-page"><QrPage employee={currentEmployeeForPdf} pageNumber={2} /></div>}
-                        
-                        {(currentEmployeeForPdf.identityProofUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrl) && 
-                            <div id="id-front-page"><DocumentPage title="Identity Proof (Front)" imageUrl={currentEmployeeForPdf.identityProofUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrlFront || (currentEmployeeForPdf as any).idProofDocumentUrl} pageNumber={3} /></div>}
-                        
-                        {(currentEmployeeForPdf.identityProofUrlBack || (currentEmployeeForPdf as any).idProofDocumentUrlBack) && 
-                            <div id="id-back-page"><DocumentPage title="Identity Proof (Back)" imageUrl={currentEmployeeForPdf.identityProofUrlBack || (currentEmployeeForPdf as any).idProofDocumentUrlBack} pageNumber={4} /></div>}
-                    </div>
-                )}
-            </div>
             <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" size="icon" asChild><Link href="/settings"><ChevronLeft className="h-4 w-4" /><span className="sr-only">Back to Settings</span></Link></Button>
@@ -413,21 +377,100 @@ export default function DataExportPage() {
                             </div>
                         </div>
                          <Button onClick={handleExport} disabled={isGenerating}>
-                            {isGenerating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating...</>
+                            {isGenerating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating ({processedCount}/{totalCount})...</>
                             : <><DownloadCloud className="mr-2 h-4 w-4" />Generate and Download</>}
                         </Button>
                     </CardContent>
 
                     {generationStatus !== 'idle' && (
                         <CardFooter>
-                           {generationStatus === 'generating' && <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Processing...</AlertTitle><AlertDescription>Your export is being generated. This may take a few moments.</AlertDescription></Alert>}
-                           {generationStatus === 'complete' && <Alert variant="default" className="bg-green-50 border-green-200"><CheckCircle className="h-4 w-4 text-green-600" /><AlertTitle className="text-green-800">Export Complete!</AlertTitle><AlertDescription className="text-green-700">Successfully processed {processedCount} records. Your download should begin shortly.</AlertDescription></Alert>}
-                           {generationStatus === 'error' && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Export Error</AlertTitle><AlertDescription>The export could not be completed. Please check the filters and try again.</AlertDescription></Alert>}
-                        </CardFooter>
+                           {generationStatus === 'generating' && <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Processing...</AlertTitle><AlertDescription>Your export is being generated. Processed {processedCount} of {totalCount} records.</AlertDescription></Alert>}
+                           {generationSessionId" value={employee.dateOfBirth} isDate />
+                    <DetailItem label="Gender" value={employee.gender} />
+                    <DetailItem label="Father's Name" value={employee.fatherName} isName />
+                    <DetailItem label="Mother's Name" value={employee.motherName} isName />
+                    <DetailItem label="Marital Status" value={employee.maritalStatus} />
+                    {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} isName />}
+                    <DetailItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
+                    <DetailItem label="District" value={employee.district} isName />
+                  </div>
+                  <Separator className="my-6" />
+                  <CardTitle className="text-lg mb-2">Contact Details</CardTitle>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Phone Number" value={employee.phoneNumber} />
+                    <DetailItem label="Email Address" value={employee.emailAddress} />
+                     <div className="md:col-span-2">
+                        <DetailItem label="Full Address" value={employee.fullAddress} isAddress />
+                     </div>
+                  </div>
+                </TabsContent>
+                <TabsContent value="employment">
+                  <CardTitle className="mb-4">Employment Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <div className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2 py-1.5 items-start sm:items-center">
+                        <span className="text-sm text-muted-foreground sm:col-span-1">Employee ID</span>
+                        <span className="text-sm font-medium sm:col-span-2 flex items-center gap-2">
+                            {employee.employeeId}
+                        </span>
+                    </div>
+                    <DetailItem label="Client Name" value={employee.clientName} isName />
+                    {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
+                    <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
+                    <DetailItem label="Status" value={employee.status} />
+                    {employee.status === 'Exited' && employee.exitDate && (
+                        <DetailItem label="Exit Date" value={employee.exitDate} isDate />
                     )}
-                </Card>
-            </div>
-        </>
-    );
+                  </div>
+                </TabsContent>
+                <TabsContent value="bank">
+                  <CardTitle className="mb-4">Bank Account Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="Bank Name" value={employee.bankName} isName />
+                    <DetailItem label="Account Number" value={employee.bankAccountNumber} />
+                    <DetailItem label="IFSC Code" value={employee.ifscCode} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="identification">
+                  <CardTitle className="mb-4">Identification Details</CardTitle>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <DetailItem label="PAN Number" value={employee.panNumber} />
+                    <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
+                    <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
+                    <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
+                    <DetailItem label="ESIC Number" value={employee.esicNumber} />
+                  </div>
+                </TabsContent>
+                <TabsContent value="qr">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <CardTitle className="mb-4">Employee QR Code</CardTitle>
+                        <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
+                            {employee.qrCodeUrl ? (
+                                <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
+                            ) : (
+                                <p className="text-muted-foreground">QR Code not available.</p>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <CardTitle className="mb-4">Uploaded Documents</CardTitle>
+                        <div className="space-y-3">
+                            <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
+                            <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />
+                            <DocumentItem name="Identity Proof (Front)" url={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} type={employee.identityProofType || (employee as any).idProofType} />
+                            <DocumentItem name="Identity Proof (Back)" url={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} type={employee.identityProofType || (employee as any).idProofType} />
+                            <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
+                            <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
+                            <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                            <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
+                        </div>
+                    </div>
+                  </div>
+                </TabsContent>
+                </CardContent>
+            </Card>
+        </Tabs>
+      </div>
+    </>
+  );
 }
-

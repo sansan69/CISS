@@ -37,7 +37,7 @@ import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorag
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 
 // Dropdown options
 const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
@@ -650,66 +650,97 @@ export default function AdminEmployeeProfilePage() {
 
     try {
         const pdfDoc = await PDFDocument.create();
-        const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-        const timesRomanBoldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-
+        const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        
+        const cissLogoUrl = '/ciss-logo.png';
+        const logoBytes = await fetch(cissLogoUrl).then(res => res.arrayBuffer());
+        const logoImage = await pdfDoc.embedPng(logoBytes);
+        
         // --- Page 1: Biodata ---
-        let page = pdfDoc.addPage();
+        const page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         const margin = 50;
-        let y = height - margin;
 
+        const drawText = (text: string, x: number, y: number, font: PDFFont, size: number, color = rgb(0, 0, 0)) => {
+            page.drawText(text, { x, y, font, size, color });
+        };
+        
+        // Header
+        logoImage.scaleToFit(50, 50);
+        page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
+        
+        drawText(toTitleCase(employee.fullName), margin + 65, height - margin - 25, helveticaBoldFont, 22, rgb(0.05, 0.2, 0.45));
+        drawText(`Employee ID: ${employee.employeeId}`, margin + 65, height - margin - 45, helveticaFont, 10, rgb(0.3, 0.3, 0.3));
+        drawText(`Client: ${employee.clientName}`, margin + 65, height - margin - 60, helveticaFont, 10, rgb(0.3, 0.3, 0.3));
+        
         const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
         if (profilePicBytes) {
             let image;
-            try {
-                if (profilePicBytes[0] === 0x89 && profilePicBytes[1] === 0x50 && profilePicBytes[2] === 0x4E && profilePicBytes[3] === 0x47) {
-                    image = await pdfDoc.embedPng(profilePicBytes);
-                } else {
-                    image = await pdfDoc.embedJpg(profilePicBytes);
-                }
-                 page.drawImage(image, { x: width - margin - 100, y: height - margin - 120, width: 100, height: 120 });
-            } catch (e) {
-                console.warn("Could not embed profile picture:", e);
+            if (profilePicBytes[0] === 0x89 && profilePicBytes[1] === 0x50 && profilePicBytes[2] === 0x4E && profilePicBytes[3] === 0x47) {
+                 image = await pdfDoc.embedPng(profilePicBytes);
+            } else {
+                 image = await pdfDoc.embedJpg(profilePicBytes);
             }
+            const imgDims = image.scaleToFit(80, 100);
+            page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
+            page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
         }
         
-        page.drawText(employee.fullName, { x: margin, y: y, font: timesRomanBoldFont, size: 22 });
-        y -= 40;
-        page.drawText(`Employee ID: ${employee.employeeId}`, { x: margin, y, font: timesRomanFont, size: 12 });
-        y -= 15;
-        page.drawText(`Client: ${employee.clientName}`, { x: margin, y, font: timesRomanFont, size: 12 });
+        let y = height - margin - 110;
+        page.drawLine({ start: { x: margin, y: y }, end: { x: width - margin, y: y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
         y -= 30;
 
-        page.drawText('Personal Details', { x: margin, y, font: timesRomanBoldFont, size: 14 });
-        y -= 20;
-        page.drawText(`Date of Birth: ${format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy')}`, { x: margin, y, font: timesRomanFont, size: 11 });
-        y -= 15;
-        page.drawText(`Phone: ${employee.phoneNumber}`, { x: margin, y, font: timesRomanFont, size: 11 });
-        y -= 15;
-        page.drawText(`Address: ${employee.fullAddress}`, { x: margin, y, font: timesRomanFont, size: 11, maxWidth: width - margin * 2 - 130 });
-        y -= 30;
+        // Personal & Contact Info
+        drawText('Personal & Contact Information', margin, y, helveticaBoldFont, 14, rgb(0.05, 0.2, 0.45));
+        y -= 25;
 
-        const qrDataURL = await QRCode.toDataURL(`${window.location.origin}/profile/${employee.id}`);
-        const qrBytes = Buffer.from(qrDataURL.split(',')[1], 'base64');
-        const qrImage = await pdfDoc.embedPng(qrBytes); // QR is always PNG
-        page.drawImage(qrImage, { x: width - margin - 120, y: margin, width: 120, height: 120 });
+        const col1X = margin;
+        const col2X = margin + 170;
+        const col3X = margin + 340;
+        
+        const drawGridItem = (label: string, value: string, x: number, y: number) => {
+            drawText(label, x, y, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
+            drawText(toTitleCase(value) || 'N/A', x, y - 15, helveticaFont, 11);
+        };
+        
+        // Row 1
+        drawGridItem('Date of Birth', format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy'), col1X, y);
+        drawGridItem('Gender', employee.gender, col2X, y);
+        drawGridItem('Marital Status', employee.maritalStatus, col3X, y);
+        y -= 45;
+
+        // Row 2
+        drawGridItem("Father's Name", employee.fatherName, col1X, y);
+        drawGridItem("Mother's Name", employee.motherName, col2X, y);
+        drawGridItem("Educational Qualification", employee.educationalQualification === 'Any Other Qualification' ? (employee.otherQualification || 'N/A') : (employee.educationalQualification || 'N/A'), col3X, y);
+        y -= 45;
+        
+        // Row 3
+        drawGridItem("Phone Number", employee.phoneNumber, col1X, y);
+        drawGridItem("Email Address", employee.emailAddress, col2X, y);
+        drawGridItem("District", employee.district, col3X, y);
+        y -= 45;
+        
+        // Row 4 - Full Address
+        drawGridItem("Full Address", employee.fullAddress, col1X, y);
+
 
         // --- Subsequent Pages: Documents ---
         const documents = [
-            { url: employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl },
-            { url: employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack },
-            { url: employee.addressProofUrlFront },
-            { url: employee.addressProofUrlBack },
-            { url: employee.signatureUrl },
-            { url: employee.bankPassbookStatementUrl },
+            { url: employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl, title: "Identity Proof (Front)"},
+            { url: employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack, title: "Identity Proof (Back)"},
+            { url: employee.addressProofUrlFront, title: "Address Proof (Front)" },
+            { url: employee.addressProofUrlBack, title: "Address Proof (Back)"},
+            { url: employee.signatureUrl, title: "Signature" },
+            { url: employee.bankPassbookStatementUrl, title: "Bank Document" },
         ];
 
         for (const doc of documents) {
             if (!doc.url) continue;
             const imageBytes = await fetchImageBytes(doc.url);
             if (imageBytes) {
-                page = pdfDoc.addPage();
+                const docPage = pdfDoc.addPage();
                 let image;
                  try {
                     if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
@@ -720,14 +751,16 @@ export default function AdminEmployeeProfilePage() {
                 } catch (e) {
                      console.warn(`Could not embed image for ${doc.url}:`, e); continue;
                 }
-                const scale = 0.85;
-                const imgWidth = page.getWidth() * scale;
-                const imgHeight = page.getHeight() * scale;
-                const aspectRatio = image.width / image.height;
-                let finalWidth = imgWidth;
-                let finalHeight = finalWidth / aspectRatio;
-                if (finalHeight > imgHeight) { finalHeight = imgHeight; finalWidth = finalHeight * aspectRatio; }
-                page.drawImage(image, { x: (page.getWidth() - finalWidth) / 2, y: (page.getHeight() - finalHeight) / 2, width: finalWidth, height: finalHeight });
+                
+                docPage.drawText(doc.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
+                const { width: pageWidth, height: pageHeight } = docPage.getSize();
+                const dims = image.scaleToFit(pageWidth - margin * 2, pageHeight - margin * 2 - 50);
+                docPage.drawImage(image, {
+                    x: (pageWidth - dims.width) / 2,
+                    y: (pageHeight - dims.height - 50) / 2,
+                    width: dims.width,
+                    height: dims.height,
+                });
             }
         }
 
