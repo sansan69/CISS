@@ -782,39 +782,72 @@ export default function AdminEmployeeProfilePage() {
         if (employee.qrCodeUrl) {
             try {
                 const qrPage = pdfDoc.addPage();
-                
-                // QR code is a data URI, extract base64 part
+                const pageW = qrPage.getWidth();
+                const pageH = qrPage.getHeight();
+
                 const qrDataUri = employee.qrCodeUrl;
                 if (qrDataUri.startsWith('data:image/png;base64,')) {
                     const qrPngBase64 = qrDataUri.substring('data:image/png;base64,'.length);
                     const qrPngBytes = Buffer.from(qrPngBase64, 'base64');
                     const qrImage = await pdfDoc.embedPng(qrPngBytes);
-                    
-                    qrPage.drawText("Employee QR Code for Attendance", { x: margin, y: qrPage.getHeight() - margin - 20, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
-                    
                     const qrDims = qrImage.scaleToFit(300, 300);
+
+                    const title = "Employee QR Code for Attendance";
+                    const titleWidth = helveticaBoldFont.widthOfTextAtSize(title, 16);
+                    qrPage.drawText(title, {
+                        x: (pageW - titleWidth) / 2,
+                        y: pageH - margin - 50,
+                        font: helveticaBoldFont,
+                        size: 16,
+                        color: rgb(0.05, 0.2, 0.45)
+                    });
+
                     qrPage.drawImage(qrImage, {
-                        x: (qrPage.getWidth() - qrDims.width) / 2,
-                        y: qrPage.getHeight() - margin - 220,
+                        x: (pageW - qrDims.width) / 2,
+                        y: pageH - margin - 80 - qrDims.height,
                         width: qrDims.width,
                         height: qrDims.height,
                     });
-
+                    
                     qrPage.drawRectangle({
-                        x: (qrPage.getWidth() - qrDims.width) / 2 - 10,
-                        y: qrPage.getHeight() - margin - 230,
+                        x: (pageW - qrDims.width) / 2 - 10,
+                        y: pageH - margin - 80 - qrDims.height - 10,
                         width: qrDims.width + 20,
                         height: qrDims.height + 20,
                         borderColor: rgb(0.8, 0.8, 0.8),
                         borderWidth: 1,
                     });
+                    
+                    let instructionsY = pageH - margin - 80 - qrDims.height - 50;
+                    
+                    const howToUse = "How to Use:";
+                    const howToUseWidth = helveticaBoldFont.widthOfTextAtSize(howToUse, 12);
+                    qrPage.drawText(howToUse, {
+                        x: (pageW - howToUseWidth) / 2,
+                        y: instructionsY,
+                        font: helveticaBoldFont,
+                        size: 12
+                    });
+                    instructionsY -= 25;
+                    
+                    const instructions = [
+                      "1. Open the attendance marking page on the official CISS Workforce app or portal.",
+                      "2. Select the 'Scan QR & Verify' option.",
+                      "3. Point your device camera at this QR code.",
+                      "4. Follow on-screen instructions to capture your photo and location to complete check-in/out."
+                    ];
 
-                    const instructionsY = qrPage.getHeight() - margin - 280;
-                    qrPage.drawText("How to Use:", { x: margin, y: instructionsY, font: helveticaBoldFont, size: 12 });
-                    qrPage.drawText("1. Open the attendance marking page on the official CISS Workforce app or portal.", { x: margin, y: instructionsY - 20, font: helveticaFont, size: 10, lineHeight: 14 });
-                    qrPage.drawText("2. Select the 'Scan QR & Verify' option.", { x: margin, y: instructionsY - 40, font: helveticaFont, size: 10, lineHeight: 14 });
-                    qrPage.drawText("3. Point your device camera at this QR code.", { x: margin, y: instructionsY - 60, font: helveticaFont, size: 10, lineHeight: 14 });
-                    qrPage.drawText("4. Follow the on-screen instructions to capture your photo and location to complete check-in/out.", { x: margin, y: instructionsY - 80, font: helveticaFont, size: 10, lineHeight: 14 });
+                    for(const instruction of instructions) {
+                        const instructionWidth = helveticaFont.widthOfTextAtSize(instruction, 10);
+                        qrPage.drawText(instruction, {
+                            x: (pageW - instructionWidth) / 2,
+                            y: instructionsY,
+                            font: helveticaFont,
+                            size: 10,
+                            lineHeight: 14
+                        });
+                        instructionsY -= 20;
+                    }
                 }
             } catch (qrError) {
                 console.error("Could not embed QR code:", qrError);
