@@ -254,7 +254,7 @@ export default function DataExportPage() {
                         drawText(item.label, x, startY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
                         drawText(toTitleCase(String(item.value)) || 'N/A', x, startY - 15, helveticaFont, 11);
                     }
-                    startY -= 50;
+                    startY -= 40;
                     
                     page.drawLine({ start: { x: margin, y: startY + 15 }, end: { x: width - margin, y: startY + 15 }, thickness: 0.2, color: rgb(0.85, 0.85, 0.85) });
                     
@@ -276,9 +276,13 @@ export default function DataExportPage() {
                      { label: "Phone Number", value: employee.phoneNumber },
                      { label: "Email Address", value: employee.emailAddress },
                      { label: "District", value: employee.district },
-                     { label: "Full Address", value: employee.fullAddress },
-                ]
+                ];
                 y = drawSection("Contact Information", contactItems, y);
+                
+                const fullAddressY = y + 25;
+                drawText("Full Address", margin, fullAddressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
+                drawText(toTitleCase(employee.fullAddress), margin, fullAddressY - 15, helveticaFont, 11);
+                y -= 40;
 
                 const employmentItems = [
                     { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
