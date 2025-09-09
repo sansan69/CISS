@@ -17,8 +17,6 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const toTitleCase = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -77,221 +75,6 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
     </div>
 );
 
-// #region PDF Generation Components
-
-const pageStyle: React.CSSProperties = {
-  width: '210mm',
-  minHeight: '297mm',
-  padding: '15mm',
-  backgroundColor: 'white',
-  color: 'black',
-  fontFamily: 'Arial, sans-serif',
-  display: 'flex',
-  flexDirection: 'column',
-  position: 'relative',
-  boxSizing: 'border-box'
-};
-
-const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
-  <footer style={{
-    position: 'absolute',
-    bottom: '10mm',
-    left: '15mm',
-    right: '15mm',
-    textAlign: 'center',
-    fontSize: '9px',
-    color: '#666',
-    borderTop: '1px solid #ccc',
-    paddingTop: '5px'
-  }}>
-    Page {pageNumber} | CISS Services Ltd. | Generated on: {format(new Date(), "dd-MM-yyyy")}
-  </footer>
-);
-
-
-const DetailGridItem = ({ label, value }: { label: string; value?: string | number | null }) => (
-  <div>
-    <p className="text-xs text-gray-500">{label}</p>
-    <p className="font-medium text-gray-800">{value || 'N/A'}</p>
-  </div>
-);
-
-const formatDateForPdf = (date: any) => {
-  if (!date) return 'N/A';
-  const dateObj = date.toDate ? date.toDate() : new Date(date);
-  if (isNaN(dateObj.getTime())) return 'N/A';
-  return format(dateObj, "dd-MM-yyyy");
-};
-
-const BiodataPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
-  <div ref={ref} style={pageStyle}>
-    <header className="flex justify-between items-start pb-4 border-b border-gray-300">
-      <div className="flex items-center gap-4">
-        <Image src="/ciss-logo.png" alt="CISS Logo" width={60} height={60} unoptimized={true} crossOrigin="anonymous" data-ai-hint="company logo"/>
-        <div>
-          <h1 className="text-3xl font-bold text-blue-800 tracking-tight">{toTitleCase(employee.fullName)}</h1>
-          <p className="text-gray-600">Employee ID: {employee.employeeId}</p>
-          <p className="text-gray-600">Client: {employee.clientName}</p>
-        </div>
-      </div>
-      {employee.profilePictureUrl && (
-        <Image 
-            src={employee.profilePictureUrl} 
-            alt={employee.fullName || 'Profile photo'} 
-            width={100} 
-            height={120} 
-            className="rounded-lg border-2 border-gray-200 object-contain p-1 bg-gray-50" 
-            crossOrigin="anonymous" 
-            unoptimized={true}
-            data-ai-hint="profile photo" 
-        />
-      )}
-    </header>
-
-    <main className="flex-grow mt-8 space-y-8 text-sm">
-      <section>
-        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Personal & Contact Information</h2>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Date of Birth" value={formatDateForPdf(employee.dateOfBirth)} />
-          <DetailGridItem label="Gender" value={employee.gender} />
-          <DetailGridItem label="Marital Status" value={employee.maritalStatus} />
-          <DetailGridItem label="Father's Name" value={toTitleCase(employee.fatherName)} />
-          <DetailGridItem label="Mother's Name" value={toTitleCase(employee.motherName)} />
-          {employee.maritalStatus === 'Married' && <DetailGridItem label="Spouse's Name" value={toTitleCase(employee.spouseName)} />}
-          <DetailGridItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
-          <DetailGridItem label="Phone Number" value={employee.phoneNumber} />
-          <DetailGridItem label="Email Address" value={employee.emailAddress?.toLowerCase()} />
-          <DetailGridItem label="District" value={toTitleCase(employee.district)} />
-          <div className="col-span-3">
-            <DetailGridItem label="Full Address" value={toTitleCase(employee.fullAddress)} />
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Employment & Statutory Details</h2>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Joining Date" value={formatDateForPdf(employee.joiningDate)} />
-          <DetailGridItem label="Status" value={employee.status} />
-          {employee.resourceIdNumber && <DetailGridItem label="Resource ID" value={employee.resourceIdNumber} />}
-          <DetailGridItem label="PAN Number" value={employee.panNumber} />
-          <DetailGridItem label="EPF/UAN Number" value={employee.epfUanNumber} />
-          <DetailGridItem label="ESIC Number" value={employee.esicNumber} />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold text-blue-700 border-b pb-2 mb-4">Bank & Identification Details</h2>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          <DetailGridItem label="Bank Name" value={toTitleCase(employee.bankName)} />
-          <DetailGridItem label="Account Number" value={employee.bankAccountNumber} />
-          <DetailGridItem label="IFSC Code" value={employee.ifscCode} />
-          <DetailGridItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
-          <DetailGridItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
-        </div>
-      </section>
-    </main>
-    <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-BiodataPage.displayName = 'BiodataPage';
-
-
-const QrPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => (
-  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center', textAlign: 'center'}}>
-    <h1 className="text-2xl font-bold mb-4">Employee QR Code</h1>
-    <p className="mb-2 text-lg">{toTitleCase(employee.fullName)}</p>
-    <p className="mb-8 text-gray-600">{employee.employeeId}</p>
-    <div className="p-4 bg-white border-4 border-gray-200 rounded-lg">
-      <Image src={employee.qrCodeUrl!} alt="Employee QR Code" width={300} height={300} unoptimized={true} crossOrigin="anonymous" data-ai-hint="qr code" />
-    </div>
-    <div className="mt-8 text-gray-600 max-w-md">
-      <p className="font-semibold mb-2">Instructions:</p>
-      <p>This QR code is for marking your attendance. Please present this code for scanning when marking IN and OUT. Keep this document safe.</p>
-    </div>
-    <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-QrPage.displayName = 'QrPage';
-
-const TermsPage = React.forwardRef<HTMLDivElement, { employee: Employee; pageNumber: number }>(({ employee, pageNumber }, ref) => {
-  const companyName = "CISS Services Ltd.";
-  return (
-    <div ref={ref} style={pageStyle}>
-      <h1 className="text-xl font-bold text-center mb-6">Terms and Conditions of Enrollment</h1>
-      <div className="space-y-3 text-xs text-justify flex-grow">
-        <section>
-          <h2 className="text-sm font-bold mb-1">I. General Eligibility and Compliance</h2>
-          <ul className="list-disc list-outside space-y-1 pl-4">
-            <li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li>
-            <li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li>
-            <li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li>
-          </ul>
-        </section>
-        <section>
-          <h2 className="text-sm font-bold mb-1">II. Employment Terms & Responsibilities</h2>
-          <ul className="list-disc list-outside space-y-1 pl-4">
-            <li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li>
-            <li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li>
-            <li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li>
-            <li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li>
-          </ul>
-        </section>
-        <section>
-          <h2 className="text-sm font-bold mb-1">III. Disciplinary Action</h2>
-          <ul className="list-disc list-outside space-y-1 pl-4">
-            <li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li>
-          </ul>
-        </section>
-      </div>
-      <section className="mt-8 pt-6 border-t-2 border-dashed border-gray-400">
-        <h2 className="text-base font-bold text-center mb-4">IV. Declaration</h2>
-        <p className="text-sm mb-6 text-justify">
-          I, <strong>{toTitleCase(employee.fullName)}</strong>, son/daughter of <strong>{toTitleCase(employee.fatherName)}</strong>, residing at {toTitleCase(employee.fullAddress)}, hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment as a Security Guard with {companyName}. I confirm that all information provided by me is true and correct to the best of my knowledge.
-        </p>
-        <div className="flex justify-between items-end mt-12 pt-12 text-sm">
-            <div className="flex-1 space-y-2">
-                {employee.signatureUrl ? (
-                    <Image src={employee.signatureUrl} alt="Employee Signature" width={150} height={75} unoptimized={true} crossOrigin='anonymous' data-ai-hint="signature" style={{ objectFit: 'contain' }} />
-                ): (
-                    <div className="h-[75px] w-[150px] border-b border-gray-400"></div>
-                )}
-                <div className="border-t border-gray-400 pt-2 font-semibold">Signature of Security Guard</div>
-            </div>
-            <div className="w-1/4 text-center">
-                <p className="border-b border-gray-400 pb-1">{formatDateForPdf(employee.joiningDate)}</p>
-                <div className="border-t border-gray-400 mt-2 pt-2 font-semibold">Date of Registration</div>
-            </div>
-        </div>
-        <div className="mt-8 pt-6 border-t border-gray-300">
-            <p className="text-sm">Name of Security Guard (in Block Letters): <span className="font-semibold">{employee.fullName?.toUpperCase()}</span></p>
-        </div>
-      </section>
-      <PageFooter pageNumber={pageNumber} />
-    </div>
-  );
-});
-TermsPage.displayName = 'TermsPage';
-
-const DocumentPage = React.forwardRef<HTMLDivElement, { title: string; imageUrl: string; pageNumber: number }>(({ title, imageUrl, pageNumber }, ref) => (
-  <div ref={ref} style={{...pageStyle, justifyContent: 'center', alignItems: 'center'}}>
-      <h1 className="text-2xl font-bold mb-4 absolute top-[15mm]">{title}</h1>
-      <Image 
-          src={imageUrl} 
-          alt={title} 
-          layout="fill"
-          objectFit="contain"
-          className="p-[30mm]"
-          unoptimized={true} 
-          crossOrigin='anonymous'
-          data-ai-hint="identity proof document"
-      />
-      <PageFooter pageNumber={pageNumber} />
-  </div>
-));
-DocumentPage.displayName = 'DocumentPage';
-
-// #endregion
 
 export default function PublicEmployeeProfilePage() {
   const params = useParams();
@@ -299,13 +82,6 @@ export default function PublicEmployeeProfilePage() {
   const { toast } = useToast();
   const employeeIdFromUrl = params.id as string;
   
-  const biodataPageRef = useRef<HTMLDivElement>(null);
-  const qrPageRef = useRef<HTMLDivElement>(null);
-  const termsPageRef = useRef<HTMLDivElement>(null);
-  const idFrontPageRef = useRef<HTMLDivElement>(null);
-  const idBackPageRef = useRef<HTMLDivElement>(null);
-
-
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -359,131 +135,33 @@ export default function PublicEmployeeProfilePage() {
       default: return 'outline';
     }
   };
-  
-  const preloadImage = (src: string) => {
-    return new Promise((resolve, reject) => {
-        const img = new window.Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = src;
-    });
-  };
 
   const handleDownloadProfile = async () => {
     if (!employee) return;
     setIsDownloadingPdf(true);
-    toast({ title: "Generating PDF...", description: "Please wait, creating profile kit." });
-    const legacy = employee as any;
-
-    const imageUrlsToPreload = [
-        employee.profilePictureUrl,
-        employee.signatureUrl,
-        employee.qrCodeUrl,
-        employee.identityProofUrlFront,
-        legacy.idProofDocumentUrlFront,
-        legacy.idProofDocumentUrl,
-        employee.identityProofUrlBack,
-        legacy.idProofDocumentUrlBack,
-    ].filter(Boolean);
-
+    toast({ title: "Generating PDF...", description: "Your download will start shortly." });
     try {
-        await Promise.all(imageUrlsToPreload.map(url => preloadImage(url as string)));
-    } catch (error) {
-        console.error("Failed to preload images for PDF, continuing anyway:", error);
-    }
-
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    let pageCount = 0;
-
-    const addPageToPdf = async (element: HTMLElement | null) => {
-        if (!element) return;
-        pageCount++;
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: false,
-            logging: false,
-        });
-        const imgData = canvas.toDataURL('image/jpeg', 0.85);
-        
-        if (pageCount > 1) {
-            pdf.addPage();
+        const response = await fetch(`/api/kit/${employee.id}`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Failed to generate PDF');
         }
-        
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const canvasAspectRatio = canvas.width / canvas.height;
-        const pageAspectRatio = pdfWidth / pdfHeight;
-        let finalWidth, finalHeight;
-        
-        if (canvasAspectRatio > pageAspectRatio) {
-            finalWidth = pdfWidth;
-            finalHeight = pdfWidth / canvasAspectRatio;
-        } else {
-            finalHeight = pdfHeight;
-            finalWidth = pdfHeight * canvasAspectRatio;
-        }
-
-        const xOffset = (pdfWidth - finalWidth) / 2;
-        const yOffset = (pdfHeight - finalHeight) / 2;
-        
-        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
-    };
-
-    try {
-        const pagesToRender = [];
-        pagesToRender.push(biodataPageRef.current);
-        if (employee.qrCodeUrl) pagesToRender.push(qrPageRef.current);
-        pagesToRender.push(termsPageRef.current);
-
-        const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
-        if (idProofFrontUrl) pagesToRender.push(idFrontPageRef.current);
-        
-        const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
-        if (idProofBackUrl) pagesToRender.push(idBackPageRef.current);
-
-        for (const pageElement of pagesToRender.filter(Boolean)) {
-            await addPageToPdf(pageElement);
-        }
-
-        pdf.save(`${employee.fullName}_Profile_Kit.pdf`);
-        toast({ title: "Download Started", description: "Your PDF profile kit is being downloaded." });
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CISS_ProfileKit_${employee.employeeId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast({ title: "Download Started", description: "Your PDF profile kit is downloading." });
     } catch (error: any) {
         console.error("Error generating PDF:", error);
-        toast({ variant: "destructive", title: "PDF Generation Failed", description: `Could not generate the profile document. ${error.message}` });
+        toast({ variant: "destructive", title: "PDF Generation Failed", description: error.message });
     } finally {
         setIsDownloadingPdf(false);
     }
-  };
-  
-  const renderOffscreenPages = () => {
-    if (!employee) return null;
-
-    const legacy = employee as any;
-    const idProofFrontUrl = employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl;
-    const idProofBackUrl = employee.identityProofUrlBack || legacy.idProofDocumentUrlBack;
-
-    const pages = [];
-    let pageNumber = 1;
-
-    pages.push(<BiodataPage key={`page-${pageNumber}`} ref={biodataPageRef} employee={employee} pageNumber={pageNumber++} />);
-    
-    if (employee.qrCodeUrl) {
-      pages.push(<QrPage key={`page-${pageNumber}`} ref={qrPageRef} employee={employee} pageNumber={pageNumber++} />);
-    }
-
-    pages.push(<TermsPage key={`page-${pageNumber}`} ref={termsPageRef} employee={employee} pageNumber={pageNumber++} />);
-
-    if (idProofFrontUrl) {
-        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idFrontPageRef} title="Identity Proof (Front)" imageUrl={idProofFrontUrl} pageNumber={pageNumber++} />);
-    }
-    if (idProofBackUrl) {
-        pages.push(<DocumentPage key={`page-${pageNumber}`} ref={idBackPageRef} title="Identity Proof (Back)" imageUrl={idProofBackUrl} pageNumber={pageNumber++} />);
-    }
-
-
-    return pages;
   };
 
   if (isLoading) {
@@ -527,9 +205,6 @@ export default function PublicEmployeeProfilePage() {
 
   return (
     <>
-      <div style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -1, fontFamily: 'sans-serif' }}>
-        {renderOffscreenPages()}
-      </div>
       <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 sm:p-6 md:p-8">
         <div className="flex justify-between items-center mb-4">
           <Button variant="outline" size="sm" onClick={() => router.push('/')}>

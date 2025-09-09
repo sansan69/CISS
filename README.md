@@ -8,6 +8,8 @@ The application serves two primary user roles:
 1.  **Employees (Public Users):** Can enroll, view their own profile, and mark attendance.
 2.  **Super Admins:** Can log in to a secure dashboard to manage employees, view analytics, and access settings.
 
+**Note on PDF Generation:** The employee "Profile Kit" generation is handled securely on the server-side via a Next.js API route, replacing a previous client-side implementation that used `html2canvas` and `jsPDF`. This ensures reliability and avoids browser-based CORS issues.
+
 ---
 
 ## 2. Core Technologies
