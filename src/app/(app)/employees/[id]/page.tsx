@@ -221,8 +221,13 @@ const generateEmployeeId = (clientName: string): string => {
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const storageRef = ref(storage, url);
-        return await getBytes(storageRef);
+        // Firebase Storage URLs can be fetched directly.
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`Could not fetch image at path: ${url}, status: ${response.status}`);
+            return null;
+        }
+        return new Uint8Array(await response.arrayBuffer());
     } catch (error) {
         console.warn(`Could not fetch image at path: ${url}`, error);
         return null; // Gracefully fail if an image is missing
@@ -644,190 +649,208 @@ export default function AdminEmployeeProfilePage() {
   };
 
   const handleDownloadProfile = async () => {
-        if (!employee) return;
-        setIsDownloadingPdf(true);
-        toast({ title: "Generating PDF...", description: "Please wait, this may take a moment." });
-        const legacy = employee as any;
+    if (!employee) return;
+    setIsDownloadingPdf(true);
+    toast({ title: "Generating PDF...", description: "Please wait, this may take a moment." });
+    const legacy = employee as any;
 
-        try {
-            const pdfDoc = await PDFDocument.create();
-            const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-            
-            const cissLogoUrl = '/ciss-logo.png';
-            const logoBytes = await fetch(cissLogoUrl).then(res => res.arrayBuffer());
-            const logoImage = await pdfDoc.embedPng(logoBytes);
-            
-            // --- Page 1: Biodata ---
-            const page = pdfDoc.addPage();
-            const { width, height } = page.getSize();
-            const margin = 50;
+    try {
+        const pdfDoc = await PDFDocument.create();
+        const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        
+        const cissLogoUrl = '/ciss-logo.png';
+        const logoBytes = await fetch(cissLogoUrl).then(res => res.arrayBuffer());
+        const logoImage = await pdfDoc.embedPng(logoBytes);
+        
+        // --- Page 1: Biodata ---
+        const page = pdfDoc.addPage();
+        const { width, height } = page.getSize();
+        const margin = 50;
 
-            const drawText = (text: string, x: number, y: number, font: PDFFont, size: number, color = rgb(0, 0, 0)) => {
-                page.drawText(text || 'N/A', { x, y, font, size, color, maxWidth: 160, wordBreaks: [' '] });
-            };
-            
-            // Header
-            logoImage.scaleToFit(50, 50);
-            page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
-            
-            page.drawText(toTitleCase(employee.fullName), { x: margin + 65, y: height - margin - 25, font: helveticaBoldFont, size: 22, color: rgb(0.05, 0.2, 0.45) });
-            page.drawText(`Employee ID: ${employee.employeeId}`, { x: margin + 65, y: height - margin - 45, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
-            page.drawText(`Client: ${employee.clientName}`, { x: margin + 65, y: height - margin - 60, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
-            
-            const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
-            if (profilePicBytes) {
-                let image;
-                if (employee.profilePictureUrl?.includes('.png')) {
-                    image = await pdfDoc.embedPng(profilePicBytes);
-                } else {
-                    image = await pdfDoc.embedJpg(profilePicBytes);
-                }
-                const imgDims = image.scaleToFit(80, 100);
-                page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
-                page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
+        const drawText = (text: string, x: number, y: number, font: PDFFont, size: number, color = rgb(0, 0, 0)) => {
+            page.drawText(text || 'N/A', { x, y, font, size, color, maxWidth: 160, wordBreaks: [' '] });
+        };
+        
+        // Header
+        logoImage.scaleToFit(50, 50);
+        page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
+        
+        page.drawText(toTitleCase(employee.fullName), { x: margin + 65, y: height - margin - 25, font: helveticaBoldFont, size: 22, color: rgb(0.05, 0.2, 0.45) });
+        page.drawText(`Employee ID: ${employee.employeeId}`, { x: margin + 65, y: height - margin - 45, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
+        page.drawText(`Client: ${employee.clientName}`, { x: margin + 65, y: height - margin - 60, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
+        
+        const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
+        if (profilePicBytes) {
+            let image;
+             if (employee.profilePictureUrl?.toLowerCase().includes('.png')) {
+                image = await pdfDoc.embedPng(profilePicBytes);
+            } else {
+                image = await pdfDoc.embedJpg(profilePicBytes);
             }
+            const imgDims = image.scaleToFit(80, 100);
+            page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
+            page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
+        }
+        
+        let y = height - margin - 120;
+        page.drawLine({ start: { x: margin, y: y }, end: { x: width - margin, y: y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+        y -= 25;
+
+        // Helper to draw a section with a title and grid items
+        const drawSection = (title: string, items: {label: string, value: any}[], startY: number): number => {
+            page.drawText(title, { x: margin, y: startY, font: helveticaBoldFont, size: 14, color: rgb(0.05, 0.2, 0.45) });
+            startY -= 25;
+
+            const col1X = margin;
+            const col2X = margin + 180;
+            const col3X = margin + 360;
             
-            let y = height - margin - 120;
-            page.drawLine({ start: { x: margin, y: y }, end: { x: width - margin, y: y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
-            y -= 25;
-
-            // Helper to draw a section with a title and grid items
-            const drawSection = (title: string, items: {label: string, value: any}[], startY: number): number => {
-                page.drawText(title, { x: margin, y: startY, font: helveticaBoldFont, size: 14, color: rgb(0.05, 0.2, 0.45) });
-                startY -= 25;
-
-                const col1X = margin;
-                const col2X = margin + 180;
-                const col3X = margin + 360;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const col = i % 3;
+                const x = col === 0 ? col1X : col === 1 ? col2X : col3X;
                 
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    const col = i % 3;
-                    const x = col === 0 ? col1X : col === 1 ? col2X : col3X;
-                    
-                    drawText(item.label, x, startY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-                    drawText(toTitleCase(item.value) || 'N/A', x, startY - 15, helveticaFont, 11);
+                drawText(item.label, x, startY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
+                drawText(toTitleCase(item.value) || 'N/A', x, startY - 15, helveticaFont, 11);
 
-                    if ((i + 1) % 3 === 0) {
-                        startY -= 45;
-                    }
-                }
-                // Adjust Y for next section if the last row wasn't full
-                if (items.length % 3 !== 0) {
+                if ((i + 1) % 3 === 0) {
                     startY -= 45;
                 }
-                
-                startY -= 10; // Extra space before next section's title
-                page.drawLine({ start: { x: margin, y: startY + 5 }, end: { x: width - margin, y: startY + 5 }, thickness: 0.2, color: rgb(0.85, 0.85, 0.85) });
-                startY -= 5;
-                
-                return startY;
-            };
-
-            const personalItems = [
-                { label: 'Date of Birth', value: format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy') },
-                { label: 'Gender', value: employee.gender },
-                { label: 'Marital Status', value: employee.maritalStatus },
-                { label: "Father's Name", value: employee.fatherName },
-                { label: "Mother's Name", value: employee.motherName },
-                ...(employee.maritalStatus === 'Married' ? [{ label: "Spouse's Name", value: employee.spouseName }] : []),
-                { label: "Educational Qualification", value: employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification },
-                { label: "Phone Number", value: employee.phoneNumber },
-                { label: "Email Address", value: employee.emailAddress },
-                { label: "District", value: employee.district },
-                { label: "Full Address", value: employee.fullAddress },
-            ];
-            y = drawSection("Personal & Contact Information", personalItems, y);
-
-            const employmentItems = [
-                { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
-                { label: "Status", value: employee.status },
-                ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : []),
-                { label: "Resource ID (if any)", value: employee.resourceIdNumber },
-            ];
-            y = drawSection("Employment & Status", employmentItems, y);
+            }
+            // Adjust Y for next section if the last row wasn't full
+            if (items.length % 3 !== 0) {
+                startY -= 45;
+            }
             
-            const statutoryItems = [
-                { label: "PAN Number", value: employee.panNumber },
-                { label: "EPF / UAN", value: employee.epfUanNumber },
-                { label: "ESIC Number", value: employee.esicNumber },
-                { label: "Bank Name", value: employee.bankName },
-                { label: "Bank Account No.", value: employee.bankAccountNumber },
-                { label: "Bank IFSC Code", value: employee.ifscCode },
-                { label: "Identity Proof", value: `${employee.identityProofType || legacy.idProofType} - ${employee.identityProofNumber || legacy.idProofNumber}`},
-                { label: "Address Proof", value: `${employee.addressProofType} - ${employee.addressProofNumber}`},
-            ];
-            y = drawSection("Bank & Statutory Details", statutoryItems, y);
+            startY -= 10; // Extra space before next section's title
+            page.drawLine({ start: { x: margin, y: startY + 5 }, end: { x: width - margin, y: startY + 5 }, thickness: 0.2, color: rgb(0.85, 0.85, 0.85) });
+            startY -= 5;
+            
+            return startY;
+        };
 
-            // --- Subsequent Pages: Documents ---
-            const documents = [
-                { url: employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl, title: "Identity Proof (Front)"},
-                { url: employee.identityProofUrlBack || legacy.idProofDocumentUrlBack, title: "Identity Proof (Back)"},
-                { url: employee.addressProofUrlFront, title: "Address Proof (Front)" },
-                { url: employee.addressProofUrlBack, title: "Address Proof (Back)"},
-                { url: employee.signatureUrl, title: "Signature" },
-                { url: employee.bankPassbookStatementUrl, title: "Bank Document" },
-                { url: employee.policeClearanceCertificateUrl, title: "Police Clearance Certificate" },
-            ];
+        const personalItems = [
+            { label: 'Date of Birth', value: format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy') },
+            { label: 'Gender', value: employee.gender },
+            { label: 'Marital Status', value: employee.maritalStatus },
+            { label: "Father's Name", value: employee.fatherName },
+            { label: "Mother's Name", value: employee.motherName },
+            ...(employee.maritalStatus === 'Married' ? [{ label: "Spouse's Name", value: employee.spouseName }] : []),
+            { label: "Educational Qualification", value: employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification },
+            { label: "Phone Number", value: employee.phoneNumber },
+            { label: "Email Address", value: employee.emailAddress },
+            { label: "District", value: employee.district },
+            { label: "Full Address", value: employee.fullAddress },
+        ];
+        y = drawSection("Personal & Contact Information", personalItems, y);
 
-            for (const doc of documents) {
-                if (!doc.url) continue;
-                const imageBytes = await fetchImageBytes(doc.url);
-                if (imageBytes) {
-                    const docPage = pdfDoc.addPage();
-                    let image;
-                    try {
-                        // A simple heuristic to detect image type from bytes
-                        if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
-                            image = await pdfDoc.embedPng(imageBytes);
-                        } else if (imageBytes[0] === 0xFF && imageBytes[1] === 0xD8) {
-                             image = await pdfDoc.embedJpg(imageBytes);
-                        } else {
-                            console.warn(`Could not determine image type for ${doc.url}, attempting JPG embed.`);
-                            image = await pdfDoc.embedJpg(imageBytes);
-                        }
-                    } catch (e) {
-                         console.error(`Could not embed image for ${doc.url}:`, e); 
-                         docPage.drawText(`Error embedding document: ${doc.title}`, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14, color: rgb(1,0,0)});
-                         continue;
-                    }
-                    
-                    docPage.drawText(doc.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
-                    const { width: pageWidth, height: pageHeight } = docPage.getSize();
-                    const dims = image.scaleToFit(pageWidth - margin * 2, pageHeight - margin * 2 - 50);
-                    docPage.drawImage(image, {
-                        x: (pageWidth - dims.width) / 2,
-                        y: (pageHeight - dims.height - 50) / 2,
-                        width: dims.width,
-                        height: dims.height,
+        const employmentItems = [
+            { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
+            { label: "Status", value: employee.status },
+            ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : []),
+            { label: "Resource ID (if any)", value: employee.resourceIdNumber },
+        ];
+        y = drawSection("Employment & Status", employmentItems, y);
+        
+        const statutoryItems = [
+            { label: "PAN Number", value: employee.panNumber },
+            { label: "EPF / UAN", value: employee.epfUanNumber },
+            { label: "ESIC Number", value: employee.esicNumber },
+            { label: "Bank Name", value: employee.bankName },
+            { label: "Bank Account No.", value: employee.bankAccountNumber },
+            { label: "Bank IFSC Code", value: employee.ifscCode },
+            { label: "Identity Proof", value: `${employee.identityProofType || legacy.idProofType} - ${employee.identityProofNumber || legacy.idProofNumber}`},
+            { label: "Address Proof", value: `${employee.addressProofType} - ${employee.addressProofNumber}`},
+        ];
+        y = drawSection("Bank & Statutory Details", statutoryItems, y);
+
+        // --- Page 2: QR Code ---
+        if (employee.qrCodeUrl) {
+            try {
+                const qrPage = pdfDoc.addPage();
+                const qrImageBytes = await fetchImageBytes(employee.qrCodeUrl);
+                if (qrImageBytes) {
+                    const qrImage = await pdfDoc.embedPng(qrImageBytes);
+                    const qrDims = qrImage.scaleToFit(qrPage.getWidth() - margin * 4, qrPage.getHeight() - margin * 4);
+                    qrPage.drawText("Employee QR Code", { x: margin, y: qrPage.getHeight() - margin, font: helveticaBoldFont, size: 14 });
+                    qrPage.drawImage(qrImage, {
+                        x: (qrPage.getWidth() - qrDims.width) / 2,
+                        y: (qrPage.getHeight() - qrDims.height) / 2,
+                        width: qrDims.width,
+                        height: qrDims.height,
                     });
                 }
+            } catch (qrError) {
+                console.error("Could not embed QR code:", qrError);
             }
-
-            const pdfBytes = await pdfDoc.save();
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `CISS_ProfileKit_${employee.employeeId}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            toast({ title: "Download Started", description: "Your PDF profile kit is downloading." });
-        } catch (error: any) {
-            console.error("Error during PDF generation:", error);
-            toast({
-                variant: "destructive",
-                title: "PDF Generation Failed",
-                description: `Could not generate the profile kit. ${error.message}`,
-                duration: 7000
-            });
-        } finally {
-            setIsDownloadingPdf(false);
         }
-    };
+        
+        // --- Subsequent Pages: Documents ---
+        const documents = [
+            { url: employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl, title: "Identity Proof (Front)"},
+            { url: employee.identityProofUrlBack || legacy.idProofDocumentUrlBack, title: "Identity Proof (Back)"},
+            { url: employee.addressProofUrlFront, title: "Address Proof (Front)" },
+            { url: employee.addressProofUrlBack, title: "Address Proof (Back)"},
+            { url: employee.signatureUrl, title: "Signature" },
+            { url: employee.bankPassbookStatementUrl, title: "Bank Document" },
+            { url: employee.policeClearanceCertificateUrl, title: "Police Clearance Certificate" },
+        ];
+
+        for (const doc of documents) {
+            if (!doc.url) continue;
+            const imageBytes = await fetchImageBytes(doc.url);
+            if (imageBytes) {
+                const docPage = pdfDoc.addPage();
+                let image;
+                 try {
+                    // A simple heuristic to detect image type from bytes
+                    if (doc.url.toLowerCase().includes('.png') || (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47)) {
+                        image = await pdfDoc.embedPng(imageBytes);
+                    } else {
+                        image = await pdfDoc.embedJpg(imageBytes);
+                    }
+                } catch (e) {
+                     console.error(`Could not embed image for ${doc.url}:`, e); 
+                     docPage.drawText(`Error embedding document: ${doc.title}`, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14, color: rgb(1,0,0)});
+                     continue;
+                }
+                
+                docPage.drawText(doc.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
+                const { width: pageWidth, height: pageHeight } = docPage.getSize();
+                const dims = image.scaleToFit(pageWidth - margin * 2, pageHeight - margin * 2 - 50);
+                docPage.drawImage(image, {
+                    x: (pageWidth - dims.width) / 2,
+                    y: (pageHeight - dims.height - 50) / 2,
+                    width: dims.width,
+                    height: dims.height,
+                });
+            }
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CISS_ProfileKit_${employee.employeeId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast({ title: "Download Started", description: "Your PDF profile kit is downloading." });
+    } catch (error: any) {
+        console.error("Error during PDF generation:", error);
+        toast({
+            variant: "destructive",
+            title: "PDF Generation Failed",
+            description: `Could not generate the profile kit. ${error.message || 'An unknown error occurred.'}`,
+            duration: 7000
+        });
+    } finally {
+        setIsDownloadingPdf(false);
+    }
+};
 
   const handleRegenerateQrCode = async () => {
     if (!employee) return;
@@ -1461,4 +1484,3 @@ const ImageInputWithPreview: React.FC<{
         </div>
     );
 };
-

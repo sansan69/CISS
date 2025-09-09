@@ -28,8 +28,12 @@ const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Ala
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const storageRef = ref(storage, url);
-        return await getBytes(storageRef);
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`Could not fetch image at path: ${url}, status: ${response.status}`);
+            return null;
+        }
+        return new Uint8Array(await response.arrayBuffer());
     } catch (error) {
         console.warn(`Could not fetch image at path: ${url}`, error);
         return null;
@@ -200,7 +204,7 @@ export default function DataExportPage() {
                 const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
                 if (profilePicBytes) {
                     let image;
-                    if (employee.profilePictureUrl?.includes('.png')) {
+                    if (employee.profilePictureUrl?.toLowerCase().includes('.png')) {
                         image = await pdfDoc.embedPng(profilePicBytes);
                     } else {
                         image = await pdfDoc.embedJpg(profilePicBytes);
@@ -281,6 +285,27 @@ export default function DataExportPage() {
                 ];
                 y = drawSection("Bank & Statutory Details", statutoryItems, y);
 
+                // --- Page 2: QR Code ---
+                if (employee.qrCodeUrl) {
+                    try {
+                        const qrPage = pdfDoc.addPage();
+                        const qrImageBytes = await fetchImageBytes(employee.qrCodeUrl);
+                        if (qrImageBytes) {
+                            const qrImage = await pdfDoc.embedPng(qrImageBytes);
+                            const qrDims = qrImage.scaleToFit(qrPage.getWidth() - margin * 4, qrPage.getHeight() - margin * 4);
+                            qrPage.drawText("Employee QR Code", { x: margin, y: qrPage.getHeight() - margin, font: helveticaBoldFont, size: 14 });
+                            qrPage.drawImage(qrImage, {
+                                x: (qrPage.getWidth() - qrDims.width) / 2,
+                                y: (qrPage.getHeight() - qrDims.height) / 2,
+                                width: qrDims.width,
+                                height: qrDims.height,
+                            });
+                        }
+                    } catch (qrError) {
+                        console.error("Could not embed QR code:", qrError);
+                    }
+                }
+
                 // --- Documents ---
                  const documents = [
                     { url: employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl, title: "Identity Proof (Front)"},
@@ -299,12 +324,9 @@ export default function DataExportPage() {
                         const docPage = pdfDoc.addPage();
                         let image;
                          try {
-                            if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
+                            if (doc.url.toLowerCase().includes('.png') || (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47)) {
                                 image = await pdfDoc.embedPng(imageBytes);
-                            } else if (imageBytes[0] === 0xFF && imageBytes[1] === 0xD8) {
-                                image = await pdfDoc.embedJpg(imageBytes);
                             } else {
-                                console.warn(`Could not determine image type for ${doc.url}, attempting JPG embed.`);
                                 image = await pdfDoc.embedJpg(imageBytes);
                             }
                         } catch (e) {
