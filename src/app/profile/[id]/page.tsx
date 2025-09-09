@@ -169,8 +169,17 @@ export default function PublicEmployeeProfilePage() {
 
         const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
         if (profilePicBytes) {
-            const image = await pdfDoc.embedPng(profilePicBytes);
-            page.drawImage(image, { x: width - margin - 100, y: height - margin - 120, width: 100, height: 120 });
+            let image;
+            try {
+                if (profilePicBytes[0] === 0x89 && profilePicBytes[1] === 0x50 && profilePicBytes[2] === 0x4E && profilePicBytes[3] === 0x47) {
+                    image = await pdfDoc.embedPng(profilePicBytes);
+                } else {
+                    image = await pdfDoc.embedJpg(profilePicBytes);
+                }
+                 page.drawImage(image, { x: width - margin - 100, y: height - margin - 120, width: 100, height: 120 });
+            } catch (e) {
+                console.warn("Could not embed profile picture:", e);
+            }
         }
         
         page.drawText(employee.fullName, { x: margin, y: y, font: timesRomanBoldFont, size: 22 });
@@ -191,7 +200,7 @@ export default function PublicEmployeeProfilePage() {
 
         const qrDataURL = await QRCode.toDataURL(`${window.location.origin}/profile/${employee.id}`);
         const qrBytes = Buffer.from(qrDataURL.split(',')[1], 'base64');
-        const qrImage = await pdfDoc.embedPng(qrBytes);
+        const qrImage = await pdfDoc.embedPng(qrBytes); // QR is always PNG
         page.drawImage(qrImage, { x: width - margin - 120, y: margin, width: 120, height: 120 });
 
         // --- Subsequent Pages: Documents ---
@@ -211,13 +220,13 @@ export default function PublicEmployeeProfilePage() {
                 page = pdfDoc.addPage();
                 let image;
                  try {
-                    image = await pdfDoc.embedJpg(imageBytes);
-                } catch {
-                    try {
+                    if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
                         image = await pdfDoc.embedPng(imageBytes);
-                    } catch (e) {
-                         console.warn(`Could not embed image for ${doc.url}`); continue;
+                    } else {
+                        image = await pdfDoc.embedJpg(imageBytes);
                     }
+                } catch (e) {
+                     console.warn(`Could not embed image for ${doc.url}:`, e); continue;
                 }
                 const scale = 0.85;
                 const imgWidth = page.getWidth() * scale;
