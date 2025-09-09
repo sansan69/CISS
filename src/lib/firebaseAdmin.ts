@@ -18,7 +18,7 @@ if (!admin.apps.length) {
   } catch (error: any) {
     console.error('Firebase Admin Initialization Error:', error);
     // Provide a more helpful error message if parsing fails
-    if (error.code === 'app/invalid-credential') {
+    if (error.code === 'app/invalid-credential' || error instanceof SyntaxError) {
         throw new Error('Failed to parse FIREBASE_ADMIN_SDK_CONFIG. Make sure it is a valid JSON string.');
     }
     throw error;
