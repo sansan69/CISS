@@ -290,16 +290,13 @@ export default function PublicEmployeeProfilePage() {
         if (employee.qrCodeUrl) {
             try {
                 const qrPage = pdfDoc.addPage();
-                const qrImageBytes = await fetchImageBytes(employee.qrCodeUrl);
-
-                if (qrImageBytes) {
-                    let qrImage;
-                    // It's a data URL from qrcode library, which is PNG
-                    if (employee.qrCodeUrl.startsWith('data:image/png')) {
-                        qrImage = await pdfDoc.embedPng(qrImageBytes);
-                    } else { // Fallback for other potential types, though unlikely for QR
-                        qrImage = await pdfDoc.embedJpg(qrImageBytes);
-                    }
+                
+                // QR code is a data URI, extract base64 part
+                const qrDataUri = employee.qrCodeUrl;
+                if (qrDataUri.startsWith('data:image/png;base64,')) {
+                    const qrPngBase64 = qrDataUri.substring('data:image/png;base64,'.length);
+                    const qrPngBytes = Buffer.from(qrPngBase64, 'base64');
+                    const qrImage = await pdfDoc.embedPng(qrPngBytes);
                     
                     qrPage.drawText("Employee QR Code for Attendance", { x: margin, y: qrPage.getHeight() - margin - 20, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
                     
@@ -326,7 +323,6 @@ export default function PublicEmployeeProfilePage() {
                     qrPage.drawText("2. Select the 'Scan QR & Verify' option.", { x: margin, y: instructionsY - 40, font: helveticaFont, size: 10, lineHeight: 14 });
                     qrPage.drawText("3. Point your device camera at this QR code.", { x: margin, y: instructionsY - 60, font: helveticaFont, size: 10, lineHeight: 14 });
                     qrPage.drawText("4. Follow the on-screen instructions to capture your photo and location to complete check-in/out.", { x: margin, y: instructionsY - 80, font: helveticaFont, size: 10, lineHeight: 14 });
-
                 }
             } catch (qrError) {
                 console.error("Could not embed QR code:", qrError);
