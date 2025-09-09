@@ -1,27 +1,30 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { firestoreAdmin, storageAdmin } from '@/lib/firebaseAdmin';
-import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
+import { db, bucket } from '@/lib/firebaseAdmin';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { format } from 'date-fns';
 import QRCode from 'qrcode';
 
-// Helper function to fetch image bytes from Firebase Storage
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 async function fetchImageBytes(filePath: string | undefined): Promise<Uint8Array | null> {
     if (!filePath) return null;
     try {
-        const bucket = storageAdmin.bucket();
-        // Extract the path from the full gs:// or https:// URL if necessary
-        const path = new URL(filePath).pathname.split('/').slice(3).join('/');
+        // Extract path from gs:// or https:// URL
+        const url = new URL(filePath);
+        const path = url.protocol === 'gs:' 
+            ? url.pathname.substring(1) 
+            : url.pathname.split('/').slice(3).join('/');
+            
         const file = bucket.file(path);
         const [buffer] = await file.download();
-        return new Uint8Array(buffer);
+        return buffer;
     } catch (error) {
         console.warn(`Could not fetch image at path: ${filePath}`, error);
-        return null; // Return null instead of throwing to allow PDF to generate without the image
+        return null; // Gracefully fail if an image is missing
     }
 }
 
-// Helper to draw text and handle wrapping
 async function drawText(page: any, text: string, options: { x: number; y: number; font: any; size: number; maxWidth?: number; color?: any }) {
     if (!text) return options.y;
     
@@ -50,63 +53,52 @@ async function drawText(page: any, text: string, options: { x: number; y: number
             page.drawText(line, { x, y: currentY, font, size, color });
             currentY -= lineHeight;
         }
-        return currentY + lineHeight; // Return Y of the start of the last line
+        return currentY;
     } else {
         page.drawText(text, { x, y: currentY, font, size, color });
-        return currentY;
+        return currentY - lineHeight;
     }
 }
 
-// Main GET handler for the API route
+
 export async function GET(req: NextRequest, { params }: { params: { employeeId: string } }) {
     const { employeeId } = params;
 
     if (!employeeId) {
-        return new NextResponse('Employee ID is required', { status: 400 });
+        return NextResponse.json({ error: 'Employee ID is required' }, { status: 400 });
     }
 
     try {
-        const employeeDoc = await firestoreAdmin.collection('employees').doc(employeeId).get();
+        const employeeDoc = await db.collection('employees').doc(employeeId).get();
 
         if (!employeeDoc.exists) {
-            return new NextResponse('Employee not found', { status: 404 });
+            return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
         }
         const employeeData = employeeDoc.data() as any;
 
-        // Create a new PDF document
         const pdfDoc = await PDFDocument.create();
         const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
         const timesRomanBoldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
-        // --- PAGE 1: BIODATA ---
         let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         const margin = 50;
+        let currentY = height - margin;
 
-        // Title
-        await drawText(page, 'Employee Profile Kit', { x: margin, y: height - margin, font: timesRomanBoldFont, size: 24 });
-
-        // Profile Picture
         const profilePicBytes = await fetchImageBytes(employeeData.profilePictureUrl);
         if (profilePicBytes) {
             const image = await pdfDoc.embedPng(profilePicBytes);
-            const aspectRatio = image.width / image.height;
-            const imageWidth = 100;
-            const imageHeight = imageWidth / aspectRatio;
-            page.drawImage(image, { x: width - margin - imageWidth, y: height - margin - imageHeight, width: imageWidth, height: imageHeight });
+            page.drawImage(image, { x: width - margin - 100, y: height - margin - 120, width: 100, height: 120 });
         }
         
-        let currentY = height - margin - 30;
+        await drawText(page, employeeData.fullName, { x: margin, y: currentY, font: timesRomanBoldFont, size: 22 });
+        currentY -= 40;
 
-        // Basic Info
-        await drawText(page, employeeData.fullName, { x: margin, y: currentY, font: timesRomanBoldFont, size: 20 });
-        currentY -= 25;
         await drawText(page, `Employee ID: ${employeeData.employeeId}`, { x: margin, y: currentY, font: timesRomanFont, size: 12 });
         currentY -= 15;
         await drawText(page, `Client: ${employeeData.clientName}`, { x: margin, y: currentY, font: timesRomanFont, size: 12 });
         currentY -= 30;
-
-        // Personal Details
+        
         await drawText(page, 'Personal Details', { x: margin, y: currentY, font: timesRomanBoldFont, size: 14 });
         currentY -= 20;
         await drawText(page, `Date of Birth: ${format(employeeData.dateOfBirth.toDate(), 'dd-MM-yyyy')}`, { x: margin, y: currentY, font: timesRomanFont, size: 11 });
@@ -115,26 +107,14 @@ export async function GET(req: NextRequest, { params }: { params: { employeeId: 
         currentY -= 15;
         await drawText(page, `Email: ${employeeData.emailAddress}`, { x: margin, y: currentY, font: timesRomanFont, size: 11 });
         currentY -= 15;
-        await drawText(page, `Address: ${employeeData.fullAddress}`, { x: margin, y: currentY, font: timesRomanFont, size: 11, maxWidth: width / 2 - margin });
-        currentY -= 40;
+        currentY = await drawText(page, `Address: ${employeeData.fullAddress}`, { x: margin, y: currentY, font: timesRomanFont, size: 11, maxWidth: width / 2 - margin });
+        currentY -= 30;
 
-        // Identification
-        await drawText(page, 'Identification', { x: margin, y: currentY, font: timesRomanBoldFont, size: 14 });
-        currentY -= 20;
-        const panMasked = `******${employeeData.panNumber?.slice(-4)}`;
-        await drawText(page, `PAN: ${panMasked}`, { x: margin, y: currentY, font: timesRomanFont, size: 11 });
-        currentY -= 15;
-        const idProofMasked = `******${employeeData.identityProofNumber?.slice(-4)}`;
-        await drawText(page, `${employeeData.identityProofType}: ${idProofMasked}`, { x: margin, y: currentY, font: timesRomanFont, size: 11 });
-        
-        // QR Code
         const qrDataURL = await QRCode.toDataURL(`${req.nextUrl.origin}/profile/${employeeId}`);
         const qrBytes = Buffer.from(qrDataURL.split(',')[1], 'base64');
         const qrImage = await pdfDoc.embedPng(qrBytes);
         page.drawImage(qrImage, { x: width - margin - 120, y: margin, width: 120, height: 120 });
 
-
-        // --- Add Document Pages ---
         const documents = [
             { title: 'Identity Proof (Front)', url: employeeData.identityProofUrlFront || employeeData.idProofDocumentUrlFront },
             { title: 'Identity Proof (Back)', url: employeeData.identityProofUrlBack || employeeData.idProofDocumentUrlBack },
@@ -145,40 +125,24 @@ export async function GET(req: NextRequest, { params }: { params: { employeeId: 
         ];
 
         for (const doc of documents) {
-            if (doc.url) {
-                const imageBytes = await fetchImageBytes(doc.url);
-                if (imageBytes) {
-                    page = pdfDoc.addPage();
-                    let image;
-                    try {
-                        image = await pdfDoc.embedJpg(imageBytes);
-                    } catch {
-                        try {
-                           image = await pdfDoc.embedPng(imageBytes);
-                        } catch (e) {
-                             console.warn(`Could not embed image for ${doc.title}`);
-                             continue;
-                        }
+            if (!doc.url) continue;
+            const imageBytes = await fetchImageBytes(doc.url);
+            if (imageBytes) {
+                page = pdfDoc.addPage();
+                let image;
+                try { image = await pdfDoc.embedJpg(imageBytes); } catch {
+                    try { image = await pdfDoc.embedPng(imageBytes); } catch (e) {
+                         console.warn(`Could not embed image for ${doc.title}`); continue;
                     }
-                   
-                    await drawText(page, doc.title, { x: margin, y: height - margin, font: timesRomanBoldFont, size: 18 });
-                    const scale = 0.8;
-                    const imgWidth = page.getWidth() * scale;
-                    const imgHeight = page.getHeight() * scale;
-                    const aspectRatio = image.width / image.height;
-                    let finalWidth = imgWidth;
-                    let finalHeight = finalWidth / aspectRatio;
-
-                    if (finalHeight > imgHeight) {
-                        finalHeight = imgHeight;
-                        finalWidth = finalHeight * aspectRatio;
-                    }
-                    
-                    const xPos = (page.getWidth() - finalWidth) / 2;
-                    const yPos = (page.getHeight() - finalHeight) / 2;
-
-                    page.drawImage(image, { x: xPos, y: yPos, width: finalWidth, height: finalHeight });
                 }
+                const scale = 0.85;
+                const imgWidth = page.getWidth() * scale;
+                const imgHeight = page.getHeight() * scale;
+                const aspectRatio = image.width / image.height;
+                let finalWidth = imgWidth;
+                let finalHeight = finalWidth / aspectRatio;
+                if (finalHeight > imgHeight) { finalHeight = imgHeight; finalWidth = finalHeight * aspectRatio; }
+                page.drawImage(image, { x: (page.getWidth() - finalWidth) / 2, y: (page.getHeight() - finalHeight) / 2, width: finalWidth, height: finalHeight });
             }
         }
 
@@ -193,7 +157,10 @@ export async function GET(req: NextRequest, { params }: { params: { employeeId: 
         });
 
     } catch (error: any) {
-        console.error('PDF Generation Error:', error);
-        return new NextResponse('Failed to generate PDF kit', { status: 500 });
+        console.error('PDF Generation API Error:', error);
+        return new NextResponse(JSON.stringify({ error: 'Failed to generate PDF kit.', details: error.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 }

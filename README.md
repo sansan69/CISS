@@ -8,7 +8,7 @@ The application serves two primary user roles:
 1.  **Employees (Public Users):** Can enroll, view their own profile, and mark attendance.
 2.  **Super Admins:** Can log in to a secure dashboard to manage employees, view analytics, and access settings.
 
-**Note on PDF Generation:** The employee "Profile Kit" generation is handled securely on the server-side via a Next.js API route, replacing a previous client-side implementation that used `html2canvas` and `jsPDF`. This ensures reliability and avoids browser-based CORS issues.
+**Note on PDF Generation:** The employee "Profile Kit" generation is handled securely on the server-side via a Next.js API route. This approach is more robust and secure than the previous client-side method, avoiding browser-based CORS issues entirely.
 
 ---
 
@@ -16,16 +16,30 @@ The application serves two primary user roles:
 
 -   **Frontend:** Next.js (App Router), React, TypeScript
 -   **UI:** ShadCN UI Components, Tailwind CSS
--   **Backend:** Firebase (Firestore, Auth, Storage)
--   **Deployment:** The frontend will be a static/SSR build, and any backend logic will be handled by Firebase Cloud Functions.
+-   **Backend:** Firebase (Firestore, Auth, Storage) and Next.js API Routes for server-side logic.
+-   **Deployment:** The frontend will be a static/SSR build hosted on Vercel. Server-side logic is handled by Next.js API Routes.
 
 ---
 
-## 3. Key Features
+## 3. Server-Side Environment Setup (Vercel)
 
-### 3.1. Public-Facing Features (No Login Required)
+For server-side functionality like PDF generation to work, you must configure environment variables in your Vercel project settings.
 
-#### 3.1.1. Landing Page (`/`)
+1.  **`FIREBASE_STORAGE_BUCKET`**: Add your Firebase Storage bucket URL (e.g., `ciss-workforce.appspot.com`).
+2.  **`FIREBASE_ADMIN_SDK_CONFIG_BASE64`** (Recommended): This is the most reliable way to store your multi-line service account key.
+    -   Go to your Firebase Project Settings > Service accounts.
+    -   Click "Generate new private key" and download the JSON file.
+    -   Encode the entire content of that JSON file into a single-line Base64 string. You can use an online tool or a terminal command:
+        `cat /path/to/your/service-account.json | base64`
+    -   Copy the resulting Base64 string and add it as the value for this environment variable in Vercel.
+
+---
+
+## 4. Key Features
+
+### 4.1. Public-Facing Features (No Login Required)
+
+#### 4.1.1. Landing Page (`/`)
 -   **Purpose:** The main entry point for all users.
 -   **UI:**
     -   Company Logo and Name ("CISS Workforce").
@@ -39,7 +53,7 @@ The application serves two primary user roles:
     -   **If exists:** The user is redirected to their public profile page (`/profile/[employeeId]`).
     -   **If not exists:** The user is redirected to the enrollment form (`/enroll?phone=[phoneNumber]`), with the phone number pre-filled and disabled.
 
-#### 3.1.2. Employee Enrollment Form (`/enroll`)
+#### 4.1.2. Employee Enrollment Form (`/enroll`)
 -   **Purpose:** A multi-step, user-friendly form for new employees to register themselves.
 -   **UI:** A well-structured form divided into sections. All fields are required unless specified.
     -   **Client Information:** Joining Date, Client Name (dropdown populated from `clients` collection).
@@ -58,7 +72,7 @@ The application serves two primary user roles:
         4.  Creates a new document in the `employees` collection in Firestore with all form data and file URLs.
         5.  On success, redirects the user to their newly created profile page (`/profile/[newEmployeeId]`).
 
-#### 3.1.3. Public Employee Profile (`/profile/[id]`)
+#### 4.1.3. Public Employee Profile (`/profile/[id]`)
 -   **Purpose:** A read-only view of an employee's profile, accessible via a direct link.
 -   **UI:**
     -   Clean, professional layout with employee's photo, name, and Employee ID prominently displayed.
@@ -66,7 +80,7 @@ The application serves two primary user roles:
     -   Displays all information from the employee's Firestore document.
     -   The "Documents" tab shows links to view/download the files stored in Firebase Storage.
 
-#### 3.1.4. Attendance Marking (`/attendance`)
+#### 4.1.4. Attendance Marking (`/attendance`)
 -   **Purpose:** A dedicated page for marking attendance using a QR code, photo, and location.
 -   **UI:**
     -   A large button to "Scan QR & Verify".
@@ -77,9 +91,9 @@ The application serves two primary user roles:
 -   **Logic:**
     -   This is a simplified, standalone feature for now. In the future, it would save attendance data to a new `attendance` collection in Firestore, linked to the employee's ID.
 
-### 3.2. Admin Features (Login Required - `/app/*`)
+### 4.2. Admin Features (Login Required - `/app/*`)
 
-#### 3.2.1. Admin Login (`/admin-login`)
+#### 4.2.1. Admin Login (`/admin-login`)
 -   **Purpose:** Secure login page for administrators.
 -   **UI:** Simple form with Email and Password fields.
 -   **Logic:**
@@ -87,7 +101,7 @@ The application serves two primary user roles:
     -   On successful login, the user is redirected to the Admin Dashboard (`/dashboard`).
     -   Shows clear error messages for incorrect credentials, user not found, etc.
 
-#### 3.2.2. Admin Layout (`/app/layout.tsx`)
+#### 4.2.2. Admin Layout (`/app/layout.tsx`)
 -   **Purpose:** A persistent layout for all admin pages.
 -   **UI:**
     -   A collapsible sidebar navigation menu.
@@ -97,7 +111,7 @@ The application serves two primary user roles:
 -   **Logic:**
     -   This is a protected route group. If a non-authenticated user tries to access any page under `/app`, they are redirected to `/admin-login`.
 
-#### 3.2.3. Dashboard (`/dashboard`)
+#### 4.2.3. Dashboard (`/dashboard`)
 -   **Purpose:** Provide a high-level overview of the workforce.
 -   **UI:**
     -   **Stat Cards:** Total Employees, Active, Inactive, On Leave.
@@ -109,7 +123,7 @@ The application serves two primary user roles:
     -   Stat cards use `getCountFromServer` for efficient counting.
     -   Charts query the `employees` collection and aggregate the data client-side.
 
-#### 3.2.4. Employee Directory (`/employees`)
+#### 4.2.4. Employee Directory (`/employees`)
 -   **Purpose:** A searchable and filterable list of all employees.
 -   **UI:**
     -   A table displaying employees with columns: Employee Name (with photo), Employee ID, Client, Mobile, Status (as a badge).
@@ -125,7 +139,7 @@ The application serves two primary user roles:
     -   Implements server-side pagination and filtering using Firestore query cursors (`startAfter`, `limit`) for performance.
     -   Deleting an employee also deletes their associated files from Firebase Storage.
 
-#### 3.2.5. Admin Employee Profile View (`/employees/[id]`)
+#### 4.2.5. Admin Employee Profile View (`/employees/[id]`)
 -   **Purpose:** A comprehensive view of an employee's profile with editing capabilities for admins.
 -   **UI:**
     -   Identical to the public profile view but includes an "Edit Profile" button.
@@ -135,13 +149,13 @@ The application serves two primary user roles:
     -   **Editing:** When changes are saved, it updates the existing Firestore document. It can also handle replacing uploaded files by deleting the old file from Storage and uploading the new one.
     -   **Admin Actions:** Allows regeneration of Employee ID and QR Code.
 
-#### 3.2.6. Settings (`/settings/*`)
+#### 4.2.6. Settings (`/settings/*`)
 -   **Client Management (`/settings/client-management`):** A simple CRUD interface to add/delete client names in the `clients` collection.
 -   **QR Management & Reports:** Placeholder pages linking to future functionality.
 
 ---
 
-## 4. Firebase Schema
+## 5. Firebase Schema
 
 ### `employees` collection
 -   Document ID: Auto-generated
@@ -153,7 +167,7 @@ The application serves two primary user roles:
 
 ---
 
-## 5. Implementation Notes
+## 6. Implementation Notes
 
 -   **State Management:** Use React's built-in state management (`useState`, `useContext`) where possible. For complex server state, `react-query` can be used.
 -   **Styling:** Strictly use Tailwind CSS and ShadCN component styles. Adhere to the theme defined in `globals.css`.

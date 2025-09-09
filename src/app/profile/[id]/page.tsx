@@ -142,10 +142,20 @@ export default function PublicEmployeeProfilePage() {
     toast({ title: "Generating PDF...", description: "Your download will start shortly." });
     try {
         const response = await fetch(`/api/kit/${employee.id}`);
+        
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || 'Failed to generate PDF');
+            let errorDetails = "Failed to generate PDF. The server returned an error.";
+            // Try to parse a JSON error response from the server
+            try {
+                const errorJson = await response.json();
+                errorDetails = errorJson.details || errorJson.error || errorDetails;
+            } catch {
+                // If the response is not JSON, use the raw text.
+                errorDetails = await response.text();
+            }
+            throw new Error(errorDetails);
         }
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
