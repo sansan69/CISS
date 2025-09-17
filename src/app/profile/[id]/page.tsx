@@ -20,6 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
 import QRCode from 'qrcode';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
 const toTitleCase = (str: string | null | undefined): string => {
@@ -324,7 +325,7 @@ export default function PublicEmployeeProfilePage() {
                     const qrPngBase64 = qrDataUri.substring('data:image/png;base64,'.length);
                     const qrPngBytes = Buffer.from(qrPngBase64, 'base64');
                     const qrImage = await pdfDoc.embedPng(qrPngBytes);
-                    const qrDims = qrImage.scaleToFit(300, 300);
+                    const qrDims = qrImage.scaleToFit(250, 250);
 
                     const title = "Employee QR Code for Attendance";
                     const titleWidth = helveticaBoldFont.widthOfTextAtSize(title, 16);
@@ -336,24 +337,24 @@ export default function PublicEmployeeProfilePage() {
                         color: rgb(0.05, 0.2, 0.45)
                     });
                     
-                    const qrBoxY = pageH - margin - 80 - qrDims.height - 10;
+                    const qrBoxY = pageH - margin - 80 - qrDims.height - 20;
                     qrPage.drawRectangle({
-                        x: (pageW - qrDims.width) / 2 - 10,
+                        x: (pageW - qrDims.width) / 2 - 20,
                         y: qrBoxY,
-                        width: qrDims.width + 20,
-                        height: qrDims.height + 20,
+                        width: qrDims.width + 40,
+                        height: qrDims.height + 40,
                         borderColor: rgb(0.8, 0.8, 0.8),
                         borderWidth: 1,
                     });
 
                     qrPage.drawImage(qrImage, {
                         x: (pageW - qrDims.width) / 2,
-                        y: qrBoxY + 10,
+                        y: qrBoxY + 20,
                         width: qrDims.width,
                         height: qrDims.height,
                     });
                     
-                    let instructionsY = qrBoxY - 40;
+                    let instructionsY = qrBoxY - 50;
                     
                     const howToUse = "How to Use:";
                     const howToUseWidth = helveticaBoldFont.widthOfTextAtSize(howToUse, 12);
@@ -369,7 +370,7 @@ export default function PublicEmployeeProfilePage() {
                       "1. Open the attendance marking page on the official CISS Workforce app or portal.",
                       "2. Select the 'Scan QR & Verify' option.",
                       "3. Point your device camera at this QR code.",
-                      "4. Follow on-screen instructions to capture your photo and location to complete check-in/out."
+                      "4. Follow on-screen instructions to complete check-in/out."
                     ];
 
                     for(const instruction of instructions) {
@@ -406,7 +407,6 @@ export default function PublicEmployeeProfilePage() {
                 const docPage = pdfDoc.addPage();
                 let image;
                  try {
-                    // A simple heuristic to detect image type from bytes
                     if (doc.url.toLowerCase().includes('.png') || (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47)) {
                         image = await pdfDoc.embedPng(imageBytes);
                     } else {
@@ -444,26 +444,24 @@ export default function PublicEmployeeProfilePage() {
                  tcPage.drawText(line, { x: margin + 15, y: tcY, font: helveticaFont, size: 9.5, lineHeight: 14 });
                  tcY -= 14;
             }
+            tcY -= 15;
         };
 
-        tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: margin, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
+        tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: (width - helveticaBoldFont.widthOfTextAtSize("Terms & Conditions of Enrollment for Security Personnel", 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
         tcY -= 40;
 
         drawTcTitle("I. General Eligibility and Compliance");
-        drawTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65),\n  physical fitness, and Indian citizenship.\n• I understand my enrollment is provisional and subject to a successful background and character verification by the\n  relevant authorities.\n• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.");
-        tcY -= 15;
+        drawTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.\n• I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.\n• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.");
         
         drawTcTitle("II. Employment Terms & Responsibilities");
-        drawTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.\n• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.\n• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.\n• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force,\n  or abandon my post without proper relief.");
-        tcY -= 15;
+        drawTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.\n• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.\n• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.\n• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.");
 
         drawTcTitle("III. Disciplinary Action");
-        drawTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to\n  and including termination of employment.");
-        tcY -= 15;
+        drawTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.");
         
         drawTcTitle("IV. Declaration");
-        drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my\nenrollment. I confirm that all information and documents provided by me are true and correct to the best of my\nknowledge.");
-        tcY -= 70;
+        drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.");
+        tcY -= 50;
 
         // Add Signature
         const signatureBytes = await fetchImageBytes(employee.signatureUrl);
@@ -571,16 +569,12 @@ export default function PublicEmployeeProfilePage() {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4">
-            <Image
-              src={employee.profilePictureUrl || "https://placehold.co/128x128.png"}
-              alt={employee.fullName || 'Employee profile picture'}
-              width={100}
-              height={100}
-              className="rounded-full border-4 border-primary shadow-md object-cover"
-              unoptimized={true}
-              crossOrigin="anonymous"
-              data-ai-hint="profile picture"
-            />
+            <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
+              <AvatarImage src={employee.profilePictureUrl} alt={employee.fullName || 'Employee profile picture'} />
+              <AvatarFallback className="text-3xl">
+                {employee.fullName?.split(' ').map(n => n[0]).join('') || 'U'}
+              </AvatarFallback>
+            </Avatar>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
               <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
@@ -700,3 +694,6 @@ export default function PublicEmployeeProfilePage() {
   );
 }
 
+
+
+    
