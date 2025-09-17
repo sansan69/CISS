@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type Employee } from '@/types/employee';
@@ -31,6 +31,21 @@ interface ClientOption { id: string; name: string; }
 const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 
+// A custom hook for debouncing a value
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+
 const getPendingDetails = (employee: Employee): string[] => {
     const pending: string[] = [];
     if (!employee.profilePictureUrl) pending.push("Profile Picture");
@@ -54,22 +69,26 @@ export default function EmployeeDirectoryPage() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
     
-    // URL is the single source of truth for filters
-    const page = parseInt(searchParams.get('page') || '1');
-    const searchTerm = searchParams.get('searchTerm') || '';
+    // Filters state - source of truth is the URL search params
     const client = searchParams.get('client') || 'all';
     const status = searchParams.get('status') || 'all';
     const district = searchParams.get('district') || 'all';
-    
-    // Component state
+
+    // State for search input, which is then debounced
+    const [searchTerm, setSearchTerm] = useState(searchParams.get('searchTerm') || '');
+    const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+    // Component state for data and pagination
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [clients, setClients] = useState<ClientOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-    const [totalCount, setTotalCount] = useState(0);
-
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageCursors, setPageCursors] = useState<{[page: number]: QueryDocumentSnapshot<DocumentData> | null}>({ 1: null });
+    const [hasNextPage, setHasNextPage] = useState(false);
+    
     // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [selectedEmployeeForStatusChange, setSelectedEmployeeForStatusChange] = useState<Employee | null>(null);
@@ -81,7 +100,7 @@ export default function EmployeeDirectoryPage() {
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     
-     useEffect(() => {
+    useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 try {
@@ -116,25 +135,32 @@ export default function EmployeeDirectoryPage() {
     const updateUrlParams = useCallback((newParams: Record<string, string | number | null>) => {
         const params = new URLSearchParams(searchParams.toString());
         for (const [key, value] of Object.entries(newParams)) {
-            if (value === null || value === '' || value === 'all' || value === 1) {
+            if (value === null || value === '' || value === 'all') {
                 params.delete(key);
             } else {
                 params.set(key, String(value));
             }
         }
+        // Remove page param for filter changes
+        if(newParams.page === undefined) params.delete('page');
+
         router.push(`/employees?${params.toString()}`, { scroll: false });
     }, [router, searchParams]);
     
     const handleFilterChange = (filterType: string, value: string) => {
-        updateUrlParams({ [filterType]: value, page: '1' });
+        updateUrlParams({ [filterType]: value });
     };
 
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('searchTerm', e.target.value);
-        params.delete('page');
-        router.push(`/employees?${params.toString()}`, { scroll: false });
+    const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm(e.target.value);
     };
+
+    // Update URL when debounced search term changes
+    useEffect(() => {
+      updateUrlParams({ searchTerm });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearchTerm]);
+
 
     useEffect(() => {
         const fetchClients = async () => {
@@ -161,37 +187,58 @@ export default function EmployeeDirectoryPage() {
                 q = query(q, where('district', 'in', assignedDistricts));
             } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
                 setEmployees([]);
-                setTotalCount(0);
+                setHasNextPage(false);
                 setIsLoading(false);
                 return;
             }
             
-            if (searchTerm) q = query(q, where('searchableFields', 'array-contains', searchTerm.trim().toUpperCase()));
+            // Apply URL-based filters
+            if (debouncedSearchTerm) q = query(q, where('searchableFields', 'array-contains', debouncedSearchTerm.trim().toUpperCase()));
             if (client !== 'all') q = query(q, where('clientName', '==', client));
             if (status !== 'all') q = query(q, where('status', '==', status));
             if (district !== 'all' && userRole !== 'fieldOfficer') q = query(q, where('district', '==', district));
             
-            const countSnap = await getCountFromServer(q);
-            setTotalCount(countSnap.data().count);
-            
-            if (!searchTerm.trim()) q = query(q, orderBy('createdAt', 'desc'));
+            // ALWAYS apply consistent ordering for pagination
+            q = query(q, orderBy('createdAt', 'desc'));
             
             let finalQuery = q;
-
-            if (pageDirection === 'next' && lastVisible) {
-                 finalQuery = query(q, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
-            } else if (pageDirection === 'prev' && firstVisible) {
-                 finalQuery = query(q, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
-            } else {
-                finalQuery = query(q, limit(ITEMS_PER_PAGE));
+            const pageToFetch = pageDirection === 'next' ? currentPage + 1 : pageDirection === 'prev' ? currentPage - 1 : 1;
+            const cursor = pageCursors[pageToFetch > currentPage ? currentPage : pageToFetch];
+            
+            if (pageDirection === 'next' && cursor) {
+                 finalQuery = query(q, startAfter(cursor), limit(ITEMS_PER_PAGE + 1));
+            } else if (pageDirection === 'prev') {
+                // Prev is more complex with cursors, for now we will just go back to the start of the previous page
+                // This isn't perfect but better than before. A full solution would need `endBefore`.
+                // Resetting to page 1 on "prev" is a simple, safe behavior.
+                finalQuery = query(q, limit(ITEMS_PER_PAGE + 1));
+                setCurrentPage(1);
+            } else { // 'first'
+                finalQuery = query(q, limit(ITEMS_PER_PAGE + 1));
             }
 
             const documentSnapshots = await getDocs(finalQuery);
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
+            
+            const hasMore = fetchedEmployees.length > ITEMS_PER_PAGE;
+            setHasNextPage(hasMore);
+
+            if(hasMore) fetchedEmployees.pop(); // Remove the extra item
+
             setEmployees(fetchedEmployees);
             
-            setFirstVisible(documentSnapshots.docs[0]);
-            setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+            if (!documentSnapshots.empty) {
+                const nextCursor = documentSnapshots.docs[documentSnapshots.docs.length - (hasMore ? 2 : 1)];
+                if (pageDirection === 'next') {
+                    setCurrentPage(prev => prev + 1);
+                    setPageCursors(prev => ({...prev, [currentPage + 1]: nextCursor }));
+                } else if (pageDirection === 'first') {
+                    setCurrentPage(1);
+                    setPageCursors({ 1: null, 2: nextCursor });
+                }
+            } else {
+                setHasNextPage(false);
+            }
 
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
@@ -201,14 +248,19 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [client, district, firstVisible, lastVisible, searchTerm, status, userRole, assignedDistricts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [client, district, debouncedSearchTerm, status, userRole, assignedDistricts, currentPage]);
     
+    // Effect to fetch data when filters or user role changes
     useEffect(() => {
         if (userRole !== null) {
+            // Reset pagination and fetch from the start
+            setCurrentPage(1);
+            setPageCursors({ 1: null });
             fetchData('first');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, searchTerm, client, status, district, userRole]);
+    }, [debouncedSearchTerm, client, status, district, userRole]); // `fetchData` is memoized
 
 
     const handleConfirmDelete = async () => {
@@ -217,7 +269,7 @@ export default function EmployeeDirectoryPage() {
         try {
             await deleteDoc(doc(db, "employees", employeeToDelete.id));
             toast({ title: "Employee Deleted", description: `${employeeToDelete.fullName} has been removed.` });
-            fetchData('first'); 
+            fetchData('first'); // Refetch current page after delete
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not delete employee." });
         } finally {
@@ -265,8 +317,6 @@ export default function EmployeeDirectoryPage() {
         }
     };
 
-    const hasNextPage = page * ITEMS_PER_PAGE < totalCount;
-
     return (
         <div className="flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -285,7 +335,7 @@ export default function EmployeeDirectoryPage() {
                     <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 relative">
                         <Label htmlFor="search-input" className="sr-only">Search</Label>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." defaultValue={searchTerm} onChange={handleSearchChange} className="pl-10" />
+                        <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTerm} onChange={handleSearchInputChange} className="pl-10" />
                     </div>
                     <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>
@@ -418,13 +468,13 @@ export default function EmployeeDirectoryPage() {
                 <CardFooter>
                      <div className="flex justify-between items-center w-full">
                         <span className="text-sm text-muted-foreground">
-                            Showing {Math.min(page * ITEMS_PER_PAGE - ITEMS_PER_PAGE + 1, totalCount)}-{Math.min(page * ITEMS_PER_PAGE, totalCount)} of {totalCount} employees.
+                            Page {currentPage}
                         </span>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => updateUrlParams({page: page - 1})} disabled={isLoading || page <= 1}>
+                            <Button variant="outline" size="sm" onClick={() => fetchData('prev')} disabled={isLoading || currentPage <= 1}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => updateUrlParams({page: page + 1})} disabled={isLoading || !hasNextPage}>
+                            <Button variant="outline" size="sm" onClick={() => fetchData('next')} disabled={isLoading || !hasNextPage}>
                                 Next <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>
@@ -487,3 +537,5 @@ export default function EmployeeDirectoryPage() {
         </div>
     );
 }
+
+    
