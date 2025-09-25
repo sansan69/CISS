@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, PieChart, Pie, Cell, Legend, XAxis, YAxis, CartesianGrid } from "recharts";
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Badge } from "@/components/ui/badge";
 
@@ -28,7 +28,10 @@ interface UpcomingDuty {
   date: Date;
   totalManpower: number;
 }
-
+interface ClientDistributionData {
+  name: string;
+  value: number;
+}
 
 const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementType; isLoading: boolean; error: string | null; helpText?: string }> = 
 ({ title, value, icon: Icon, isLoading, error, helpText }) => (
@@ -58,6 +61,7 @@ const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementTyp
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [newHiresData, setNewHiresData] = useState<NewHiresData[]>([]);
+    const [clientDistributionData, setClientDistributionData] = useState<ClientDistributionData[]>([]);
     const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
     const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
 
@@ -117,14 +121,17 @@ export default function DashboardPage() {
             setError(null);
             try {
                 let employeesQueryBuilder: any = collection(db, "employees");
+                let fullEmployeesQuery: any = collection(db, "employees");
 
                 // If field officer, filter by their assigned districts
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                     employeesQueryBuilder = query(employeesQueryBuilder, where('district', 'in', assignedDistricts));
+                    fullEmployeesQuery = query(fullEmployeesQuery, where('district', 'in', assignedDistricts));
                 } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
                     // Field officer has no assigned districts, so they see nothing.
                     setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0 });
                     setNewHiresData([]);
+                    setClientDistributionData([]);
                     setRecentActivity([]);
                     setUpcomingDuties([]);
                     setIsLoading(false);
@@ -142,6 +149,8 @@ export default function DashboardPage() {
                 
                 const recentActivityQuery = query(employeesQueryBuilder, orderBy("createdAt", "desc"), limit(5));
 
+                const allEmployeesForClientChart = getDocs(fullEmployeesQuery);
+
                 const queriesToRun: Promise<any>[] = [
                     totalQuery,
                     activeQuery,
@@ -149,6 +158,7 @@ export default function DashboardPage() {
                     inactiveQuery,
                     getDocs(hiresQuery),
                     getDocs(recentActivityQuery),
+                    allEmployeesForClientChart
                 ];
 
                 // --- Field Officer Specific Query ---
@@ -176,6 +186,7 @@ export default function DashboardPage() {
                     inactiveSnap,
                     hiresSnapshot,
                     recentActivitySnapshot,
+                    allEmployeesSnapshot,
                     dutiesSnapshot
                 ] = await Promise.all(queriesToRun);
                 
@@ -199,6 +210,18 @@ export default function DashboardPage() {
                     }
                 });
                 setNewHiresData(Object.entries(hiresByMonth).map(([month, hires]) => ({ month, hires })).reverse());
+
+                const clientCounts: { [key: string]: number } = {};
+                allEmployeesSnapshot.docs.forEach((doc: any) => {
+                    const clientName = doc.data().clientName || "Unassigned";
+                    clientCounts[clientName] = (clientCounts[clientName] || 0) + 1;
+                });
+                setClientDistributionData(
+                    Object.entries(clientCounts)
+                        .map(([name, value]) => ({ name, value }))
+                        .sort((a, b) => b.value - a.value)
+                );
+
 
                 setRecentActivity(recentActivitySnapshot.docs.map((doc: any) => {
                     const data = doc.data() as Employee;
@@ -244,6 +267,20 @@ export default function DashboardPage() {
         color: "hsl(var(--chart-1))",
       },
     };
+    
+    const clientChartConfig = {
+      clients: {
+        label: "Clients",
+      },
+      ...clientDistributionData.reduce((acc, client, index) => {
+            acc[client.name] = {
+                label: client.name,
+                color: `hsl(var(--chart-${(index % 5) + 1}))`
+            };
+            return acc;
+      }, {} as any)
+    };
+
 
     if (error) {
         return (
@@ -299,27 +336,53 @@ export default function DashboardPage() {
                 </Card>
             )}
 
-            <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-                <Card className="xl:col-span-2">
-                    <CardHeader>
-                        <CardTitle>New Hires - Last 6 Months</CardTitle>
-                        <CardDescription>A monthly breakdown of new employee enrollments.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pl-2">
-                        {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
-                        <ChartContainer config={newHiresChartConfig} className="w-full h-[300px]">
-                            <BarChart data={newHiresData} accessibilityLayer>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} allowDecimals={false} />
-                                <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent hideLabel />} />
-                                <Bar dataKey="hires" fill="var(--color-hires)" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ChartContainer>
-                        }
-                    </CardContent>
-                </Card>
-                <Card>
+            <div className="grid gap-6 lg:grid-cols-3">
+                <div className="grid gap-6 lg:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>New Hires - Last 6 Months</CardTitle>
+                            <CardDescription>A monthly breakdown of new employee enrollments.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pl-2">
+                            {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
+                            <ChartContainer config={newHiresChartConfig} className="w-full h-[300px]">
+                                <BarChart data={newHiresData} accessibilityLayer>
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} allowDecimals={false} />
+                                    <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent hideLabel />} />
+                                    <Bar dataKey="hires" fill="var(--color-hires)" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ChartContainer>
+                            }
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Employee Distribution by Client</CardTitle>
+                            <CardDescription>A breakdown of the workforce by client assignment.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {isLoading ? <div className="h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
+                            clientDistributionData.length > 0 ? (
+                                <ChartContainer config={clientChartConfig} className="w-full aspect-square h-[250px]">
+                                    <PieChart>
+                                        <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
+                                        <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                             {clientDistributionData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={clientChartConfig[entry.name]?.color} />
+                                            ))}
+                                        </Pie>
+                                        <Legend />
+                                    </PieChart>
+                                </ChartContainer>
+                            ) : (
+                                <p className="text-center text-muted-foreground py-10">No employee data to display chart.</p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+                <Card className="lg:col-span-1">
                     <CardHeader>
                         <CardTitle>Recent Activity</CardTitle>
                         <CardDescription>Latest enrollments in the system.</CardDescription>
@@ -364,3 +427,4 @@ export default function DashboardPage() {
         </div>
     );
 }
+
