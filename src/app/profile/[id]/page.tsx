@@ -268,7 +268,8 @@ export default function PublicEmployeeProfilePage() {
         y = drawSection("Contact Information", contactItems, y);
 
         const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, font: PDFFont, size: number, color = rgb(0,0,0)): number => {
-            const words = text.split(' ');
+            const sanitizedText = text.replace(/\n/g, ' ');
+            const words = sanitizedText.split(' ');
             let line = '';
             let currentY = y;
             const lineHeight = size * 1.2;
