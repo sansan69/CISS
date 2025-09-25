@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -221,16 +220,15 @@ const generateEmployeeId = (clientName: string): string => {
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        // Use a CORS-enabled fetch first, as it's more direct for public URLs
         const response = await fetch(url, { mode: 'cors' });
         if (!response.ok) {
+            console.warn(`Direct fetch for ${url} failed with status ${response.status}. Falling back to SDK.`);
             throw new Error(`Direct fetch failed: ${response.statusText}`);
         }
         const blob = await response.blob();
         return new Uint8Array(await blob.arrayBuffer());
     } catch (error) {
-        console.warn(`Direct fetch for ${url} failed. Falling back to SDK. Error:`, error);
-        // Fallback to using the SDK's getBytes method
+        console.warn(`Direct fetch for ${url} failed. Error:`, error);
         try {
             const storageRef = ref(storage, url);
             const bytes = await getBytes(storageRef);
@@ -757,7 +755,7 @@ export default function AdminEmployeeProfilePage() {
         y = drawSection("Contact Information", contactItems, y);
 
         const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, font: PDFFont, size: number, color = rgb(0,0,0)): number => {
-            const sanitizedText = text.replace(/\n/g, ' ');
+            const sanitizedText = text.replace(/(\r\n|\n|\r)/gm, " ");
             const words = sanitizedText.split(' ');
             let line = '';
             let currentY = y;
@@ -780,7 +778,7 @@ export default function AdminEmployeeProfilePage() {
 
         const addressY = y + 25;
         drawText("Full Address", margin, addressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress.replace(/\n/g, " ")), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
+        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress.replace(/(\r\n|\n|\r)/gm, " ")), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
         y = addressTextHeight - 25;
         
         const employmentItems = [
@@ -928,29 +926,49 @@ export default function AdminEmployeeProfilePage() {
             tcPage.drawText(text, { x: margin, y: tcY, font: helveticaBoldFont, size: 11 });
             tcY -= 20;
         };
-        const drawTcText = (text: string) => {
-            const lines = text.split('\n');
-            for(const line of lines) {
-                 tcPage.drawText(line, { x: margin + 15, y: tcY, font: helveticaFont, size: 9.5, lineHeight: 14 });
-                 tcY -= 14;
+
+        const drawWrappedTcText = (text: string, x: number, maxWidth: number, size: number, font: PDFFont) => {
+            const words = text.split(' ');
+            let line = '';
+            const lineHeight = size * 1.4;
+
+            for (const word of words) {
+                const testLine = line + word + ' ';
+                const testWidth = font.widthOfTextAtSize(testLine, size);
+                if (testWidth > maxWidth && line.length > 0) {
+                    tcPage.drawText(line, { x: x, y: tcY, font: font, size: size, lineHeight: lineHeight });
+                    tcY -= lineHeight;
+                    line = word + ' ';
+                } else {
+                    line = testLine;
+                }
             }
-            tcY -= 15;
+            tcPage.drawText(line, { x: x, y: tcY, font: font, size: size, lineHeight: lineHeight });
+            tcY -= lineHeight;
         };
 
         tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: (width - helveticaBoldFont.widthOfTextAtSize("Terms & Conditions of Enrollment for Security Personnel", 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
         tcY -= 40;
 
         drawTcTitle("I. General Eligibility and Compliance");
-        drawTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.\n• I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.\n• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.");
+        drawWrappedTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        drawWrappedTcText("• I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        drawWrappedTcText("• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        tcY -= 15;
         
         drawTcTitle("II. Employment Terms & Responsibilities");
-        drawTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.\n• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.\n• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.\n• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.");
+        drawWrappedTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        drawWrappedTcText("• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        drawWrappedTcText("• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        drawWrappedTcText("• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        tcY -= 15;
 
         drawTcTitle("III. Disciplinary Action");
-        drawTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.");
+        drawWrappedTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
+        tcY -= 15;
         
         drawTcTitle("IV. Declaration");
-        drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.");
+        drawWrappedTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
         tcY -= 50;
 
         // Add Signature
@@ -1386,7 +1404,7 @@ export default function AdminEmployeeProfilePage() {
                 <CardContent className="space-y-8">
                   {/* Personal Information Section */}
                   <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal & Contact</h3>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Personal &amp; Contact</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -1501,9 +1519,9 @@ export default function AdminEmployeeProfilePage() {
                       {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                     </div>
                   </section>
-                  {/* Bank & ID Section */}
+                  {/* Bank &amp; ID Section */}
                   <section>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank & Statutory Details</h3>
+                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Bank &amp; Statutory Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
@@ -1544,7 +1562,7 @@ export default function AdminEmployeeProfilePage() {
 
                   {/* Other Documents Section */}
                   <section>
-                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents & Signature</h3>
+                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Other Documents &amp; Signature</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <ImageInputWithPreview label="Profile Picture" currentUrl={employee.profilePictureUrl} preview={profilePicPreview} setFile={setNewProfilePicture} setPreview={setProfilePicPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('profilePicture')} isProfilePic={true} onRemove={() => handleRemoveFile('profilePictureUrl', setNewProfilePicture, setProfilePicPreview)} canRemove={isAdminView}/>
                           <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} onRemove={() => handleRemoveFile('signatureUrl', setNewSignatureUrl, setSignatureUrlPreview)} canRemove={isAdminView}/>
@@ -1626,7 +1644,7 @@ const ImageInputWithPreview: React.FC<{
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={onRemove}>Confirm & Remove</AlertDialogAction>
+                                    <AlertDialogAction onClick={onRemove}>Confirm &amp; Remove</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
