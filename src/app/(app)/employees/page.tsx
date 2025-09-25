@@ -84,10 +84,10 @@ export default function EmployeeDirectoryPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    // Pagination state
+    // --- New Simplified Pagination State ---
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageCursors, setPageCursors] = useState<{[page: number]: QueryDocumentSnapshot<DocumentData> | null}>({ 1: null });
-    const [hasNextPage, setHasNextPage] = useState(false);
+    const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]); // History of first docs of each page
+    const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     
     // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -173,73 +173,77 @@ export default function EmployeeDirectoryPage() {
         };
         fetchClients();
     }, [toast]);
+    
+    const buildBaseQuery = useCallback(() => {
+        let q: Query = collection(db, "employees");
 
-    const fetchData = useCallback(async (pageDirection: 'next' | 'prev' | 'first' = 'first') => {
-        if (userRole === null) return;
+        if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+            q = query(q, where('district', 'in', assignedDistricts));
+        } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+            return null; // Return null to indicate no query should be run
+        }
+        
+        if (debouncedSearchTerm) q = query(q, where('searchableFields', 'array-contains', debouncedSearchTerm.trim().toUpperCase()));
+        if (client !== 'all') q = query(q, where('clientName', '==', client));
+        if (status !== 'all') q = query(q, where('status', '==', status));
+        if (district !== 'all' && userRole !== 'fieldOfficer') q = query(q, where('district', '==', district));
+        
+        // Consistent ordering
+        q = query(q, orderBy('createdAt', 'desc'));
 
+        return q;
+    }, [userRole, assignedDistricts, debouncedSearchTerm, client, status, district]);
+
+
+    const fetchData = useCallback(async (direction: 'next' | 'prev' | 'first') => {
         setIsLoading(true);
         setError(null);
-        try {
-            let q: Query = collection(db, "employees");
-            
-            // Apply role-based filtering first
-            if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
-                q = query(q, where('district', 'in', assignedDistricts));
-            } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
-                setEmployees([]);
-                setHasNextPage(false);
-                setIsLoading(false);
-                return;
-            }
-            
-            // Apply URL-based filters
-            if (debouncedSearchTerm) q = query(q, where('searchableFields', 'array-contains', debouncedSearchTerm.trim().toUpperCase()));
-            if (client !== 'all') q = query(q, where('clientName', '==', client));
-            if (status !== 'all') q = query(q, where('status', '==', status));
-            if (district !== 'all' && userRole !== 'fieldOfficer') q = query(q, where('district', '==', district));
-            
-            // ALWAYS apply consistent ordering for pagination
-            q = query(q, orderBy('createdAt', 'desc'));
-            
-            let finalQuery = q;
-            const pageToFetch = pageDirection === 'next' ? currentPage + 1 : pageDirection === 'prev' ? currentPage - 1 : 1;
-            const cursor = pageCursors[pageToFetch > currentPage ? currentPage : pageToFetch];
-            
-            if (pageDirection === 'next' && cursor) {
-                 finalQuery = query(q, startAfter(cursor), limit(ITEMS_PER_PAGE + 1));
-            } else if (pageDirection === 'prev') {
-                // Prev is more complex with cursors, for now we will just go back to the start of the previous page
-                // This isn't perfect but better than before. A full solution would need `endBefore`.
-                // Resetting to page 1 on "prev" is a simple, safe behavior.
-                finalQuery = query(q, limit(ITEMS_PER_PAGE + 1));
-                setCurrentPage(1);
-            } else { // 'first'
-                finalQuery = query(q, limit(ITEMS_PER_PAGE + 1));
-            }
+        
+        const baseQuery = buildBaseQuery();
+        if (!baseQuery) {
+            setEmployees([]);
+            setIsLoading(false);
+            return;
+        }
 
+        let finalQuery: Query;
+
+        if (direction === 'next') {
+            finalQuery = query(baseQuery, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
+        } else if (direction === 'prev' && currentPage > 1) {
+            const prevPageCursor = pageHistory[currentPage - 1];
+            finalQuery = query(baseQuery, startAfter(prevPageCursor), limit(ITEMS_PER_PAGE));
+        } else { // 'first'
+            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
+        }
+        
+        try {
             const documentSnapshots = await getDocs(finalQuery);
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
-            
-            const hasMore = fetchedEmployees.length > ITEMS_PER_PAGE;
-            setHasNextPage(hasMore);
-
-            if(hasMore) fetchedEmployees.pop(); // Remove the extra item
-
             setEmployees(fetchedEmployees);
             
             if (!documentSnapshots.empty) {
-                const nextCursor = documentSnapshots.docs[documentSnapshots.docs.length - (hasMore ? 2 : 1)];
-                if (pageDirection === 'next') {
-                    setCurrentPage(prev => prev + 1);
-                    setPageCursors(prev => ({...prev, [currentPage + 1]: nextCursor }));
-                } else if (pageDirection === 'first') {
+                const first = documentSnapshots.docs[0];
+                const last = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+                setLastVisible(last);
+                
+                if (direction === 'next') {
+                    setCurrentPage(p => p + 1);
+                    setPageHistory(h => [...h, first]);
+                } else if (direction === 'prev') {
+                    setCurrentPage(p => p - 1);
+                    setPageHistory(h => h.slice(0, -1));
+                } else { // 'first'
                     setCurrentPage(1);
-                    setPageCursors({ 1: null, 2: nextCursor });
+                    setPageHistory([null, first]);
                 }
             } else {
-                setHasNextPage(false);
+                 if (direction === 'next') {
+                    setLastVisible(null); // No more pages
+                } else {
+                    setEmployees([]); // No results for this query
+                }
             }
-
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
             if (err.code === 'permission-denied') message = "Permission denied. Check Firestore security rules.";
@@ -249,18 +253,14 @@ export default function EmployeeDirectoryPage() {
             setIsLoading(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [client, district, debouncedSearchTerm, status, userRole, assignedDistricts, currentPage]);
-    
-    // Effect to fetch data when filters or user role changes
+    }, [buildBaseQuery, currentPage, lastVisible, pageHistory]);
+
     useEffect(() => {
         if (userRole !== null) {
-            // Reset pagination and fetch from the start
-            setCurrentPage(1);
-            setPageCursors({ 1: null });
             fetchData('first');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [debouncedSearchTerm, client, status, district, userRole]); // `fetchData` is memoized
+    }, [debouncedSearchTerm, client, status, district, userRole]);
 
 
     const handleConfirmDelete = async () => {
@@ -316,6 +316,10 @@ export default function EmployeeDirectoryPage() {
             default: return 'outline';
         }
     };
+    
+    // Derived state for button disabling
+    const hasNextPage = employees.length === ITEMS_PER_PAGE;
+    const hasPreviousPage = currentPage > 1;
 
     return (
         <div className="flex flex-col gap-6">
@@ -471,7 +475,7 @@ export default function EmployeeDirectoryPage() {
                             Page {currentPage}
                         </span>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => fetchData('prev')} disabled={isLoading || currentPage <= 1}>
+                            <Button variant="outline" size="sm" onClick={() => fetchData('prev')} disabled={isLoading || !hasPreviousPage}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => fetchData('next')} disabled={isLoading || !hasNextPage}>
@@ -537,5 +541,7 @@ export default function EmployeeDirectoryPage() {
         </div>
     );
 }
+
+    
 
     
