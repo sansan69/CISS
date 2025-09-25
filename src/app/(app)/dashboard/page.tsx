@@ -268,14 +268,22 @@ export default function DashboardPage() {
       },
     };
     
+    const clientChartColors = [
+        "hsl(var(--chart-1))",
+        "hsl(var(--chart-2))",
+        "hsl(var(--chart-3))",
+        "hsl(var(--chart-4))",
+        "hsl(var(--chart-5))",
+    ];
+
     const clientChartConfig = {
       clients: {
         label: "Clients",
       },
-      ...clientDistributionData.reduce((acc, client, index) => {
+      ...clientDistributionData.reduce((acc, client) => {
             acc[client.name] = {
                 label: client.name,
-                color: `hsl(var(--chart-${(index % 5) + 1}))`
+                // The color will be assigned dynamically in the Pie component
             };
             return acc;
       }, {} as any)
@@ -370,7 +378,7 @@ export default function DashboardPage() {
                                         <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
                                         <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
                                              {clientDistributionData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={clientChartConfig[entry.name]?.color} />
+                                                <Cell key={`cell-${index}`} fill={clientChartColors[index % clientChartColors.length]} />
                                             ))}
                                         </Pie>
                                         <Legend />
@@ -428,3 +436,4 @@ export default function DashboardPage() {
     );
 }
 
+    
