@@ -84,10 +84,11 @@ export default function EmployeeDirectoryPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    // --- New Simplified Pagination State ---
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]); // History of first docs of each page
+    const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNextPage, setHasNextPage] = useState(false);
+    const [hasPreviousPage, setHasPreviousPage] = useState(false);
     
     // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -183,10 +184,18 @@ export default function EmployeeDirectoryPage() {
             return null; // Return null to indicate no query should be run
         }
         
-        if (debouncedSearchTerm) q = query(q, where('searchableFields', 'array-contains', debouncedSearchTerm.trim().toUpperCase()));
-        if (client !== 'all') q = query(q, where('clientName', '==', client));
-        if (status !== 'all') q = query(q, where('status', '==', status));
-        if (district !== 'all' && userRole !== 'fieldOfficer') q = query(q, where('district', '==', district));
+        if (debouncedSearchTerm) {
+            q = query(q, where('searchableFields', 'array-contains', debouncedSearchTerm.trim().toUpperCase()));
+        }
+        if (client !== 'all') {
+            q = query(q, where('clientName', '==', client));
+        }
+        if (status !== 'all') {
+            q = query(q, where('status', '==', status));
+        }
+        if (district !== 'all' && userRole !== 'fieldOfficer') {
+            q = query(q, where('district', '==', district));
+        }
         
         // Consistent ordering
         q = query(q, orderBy('createdAt', 'desc'));
@@ -194,8 +203,7 @@ export default function EmployeeDirectoryPage() {
         return q;
     }, [userRole, assignedDistricts, debouncedSearchTerm, client, status, district]);
 
-
-    const fetchData = useCallback(async (direction: 'next' | 'prev' | 'first') => {
+    const fetchData = useCallback(async (direction: 'next' | 'prev' | 'first' = 'first') => {
         setIsLoading(true);
         setError(null);
         
@@ -208,11 +216,10 @@ export default function EmployeeDirectoryPage() {
 
         let finalQuery: Query;
 
-        if (direction === 'next') {
+        if (direction === 'next' && lastVisible) {
             finalQuery = query(baseQuery, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
-        } else if (direction === 'prev' && currentPage > 1) {
-            const prevPageCursor = pageHistory[currentPage - 1];
-            finalQuery = query(baseQuery, startAfter(prevPageCursor), limit(ITEMS_PER_PAGE));
+        } else if (direction === 'prev' && firstVisible) {
+            finalQuery = query(baseQuery, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
         } else { // 'first'
             finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
         }
@@ -225,24 +232,24 @@ export default function EmployeeDirectoryPage() {
             if (!documentSnapshots.empty) {
                 const first = documentSnapshots.docs[0];
                 const last = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+                setFirstVisible(first);
                 setLastVisible(last);
                 
-                if (direction === 'next') {
-                    setCurrentPage(p => p + 1);
-                    setPageHistory(h => [...h, first]);
-                } else if (direction === 'prev') {
-                    setCurrentPage(p => p - 1);
-                    setPageHistory(h => h.slice(0, -1));
-                } else { // 'first'
-                    setCurrentPage(1);
-                    setPageHistory([null, first]);
-                }
+                // Check for next/prev pages
+                const nextQuery = query(baseQuery, startAfter(last), limit(1));
+                const prevQuery = query(baseQuery, endBefore(first), limit(1));
+                
+                const [nextSnap, prevSnap] = await Promise.all([getDocs(nextQuery), getDocs(prevQuery)]);
+                
+                setHasNextPage(!nextSnap.empty);
+                setHasPreviousPage(direction === 'prev' || currentPage > 1);
+
             } else {
-                 if (direction === 'next') {
-                    setLastVisible(null); // No more pages
-                } else {
-                    setEmployees([]); // No results for this query
-                }
+                setEmployees([]);
+                setFirstVisible(null);
+                setLastVisible(null);
+                setHasNextPage(false);
+                setHasPreviousPage(currentPage > 1);
             }
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
@@ -252,15 +259,29 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [buildBaseQuery, currentPage, lastVisible, pageHistory]);
+    }, [buildBaseQuery, lastVisible, firstVisible, currentPage]);
 
     useEffect(() => {
         if (userRole !== null) {
             fetchData('first');
+            setCurrentPage(1);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [debouncedSearchTerm, client, status, district, userRole]);
+    
+    const handleNextPage = () => {
+        if (hasNextPage) {
+            setCurrentPage(p => p + 1);
+            fetchData('next');
+        }
+    };
+    
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(p => p - 1);
+            fetchData('prev');
+        }
+    };
 
 
     const handleConfirmDelete = async () => {
@@ -316,10 +337,6 @@ export default function EmployeeDirectoryPage() {
             default: return 'outline';
         }
     };
-    
-    // Derived state for button disabling
-    const hasNextPage = employees.length === ITEMS_PER_PAGE;
-    const hasPreviousPage = currentPage > 1;
 
     return (
         <div className="flex flex-col gap-6">
@@ -475,10 +492,10 @@ export default function EmployeeDirectoryPage() {
                             Page {currentPage}
                         </span>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => fetchData('prev')} disabled={isLoading || !hasPreviousPage}>
+                            <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={isLoading || !hasPreviousPage}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => fetchData('next')} disabled={isLoading || !hasNextPage}>
+                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || !hasNextPage}>
                                 Next <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>
