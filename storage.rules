@@ -3,15 +3,16 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // TEMPORARY: Allow all reads and writes for any file in the employees folder.
-    // This is to unblock the public registration flow.
-    // This is NOT secure for production.
+    // Allow public read access for all employee-related files.
+    // This is necessary for client-side PDF generation and public profiles.
+    // Write access should be restricted to authenticated users (e.g., during enrollment).
     match /employees/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
 
-    // Default Deny Rule
-    // This is a catch-all that explicitly denies access to any other path.
+    // Default Deny Rule for any other paths.
+    // This is a security best practice.
     match /{path=**} {
        allow read, write: if false;
     }

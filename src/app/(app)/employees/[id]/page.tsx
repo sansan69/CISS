@@ -221,29 +221,27 @@ const generateEmployeeId = (clientName: string): string => {
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const storageRef = ref(storage, url);
-        const bytes = await getBytes(storageRef);
-        return new Uint8Array(bytes);
-    } catch (error: any) {
-        if (error.code === 'storage/object-not-found') {
-            console.warn(`Image not found at path: ${url}. Attempting direct fetch.`);
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    console.error(`Direct fetch failed for ${url}: ${response.statusText}`);
-                    return null;
-                }
-                const blob = await response.blob();
-                return new Uint8Array(await blob.arrayBuffer());
-            } catch (fetchError) {
-                console.error(`Direct fetch also failed for ${url}:`, fetchError);
-                return null;
-            }
+        // Use a CORS-enabled fetch first, as it's more direct for public URLs
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Direct fetch failed: ${response.statusText}`);
         }
-        console.warn(`Could not fetch image at path: ${url}`, error);
-        return null;
+        const blob = await response.blob();
+        return new Uint8Array(await blob.arrayBuffer());
+    } catch (error) {
+        console.warn(`Direct fetch for ${url} failed. Falling back to SDK. Error:`, error);
+        // Fallback to using the SDK's getBytes method
+        try {
+            const storageRef = ref(storage, url);
+            const bytes = await getBytes(storageRef);
+            return new Uint8Array(bytes);
+        } catch (sdkError: any) {
+            console.error(`SDK getBytes also failed for ${url}:`, sdkError);
+            return null;
+        }
     }
 }
+
 
 export default function AdminEmployeeProfilePage() {
   const params = useParams();
