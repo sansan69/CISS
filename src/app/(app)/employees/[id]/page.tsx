@@ -222,7 +222,7 @@ async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | nu
     if (!url) return null;
     try {
         // Use a CORS-enabled fetch first, as it's more direct for public URLs
-        const response = await fetch(url);
+        const response = await fetch(url, { mode: 'cors' });
         if (!response.ok) {
             throw new Error(`Direct fetch failed: ${response.statusText}`);
         }
@@ -780,7 +780,7 @@ export default function AdminEmployeeProfilePage() {
 
         const addressY = y + 25;
         drawText("Full Address", margin, addressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
+        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress.replace(/\n/g, " ")), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
         y = addressTextHeight - 25;
         
         const employmentItems = [
@@ -1276,7 +1276,7 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="Phone Number" value={employee.phoneNumber} />
                     <DetailItem label="Email Address" value={employee.emailAddress} />
                      <div className="md:col-span-2">
-                        <DetailItem label="Full Address" value={employee.fullAddress} isAddress />
+                        <DetailItem label="Full Address" value={employee.fullAddress.replace(/\n/g, ", ")} isAddress />
                      </div>
                   </div>
                 </TabsContent>
@@ -1639,5 +1639,7 @@ const ImageInputWithPreview: React.FC<{
 };
 
 
+
+    
 
     
