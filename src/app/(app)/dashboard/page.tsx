@@ -79,11 +79,10 @@ export default function DashboardPage() {
                 try {
                     const tokenResult = await user.getIdTokenResult();
                     const claims = tokenResult.claims;
-                    if (user.email === 'admin@cisskerala.app') {
+                    if (claims.admin) { // Using custom claims for admin check
                         setUserRole('admin');
                         setAssignedDistricts([]);
                     } else {
-                        // For non-admins, check if they are a field officer
                         const officersRef = collection(db, "fieldOfficers");
                         const q = query(officersRef, where("uid", "==", user.uid));
                         const snapshot = await getDocs(q);
@@ -121,21 +120,10 @@ export default function DashboardPage() {
             setError(null);
             try {
                 let employeesQueryBuilder: any = collection(db, "employees");
-                let fullEmployeesQuery: any = collection(db, "employees");
 
-                // If field officer, filter by their assigned districts
+                // If field officer with districts, filter by their assigned districts. Otherwise, show all.
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                     employeesQueryBuilder = query(employeesQueryBuilder, where('district', 'in', assignedDistricts));
-                    fullEmployeesQuery = query(fullEmployeesQuery, where('district', 'in', assignedDistricts));
-                } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
-                    // Field officer has no assigned districts, so they see nothing.
-                    setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0 });
-                    setNewHiresData([]);
-                    setClientDistributionData([]);
-                    setRecentActivity([]);
-                    setUpcomingDuties([]);
-                    setIsLoading(false);
-                    return;
                 }
 
                 // --- Common Queries for all roles ---
@@ -148,8 +136,9 @@ export default function DashboardPage() {
                 const hiresQuery = query(employeesQueryBuilder, where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
                 
                 const recentActivityQuery = query(employeesQueryBuilder, orderBy("createdAt", "desc"), limit(5));
-
-                const allEmployeesForClientChart = getDocs(fullEmployeesQuery);
+                
+                // IMPORTANT: Client distribution chart should always show data for ALL employees, regardless of role.
+                const allEmployeesForClientChart = getDocs(collection(db, "employees"));
 
                 const queriesToRun: Promise<any>[] = [
                     totalQuery,
@@ -436,4 +425,3 @@ export default function DashboardPage() {
     );
 }
 
-    
