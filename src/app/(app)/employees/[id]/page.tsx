@@ -220,21 +220,28 @@ const generateEmployeeId = (clientName: string): string => {
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const response = await fetch(url, { mode: 'cors' });
-        if (!response.ok) {
-            console.warn(`Direct fetch for ${url} failed with status ${response.status}. Falling back to SDK.`);
-            throw new Error(`Direct fetch failed: ${response.statusText}`);
+        // The Firebase Storage SDK is the most reliable way to fetch storage objects,
+        // as it handles authentication and doesn't rely on public URLs or CORS.
+        const storageRef = ref(storage, url);
+        const bytes = await getBytes(storageRef);
+        return new Uint8Array(bytes);
+    } catch (error: any) {
+        if (error.code === 'storage/object-not-found') {
+            console.warn(`Image not found at path: ${url}. This might be a legacy URL.`);
+        } else {
+             console.error(`SDK getBytes failed for ${url}:`, error);
         }
-        const blob = await response.blob();
-        return new Uint8Array(await blob.arrayBuffer());
-    } catch (error) {
-        console.warn(`Direct fetch for ${url} failed. Error:`, error);
+        // Fallback for older, public URLs that might exist in the database
         try {
-            const storageRef = ref(storage, url);
-            const bytes = await getBytes(storageRef);
-            return new Uint8Array(bytes);
-        } catch (sdkError: any) {
-            console.error(`SDK getBytes also failed for ${url}:`, sdkError);
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error(`Fallback fetch failed for ${url}: ${response.statusText}`);
+                return null;
+            }
+            const blob = await response.blob();
+            return new Uint8Array(await blob.arrayBuffer());
+        } catch (fetchError) {
+             console.error(`Final fallback fetch also failed for ${url}:`, fetchError);
             return null;
         }
     }
@@ -1026,159 +1033,7 @@ export default function AdminEmployeeProfilePage() {
         setIsDownloadingPdf(false);
     }
   };
-
-  const handleRegenerateQrCode = async () => {
-    if (!employee) return;
-    setIsRegeneratingQr(true);
-    try {
-      const dataString = `Employee ID: ${employee.employeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
-      const newQrDataUrl = await QRCode.toDataURL(dataString, {
-        errorCorrectionLevel: 'H',
-        type: 'image/png',
-        quality: 0.92,
-        margin: 1,
-        width: 256,
-      });
-
-      const employeeDocRef = doc(db, "employees", employee.id);
-      await updateDoc(employeeDocRef, {
-        qrCodeUrl: newQrDataUrl,
-        updatedAt: serverTimestamp(),
-      });
-
-      setEmployee(prev => prev ? { ...prev, qrCodeUrl: newQrDataUrl } : null);
-      toast({ title: "QR Code Regenerated", description: "Employee QR code has been updated." });
-
-    } catch (err) {
-      console.error("Error regenerating QR code:", err);
-      toast({ variant: "destructive", title: "QR Regeneration Failed", description: "Could not regenerate the QR code." });
-    } finally {
-      setIsRegeneratingQr(false);
-    }
-  };
-
-  const handleRegenerateEmployeeId = async () => {
-    if (!employee) return;
-    setIsRegeneratingId(true);
-    try {
-      const newEmployeeId = generateEmployeeId(employee.clientName);
-      const dataString = `Employee ID: ${newEmployeeId}\nName: ${employee.fullName}\nPhone: ${employee.phoneNumber}`;
-      const newQrDataUrl = await QRCode.toDataURL(dataString, {
-        errorCorrectionLevel: 'H', type: 'image/png', quality: 0.92, margin: 1, width: 256,
-      });
-      
-       const nameParts = employee.fullName.toUpperCase().split(' ').filter(Boolean);
-       const newSearchableFields = Array.from(new Set([
-          ...nameParts,
-          newEmployeeId.toUpperCase(),
-          employee.phoneNumber
-      ].filter(Boolean)));
-
-      const employeeDocRef = doc(db, "employees", employee.id);
-      await updateDoc(employeeDocRef, {
-        employeeId: newEmployeeId,
-        qrCodeUrl: newQrDataUrl,
-        searchableFields: newSearchableFields,
-        updatedAt: serverTimestamp(),
-      });
-
-      setEmployee(prev => prev ? { ...prev, employeeId: newEmployeeId, qrCodeUrl: newQrDataUrl, searchableFields: newSearchableFields } : null);
-      toast({ title: "Employee ID Regenerated", description: `New ID is ${newEmployeeId}. QR code and search fields also updated.` });
-    } catch (err) {
-      console.error("Error regenerating Employee ID:", err);
-      toast({ variant: "destructive", title: "ID Regeneration Failed", description: "Could not regenerate the Employee ID." });
-    } finally {
-      setIsRegeneratingId(false);
-    }
-  };
   
-  const handleRemoveFile = async (
-    fileUrlKey: keyof Pick<Employee, 'profilePictureUrl' | 'identityProofUrlFront' | 'identityProofUrlBack' | 'addressProofUrlFront' | 'addressProofUrlBack' | 'signatureUrl' | 'bankPassbookStatementUrl' | 'policeClearanceCertificateUrl'>,
-    setFile: React.Dispatch<React.SetStateAction<File | null>>,
-    setPreview: React.Dispatch<React.SetStateAction<string | null>>
-  ) => {
-    if (!employee || !isAdminView) {
-      toast({ variant: "destructive", title: "Unauthorized", description: "Only admins can remove documents." });
-      return;
-    }
-
-    // Clear local staged file if it exists
-    setFile(null);
-    setPreview(null);
-    
-    // Check if there's an existing file in the database
-    const existingUrl = employee[fileUrlKey];
-    if (existingUrl) {
-      const employeeDocRef = doc(db, "employees", employee.id);
-      try {
-        await deleteFileFromStorage(existingUrl);
-        await updateDoc(employeeDocRef, {
-            [fileUrlKey]: deleteField(),
-            updatedAt: serverTimestamp(),
-        });
-
-        // Update local state to reflect deletion
-        setEmployee(prev => prev ? { ...prev, [fileUrlKey]: undefined } : null);
-
-        toast({ title: "Document Removed", description: "The existing document has been deleted." });
-      } catch (error) {
-        console.error("Error removing file: ", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not remove the document." });
-      }
-    }
-  };
-
-  const resetFileStates = () => {
-      setNewProfilePicture(null);
-      setNewIdentityProofUrlFront(null);
-      setNewIdentityProofUrlBack(null);
-      setNewAddressProofUrlFront(null);
-      setNewAddressProofUrlBack(null);
-      setNewSignatureUrl(null);
-      setNewBankPassbookStatement(null);
-      setNewPoliceClearanceCertificate(null);
-
-      setProfilePicPreview(null);
-      setIdentityProofUrlFrontPreview(null);
-      setIdentityProofUrlBackPreview(null);
-      setAddressProofUrlFrontPreview(null);
-      setAddressProofUrlBackPreview(null);
-      setSignatureUrlPreview(null);
-      setBankPassbookPreview(null);
-      setPoliceCertificatePreview(null);
-  }
-
-  const toggleEditMode = (forceState?: boolean) => {
-    const newEditState = forceState !== undefined ? forceState : !isEditing;
-    const url = new URL(window.location.href);
-    if (newEditState) {
-        url.searchParams.set('edit', 'true');
-    } else {
-        url.searchParams.delete('edit');
-        resetFileStates();
-        if(employee) {
-          form.reset({
-             ...employee,
-             joiningDate: employee.joiningDate?.toDate ? employee.joiningDate.toDate() : new Date(employee.joiningDate),
-             dateOfBirth: employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : new Date(employee.dateOfBirth),
-             exitDate: employee.exitDate?.toDate ? employee.exitDate.toDate() : (employee.exitDate ? new Date(employee.exitDate) : null),
-             spouseName: employee.spouseName ?? '',
-             resourceIdNumber: employee.resourceIdNumber ?? '',
-             panNumber: employee.panNumber ?? '',
-             epfUanNumber: employee.epfUanNumber ?? '',
-             esicNumber: employee.esicNumber ?? '',
-             otherQualification: employee.otherQualification ?? '',
-             addressProofNumber: employee.addressProofNumber ?? '',
-             bankName: employee.bankName ?? '',
-             bankAccountNumber: employee.bankAccountNumber ?? '',
-             ifscCode: employee.ifscCode ?? '',
-          });
-        }
-    }
-    router.replace(url.toString(), { scroll: false });
-  };
-  
-
   if (isLoading || isAuthLoading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
@@ -1657,6 +1512,8 @@ const ImageInputWithPreview: React.FC<{
 };
 
 
+
+    
 
     
 

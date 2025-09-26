@@ -82,21 +82,28 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const response = await fetch(url, { mode: 'cors' });
-        if (!response.ok) {
-            console.warn(`Direct fetch for ${url} failed with status ${response.status}. Falling back to SDK.`);
-            throw new Error(`Direct fetch failed: ${response.statusText}`);
+        // The Firebase Storage SDK is the most reliable way to fetch storage objects,
+        // as it handles authentication and doesn't rely on public URLs or CORS.
+        const storageRef = ref(storage, url);
+        const bytes = await getBytes(storageRef);
+        return new Uint8Array(bytes);
+    } catch (error: any) {
+        if (error.code === 'storage/object-not-found') {
+            console.warn(`Image not found at path: ${url}. This might be a legacy URL.`);
+        } else {
+             console.error(`SDK getBytes failed for ${url}:`, error);
         }
-        const blob = await response.blob();
-        return new Uint8Array(await blob.arrayBuffer());
-    } catch (error) {
-        console.warn(`Direct fetch for ${url} failed. Error:`, error);
+        // Fallback for older, public URLs that might exist in the database
         try {
-            const storageRef = ref(storage, url);
-            const bytes = await getBytes(storageRef);
-            return new Uint8Array(bytes);
-        } catch (sdkError: any) {
-            console.error(`SDK getBytes also failed for ${url}:`, sdkError);
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error(`Fallback fetch failed for ${url}: ${response.statusText}`);
+                return null;
+            }
+            const blob = await response.blob();
+            return new Uint8Array(await blob.arrayBuffer());
+        } catch (fetchError) {
+             console.error(`Final fallback fetch also failed for ${url}:`, fetchError);
             return null;
         }
     }
@@ -287,7 +294,7 @@ export default function PublicEmployeeProfilePage() {
 
         const addressY = y + 25;
         drawText("Full Address", margin, addressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
+        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress.replace(/(\r\n|\n|\r)/gm, " ")), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
         y = addressTextHeight - 25;
         
         const employmentItems = [
@@ -710,3 +717,5 @@ export default function PublicEmployeeProfilePage() {
     </>
   );
 }
+
+    
