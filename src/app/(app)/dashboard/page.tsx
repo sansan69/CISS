@@ -114,6 +114,13 @@ export default function DashboardPage() {
         if (userRole === null) { // Wait until we know the user's role
             return;
         }
+        
+        if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+            setError("You have not been assigned to any districts. Please contact an administrator.");
+            setIsLoading(false);
+            setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0});
+            return;
+        }
 
         const fetchDashboardData = async () => {
             setIsLoading(true);
@@ -425,3 +432,4 @@ export default function DashboardPage() {
     );
 }
 
+    
