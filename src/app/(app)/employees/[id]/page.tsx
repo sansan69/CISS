@@ -227,8 +227,6 @@ async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | nu
     } catch (error: any) {
         if (error.code === 'storage/object-not-found') {
             console.warn(`Image not found at path: ${url}. The file may have been deleted or the URL is incorrect.`);
-            // No fallback to fetch, as it can cause CORS issues if not configured properly.
-            // The SDK is the most reliable method.
         } else {
             console.error(`Error fetching image bytes via SDK for ${url}:`, error);
         }
@@ -940,8 +938,10 @@ export default function AdminEmployeeProfilePage() {
                     line = testLine;
                 }
             }
-            tcPage.drawText(line, { x: x, y: tcY, font: font, size: size, lineHeight: lineHeight });
-            tcY -= lineHeight;
+            if (line.trim() !== '') {
+                tcPage.drawText(line, { x: x, y: tcY, font: font, size: size, lineHeight: lineHeight });
+                tcY -= lineHeight;
+            }
         };
 
         tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: (width - helveticaBoldFont.widthOfTextAtSize("Terms & Conditions of Enrollment for Security Personnel", 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
