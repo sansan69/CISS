@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import QRCode from 'qrcode';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import { ref, deleteObject, getBytes } from 'firebase/storage';
+import { ref, getBytes } from 'firebase/storage';
 
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -216,6 +216,23 @@ const generateEmployeeId = (clientName: string): string => {
   const financialYear = getCurrentFinancialYear();
   const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
   return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+};
+
+const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
+    const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+    try {
+        const url = await QRCode.toDataURL(dataString, {
+            errorCorrectionLevel: 'H',
+            type: 'image/png',
+            quality: 0.92,
+            margin: 1,
+            width: 256,
+        });
+        return url;
+    } catch (err) {
+        console.error('QR code generation failed:', err);
+        throw new Error('Failed to generate QR code.');
+    }
 };
 
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
@@ -649,6 +666,63 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
+  const handleRegenerateEmployeeId = async () => {
+    if (!employee) return;
+    setIsRegeneratingId(true);
+    try {
+        const newEmployeeId = generateEmployeeId(employee.clientName);
+        const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, employee.fullName, employee.phoneNumber);
+
+        const newSearchableFields = Array.from(new Set([
+            ...employee.fullName.split(' ').filter(Boolean),
+            employee.firstName,
+            employee.lastName,
+            newEmployeeId,
+            employee.phoneNumber
+        ].map(s => s.toUpperCase())));
+
+        const updateData = {
+            employeeId: newEmployeeId,
+            qrCodeUrl: newQrCodeUrl,
+            searchableFields: newSearchableFields,
+            publicProfile: {
+                ...employee.publicProfile,
+                employeeId: newEmployeeId,
+            },
+            updatedAt: serverTimestamp(),
+        };
+
+        const employeeDocRef = doc(db, "employees", employee.id);
+        await updateDoc(employeeDocRef, updateData);
+        
+        toast({ title: "Employee ID Regenerated", description: `New ID: ${newEmployeeId}` });
+        await fetchEmployee(); // Refresh data
+    } catch (err: any) {
+        toast({ variant: "destructive", title: "Regeneration Failed", description: err.message });
+    } finally {
+        setIsRegeneratingId(false);
+    }
+  };
+
+  const handleRegenerateQrCode = async () => {
+    if (!employee) return;
+    setIsRegeneratingQr(true);
+    try {
+        const newQrCodeUrl = await generateQrCodeDataUrl(employee.employeeId, employee.fullName, employee.phoneNumber);
+        const employeeDocRef = doc(db, "employees", employee.id);
+        await updateDoc(employeeDocRef, {
+            qrCodeUrl: newQrCodeUrl,
+            updatedAt: serverTimestamp(),
+        });
+        toast({ title: "QR Code Regenerated", description: "The employee's QR code has been updated." });
+        await fetchEmployee(); // Refresh data
+    } catch (err: any) {
+        toast({ variant: "destructive", title: "QR Regeneration Failed", description: err.message });
+    } finally {
+        setIsRegeneratingQr(false);
+    }
+  };
+
   const handleDownloadProfile = async () => {
     if (!employee) return;
     setIsDownloadingPdf(true);
@@ -1072,6 +1146,56 @@ export default function AdminEmployeeProfilePage() {
       defaultCalendarMonth.setTime(fallbackDate.getTime());
   }
 
+  const toggleEditMode = () => {
+    setIsEditing(!isEditing);
+    // Add logic to toggle query parameter
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    if (!isEditing) {
+        newSearchParams.set('edit', 'true');
+    } else {
+        newSearchParams.delete('edit');
+    }
+    router.push(`${window.location.pathname}?${newSearchParams.toString()}`);
+  };
+
+  const handleRemoveFile = async (
+    fileKey: keyof Employee,
+    setFile: (file: File | null) => void,
+    setPreview: (preview: string | null) => void
+  ) => {
+    if (!employee) return;
+    const urlToRemove = employee[fileKey] as string | undefined;
+
+    // Resetting the UI state immediately for better UX
+    setFile(null);
+    setPreview(null);
+    
+    // Create a payload to nullify the field in Firestore
+    const updatePayload = {
+      [fileKey]: deleteField(),
+      updatedAt: serverTimestamp(),
+    };
+    
+    try {
+        const employeeDocRef = doc(db, "employees", employee.id);
+        await updateDoc(employeeDocRef, updatePayload);
+        
+        // Also remove the old file from storage
+        if (urlToRemove) {
+            await deleteFileFromStorage(urlToRemove);
+        }
+
+        toast({ title: "File Removed", description: `The file for ${fileKey} has been marked for removal. It will be deleted upon saving changes.` });
+        
+        // Refetch employee data to update the UI correctly
+        await fetchEmployee();
+
+    } catch (err: any) {
+        console.error("Error removing file:", err);
+        toast({ variant: 'destructive', title: 'Removal Failed', description: 'Could not remove the file.' });
+    }
+  };
+
   return (
     <>
       <div className="flex flex-col gap-6">
@@ -1417,7 +1541,7 @@ export default function AdminEmployeeProfilePage() {
                   </section>
                 </CardContent>
                 <CardFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => toggleEditMode(false)} disabled={isSubmitting}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => toggleEditMode()} disabled={isSubmitting}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Changes
