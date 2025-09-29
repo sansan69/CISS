@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -226,24 +227,11 @@ async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | nu
         const bytes = await getBytes(storageRef);
         return new Uint8Array(bytes);
     } catch (error: any) {
-        if (error.code === 'storage/object-not-found') {
-            console.warn(`Image not found at path: ${url}. This might be a legacy URL.`);
-        } else {
-             console.error(`SDK getBytes failed for ${url}:`, error);
-        }
-        // Fallback for older, public URLs that might exist in the database
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                console.error(`Fallback fetch failed for ${url}: ${response.statusText}`);
-                return null;
-            }
-            const blob = await response.blob();
-            return new Uint8Array(await blob.arrayBuffer());
-        } catch (fetchError) {
-             console.error(`Final fallback fetch also failed for ${url}:`, fetchError);
-            return null;
-        }
+        console.error(`Firebase SDK getBytes() failed for ${url}:`, error);
+        // Do not fallback to fetch, as it's the source of CORS issues in production.
+        // The SDK is the correct method. If it fails, the issue is likely with permissions
+        // or the URL itself, which a direct fetch won't solve reliably.
+        return null;
     }
 }
 
