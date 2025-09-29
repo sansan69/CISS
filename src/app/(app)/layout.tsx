@@ -193,18 +193,23 @@ export function AppLayout({ children }: { children: ReactNode }) {
       setIsLoadingAuth(true);
       if (user) {
         setAuthUser(user);
-        
-        if (user.email === 'admin@cisskerala.app') {
-            setUserRole('admin');
-        } else {
-            const fieldOfficersCollection = collection(db, 'fieldOfficers');
-            const q = query(fieldOfficersCollection, where("uid", "==", user.uid));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                setUserRole('fieldOfficer');
+        try {
+            const tokenResult = await user.getIdTokenResult();
+            if (tokenResult.claims.admin === true) {
+                setUserRole('admin');
             } else {
-                setUserRole('user'); 
+                const fieldOfficersCollection = collection(db, 'fieldOfficers');
+                const q = query(fieldOfficersCollection, where("uid", "==", user.uid));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    setUserRole('fieldOfficer');
+                } else {
+                    setUserRole('user'); 
+                }
             }
+        } catch (error) {
+            console.error("Error fetching user role:", error);
+            setUserRole('user'); // Default to a non-privileged role on error
         }
       } else {
         setAuthUser(null);

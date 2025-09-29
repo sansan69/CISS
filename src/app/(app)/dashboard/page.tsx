@@ -79,7 +79,7 @@ export default function DashboardPage() {
                 try {
                     const tokenResult = await user.getIdTokenResult();
                     const claims = tokenResult.claims;
-                    if (claims.admin) { // Using custom claims for admin check
+                    if (claims.admin) { 
                         setUserRole('admin');
                         setAssignedDistricts([]);
                     } else {
@@ -91,7 +91,7 @@ export default function DashboardPage() {
                             setUserRole('fieldOfficer');
                             setAssignedDistricts(officerData.assignedDistricts || []);
                         } else {
-                            setUserRole('user'); // Or another default role
+                            setUserRole('user'); 
                             setAssignedDistricts([]);
                         }
                     }
@@ -116,10 +116,8 @@ export default function DashboardPage() {
         }
         
         if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
-            setError("You have not been assigned to any districts. Please contact an administrator.");
-            setIsLoading(false);
-            setStats({ total: 0, active: 0, onLeave: 0, inactiveOrExited: 0});
-            return;
+             setError("You have not been assigned to any districts. Please contact an administrator.");
+             // Show stats for all employees if no districts assigned
         }
 
         const fetchDashboardData = async () => {
@@ -128,7 +126,7 @@ export default function DashboardPage() {
             try {
                 let employeesQueryBuilder: any = collection(db, "employees");
 
-                // If field officer with districts, filter by their assigned districts. Otherwise, show all.
+                // If field officer with districts, filter by their assigned districts. Otherwise (admin or FO with no districts), show all.
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                     employeesQueryBuilder = query(employeesQueryBuilder, where('district', 'in', assignedDistricts));
                 }
@@ -286,6 +284,16 @@ export default function DashboardPage() {
     };
 
 
+    if (error && userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+        return (
+            <Alert variant="destructive" className="w-full">
+                <AlertIcon className="h-4 w-4" />
+                <AlertTitle>Assignment Pending</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+            </Alert>
+        );
+    }
+
     if (error) {
         return (
             <Alert variant="destructive" className="w-full">
@@ -431,5 +439,3 @@ export default function DashboardPage() {
         </div>
     );
 }
-
-    
