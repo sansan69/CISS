@@ -39,6 +39,68 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 
+// #region PDF Text Helper Functions
+// Normalize weird whitespace, keep intended line breaks as separators.
+function normalizePdfText(input: unknown) {
+  let s = (input ?? '').toString();
+  s = s.replace(/\r\n/g, '\n');         // normalize CRLF
+  s = s.replace(/\r/g, '\n');           // normalize CR
+  s = s.replace(/\u00A0/g, ' ');        // nbsp → space
+  s = s.replace(/\t/g, ' ');            // tabs → space
+  s = s.replace(/[\u2028\u2029]/g, ' ');// LS/PS → space
+  return s;
+}
+
+// Simple width-based wrapper using pdf-lib-like API
+function wrapTextToWidth(
+  text: string,
+  font: any,               // the embedded font object
+  fontSize: number,
+  maxWidth: number
+) {
+  const lines: string[] = [];
+  for (const raw of normalizePdfText(text).split('\n')) {
+    const words = raw.split(/\s+/).filter(Boolean);
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      const width = font.widthOfTextAtSize(test, fontSize);
+      if (width > maxWidth) {
+        if (line) lines.push(line);
+        line = w;
+      } else {
+        line = test;
+      }
+    }
+    lines.push(line || ''); // push even if empty line
+  }
+  return lines;
+}
+
+// Safe draw that never feeds \n into width/draw calls
+function drawMultilineText(opts: {
+  page: any;
+  text: string;
+  font: any;
+  fontSize: number;
+  x: number;
+  y: number;          // top baseline
+  maxWidth: number;
+  lineHeight?: number;
+  color?: any;
+}) {
+  const { page, text, font, fontSize, x, y, maxWidth, lineHeight = fontSize * 1.2, color } = opts;
+  const lines = wrapTextToWidth(text, font, fontSize, maxWidth);
+  let yy = y;
+  for (const line of lines) {
+    // IMPORTANT: line contains no \n now
+    page.drawText(line, { x, y: yy, size: fontSize, font, color });
+    yy -= lineHeight;
+  }
+}
+// #endregion
+
+
 // Dropdown options
 const keralaDistricts = ["Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"];
 const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
@@ -238,18 +300,20 @@ const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phone
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;
     try {
-        const storageRef = ref(storage, url);
-        const bytes = await getBytes(storageRef);
-        return new Uint8Array(bytes);
+      // The Firebase Storage SDK is the most reliable way to fetch storage objects
+      // as it handles authentication and permissions gracefully.
+      const storageRef = ref(storage, url);
+      const bytes = await getBytes(storageRef);
+      return new Uint8Array(bytes);
     } catch (error: any) {
-        if (error.code === 'storage/object-not-found') {
-            console.warn(`Image not found at path: ${url}. The file may have been deleted or the URL is incorrect.`);
-        } else {
-            console.error(`Error fetching image bytes via SDK for ${url}:`, error);
-        }
-        return null;
+      if (error.code === 'storage/object-not-found') {
+        console.warn(`Image not found at path: ${url}. The file may have been deleted or the URL is incorrect.`);
+      } else {
+        console.error(`Error fetching image bytes for ${url}:`, error);
+      }
+      return null;
     }
-}
+  }
 
 
 export default function AdminEmployeeProfilePage() {
@@ -821,33 +885,14 @@ export default function AdminEmployeeProfilePage() {
         ];
         
         y = drawSection("Contact Information", contactItems, y);
-
-        const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, font: PDFFont, size: number, color = rgb(0,0,0)): number => {
-            const sanitizedText = text.replace(/(\r\n|\n|\r)/gm, " ");
-            const words = sanitizedText.split(' ');
-            let line = '';
-            let currentY = y;
-            const lineHeight = size * 1.2;
-
-            for (const word of words) {
-                const testLine = line + word + ' ';
-                const testWidth = font.widthOfTextAtSize(testLine, size);
-                if (testWidth > maxWidth && line !== '') {
-                    page.drawText(line, { x, y: currentY, font, size, color });
-                    currentY -= lineHeight;
-                    line = word + ' ';
-                } else {
-                    line = testLine;
-                }
-            }
-            page.drawText(line, { x, y: currentY, font, size, color });
-            return currentY - lineHeight;
-        };
-
+        
         const addressY = y + 25;
         drawText("Full Address", margin, addressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-        const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
-        y = addressTextHeight - 25;
+        drawMultilineText({ page, text: toTitleCase(employee.fullAddress), x: margin, y: addressY - 15, maxWidth: width - margin * 2, font: helveticaFont, fontSize: 11 });
+        // Estimate height, this is not perfect but better than nothing
+        const addressLines = wrapTextToWidth(toTitleCase(employee.fullAddress), helveticaFont, 11, width-margin*2).length;
+        y -= (addressLines * (11*1.2)) + 25;
+
         
         const employmentItems = [
             { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
@@ -930,15 +975,8 @@ export default function AdminEmployeeProfilePage() {
                     ];
 
                     for(const instruction of instructions) {
-                        const instructionWidth = helveticaFont.widthOfTextAtSize(instruction, 10);
-                        qrPage.drawText(instruction, {
-                            x: (pageW - instructionWidth) / 2,
-                            y: instructionsY,
-                            font: helveticaFont,
-                            size: 10,
-                            lineHeight: 14
-                        });
-                        instructionsY -= 20;
+                        drawMultilineText({ page: qrPage, text: instruction, font: helveticaFont, fontSize: 10, x: (pageW - helveticaFont.widthOfTextAtSize(instruction, 10))/2, y: instructionsY, maxWidth: pageW - margin * 2 });
+                        instructionsY -= (10 * 1.2 * 2);
                     }
                 }
             } catch (qrError) {
@@ -989,58 +1027,44 @@ export default function AdminEmployeeProfilePage() {
         // --- Last Page: Terms and Conditions ---
         const tcPage = pdfDoc.addPage();
         let tcY = tcPage.getHeight() - margin;
-
-        const drawTcTitle = (text: string) => {
-            tcPage.drawText(text, { x: margin, y: tcY, font: helveticaBoldFont, size: 11 });
-            tcY -= 20;
-        };
-
-        const drawWrappedTcText = (text: string, x: number, maxWidth: number, size: number, font: PDFFont) => {
-            const sanitizedText = text.replace(/(\r\n|\n|\r)/gm, " ");
-            const words = sanitizedText.split(' ');
-            let line = '';
-            const lineHeight = size * 1.4;
-
-            for (const word of words) {
-                const testLine = line + word + ' ';
-                const testWidth = font.widthOfTextAtSize(testLine, size);
-                if (testWidth > maxWidth && line.length > 0) {
-                    tcPage.drawText(line, { x: x, y: tcY, font: font, size: size, lineHeight: lineHeight });
-                    tcY -= lineHeight;
-                    line = word + ' ';
-                } else {
-                    line = testLine;
-                }
-            }
-            if (line.trim() !== '') {
-                tcPage.drawText(line, { x: x, y: tcY, font: font, size: size, lineHeight: lineHeight });
-                tcY -= lineHeight;
-            }
-        };
-
+        
         tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: (width - helveticaBoldFont.widthOfTextAtSize("Terms & Conditions of Enrollment for Security Personnel", 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
         tcY -= 40;
 
-        drawTcTitle("I. General Eligibility and Compliance");
-        drawWrappedTcText("• I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        drawWrappedTcText("• I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        drawWrappedTcText("• I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        tcY -= 15;
-        
-        drawTcTitle("II. Employment Terms & Responsibilities");
-        drawWrappedTcText("• My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        drawWrappedTcText("• I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        drawWrappedTcText("• I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        drawWrappedTcText("• I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        tcY -= 15;
+        const tcContent = [
+            { title: "I. General Eligibility and Compliance", 
+              points: [
+                "I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.",
+                "I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.",
+                "I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies."
+              ]},
+            { title: "II. Employment Terms & Responsibilities",
+              points: [
+                "My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.",
+                "I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.",
+                "I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.",
+                "I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief."
+              ]},
+            { title: "III. Disciplinary Action",
+              points: [
+                "I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment."
+              ]},
+            { title: "IV. Declaration",
+              points: [
+                "I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge."
+              ]}
+        ];
 
-        drawTcTitle("III. Disciplinary Action");
-        drawWrappedTcText("• I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        tcY -= 15;
-        
-        drawTcTitle("IV. Declaration");
-        drawWrappedTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.", margin + 15, width - (margin * 2) - 15, 9.5, helveticaFont);
-        tcY -= 50;
+        for(const section of tcContent) {
+            tcPage.drawText(section.title, { x: margin, y: tcY, font: helveticaBoldFont, size: 11 });
+            tcY -= 20;
+            for(const point of section.points) {
+                drawMultilineText({ page: tcPage, text: `• ${point}`, font: helveticaFont, fontSize: 9.5, x: margin + 15, y: tcY, maxWidth: width - (margin * 2) - 15 });
+                const lines = wrapTextToWidth(`• ${point}`, helveticaFont, 9.5, width - (margin * 2) - 15);
+                tcY -= lines.length * (9.5 * 1.4);
+            }
+            tcY -= 15;
+        }
 
         // Add Signature
         const signatureBytes = await fetchImageBytes(employee.signatureUrl);
