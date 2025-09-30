@@ -386,7 +386,7 @@ export default function DashboardPage() {
                         ) : !isMounted ? (
                             <div className="h-[250px] flex justify-center items-center text-muted-foreground">Preparing chart...</div>
                         ) : clientDistributionData.length > 0 ? (
-                            <ChartContainer config={clientChartConfig} className="w-full aspect-square h-[250px]">
+                            <ChartContainer config={clientChartConfig} className="w-full h-[300px]">
                                 <PieChart>
                                     <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
                                     <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
