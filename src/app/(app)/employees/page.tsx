@@ -203,8 +203,8 @@ export default function EmployeeDirectoryPage() {
             const searchUpper = trimmed.toUpperCase();
             q = query(q, orderBy('fullName'), startAt(searchUpper), endAt(searchUpper + '\uf8ff')) as Query;
         } else {
-            // Default ordering when not searching
-            q = query(q, orderBy('createdAt', 'desc'));
+            // Default ordering when not searching - use fullName to avoid composite index needs with filters
+            q = query(q, orderBy('fullName'));
         }
 
         return q;
@@ -249,7 +249,7 @@ export default function EmployeeDirectoryPage() {
                 const [nextSnap, prevSnap] = await Promise.all([getDocs(nextQuery), getDocs(prevQuery)]);
                 
                 setHasNextPage(!nextSnap.empty);
-                setHasPreviousPage(direction === 'prev' || currentPage > 1);
+                setHasPreviousPage(!prevSnap.empty);
 
             } else {
                 setEmployees([]);
