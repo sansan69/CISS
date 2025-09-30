@@ -43,6 +43,12 @@ const settingsOptions = [
     icon: DownloadCloud,
     href: "/settings/data-export",
   },
+  {
+    title: "Assigned Guards Export",
+    description: "Download assigned guard details to Excel with filters.",
+    icon: Users,
+    href: "/settings/assigned-guards-export",
+  },
 ];
 
 export default function SettingsPage() {
