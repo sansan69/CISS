@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
 
-const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
+const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep" ];
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 
 // A custom hook for debouncing a value

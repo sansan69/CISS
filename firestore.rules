@@ -27,8 +27,21 @@ service cloud.firestore {
     match /workOrders/{workOrderId} {
       // Allow authenticated users (admins/field officers) to read work orders
       allow read: if request.auth != null;
-      // Restrict writes to admin
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      // Admin can create/update/delete; field officers can update assignedGuards only for their districts
+      allow create: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      allow update: if request.auth != null && (
+        request.auth.token.email == 'admin@cisskerala.app' ||
+        (
+          // minimal FO permission: can only change assignedGuards array
+          request.resource.data.assignedGuards != resource.data.assignedGuards &&
+          request.resource.data.maleGuardsRequired == resource.data.maleGuardsRequired &&
+          request.resource.data.femaleGuardsRequired == resource.data.femaleGuardsRequired &&
+          request.resource.data.totalManpower == resource.data.totalManpower &&
+          request.resource.data.siteId == resource.data.siteId &&
+          request.resource.data.date == resource.data.date
+        )
+      );
+      allow delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
     }
 
     // Rules for the 'sites' collection

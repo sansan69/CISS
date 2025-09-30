@@ -12,6 +12,31 @@
       "collectionGroup": "sites",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "siteName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "siteId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sites",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "clientName", "order": "ASCENDING" },
         { "fieldPath": "district", "order": "ASCENDING" },
         { "fieldPath": "siteName", "order": "ASCENDING" }

@@ -183,7 +183,7 @@ interface ClientOption {
 const keralaDistricts = [
   "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
-  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
+  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
 ];
 
 const idProofOptions = ["Aadhar Card", "PAN Card", "Voter ID", "Passport", "Driving License", "Birth Certificate", "School Certificate"];

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast } from 'firebase/firestore';
+import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast, addDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
@@ -66,16 +66,19 @@ const requiredFields = [
     'Client Name', 'Site Name', 'Site Address', 'Geolocation', 'District'
 ];
 
-const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
+const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep" ];
 const SITES_PER_PAGE = 10;
 
 
-const SiteEditForm: React.FC<{ 
-    site: Site; 
-    onSave: (siteData: Partial<Site>) => Promise<void>; 
-    isSaving: boolean; 
+interface SiteEditFormProps {
+    site: Site;
+    onSave: (siteData: Partial<Site>) => Promise<void>;
+    isSaving: boolean;
     onClose: () => void;
-}> = ({ site, onSave, isSaving, onClose }) => {
+    clients: ClientOption[];
+}
+
+const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients }) => {
     const [formData, setFormData] = useState<Partial<Site>>(site);
 
     const handleSave = () => {
@@ -101,7 +104,14 @@ const SiteEditForm: React.FC<{
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
                 <Label htmlFor="clientName">Client Name</Label>
-                <Input id="clientName" value={formData.clientName || ''} onChange={(e) => setFormData({...formData, clientName: e.target.value})} />
+                <Select value={formData.clientName} onValueChange={(value) => setFormData({ ...formData, clientName: value })}>
+                    <SelectTrigger id="clientName"><SelectValue placeholder="Select a client" /></SelectTrigger>
+                    <SelectContent>
+                        {clients.map(c => (
+                            <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
              <div className="grid gap-2">
                 <Label htmlFor="siteName">Site Name</Label>
@@ -144,6 +154,8 @@ export default function SiteManagementPage() {
     const [editingSite, setEditingSite] = useState<Site | null>(null);
     const [deletingSite, setDeletingSite] = useState<Site | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [createData, setCreateData] = useState<Partial<Site>>({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0) });
     
     // Filters
     const [clients, setClients] = useState<ClientOption[]>([]);
@@ -486,9 +498,14 @@ export default function SiteManagementPage() {
                     <CardDescription>Upload an Excel file to add multiple new sites at once.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex gap-4">
-                        <Button onClick={handleDownloadTemplate} variant="outline">
-                            <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
+                    <div className="flex justify-between items-center">
+                        <div className="flex gap-4">
+                            <Button onClick={handleDownloadTemplate} variant="outline">
+                                <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
+                            </Button>
+                        </div>
+                        <Button onClick={() => setIsCreateOpen(true)}>
+                            Add New Site
                         </Button>
                     </div>
                      <div className="flex flex-col sm:flex-row gap-4 items-center">
@@ -511,6 +528,88 @@ export default function SiteManagementPage() {
                     </Button>
                 </CardFooter>
             </Card>
+            {/* Create New Site Dialog */}
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Site</DialogTitle>
+                        <DialogDescription>Enter the details below to create a new site.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-client">Client Name</Label>
+                            <Select value={createData.clientName} onValueChange={(value) => setCreateData({ ...createData, clientName: value })}>
+                                <SelectTrigger id="new-client"><SelectValue placeholder="Select client" /></SelectTrigger>
+                                <SelectContent>
+                                    {clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-site-name">Site Name</Label>
+                            <Input id="new-site-name" value={createData.siteName || ''} onChange={(e) => setCreateData({ ...createData, siteName: e.target.value })} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-site-id">Site ID (optional)</Label>
+                            <Input id="new-site-id" value={createData.siteId || ''} onChange={(e) => setCreateData({ ...createData, siteId: e.target.value })} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-address">Site Address</Label>
+                            <Input id="new-address" value={createData.siteAddress || ''} onChange={(e) => setCreateData({ ...createData, siteAddress: e.target.value })} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-district">District</Label>
+                            <Select value={createData.district} onValueChange={(value) => setCreateData({ ...createData, district: value })}>
+                                <SelectTrigger id="new-district"><SelectValue placeholder="Select district" /></SelectTrigger>
+                                <SelectContent>
+                                    {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-geo">Geolocation (lat,long)</Label>
+                            <Input id="new-geo" placeholder="10.1234,76.5432" onChange={(e) => {
+                                const s = e.target.value.trim();
+                                const parts = s.split(',').map(p => parseFloat(p.trim()));
+                                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                                    setCreateData({ ...createData, geolocation: new GeoPoint(parts[0], parts[1]) });
+                                }
+                            }} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                        <Button onClick={async () => {
+                            if (!createData.clientName || !createData.siteName || !createData.siteAddress || !createData.district || !createData.geolocation) {
+                                toast({ variant: 'destructive', title: 'Missing Data', description: 'Please fill all required fields.' });
+                                return;
+                            }
+                            try {
+                                setIsSubmitting(true);
+                                await addDoc(collection(db, 'sites'), {
+                                    clientName: createData.clientName,
+                                    siteName: createData.siteName,
+                                    siteId: createData.siteId || null,
+                                    siteAddress: createData.siteAddress,
+                                    district: createData.district,
+                                    geolocation: createData.geolocation,
+                                    createdAt: serverTimestamp(),
+                                    updatedAt: serverTimestamp(),
+                                });
+                                toast({ title: 'Site Created', description: 'The new site has been added.' });
+                                setIsCreateOpen(false);
+                                setCreateData({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0) });
+                                fetchSites('first');
+                                setCurrentPage(1);
+                            } catch (e) {
+                                toast({ variant: 'destructive', title: 'Create Failed', description: 'Could not create site. Please try again.' });
+                            } finally {
+                                setIsSubmitting(false);
+                            }
+                        }} disabled={isSubmitting}>Create Site</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {processedRecords.length > 0 && (
                  <Card>
@@ -627,7 +726,7 @@ export default function SiteManagementPage() {
                         <DialogTitle>Edit Site</DialogTitle>
                         <DialogDescription>Update the details for "{editingSite?.siteName}".</DialogDescription>
                     </DialogHeader>
-                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} />}
+                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} clients={clients} />}
                 </DialogContent>
             </Dialog>
 

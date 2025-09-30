@@ -4,14 +4,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ArrowLeft, UserPlus, AlertCircle, Search, UserCheck, X } from 'lucide-react';
+import { Loader2, ArrowLeft, UserPlus, AlertCircle, Search, UserCheck, X, Edit3, Save, Trash2 } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
@@ -229,6 +229,9 @@ export default function AssignGuardsPage() {
     const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
     const [availableGuards, setAvailableGuards] = useState<Employee[]>([]);
     const [isLoadingGuards, setIsLoadingGuards] = useState(false);
+    const [editCountsFor, setEditCountsFor] = useState<string | null>(null);
+    const [editMale, setEditMale] = useState<number>(0);
+    const [editFemale, setEditFemale] = useState<number>(0);
 
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -278,9 +281,11 @@ export default function AssignGuardsPage() {
                 }
                 setSite(siteData);
 
-                const q = query(collection(db, "workOrders"), where("siteId", "==", siteId), orderBy("date", "asc"));
+                const q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder));
+                    // Sort by date ascending client-side to avoid composite index requirement
+                    orders.sort((a,b) => a.date.toMillis() - b.date.toMillis());
                     setWorkOrders(orders);
                     setIsLoading(false);
                 }, (err) => {
@@ -379,15 +384,63 @@ export default function AssignGuardsPage() {
                                     <div>
                                         <p className="font-bold text-lg">{order.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
                                         <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                                            <span>Male Required: <Badge>{order.maleGuardsRequired}</Badge></span>
-                                            <span>Female Required: <Badge>{order.femaleGuardsRequired}</Badge></span>
-                                            <span>Total: <Badge variant="secondary">{order.totalManpower}</Badge></span>
+                                            {editCountsFor === order.id ? (
+                                                <>
+                                                    <span className="flex items-center gap-2">Male Required:
+                                                        <Input type="number" value={editMale} onChange={(e)=>setEditMale(parseInt(e.target.value || '0'))} className="w-20 h-8" />
+                                                    </span>
+                                                    <span className="flex items-center gap-2">Female Required:
+                                                        <Input type="number" value={editFemale} onChange={(e)=>setEditFemale(parseInt(e.target.value || '0'))} className="w-20 h-8" />
+                                                    </span>
+                                                    <span>Total: <Badge variant="secondary">{(editMale||0)+(editFemale||0)}</Badge></span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>Male Required: <Badge>{order.maleGuardsRequired}</Badge></span>
+                                                    <span>Female Required: <Badge>{order.femaleGuardsRequired}</Badge></span>
+                                                    <span>Total: <Badge variant="secondary">{order.totalManpower}</Badge></span>
+                                                </>
+                                            )}
                                             <span>Assigned: <Badge variant="default">{Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0}</Badge></span>
                                         </div>
                                     </div>
-                                    <Button onClick={() => handleOpenAssignDialog(order)}>
-                                        <UserPlus className="mr-2 h-4 w-4" /> Assign
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        {userRole === 'admin' && (
+                                            editCountsFor === order.id ? (
+                                                <Button size="sm" onClick={async ()=>{
+                                                    try {
+                                                        const ref = doc(db, 'workOrders', order.id);
+                                                        const male = Number.isFinite(editMale) ? editMale : 0;
+                                                        const female = Number.isFinite(editFemale) ? editFemale : 0;
+                                                        await updateDoc(ref, { maleGuardsRequired: male, femaleGuardsRequired: female, totalManpower: male + female, updatedAt: serverTimestamp() });
+                                                        setEditCountsFor(null);
+                                                    } catch (e) {
+                                                        console.error(e);
+                                                    }
+                                                }}>
+                                                    <Save className="mr-2 h-4 w-4"/> Save
+                                                </Button>
+                                            ) : (
+                                                <Button variant="outline" size="sm" onClick={()=>{ setEditCountsFor(order.id); setEditMale(order.maleGuardsRequired); setEditFemale(order.femaleGuardsRequired); }}>
+                                                    <Edit3 className="mr-2 h-4 w-4"/> Edit
+                                                </Button>
+                                            )
+                                        )}
+                                        {userRole === 'admin' && (
+                                            <Button size="sm" variant="destructive" onClick={async ()=>{
+                                                try {
+                                                    await deleteDoc(doc(db,'workOrders', order.id));
+                                                } catch (e) {
+                                                    console.error(e);
+                                                }
+                                            }}>
+                                                <Trash2 className="mr-2 h-4 w-4"/> Delete
+                                            </Button>
+                                        )}
+                                        <Button onClick={() => handleOpenAssignDialog(order)} size="sm">
+                                            <UserPlus className="mr-2 h-4 w-4" /> Assign
+                                        </Button>
+                                    </div>
                                 </div>
                            ))}
                         </div>

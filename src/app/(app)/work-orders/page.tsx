@@ -6,10 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Loader2, FileCheck2, UserPlus } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, serverTimestamp, doc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, serverTimestamp, doc, Timestamp, deleteDoc, addDoc } from 'firebase/firestore';
+import { startOfToday } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -78,7 +79,8 @@ export default function WorkOrderPage() {
         if (userRole === null) return;
         
         setIsLoading(true);
-        let q = query(collection(db, "workOrders"), where("date", ">=", Timestamp.fromDate(new Date())), orderBy("date", "asc"));
+        // Fetch upcoming work orders starting from today's midnight to include today's duties
+        let q = query(collection(db, "workOrders"), where("date", ">=", Timestamp.fromDate(startOfToday())));
 
         if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
             q = query(q, where("district", "in", assignedDistricts));
@@ -91,6 +93,8 @@ export default function WorkOrderPage() {
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder));
+            // Sort by date ascending client-side
+            orders.sort((a,b) => a.date.toMillis() - b.date.toMillis());
             const groupedBySite = orders.reduce((acc, order) => {
                 const key = order.siteId;
                 if (!acc[key]) {
@@ -145,87 +149,165 @@ export default function WorkOrderPage() {
                 const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
 
                 if (jsonData.length < 3) throw new Error("File must have at least 3 rows (2 header rows and 1 data row).");
-                
-                const dateHeader = jsonData[0];
-                const genderHeader = jsonData[1];
-                const siteDataRows = jsonData.slice(2);
 
-                const columnMapping: {[key: string]: string} = { "S.No": "sNo", "ZONE": "zone", "STATE": "state", "CITY": "city", "TC CODE": "siteId", "CENTER": "siteName" };
-                
-                const staticHeaders: string[] = jsonData[1].slice(0, 6).map((h:any, i: number) => columnMapping[jsonData[0][i]] || jsonData[0][i]);
+                const headerRow1 = jsonData[0]; // top header row: labels and date columns
+                const headerRow2 = jsonData[1]; // second header row: gender under each date
+                const dataRows = jsonData.slice(2);
 
-                const dateColumns: { date: Date, maleIndex: number, femaleIndex: number }[] = [];
-                for (let i = 6; i < dateHeader.length; i++) {
-                    const dateValue = dateHeader[i];
-                    if (dateValue instanceof Date && String(genderHeader[i]).toUpperCase() === 'MALE') {
-                        dateColumns.push({
-                            date: dateValue,
-                            maleIndex: i,
-                            femaleIndex: i + 1,
-                        });
+                // Map static columns by name
+                const mapping: Record<string, string> = {
+                    'S.No': 'sNo',
+                    'ZONE': 'zone',
+                    'STATE': 'state',
+                    'CITY': 'district',
+                    'TC CODE': 'siteCode',
+                    'CENTER': 'siteName',
+                    'TC Address': 'siteAddress',
+                };
+
+                // Helper to parse dates flexibly (Date object or strings like 04-Oct-25)
+                const parseHeaderDate = (val: any): Date | null => {
+                    if (val instanceof Date) {
+                        // Normalize to local date (strip time/timezone drift from Excel)
+                        return new Date(val.getFullYear(), val.getMonth(), val.getDate());
                     }
+                    if (typeof val === 'number') {
+                        // Excel serial number
+                        // Excel serial number handling using workbook date system not available here reliably,
+                        // attempt generic conversion: Excel serial (assuming 1900 system)
+                        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                        const ms = Math.round((val - Math.floor(val)) * 24 * 60 * 60 * 1000);
+                        const date = new Date(excelEpoch.getTime() + Math.floor(val) * 86400000 + ms);
+                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                    }
+                    if (typeof val === 'string') {
+                        const s = val.trim();
+                        const parsed = new Date(s);
+                        if (!isNaN(parsed.getTime())) return parsed;
+                        const m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+                        if (m) {
+                            const day = parseInt(m[1]);
+                            const monStr = m[2].toLowerCase();
+                            const yr = parseInt(m[3]);
+                            const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+                            const month = months.indexOf(monStr);
+                            const year = yr < 100 ? 2000 + yr : yr;
+                            if (month >= 0) return new Date(year, month, day);
+                        }
+                    }
+                    return null;
+                };
+
+                // Determine where date columns start by finding first Date/string-date in row1
+                const staticIndices: Record<string, number> = {};
+                let firstDateCol = -1;
+                for (let i = 0; i < headerRow1.length; i++) {
+                    const label = (headerRow1[i] ?? '').toString().trim();
+                    if (parseHeaderDate(headerRow1[i])) {
+                        firstDateCol = i;
+                        break;
+                    }
+                    if (mapping[label] !== undefined) {
+                        staticIndices[mapping[label]] = i;
+                    }
+                }
+                if (firstDateCol === -1) throw new Error('Could not locate date columns in the header.');
+
+                // Build date columns list by pairing MALE/FEMALE using the formatted header text
+                const dateColumns: { date: Date; maleIndex: number; femaleIndex: number }[] = [];
+                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+                for (let c = firstDateCol; c <= range.e.c; c++) {
+                    const addr = XLSX.utils.encode_cell({ r: 0, c });
+                    const cell = (worksheet as any)[addr];
+                    const raw = cell?.w ?? cell?.v;
+                    const parsedDate = parseHeaderDate(raw);
+                    if (!parsedDate) continue;
+                    // genders in next row under date columns
+                    const maleIdx = c + headerRow2.slice(c, c + 2).findIndex((x:any) => String(x).toUpperCase().includes('MALE'));
+                    const femaleIdx = c + headerRow2.slice(c, c + 2).findIndex((x:any) => String(x).toUpperCase().includes('FEMALE'));
+                    if (maleIdx >= c && femaleIdx >= c) {
+                        dateColumns.push({ date: parsedDate, maleIndex: maleIdx, femaleIndex: femaleIdx });
+                    }
+                    c++; // skip paired column
                 }
                 
                 if (dateColumns.length === 0) throw new Error("No valid date columns found in the file's header.");
 
                 toast({ title: 'Matching Sites...', description: 'Comparing with database...' });
                 const sitesSnapshot = await getDocs(collection(db, "sites"));
-                const sitesMap = new Map(sitesSnapshot.docs.map(doc => [String(doc.data().siteId).trim(), {id: doc.id, ...doc.data()}]));
+                const sitesByCode = new Map<string, any>(sitesSnapshot.docs.map(doc => [String(doc.data().siteId || '').trim(), { id: doc.id, ...doc.data() }]));
+                // Fallback map by name+district
+                const sitesByNameDistrict = new Map<string, any>(sitesSnapshot.docs.map(doc => {
+                    const d = doc.data();
+                    return [(`${(d.siteName||'').toLowerCase().trim()}|${(d.district||'').toLowerCase().trim()}`), { id: doc.id, ...d }];
+                }));
 
-                const batch = writeBatch(db);
                 let operationsCount = 0;
-                let skippedSites = new Set<string>();
+                let createdSites = 0;
 
-                for (const row of siteDataRows) {
-                    const rowData: {[key: string]: any} = {};
-                    staticHeaders.forEach((key, index) => { rowData[key] = row[index]; });
-                    
-                    const siteId = String(rowData.siteId).trim();
-                    if (!siteId) continue;
+                for (const row of dataRows) {
+                    const getVal = (key:string) => row[staticIndices[key]];
+                    const siteCode = String(getVal('siteCode') ?? '').trim();
+                    const siteName = String(getVal('siteName') ?? '').trim();
+                    const siteAddress = String(getVal('siteAddress') ?? '').trim();
+                    const state = String(getVal('state') ?? '').trim();
+                    const district = String(getVal('district') ?? '').trim();
 
-                    const site = sitesMap.get(siteId);
+                    if (!siteName) continue;
+
+                    let site = (siteCode && sitesByCode.get(siteCode)) || sitesByNameDistrict.get(`${siteName.toLowerCase()}|${district.toLowerCase()}`);
+
                     if (!site) {
-                        skippedSites.add(siteId);
-                        continue;
+                        // Create site if missing
+                        const newSiteData = {
+                            clientName: 'Unassigned',
+                            siteName,
+                            siteId: siteCode || null,
+                            siteAddress: siteAddress || '',
+                            district: district || '',
+                            state: state || 'Kerala',
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp(),
+                        } as any;
+                        const newRef = await addDoc(collection(db, 'sites'), newSiteData);
+                        site = { id: newRef.id, ...newSiteData };
+                        if (siteCode) sitesByCode.set(siteCode, site);
+                        sitesByNameDistrict.set(`${siteName.toLowerCase()}|${district.toLowerCase()}`, site);
+                        createdSites++;
                     }
 
                     for (const { date, maleIndex, femaleIndex } of dateColumns) {
                         const maleGuardsRequired = Number(row[maleIndex]) || 0;
                         const femaleGuardsRequired = Number(row[femaleIndex]) || 0;
                         const totalManpower = maleGuardsRequired + femaleGuardsRequired;
-                        
-                        if (totalManpower > 0) {
-                            const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD format for ID
-                            const workOrderId = `${site.id}_${dateString}`;
-                            const workOrderRef = doc(db, "workOrders", workOrderId);
-                            
-                            batch.set(workOrderRef, {
-                                siteId: site.id,
-                                siteName: site.siteName,
-                                clientName: site.clientName,
-                                district: site.district,
-                                date: Timestamp.fromDate(date),
-                                maleGuardsRequired: maleGuardsRequired,
-                                femaleGuardsRequired: femaleGuardsRequired,
-                                totalManpower: totalManpower,
-                                assignedGuards: [],
-                                createdAt: serverTimestamp(),
-                                updatedAt: serverTimestamp(),
-                            });
-                            operationsCount++;
-                        }
+                        if (totalManpower <= 0) continue;
+
+                        // Normalize to local noon to avoid timezone off-by-one when stored/retrieved
+                        const safeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
+                        const dateString = `${safeDate.getFullYear()}-${String(safeDate.getMonth()+1).padStart(2,'0')}-${String(safeDate.getDate()).padStart(2,'0')}`;
+                        const workOrderId = `${site.id}_${dateString}`;
+                        const workOrderRef = doc(db, 'workOrders', workOrderId);
+                        await writeBatch(db).set(workOrderRef, {
+                            siteId: site.id,
+                            siteName: site.siteName,
+                            clientName: site.clientName,
+                            district: site.district,
+                            date: Timestamp.fromDate(safeDate),
+                            maleGuardsRequired,
+                            femaleGuardsRequired,
+                            totalManpower,
+                            assignedGuards: [],
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp(),
+                        }).commit();
+                        operationsCount++;
                     }
                 }
 
                 if (operationsCount > 0) {
-                    await batch.commit();
-                    toast({ title: 'Success', description: `Processed and committed ${operationsCount} daily work orders.` });
+                    toast({ title: 'Success', description: `Processed ${operationsCount} daily work orders. New sites created: ${createdSites}.` });
                 } else {
                     toast({ variant: 'default', title: 'No New Data', description: 'No new work order entries were found to import.' });
-                }
-                
-                if (skippedSites.size > 0) {
-                    toast({ variant: 'destructive', title: 'Skipped Sites', description: `Skipped ${skippedSites.size} sites not found in the database. TC Codes: ${Array.from(skippedSites).join(', ')}`, duration: 10000 });
                 }
 
             } catch (error: any) {
@@ -297,18 +379,28 @@ export default function WorkOrderPage() {
                                             <h3 className="font-semibold text-lg">{siteInfo.siteName}</h3>
                                             <p className="text-sm text-muted-foreground">{siteInfo.clientName} - <Badge variant="secondary">{siteInfo.district}</Badge></p>
                                         </div>
+                                         <div className="flex gap-2">
+                                         {userRole === 'admin' && (
+                                            <Button size="sm" variant="outline" asChild>
+                                                <Link href={`/work-orders/${siteId}`}>
+                                                    <Edit3 className="mr-2 h-4 w-4" />
+                                                    Edit Duties
+                                                </Link>
+                                            </Button>
+                                         )}
                                          <Button size="sm" variant="outline" asChild>
                                             <Link href={`/work-orders/${siteId}`}>
                                                 <UserPlus className="mr-2 h-4 w-4" />
                                                 Assign Guards
                                             </Link>
                                         </Button>
+                                        </div>
                                     </div>
                                     <div className="mt-4">
                                         <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
                                         <div className="flex flex-wrap gap-2">
                                             {orders.map(order => (
-                                                <div key={order.id} className="p-2 border rounded-md text-center bg-muted/50 min-w-[120px]">
+                                                <div key={order.id} className="relative p-2 border rounded-md text-center bg-muted/50 min-w-[140px]">
                                                     <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                                                     <div className="flex justify-around items-center mt-1 pt-1 border-t">
                                                         <div className="text-center px-1">
@@ -324,6 +416,17 @@ export default function WorkOrderPage() {
                                                             <p className="text-xs text-muted-foreground">Total</p>
                                                         </div>
                                                     </div>
+                                                    {userRole === 'admin' && (
+                                                        <button
+                                                            className="absolute top-1 right-1 rounded p-1 text-destructive hover:bg-red-50"
+                                                            title="Delete duty"
+                                                            onClick={async ()=>{
+                                                                try { await deleteDoc(doc(db,'workOrders', order.id)); } catch(e){ console.error(e); }
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>

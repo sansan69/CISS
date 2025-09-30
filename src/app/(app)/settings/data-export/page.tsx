@@ -182,6 +182,70 @@ export default function DataExportPage() {
         const employeesToExport = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
         toast({ title: `Starting PDF Generation for ${employeesToExport.length} Employees`, description: "This may take some time. Please keep this tab open and approve the multiple file downloads." });
         
+        // --- Helpers copied from profile kit generators ---
+        function normalizePdfText(input: unknown) {
+            let s = (input ?? '').toString();
+            s = s.replace(/\r\n/g, '\n');
+            s = s.replace(/\r/g, '\n');
+            s = s.replace(/\u00A0/g, ' ');
+            s = s.replace(/\t/g, ' ');
+            s = s.replace(/[\u2028\u2029]/g, ' ');
+            return s;
+        }
+        function sanitizePdfString(input: unknown): string {
+            const s = normalizePdfText(input);
+            return s.replace(/\n/g, ' ');
+        }
+        function wrapTextToWidth(text: string, font: any, fontSize: number, maxWidth: number) {
+            const lines: string[] = [];
+            for (const raw of normalizePdfText(text).split('\n')) {
+                const words = raw.split(/\s+/).filter(Boolean);
+                let line = '';
+                for (const w of words) {
+                    const test = line ? line + ' ' + w : w;
+                    const width = font.widthOfTextAtSize(test, fontSize);
+                    if (width > maxWidth) {
+                        if (line) lines.push(line);
+                        line = w;
+                    } else {
+                        line = test;
+                    }
+                }
+                lines.push(line || '');
+            }
+            return lines;
+        }
+        function drawMultilineText(opts: { page: any; text: string; font: any; fontSize: number; x: number; y: number; maxWidth: number; lineHeight?: number; color?: any; }) {
+            const { page, text, font, fontSize, x, y, maxWidth, lineHeight = fontSize * 1.2, color } = opts;
+            const lines = wrapTextToWidth(text, font, fontSize, maxWidth);
+            let yy = y;
+            for (const line of lines) {
+                page.drawText(line, { x, y: yy, size: fontSize, font, color });
+                yy -= lineHeight;
+            }
+            return yy;
+        }
+        function detectFormat(bytes: Uint8Array, url?: string): 'png' | 'jpg' | 'pdf' | 'webp' | 'unknown' {
+            const ext = (url || '').toLowerCase();
+            if (ext.endsWith('.png')) return 'png';
+            if (ext.endsWith('.jpg') || ext.endsWith('.jpeg')) return 'jpg';
+            if (ext.endsWith('.pdf')) return 'pdf';
+            // magic numbers
+            if (bytes.length >= 4) {
+                if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+                if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpg';
+                if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'pdf';
+                if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return 'webp'; // RIFF (likely WEBP)
+            }
+            return 'unknown';
+        }
+        const base64ToUint8Array = (base64: string): Uint8Array => {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        };
+
         for (let i = 0; i < employeesToExport.length; i++) {
             const employee = employeesToExport[i];
             const legacy = employee as any;
@@ -209,19 +273,21 @@ export default function DataExportPage() {
                 logoImage.scaleToFit(50, 50);
                 page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
                 
-                page.drawText(toTitleCase(employee.fullName), { x: margin + 65, y: height - margin - 25, font: helveticaBoldFont, size: 22, color: rgb(0.05, 0.2, 0.45) });
-                page.drawText(`Employee ID: ${employee.employeeId}`, { x: margin + 65, y: height - margin - 45, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
-                page.drawText(`Client: ${employee.clientName}`, { x: margin + 65, y: height - margin - 60, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
+                const safeFullNameHeader = toTitleCase(sanitizePdfString(employee.fullName));
+                const safeEmpIdHeader = sanitizePdfString(`Employee ID: ${employee.employeeId}`);
+                const safeClientHeader = sanitizePdfString(`Client: ${employee.clientName}`);
+                page.drawText(safeFullNameHeader, { x: margin + 65, y: height - margin - 25, font: helveticaBoldFont, size: 22, color: rgb(0.05, 0.2, 0.45) });
+                page.drawText(safeEmpIdHeader, { x: margin + 65, y: height - margin - 45, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
+                page.drawText(safeClientHeader, { x: margin + 65, y: height - margin - 60, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
                 
                 const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
                 if (profilePicBytes) {
                     let image;
                     try {
-                        if (employee.profilePictureUrl?.toLowerCase().includes('.png') || (profilePicBytes[0] === 0x89 && profilePicBytes[1] === 0x50)) {
-                            image = await pdfDoc.embedPng(profilePicBytes);
-                        } else {
-                            image = await pdfDoc.embedJpg(profilePicBytes);
-                        }
+                        const fmt = detectFormat(profilePicBytes, employee.profilePictureUrl);
+                        if (fmt === 'png') image = await pdfDoc.embedPng(profilePicBytes);
+                        else if (fmt === 'jpg') image = await pdfDoc.embedJpg(profilePicBytes);
+                        else throw new Error(`Unsupported image format for profile picture: ${fmt}`);
                         const imgDims = image.scaleToFit(80, 100);
                         page.drawImage(image, { x: width - margin - imgDims.width, y: height - margin - 100, width: imgDims.width, height: imgDims.height });
                         page.drawRectangle({x: width - margin - imgDims.width - 2, y: height - margin - 100 - 2, width: imgDims.width+4, height: imgDims.height+4, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1});
@@ -252,7 +318,8 @@ export default function DataExportPage() {
                         }
                         
                         drawText(item.label, x, startY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-                        drawText(toTitleCase(String(item.value)) || 'N/A', x, startY - 15, helveticaFont, 11);
+                        const safeValue = toTitleCase(sanitizePdfString(String(item.value)) || 'N/A');
+                        page.drawText(safeValue, { x, y: startY - 15, font: helveticaFont, size: 11 });
                     }
                     startY -= 40;
                     
@@ -273,57 +340,36 @@ export default function DataExportPage() {
                 y = drawSection("Personal Information", personalItems, y);
 
                 const contactItems = [
-                     { label: "Phone Number", value: employee.phoneNumber },
-                     { label: "Email Address", value: employee.emailAddress },
-                     { label: "District", value: employee.district },
-                ];
+                    { label: "Phone Number", value: sanitizePdfString(employee.phoneNumber) },
+                    { label: "Email Address", value: sanitizePdfString(employee.emailAddress) },
+                    { label: "District", value: sanitizePdfString(employee.district) },
+               ];
                 
                 y = drawSection("Contact Information", contactItems, y);
 
-                const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, font: PDFFont, size: number, color = rgb(0,0,0)): number => {
-                    const words = text.split(' ');
-                    let line = '';
-                    let currentY = y;
-                    const lineHeight = size * 1.2;
-
-                    for (const word of words) {
-                        const testLine = line + word + ' ';
-                        const testWidth = font.widthOfTextAtSize(testLine, size);
-                        if (testWidth > maxWidth && line !== '') {
-                            page.drawText(line, { x, y: currentY, font, size, color });
-                            currentY -= lineHeight;
-                            line = word + ' ';
-                        } else {
-                            line = testLine;
-                        }
-                    }
-                    page.drawText(line, { x, y: currentY, font, size, color });
-                    return currentY - lineHeight;
-                };
-
                 const addressY = y + 25;
                 drawText("Full Address", margin, addressY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-                const addressTextHeight = drawWrappedText(toTitleCase(employee.fullAddress), margin, addressY - 15, width - margin * 2, helveticaFont, 11);
+                const addressTextHeight = drawMultilineText({ page, text: toTitleCase(sanitizePdfString(employee.fullAddress)), x: margin, y: addressY - 15, maxWidth: width - margin * 2, font: helveticaFont, fontSize: 11 });
                 y = addressTextHeight - 25;
 
                 const employmentItems = [
                     { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
-                    { label: "Status", value: employee.status },
-                    { label: "Resource ID (if any)", value: employee.resourceIdNumber },
+                    { label: "Status", value: sanitizePdfString(employee.status) },
+                    { label: "Resource ID (if any)", value: sanitizePdfString(employee.resourceIdNumber) },
                     ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : [{ label: "Exit Date", value: "N/A" }]),
                 ];
                 y = drawSection("Employment Details", employmentItems, y);
                 
                 const statutoryItems = [
-                    { label: "PAN Number", value: employee.panNumber },
-                    { label: "EPF / UAN", value: employee.epfUanNumber },
-                    { label: "ESIC Number", value: employee.esicNumber },
-                    { label: "Bank Name", value: employee.bankName },
-                    { label: "Bank Account No.", value: employee.bankAccountNumber },
-                    { label: "Bank IFSC Code", value: employee.ifscCode },
-                    { label: "Identity Proof", value: `${employee.identityProofType || legacy.idProofType} - ${employee.identityProofNumber || legacy.idProofNumber}`},
-                    { label: "Address Proof", value: `${employee.addressProofType} - ${employee.addressProofNumber}`},
-                ];
+                    { label: "PAN Number", value: sanitizePdfString(employee.panNumber) },
+                    { label: "EPF / UAN", value: sanitizePdfString(employee.epfUanNumber) },
+                    { label: "ESIC Number", value: sanitizePdfString(employee.esicNumber) },
+                    { label: "Bank Name", value: sanitizePdfString(employee.bankName) },
+                    { label: "Bank Account No.", value: sanitizePdfString(employee.bankAccountNumber) },
+                    { label: "Bank IFSC Code", value: sanitizePdfString(employee.ifscCode) },
+                    { label: "Identity Proof", value: sanitizePdfString(`${employee.identityProofType || legacy.idProofType} - ${employee.identityProofNumber || legacy.idProofNumber}`)},
+                    { label: "Address Proof", value: sanitizePdfString(`${employee.addressProofType} - ${employee.addressProofNumber}`)},
+               ];
                 y = drawSection("Bank & Statutory Details", statutoryItems, y);
 
 
@@ -337,7 +383,7 @@ export default function DataExportPage() {
                         const qrDataUri = employee.qrCodeUrl;
                         if (qrDataUri.startsWith('data:image/png;base64,')) {
                             const qrPngBase64 = qrDataUri.substring('data:image/png;base64,'.length);
-                            const qrPngBytes = Buffer.from(qrPngBase64, 'base64');
+                            const qrPngBytes = base64ToUint8Array(qrPngBase64);
                             const qrImage = await pdfDoc.embedPng(qrPngBytes);
                             const qrDims = qrImage.scaleToFit(300, 300);
 
@@ -414,25 +460,25 @@ export default function DataExportPage() {
                     { url: employee.policeClearanceCertificateUrl, title: "Police Clearance Certificate" },
                 ];
 
-                for (const doc of documents) {
-                    if (!doc.url) continue;
-                    const imageBytes = await fetchImageBytes(doc.url);
-                    if (imageBytes) {
-                        const docPage = pdfDoc.addPage();
+                for (const docItem of documents) {
+                    if (!docItem.url) continue;
+                    const imageBytes = await fetchImageBytes(docItem.url);
+                    if (!imageBytes) continue;
+
+                    const fmt = detectFormat(imageBytes, docItem.url);
+                    const docPage = pdfDoc.addPage();
+                    if (fmt === 'pdf' || fmt === 'webp' || fmt === 'unknown') {
+                        // Unsupported for embedding; add a placeholder note instead of throwing
+                        docPage.drawText(docItem.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
+                        const notice = fmt === 'pdf' ? 'Attached document is a PDF (preview not supported in kit).' : 'Attached document format not supported for inline preview.';
+                        drawMultilineText({ page: docPage, text: notice, font: helveticaFont, fontSize: 11, x: margin, y: docPage.getHeight() - margin - 30, maxWidth: docPage.getWidth() - margin * 2 });
+                        continue;
+                    }
+                    try {
                         let image;
-                         try {
-                            if (doc.url.toLowerCase().includes('.png') || (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47)) {
-                                image = await pdfDoc.embedPng(imageBytes);
-                            } else {
-                                image = await pdfDoc.embedJpg(imageBytes);
-                            }
-                        } catch (e) {
-                             console.error(`Could not embed image for ${doc.url}:`, e); 
-                             docPage.drawText(`Error embedding document: ${doc.title}`, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14, color: rgb(1,0,0)});
-                             continue;
-                        }
-                        
-                        docPage.drawText(doc.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
+                        if (fmt === 'png') image = await pdfDoc.embedPng(imageBytes);
+                        else image = await pdfDoc.embedJpg(imageBytes);
+                        docPage.drawText(docItem.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
                         const { width: pageWidth, height: pageHeight } = docPage.getSize();
                         const dims = image.scaleToFit(pageWidth - margin * 2, pageHeight - margin * 2 - 50);
                         docPage.drawImage(image, {
@@ -441,11 +487,15 @@ export default function DataExportPage() {
                             width: dims.width,
                             height: dims.height,
                         });
+                    } catch (e) {
+                        console.error(`Could not embed image for ${docItem.url}:`, e);
+                        docPage.drawText(`Error embedding document: ${docItem.title}`, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14, color: rgb(1,0,0)});
                     }
                 }
                 
                 // --- Last Page: Terms and Conditions ---
                 const tcPage = pdfDoc.addPage();
+                const tcWidth = tcPage.getWidth();
                 let tcY = tcPage.getHeight() - margin;
 
                 const drawTcTitle = (text: string) => {
@@ -460,7 +510,8 @@ export default function DataExportPage() {
                     }
                 };
 
-                tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: margin, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
+                const tcTitle = "Terms & Conditions";
+                tcPage.drawText(tcTitle, { x: (tcWidth - helveticaBoldFont.widthOfTextAtSize(tcTitle, 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
                 tcY -= 40;
 
                 drawTcTitle("I. General Eligibility and Compliance");
@@ -479,7 +530,7 @@ export default function DataExportPage() {
                 drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my\nenrollment. I confirm that all information and documents provided by me are true and correct to the best of my\nknowledge.");
                 tcY -= 70;
 
-                // Add Signature
+                // Add Signature anchored bottom-right
                 const signatureBytes = await fetchImageBytes(employee.signatureUrl);
                 if (signatureBytes) {
                     let signatureImage;
@@ -490,14 +541,15 @@ export default function DataExportPage() {
                             signatureImage = await pdfDoc.embedJpg(signatureBytes);
                         }
                         const sigDims = signatureImage.scaleToFit(120, 50);
+                        const signatureY = margin + 40;
                         tcPage.drawImage(signatureImage, {
-                            x: width - margin - sigDims.width,
-                            y: tcY + 20,
+                            x: tcWidth - margin - sigDims.width,
+                            y: signatureY,
                             width: sigDims.width,
                             height: sigDims.height,
                         });
-                        tcPage.drawLine({ start: { x: width - margin - 130, y: tcY + 15 }, end: { x: width - margin, y: tcY + 15 }, thickness: 0.5 });
-                        tcPage.drawText("Signature of Applicant", { x: width - margin - 125, y: tcY, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
+                        tcPage.drawLine({ start: { x: tcWidth - margin - 130, y: signatureY - 5 }, end: { x: tcWidth - margin, y: signatureY - 5 }, thickness: 0.5 });
+                        tcPage.drawText("Signature of Applicant", { x: tcWidth - margin - 125, y: signatureY - 18, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
 
                     } catch (sigError) {
                          console.error("Could not embed signature", sigError);
