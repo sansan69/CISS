@@ -70,7 +70,13 @@ export default function DashboardPage() {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    // Ensure charts render only on client to avoid SSR/hydration issues in prod
+    const [isMounted, setIsMounted] = useState(false);
 
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -375,22 +381,25 @@ export default function DashboardPage() {
                             <CardDescription>A breakdown of the workforce by client assignment.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {isLoading ? <div className="h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
-                            clientDistributionData.length > 0 ? (
-                                <ChartContainer config={clientChartConfig} className="w-full aspect-square h-[250px]">
-                                    <PieChart>
-                                        <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
-                                        <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                             {clientDistributionData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={clientChartColors[index % clientChartColors.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Legend />
-                                    </PieChart>
-                                </ChartContainer>
-                            ) : (
-                                <p className="text-center text-muted-foreground py-10">No employee data to display chart.</p>
-                            )}
+                        {isLoading ? (
+                            <div className="h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                        ) : !isMounted ? (
+                            <div className="h-[250px] flex justify-center items-center text-muted-foreground">Preparing chart...</div>
+                        ) : clientDistributionData.length > 0 ? (
+                            <ChartContainer config={clientChartConfig} className="w-full aspect-square h-[250px]">
+                                <PieChart>
+                                    <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
+                                    <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                            {clientDistributionData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={clientChartColors[index % clientChartColors.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Legend />
+                                </PieChart>
+                            </ChartContainer>
+                        ) : (
+                            <p className="text-center text-muted-foreground py-10">No employee data to display chart.</p>
+                        )}
                         </CardContent>
                     </Card>
                 </div>
