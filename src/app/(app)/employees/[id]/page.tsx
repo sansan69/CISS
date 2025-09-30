@@ -1095,9 +1095,8 @@ export default function AdminEmployeeProfilePage() {
                     signatureImage = await pdfDoc.embedJpg(signatureBytes);
                 }
                 const sigDims = signatureImage.scaleToFit(120, 50);
-                // two lines of spacing = 2 * 13 (we used lineHeight 13 above)
-                tcY -= 26;
-                const signatureY = Math.max(margin + 40, tcY);
+                // Anchor signature area to bottom-right with safe padding (prevents overlap)
+                const signatureY = margin + 40;
                 tcPage.drawImage(signatureImage, {
                     x: tcWidth - margin - sigDims.width,
                     y: signatureY,
