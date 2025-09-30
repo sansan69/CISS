@@ -33,13 +33,14 @@ import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { db, storage } from "@/lib/firebase"; 
+import { db, storage, auth } from "@/lib/firebase"; 
 import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs, where } from "firebase/firestore";
 import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import QRCode from 'qrcode';
+import { signInAnonymously, onAuthStateChanged as onAuthChanged } from 'firebase/auth';
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -358,6 +359,16 @@ export default function EnrollEmployeePage() {
   const watchEducationalQualification = form.watch("educationalQualification");
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
+
+  useEffect(() => {
+    // Ensure we are authenticated (anonymous is sufficient) so Storage writes succeed
+    const unsub = onAuthChanged(auth, (u) => {
+      if (!u) {
+        signInAnonymously(auth).catch((e) => console.error('Anonymous auth failed:', e));
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (!fullAddress || fullAddress.length < 15) {

@@ -3,12 +3,15 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Allow public read access for all employee-related files.
-    // This is necessary for client-side PDF generation and public profiles.
-    // Write access should be restricted to authenticated users (e.g., during enrollment).
+    // Employee uploads and downloads
+    // - Public READ is allowed for generating profile kits and public profile views
+    // - WRITE allowed for any authenticated user (includes anonymous sign-in)
+    //   and restricted to images/PDF up to 5MB
     match /employees/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
     }
 
     // Default Deny Rule for any other paths.
