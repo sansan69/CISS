@@ -145,22 +145,28 @@ export default function DashboardPage() {
                 
                 // Start of the oldest month we want to include
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-                const hiresQuery = query(
-                    employeesQueryBuilder,
-                    where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo))
-                );
+                const includeCharts = userRole !== 'fieldOfficer';
+                // Avoid composite-index requirement for FO and skip unnecessary chart queries
+                let hiresDocsPromise: Promise<any> = includeCharts
+                    ? getDocs(query(
+                        employeesQueryBuilder,
+                        where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo))
+                      ))
+                    : Promise.resolve({ docs: [] });
                 
                 const recentActivityQuery = query(employeesQueryBuilder, orderBy("createdAt", "desc"), limit(5));
                 
-                // IMPORTANT: Client distribution chart should always show data for ALL employees, regardless of role.
-                const allEmployeesForClientChart = getDocs(collection(db, "employees"));
+                // IMPORTANT: Client distribution chart uses ALL employees; skip for FO
+                const allEmployeesForClientChart = includeCharts
+                    ? getDocs(collection(db, "employees"))
+                    : Promise.resolve({ docs: [] });
 
                 const queriesToRun: Promise<any>[] = [
                     totalQuery,
                     activeQuery,
                     onLeaveQuery,
                     inactiveQuery,
-                    getDocs(hiresQuery),
+                    hiresDocsPromise,
                     getDocs(recentActivityQuery),
                     allEmployeesForClientChart
                 ];
@@ -212,6 +218,7 @@ export default function DashboardPage() {
 
                 hiresSnapshot.docs.forEach((doc: any) => {
                     const data = doc.data();
+                    // No-op: charts not shown for field officers
                     let jsDate: Date | null = null;
                     const jd = data.joiningDate;
                     if (jd && typeof jd.toDate === 'function') {
@@ -372,54 +379,56 @@ export default function DashboardPage() {
             )}
 
             <div className="grid gap-6 lg:grid-cols-3">
-                <div className="grid gap-6 lg:col-span-2">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>New Hires - Last 6 Months</CardTitle>
-                            <CardDescription>A monthly breakdown of new employee enrollments.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="pl-2">
-                            {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
-                            <ChartContainer config={newHiresChartConfig} className="w-full h-[300px]">
-                                <BarChart data={newHiresData} accessibilityLayer>
-                                    <CartesianGrid vertical={false} />
-                                    <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} allowDecimals={false} />
-                                    <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent hideLabel />} />
-                                    <Bar dataKey="hires" fill="var(--color-hires)" radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ChartContainer>
-                            }
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Employee Distribution by Client</CardTitle>
-                            <CardDescription>A breakdown of the workforce by client assignment.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                        {isLoading ? (
-                            <div className="h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                        ) : !isMounted ? (
-                            <div className="h-[250px] flex justify-center items-center text-muted-foreground">Preparing chart...</div>
-                        ) : clientDistributionData.length > 0 ? (
-                            <ChartContainer config={clientChartConfig} className="w-full h-[300px]">
-                                <PieChart>
-                                    <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
-                                    <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                            {clientDistributionData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={clientChartColors[index % clientChartColors.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Legend />
-                                </PieChart>
-                            </ChartContainer>
-                        ) : (
-                            <p className="text-center text-muted-foreground py-10">No employee data to display chart.</p>
-                        )}
-                        </CardContent>
-                    </Card>
-                </div>
+                {userRole !== 'fieldOfficer' && (
+                    <div className="grid gap-6 lg:col-span-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>New Hires - Last 6 Months</CardTitle>
+                                <CardDescription>A monthly breakdown of new employee enrollments.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="pl-2">
+                                {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
+                                <ChartContainer config={newHiresChartConfig} className="w-full h-[300px]">
+                                    <BarChart data={newHiresData} accessibilityLayer>
+                                        <CartesianGrid vertical={false} />
+                                        <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} allowDecimals={false} />
+                                        <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent hideLabel />} />
+                                        <Bar dataKey="hires" fill="var(--color-hires)" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ChartContainer>
+                                }
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Employee Distribution by Client</CardTitle>
+                                <CardDescription>A breakdown of the workforce by client assignment.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                            {isLoading ? (
+                                <div className="h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                            ) : !isMounted ? (
+                                <div className="h-[250px] flex justify-center items-center text-muted-foreground">Preparing chart...</div>
+                            ) : clientDistributionData.length > 0 ? (
+                                <ChartContainer config={clientChartConfig} className="w-full h-[300px]">
+                                    <PieChart>
+                                        <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
+                                        <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                                {clientDistributionData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={clientChartColors[index % clientChartColors.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Legend />
+                                    </PieChart>
+                                </ChartContainer>
+                            ) : (
+                                <p className="text-center text-muted-foreground py-10">No employee data to display chart.</p>
+                            )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
                 <Card className="lg:col-span-1">
                     <CardHeader>
                         <CardTitle>Recent Activity</CardTitle>

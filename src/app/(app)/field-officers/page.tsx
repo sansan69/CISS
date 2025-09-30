@@ -32,6 +32,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { getApps, initializeApp } from 'firebase/app';
+import { getAuth as getAuthMod, signInWithEmailAndPassword, signOut as signOutMod, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 
 interface FieldOfficer {
@@ -46,7 +48,7 @@ interface FieldOfficer {
 const keralaDistricts = [
   "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
-  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
+  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
 ];
 
 // Simplified list of auth users for dropdown (in a real app, this might be more complex)
@@ -76,6 +78,10 @@ const OfficerForm: React.FC<{
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>(officer?.assignedDistricts || []);
     
     const [nameError, setNameError] = useState<string | null>(null);
+    const [emailInput, setEmailInput] = useState<string>("");
+    const [passwordInput, setPasswordInput] = useState<string>("");
+    const [isVerifyingUser, setIsVerifyingUser] = useState(false);
+    const { toast } = useToast();
     
     const availableDistricts = useMemo(() => {
         if (isEditing) {
@@ -100,26 +106,102 @@ const OfficerForm: React.FC<{
             isValid = false;
         }
 
-        if (!isEditing && !selectedUser) {
-            // In a real app you'd have a select error state
+        if (!isEditing && !selectedUser && !(emailInput && passwordInput)) {
             isValid = false;
         }
         
         return isValid;
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!validate()) return;
+        
+        let userForOfficer = selectedUser;
+        
+        if (!isEditing && !userForOfficer && emailInput && passwordInput) {
+            setIsVerifyingUser(true);
+            try {
+                const appName = 'lookup-auth-app';
+                const existing = getApps().find(a => a.name === appName);
+                const lookupApp = existing || initializeApp({
+                    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
+                    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
+                    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
+                    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET as string,
+                    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
+                    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
+                }, appName);
+
+                const tempAuth = getAuthMod(lookupApp);
+                const cred = await createUserWithEmailAndPassword(tempAuth, emailInput.trim(), passwordInput);
+                if (name.trim()) {
+                    await updateProfile(cred.user, { displayName: name.trim() });
+                }
+                userForOfficer = { uid: cred.user.uid, email: cred.user.email || emailInput.trim(), name: name.trim() || cred.user.displayName || '' };
+                toast({ title: 'Auth User Created', description: 'User has been added to Firebase Authentication.' });
+                await signOutMod(tempAuth);
+            } catch (e: any) {
+                console.error('Auth user creation failed:', e);
+                let message = 'Could not create auth user.';
+                if (e.code === 'auth/email-already-in-use') message = 'Email already in use. Use Select User or Verify instead.';
+                if (e.code === 'auth/weak-password') message = 'Password is too weak.';
+                const { toast } = useToast();
+                toast({ variant: 'destructive', title: 'Creation Failed', description: message });
+                setIsVerifyingUser(false);
+                return;
+            } finally {
+                setIsVerifyingUser(false);
+            }
+        }
         
         const officerData = {
           name: name.trim(),
           assignedDistricts,
-          email: selectedUser?.email,
-          uid: selectedUser?.uid,
-          ...(isEditing && { id: officer.id })
+          email: userForOfficer?.email,
+          uid: userForOfficer?.uid,
+          ...(isEditing && { id: officer?.id })
         };
         
         onSave(officerData, isEditing);
+    };
+
+    const handleVerifyCredentials = async () => {
+        if (!emailInput || !passwordInput) {
+            toast({ variant: "destructive", title: "Missing Credentials", description: "Enter email and password to verify user." });
+            return;
+        }
+        setIsVerifyingUser(true);
+        try {
+            // Create or reuse a secondary app so admin session is not affected
+            const appName = 'lookup-auth-app';
+            const existing = getApps().find(a => a.name === appName);
+            const lookupApp = existing || initializeApp({
+                apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
+                authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
+                projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
+                storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET as string,
+                messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
+                appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
+            }, appName);
+
+            const tempAuth = getAuthMod(lookupApp);
+            const cred = await signInWithEmailAndPassword(tempAuth, emailInput.trim(), passwordInput);
+            const u = cred.user;
+            const resolvedName = u.displayName || name || (u.email ? u.email.split('@')[0] : '');
+            setSelectedUser({ uid: u.uid, email: u.email || emailInput.trim(), name: resolvedName });
+            if (!name) setName(resolvedName);
+            toast({ title: "User Verified", description: "Credentials verified and user loaded. You can assign districts now." });
+            await signOutMod(tempAuth); // cleanup secondary session
+        } catch (e: any) {
+            console.error('Credential verification failed:', e);
+            let message = 'Could not verify credentials. Please check email/password.';
+            if (e.code === 'auth/user-not-found') message = 'No user found for this email.';
+            if (e.code === 'auth/wrong-password') message = 'Incorrect password.';
+            if (e.code === 'auth/too-many-requests') message = 'Too many attempts. Try again later.';
+            toast({ variant: 'destructive', title: 'Verification Failed', description: message });
+        } finally {
+            setIsVerifyingUser(false);
+        }
     };
 
     return (
@@ -144,6 +226,26 @@ const OfficerForm: React.FC<{
                 </select>
                 {isEditing && <p className="text-xs text-muted-foreground">User account cannot be changed after creation.</p>}
             </div>
+            {!isEditing && (
+                <div className="grid gap-2">
+                    <Label>Or enter new/existing user credentials</Label>
+                    <div className="grid grid-cols-1 gap-2">
+                        <Input type="email" placeholder="user@example.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
+                        <Input type="password" placeholder="Password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
+                        <div className="flex justify-end">
+                            <div className="flex gap-2">
+                                <Button type="button" variant="outline" onClick={handleVerifyCredentials} disabled={isVerifyingUser || isSaving}>
+                                    {isVerifyingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify & Load
+                                </Button>
+                                <Button type="button" onClick={handleSave} disabled={isVerifyingUser || isSaving}>
+                                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Auth User & Officer
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">We use a secure secondary session to verify or create the user in Firebase Authentication. Credentials are not stored.</p>
+                </div>
+            )}
             <div className="grid gap-2">
                 <Label htmlFor="name">Officer Display Name</Label>
                 <Input
