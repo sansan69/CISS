@@ -83,6 +83,12 @@ function drawMultilineText(opts: {
 }
 // #endregion
 
+// Ensure individual strings passed to drawText/widthOfTextAtSize contain no newlines
+function sanitizePdfString(input: unknown): string {
+  const s = normalizePdfText(input);
+  return s.replace(/\n/g, ' ');
+}
+
 
 const toTitleCase = (str: string | null | undefined): string => {
     if (!str) return '';
@@ -292,7 +298,8 @@ export default function PublicEmployeeProfilePage() {
                 }
                 
                 drawText(item.label, x, startY, helveticaFont, 9, rgb(0.4, 0.4, 0.4));
-                drawText(toTitleCase(String(item.value)) || 'N/A', x, startY - 15, helveticaFont, 11);
+                const safeValue = toTitleCase(sanitizePdfString(String(item.value)) || 'N/A');
+                page.drawText(safeValue, { x, y: startY - 15, font: helveticaFont, size: 11 });
             }
             startY -= 40; 
             
@@ -408,7 +415,8 @@ export default function PublicEmployeeProfilePage() {
                     ];
 
                     for(const instruction of instructions) {
-                        drawMultilineText({ page: qrPage, text: instruction, font: helveticaFont, fontSize: 10, x: (pageW - helveticaFont.widthOfTextAtSize(instruction, 10))/2, y: instructionsY, maxWidth: pageW - margin * 2 });
+                        const safeInstruction = sanitizePdfString(instruction);
+                        drawMultilineText({ page: qrPage, text: safeInstruction, font: helveticaFont, fontSize: 10, x: (pageW - helveticaFont.widthOfTextAtSize(safeInstruction, 10))/2, y: instructionsY, maxWidth: pageW - margin * 2 });
                         instructionsY -= (10 * 1.2 * 2);
                     }
                 }
