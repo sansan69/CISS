@@ -470,11 +470,14 @@ export default function PublicEmployeeProfilePage() {
         
         // --- Last Page: Terms and Conditions ---
         const tcPage = pdfDoc.addPage();
+        const tcWidth = tcPage.getWidth();
         let tcY = tcPage.getHeight() - margin;
-
-        tcPage.drawText("Terms & Conditions of Enrollment for Security Personnel", { x: (width - helveticaBoldFont.widthOfTextAtSize("Terms & Conditions of Enrollment for Security Personnel", 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
+        
+        const tcTitle = "Terms & Conditions";
+        tcPage.drawText(tcTitle, { x: (tcWidth - helveticaBoldFont.widthOfTextAtSize(tcTitle, 16))/2, y: tcY, font: helveticaBoldFont, size: 16, color: rgb(0.05, 0.2, 0.45) });
         tcY -= 40;
 
+        // Copy text exactly as shown on the enrollment form
         const tcContent = [
             { title: "I. General Eligibility and Compliance", 
               points: [
@@ -499,18 +502,22 @@ export default function PublicEmployeeProfilePage() {
               ]}
         ];
 
+        const bulletX = margin + 15;
+        const contentMaxWidth = tcWidth - (margin * 2) - 15;
         for(const section of tcContent) {
-            tcPage.drawText(section.title, { x: margin, y: tcY, font: helveticaBoldFont, size: 11 });
+            tcPage.drawText(section.title, { x: margin, y: tcY, font: helveticaBoldFont, size: 12, color: rgb(0.05, 0.2, 0.45) });
             tcY -= 20;
             for(const point of section.points) {
-                drawMultilineText({ page: tcPage, text: `• ${point}`, font: helveticaFont, fontSize: 9.5, x: margin + 15, y: tcY, maxWidth: width - (margin * 2) - 15 });
-                const lines = wrapTextToWidth(`• ${point}`, helveticaFont, 9.5, width - (margin * 2) - 15);
-                tcY -= lines.length * (9.5 * 1.4);
+                const safePoint = sanitizePdfString(`• ${point}`);
+                drawMultilineText({ page: tcPage, text: safePoint, font: helveticaFont, fontSize: 10.5, x: bulletX, y: tcY, maxWidth: contentMaxWidth, lineHeight: 13 });
+                const lines = wrapTextToWidth(safePoint, helveticaFont, 10.5, contentMaxWidth);
+                tcY -= lines.length * 13;
+                tcY -= 4; // small gap between bullets
             }
-            tcY -= 15;
+            tcY -= 10; // gap between sections
         }
 
-        // Add Signature
+        // Add Signature (place it a little below after all paragraphs with ~2 line spacing)
         const signatureBytes = await fetchImageBytes(employee.signatureUrl);
         if (signatureBytes) {
             let signatureImage;
@@ -521,14 +528,17 @@ export default function PublicEmployeeProfilePage() {
                     signatureImage = await pdfDoc.embedJpg(signatureBytes);
                 }
                 const sigDims = signatureImage.scaleToFit(120, 50);
+                // two lines of spacing = 2 * 13 (we used lineHeight 13 above)
+                tcY -= 26;
+                const signatureY = Math.max(margin + 40, tcY);
                 tcPage.drawImage(signatureImage, {
-                    x: width - margin - sigDims.width,
-                    y: tcY + 20,
+                    x: tcWidth - margin - sigDims.width,
+                    y: signatureY,
                     width: sigDims.width,
                     height: sigDims.height,
                 });
-                 tcPage.drawLine({ start: { x: width - margin - 130, y: tcY + 15 }, end: { x: width - margin, y: tcY + 15 }, thickness: 0.5 });
-                 tcPage.drawText("Signature of Applicant", { x: width - margin - 125, y: tcY, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
+                 tcPage.drawLine({ start: { x: tcWidth - margin - 130, y: signatureY - 5 }, end: { x: tcWidth - margin, y: signatureY - 5 }, thickness: 0.5 });
+                 tcPage.drawText("Signature of Applicant", { x: tcWidth - margin - 125, y: signatureY - 18, font: helveticaFont, size: 8, color: rgb(0.4, 0.4, 0.4) });
 
             } catch (sigError) {
                  console.error("Could not embed signature", sigError);
