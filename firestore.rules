@@ -12,6 +12,33 @@ service cloud.firestore {
 
     }
 
+    // Rules for the 'fieldOfficers' collection
+    match /fieldOfficers/{officerId} {
+      // Allow authenticated users to read their own Field Officer record
+      // Admin (by email) can read/write all officer records
+      allow read: if request.auth != null && (
+        resource.data.uid == request.auth.uid ||
+        request.auth.token.email == 'admin@cisskerala.app'
+      );
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
+    // Rules for the 'workOrders' collection
+    match /workOrders/{workOrderId} {
+      // Allow authenticated users (admins/field officers) to read work orders
+      allow read: if request.auth != null;
+      // Restrict writes to admin
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
+    // Rules for the 'sites' collection
+    match /sites/{siteId} {
+      // Allow authenticated users to read sites (used for imports and dashboards)
+      allow read: if request.auth != null;
+      // Restrict writes to admin
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
     // Rules for the 'clients' collection
     match /clients/{clientId} {
 
@@ -19,8 +46,8 @@ service cloud.firestore {
       // This is required for the client dropdown on the enrollment forms to work.
       allow read: if true;
 
-      // Only allow authenticated users (admins) to add, update, or delete clients.
-      allow create, update, delete: if request.auth != null;
+      // Only allow admin to add, update, or delete clients.
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
     }
   }
 }

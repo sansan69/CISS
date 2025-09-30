@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, endBefore, limitToLast } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, endBefore, limitToLast, startAt, endAt } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -156,7 +156,7 @@ export default function EmployeeDirectoryPage() {
         setSearchTerm(e.target.value);
     };
 
-    // Update URL when debounced search term changes
+    // Update URL when debounced search term changes for shareable filters
     useEffect(() => {
       updateUrlParams({ searchTerm });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,9 +184,9 @@ export default function EmployeeDirectoryPage() {
             return null; // Return null to indicate no query should be run
         }
         
-        if (debouncedSearchTerm) {
-            q = query(q, where('searchableFields', 'array-contains', debouncedSearchTerm.trim().toUpperCase()));
-        }
+        const trimmed = debouncedSearchTerm.trim();
+        const hasSearch = trimmed.length > 0;
+
         if (client !== 'all') {
             q = query(q, where('clientName', '==', client));
         }
@@ -197,8 +197,15 @@ export default function EmployeeDirectoryPage() {
             q = query(q, where('district', '==', district));
         }
         
-        // Consistent ordering
-        q = query(q, orderBy('createdAt', 'desc'));
+        // Search behavior: prefix search on fullName (industry-standard incremental search)
+        // We order by fullName and use startAt/endAt for prefix matching.
+        if (hasSearch) {
+            const searchUpper = trimmed.toUpperCase();
+            q = query(q, orderBy('fullName'), startAt(searchUpper), endAt(searchUpper + '\uf8ff')) as Query;
+        } else {
+            // Default ordering when not searching
+            q = query(q, orderBy('createdAt', 'desc'));
+        }
 
         return q;
     }, [userRole, assignedDistricts, debouncedSearchTerm, client, status, district]);

@@ -143,8 +143,12 @@ export default function DashboardPage() {
                 const onLeaveQuery = getCountFromServer(query(employeesQueryBuilder, where('status', '==', 'OnLeave')));
                 const inactiveQuery = getCountFromServer(query(employeesQueryBuilder, where('status', 'in', ['Inactive', 'Exited'])));
                 
+                // Start of the oldest month we want to include
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-                const hiresQuery = query(employeesQueryBuilder, where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo)));
+                const hiresQuery = query(
+                    employeesQueryBuilder,
+                    where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo))
+                );
                 
                 const recentActivityQuery = query(employeesQueryBuilder, orderBy("createdAt", "desc"), limit(5));
                 
@@ -198,18 +202,31 @@ export default function DashboardPage() {
                     inactiveOrExited: inactiveSnap.data().count,
                 });
 
-                const hiresByMonth: { [key: string]: number } = {};
-                for (let i = 0; i < 6; i++) {
-                    hiresByMonth[format(subMonths(new Date(), i), 'MMM yyyy')] = 0;
-                }
+                // Prepare month buckets for the last 6 months in chronological order
+                const monthStarts: Date[] = [];
+                for (let i = 5; i >= 0; i--) monthStarts.push(startOfMonth(subMonths(new Date(), i)));
+                const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));
+                const hiresByMonth: Record<string, number> = Object.fromEntries(
+                    monthLabels.map(label => [label, 0])
+                );
+
                 hiresSnapshot.docs.forEach((doc: any) => {
                     const data = doc.data();
-                    if (data.joiningDate) {
-                        const monthKey = format((data.joiningDate as Timestamp).toDate(), 'MMM yyyy');
-                        if (hiresByMonth.hasOwnProperty(monthKey)) hiresByMonth[monthKey]++;
+                    let jsDate: Date | null = null;
+                    const jd = data.joiningDate;
+                    if (jd && typeof jd.toDate === 'function') {
+                        jsDate = (jd as Timestamp).toDate();
+                    } else if (typeof jd === 'string' || jd instanceof Date) {
+                        const parsed = new Date(jd);
+                        if (!isNaN(parsed.getTime())) jsDate = parsed;
+                    }
+                    if (jsDate) {
+                        const monthKey = format(startOfMonth(jsDate), 'MMM yyyy');
+                        if (monthKey in hiresByMonth) hiresByMonth[monthKey]++;
                     }
                 });
-                setNewHiresData(Object.entries(hiresByMonth).map(([month, hires]) => ({ month, hires })).reverse());
+
+                setNewHiresData(monthLabels.map(label => ({ month: label, hires: hiresByMonth[label] || 0 })));
 
                 const clientCounts: { [key: string]: number } = {};
                 allEmployeesSnapshot.docs.forEach((doc: any) => {
