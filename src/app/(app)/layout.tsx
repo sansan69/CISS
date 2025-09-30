@@ -195,7 +195,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         setAuthUser(user);
         try {
             const tokenResult = await user.getIdTokenResult();
-            if (tokenResult.claims.admin === true) {
+            const isAdmin = tokenResult.claims?.admin === true || user.email === 'admin@cisskerala.app';
+            if (isAdmin) {
                 setUserRole('admin');
             } else {
                 const fieldOfficersCollection = collection(db, 'fieldOfficers');
