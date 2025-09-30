@@ -203,8 +203,8 @@ export default function EmployeeDirectoryPage() {
             const searchUpper = trimmed.toUpperCase();
             q = query(q, orderBy('fullName'), startAt(searchUpper), endAt(searchUpper + '\uf8ff')) as Query;
         } else {
-            // Default ordering when not searching - use fullName to avoid composite index needs with filters
-            q = query(q, orderBy('fullName'));
+            // Default ordering when not searching: latest enrolled first
+            q = query(q, orderBy('createdAt', 'desc'));
         }
 
         return q;
