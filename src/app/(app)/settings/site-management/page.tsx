@@ -80,6 +80,9 @@ interface SiteEditFormProps {
 
 const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients }) => {
     const [formData, setFormData] = useState<Partial<Site>>(site);
+    const [latInput, setLatInput] = useState<string>(site.geolocation ? String(site.geolocation.latitude) : '');
+    const [lngInput, setLngInput] = useState<string>(site.geolocation ? String(site.geolocation.longitude) : '');
+    const [geoError, setGeoError] = useState<string | null>(null);
 
     const handleSave = () => {
         const changes: Partial<Site> = {};
@@ -120,6 +123,32 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
              <div className="grid gap-2">
                 <Label htmlFor="siteAddress">Site Address</Label>
                 <Input id="siteAddress" value={formData.siteAddress || ''} onChange={(e) => setFormData({...formData, siteAddress: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+                <Label>Geolocation (Latitude, Longitude)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Latitude" value={latInput} onChange={(e)=>{
+                        const v = e.target.value; setLatInput(v);
+                        const lat = parseFloat(v); const lng = parseFloat(lngInput);
+                        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                            setGeoError(null);
+                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng) });
+                        } else {
+                            setGeoError('Enter valid coordinates');
+                        }
+                    }} />
+                    <Input placeholder="Longitude" value={lngInput} onChange={(e)=>{
+                        const v = e.target.value; setLngInput(v);
+                        const lat = parseFloat(latInput); const lng = parseFloat(v);
+                        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                            setGeoError(null);
+                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng) });
+                        } else {
+                            setGeoError('Enter valid coordinates');
+                        }
+                    }} />
+                </div>
+                {geoError && <p className="text-sm text-destructive">{geoError}</p>}
             </div>
             <div className="grid gap-2">
                 <Label htmlFor="district">District</Label>
@@ -207,12 +236,14 @@ export default function SiteManagementPage() {
                 q = query(q, where('clientName', '==', selectedClient));
             }
 
-            q = query(q, orderBy('clientName', 'asc'), orderBy('siteName', 'asc'));
+            // Use a single orderBy to avoid composite index requirements across different filter combos
+            q = query(q, orderBy('clientName', 'asc'));
             
             let finalQuery = q;
             if (pageDirection === 'next' && lastDoc) {
                 finalQuery = query(q, startAfter(lastDoc), limit(SITES_PER_PAGE));
             } else if (pageDirection === 'prev' && firstDoc) {
+                // Use startAt with the stored firstDoc anchor and then take the previous page by limitingToLast
                 finalQuery = query(q, endBefore(firstDoc), limitToLast(SITES_PER_PAGE));
             } else {
                  finalQuery = query(q, limit(SITES_PER_PAGE));
@@ -567,14 +598,23 @@ export default function SiteManagementPage() {
                             </Select>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="new-geo">Geolocation (lat,long)</Label>
-                            <Input id="new-geo" placeholder="10.1234,76.5432" onChange={(e) => {
-                                const s = e.target.value.trim();
-                                const parts = s.split(',').map(p => parseFloat(p.trim()));
-                                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                                    setCreateData({ ...createData, geolocation: new GeoPoint(parts[0], parts[1]) });
-                                }
-                            }} />
+                            <Label>Geolocation (Latitude, Longitude)</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Input placeholder="Latitude" onChange={(e)=>{
+                                    const lat = parseFloat(e.target.value);
+                                    const lng = (createData.geolocation ? createData.geolocation.longitude : NaN);
+                                    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng) });
+                                    }
+                                }} />
+                                <Input placeholder="Longitude" onChange={(e)=>{
+                                    const lng = parseFloat(e.target.value);
+                                    const lat = (createData.geolocation ? createData.geolocation.latitude : NaN);
+                                    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng) });
+                                    }
+                                }} />
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>
