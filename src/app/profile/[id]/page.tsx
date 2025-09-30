@@ -255,9 +255,12 @@ export default function PublicEmployeeProfilePage() {
         logoImage.scaleToFit(50, 50);
         page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
         
-        page.drawText(toTitleCase(employee.fullName), { x: margin + 65, y: height - margin - 25, font: helveticaBoldFont, size: 22, color: rgb(0.05, 0.2, 0.45) });
-        page.drawText(`Employee ID: ${employee.employeeId}`, { x: margin + 65, y: height - margin - 45, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
-        page.drawText(`Client: ${employee.clientName}`, { x: margin + 65, y: height - margin - 60, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
+        const safeFullNameHeader = toTitleCase(sanitizePdfString(employee.fullName));
+        const safeEmpIdHeader = sanitizePdfString(`Employee ID: ${employee.employeeId}`);
+        const safeClientHeader = sanitizePdfString(`Client: ${employee.clientName}`);
+        page.drawText(safeFullNameHeader, { x: margin + 65, y: height - margin - 25, font: helveticaBoldFont, size: 22, color: rgb(0.05, 0.2, 0.45) });
+        page.drawText(safeEmpIdHeader, { x: margin + 65, y: height - margin - 45, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
+        page.drawText(safeClientHeader, { x: margin + 65, y: height - margin - 60, font: helveticaFont, size: 10, color: rgb(0.3, 0.3, 0.3) });
         
         const profilePicBytes = await fetchImageBytes(employee.profilePictureUrl);
         if (profilePicBytes) {
@@ -310,19 +313,19 @@ export default function PublicEmployeeProfilePage() {
 
         const personalItems = [
             { label: 'Date of Birth', value: format(employee.dateOfBirth.toDate(), 'dd-MM-yyyy') },
-            { label: 'Gender', value: employee.gender },
-            { label: "Father's Name", value: employee.fatherName },
-            { label: "Mother's Name", value: employee.motherName },
-            { label: 'Marital Status', value: employee.maritalStatus },
-            ...(employee.maritalStatus === 'Married' ? [{ label: "Spouse's Name", value: employee.spouseName }] : [{label: "Spouse's Name", value: 'N/A'}]),
-            { label: "Educational Qualification", value: employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification },
+            { label: 'Gender', value: sanitizePdfString(employee.gender) },
+            { label: "Father's Name", value: sanitizePdfString(employee.fatherName) },
+            { label: "Mother's Name", value: sanitizePdfString(employee.motherName) },
+            { label: 'Marital Status', value: sanitizePdfString(employee.maritalStatus) },
+            ...(employee.maritalStatus === 'Married' ? [{ label: "Spouse's Name", value: sanitizePdfString(employee.spouseName) }] : [{label: "Spouse's Name", value: 'N/A'}]),
+            { label: "Educational Qualification", value: employee.educationalQualification === 'Any Other Qualification' ? sanitizePdfString(employee.otherQualification) : sanitizePdfString(employee.educationalQualification) },
         ];
         y = drawSection("Personal Information", personalItems, y);
 
         const contactItems = [
-             { label: "Phone Number", value: employee.phoneNumber },
-             { label: "Email Address", value: employee.emailAddress },
-             { label: "District", value: employee.district },
+             { label: "Phone Number", value: sanitizePdfString(employee.phoneNumber) },
+             { label: "Email Address", value: sanitizePdfString(employee.emailAddress) },
+             { label: "District", value: sanitizePdfString(employee.district) },
         ];
         
         y = drawSection("Contact Information", contactItems, y);
@@ -336,21 +339,21 @@ export default function PublicEmployeeProfilePage() {
         
         const employmentItems = [
             { label: "Joining Date", value: format(employee.joiningDate.toDate(), 'dd-MM-yyyy') },
-            { label: "Status", value: employee.status },
-            { label: "Resource ID (if any)", value: employee.resourceIdNumber },
+            { label: "Status", value: sanitizePdfString(employee.status) },
+            { label: "Resource ID (if any)", value: sanitizePdfString(employee.resourceIdNumber) },
             ...(employee.status === 'Exited' && employee.exitDate ? [{ label: "Exit Date", value: format(employee.exitDate.toDate(), 'dd-MM-yyyy') }] : [{ label: "Exit Date", value: "N/A" }]),
         ];
         y = drawSection("Employment Details", employmentItems, y);
         
         const statutoryItems = [
-            { label: "PAN Number", value: employee.panNumber },
-            { label: "EPF / UAN", value: employee.epfUanNumber },
-            { label: "ESIC Number", value: employee.esicNumber },
-            { label: "Bank Name", value: employee.bankName },
-            { label: "Bank Account No.", value: employee.bankAccountNumber },
-            { label: "Bank IFSC Code", value: employee.ifscCode },
-            { label: "Identity Proof", value: `${employee.identityProofType || legacy.idProofType} - ${employee.identityProofNumber || legacy.idProofNumber}`},
-            { label: "Address Proof", value: `${employee.addressProofType} - ${employee.addressProofNumber}`},
+            { label: "PAN Number", value: sanitizePdfString(employee.panNumber) },
+            { label: "EPF / UAN", value: sanitizePdfString(employee.epfUanNumber) },
+            { label: "ESIC Number", value: sanitizePdfString(employee.esicNumber) },
+            { label: "Bank Name", value: sanitizePdfString(employee.bankName) },
+            { label: "Bank Account No.", value: sanitizePdfString(employee.bankAccountNumber) },
+            { label: "Bank IFSC Code", value: sanitizePdfString(employee.ifscCode) },
+            { label: "Identity Proof", value: sanitizePdfString(`${employee.identityProofType || legacy.idProofType} - ${employee.identityProofNumber || legacy.idProofNumber}`)},
+            { label: "Address Proof", value: sanitizePdfString(`${employee.addressProofType} - ${employee.addressProofNumber}`)},
         ];
         y = drawSection("Bank & Statutory Details", statutoryItems, y);
 
