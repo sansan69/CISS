@@ -589,6 +589,11 @@ export default function SiteManagementPage() {
                                         <h3 className="font-semibold">{site.siteName}</h3>
                                         <p className="text-sm text-muted-foreground">{site.clientName}</p>
                                         <p className="text-xs text-muted-foreground mt-1">{site.siteAddress}</p>
+                                        {site.geolocation && (
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                Lat, Long: {site.geolocation.latitude.toFixed(5)}, {site.geolocation.longitude.toFixed(5)}
+                                            </p>
+                                        )}
                                         <Badge variant="outline" className="mt-2">{site.district}</Badge>
                                     </div>
                                     <div className="flex gap-2 self-start sm:self-center">

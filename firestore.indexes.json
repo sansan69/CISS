@@ -9,6 +9,31 @@
       ]
     },
     {
+      "collectionGroup": "sites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "siteName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "siteName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "siteName", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "employees",
       "queryScope": "COLLECTION",
       "fields": [
