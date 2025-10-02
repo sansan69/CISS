@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,61 @@ export default function LandingPage() {
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+
+  // PWA install prompt only on landing page
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    if (isStandalone) return; // already installed
+
+    if (localStorage.getItem('pwaInstallDismissed') === '1' || localStorage.getItem('pwaInstalled') === '1') return;
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+    const handleAppInstalled = () => {
+      setShowInstallPrompt(false);
+      setDeferredPrompt(null);
+      localStorage.setItem('pwaInstalled', '1');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    try {
+      if (!deferredPrompt) {
+        setShowInstallPrompt(false);
+        return;
+      }
+      deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+      if (choiceResult.outcome === 'accepted') {
+        localStorage.setItem('pwaInstalled', '1');
+      } else {
+        localStorage.setItem('pwaInstallDismissed', '1');
+      }
+    } finally {
+      setShowInstallPrompt(false);
+    }
+  };
+
+  const handleDismissInstall = () => {
+    setShowInstallPrompt(false);
+    localStorage.setItem('pwaInstallDismissed', '1');
+  };
 
   const handleContinue = async () => {
     setIsLoading(true);
@@ -120,6 +175,24 @@ export default function LandingPage() {
           &copy; {new Date().getFullYear()} CISS Workforce. All rights reserved.
         </footer>
       </div>
+
+      {showInstallPrompt && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom)]">
+          <div className="mx-auto max-w-md rounded-xl border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 shadow-lg p-3 sm:p-4">
+            <div className="flex items-center gap-3">
+              <DownloadCloud className="h-5 w-5 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Install CISS Workforce</p>
+                <p className="text-xs text-muted-foreground truncate">Add the app to your device for faster access.</p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={handleDismissInstall}>Not now</Button>
+                <Button size="sm" onClick={handleInstallClick}>Install</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
