@@ -20,65 +20,93 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [showFallbackGuidance, setShowFallbackGuidance] = useState(false);
 
   // PWA install prompt only on landing page
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    if (isStandalone) return; // already installed
+    if (isStandalone) {
+      console.log('PWA: Already running in standalone mode');
+      return;
+    }
 
-    if (localStorage.getItem('pwaInstallDismissed') === '1' || localStorage.getItem('pwaInstalled') === '1') return;
+    const dismissed = localStorage.getItem('pwaInstallDismissed') === '1';
+    const installed = localStorage.getItem('pwaInstalled') === '1';
+    
+    if (dismissed || installed) {
+      console.log('PWA: Install prompt previously dismissed or installed');
+      return;
+    }
+
+    console.log('PWA: Setting up install prompt listeners');
 
     const handleBeforeInstallPrompt = (e: any) => {
+      console.log('PWA: beforeinstallprompt event fired');
       e.preventDefault();
       setDeferredPrompt(e);
       setShowInstallPrompt(true);
     };
+    
     // For iOS Safari and some browsers that do not fire beforeinstallprompt,
     // show a guidance banner after a small delay.
     const fallbackTimer = window.setTimeout(() => {
-      if (!('BeforeInstallPromptEvent' in window) && !deferredPrompt) {
-        // If still not installed or dismissed, show prompt with guidance.
+      console.log('PWA: Fallback timer triggered, checking if prompt should show');
+      if (!deferredPrompt) {
+        console.log('PWA: Showing fallback guidance banner (no beforeinstallprompt fired)');
         setShowInstallPrompt(true);
+        setShowFallbackGuidance(true);
       }
-    }, 2000);
+    }, 3000);
+    
     const handleAppInstalled = () => {
+      console.log('PWA: App installed event fired');
       setShowInstallPrompt(false);
       setDeferredPrompt(null);
       localStorage.setItem('pwaInstalled', '1');
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt, { once: true });
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as any);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [deferredPrompt]);
 
   const handleInstallClick = async () => {
+    console.log('PWA: Install button clicked', { hasDeferredPrompt: !!deferredPrompt, showFallbackGuidance });
+    
+    if (!deferredPrompt) {
+      // For browsers that don't support beforeinstallprompt (like iOS Safari)
+      console.log('PWA: No deferred prompt - user must install manually');
+      setShowInstallPrompt(false);
+      return;
+    }
+    
     try {
-      if (!deferredPrompt) {
-        setShowInstallPrompt(false);
-        return;
-      }
+      console.log('PWA: Prompting for install');
       deferredPrompt.prompt();
       const choiceResult = await deferredPrompt.userChoice;
+      console.log('PWA: User choice:', choiceResult.outcome);
       setDeferredPrompt(null);
       if (choiceResult.outcome === 'accepted') {
         localStorage.setItem('pwaInstalled', '1');
       } else {
         localStorage.setItem('pwaInstallDismissed', '1');
       }
+    } catch (err) {
+      console.error('PWA: Install prompt error:', err);
     } finally {
       setShowInstallPrompt(false);
     }
   };
 
   const handleDismissInstall = () => {
+    console.log('PWA: Install dismissed');
     setShowInstallPrompt(false);
     localStorage.setItem('pwaInstallDismissed', '1');
   };
@@ -193,14 +221,13 @@ export default function LandingPage() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">Install CISS Workforce</p>
                 <p className="text-xs text-muted-foreground truncate">Add the app to your device for faster access.</p>
-                {/* iOS guidance: explain manual Add to Home Screen if needed */}
-                {(!('BeforeInstallPromptEvent' in window)) && (
+                {showFallbackGuidance && (
                   <p className="text-[11px] text-muted-foreground mt-1">On iOS: tap the Share icon and choose "Add to Home Screen".</p>
                 )}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={handleDismissInstall}>Not now</Button>
-                <Button size="sm" onClick={handleInstallClick}>Install</Button>
+                <Button size="sm" onClick={handleInstallClick}>{deferredPrompt ? 'Install' : 'Got it'}</Button>
               </div>
             </div>
           </div>
