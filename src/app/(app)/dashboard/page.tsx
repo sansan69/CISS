@@ -147,10 +147,11 @@ export default function DashboardPage() {
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
                 const includeCharts = userRole !== 'fieldOfficer';
                 // Avoid composite-index requirement for FO and skip unnecessary chart queries
+                // Use createdAt to reflect actual enrollment counts; fallback handled during tally
                 let hiresDocsPromise: Promise<any> = includeCharts
                     ? getDocs(query(
                         employeesQueryBuilder,
-                        where("joiningDate", ">=", Timestamp.fromDate(sixMonthsAgo))
+                        where("createdAt", ">=", Timestamp.fromDate(sixMonthsAgo))
                       ))
                     : Promise.resolve({ docs: [] });
                 
@@ -218,15 +219,20 @@ export default function DashboardPage() {
 
                 hiresSnapshot.docs.forEach((doc: any) => {
                     const data = doc.data();
-                    // No-op: charts not shown for field officers
+                    // Prefer createdAt (enrollment), fallback to joiningDate
                     let jsDate: Date | null = null;
+                    const cd = data.createdAt;
                     const jd = data.joiningDate;
-                    if (jd && typeof jd.toDate === 'function') {
-                        jsDate = (jd as Timestamp).toDate();
-                    } else if (typeof jd === 'string' || jd instanceof Date) {
-                        const parsed = new Date(jd);
-                        if (!isNaN(parsed.getTime())) jsDate = parsed;
-                    }
+                    const coerceDate = (val: any): Date | null => {
+                        if (!val) return null;
+                        if (typeof val.toDate === 'function') return (val as Timestamp).toDate();
+                        if (typeof val === 'string' || val instanceof Date) {
+                            const parsed = new Date(val);
+                            return isNaN(parsed.getTime()) ? null : parsed;
+                        }
+                        return null;
+                    };
+                    jsDate = coerceDate(cd) || coerceDate(jd);
                     if (jsDate) {
                         const monthKey = format(startOfMonth(jsDate), 'MMM yyyy');
                         if (monthKey in hiresByMonth) hiresByMonth[monthKey]++;
