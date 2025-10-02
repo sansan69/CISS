@@ -13,6 +13,7 @@ import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, ser
 import { startOfToday } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
@@ -399,36 +400,52 @@ export default function WorkOrderPage() {
                                     <div className="mt-4">
                                         <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
                                         <div className="flex flex-wrap gap-2">
-                                            {orders.map(order => (
-                                                <div key={order.id} className="relative p-2 border rounded-md text-center bg-muted/50 min-w-[140px]">
-                                                    <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                    <div className="flex justify-around items-center mt-1 pt-1 border-t">
-                                                        <div className="text-center px-1">
-                                                            <p className="text-lg font-bold">{order.maleGuardsRequired}</p>
-                                                            <p className="text-xs text-muted-foreground">Male</p>
+                                            {orders.map(order => {
+                                                const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
+                                                const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                                                const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
+                                                const status = assignedCount === 0 ? 'Unassigned' : (assignedCount >= totalRequired ? 'Fully Assigned' : 'Partially Assigned');
+                                                const statusClasses = assignedCount === 0
+                                                    ? 'bg-red-100 text-red-700 border-red-200'
+                                                    : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
+                                                return (
+                                                    <div key={order.id} className={`relative p-2 border rounded-md text-center min-w-[160px] ${assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40')}`}>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded border ${statusClasses}`}>{status}</span>
                                                         </div>
-                                                         <div className="text-center px-1">
-                                                            <p className="text-lg font-bold">{order.femaleGuardsRequired}</p>
-                                                            <p className="text-xs text-muted-foreground">Female</p>
+                                                        <div className="flex justify-around items-center mt-1 pt-1 border-t">
+                                                            <div className="text-center px-1">
+                                                                <p className="text-lg font-bold">{order.maleGuardsRequired}</p>
+                                                                <p className="text-xs text-muted-foreground">Male</p>
+                                                            </div>
+                                                            <div className="text-center px-1">
+                                                                <p className="text-lg font-bold">{order.femaleGuardsRequired}</p>
+                                                                <p className="text-xs text-muted-foreground">Female</p>
+                                                            </div>
+                                                            <div className="text-center px-1">
+                                                                <p className="text-lg font-bold">{totalRequired}</p>
+                                                                <p className="text-xs text-muted-foreground">Total</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="text-center px-1">
-                                                            <p className="text-lg font-bold">{order.totalManpower}</p>
-                                                            <p className="text-xs text-muted-foreground">Total</p>
+                                                        <div className="mt-2 space-y-1">
+                                                            <Progress value={percent} className="h-1.5" />
+                                                            <p className="text-[11px] text-muted-foreground">Assigned {assignedCount}/{totalRequired} ({percent}%)</p>
                                                         </div>
+                                                        {userRole === 'admin' && (
+                                                            <button
+                                                                className="absolute top-1 right-1 rounded p-1 text-destructive hover:bg-red-50"
+                                                                title="Delete duty"
+                                                                onClick={async ()=>{
+                                                                    try { await deleteDoc(doc(db,'workOrders', order.id)); } catch(e){ console.error(e); }
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                    {userRole === 'admin' && (
-                                                        <button
-                                                            className="absolute top-1 right-1 rounded p-1 text-destructive hover:bg-red-50"
-                                                            title="Delete duty"
-                                                            onClick={async ()=>{
-                                                                try { await deleteDoc(doc(db,'workOrders', order.id)); } catch(e){ console.error(e); }
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>

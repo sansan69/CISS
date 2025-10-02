@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, endBefore, limitToLast, startAt, endAt } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, startAt, endAt } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -89,6 +89,7 @@ export default function EmployeeDirectoryPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [hasNextPage, setHasNextPage] = useState(false);
     const [hasPreviousPage, setHasPreviousPage] = useState(false);
+    const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
     
     // Modals state
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -222,12 +223,14 @@ export default function EmployeeDirectoryPage() {
         }
 
         let finalQuery: Query;
+        let targetPage = currentPage;
+        if (direction === 'next') targetPage = currentPage + 1;
+        if (direction === 'prev') targetPage = Math.max(1, currentPage - 1);
 
-        if (direction === 'next' && lastVisible) {
-            finalQuery = query(baseQuery, startAfter(lastVisible), limit(ITEMS_PER_PAGE));
-        } else if (direction === 'prev' && firstVisible) {
-            finalQuery = query(baseQuery, endBefore(firstVisible), limitToLast(ITEMS_PER_PAGE));
-        } else { // 'first'
+        const startAfterCursor = pageCursors[targetPage - 1] || null;
+        if (startAfterCursor) {
+            finalQuery = query(baseQuery, startAfter(startAfterCursor), limit(ITEMS_PER_PAGE));
+        } else {
             finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
         }
         
@@ -241,22 +244,24 @@ export default function EmployeeDirectoryPage() {
                 const last = documentSnapshots.docs[documentSnapshots.docs.length - 1];
                 setFirstVisible(first);
                 setLastVisible(last);
-                
-                // Check for next/prev pages
-                const nextQuery = query(baseQuery, startAfter(last), limit(1));
-                const prevQuery = query(baseQuery, endBefore(first), limit(1));
-                
-                const [nextSnap, prevSnap] = await Promise.all([getDocs(nextQuery), getDocs(prevQuery)]);
-                
-                setHasNextPage(!nextSnap.empty);
-                setHasPreviousPage(!prevSnap.empty);
+                // Update page cursors so page N+1 starts after last of page N
+                setPageCursors(prev => {
+                    const next = prev.slice(0, targetPage); // keep up to targetPage-1
+                    next[targetPage - 1] = prev[targetPage - 1] ?? null; // ensure slot exists
+                    next[targetPage] = last; // cursor for next page
+                    return next;
+                });
+                setCurrentPage(targetPage);
+                setHasPreviousPage(targetPage > 1);
+                setHasNextPage(documentSnapshots.size === ITEMS_PER_PAGE);
 
             } else {
                 setEmployees([]);
                 setFirstVisible(null);
                 setLastVisible(null);
                 setHasNextPage(false);
-                setHasPreviousPage(currentPage > 1);
+                setHasPreviousPage(targetPage > 1);
+                setCurrentPage(targetPage);
             }
         } catch (err: any) {
             let message = err.message || "Failed to fetch employees.";
@@ -266,26 +271,25 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [buildBaseQuery, lastVisible, firstVisible, currentPage]);
+    }, [buildBaseQuery, currentPage, pageCursors]);
 
     useEffect(() => {
         if (userRole !== null) {
-            fetchData('first');
+            setPageCursors([null]);
             setCurrentPage(1);
+            fetchData('first');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [debouncedSearchTerm, client, status, district, userRole]);
     
     const handleNextPage = () => {
         if (hasNextPage) {
-            setCurrentPage(p => p + 1);
             fetchData('next');
         }
     };
     
     const handlePrevPage = () => {
         if (currentPage > 1) {
-            setCurrentPage(p => p - 1);
             fetchData('prev');
         }
     };

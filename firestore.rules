@@ -46,8 +46,8 @@ service cloud.firestore {
 
     // Rules for the 'sites' collection
     match /sites/{siteId} {
-      // Allow authenticated users to read sites (used for imports and dashboards)
-      allow read: if request.auth != null;
+      // Allow public reads so attendance page can load sites without auth
+      allow read: if true;
       // Restrict writes to admin
       allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
     }
@@ -61,6 +61,14 @@ service cloud.firestore {
 
       // Only allow admin to add, update, or delete clients.
       allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
+    // Rules for the 'attendanceLogs' collection
+    match /attendanceLogs/{logId} {
+      // Allow anyone to create a log (public kiosk use). Reads can be restricted later if needed.
+      allow create: if true;
+      allow read: if request.auth != null; // limit reads to authenticated users
+      allow update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
     }
   }
 }

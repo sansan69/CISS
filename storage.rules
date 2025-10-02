@@ -4,14 +4,10 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // Employee uploads and downloads
-    // - Public READ is allowed for generating profile kits and public profile views
-    // - WRITE allowed for any authenticated user (includes anonymous sign-in)
-    //   and restricted to images/PDF up to 5MB
+    // Public READ and WRITE (no auth required)
     match /employees/{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      allow write: if true;
     }
 
     // Default Deny Rule for any other paths.

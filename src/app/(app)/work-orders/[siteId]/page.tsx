@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft, UserPlus, AlertCircle, Search, UserCheck, X, Edit3, Save, Trash2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
@@ -379,70 +380,85 @@ export default function AssignGuardsPage() {
                         <p className="text-center text-muted-foreground py-10">No upcoming duties found for this site.</p>
                     ) : (
                         <div className="space-y-4">
-                           {workOrders.map(order => (
-                                <div key={order.id} className="p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <div>
-                                        <p className="font-bold text-lg">{order.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                                            {editCountsFor === order.id ? (
-                                                <>
-                                                    <span className="flex items-center gap-2">Male Required:
-                                                        <Input type="number" value={editMale} onChange={(e)=>setEditMale(parseInt(e.target.value || '0'))} className="w-20 h-8" />
-                                                    </span>
-                                                    <span className="flex items-center gap-2">Female Required:
-                                                        <Input type="number" value={editFemale} onChange={(e)=>setEditFemale(parseInt(e.target.value || '0'))} className="w-20 h-8" />
-                                                    </span>
-                                                    <span>Total: <Badge variant="secondary">{(editMale||0)+(editFemale||0)}</Badge></span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <span>Male Required: <Badge>{order.maleGuardsRequired}</Badge></span>
-                                                    <span>Female Required: <Badge>{order.femaleGuardsRequired}</Badge></span>
-                                                    <span>Total: <Badge variant="secondary">{order.totalManpower}</Badge></span>
-                                                </>
-                                            )}
-                                            <span>Assigned: <Badge variant="default">{Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0}</Badge></span>
+                           {workOrders.map(order => {
+                                const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
+                                const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                                const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
+                                const status = assignedCount === 0 ? 'Unassigned' : (assignedCount >= totalRequired ? 'Fully Assigned' : 'Partially Assigned');
+                                const cardBg = assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40');
+                                const badgeClass = assignedCount === 0 ? 'bg-red-100 text-red-700 border-red-200' : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
+                                return (
+                                    <div key={order.id} className={`p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${cardBg}`}>
+                                        <div className="w-full sm:w-auto">
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-bold text-lg">{order.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded border ${badgeClass}`}>{status}</span>
+                                            </div>
+                                            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                                                {editCountsFor === order.id ? (
+                                                    <>
+                                                        <span className="flex items-center gap-2">Male Required:
+                                                            <Input type="number" value={editMale} onChange={(e)=>setEditMale(parseInt(e.target.value || '0'))} className="w-20 h-8" />
+                                                        </span>
+                                                        <span className="flex items-center gap-2">Female Required:
+                                                            <Input type="number" value={editFemale} onChange={(e)=>setEditFemale(parseInt(e.target.value || '0'))} className="w-20 h-8" />
+                                                        </span>
+                                                        <span>Total: <Badge variant="secondary">{(editMale||0)+(editFemale||0)}</Badge></span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span>Male Required: <Badge>{order.maleGuardsRequired}</Badge></span>
+                                                        <span>Female Required: <Badge>{order.femaleGuardsRequired}</Badge></span>
+                                                        <span>Total: <Badge variant="secondary">{totalRequired}</Badge></span>
+                                                    </>
+                                                )}
+                                                <span>Assigned: <Badge variant="default">{assignedCount}/{totalRequired}</Badge></span>
+                                            </div>
+                                            <div className="mt-2 max-w-xs">
+                                                <Progress value={percent} className="h-1.5" />
+                                                <p className="text-[11px] text-muted-foreground mt-1">{percent}% assigned</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {userRole === 'admin' && (
-                                            editCountsFor === order.id ? (
-                                                <Button size="sm" onClick={async ()=>{
+                                        <div className="flex gap-2">
+                                            {userRole === 'admin' && (
+                                                editCountsFor === order.id ? (
+                                                    <Button size="sm" onClick={async ()=>{
+                                                        try {
+                                                            const ref = doc(db, 'workOrders', order.id);
+                                                            const male = Number.isFinite(editMale) ? editMale : 0;
+                                                            const female = Number.isFinite(editFemale) ? editFemale : 0;
+                                                            await updateDoc(ref, { maleGuardsRequired: male, femaleGuardsRequired: female, totalManpower: male + female, updatedAt: serverTimestamp() });
+                                                            setEditCountsFor(null);
+                                                        } catch (e) {
+                                                            console.error(e);
+                                                        }
+                                                    }}>
+                                                        <Save className="mr-2 h-4 w-4"/> Save
+                                                    </Button>
+                                                ) : (
+                                                    <Button variant="outline" size="sm" onClick={()=>{ setEditCountsFor(order.id); setEditMale(order.maleGuardsRequired); setEditFemale(order.femaleGuardsRequired); }}>
+                                                        <Edit3 className="mr-2 h-4 w-4"/> Edit
+                                                    </Button>
+                                                )
+                                            )}
+                                            {userRole === 'admin' && (
+                                                <Button size="sm" variant="destructive" onClick={async ()=>{
                                                     try {
-                                                        const ref = doc(db, 'workOrders', order.id);
-                                                        const male = Number.isFinite(editMale) ? editMale : 0;
-                                                        const female = Number.isFinite(editFemale) ? editFemale : 0;
-                                                        await updateDoc(ref, { maleGuardsRequired: male, femaleGuardsRequired: female, totalManpower: male + female, updatedAt: serverTimestamp() });
-                                                        setEditCountsFor(null);
+                                                        await deleteDoc(doc(db,'workOrders', order.id));
                                                     } catch (e) {
                                                         console.error(e);
                                                     }
                                                 }}>
-                                                    <Save className="mr-2 h-4 w-4"/> Save
+                                                    <Trash2 className="mr-2 h-4 w-4"/> Delete
                                                 </Button>
-                                            ) : (
-                                                <Button variant="outline" size="sm" onClick={()=>{ setEditCountsFor(order.id); setEditMale(order.maleGuardsRequired); setEditFemale(order.femaleGuardsRequired); }}>
-                                                    <Edit3 className="mr-2 h-4 w-4"/> Edit
-                                                </Button>
-                                            )
-                                        )}
-                                        {userRole === 'admin' && (
-                                            <Button size="sm" variant="destructive" onClick={async ()=>{
-                                                try {
-                                                    await deleteDoc(doc(db,'workOrders', order.id));
-                                                } catch (e) {
-                                                    console.error(e);
-                                                }
-                                            }}>
-                                                <Trash2 className="mr-2 h-4 w-4"/> Delete
+                                            )}
+                                            <Button onClick={() => handleOpenAssignDialog(order)} size="sm">
+                                                <UserPlus className="mr-2 h-4 w-4" /> Assign
                                             </Button>
-                                        )}
-                                        <Button onClick={() => handleOpenAssignDialog(order)} size="sm">
-                                            <UserPlus className="mr-2 h-4 w-4" /> Assign
-                                        </Button>
+                                        </div>
                                     </div>
-                                </div>
-                           ))}
+                                );
+                           })}
                         </div>
                     )}
                 </CardContent>

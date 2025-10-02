@@ -43,6 +43,8 @@ interface Site {
     siteAddress: string;
     district: string;
     geolocation: GeoPoint;
+    latString?: string;
+    lngString?: string;
 }
 
 interface ClientOption {
@@ -70,6 +72,11 @@ const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Ala
 const SITES_PER_PAGE = 10;
 
 
+const formatCoord = (n: number): string => {
+    if (typeof n !== 'number' || isNaN(n)) return '';
+    return n.toFixed(6).replace(/\.?0+$/, '');
+};
+
 interface SiteEditFormProps {
     site: Site;
     onSave: (siteData: Partial<Site>) => Promise<void>;
@@ -80,8 +87,8 @@ interface SiteEditFormProps {
 
 const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients }) => {
     const [formData, setFormData] = useState<Partial<Site>>(site);
-    const [latInput, setLatInput] = useState<string>(site.geolocation ? String(site.geolocation.latitude) : '');
-    const [lngInput, setLngInput] = useState<string>(site.geolocation ? String(site.geolocation.longitude) : '');
+    const [latInput, setLatInput] = useState<string>(site.latString ?? (site.geolocation ? String(site.geolocation.latitude) : ''));
+    const [lngInput, setLngInput] = useState<string>(site.lngString ?? (site.geolocation ? String(site.geolocation.longitude) : ''));
     const [geoError, setGeoError] = useState<string | null>(null);
 
     const handleSave = () => {
@@ -132,7 +139,7 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                         const lat = parseFloat(v); const lng = parseFloat(lngInput);
                         if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
                             setGeoError(null);
-                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng) });
+                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng), latString: v, lngString: lngInput });
                         } else {
                             setGeoError('Enter valid coordinates');
                         }
@@ -142,7 +149,7 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                         const lat = parseFloat(latInput); const lng = parseFloat(v);
                         if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
                             setGeoError(null);
-                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng) });
+                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng), latString: latInput, lngString: v });
                         } else {
                             setGeoError('Enter valid coordinates');
                         }
@@ -184,7 +191,7 @@ export default function SiteManagementPage() {
     const [deletingSite, setDeletingSite] = useState<Site | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [createData, setCreateData] = useState<Partial<Site>>({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0) });
+    const [createData, setCreateData] = useState<Partial<Site>>({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), latString: '', lngString: '' });
     
     // Filters
     const [clients, setClients] = useState<ClientOption[]>([]);
@@ -467,6 +474,8 @@ export default function SiteManagementPage() {
             const siteDocRef = doc(db, 'sites', editingSite.id);
             await updateDoc(siteDocRef, {
                 ...updatedData,
+                // If geolocation updated and we have lat/lng inputs in formData, persist the strings too
+                ...(updatedData.geolocation ? { latString: (updatedData as any).latString ?? undefined, lngString: (updatedData as any).lngString ?? undefined } : {}),
                 updatedAt: serverTimestamp(),
             });
             toast({ title: "Site Updated", description: "The site details have been saved." });
@@ -600,18 +609,20 @@ export default function SiteManagementPage() {
                         <div className="grid gap-2">
                             <Label>Geolocation (Latitude, Longitude)</Label>
                             <div className="grid grid-cols-2 gap-2">
-                                <Input placeholder="Latitude" onChange={(e)=>{
-                                    const lat = parseFloat(e.target.value);
+                                <Input placeholder="Latitude" value={createData.latString || ''} onChange={(e)=>{
+                                    const v = e.target.value;
+                                    const lat = parseFloat(v);
                                     const lng = (createData.geolocation ? createData.geolocation.longitude : NaN);
                                     if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng) });
+                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng), latString: v });
                                     }
                                 }} />
-                                <Input placeholder="Longitude" onChange={(e)=>{
-                                    const lng = parseFloat(e.target.value);
+                                <Input placeholder="Longitude" value={createData.lngString || ''} onChange={(e)=>{
+                                    const v = e.target.value;
+                                    const lng = parseFloat(v);
                                     const lat = (createData.geolocation ? createData.geolocation.latitude : NaN);
                                     if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng) });
+                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng), lngString: v });
                                     }
                                 }} />
                             </div>
@@ -633,12 +644,14 @@ export default function SiteManagementPage() {
                                     siteAddress: createData.siteAddress,
                                     district: createData.district,
                                     geolocation: createData.geolocation,
+                                    latString: createData.latString,
+                                    lngString: createData.lngString,
                                     createdAt: serverTimestamp(),
                                     updatedAt: serverTimestamp(),
                                 });
                                 toast({ title: 'Site Created', description: 'The new site has been added.' });
                                 setIsCreateOpen(false);
-                                setCreateData({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0) });
+                                setCreateData({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), latString: '', lngString: '' });
                                 fetchSites('first');
                                 setCurrentPage(1);
                             } catch (e) {
@@ -730,7 +743,7 @@ export default function SiteManagementPage() {
                                         <p className="text-xs text-muted-foreground mt-1">{site.siteAddress}</p>
                                         {site.geolocation && (
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                Lat, Long: {site.geolocation.latitude.toFixed(5)}, {site.geolocation.longitude.toFixed(5)}
+                                                Lat, Long: {site.latString ?? formatCoord(site.geolocation.latitude)}, {site.lngString ?? formatCoord(site.geolocation.longitude)}
                                             </p>
                                         )}
                                         <Badge variant="outline" className="mt-2">{site.district}</Badge>

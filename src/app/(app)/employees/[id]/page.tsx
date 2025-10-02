@@ -289,14 +289,15 @@ const generateEmployeeId = (clientName: string): string => {
 const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
     const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
     try {
+        // Use correct QRCode.toDataURL overload (text, options)
         const url = await QRCode.toDataURL(dataString, {
             errorCorrectionLevel: 'H',
-            type: 'image/png',
-            quality: 0.92,
             margin: 1,
             width: 256,
-        });
-        return url;
+            // type is allowed in latest qrcode types; keep as any cast to satisfy older types
+            type: 'image/png' as any,
+        } as any);
+        return url as unknown as string;
     } catch (err) {
         console.error('QR code generation failed:', err);
         throw new Error('Failed to generate QR code.');
@@ -310,6 +311,7 @@ async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | nu
       // as it handles authentication and permissions gracefully.
       const storageRef = ref(storage, url);
       const bytes = await getBytes(storageRef);
+      // Return as Uint8Array for pdf-lib embed
       return new Uint8Array(bytes);
     } catch (error: any) {
       if (error.code === 'storage/object-not-found') {
@@ -667,8 +669,8 @@ export default function AdminEmployeeProfilePage() {
             if (key === 'dateOfBirth' || key === 'joiningDate' || key === 'exitDate') {
                 const formDate = formValue as Date | null | undefined;
                 const originalDate = originalValue?.toDate ? originalValue.toDate() : (originalValue ? new Date(originalValue) : null);
-                if (formDate?.getTime() !== originalDate?.getTime()) {
-                    formPayload[key] = formValue ? Timestamp.fromDate(formValue) : (key === 'exitDate' ? deleteField() : originalValue);
+                if ((formDate instanceof Date ? formDate.getTime() : undefined) !== originalDate?.getTime()) {
+                    formPayload[key] = formDate instanceof Date ? Timestamp.fromDate(formDate) : (key === 'exitDate' ? deleteField() : originalValue);
                 }
             } else if (formValue !== originalValue) {
                 formPayload[key] = formValue;
@@ -713,10 +715,10 @@ export default function AdminEmployeeProfilePage() {
             await updateDoc(employeeDocRef, finalPayload);
             toast({ title: "Profile Updated", description: "Employee details have been saved." });
             await fetchEmployee();
-            toggleEditMode(false);
+            toggleEditMode();
         } else {
             toast({ title: "No Changes", description: "No changes were detected to save." });
-            toggleEditMode(false);
+            toggleEditMode();
         }
     } catch (err: any) {
         console.error("Error updating profile:", err);
@@ -756,8 +758,11 @@ export default function AdminEmployeeProfilePage() {
             qrCodeUrl: newQrCodeUrl,
             searchableFields: newSearchableFields,
             publicProfile: {
-                ...employee.publicProfile,
+                fullName: employee.fullName,
                 employeeId: newEmployeeId,
+                clientName: employee.clientName,
+                profilePictureUrl: employee.profilePictureUrl,
+                status: employee.status,
             },
             updatedAt: serverTimestamp(),
         };
@@ -1118,7 +1123,7 @@ export default function AdminEmployeeProfilePage() {
         const a = document.createElement('a');
         a.href = url;
         
-        const formattedJoiningDate = format(employee.joiningDate.toDate(), 'yyyy-MM-dd');
+        const formattedJoiningDate = format((employee.joiningDate as any).toDate ? (employee.joiningDate as any).toDate() : new Date(employee.joiningDate as any), 'yyyy-MM-dd');
         const cleanFullName = employee.fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
         const cleanClientName = employee.clientName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
         const fileName = `ProfileKit_${cleanFullName}_${cleanClientName}_${formattedJoiningDate}.pdf`;
