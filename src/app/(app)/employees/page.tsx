@@ -397,7 +397,54 @@ export default function EmployeeDirectoryPage() {
                     <CardDescription>A directory of all personnel in the system.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
+                    {/* Mobile list (shown on small screens) */}
+                    <div className="block md:hidden space-y-3">
+                        {isLoading ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="flex items-center gap-3 p-3 border rounded-lg">
+                                    <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
+                                        <div className="h-3 w-1/3 rounded bg-muted animate-pulse" />
+                                    </div>
+                                </div>
+                            ))
+                        ) : error ? (
+                            <div className="text-center text-destructive py-6">{error}</div>
+                        ) : employees.length === 0 ? (
+                            <div className="text-center py-6">No employees found for the current filters.</div>
+                        ) : (
+                            employees.map((emp) => {
+                                const pendingItems = getPendingDetails(emp);
+                                return (
+                                    <div key={emp.id} className="p-3 border rounded-lg flex items-center gap-3">
+                                        <Avatar className="h-10 w-10 shrink-0">
+                                            <AvatarImage src={emp.profilePictureUrl} data-ai-hint="employee avatar" />
+                                            <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('') || 'U'}</AvatarFallback>
+                                        </Avatar>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="truncate font-medium">{emp.fullName}</div>
+                                                <Badge variant={getStatusBadgeVariant(emp.status)} className="shrink-0">{emp.status}</Badge>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground truncate">{emp.clientName} • {emp.employeeId}</div>
+                                            {pendingItems.length === 0 ? (
+                                                <div className="mt-1 text-xs text-green-600">Complete</div>
+                                            ) : (
+                                                <div className="mt-1 text-xs text-amber-600">{pendingItems.length} Pending</div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col gap-2 items-end">
+                                            <Button size="sm" onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}>View</Button>
+                                        </div>
+                                    </div>
+                                )
+                            })
+                        )}
+                    </div>
+
+                    {/* Desktop table (md and up) */}
+                    <div className="hidden md:block overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>

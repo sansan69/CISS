@@ -110,16 +110,16 @@ const AssignGuardsDialog: React.FC<{
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+            <DialogContent className="w-[95vw] sm:w-auto max-w-full sm:max-w-3xl lg:max-w-4xl h-[90vh] flex flex-col p-3 sm:p-6 overscroll-contain overflow-y-auto pb-[env(safe-area-inset-bottom)]">
                 <DialogHeader>
                     <DialogTitle>Assign Guards for {workOrder.siteName}</DialogTitle>
                     <DialogDescription>
                         Date: {workOrder.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex-1 grid md:grid-cols-2 gap-6 overflow-hidden">
+                <div className="flex-1 grid md:grid-cols-2 gap-3 sm:gap-6 overflow-hidden min-h-0">
                     {/* Left side: Search and available guards */}
-                    <div className="flex flex-col gap-4 overflow-hidden">
+                    <div className="flex flex-col gap-3 sm:gap-4 overflow-hidden min-h-0">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                             <Input
@@ -129,18 +129,18 @@ const AssignGuardsDialog: React.FC<{
                                 className="pl-10"
                             />
                         </div>
-                        <ScrollArea className="flex-1 border rounded-md">
+                        <ScrollArea className="flex-1 min-h-0 border rounded-md">
                              <div className="p-2 space-y-1">
                                 {filteredGuards.length > 0 ? filteredGuards.map(guard => (
-                                    <div key={guard.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                    <div key={guard.id} className="flex items-center justify-between p-2.5 sm:p-2 rounded-md hover:bg-muted">
                                         <div className="flex items-center gap-3">
                                             <Avatar>
                                                 <AvatarImage src={guard.profilePictureUrl} />
                                                 <AvatarFallback>{guard.fullName.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
                                             </Avatar>
                                             <div>
-                                                <p className="font-medium">{guard.fullName}</p>
-                                                <p className="text-sm text-muted-foreground">{guard.employeeId}</p>
+                                                <p className="font-medium truncate max-w-[10rem] sm:max-w-none">{guard.fullName}</p>
+                                                <p className="text-xs sm:text-sm text-muted-foreground">{guard.employeeId}</p>
                                             </div>
                                         </div>
                                         <Button
@@ -159,7 +159,7 @@ const AssignGuardsDialog: React.FC<{
                         </ScrollArea>
                     </div>
                     {/* Right side: Requirements and assigned guards */}
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-3 sm:gap-4 min-h-0">
                         <Card>
                             <CardHeader className="p-4">
                                 <CardTitle className="text-lg">Manpower Requirement</CardTitle>
@@ -179,13 +179,13 @@ const AssignGuardsDialog: React.FC<{
                                <p>Male: {maleAssignedCount}/{workOrder.maleGuardsRequired}</p>
                                <p>Female: {femaleAssignedCount}/{workOrder.femaleGuardsRequired}</p>
                            </div>
-                           <ScrollArea className="flex-1 border rounded-md p-2">
+                           <ScrollArea className="flex-1 min-h-0 border rounded-md p-2">
                                {selectedGuards.length > 0 ? selectedGuards.map(guard => (
                                     <div key={guard.uid} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                          <div className="flex items-center gap-3">
                                             <div>
-                                                <p className="font-medium">{guard.name}</p>
-                                                <p className="text-sm text-muted-foreground">{guard.employeeId}</p>
+                                                <p className="font-medium truncate max-w-[10rem] sm:max-w-none">{guard.name}</p>
+                                                <p className="text-xs sm:text-sm text-muted-foreground">{guard.employeeId}</p>
                                             </div>
                                         </div>
                                          <Button size="sm" variant="destructive" onClick={() => setSelectedGuards(prev => prev.filter(g => g.uid !== guard.uid))}>
@@ -199,9 +199,9 @@ const AssignGuardsDialog: React.FC<{
                         </div>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSaveAssignments} disabled={isSaving}>
+                <DialogFooter className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t mt-2 p-3 sm:p-4">
+                    <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+                    <Button onClick={handleSaveAssignments} disabled={isSaving} className="w-full sm:w-auto">
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Save Assignments
                     </Button>

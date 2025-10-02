@@ -337,8 +337,8 @@ export default function DashboardPage() {
     const activePercentage = stats && stats.total > 0 ? ((stats.active / stats.total) * 100).toFixed(0) + '%' : '-';
 
     return (
-        <div className="flex flex-col gap-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard title="Total Employees" value={stats?.total} icon={Users} isLoading={isLoading} error={error} />
                 <StatCard title="Active Employees" value={stats?.active} icon={UserCheck} isLoading={isLoading} error={error} helpText={`${activePercentage} of total workforce`} />
                 <StatCard title="Inactive & Exited" value={stats?.inactiveOrExited} icon={UserMinus} isLoading={isLoading} error={error} />
@@ -378,17 +378,17 @@ export default function DashboardPage() {
                 </Card>
             )}
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
                 {userRole !== 'fieldOfficer' && (
                     <div className="grid gap-6 lg:col-span-2">
                         <Card>
-                            <CardHeader>
+                            <CardHeader className="pb-2 sm:pb-4">
                                 <CardTitle>New Hires - Last 6 Months</CardTitle>
                                 <CardDescription>A monthly breakdown of new employee enrollments.</CardDescription>
                             </CardHeader>
-                            <CardContent className="pl-2">
-                                {isLoading ? <div className="h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
-                                <ChartContainer config={newHiresChartConfig} className="w-full h-[300px]">
+                            <CardContent className="px-2 sm:px-4">
+                                {isLoading ? <div className="h-[220px] md:h-[300px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div> : 
+                                <ChartContainer config={newHiresChartConfig} className="w-full h-[220px] md:h-[300px]">
                                     <BarChart data={newHiresData} accessibilityLayer>
                                         <CartesianGrid vertical={false} />
                                         <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
@@ -401,17 +401,17 @@ export default function DashboardPage() {
                             </CardContent>
                         </Card>
                         <Card>
-                            <CardHeader>
+                            <CardHeader className="pb-2 sm:pb-4">
                                 <CardTitle>Employee Distribution by Client</CardTitle>
                                 <CardDescription>A breakdown of the workforce by client assignment.</CardDescription>
                             </CardHeader>
                             <CardContent>
                             {isLoading ? (
-                                <div className="h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                                <div className="h-[200px] md:h-[250px] flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
                             ) : !isMounted ? (
-                                <div className="h-[250px] flex justify-center items-center text-muted-foreground">Preparing chart...</div>
+                                <div className="h-[200px] md:h-[250px] flex justify-center items-center text-muted-foreground">Preparing chart...</div>
                             ) : clientDistributionData.length > 0 ? (
-                                <ChartContainer config={clientChartConfig} className="w-full h-[300px]">
+                                <ChartContainer config={clientChartConfig} className="w-full h-[220px] md:h-[300px]">
                                     <PieChart>
                                         <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
                                         <Pie data={clientDistributionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
