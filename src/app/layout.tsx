@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   title: 'CISS Workforce',
   description: 'CISS Workforce Employee Management System',
   applicationName: 'CISS Workforce',
+  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
