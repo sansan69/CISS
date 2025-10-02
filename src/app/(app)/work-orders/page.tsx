@@ -93,7 +93,12 @@ export default function WorkOrderPage() {
         }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder));
+            const todayMs = startOfToday().getTime();
+            const orders = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder))
+                .filter(o => {
+                    try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
+                });
             // Sort by date ascending client-side
             orders.sort((a,b) => a.date.toMillis() - b.date.toMillis());
             const groupedBySite = orders.reduce((acc, order) => {

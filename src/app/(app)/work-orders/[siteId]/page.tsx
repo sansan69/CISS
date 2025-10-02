@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import type { Employee } from '@/types/employee';
+import { startOfToday } from 'date-fns';
 
 
 interface WorkOrder {
@@ -284,7 +285,12 @@ export default function AssignGuardsPage() {
 
                 const q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
                 const unsubscribe = onSnapshot(q, (snapshot) => {
-                    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder));
+                    const todayMs = startOfToday().getTime();
+                    const orders = snapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder))
+                        .filter(o => {
+                            try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
+                        });
                     // Sort by date ascending client-side to avoid composite index requirement
                     orders.sort((a,b) => a.date.toMillis() - b.date.toMillis());
                     setWorkOrders(orders);
