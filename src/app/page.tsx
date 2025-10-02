@@ -35,6 +35,14 @@ export default function LandingPage() {
       setDeferredPrompt(e);
       setShowInstallPrompt(true);
     };
+    // For iOS Safari and some browsers that do not fire beforeinstallprompt,
+    // show a guidance banner after a small delay.
+    const fallbackTimer = window.setTimeout(() => {
+      if (!('BeforeInstallPromptEvent' in window) && !deferredPrompt) {
+        // If still not installed or dismissed, show prompt with guidance.
+        setShowInstallPrompt(true);
+      }
+    }, 2000);
     const handleAppInstalled = () => {
       setShowInstallPrompt(false);
       setDeferredPrompt(null);
@@ -47,6 +55,7 @@ export default function LandingPage() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.clearTimeout(fallbackTimer);
     };
   }, []);
 
@@ -184,6 +193,10 @@ export default function LandingPage() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">Install CISS Workforce</p>
                 <p className="text-xs text-muted-foreground truncate">Add the app to your device for faster access.</p>
+                {/* iOS guidance: explain manual Add to Home Screen if needed */}
+                {(!('BeforeInstallPromptEvent' in window)) && (
+                  <p className="text-[11px] text-muted-foreground mt-1">On iOS: tap the Share icon and choose "Add to Home Screen".</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={handleDismissInstall}>Not now</Button>

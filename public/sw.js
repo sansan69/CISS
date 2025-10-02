@@ -1,7 +1,7 @@
 // A robust, production-ready service worker.
 // See: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
 
-const CACHE_NAME = 'ciss-workforce-cache-v2'; // Increment version to force update
+const CACHE_NAME = 'ciss-workforce-cache-v3'; // Increment version to force update
 const APP_SHELL_URLS = [
   '/',
   '/admin-login',
@@ -10,6 +10,7 @@ const APP_SHELL_URLS = [
   '/favicon.ico',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
+  '/offline.html',
   // Any other critical static assets for the app shell
 ];
 
@@ -59,10 +60,20 @@ self.addEventListener('fetch', event => {
   // This ensures users always get the latest HTML if they are online.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        // If the network fails, serve the cached root page as a fallback.
-        return caches.match('/');
-      })
+      (async () => {
+        try {
+          const networkResponse = await fetch(event.request);
+          return networkResponse;
+        } catch (err) {
+          // If the network fails, serve an offline fallback page if available.
+          const cache = await caches.open(CACHE_NAME);
+          const offline = await cache.match('/offline.html');
+          if (offline) return offline;
+          // Last resort, try cached root.
+          const root = await cache.match('/');
+          return root || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        }
+      })()
     );
     return;
   }
