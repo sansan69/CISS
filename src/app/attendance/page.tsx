@@ -91,14 +91,20 @@ export default function AttendancePage() {
           orderBy('clientName', 'asc')
         );
         const snap = await getDocs(q);
-        const options: SiteOption[] = snap.docs.map(d => ({ 
-          id: d.id, 
-          siteName: d.data().siteName, 
-          clientName: d.data().clientName, 
-          district: d.data().district,
-          lat: d.data().geolocation?.latitude,
-          lng: d.data().geolocation?.longitude,
-        }));
+        const options: SiteOption[] = snap.docs.map(d => {
+          const geo = d.data().geolocation;
+          // Parse from GeoPoint or fallback to stored string values
+          const lat = typeof geo?.latitude === 'number' ? geo.latitude : (geo?.lat || parseFloat(d.data().latString || '0'));
+          const lng = typeof geo?.longitude === 'number' ? geo.longitude : (geo?.lng || parseFloat(d.data().lngString || '0'));
+          return { 
+            id: d.id, 
+            siteName: d.data().siteName, 
+            clientName: d.data().clientName, 
+            district: d.data().district,
+            lat,
+            lng,
+          };
+        });
         setSiteOptions(options);
         if (options.length === 0) {
           toast({ title: 'No sites found', description: `No sites under ${selectedDistrict}.` });
@@ -398,8 +404,16 @@ export default function AttendancePage() {
       setIsFetchingLocation(false);
     }
     if (currentCoords) {
+      console.log('Geofence check:', {
+        userLat: currentCoords.lat,
+        userLon: currentCoords.lon,
+        siteLat: selectedSite.lat,
+        siteLng: selectedSite.lng,
+        accuracy: currentCoords.accuracyMeters
+      });
       const distance = haversineDistanceMeters(currentCoords.lat, currentCoords.lon, selectedSite.lat, selectedSite.lng);
       const effectiveRadius = Math.max(150, Math.ceil(currentCoords.accuracyMeters || 0) + 50);
+      console.log('Distance check:', { distance: Math.round(distance), effectiveRadius, passed: distance <= effectiveRadius });
       if (distance > effectiveRadius) {
         toast({ variant: 'destructive', title: 'Out of Range', description: `You are ${Math.round(distance)}m away (allowed ${effectiveRadius}m). Move closer to the site.` });
         return;
