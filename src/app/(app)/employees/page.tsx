@@ -185,9 +185,6 @@ export default function EmployeeDirectoryPage() {
             return null; // Return null to indicate no query should be run
         }
         
-        const trimmed = debouncedSearchTerm.trim();
-        const hasSearch = trimmed.length > 0;
-
         if (client !== 'all') {
             q = query(q, where('clientName', '==', client));
         }
@@ -197,19 +194,9 @@ export default function EmployeeDirectoryPage() {
         if (district !== 'all' && userRole !== 'fieldOfficer') {
             q = query(q, where('district', '==', district));
         }
-        
-        // Search behavior: prefix search on fullName (industry-standard incremental search)
-        // We order by fullName and use startAt/endAt for prefix matching.
-        if (hasSearch) {
-            const searchUpper = trimmed.toUpperCase();
-            q = query(q, orderBy('fullName'), startAt(searchUpper), endAt(searchUpper + '\uf8ff')) as Query;
-        } else {
-            // Default ordering when not searching: latest enrolled first
-            q = query(q, orderBy('createdAt', 'desc'));
-        }
-
+        // Note: ordering and search are applied in fetchData to support multi-field search
         return q;
-    }, [userRole, assignedDistricts, debouncedSearchTerm, client, status, district]);
+    }, [userRole, assignedDistricts, client, status, district]);
 
     const fetchData = useCallback(async (direction: 'next' | 'prev' | 'first' = 'first') => {
         setIsLoading(true);
@@ -222,33 +209,88 @@ export default function EmployeeDirectoryPage() {
             return;
         }
 
-        let finalQuery: Query;
-        let targetPage = currentPage;
-        if (direction === 'next') targetPage = currentPage + 1;
-        if (direction === 'prev') targetPage = Math.max(1, currentPage - 1);
+        const trimmed = debouncedSearchTerm.trim();
+        const hasSearch = trimmed.length > 0;
 
-        const startAfterCursor = pageCursors[targetPage - 1] || null;
-        if (startAfterCursor) {
-            finalQuery = query(baseQuery, startAfter(startAfterCursor), limit(ITEMS_PER_PAGE));
-        } else {
-            finalQuery = query(baseQuery, limit(ITEMS_PER_PAGE));
-        }
-        
         try {
+            if (hasSearch) {
+                // Multi-field search: name (prefix, case variants) + exact employeeId/phone
+                const term = trimmed;
+                const termCap = term.replace(/\b\w/g, (c) => c.toUpperCase());
+                const termUpper = term.toUpperCase();
+                const queries: Promise<any>[] = [];
+
+                // Name prefix searches (different case variants to improve matches)
+                queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(term), endAt(term + '\uf8ff'), limit(ITEMS_PER_PAGE)) as Query));
+                if (termCap !== term) {
+                    queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(termCap), endAt(termCap + '\uf8ff'), limit(ITEMS_PER_PAGE)) as Query));
+                }
+                if (termUpper !== term && termUpper !== termCap) {
+                    queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(termUpper), endAt(termUpper + '\uf8ff'), limit(ITEMS_PER_PAGE)) as Query));
+                }
+
+                // Exact employeeId and phoneNumber matches (no extra indexes needed)
+                if (term.length >= 4) {
+                    queries.push(getDocs(query(baseQuery, where('employeeId', '==', termUpper)) as Query));
+                }
+                const digits = term.replace(/\D/g, '');
+                if (digits.length >= 6) {
+                    queries.push(getDocs(query(baseQuery, where('phoneNumber', '==', digits)) as Query));
+                }
+
+                const snapshots = await Promise.all(queries);
+                const seen = new Set<string>();
+                const merged: Employee[] = [];
+                snapshots.forEach(snap => {
+                    snap.docs.forEach((d: any) => {
+                        if (!seen.has(d.id)) {
+                            seen.add(d.id);
+                            merged.push({ id: d.id, ...(d.data() as any) } as Employee);
+                        }
+                    });
+                });
+                // Sort by createdAt desc to keep recency
+                merged.sort((a: any, b: any) => {
+                    const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+                    const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+                    return tb - ta;
+                });
+                setEmployees(merged.slice(0, ITEMS_PER_PAGE));
+                setHasNextPage(false);
+                setHasPreviousPage(false);
+                setCurrentPage(1);
+                setFirstVisible(null);
+                setLastVisible(null);
+                return;
+            }
+
+            // No search: use paginated order by createdAt desc
+            let finalQuery: Query;
+            let targetPage = currentPage;
+            if (direction === 'next') targetPage = currentPage + 1;
+            if (direction === 'prev') targetPage = Math.max(1, currentPage - 1);
+
+            const orderedBase = query(baseQuery, orderBy('createdAt', 'desc')) as Query;
+            const startAfterCursor = pageCursors[targetPage - 1] || null;
+            if (startAfterCursor) {
+                finalQuery = query(orderedBase, startAfter(startAfterCursor), limit(ITEMS_PER_PAGE));
+            } else {
+                finalQuery = query(orderedBase, limit(ITEMS_PER_PAGE));
+            }
+
             const documentSnapshots = await getDocs(finalQuery);
             const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
             setEmployees(fetchedEmployees);
-            
+
             if (!documentSnapshots.empty) {
                 const first = documentSnapshots.docs[0];
                 const last = documentSnapshots.docs[documentSnapshots.docs.length - 1];
                 setFirstVisible(first);
                 setLastVisible(last);
-                // Update page cursors so page N+1 starts after last of page N
                 setPageCursors(prev => {
-                    const next = prev.slice(0, targetPage); // keep up to targetPage-1
-                    next[targetPage - 1] = prev[targetPage - 1] ?? null; // ensure slot exists
-                    next[targetPage] = last; // cursor for next page
+                    const next = prev.slice(0, targetPage);
+                    next[targetPage - 1] = prev[targetPage - 1] ?? null;
+                    next[targetPage] = last;
                     return next;
                 });
                 setCurrentPage(targetPage);
@@ -271,7 +313,7 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [buildBaseQuery, currentPage, pageCursors]);
+    }, [buildBaseQuery, currentPage, pageCursors, debouncedSearchTerm]);
 
     useEffect(() => {
         if (userRole !== null) {

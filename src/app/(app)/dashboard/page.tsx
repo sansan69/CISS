@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Users, UserCheck, UserMinus, Clock, ArrowRight, UserPlus, Loader2, AlertCircle as AlertIcon, CalendarClock } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { db, auth } from '@/lib/firebase';
-import { collection, getCountFromServer, getDocs, query, where, Timestamp, orderBy, limit } from "firebase/firestore";
+import { collection, getCountFromServer, getDocs, query, where, Timestamp, orderBy, limit, doc, getDoc, onSnapshot } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, subMonths, startOfMonth, startOfToday, addDays, endOfDay } from 'date-fns';
@@ -70,6 +70,9 @@ export default function DashboardPage() {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    const [clientInfo, setClientInfo] = useState<{ clientId: string; clientName: string } | null>(null);
+    const [todayLogs, setTodayLogs] = useState<any[]>([]);
+    const [clientAttendance, setClientAttendance] = useState<{ inToday: number; outToday: number; onDuty: number }>({ inToday: 0, outToday: 0, onDuty: 0 });
     // Ensure charts render only on client to avoid SSR/hydration issues in prod
     const [isMounted, setIsMounted] = useState(false);
 
@@ -97,14 +100,25 @@ export default function DashboardPage() {
                             setUserRole('fieldOfficer');
                             setAssignedDistricts(officerData.assignedDistricts || []);
                         } else {
-                            setUserRole('user'); 
-                            setAssignedDistricts([]);
+                            // Check if this is a client user via mapping
+                            const mappingRef = doc(db, 'clientUsersByUid', user.uid);
+                            const mappingSnap = await getDoc(mappingRef);
+                            if (mappingSnap.exists()) {
+                                const m: any = mappingSnap.data();
+                                setUserRole('client');
+                                setClientInfo({ clientId: m.clientId, clientName: m.clientName });
+                            } else {
+                                setUserRole('user'); 
+                                setAssignedDistricts([]);
+                                setClientInfo(null);
+                            }
                         }
                     }
                 } catch (e) {
                     console.error("Error getting user claims:", e);
                     setUserRole('user');
                     setAssignedDistricts([]);
+                    setClientInfo(null);
                     setError("Could not verify user role.");
                 }
             } else {
@@ -135,6 +149,8 @@ export default function DashboardPage() {
                 // If field officer with districts, filter by their assigned districts. Otherwise (admin or FO with no districts), show all.
                 if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
                     employeesQueryBuilder = query(employeesQueryBuilder, where('district', 'in', assignedDistricts));
+                } else if (userRole === 'client' && clientInfo?.clientName) {
+                    employeesQueryBuilder = query(employeesQueryBuilder, where('clientName', '==', clientInfo.clientName));
                 }
 
                 // --- Common Queries for all roles ---
@@ -145,7 +161,7 @@ export default function DashboardPage() {
                 
                 // Start of the oldest month we want to include
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-                const includeCharts = userRole !== 'fieldOfficer';
+                const includeCharts = userRole !== 'fieldOfficer' && userRole !== 'client';
                 // Avoid composite-index requirement for FO and skip unnecessary chart queries
                 // Use createdAt to reflect actual enrollment counts; fallback handled during tally
                 let hiresDocsPromise: Promise<any> = includeCharts
@@ -289,7 +305,40 @@ export default function DashboardPage() {
             }
         };
         fetchDashboardData();
-    }, [userRole, assignedDistricts]);
+    }, [userRole, assignedDistricts, clientInfo]);
+
+    // Live attendance stream for client users
+    useEffect(() => {
+        if (userRole !== 'client' || !clientInfo?.clientName) return;
+        const todayStart = startOfToday();
+        const qLogs = query(
+            collection(db, 'attendanceLogs'),
+            where('clientName', '==', clientInfo.clientName),
+            where('createdAt', '>=', Timestamp.fromDate(todayStart)),
+            orderBy('createdAt', 'desc')
+        );
+        const unsub = onSnapshot(qLogs, (snap) => {
+            const logs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+            setTodayLogs(logs);
+            // Compute by-employee latest status
+            const latestByEmp = new Map<string, any>();
+            const seenIn = new Set<string>();
+            const seenOut = new Set<string>();
+            logs.forEach(l => {
+                const empId = l.employeeId;
+                if (l.status === 'In') seenIn.add(empId);
+                if (l.status === 'Out') seenOut.add(empId);
+                const prev = latestByEmp.get(empId);
+                const prevTs = prev?.createdAt?.toMillis ? prev.createdAt.toMillis() : (prev?.createdAt instanceof Date ? prev.createdAt.getTime() : 0);
+                const curTs = l.createdAt?.toMillis ? l.createdAt.toMillis() : (l.createdAt instanceof Date ? l.createdAt.getTime() : 0);
+                if (!prev || curTs > prevTs) latestByEmp.set(empId, l);
+            });
+            let onDuty = 0;
+            latestByEmp.forEach((log) => { if (log.status === 'In') onDuty++; });
+            setClientAttendance({ inToday: seenIn.size, outToday: seenOut.size, onDuty });
+        });
+        return () => unsub();
+    }, [userRole, clientInfo]);
 
     const newHiresChartConfig = {
       hires: {
@@ -385,7 +434,7 @@ export default function DashboardPage() {
             )}
 
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-                {userRole !== 'fieldOfficer' && (
+                {userRole !== 'fieldOfficer' && userRole !== 'client' && (
                     <div className="grid gap-6 lg:col-span-2">
                         <Card>
                             <CardHeader className="pb-2 sm:pb-4">
@@ -435,6 +484,7 @@ export default function DashboardPage() {
                         </Card>
                     </div>
                 )}
+                {userRole !== 'client' && (
                 <Card className="lg:col-span-1">
                     <CardHeader>
                         <CardTitle>Recent Activity</CardTitle>
@@ -476,7 +526,37 @@ export default function DashboardPage() {
                         </Button>
                     </CardFooter>
                 </Card>
+                )}
             </div>
+
+            {userRole === 'client' && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Live Attendance — Today</CardTitle>
+                        <CardDescription>Showing latest check-ins/outs for {clientInfo?.clientName}.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {todayLogs.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-6">No attendance marked yet today.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {todayLogs.slice(0, 12).map((l) => (
+                                    <div key={l.id} className="flex items-center justify-between p-3 border rounded-md">
+                                        <div className="min-w-0">
+                                            <p className="font-medium truncate">{l.employeeName || l.employeeId}</p>
+                                            <p className="text-xs text-muted-foreground truncate">{l.siteName}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Badge variant={l.status === 'In' ? 'default' : 'secondary'}>{l.status}</Badge>
+                                            <span className="text-xs text-muted-foreground">{l.createdAt?.toDate ? format(l.createdAt.toDate(), 'hh:mm a') : ''}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }

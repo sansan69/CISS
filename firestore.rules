@@ -63,6 +63,48 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
     }
 
+    // Rules for client-to-user links (clientUsers)
+    match /clientUsers/{mappingId} {
+      // Admin can manage all mappings
+      allow create, delete, update: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      // Linked user can read their own mapping
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
+    // Mirror mapping for fast lookup by UID in rules
+    match /clientUsersByUid/{uid} {
+      allow create, delete, update: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // READ-ONLY access for client users to business data
+    // Employees: client users can read employees of their client only
+    match /employees/{employeeId} {
+      allow read: if true || ( // current app allows public; if tightened later, keep client user read below
+        request.auth != null && exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientName == resource.data.clientName
+      );
+      // client users cannot write
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
+    // Sites: read allowed, writes only by admin
+    match /sites/{siteId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
+    // Work orders: client users can read work orders of their client
+    match /workOrders/{workOrderId} {
+      allow read: if request.auth != null && (
+        request.auth.token.email == 'admin@cisskerala.app' || (
+          exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientId == resource.data.clientId
+        )
+      );
+      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    }
+
     // Rules for the 'attendanceLogs' collection
     match /attendanceLogs/{logId} {
       // Allow anyone to create a log (public kiosk use). Reads can be restricted later if needed.
