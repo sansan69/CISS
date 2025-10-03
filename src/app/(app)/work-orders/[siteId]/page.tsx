@@ -31,6 +31,18 @@ import type { Employee } from '@/types/employee';
 import { startOfToday } from 'date-fns';
 
 
+// Safely compute initials for avatar fallbacks
+const getInitials = (name?: string, employeeId?: string) => {
+    const safeName = (name || '').trim();
+    if (safeName) {
+        const parts = safeName.split(/\s+/g).filter(Boolean);
+        const initials = parts.map(p => p[0]).slice(0, 2).join('');
+        return initials.toUpperCase() || 'NA';
+    }
+    const id = (employeeId || '').trim();
+    return id ? id.slice(-2).toUpperCase() : 'NA';
+};
+
 interface WorkOrder {
     id: string;
     siteId: string;
@@ -71,8 +83,8 @@ const AssignGuardsDialog: React.FC<{
         if (!searchTerm) return availableGuards;
         const lowercasedFilter = searchTerm.toLowerCase();
         return availableGuards.filter(guard =>
-            guard.fullName.toLowerCase().includes(lowercasedFilter) ||
-            guard.employeeId.toLowerCase().includes(lowercasedFilter)
+            (guard.fullName || '').toLowerCase().includes(lowercasedFilter) ||
+            (guard.employeeId || '').toLowerCase().includes(lowercasedFilter)
         );
     }, [searchTerm, availableGuards]);
 
@@ -136,7 +148,7 @@ const AssignGuardsDialog: React.FC<{
                                         <div className="flex items-center gap-3">
                                             <Avatar>
                                                 <AvatarImage src={guard.profilePictureUrl} />
-                                                <AvatarFallback>{guard.fullName.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
+                                                <AvatarFallback>{getInitials(guard.fullName as any, (guard as any).employeeId)}</AvatarFallback>
                                             </Avatar>
                                             <div>
                                                 <p className="font-medium truncate max-w-[10rem] sm:max-w-none">{guard.fullName}</p>
