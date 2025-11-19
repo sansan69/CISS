@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, serverTimestamp, doc, Timestamp, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
 import { startOfToday } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
@@ -283,29 +283,54 @@ export default function WorkOrderPage() {
                     }
 
                     for (const { date, maleIndex, femaleIndex } of dateColumns) {
-                        const maleGuardsRequired = Number(row[maleIndex]) || 0;
-                        const femaleGuardsRequired = Number(row[femaleIndex]) || 0;
-                        const totalManpower = maleGuardsRequired + femaleGuardsRequired;
-                        if (totalManpower <= 0) continue;
+                        const maleFromFile = Number(row[maleIndex]) || 0;
+                        const femaleFromFile = Number(row[femaleIndex]) || 0;
+                        const additionalTotal = maleFromFile + femaleFromFile;
+                        // Skip if this file has no requirement for that date
+                        if (additionalTotal <= 0) continue;
 
                         // Normalize to local noon to avoid timezone off-by-one when stored/retrieved
                         const safeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
                         const dateString = `${safeDate.getFullYear()}-${String(safeDate.getMonth()+1).padStart(2,'0')}-${String(safeDate.getDate()).padStart(2,'0')}`;
                         const workOrderId = `${site.id}_${dateString}`;
                         const workOrderRef = doc(db, 'workOrders', workOrderId);
-                        await writeBatch(db).set(workOrderRef, {
+
+                        // If a work order already exists for this site+date, ADD to existing counts instead of replacing.
+                        const existingSnap = await getDoc(workOrderRef);
+                        let finalMale = maleFromFile;
+                        let finalFemale = femaleFromFile;
+                        let existingAssigned: any[] = [];
+                        let existingCreatedAt: any = null;
+                        let existingDate: any = Timestamp.fromDate(safeDate);
+
+                        if (existingSnap.exists()) {
+                            const existing = existingSnap.data() as any;
+                            const existingMale = Number(existing.maleGuardsRequired || 0);
+                            const existingFemale = Number(existing.femaleGuardsRequired || 0);
+                            finalMale += existingMale;
+                            finalFemale += existingFemale;
+                            existingAssigned = Array.isArray(existing.assignedGuards) ? existing.assignedGuards : [];
+                            existingCreatedAt = existing.createdAt || null;
+                            existingDate = existing.date || existingDate;
+                        }
+
+                        const totalManpower = finalMale + finalFemale;
+
+                        await setDoc(workOrderRef, {
                             siteId: site.id,
                             siteName: site.siteName,
                             clientName: site.clientName,
                             district: site.district,
-                            date: Timestamp.fromDate(safeDate),
-                            maleGuardsRequired,
-                            femaleGuardsRequired,
+                            date: existingDate,
+                            maleGuardsRequired: finalMale,
+                            femaleGuardsRequired: finalFemale,
                             totalManpower,
-                            assignedGuards: [],
-                            createdAt: serverTimestamp(),
+                            // Preserve any existing guard assignments when re-importing
+                            assignedGuards: existingAssigned,
+                            createdAt: existingCreatedAt ?? serverTimestamp(),
                             updatedAt: serverTimestamp(),
-                        }).commit();
+                        }, { merge: true });
+
                         operationsCount++;
                     }
                 }

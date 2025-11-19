@@ -23,7 +23,12 @@ import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
 
 interface ClientOption { id: string; name: string; }
-const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod" ];
+// Keep this list in sync with the enrollment and edit profile forms.
+const keralaDistricts = [
+  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
+  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
+  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
+];
 
 async function fetchImageBytes(url: string | undefined): Promise<Uint8Array | null> {
     if (!url) return null;

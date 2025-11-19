@@ -27,6 +27,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Employee } from '@/types/employee';
 import { startOfToday } from 'date-fns';
 
@@ -120,99 +121,337 @@ const AssignGuardsDialog: React.FC<{
     const maleAssignedCount = selectedGuards.filter(g => g.gender === 'Male').length;
     const femaleAssignedCount = selectedGuards.filter(g => g.gender === 'Female').length;
 
+    // Find assigned guard details for display
+    const getAssignedGuardDetails = (uid: string) => {
+        return availableGuards.find(g => g.id === uid);
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-[95vw] sm:w-auto max-w-full sm:max-w-3xl lg:max-w-4xl h-[90vh] flex flex-col p-3 sm:p-6 overscroll-contain overflow-y-auto pb-[env(safe-area-inset-bottom)]">
-                <DialogHeader>
-                    <DialogTitle>Assign Guards for {workOrder.siteName}</DialogTitle>
-                    <DialogDescription>
-                        Date: {workOrder.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+            <DialogContent className="w-[95vw] sm:w-[90vw] md:w-auto max-w-full md:max-w-4xl lg:max-w-5xl h-[90vh] sm:h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+                <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b flex-shrink-0">
+                    <DialogTitle className="text-lg sm:text-xl">Assign Guards for {workOrder.siteName}</DialogTitle>
+                    <DialogDescription className="text-sm">
+                        {workOrder.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex-1 grid md:grid-cols-2 gap-3 sm:gap-6 overflow-hidden min-h-0">
-                    {/* Left side: Search and available guards */}
-                    <div className="flex flex-col gap-3 sm:gap-4 overflow-hidden min-h-0">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                            <Input
-                                placeholder="Search available guards..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-                        <ScrollArea className="flex-1 min-h-0 border rounded-md">
-                             <div className="p-2 space-y-1">
-                                {filteredGuards.length > 0 ? filteredGuards.map(guard => (
-                                    <div key={guard.id} className="flex items-center justify-between p-2.5 sm:p-2 rounded-md hover:bg-muted">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar>
-                                                <AvatarImage src={guard.profilePictureUrl} />
-                                                <AvatarFallback>{getInitials(guard.fullName as any, (guard as any).employeeId)}</AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <p className="font-medium truncate max-w-[10rem] sm:max-w-none">{guard.fullName}</p>
-                                                <p className="text-xs sm:text-sm text-muted-foreground">{guard.employeeId}</p>
-                                            </div>
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            variant={selectedGuards.some(g => g.uid === guard.id) ? "destructive" : "outline"}
-                                            onClick={() => handleToggleGuard(guard)}
-                                        >
-                                           {selectedGuards.some(g => g.uid === guard.id) ? <X className="mr-2 h-4 w-4" /> : <UserCheck className="mr-2 h-4 w-4" />}
-                                           {selectedGuards.some(g => g.uid === guard.id) ? "Unassign" : "Assign"}
-                                        </Button>
-                                    </div>
-                                )) : (
-                                    <p className="text-center text-muted-foreground p-4">No available guards found.</p>
-                                )}
+
+                {/* Mobile: Tabs, Desktop: Side-by-side */}
+                <div className="flex-1 overflow-hidden min-h-0 flex flex-col md:flex-row">
+                    {/* Mobile: Tab Navigation */}
+                    <div className="md:hidden flex flex-col flex-1 overflow-hidden min-h-0">
+                        <Tabs defaultValue="available" className="flex flex-col flex-1 overflow-hidden min-h-0 w-full">
+                            <div className="flex-shrink-0 border-b px-4 pt-2">
+                                <TabsList className="w-full grid grid-cols-2 h-auto p-1">
+                                    <TabsTrigger value="available" className="text-xs sm:text-sm py-2.5">
+                                        Available ({filteredGuards.length})
+                                    </TabsTrigger>
+                                    <TabsTrigger value="assigned" className="text-xs sm:text-sm py-2.5 relative">
+                                        Assigned ({selectedGuards.length}/{workOrder.totalManpower})
+                                        {selectedGuards.length > 0 && (
+                                            <span className="ml-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                                                {selectedGuards.length}
+                                            </span>
+                                        )}
+                                    </TabsTrigger>
+                                </TabsList>
                             </div>
-                        </ScrollArea>
-                    </div>
-                    {/* Right side: Requirements and assigned guards */}
-                    <div className="flex flex-col gap-3 sm:gap-4 min-h-0">
-                        <Card>
-                            <CardHeader className="p-4">
-                                <CardTitle className="text-lg">Manpower Requirement</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-4 grid grid-cols-3 gap-2 text-center">
-                                <div><p className="text-2xl font-bold">{workOrder.maleGuardsRequired}</p><p className="text-sm text-muted-foreground">Male</p></div>
-                                <div><p className="text-2xl font-bold">{workOrder.femaleGuardsRequired}</p><p className="text-sm text-muted-foreground">Female</p></div>
-                                <div><p className="text-2xl font-bold">{workOrder.totalManpower}</p><p className="text-sm text-muted-foreground">Total</p></div>
-                            </CardContent>
-                        </Card>
-                        <Separator />
-                        <div className="flex-1 flex flex-col gap-2 overflow-hidden">
-                           <h3 className="font-semibold">
-                                Assigned Guards ({selectedGuards.length} / {workOrder.totalManpower})
-                           </h3>
-                           <div className="flex gap-4 text-sm">
-                               <p>Male: {maleAssignedCount}/{workOrder.maleGuardsRequired}</p>
-                               <p>Female: {femaleAssignedCount}/{workOrder.femaleGuardsRequired}</p>
-                           </div>
-                           <ScrollArea className="flex-1 min-h-0 border rounded-md p-2">
-                               {selectedGuards.length > 0 ? selectedGuards.map(guard => (
-                                    <div key={guard.uid} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                         <div className="flex items-center gap-3">
-                                            <div>
-                                                <p className="font-medium truncate max-w-[10rem] sm:max-w-none">{guard.name}</p>
-                                                <p className="text-xs sm:text-sm text-muted-foreground">{guard.employeeId}</p>
-                                            </div>
-                                        </div>
-                                         <Button size="sm" variant="destructive" onClick={() => setSelectedGuards(prev => prev.filter(g => g.uid !== guard.uid))}>
-                                            <X className="mr-2 h-4 w-4" /> Remove
-                                         </Button>
+                            
+                            <TabsContent value="available" className="flex-1 overflow-hidden m-0 p-4 data-[state=active]:flex data-[state=active]:flex-col">
+                                <div className="flex flex-col gap-3 h-full">
+                                    <div className="relative flex-shrink-0">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search guards..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="pl-9 h-10 text-sm"
+                                        />
                                     </div>
-                               )) : (
-                                   <p className="text-center text-muted-foreground p-4">No guards assigned yet.</p>
-                               )}
-                           </ScrollArea>
+                                    <Card className="flex-shrink-0">
+                                        <CardContent className="p-3 grid grid-cols-3 gap-2 text-center">
+                                            <div>
+                                                <p className="text-xl font-bold">{workOrder.maleGuardsRequired}</p>
+                                                <p className="text-xs text-muted-foreground">Male</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xl font-bold">{workOrder.femaleGuardsRequired}</p>
+                                                <p className="text-xs text-muted-foreground">Female</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xl font-bold">{workOrder.totalManpower}</p>
+                                                <p className="text-xs text-muted-foreground">Total</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                    <ScrollArea className="flex-1 min-h-0">
+                                        <div className="space-y-2 pr-2">
+                                            {filteredGuards.length > 0 ? filteredGuards.map(guard => {
+                                                const isSelected = selectedGuards.some(g => g.uid === guard.id);
+                                                return (
+                                                    <div 
+                                                        key={guard.id} 
+                                                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                                                            isSelected ? 'bg-primary/5 border-primary/20' : 'bg-card hover:bg-muted/50'
+                                                        }`}
+                                                    >
+                                                        <Avatar className="h-10 w-10 flex-shrink-0">
+                                                            <AvatarImage src={guard.profilePictureUrl} />
+                                                            <AvatarFallback className="text-xs">
+                                                                {getInitials(guard.fullName as any, (guard as any).employeeId)}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-sm truncate">{guard.fullName}</p>
+                                                            <p className="text-xs text-muted-foreground truncate">{guard.employeeId}</p>
+                                                            <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
+                                                                {guard.gender}
+                                                            </Badge>
+                                                        </div>
+                                                        <Button
+                                                            size="sm"
+                                                            variant={isSelected ? "destructive" : "default"}
+                                                            onClick={() => handleToggleGuard(guard)}
+                                                            className="flex-shrink-0 h-8 px-3 text-xs"
+                                                        >
+                                                            {isSelected ? (
+                                                                <>
+                                                                    <X className="h-3 w-3 mr-1" />
+                                                                    Remove
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <UserCheck className="h-3 w-3 mr-1" />
+                                                                    Add
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="text-center text-muted-foreground py-8">
+                                                    <p className="text-sm">No available guards found.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </div>
+                            </TabsContent>
+                            
+                            <TabsContent value="assigned" className="flex-1 overflow-hidden m-0 p-4 data-[state=active]:flex data-[state=active]:flex-col">
+                                <div className="flex flex-col gap-3 h-full">
+                                    <Card className="flex-shrink-0">
+                                        <CardContent className="p-3">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <h3 className="font-semibold text-sm">Assignment Status</h3>
+                                                <Badge variant={selectedGuards.length >= workOrder.totalManpower ? "default" : "secondary"}>
+                                                    {selectedGuards.length}/{workOrder.totalManpower}
+                                                </Badge>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                                                    <span className="text-muted-foreground">Male:</span>
+                                                    <span className="font-semibold">
+                                                        {maleAssignedCount}/{workOrder.maleGuardsRequired}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                                                    <span className="text-muted-foreground">Female:</span>
+                                                    <span className="font-semibold">
+                                                        {femaleAssignedCount}/{workOrder.femaleGuardsRequired}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                    <ScrollArea className="flex-1 min-h-0">
+                                        <div className="space-y-2 pr-2">
+                                            {selectedGuards.length > 0 ? selectedGuards.map(guard => {
+                                                const guardDetails = getAssignedGuardDetails(guard.uid);
+                                                return (
+                                                    <div 
+                                                        key={guard.uid} 
+                                                        className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
+                                                    >
+                                                        <Avatar className="h-10 w-10 flex-shrink-0">
+                                                            <AvatarImage src={guardDetails?.profilePictureUrl} />
+                                                            <AvatarFallback className="text-xs">
+                                                                {getInitials(guard.name, guard.employeeId)}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-sm truncate">{guard.name}</p>
+                                                            <p className="text-xs text-muted-foreground truncate">{guard.employeeId}</p>
+                                                            <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
+                                                                {guard.gender}
+                                                            </Badge>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="destructive" 
+                                                            onClick={() => setSelectedGuards(prev => prev.filter(g => g.uid !== guard.uid))}
+                                                            className="flex-shrink-0 h-8 px-3 text-xs"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="text-center text-muted-foreground py-8">
+                                                    <UserPlus className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                                    <p className="text-sm">No guards assigned yet.</p>
+                                                    <p className="text-xs mt-1">Switch to "Available" tab to assign guards.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+
+                    {/* Desktop: Side-by-side layout */}
+                    <div className="hidden md:flex flex-1 overflow-hidden min-h-0 gap-4 px-4 sm:px-6 py-4">
+                        {/* Left: Available Guards */}
+                        <div className="flex flex-col gap-3 flex-1 min-w-0 overflow-hidden">
+                            <div className="relative flex-shrink-0">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search available guards..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-9"
+                                />
+                            </div>
+                            <ScrollArea className="flex-1 min-h-0 border rounded-md">
+                                <div className="p-3 space-y-2">
+                                    {filteredGuards.length > 0 ? filteredGuards.map(guard => {
+                                        const isSelected = selectedGuards.some(g => g.uid === guard.id);
+                                        return (
+                                            <div 
+                                                key={guard.id} 
+                                                className={`flex items-center gap-3 p-2.5 rounded-md transition-colors ${
+                                                    isSelected ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted'
+                                                }`}
+                                            >
+                                                <Avatar className="h-9 w-9 flex-shrink-0">
+                                                    <AvatarImage src={guard.profilePictureUrl} />
+                                                    <AvatarFallback className="text-xs">
+                                                        {getInitials(guard.fullName as any, (guard as any).employeeId)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium text-sm truncate">{guard.fullName}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{guard.employeeId}</p>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant={isSelected ? "destructive" : "outline"}
+                                                    onClick={() => handleToggleGuard(guard)}
+                                                    className="flex-shrink-0"
+                                                >
+                                                    {isSelected ? (
+                                                        <>
+                                                            <X className="h-4 w-4 mr-1.5" />
+                                                            Unassign
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <UserCheck className="h-4 w-4 mr-1.5" />
+                                                            Assign
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        );
+                                    }) : (
+                                        <p className="text-center text-muted-foreground py-6 text-sm">No available guards found.</p>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </div>
+
+                        {/* Right: Requirements & Assigned */}
+                        <div className="flex flex-col gap-3 w-80 lg:w-96 flex-shrink-0 overflow-hidden">
+                            <Card className="flex-shrink-0">
+                                <CardHeader className="p-4 pb-2">
+                                    <CardTitle className="text-base">Manpower Requirement</CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-4 pt-0 grid grid-cols-3 gap-3 text-center">
+                                    <div>
+                                        <p className="text-2xl font-bold">{workOrder.maleGuardsRequired}</p>
+                                        <p className="text-xs text-muted-foreground">Male</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-2xl font-bold">{workOrder.femaleGuardsRequired}</p>
+                                        <p className="text-xs text-muted-foreground">Female</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-2xl font-bold">{workOrder.totalManpower}</p>
+                                        <p className="text-xs text-muted-foreground">Total</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            
+                            <div className="flex-1 flex flex-col gap-2 overflow-hidden min-h-0">
+                                <div className="flex items-center justify-between flex-shrink-0">
+                                    <h3 className="font-semibold text-sm">
+                                        Assigned Guards
+                                    </h3>
+                                    <Badge variant={selectedGuards.length >= workOrder.totalManpower ? "default" : "secondary"}>
+                                        {selectedGuards.length}/{workOrder.totalManpower}
+                                    </Badge>
+                                </div>
+                                <div className="flex gap-3 text-xs text-muted-foreground flex-shrink-0">
+                                    <span>Male: {maleAssignedCount}/{workOrder.maleGuardsRequired}</span>
+                                    <span>Female: {femaleAssignedCount}/{workOrder.femaleGuardsRequired}</span>
+                                </div>
+                                <ScrollArea className="flex-1 min-h-0 border rounded-md">
+                                    <div className="p-3 space-y-2">
+                                        {selectedGuards.length > 0 ? selectedGuards.map(guard => {
+                                            const guardDetails = getAssignedGuardDetails(guard.uid);
+                                            return (
+                                                <div 
+                                                    key={guard.uid} 
+                                                    className="flex items-center gap-3 p-2.5 rounded-md bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors"
+                                                >
+                                                    <Avatar className="h-9 w-9 flex-shrink-0">
+                                                        <AvatarImage src={guardDetails?.profilePictureUrl} />
+                                                        <AvatarFallback className="text-xs">
+                                                            {getInitials(guard.name, guard.employeeId)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-sm truncate">{guard.name}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{guard.employeeId}</p>
+                                                    </div>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        onClick={() => setSelectedGuards(prev => prev.filter(g => g.uid !== guard.uid))}
+                                                        className="flex-shrink-0 h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            );
+                                        }) : (
+                                            <div className="text-center text-muted-foreground py-8">
+                                                <UserPlus className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                                                <p className="text-sm">No guards assigned yet.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <DialogFooter className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t mt-2 p-3 sm:p-4">
-                    <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+
+                <DialogFooter className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 py-3 sm:py-4 gap-2">
+                    <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
+                        Cancel
+                    </Button>
                     <Button onClick={handleSaveAssignments} disabled={isSaving} className="w-full sm:w-auto">
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Save Assignments
