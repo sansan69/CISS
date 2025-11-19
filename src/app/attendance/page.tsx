@@ -41,6 +41,14 @@ interface AttendanceRecord {
   photoUrl?: string;
 }
 
+type ScannedEmployee = {
+  id: string;                 // Firestore document ID
+  employeeCode?: string;      // Human-readable employeeId like CISS/...
+  fullName: string;
+  phoneNumber?: string;
+  clientName?: string;
+};
+
 export default function AttendancePage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -52,7 +60,8 @@ export default function AttendancePage() {
   const [siteOptions, setSiteOptions] = useState<SiteOption[]>([]);
   const [isLoadingSites, setIsLoadingSites] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<'In' | 'Out'>('In');
-  const [scannedEmployee, setScannedEmployee] = useState<{ id: string; fullName: string; phoneNumber?: string } | null>(null);
+  const [scannedEmployee, setScannedEmployee] = useState<ScannedEmployee | null>(null);
+  const [clientFilter, setClientFilter] = useState<'auto' | 'all' | string>('auto');
   const [hasScanned, setHasScanned] = useState(false);
   
   const [isScanning, setIsScanning] = useState(false);
@@ -80,30 +89,56 @@ export default function AttendancePage() {
     "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
   ];
 
+  const availableClients = React.useMemo(() => {
+    const set = new Set<string>();
+    siteOptions.forEach(s => {
+      if (s.clientName) set.add(s.clientName);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [siteOptions]);
+
+  const filteredSiteOptions = React.useMemo(() => {
+    if (!siteOptions.length) return [];
+    let targetClient: string | null = null;
+
+    if (clientFilter === 'all') {
+      targetClient = null;
+    } else if (clientFilter === 'auto') {
+      targetClient = scannedEmployee?.clientName ?? null;
+    } else {
+      targetClient = clientFilter;
+    }
+
+    if (!targetClient) return siteOptions;
+    return siteOptions.filter(s => s.clientName === targetClient);
+  }, [siteOptions, clientFilter, scannedEmployee?.clientName]);
+
   useEffect(() => {
     const fetchSites = async () => {
       if (!selectedDistrict) { setSiteOptions([]); setSelectedSiteId(""); return; }
       setIsLoadingSites(true);
       try {
-        const q = query(
-          collection(db, 'sites'),
-          where('district', '==', selectedDistrict),
-          orderBy('clientName', 'asc')
-        );
+        const q = query(collection(db, 'sites'), where('district', '==', selectedDistrict));
         const snap = await getDocs(q);
         const options: SiteOption[] = snap.docs.map(d => {
-          const geo = d.data().geolocation;
+          const data = d.data() as any;
+          const geo = data.geolocation;
           // Parse from GeoPoint or fallback to stored string values
-          const lat = typeof geo?.latitude === 'number' ? geo.latitude : (geo?.lat || parseFloat(d.data().latString || '0'));
-          const lng = typeof geo?.longitude === 'number' ? geo.longitude : (geo?.lng || parseFloat(d.data().lngString || '0'));
+          const lat = typeof geo?.latitude === 'number' ? geo.latitude : (geo?.lat || parseFloat(data.latString || '0'));
+          const lng = typeof geo?.longitude === 'number' ? geo.longitude : (geo?.lng || parseFloat(data.lngString || '0'));
           return { 
             id: d.id, 
-            siteName: d.data().siteName, 
-            clientName: d.data().clientName, 
-            district: d.data().district,
+            siteName: data.siteName, 
+            clientName: data.clientName, 
+            district: data.district,
             lat,
             lng,
           };
+        }).sort((a, b) => {
+          if (a.clientName === b.clientName) {
+            return a.siteName.localeCompare(b.siteName);
+          }
+          return String(a.clientName || '').localeCompare(String(b.clientName || ''));
         });
         setSiteOptions(options);
         if (options.length === 0) {
@@ -124,12 +159,15 @@ export default function AttendancePage() {
     setIsTakingPhoto(true);
 
     try {
+      // Capture GPS once at the beginning of the flow
       await getDeviceLocation();
       // Start scanner which will also start the camera stream
       await handleScanAndCapture();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Verification Error", description: error.message });
       resetState();
+    } finally {
+      setIsFetchingLocation(false);
     }
   };
 
@@ -235,7 +273,13 @@ export default function AttendancePage() {
     if (snap.empty) return null;
     const d = snap.docs[0];
     const data = d.data() as any;
-    return { id: d.id, fullName: data.fullName, phoneNumber: data.phoneNumber } as { id: string; fullName: string; phoneNumber?: string };
+  return {
+    id: d.id,
+    employeeCode: data.employeeId,
+    fullName: data.fullName,
+    phoneNumber: data.phoneNumber,
+    clientName: data.clientName,
+  } as ScannedEmployee;
   };
 
   const handleScanAndCapture = async () => {
@@ -386,38 +430,40 @@ export default function AttendancePage() {
       toast({ variant: 'destructive', title: 'Incomplete Verification', description: 'Scan QR (or use manual ID) and capture photo before submitting.' });
       return;
     }
-    // Geofence: ensure within 50 meters of selected site
+    // Geofence: ensure within 150 meters of selected site
     const selectedSite = siteOptions.find(s => s.id === selectedSiteId);
     if (!selectedSite || selectedSite.lat == null || selectedSite.lng == null) {
       toast({ variant: 'destructive', title: 'Site Location Missing', description: 'Selected site does not have coordinates configured.' });
       return;
     }
-    let currentCoords: { lat: number; lon: number; accuracyMeters?: number } | null = null;
-    try {
-      setIsFetchingLocation(true);
-      currentCoords = await getDeviceLocation();
-    } catch (e: any) {
-      // Proceed without geofence if location is unavailable per user's simplified flow
-      currentCoords = null;
-      toast({ title: 'Location Unavailable', description: 'Proceeding without geofence.' });
-    } finally {
-      setIsFetchingLocation(false);
-    }
-    if (currentCoords) {
-      console.log('Geofence check:', {
-        userLat: currentCoords.lat,
-        userLon: currentCoords.lon,
-        siteLat: selectedSite.lat,
-        siteLng: selectedSite.lng,
-        accuracy: currentCoords.accuracyMeters
+    if (!locationCoords) {
+      toast({
+        variant: 'destructive',
+        title: 'Location Not Captured',
+        description: 'GPS location could not be captured. Please ensure location is enabled and tap "Start Verification" again.',
       });
-      const distance = haversineDistanceMeters(currentCoords.lat, currentCoords.lon, selectedSite.lat, selectedSite.lng);
-      const effectiveRadius = Math.max(150, Math.ceil(currentCoords.accuracyMeters || 0) + 50);
-      console.log('Distance check:', { distance: Math.round(distance), effectiveRadius, passed: distance <= effectiveRadius });
-      if (distance > effectiveRadius) {
-        toast({ variant: 'destructive', title: 'Out of Range', description: `You are ${Math.round(distance)}m away (allowed ${effectiveRadius}m). Move closer to the site.` });
-        return;
-      }
+      return;
+    }
+
+    // Additional safety: ensure employee is marking attendance only for their client
+    if (scannedEmployee.clientName && selectedSite.clientName && scannedEmployee.clientName !== selectedSite.clientName) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Site for Employee',
+        description: `This site belongs to ${selectedSite.clientName}, but you are assigned to ${scannedEmployee.clientName}.`,
+      });
+      return;
+    }
+
+    const distance = haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng);
+    const allowedRadius = 150; // meters
+    if (distance > allowedRadius) {
+      toast({
+        variant: 'destructive',
+        title: 'Outside Allowed Radius',
+        description: `You are approximately ${Math.round(distance)} meters away from the selected site. You must be within ${allowedRadius} meters to mark attendance.`,
+      });
+      return;
     }
     try {
       // Upload captured photo to Storage with retry
@@ -439,11 +485,10 @@ export default function AttendancePage() {
         siteName: selectedSite.siteName,
         clientName: selectedSite.clientName,
         siteCoords: { lat: selectedSite.lat, lng: selectedSite.lng },
-        locationText: currentCoords ? location : 'Unavailable',
-        locationCoords: currentCoords || null,
-        distanceMeters: currentCoords ? Math.round(haversineDistanceMeters(currentCoords.lat, currentCoords.lon, selectedSite.lat, selectedSite.lng)) : null,
-        locationAccuracyMeters: currentCoords?.accuracyMeters ? Math.round(currentCoords.accuracyMeters) : null,
-        locationAccuracyMeters: currentCoords.accuracyMeters ? Math.round(currentCoords.accuracyMeters) : null,
+        locationText: location,
+        locationCoords,
+        distanceMeters: Math.round(distance),
+        locationAccuracyMeters: locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null,
         photoUrl,
         deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
         createdAt: serverTimestamp(),
@@ -474,6 +519,8 @@ export default function AttendancePage() {
       setWatermarkedPhoto(null);
       setLocation(null);
       setLocationCoords(null);
+      setScannedEmployee(null);
+      setHasScanned(false);
       setIsScanning(false);
       setIsTakingPhoto(false);
       setIsFetchingLocation(false);
@@ -492,12 +539,20 @@ export default function AttendancePage() {
       <Card>
         <CardHeader>
           <CardTitle>Duty Selection</CardTitle>
-          <CardDescription>Select your district and site to continue.</CardDescription>
+          <CardDescription>
+            Select your district, client (if different from your primary client), and site for today&apos;s duty.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="grid gap-2">
             <Label>District</Label>
-            <Select value={selectedDistrict} onValueChange={(v) => { setSelectedDistrict(v); }}>
+            <Select
+              value={selectedDistrict}
+              onValueChange={(v) => {
+                setSelectedDistrict(v);
+                setSelectedSiteId("");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a district" />
               </SelectTrigger>
@@ -508,15 +563,61 @@ export default function AttendancePage() {
               </SelectContent>
             </Select>
           </div>
+
           <div className="grid gap-2">
-            <Label>Site</Label>
-            <Select value={selectedSiteId} onValueChange={(v) => setSelectedSiteId(v)} disabled={!selectedDistrict || isLoadingSites}>
+            <Label>Client (for today)</Label>
+            <Select
+              value={clientFilter}
+              onValueChange={(v) => {
+                setClientFilter(v as any);
+                setSelectedSiteId("");
+              }}
+              disabled={!selectedDistrict || availableClients.length === 0}
+            >
               <SelectTrigger>
-                <SelectValue placeholder={isLoadingSites ? 'Loading sites...' : (selectedDistrict ? 'Select a site' : 'Select district first')} />
+                <SelectValue placeholder="Select client filter" />
               </SelectTrigger>
               <SelectContent>
-                {siteOptions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.clientName} — {s.siteName}</SelectItem>
+                {scannedEmployee?.clientName && (
+                  <SelectItem value="auto">
+                    Same as employee ({scannedEmployee.clientName})
+                  </SelectItem>
+                )}
+                <SelectItem value="all">All clients in district</SelectItem>
+                {availableClients.map(client => (
+                  <SelectItem key={client} value={client}>
+                    {client}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Site</Label>
+            <Select
+              value={selectedSiteId}
+              onValueChange={(v) => setSelectedSiteId(v)}
+              disabled={!selectedDistrict || isLoadingSites || filteredSiteOptions.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    isLoadingSites
+                      ? 'Loading sites...'
+                      : (!selectedDistrict
+                          ? 'Select district first'
+                          : (filteredSiteOptions.length === 0
+                              ? 'No sites for selected client'
+                              : 'Select a site'))
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredSiteOptions.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.clientName} — {s.siteName}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

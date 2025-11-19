@@ -33,6 +33,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 
 interface Site {
@@ -76,6 +83,37 @@ const formatCoord = (n: number): string => {
     if (typeof n !== 'number' || isNaN(n)) return '';
     return n.toFixed(6).replace(/\.?0+$/, '');
 };
+
+const toRadians = (deg: number) => (deg * Math.PI) / 180;
+const haversineDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000; // meters
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) *
+            Math.cos(toRadians(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
+type GeocodeStatus = 'created' | 'updated' | 'kept' | 'failed' | 'noResult';
+
+interface GeocodeResult {
+    clientName?: string;
+    siteName?: string;
+    district?: string;
+    siteAddress?: string;
+    status: GeocodeStatus;
+    message: string;
+    oldLat?: number;
+    oldLng?: number;
+    newLat?: number;
+    newLng?: number;
+    distanceMeters?: number;
+}
 
 interface SiteEditFormProps {
     site: Site;
@@ -205,6 +243,14 @@ export default function SiteManagementPage() {
     const [firstDoc, setFirstDoc] = useState<QueryDocumentSnapshot | null>(null);
     const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
     const [hasNextPage, setHasNextPage] = useState(false);
+
+    // Geocoding helper state
+    const [isGeocoding, setIsGeocoding] = useState(false);
+    const [geocodeReport, setGeocodeReport] = useState<string>('');
+    const [geocodeResults, setGeocodeResults] = useState<GeocodeResult[]>([]);
+    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
+    const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+    const [bulkDeleteMode, setBulkDeleteMode] = useState<'selected' | 'all' | null>(null);
 
     useEffect(() => {
         const fetchFilterData = async () => {
@@ -503,9 +549,259 @@ export default function SiteManagementPage() {
         }
     };
 
+    const handleDownloadGeocodeReport = () => {
+        if (!geocodeResults.length) {
+            toast({ variant: 'destructive', title: 'No Report Available', description: 'Run "Update Site Locations" first.' });
+            return;
+        }
+
+        const rows = geocodeResults.map((r, index) => ({
+            SNo: index + 1,
+            Client: r.clientName ?? '',
+            'Site Name': r.siteName ?? '',
+            District: r.district ?? '',
+            'Site Address': r.siteAddress ?? '',
+            Status: r.status,
+            Message: r.message,
+            'Old Latitude': typeof r.oldLat === 'number' ? formatCoord(r.oldLat) : '',
+            'Old Longitude': typeof r.oldLng === 'number' ? formatCoord(r.oldLng) : '',
+            'New Latitude': typeof r.newLat === 'number' ? formatCoord(r.newLat) : '',
+            'New Longitude': typeof r.newLng === 'number' ? formatCoord(r.newLng) : '',
+            'Distance (m)': typeof r.distanceMeters === 'number' ? Math.round(r.distanceMeters) : '',
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Geocoding Report');
+        XLSX.writeFile(workbook, 'CISS_Site_Geocoding_Report.xlsx');
+    };
+
+    // --- Bulk Geocoding using a server-side API route ---
+    const handleAutoGeocode = async () => {
+        setIsGeocoding(true);
+        setGeocodeReport('');
+        setGeocodeResults([]);
+        try {
+            // Load all sites so we can validate / refresh their coordinates
+            const snap = await getDocs(collection(db, 'sites'));
+            const allSites = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+
+            const reportLines: string[] = [];
+            const structuredResults: GeocodeResult[] = [];
+            const batch = writeBatch(db);
+
+            for (const site of allSites) {
+                const addressParts = [
+                    site.siteAddress,
+                    site.district,
+                    'Kerala',
+                    'India',
+                ].filter(Boolean);
+                const address = addressParts.join(', ');
+
+                try {
+                    const res = await fetch('/api/geocode-site', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address }),
+                    });
+
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        const message = errText || 'Geocoding failed.';
+                        reportLines.push(`❌ ${site.siteName} (${site.clientName}) – ${message}`);
+                        structuredResults.push({
+                            clientName: site.clientName,
+                            siteName: site.siteName,
+                            district: site.district,
+                            siteAddress: site.siteAddress,
+                            status: 'failed',
+                            message,
+                        });
+                        continue;
+                    }
+
+                    const data = await res.json();
+                    if (typeof data.lat !== 'number' || typeof data.lng !== 'number') {
+                        const message = `No coordinates returned for address "${address}".`;
+                        reportLines.push(`⚠️ ${site.siteName} (${site.clientName}) – ${message}`);
+                        structuredResults.push({
+                            clientName: site.clientName,
+                            siteName: site.siteName,
+                            district: site.district,
+                            siteAddress: site.siteAddress,
+                            status: 'noResult',
+                            message,
+                        });
+                        continue;
+                    }
+
+                    const lat = data.lat;
+                    const lng = data.lng;
+                    const hasExisting =
+                        site.geolocation &&
+                        typeof site.geolocation.latitude === 'number' &&
+                        typeof site.geolocation.longitude === 'number';
+                    let actionLabel: string = 'created';
+                    let status: GeocodeStatus = 'created';
+                    let distance: number | undefined;
+
+                    if (hasExisting) {
+                        const existingLat = site.geolocation.latitude;
+                        const existingLng = site.geolocation.longitude;
+                        distance = haversineDistanceMeters(existingLat, existingLng, lat, lng);
+
+                        // If the existing coordinate is already within ~50m, keep it
+                        if (distance <= 50) {
+                            const message = `Existing location kept (≈${Math.round(distance)}m from geocoded point).`;
+                            reportLines.push(
+                                `↔︎ ${site.siteName} (${site.clientName}) – ${message}`,
+                            );
+                            structuredResults.push({
+                                clientName: site.clientName,
+                                siteName: site.siteName,
+                                district: site.district,
+                                siteAddress: site.siteAddress,
+                                status: 'kept',
+                                message,
+                                oldLat: existingLat,
+                                oldLng: existingLng,
+                                newLat: lat,
+                                newLng: lng,
+                                distanceMeters: distance,
+                            });
+                            continue;
+                        }
+                        actionLabel = `updated (was ≈${Math.round(distance)}m away)`;
+                        status = 'updated';
+                    }
+
+                    batch.update(doc(db, 'sites', site.id), {
+                        geolocation: new GeoPoint(lat, lng),
+                        latString: formatCoord(lat),
+                        lngString: formatCoord(lng),
+                        updatedAt: serverTimestamp(),
+                    });
+                    reportLines.push(
+                        `✅ ${site.siteName} (${site.clientName}) – ${formatCoord(lat)}, ${formatCoord(
+                            lng,
+                        )} (${actionLabel})`,
+                    );
+                    structuredResults.push({
+                        clientName: site.clientName,
+                        siteName: site.siteName,
+                        district: site.district,
+                        siteAddress: site.siteAddress,
+                        status,
+                        message: actionLabel,
+                        oldLat: hasExisting ? site.geolocation.latitude : undefined,
+                        oldLng: hasExisting ? site.geolocation.longitude : undefined,
+                        newLat: lat,
+                        newLng: lng,
+                        distanceMeters: distance,
+                    });
+                } catch (e: any) {
+                    console.error('Geocode failed for site', site.id, e);
+                    const message = e?.message || 'Unexpected error during geocoding.';
+                    reportLines.push(`❌ ${site.siteName} (${site.clientName}) – ${message}`);
+                    structuredResults.push({
+                        clientName: site.clientName,
+                        siteName: site.siteName,
+                        district: site.district,
+                        siteAddress: site.siteAddress,
+                        status: 'failed',
+                        message,
+                    });
+                }
+            }
+
+            if (reportLines.length > 0) {
+                await batch.commit();
+                setGeocodeReport(reportLines.join('\n'));
+                setGeocodeResults(structuredResults);
+            }
+
+            toast({
+                title: 'Geocoding Completed',
+                description: 'Site coordinates have been updated where possible.',
+            });
+            fetchSites('first');
+            setCurrentPage(1);
+        } catch (e: any) {
+            console.error('Bulk geocoding error', e);
+            toast({
+                variant: 'destructive',
+                title: 'Geocoding Failed',
+                description: e?.message || 'An error occurred during geocoding.',
+            });
+        } finally {
+            setIsGeocoding(false);
+        }
+    };
+
     const successCount = processedRecords.filter(r => r.status === 'success').length;
     const errorCount = processedRecords.filter(r => r.status === 'error').length;
     const duplicateCount = processedRecords.filter(r => r.status === 'duplicate').length;
+
+    const toggleSiteSelection = (siteId: string) => {
+        setSelectedSiteIds(prev =>
+            prev.includes(siteId) ? prev.filter(id => id !== siteId) : [...prev, siteId],
+        );
+    };
+
+    const toggleSelectAllOnPage = () => {
+        if (!sites.length) return;
+        const allIds = sites.map(s => s.id);
+        const allSelected = allIds.every(id => selectedSiteIds.includes(id));
+        if (allSelected) {
+            setSelectedSiteIds(prev => prev.filter(id => !allIds.includes(id)));
+        } else {
+            setSelectedSiteIds(prev => Array.from(new Set([...prev, ...allIds])));
+        }
+    };
+
+    const handleBulkDelete = async (mode: 'selected' | 'all') => {
+        let ids: string[] = [];
+
+        if (mode === 'selected') {
+            if (!selectedSiteIds.length) {
+                toast({ variant: 'destructive', title: 'No Sites Selected', description: 'Select one or more sites to delete.' });
+                return;
+            }
+            ids = [...selectedSiteIds];
+        } else {
+            const snap = await getDocs(collection(db, 'sites'));
+            ids = snap.docs.map(d => d.id);
+            if (!ids.length) {
+                toast({ variant: 'destructive', title: 'No Sites Found', description: 'There are no sites to delete.' });
+                return;
+            }
+        }
+
+        setIsSubmitting(true);
+        try {
+            // Firestore batch limit is 500 writes; delete in chunks to be safe
+            const chunkSize = 400;
+            for (let i = 0; i < ids.length; i += chunkSize) {
+                const chunk = ids.slice(i, i + chunkSize);
+                const batch = writeBatch(db);
+                chunk.forEach(siteId => {
+                    batch.delete(doc(db, 'sites', siteId));
+                });
+                await batch.commit();
+            }
+
+            toast({ title: 'Sites Deleted', description: `${ids.length} site(s) have been removed.` });
+            setSelectedSiteIds([]);
+            fetchSites('first');
+            setCurrentPage(1);
+        } catch (error: any) {
+            console.error('Bulk delete failed', error);
+            toast({ variant: 'destructive', title: 'Delete Failed', description: error?.message || 'Could not delete selected sites.' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
 
     return (
@@ -567,6 +863,46 @@ export default function SiteManagementPage() {
                         {isProcessing ? 'Processing...' : 'Process & Upload File'}
                     </Button>
                 </CardFooter>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Auto-Geocode Sites</CardTitle>
+                    <CardDescription>
+                        Fetch latitude/longitude for sites based on their address so that attendance can be validated against the correct location.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                        Clicking **Update Site Locations** will look up coordinates for any sites that do not yet have valid geolocation saved.
+                        A secure server-side API (`/api/geocode-site`) is used so your geocoding API key is never exposed to the browser.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                        <Button onClick={handleAutoGeocode} disabled={isGeocoding}>
+                            {isGeocoding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
+                            {isGeocoding ? 'Updating site locations...' : 'Update Site Locations'}
+                        </Button>
+                        <Button variant="outline" onClick={handleDownloadGeocodeReport} disabled={!geocodeResults.length}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Geocoding Report
+                        </Button>
+                    </div>
+                    {geocodeReport && (
+                        <div className="mt-3">
+                            <Label className="text-xs font-medium text-muted-foreground">Geocoding Summary</Label>
+                            <Textarea
+                                className="mt-1 h-40 text-xs font-mono"
+                                value={geocodeReport}
+                                readOnly
+                            />
+                            <p className="mt-2 text-xs text-muted-foreground">
+                                Entries marked with ❌ or ⚠️ could not be geocoded automatically. For those sites, open them in
+                                the editor and manually paste the latitude/longitude (for example from Google Maps: right‑click
+                                on the map &rarr; “What&apos;s here?” &rarr; copy the decimal coordinates).
+                            </p>
+                        </div>
+                    )}
+                </CardContent>
             </Card>
             {/* Create New Site Dialog */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -697,7 +1033,7 @@ export default function SiteManagementPage() {
                     <CardDescription>A list of all currently managed sites in the system.</CardDescription>
                 </CardHeader>
                  <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 border-b">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b">
                         <div className="space-y-1.5">
                             <Label htmlFor="client-filter">Filter by Client</Label>
                             <Select value={selectedClient} onValueChange={setSelectedClient} disabled={isFilterDataLoading}>
@@ -728,6 +1064,52 @@ export default function SiteManagementPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="space-y-1.5">
+                            <Label>Bulk Actions</Label>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={toggleSelectAllOnPage}
+                                    disabled={isLoadingSites || !sites.length}
+                                >
+                                    Select {sites.length && sites.every(s => selectedSiteIds.includes(s.id)) ? 'None' : 'All on Page'}
+                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="icon"
+                                            disabled={isLoadingSites || (!selectedSiteIds.length && sites.length === 0)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            <span className="sr-only">Delete options</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                            onClick={() => {
+                                                setBulkDeleteMode('selected');
+                                                setIsBulkDeleteDialogOpen(true);
+                                            }}
+                                            disabled={!selectedSiteIds.length}
+                                        >
+                                            Delete selected sites
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            onClick={() => {
+                                                setBulkDeleteMode('all');
+                                                setIsBulkDeleteDialogOpen(true);
+                                            }}
+                                        >
+                                            Delete ALL sites
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </div>
                     </div>
                      {isLoadingSites ? (
                         <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -735,25 +1117,41 @@ export default function SiteManagementPage() {
                         <p className="text-center text-muted-foreground py-10">No sites found for the selected filters.</p>
                     ) : (
                         <div className="space-y-3 mt-4">
-                            {sites.map(site => (
-                                <div key={site.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg shadow-sm">
-                                    <div className="flex-1 mb-2 sm:mb-0">
-                                        <h3 className="font-semibold">{site.siteName}</h3>
-                                        <p className="text-sm text-muted-foreground">{site.clientName}</p>
-                                        <p className="text-xs text-muted-foreground mt-1">{site.siteAddress}</p>
-                                        {site.geolocation && (
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                Lat, Long: {site.latString ?? formatCoord(site.geolocation.latitude)}, {site.lngString ?? formatCoord(site.geolocation.longitude)}
-                                            </p>
-                                        )}
-                                        <Badge variant="outline" className="mt-2">{site.district}</Badge>
+                            {sites.map(site => {
+                                const isSelected = selectedSiteIds.includes(site.id);
+                                return (
+                                    <div
+                                        key={site.id}
+                                        className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg shadow-sm ${
+                                            isSelected ? 'bg-red-50/40 border-red-300' : ''
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3 flex-1 mb-2 sm:mb-0">
+                                            <input
+                                                type="checkbox"
+                                                className="mt-1 h-4 w-4"
+                                                checked={isSelected}
+                                                onChange={() => toggleSiteSelection(site.id)}
+                                            />
+                                            <div className="flex-1">
+                                                <h3 className="font-semibold">{site.siteName}</h3>
+                                                <p className="text-sm text-muted-foreground">{site.clientName}</p>
+                                                <p className="text-xs text-muted-foreground mt-1">{site.siteAddress}</p>
+                                                {site.geolocation && (
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        Lat, Long: {site.latString ?? formatCoord(site.geolocation.latitude)}, {site.lngString ?? formatCoord(site.geolocation.longitude)}
+                                                    </p>
+                                                )}
+                                                <Badge variant="outline" className="mt-2">{site.district}</Badge>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 self-start sm:self-center">
+                                            <Button variant="outline" size="sm" onClick={() => setEditingSite(site)}><Edit className="mr-2 h-4 w-4"/>Edit</Button>
+                                            <Button variant="destructive" size="sm" onClick={() => setDeletingSite(site)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 self-start sm:self-center">
-                                        <Button variant="outline" size="sm" onClick={() => setEditingSite(site)}><Edit className="mr-2 h-4 w-4"/>Edit</Button>
-                                        <Button variant="destructive" size="sm" onClick={() => setDeletingSite(site)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </CardContent>
@@ -796,6 +1194,44 @@ export default function SiteManagementPage() {
                         <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteSite} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Bulk Delete Dialog */}
+            <AlertDialog
+                open={isBulkDeleteDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsBulkDeleteDialogOpen(false);
+                        setBulkDeleteMode(null);
+                    }
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm bulk delete</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {bulkDeleteMode === 'all'
+                                ? 'This will permanently delete ALL sites from the system. This cannot be undone.'
+                                : `This will permanently delete ${selectedSiteIds.length} selected site(s). This cannot be undone.`}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={isSubmitting || !bulkDeleteMode}
+                            className="bg-destructive hover:bg-destructive/90"
+                            onClick={async () => {
+                                if (!bulkDeleteMode) return;
+                                await handleBulkDelete(bulkDeleteMode);
+                                setIsBulkDeleteDialogOpen(false);
+                                setBulkDeleteMode(null);
+                            }}
+                        >
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
