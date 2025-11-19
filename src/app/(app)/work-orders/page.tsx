@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +10,19 @@ import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2 } from 'lucid
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
-import { startOfToday } from 'date-fns';
+import { startOfToday, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 interface WorkOrder {
     id: string;
@@ -30,6 +37,14 @@ interface WorkOrder {
     assignedGuards: any[];
 }
 
+const isSameDay = (a: Date, b: Date) => {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+};
+
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -39,6 +54,9 @@ export default function WorkOrderPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [dateSort, setDateSort] = useState<'asc' | 'desc'>('asc');
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -120,6 +138,68 @@ export default function WorkOrderPage() {
         return () => unsubscribe();
 
     }, [userRole, assignedDistricts, toast]);
+
+    // Distinct districts present in current work orders (for filter dropdown)
+    const availableDistricts = useMemo(() => {
+        const set = new Set<string>();
+        Object.values(workOrdersBySite).forEach(orders => {
+            orders.forEach(order => {
+                if (order.district) {
+                    set.add(order.district);
+                }
+            });
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [workOrdersBySite]);
+
+    // Apply district/date filters and sort by date for display
+    const filteredEntries = useMemo(() => {
+        const entries = Object.entries(workOrdersBySite);
+        const result: [string, WorkOrder[]][] = [];
+
+        for (const [siteId, orders] of entries) {
+            let filtered = orders;
+
+            if (selectedDistrict !== 'all') {
+                const districtLower = selectedDistrict.toLowerCase();
+                filtered = filtered.filter(o => (o.district || '').toLowerCase() === districtLower);
+            }
+
+            if (selectedDate) {
+                filtered = filtered.filter(o => {
+                    try {
+                        const d = o.date.toDate() as Date;
+                        return isSameDay(d, selectedDate);
+                    } catch {
+                        return false;
+                    }
+                });
+            }
+
+            if (filtered.length === 0) continue;
+
+            const sortedOrders = [...filtered].sort((a, b) => {
+                try {
+                    const aTime = a.date.toMillis();
+                    const bTime = b.date.toMillis();
+                    return dateSort === 'asc' ? aTime - bTime : bTime - aTime;
+                } catch {
+                    return 0;
+                }
+            });
+
+            result.push([siteId, sortedOrders]);
+        }
+
+        // Sort sites by their earliest (or latest) duty date according to sort order
+        result.sort(([, aOrders], [, bOrders]) => {
+            const aTime = aOrders[0]?.date?.toMillis?.() ?? 0;
+            const bTime = bOrders[0]?.date?.toMillis?.() ?? 0;
+            return dateSort === 'asc' ? aTime - bTime : bTime - aTime;
+        });
+
+        return result;
+    }, [workOrdersBySite, selectedDistrict, selectedDate, dateSort]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -387,10 +467,71 @@ export default function WorkOrderPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Active Duty Sites</CardTitle>
-                    <CardDescription>
-                        {userRole === 'admin' ? 'List of all sites with upcoming work orders.' : 'List of sites in your assigned districts with upcoming duties.'}
-                    </CardDescription>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <CardTitle>Active Duty Sites</CardTitle>
+                            <CardDescription>
+                                {userRole === 'admin'
+                                    ? 'List of all sites with upcoming work orders.'
+                                    : 'List of sites in your assigned districts with upcoming duties.'}
+                            </CardDescription>
+                        </div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                            <div className="flex flex-col gap-1 min-w-[160px]">
+                                <Label className="text-xs font-medium text-muted-foreground">Filter by date</Label>
+                                <Input
+                                    type="date"
+                                    value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        if (!value) {
+                                            setSelectedDate(null);
+                                            return;
+                                        }
+                                        const parsed = new Date(value + 'T00:00:00');
+                                        if (!isNaN(parsed.getTime())) {
+                                            setSelectedDate(parsed);
+                                        }
+                                    }}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1 min-w-[160px]">
+                                <Label className="text-xs font-medium text-muted-foreground">Filter by district</Label>
+                                <Select
+                                    value={selectedDistrict}
+                                    onValueChange={(val) => setSelectedDistrict(val)}
+                                >
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="All districts" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All districts</SelectItem>
+                                        {availableDistricts.map((d) => (
+                                            <SelectItem key={d} value={d}>
+                                                {d}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex flex-col gap-1 min-w-[160px]">
+                                <Label className="text-xs font-medium text-muted-foreground">Sort by date</Label>
+                                <Select
+                                    value={dateSort}
+                                    onValueChange={(val) => setDateSort(val as 'asc' | 'desc')}
+                                >
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="asc">Earliest first</SelectItem>
+                                        <SelectItem value="desc">Latest first</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -399,9 +540,11 @@ export default function WorkOrderPage() {
                         </div>
                     ) : Object.keys(workOrdersBySite).length === 0 ? (
                         <p className="text-center text-muted-foreground py-10">No upcoming duties found.</p>
+                    ) : filteredEntries.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-10">No duties match the current filters.</p>
                     ) : (
                         <div className="space-y-4">
-                            {Object.entries(workOrdersBySite).map(([siteId, orders]) => {
+                            {filteredEntries.map(([siteId, orders]) => {
                                 const siteInfo = orders[0];
                                 return (
                                 <div key={siteId} className="p-4 border rounded-lg">
