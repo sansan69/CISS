@@ -17,11 +17,24 @@ The application serves two primary user roles:
 -   **Frontend:** Next.js (App Router), React, TypeScript
 -   **UI:** ShadCN UI Components, Tailwind CSS
 -   **Backend:** Firebase (Firestore, Auth, Storage) and Next.js API Routes for server-side logic.
--   **Deployment:** The frontend will be a static/SSR build hosted on Vercel. Server-side logic is handled by Next.js API Routes.
+-   **Deployment:** The application now assumes a standard Next.js runtime with Firebase services and authenticated Next.js API Routes for privileged operations. Cloud Functions are not part of the active runtime path.
 
 ---
 
-## 3. Server-Side Environment Setup (Vercel)
+## 3. Local Development
+
+1. Copy `.env.example` to `.env.local` and fill in the Firebase web config values.
+2. Add server-side Firebase credentials with either `FIREBASE_ADMIN_SDK_CONFIG_BASE64` or the split admin variables.
+3. Install dependencies with `npm install`.
+4. Start the app with `npm run dev`.
+5. Verify the baseline with:
+   - `npm run lint`
+   - `npm run typecheck`
+   - `npm run build`
+
+---
+
+## 4. Server-Side Environment Setup
 
 For server-side functionality like PDF generation to work, you must configure environment variables in your Vercel project settings.
 
@@ -35,7 +48,7 @@ For server-side functionality like PDF generation to work, you must configure en
 
 ---
 
-## 4. Key Features
+## 5. Key Features
 
 ### 4.1. Public-Facing Features (No Login Required)
 

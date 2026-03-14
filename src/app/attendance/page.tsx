@@ -16,11 +16,12 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy, limit, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { storage } from '@/lib/firebase';
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { haversineDistanceMeters } from '@/lib/geo';
 
 type SiteOption = {
   id: string;
@@ -54,7 +55,7 @@ export default function AttendancePage() {
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [watermarkedPhoto, setWatermarkedPhoto] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number; accuracyMeters?: number } | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [siteOptions, setSiteOptions] = useState<SiteOption[]>([]);
@@ -220,7 +221,7 @@ export default function AttendancePage() {
 
   const stopScanner = () => {
     try {
-      scannerRef.current?.reset();
+      (scannerRef.current as any)?.reset?.();
     } catch {}
     if (videoRef.current) {
       const stream = videoRef.current.srcObject as MediaStream | null;
@@ -245,18 +246,6 @@ export default function AttendancePage() {
     // Stop camera/decoder after capturing photo so UI can proceed to submit
     stopScanner();
     setIsTakingPhoto(false);
-  };
-
-  const toRadians = (deg: number) => (deg * Math.PI) / 180;
-  const haversineDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371000; // meters
-    const dLat = toRadians(lat2 - lat1);
-    const dLon = toRadians(lon2 - lon1);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
   };
 
   const parseEmployeeIdFromText = (text: string): string | null => {
@@ -290,7 +279,7 @@ export default function AttendancePage() {
         const hints = new Map();
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
         hints.set(DecodeHintType.TRY_HARDER, true);
-        scannerRef.current = new BrowserMultiFormatReader(hints, 100);
+        scannerRef.current = new BrowserMultiFormatReader(hints);
       }
 
       // Use explicit constraints for better reliability (rear camera, HD)
@@ -477,8 +466,11 @@ export default function AttendancePage() {
 
       // Write Firestore attendance log (no pre-read to avoid auth issues)
       const payload = {
-        employeeId: scannedEmployee.id,
+        employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
+        employeeDocId: scannedEmployee.id,
         employeeName: scannedEmployee.fullName,
+        employeePhoneNumber: scannedEmployee.phoneNumber,
+        employeeClientName: scannedEmployee.clientName,
         status: selectedStatus,
         district: selectedDistrict,
         siteId: selectedSiteId,
@@ -491,14 +483,26 @@ export default function AttendancePage() {
         locationAccuracyMeters: locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null,
         photoUrl,
         deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
-        createdAt: serverTimestamp(),
       } as const;
-      await withRetry(() => addDoc(collection(db, 'attendanceLogs'), payload));
+      await withRetry(async () => {
+        const response = await fetch('/api/attendance/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const responseBody = await response.json().catch(() => ({}));
+          throw new Error(responseBody.error || 'Could not submit attendance.');
+        }
+      });
 
     const newRecord: AttendanceRecord = {
         id: String(ts),
         name: scannedEmployee.fullName,
-        employeeId: scannedEmployee.id,
+        employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
       time: new Date().toLocaleTimeString(),
         status: selectedStatus,
       location: location!,

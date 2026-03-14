@@ -1,110 +1,262 @@
-
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import React, { useEffect, useMemo, useState } from "react";
+import { collection, limit, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ListFilter, FileDown, Loader2, AlertCircle } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import React, { useState } from 'react';
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, FileDown, Search } from "lucide-react";
+import { format } from "date-fns";
+import { KERALA_DISTRICTS } from "@/lib/constants";
+import { authorizedFetch } from "@/lib/api-client";
+import { useToast } from "@/hooks/use-toast";
 
-// This is a placeholder page for the admin view of attendance logs.
-// We will build this out later with features like filtering, searching, and exporting reports.
+type AttendanceLog = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  status: "In" | "Out";
+  district?: string;
+  clientName?: string;
+  siteName?: string;
+  locationText?: string;
+  photoUrl?: string;
+  createdAt?: Timestamp;
+};
 
-const mockLogs = [
-    { id: '1', name: 'Aarav Sharma', employeeId: 'TCS/24-25/001', time: '09:02 AM', status: 'In', location: 'TCS Technopark', photoUrl: 'https://placehold.co/40x40.png' },
-    { id: '2', name: 'Isha Verma', employeeId: 'WIPRO/23-24/102', time: '09:05 AM', status: 'In', location: 'Wipro Infopark', photoUrl: 'https://placehold.co/40x40.png' },
-    { id: '3', name: 'Rohan Nair', employeeId: 'INFOSYS/24-25/033', time: '08:55 AM', status: 'In', location: 'Infosys Campus', photoUrl: 'https://placehold.co/40x40.png' },
-    { id: '4', name: 'Priya Menon', employeeId: 'TCS/23-24/214', time: '09:15 AM', status: 'In', location: 'TCS Technopark', photoUrl: 'https://placehold.co/40x40.png' },
-    { id: '5', name: 'Aarav Sharma', employeeId: 'TCS/24-25/001', time: '06:05 PM', status: 'Out', location: 'TCS Technopark', photoUrl: 'https://placehold.co/40x40.png' },
-];
-
+function downloadBlob(content: BlobPart, filename: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function AttendanceLogsPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string|null>(null);
+  const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [districtFilter, setDistrictFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const { toast } = useToast();
 
-  // In a real app, this would be fetched from Firestore
-  const logs = mockLogs;
+  useEffect(() => {
+    const logsQuery = query(
+      collection(db, "attendanceLogs"),
+      orderBy("createdAt", "desc"),
+      limit(200)
+    );
+
+    const unsubscribe = onSnapshot(
+      logsQuery,
+      (snapshot) => {
+        setLogs(
+          snapshot.docs.map((docSnapshot) => ({
+            id: docSnapshot.id,
+            ...(docSnapshot.data() as Omit<AttendanceLog, "id">),
+          }))
+        );
+        setIsLoading(false);
+      },
+      () => setIsLoading(false)
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const filteredLogs = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    return logs.filter((log) => {
+      const matchesStatus = statusFilter === "all" || log.status === statusFilter;
+      const matchesDistrict = districtFilter === "all" || log.district === districtFilter;
+      const matchesSearch =
+        !term ||
+        log.employeeName?.toLowerCase().includes(term) ||
+        log.employeeId?.toLowerCase().includes(term) ||
+        log.siteName?.toLowerCase().includes(term) ||
+        log.clientName?.toLowerCase().includes(term);
+
+      return matchesStatus && matchesDistrict && matchesSearch;
+    });
+  }, [districtFilter, logs, searchTerm, statusFilter]);
+
+  const totals = useMemo(() => {
+    const inCount = filteredLogs.filter((log) => log.status === "In").length;
+    const outCount = filteredLogs.filter((log) => log.status === "Out").length;
+    const uniqueEmployees = new Set(filteredLogs.map((log) => log.employeeId)).size;
+    return { total: filteredLogs.length, inCount, outCount, uniqueEmployees };
+  }, [filteredLogs]);
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      const params = new URLSearchParams({
+        format: "csv",
+        status: statusFilter,
+        district: districtFilter,
+      });
+
+      const response = await authorizedFetch(`/api/admin/reports/attendance?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Could not export the current attendance view.");
+      }
+
+      const csv = await response.text();
+      downloadBlob(csv, "attendance-logs.csv", "text/csv;charset=utf-8");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: error.message || "Could not export attendance logs.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-         <div>
-            <h1 className="text-3xl font-bold tracking-tight">Attendance Logs</h1>
-            <p className="text-muted-foreground">View all employee check-ins and check-outs.</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Attendance Logs</h1>
+          <p className="text-muted-foreground">Live attendance activity from the latest 200 records.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <ListFilter className="mr-2 h-4 w-4" />
-            Filter
-          </Button>
-          <Button>
-            <FileDown className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
+        <Button onClick={handleExport} disabled={isExporting}>
+          {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+          Export CSV
+        </Button>
       </div>
-      
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Total records</CardDescription>
+            <CardTitle>{totals.total}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>IN marks</CardDescription>
+            <CardTitle>{totals.inCount}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>OUT marks</CardDescription>
+            <CardTitle>{totals.outCount}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Unique employees</CardDescription>
+            <CardTitle>{totals.uniqueEmployees}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>All Attendance Records</CardTitle>
-          <CardDescription>
-            A live feed of attendance records from all locations.
-          </CardDescription>
+          <CardTitle>Filters</CardTitle>
+          <CardDescription>Search by employee, site, or client and narrow the live log stream.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search logs"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="In">IN only</SelectItem>
+              <SelectItem value="Out">OUT only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={districtFilter} onValueChange={setDistrictFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="District" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All districts</SelectItem>
+              {KERALA_DISTRICTS.map((district) => (
+                <SelectItem key={district} value={district}>
+                  {district}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent activity</CardTitle>
+          <CardDescription>The list updates automatically as new attendance records arrive.</CardDescription>
         </CardHeader>
         <CardContent>
-            {isLoading ? (
-                <div className="flex justify-center items-center h-48"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>
-            ) : error ? (
-                <div className="text-center py-10 text-destructive"><AlertCircle className="mx-auto h-12 w-12" /><p className="mt-4 text-lg">{error}</p></div>
-            ) : (
-                 <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Employee</TableHead>
-                            <TableHead>Time</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Location / Details</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {logs.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="h-24 text-center">No attendance records found.</TableCell></TableRow>
-                        ) : (
-                            logs.map((log) => (
-                                <TableRow key={log.id}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar>
-                                                <AvatarImage src={log.photoUrl} alt={log.name} />
-                                                <AvatarFallback>{log.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <div className="font-medium">{log.name}</div>
-                                                <div className="text-sm text-muted-foreground">{log.employeeId}</div>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{log.time}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={log.status === 'In' ? 'default' : 'destructive'}>{log.status}</Badge>
-                                    </TableCell>
-                                    <TableCell>{log.location}</TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                 </Table>
-            )}
+          {isLoading ? (
+            <div className="flex h-40 items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Site</TableHead>
+                  <TableHead>District</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      No attendance records match the current filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>
+                        <div className="font-medium">{log.employeeName || "Unknown employee"}</div>
+                        <div className="text-xs text-muted-foreground">{log.employeeId}</div>
+                      </TableCell>
+                      <TableCell>
+                        {log.createdAt ? format(log.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "Pending"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div>{log.siteName || "Unknown site"}</div>
+                        <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
+                      </TableCell>
+                      <TableCell>{log.district || "N/A"}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
-        <CardFooter>
-            <div className="text-xs text-muted-foreground">Showing the last <strong>{logs.length}</strong> records.</div>
-        </CardFooter>
       </Card>
     </div>
   );
 }
-
-    

@@ -33,14 +33,13 @@ import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { db, storage, auth } from "@/lib/firebase"; 
-import { collection, addDoc, Timestamp, serverTimestamp, query, orderBy, onSnapshot, getDocs, where } from "firebase/firestore";
-import { compressImage, uploadFileToStorage, dataURLtoFile } from "@/lib/storageUtils"; 
+import { db } from "@/lib/firebase"; 
+import { collection, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
+import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils"; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
-import QRCode from 'qrcode';
-import { signInAnonymously, onAuthStateChanged as onAuthChanged } from 'firebase/auth';
+import { EDUCATION_OPTIONS, KERALA_DISTRICTS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
 
 
 const MAX_FILE_SIZE_MB = 5;
@@ -51,8 +50,8 @@ const fileSchema = z.instanceof(File, { message: "This field is required." })
 
 const optionalFileSchema = fileSchema.optional();
 
-const proofTypes = z.enum(["Aadhar Card", "PAN Card", "Voter ID", "Passport", "Driving License", "Birth Certificate", "School Certificate"]);
-const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
+const proofTypes = z.enum(PROOF_TYPES);
+const qualificationTypes = z.enum(EDUCATION_OPTIONS);
 
 const idValidation = {
     "Aadhar Card": /^\d{12}$/,
@@ -168,15 +167,10 @@ interface ClientOption {
   name: string;
 }
 
-const keralaDistricts = [
-  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", 
-  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", 
-  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
-];
-
-const idProofOptions = ["Aadhar Card", "PAN Card", "Voter ID", "Passport", "Driving License", "Birth Certificate", "School Certificate"];
-const maritalStatuses = ["Married", "Unmarried"];
-const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
+const keralaDistricts = [...KERALA_DISTRICTS];
+const idProofOptions = [...PROOF_TYPES];
+const maritalStatuses = [...MARITAL_STATUSES];
+const educationOptions = [...EDUCATION_OPTIONS];
 
 
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
@@ -187,63 +181,6 @@ const handleUploadError = (err: any, documentName: string): never => {
     throw new Error(`Permission Denied: Your admin account does not have permission to upload the ${documentName}. Please check your Firebase Storage security rules to allow writes for authenticated users.`);
   }
   throw new Error(`${documentName} processing failed: ${err.message}`);
-};
-
-const abbreviateClientName = (clientName: string): string => {
-  if (!clientName) return "CLIENT";
-  const upperCaseName = clientName.trim().toUpperCase();
-
-  const abbreviations: { [key: string]: string } = {
-    "TATA CONSULTANCY SERVICES": "TCS",
-    "WIPRO": "WIPRO",
-  };
-  if (abbreviations[upperCaseName]) {
-    return abbreviations[upperCaseName];
-  }
-
-  const words = upperCaseName.split(/[\s-]+/).filter((w) => w.length > 0);
-  if (words.length > 1) {
-    return words.map((word) => word[0]).join("");
-  }
-
-  if (upperCaseName.length <= 4) {
-    return upperCaseName;
-  }
-  return upperCaseName.substring(0, 4);
-};
-
-const getCurrentFinancialYear = (): string => {
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 1-12
-  const currentYear = now.getFullYear();
-  if (currentMonth >= 4) { // April or later
-    return `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
-  } else { // Jan, Feb, March
-    return `${currentYear - 1}-${currentYear.toString().slice(-2)}`;
-  }
-};
-
-const generateEmployeeId = (clientName: string): string => {
-  const shortClientName = abbreviateClientName(clientName);
-  const financialYear = getCurrentFinancialYear();
-  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
-  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
-};
-
-const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
-  const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
-  try {
-    return await QRCode.toDataURL(dataString, {
-      errorCorrectionLevel: 'H',
-      type: 'image/png',
-      quality: 0.92,
-      margin: 1,
-      width: 256,
-    });
-  } catch (err) {
-    console.error('QR code generation failed:', err);
-    throw new Error('Failed to generate QR code.');
-  }
 };
 
 const IdNumberInput = ({
@@ -359,16 +296,6 @@ export default function EnrollEmployeePage() {
   const watchEducationalQualification = form.watch("educationalQualification");
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
-
-  useEffect(() => {
-    // Ensure we are authenticated (anonymous is sufficient) so Storage writes succeed
-    const unsub = onAuthChanged(auth, (u) => {
-      if (!u) {
-        signInAnonymously(auth).catch((e) => console.error('Anonymous auth failed:', e));
-      }
-    });
-    return () => unsub();
-  }, []);
 
   useEffect(() => {
     if (!fullAddress || fullAddress.length < 15) {
@@ -532,40 +459,8 @@ export default function EnrollEmployeePage() {
   async function onSubmit(data: EnrollmentFormValues) {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait." });
-    
-    // Check for duplicates before proceeding
-    const employeesRef = collection(db, "employees");
-    const phoneQuery = query(employeesRef, where("phoneNumber", "==", data.phoneNumber));
-    const emailQuery = query(employeesRef, where("emailAddress", "==", data.emailAddress.toLowerCase()));
-
-    const [phoneSnapshot, emailSnapshot] = await Promise.all([getDocs(phoneQuery), getDocs(emailQuery)]);
-
-    if (!phoneSnapshot.empty) {
-        toast({ variant: "destructive", title: "Duplicate Employee", description: "An employee with this phone number already exists." });
-        setIsLoading(false);
-        return;
-    }
-    if (!emailSnapshot.empty) {
-        toast({ variant: "destructive", title: "Duplicate Employee", description: "An employee with this email address already exists." });
-        setIsLoading(false);
-        return;
-    }
-
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
-    const fullName = `${data.firstName.toUpperCase()} ${data.lastName.toUpperCase()}`;
-    const newEmployeeId = generateEmployeeId(data.clientName);
-    const newQrCodeUrl = await generateQrCodeDataUrl(newEmployeeId, fullName, data.phoneNumber);
-    
-    const nameParts = fullName.split(' ').filter(Boolean);
-    const searchableFields = Array.from(new Set([
-        ...nameParts,
-        data.firstName.toUpperCase(),
-        data.lastName.toUpperCase(),
-        newEmployeeId.toUpperCase(),
-        data.phoneNumber,
-    ].filter(Boolean) as string[]));
-
     const uploadedUrls: { [key: string]: string | null } = {
         profilePictureUrl: null,
         identityProofUrlFront: null,
@@ -582,8 +477,8 @@ export default function EnrollEmployeePage() {
             { name: "Profile Picture", file: data.profilePicture, path: `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, isImage: true, key: 'profilePictureUrl' },
             { name: "Identity Proof (Front)", file: data.identityProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_front.${data.identityProofUrlFront.name.split('.').pop()}`, isImage: data.identityProofUrlFront.type.startsWith("image/"), key: 'identityProofUrlFront' },
             { name: "Identity Proof (Back)", file: data.identityProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_back.${data.identityProofUrlBack.name.split('.').pop()}`, isImage: data.identityProofUrlBack.type.startsWith("image/"), key: 'identityProofUrlBack' },
-            { name: "Address Proof (Front)", file: data.addressProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_addr_front.${data.addressProofUrlFront.name.split('.').pop()}`, isImage: data.addressProofUrlFront.type.startsWith("image/"), key: 'addressProofUrlFront' },
-            { name: "Address Proof (Back)", file: data.addressProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_addr_back.${data.addressProofUrlBack.name.split('.').pop()}`, isImage: data.addressProofUrlBack.type.startsWith("image/"), key: 'addressProofUrlBack' },
+            { name: "Address Proof (Front)", file: data.addressProofUrlFront, path: `employees/${phoneNumber}/addressProofs/${Date.now()}_addr_front.${data.addressProofUrlFront.name.split('.').pop()}`, isImage: data.addressProofUrlFront.type.startsWith("image/"), key: 'addressProofUrlFront' },
+            { name: "Address Proof (Back)", file: data.addressProofUrlBack, path: `employees/${phoneNumber}/addressProofs/${Date.now()}_addr_back.${data.addressProofUrlBack.name.split('.').pop()}`, isImage: data.addressProofUrlBack.type.startsWith("image/"), key: 'addressProofUrlBack' },
             { name: "Signature", file: data.signatureUrl, path: `employees/${phoneNumber}/signatures/${Date.now()}_sig.jpg`, isImage: true, key: 'signatureUrl' },
             { name: "Bank Document", file: data.bankPassbookStatement, path: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank.${data.bankPassbookStatement?.name.split('.').pop()}`, isImage: data.bankPassbookStatement?.type.startsWith("image/") ?? false, key: 'bankPassbookStatementUrl' },
             { name: "Police Certificate", file: data.policeClearanceCertificate, path: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${data.policeClearanceCertificate?.name.split('.').pop()}`, isImage: data.policeClearanceCertificate?.type.startsWith("image/") ?? false, key: 'policeClearanceCertificateUrl' },
@@ -605,59 +500,58 @@ export default function EnrollEmployeePage() {
         }
       
       toast({ title: "Saving Employee Data...", description: "Almost done."});
+      const response = await fetch("/api/employees/enroll", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          joiningDate: data.joiningDate.toISOString(),
+          clientName: data.clientName,
+          resourceIdNumber: data.resourceIdNumber || undefined,
+          profilePictureUrl: uploadedUrls.profilePictureUrl,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          fatherName: data.fatherName,
+          motherName: data.motherName,
+          dateOfBirth: data.dateOfBirth.toISOString(),
+          gender: data.gender,
+          maritalStatus: data.maritalStatus,
+          spouseName: data.spouseName || undefined,
+          educationalQualification: data.educationalQualification,
+          otherQualification: data.otherQualification || undefined,
+          district: data.district,
+          fullAddress: data.fullAddress,
+          emailAddress: data.emailAddress,
+          phoneNumber: data.phoneNumber,
+          identityProofType: data.identityProofType,
+          identityProofNumber: data.identityProofNumber,
+          identityProofUrlFront: uploadedUrls.identityProofUrlFront,
+          identityProofUrlBack: uploadedUrls.identityProofUrlBack,
+          addressProofType: data.addressProofType,
+          addressProofNumber: data.addressProofNumber,
+          addressProofUrlFront: uploadedUrls.addressProofUrlFront,
+          addressProofUrlBack: uploadedUrls.addressProofUrlBack,
+          signatureUrl: uploadedUrls.signatureUrl,
+          bankAccountNumber: data.bankAccountNumber || undefined,
+          ifscCode: data.ifscCode || undefined,
+          bankName: data.bankName || undefined,
+          bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl || undefined,
+          panNumber: data.panNumber || undefined,
+          epfUanNumber: data.epfUanNumber || undefined,
+          esicNumber: data.esicNumber || undefined,
+          policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl || undefined,
+        }),
+      });
 
-      const employeeDataForFirestore: Record<string, any> = {
-            employeeId: newEmployeeId,
-            qrCodeUrl: newQrCodeUrl,
-            searchableFields,
-            clientName: data.clientName,
-            firstName: data.firstName.toUpperCase(),
-            lastName: data.lastName.toUpperCase(),
-            fullName: fullName,
-            fatherName: data.fatherName.toUpperCase(),
-            motherName: data.motherName.toUpperCase(),
-            joiningDate: Timestamp.fromDate(data.joiningDate),
-            dateOfBirth: Timestamp.fromDate(data.dateOfBirth),
-            gender: data.gender,
-            maritalStatus: data.maritalStatus,
-            educationalQualification: data.educationalQualification,
-            otherQualification: data.otherQualification || "",
-            district: data.district,
-            fullAddress: data.fullAddress.toUpperCase(),
-            emailAddress: data.emailAddress.toLowerCase(),
-            phoneNumber: data.phoneNumber,
-            status: 'Active',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            identityProofType: data.identityProofType,
-            identityProofNumber: data.identityProofNumber,
-            identityProofUrlFront: uploadedUrls.identityProofUrlFront,
-            identityProofUrlBack: uploadedUrls.identityProofUrlBack,
-            addressProofType: data.addressProofType,
-            addressProofNumber: data.addressProofNumber,
-            addressProofUrlFront: uploadedUrls.addressProofUrlFront,
-            addressProofUrlBack: uploadedUrls.addressProofUrlBack,
-            signatureUrl: uploadedUrls.signatureUrl,
-            profilePictureUrl: uploadedUrls.profilePictureUrl,
-        };
-
-      // Conditionally add optional fields
-      if (data.bankAccountNumber) employeeDataForFirestore.bankAccountNumber = data.bankAccountNumber;
-      if (data.ifscCode) employeeDataForFirestore.ifscCode = data.ifscCode.toUpperCase();
-      if (data.bankName) employeeDataForFirestore.bankName = data.bankName.toUpperCase();
-      if (uploadedUrls.bankPassbookStatementUrl) employeeDataForFirestore.bankPassbookStatementUrl = uploadedUrls.bankPassbookStatementUrl;
-      if (data.resourceIdNumber) employeeDataForFirestore.resourceIdNumber = data.resourceIdNumber;
-      if (data.spouseName) employeeDataForFirestore.spouseName = data.spouseName.toUpperCase();
-      if (data.panNumber) employeeDataForFirestore.panNumber = data.panNumber.toUpperCase();
-      if (data.epfUanNumber) employeeDataForFirestore.epfUanNumber = data.epfUanNumber;
-      if (data.esicNumber) employeeDataForFirestore.esicNumber = data.esicNumber;
-      if (uploadedUrls.policeClearanceCertificateUrl) employeeDataForFirestore.policeClearanceCertificateUrl = uploadedUrls.policeClearanceCertificateUrl;
-      
-      const docRef = await addDoc(collection(db, "employees"), employeeDataForFirestore);
+      const responseBody = await response.json();
+      if (!response.ok) {
+        throw new Error(responseBody.error || "Could not create employee record.");
+      }
       
       toast({
         title: "Registration Successful!",
-        description: `${data.firstName} ${data.lastName}'s registration (ID: ${newEmployeeId}) has been saved.`,
+        description: `${data.firstName} ${data.lastName}'s registration (ID: ${responseBody.employeeId}) has been saved.`,
         action: <Check className="h-5 w-5 text-green-500" />,
       });
       form.reset();
@@ -670,9 +564,14 @@ export default function EnrollEmployeePage() {
       setSignatureUrlPreview(null);
       setBankPassbookPreview(null);
       setPoliceCertPreview(null);
-      router.push(`/employees/${docRef.id}`);
+      router.push(`/employees/${responseBody.id}`);
 
     } catch (error: any) {
+      await Promise.allSettled(
+        Object.values(uploadedUrls)
+          .filter((url): url is string => Boolean(url))
+          .map((url) => deleteFileFromStorage(url)),
+      );
       console.error("Registration or Upload Error: ", error);
       toast({
         variant: "destructive",

@@ -2,115 +2,74 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Rules for the 'employees' collection
-    match /employees/{employeeId} {
-      
-      // TEMPORARY: Allow all reads and writes to unblock functionality.
-      // This is not secure for production and should be revisited.
-      allow read, write: if true;
-
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Rules for the 'fieldOfficers' collection
-    match /fieldOfficers/{officerId} {
-      // Allow authenticated users to read their own Field Officer record
-      // Admin (by email) can read/write all officer records
-      allow read: if request.auth != null && (
-        resource.data.uid == request.auth.uid ||
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
         request.auth.token.email == 'admin@cisskerala.app'
       );
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
     }
 
-    // Rules for the 'workOrders' collection
-    match /workOrders/{workOrderId} {
-      // Allow authenticated users (admins/field officers) to read work orders
-      allow read: if request.auth != null;
-      // Admin can create/update/delete; field officers can update assignedGuards only for their districts
-      allow create: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
-      allow update: if request.auth != null && (
-        request.auth.token.email == 'admin@cisskerala.app' ||
-        (
-          // minimal FO permission: can only change assignedGuards array
-          request.resource.data.assignedGuards != resource.data.assignedGuards &&
-          request.resource.data.maleGuardsRequired == resource.data.maleGuardsRequired &&
-          request.resource.data.femaleGuardsRequired == resource.data.femaleGuardsRequired &&
-          request.resource.data.totalManpower == resource.data.totalManpower &&
-          request.resource.data.siteId == resource.data.siteId &&
-          request.resource.data.date == resource.data.date
-        )
-      );
-      allow delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    function isFieldOfficer() {
+      return isSignedIn() && request.auth.token.role == 'fieldOfficer';
     }
 
-    // Rules for the 'sites' collection
-    match /sites/{siteId} {
-      // Allow public reads so attendance page can load sites without auth
-      allow read: if true;
-      // Restrict writes to admin
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+    function isClientUser() {
+      return isSignedIn() && request.auth.token.role == 'client';
     }
 
-    // Rules for the 'clients' collection
-    match /clients/{clientId} {
-
-      // Allow anyone to read the list of clients. 
-      // This is required for the client dropdown on the enrollment forms to work.
-      allow read: if true;
-
-      // Only allow admin to add, update, or delete clients.
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
-    }
-
-    // Rules for client-to-user links (clientUsers)
-    match /clientUsers/{mappingId} {
-      // Admin can manage all mappings
-      allow create, delete, update: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
-      // Linked user can read their own mapping
-      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
-    }
-
-    // Mirror mapping for fast lookup by UID in rules
-    match /clientUsersByUid/{uid} {
-      allow create, delete, update: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
-      allow read: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // READ-ONLY access for client users to business data
-    // Employees: client users can read employees of their client only
     match /employees/{employeeId} {
-      allow read: if true || ( // current app allows public; if tightened later, keep client user read below
-        request.auth != null && exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientName == resource.data.clientName
-      );
-      // client users cannot write
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    // Sites: read allowed, writes only by admin
+    match /clients/{clientId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /fieldOfficers/{officerId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /sites/{siteId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      allow create, update, delete: if isAdmin();
     }
 
-    // Work orders: client users can read work orders of their client
+    match /clientUsers/{mappingId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /clientUsersByUid/{uid} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow create, update, delete: if isAdmin();
+    }
+
     match /workOrders/{workOrderId} {
-      allow read: if request.auth != null && (
-        request.auth.token.email == 'admin@cisskerala.app' || (
-          exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientId == resource.data.clientId
-        )
+      allow read: if isAdmin() || isFieldOfficer() || (
+        isClientUser() &&
+        exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientId == resource.data.clientId
       );
-      allow create, update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isFieldOfficer();
     }
 
-    // Rules for the 'attendanceLogs' collection
     match /attendanceLogs/{logId} {
-      // Allow anyone to create a log (public kiosk use). Reads can be restricted later if needed.
-      allow create: if true;
-      allow read: if request.auth != null; // limit reads to authenticated users
-      allow update, delete: if request.auth != null && request.auth.token.email == 'admin@cisskerala.app';
+      allow create: if false;
+      allow read: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /attendanceState/{employeeId} {
+      allow read, write: if isAdmin();
     }
   }
 }

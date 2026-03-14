@@ -36,10 +36,10 @@ import {
 import React, { useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs } from "firebase/firestore";
 import { cn } from '@/lib/utils';
 import { Toaster } from "@/components/ui/toaster"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+import { resolveAppUser } from '@/lib/auth/roles';
 
 interface NavItem {
   href: string;
@@ -67,6 +67,7 @@ const settingsSubItems: NavItem[] = [
     { href: '/settings/data-export', label: 'Data Export', icon: DownloadCloud },
     { href: '/settings/qr-management', label: 'QR Codes', icon: QrCode },
     { href: '/settings/reports', label: 'Reports', icon: BarChart3 },
+    { href: '/settings/assigned-guards-export', label: 'Assigned Guards Export', icon: Users },
 ];
 
 function NavLink({ item, onClick, userRole }: { item: NavItem; onClick?: () => void; userRole: string | null }) {
@@ -194,20 +195,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       if (user) {
         setAuthUser(user);
         try {
-            const tokenResult = await user.getIdTokenResult();
-            const isAdmin = tokenResult.claims?.admin === true || user.email === 'admin@cisskerala.app';
-            if (isAdmin) {
-                setUserRole('admin');
-            } else {
-                const fieldOfficersCollection = collection(db, 'fieldOfficers');
-                const q = query(fieldOfficersCollection, where("uid", "==", user.uid));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) {
-                    setUserRole('fieldOfficer');
-                } else {
-                    setUserRole('user'); 
-                }
-            }
+            const appUser = await resolveAppUser(user);
+            setUserRole(appUser.role);
         } catch (error) {
             console.error("Error fetching user role:", error);
             setUserRole('user'); // Default to a non-privileged role on error

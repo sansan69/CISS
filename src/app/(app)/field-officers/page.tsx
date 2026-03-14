@@ -32,8 +32,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getApps, initializeApp } from 'firebase/app';
-import { getAuth as getAuthMod, signInWithEmailAndPassword, signOut as signOutMod, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { authorizedFetch } from '@/lib/api-client';
+import { KERALA_DISTRICTS } from '@/lib/constants';
+import { resolveAppUser } from '@/lib/auth/roles';
 
 
 interface FieldOfficer {
@@ -44,12 +45,6 @@ interface FieldOfficer {
   assignedDistricts: string[];
   createdAt?: any;
 }
-
-const keralaDistricts = [
-  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
-  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
-  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
-];
 
 // Simplified list of auth users for dropdown (in a real app, this might be more complex)
 interface AuthUser {
@@ -85,9 +80,9 @@ const OfficerForm: React.FC<{
     
     const availableDistricts = useMemo(() => {
         if (isEditing) {
-            return keralaDistricts.filter(d => !unavailableDistricts.includes(d) || assignedDistricts.includes(d));
+            return KERALA_DISTRICTS.filter(d => !unavailableDistricts.includes(d) || assignedDistricts.includes(d));
         }
-        return keralaDistricts.filter(d => !unavailableDistricts.includes(d));
+        return KERALA_DISTRICTS.filter(d => !unavailableDistricts.includes(d));
     }, [unavailableDistricts, isEditing, assignedDistricts]);
     
     const availableUsers = useMemo(() => {
@@ -121,32 +116,25 @@ const OfficerForm: React.FC<{
         if (!isEditing && !userForOfficer && emailInput && passwordInput) {
             setIsVerifyingUser(true);
             try {
-                const appName = 'lookup-auth-app';
-                const existing = getApps().find(a => a.name === appName);
-                const lookupApp = existing || initializeApp({
-                    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
-                    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
-                    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
-                    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET as string,
-                    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
-                    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
-                }, appName);
-
-                const tempAuth = getAuthMod(lookupApp);
-                const cred = await createUserWithEmailAndPassword(tempAuth, emailInput.trim(), passwordInput);
-                if (name.trim()) {
-                    await updateProfile(cred.user, { displayName: name.trim() });
+                const response = await authorizedFetch('/api/admin/field-officers', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        email: emailInput.trim(),
+                        password: passwordInput,
+                        name: name.trim(),
+                        assignedDistricts,
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Could not create the field officer.');
                 }
-                userForOfficer = { uid: cred.user.uid, email: cred.user.email || emailInput.trim(), name: name.trim() || cred.user.displayName || '' };
                 toast({ title: 'Auth User Created', description: 'User has been added to Firebase Authentication.' });
-                await signOutMod(tempAuth);
+                onClose();
+                return;
             } catch (e: any) {
                 console.error('Auth user creation failed:', e);
-                let message = 'Could not create auth user.';
-                if (e.code === 'auth/email-already-in-use') message = 'Email already in use. Use Select User or Verify instead.';
-                if (e.code === 'auth/weak-password') message = 'Password is too weak.';
-                const { toast } = useToast();
-                toast({ variant: 'destructive', title: 'Creation Failed', description: message });
+                toast({ variant: 'destructive', title: 'Creation Failed', description: e.message || 'Could not create auth user.' });
                 setIsVerifyingUser(false);
                 return;
             } finally {
@@ -167,38 +155,22 @@ const OfficerForm: React.FC<{
 
     const handleVerifyCredentials = async () => {
         if (!emailInput || !passwordInput) {
-            toast({ variant: "destructive", title: "Missing Credentials", description: "Enter email and password to verify user." });
+            toast({ variant: "destructive", title: "Missing Email", description: "Enter the email for the existing user account." });
             return;
         }
         setIsVerifyingUser(true);
         try {
-            // Create or reuse a secondary app so admin session is not affected
-            const appName = 'lookup-auth-app';
-            const existing = getApps().find(a => a.name === appName);
-            const lookupApp = existing || initializeApp({
-                apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
-                authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
-                projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
-                storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET as string,
-                messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
-                appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
-            }, appName);
-
-            const tempAuth = getAuthMod(lookupApp);
-            const cred = await signInWithEmailAndPassword(tempAuth, emailInput.trim(), passwordInput);
-            const u = cred.user;
-            const resolvedName = u.displayName || name || (u.email ? u.email.split('@')[0] : '');
-            setSelectedUser({ uid: u.uid, email: u.email || emailInput.trim(), name: resolvedName });
+            const matchedUser = allAuthUsers.find((user) => user.email?.toLowerCase() === emailInput.trim().toLowerCase());
+            if (!matchedUser) {
+                throw new Error('No Firebase Auth user exists for that email yet.');
+            }
+            const resolvedName = matchedUser.name || name || (matchedUser.email ? matchedUser.email.split('@')[0] : '');
+            setSelectedUser({ uid: matchedUser.uid, email: matchedUser.email, name: resolvedName });
             if (!name) setName(resolvedName);
-            toast({ title: "User Verified", description: "Credentials verified and user loaded. You can assign districts now." });
-            await signOutMod(tempAuth); // cleanup secondary session
+            toast({ title: "User Loaded", description: "Existing auth user found. You can assign districts now." });
         } catch (e: any) {
             console.error('Credential verification failed:', e);
-            let message = 'Could not verify credentials. Please check email/password.';
-            if (e.code === 'auth/user-not-found') message = 'No user found for this email.';
-            if (e.code === 'auth/wrong-password') message = 'Incorrect password.';
-            if (e.code === 'auth/too-many-requests') message = 'Too many attempts. Try again later.';
-            toast({ variant: 'destructive', title: 'Verification Failed', description: message });
+            toast({ variant: 'destructive', title: 'Lookup Failed', description: e.message || 'Could not find that auth user.' });
         } finally {
             setIsVerifyingUser(false);
         }
@@ -301,7 +273,13 @@ export default function FieldOfficerManagementPage() {
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setAuthStatus(user && user.email === 'admin@cisskerala.app' ? 'admin' : 'other');
+        if (!user) {
+            setAuthStatus('other');
+            return;
+        }
+        resolveAppUser(user)
+            .then((appUser) => setAuthStatus(appUser.role === 'admin' ? 'admin' : 'other'))
+            .catch(() => setAuthStatus('other'));
     });
     return () => unsubscribe();
   }, []);
@@ -320,14 +298,12 @@ export default function FieldOfficerManagementPage() {
     // Simulating that fetch here.
     const fetchAllData = async () => {
         try {
-            // This is a simplified stand-in. Client-side SDK CANNOT list all users.
-            // This is a conceptual representation.
-             const hardcodedUsers: AuthUser[] = [
-                { uid: 'mock_uid_1', email: 'officer1@cisskerala.app', name: 'Ravi Kumar' },
-                { uid: 'mock_uid_2', email: 'officer2@cisskerala.app', name: 'Sita Menon' },
-                { uid: 'admin_uid', email: 'admin@cisskerala.app', name: 'Main Admin' },
-             ];
-             setAllAuthUsers(hardcodedUsers);
+            const response = await authorizedFetch('/api/admin/auth-users');
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || 'Could not load auth users.');
+            }
+            setAllAuthUsers(data.users || []);
         } catch (error) {
              console.error("Error fetching auth users (simulation): ", error);
              toast({ variant: "destructive", title: "Error", description: "Could not load user list." });
@@ -369,21 +345,32 @@ export default function FieldOfficerManagementPage() {
     
     try {
       if (isEditing) { // Update existing officer
-        const officerRef = doc(db, 'fieldOfficers', officerData.id);
-        await updateDoc(officerRef, {
-            name: officerData.name,
-            assignedDistricts: officerData.assignedDistricts,
-            updatedAt: serverTimestamp(),
+        const response = await authorizedFetch(`/api/admin/field-officers/${officerData.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+                name: officerData.name,
+                assignedDistricts: officerData.assignedDistricts,
+            }),
         });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not update the officer.');
+        }
         toast({ title: "Officer Updated", description: `"${officerData.name}" has been successfully updated.` });
       } else { // Create new officer
-        await addDoc(collection(db, 'fieldOfficers'), {
-            uid: officerData.uid,
-            email: officerData.email,
-            name: officerData.name,
-            assignedDistricts: officerData.assignedDistricts,
-            createdAt: serverTimestamp(),
+        const response = await authorizedFetch('/api/admin/field-officers', {
+            method: 'POST',
+            body: JSON.stringify({
+                uid: officerData.uid,
+                email: officerData.email,
+                name: officerData.name,
+                assignedDistricts: officerData.assignedDistricts,
+            }),
         });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not create the officer.');
+        }
         toast({ title: "Officer Role Assigned", description: `"${officerData.name}" is now a Field Officer.` });
       }
       closeFormDialog();
@@ -401,7 +388,13 @@ export default function FieldOfficerManagementPage() {
     setIsSubmitting(true);
     
     try {
-        await deleteDoc(doc(db, 'fieldOfficers', deletingOfficer.id));
+        const response = await authorizedFetch(`/api/admin/field-officers/${deletingOfficer.id}`, {
+            method: 'DELETE',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.error || 'Could not revoke the officer role.');
+        }
       toast({
         title: "Officer Role Revoked",
         description: `"${deletingOfficer.name}" is no longer a field officer. Their login still exists.`,

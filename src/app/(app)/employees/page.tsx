@@ -24,6 +24,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
+import { resolveAppUser } from '@/lib/auth/roles';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
@@ -106,22 +107,9 @@ export default function EmployeeDirectoryPage() {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 try {
-                    if (user.email === 'admin@cisskerala.app') {
-                        setUserRole('admin');
-                        setAssignedDistricts([]);
-                    } else {
-                        const officersRef = collection(db, "fieldOfficers");
-                        const q = query(officersRef, where("uid", "==", user.uid));
-                        const snapshot = await getDocs(q);
-                        if (!snapshot.empty) {
-                            const officerData = snapshot.docs[0].data();
-                            setUserRole('fieldOfficer');
-                            setAssignedDistricts(officerData.assignedDistricts || []);
-                        } else {
-                            setUserRole('user');
-                            setAssignedDistricts([]);
-                        }
-                    }
+                    const appUser = await resolveAppUser(user);
+                    setUserRole(appUser.role);
+                    setAssignedDistricts(appUser.assignedDistricts);
                 } catch (e) {
                     setUserRole('user');
                     setAssignedDistricts([]);

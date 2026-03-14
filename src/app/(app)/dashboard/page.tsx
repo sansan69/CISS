@@ -16,6 +16,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { BarChart, Bar, PieChart, Pie, Cell, Legend, XAxis, YAxis, CartesianGrid } from "recharts";
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Badge } from "@/components/ui/badge";
+import { resolveAppUser } from '@/lib/auth/roles';
 
 
 interface DashboardStats { total: number; active: number; onLeave: number; inactiveOrExited: number; }
@@ -86,34 +87,14 @@ export default function DashboardPage() {
             if (user) {
                 setCurrentUser(user);
                 try {
-                    const tokenResult = await user.getIdTokenResult();
-                    const claims = tokenResult.claims;
-                    if (claims.admin) { 
-                        setUserRole('admin');
-                        setAssignedDistricts([]);
-                    } else {
-                        const officersRef = collection(db, "fieldOfficers");
-                        const q = query(officersRef, where("uid", "==", user.uid));
-                        const snapshot = await getDocs(q);
-                        if (!snapshot.empty) {
-                            const officerData = snapshot.docs[0].data();
-                            setUserRole('fieldOfficer');
-                            setAssignedDistricts(officerData.assignedDistricts || []);
-                        } else {
-                            // Check if this is a client user via mapping
-                            const mappingRef = doc(db, 'clientUsersByUid', user.uid);
-                            const mappingSnap = await getDoc(mappingRef);
-                            if (mappingSnap.exists()) {
-                                const m: any = mappingSnap.data();
-                                setUserRole('client');
-                                setClientInfo({ clientId: m.clientId, clientName: m.clientName });
-                            } else {
-                                setUserRole('user'); 
-                                setAssignedDistricts([]);
-                                setClientInfo(null);
-                            }
-                        }
-                    }
+                    const appUser = await resolveAppUser(user);
+                    setUserRole(appUser.role);
+                    setAssignedDistricts(appUser.assignedDistricts);
+                    setClientInfo(
+                        appUser.clientId && appUser.clientName
+                            ? { clientId: appUser.clientId, clientName: appUser.clientName }
+                            : null
+                    );
                 } catch (e) {
                     console.error("Error getting user claims:", e);
                     setUserRole('user');

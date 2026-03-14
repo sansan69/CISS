@@ -582,15 +582,38 @@ export default function SiteManagementPage() {
         setGeocodeReport('');
         setGeocodeResults([]);
         try {
-            // Load all sites so we can validate / refresh their coordinates
+            // Load all sites and only geocode records that are still missing valid coordinates.
             const snap = await getDocs(collection(db, 'sites'));
             const allSites = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+            const sitesNeedingGeocodes = allSites.filter((site) => {
+                const lat = site?.geolocation?.latitude;
+                const lng = site?.geolocation?.longitude;
+                return !Number.isFinite(lat) || !Number.isFinite(lng);
+            });
 
             const reportLines: string[] = [];
             const structuredResults: GeocodeResult[] = [];
-            const batch = writeBatch(db);
+            let batch = writeBatch(db);
+            let pendingWrites = 0;
 
-            for (const site of allSites) {
+            const flushBatch = async () => {
+                if (pendingWrites === 0) return;
+                await batch.commit();
+                batch = writeBatch(db);
+                pendingWrites = 0;
+            };
+
+            if (sitesNeedingGeocodes.length === 0) {
+                setGeocodeReport('ℹ️ All sites already have valid coordinates saved.');
+                setGeocodeResults([]);
+                toast({
+                    title: 'No Geocoding Needed',
+                    description: 'All sites already have coordinates configured.',
+                });
+                return;
+            }
+
+            for (const site of sitesNeedingGeocodes) {
                 const addressParts = [
                     site.siteAddress,
                     site.district,
@@ -638,67 +661,31 @@ export default function SiteManagementPage() {
 
                     const lat = data.lat;
                     const lng = data.lng;
-                    const hasExisting =
-                        site.geolocation &&
-                        typeof site.geolocation.latitude === 'number' &&
-                        typeof site.geolocation.longitude === 'number';
-                    let actionLabel: string = 'created';
-                    let status: GeocodeStatus = 'created';
-                    let distance: number | undefined;
-
-                    if (hasExisting) {
-                        const existingLat = site.geolocation.latitude;
-                        const existingLng = site.geolocation.longitude;
-                        distance = haversineDistanceMeters(existingLat, existingLng, lat, lng);
-
-                        // If the existing coordinate is already within ~50m, keep it
-                        if (distance <= 50) {
-                            const message = `Existing location kept (≈${Math.round(distance)}m from geocoded point).`;
-                            reportLines.push(
-                                `↔︎ ${site.siteName} (${site.clientName}) – ${message}`,
-                            );
-                            structuredResults.push({
-                                clientName: site.clientName,
-                                siteName: site.siteName,
-                                district: site.district,
-                                siteAddress: site.siteAddress,
-                                status: 'kept',
-                                message,
-                                oldLat: existingLat,
-                                oldLng: existingLng,
-                                newLat: lat,
-                                newLng: lng,
-                                distanceMeters: distance,
-                            });
-                            continue;
-                        }
-                        actionLabel = `updated (was ≈${Math.round(distance)}m away)`;
-                        status = 'updated';
-                    }
-
                     batch.update(doc(db, 'sites', site.id), {
                         geolocation: new GeoPoint(lat, lng),
                         latString: formatCoord(lat),
                         lngString: formatCoord(lng),
                         updatedAt: serverTimestamp(),
                     });
+                    pendingWrites++;
+
+                    if (pendingWrites >= 400) {
+                        await flushBatch();
+                    }
                     reportLines.push(
                         `✅ ${site.siteName} (${site.clientName}) – ${formatCoord(lat)}, ${formatCoord(
                             lng,
-                        )} (${actionLabel})`,
+                        )} (created)`,
                     );
                     structuredResults.push({
                         clientName: site.clientName,
                         siteName: site.siteName,
                         district: site.district,
                         siteAddress: site.siteAddress,
-                        status,
-                        message: actionLabel,
-                        oldLat: hasExisting ? site.geolocation.latitude : undefined,
-                        oldLng: hasExisting ? site.geolocation.longitude : undefined,
+                        status: 'created',
+                        message: 'created',
                         newLat: lat,
                         newLng: lng,
-                        distanceMeters: distance,
                     });
                 } catch (e: any) {
                     console.error('Geocode failed for site', site.id, e);
@@ -716,14 +703,14 @@ export default function SiteManagementPage() {
             }
 
             if (reportLines.length > 0) {
-                await batch.commit();
+                await flushBatch();
                 setGeocodeReport(reportLines.join('\n'));
                 setGeocodeResults(structuredResults);
             }
 
             toast({
                 title: 'Geocoding Completed',
-                description: 'Site coordinates have been updated where possible.',
+                description: 'Missing site coordinates have been updated where possible.',
             });
             fetchSites('first');
             setCurrentPage(1);

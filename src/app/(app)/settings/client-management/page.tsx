@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, where, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
-import { getApps, initializeApp } from 'firebase/app';
-import { getAuth as getAuthMod, signInWithEmailAndPassword, signOut as signOutMod, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { authorizedFetch } from '@/lib/api-client';
 
 interface Client {
   id: string;
@@ -89,10 +88,14 @@ export default function ClientManagementPage() {
 
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'clients'), {
-        name: newClientName.trim(),
-        createdAt: serverTimestamp(),
+      const response = await authorizedFetch('/api/admin/clients', {
+        method: 'POST',
+        body: JSON.stringify({ name: newClientName.trim() }),
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not add the client.');
+      }
       toast({
         title: "Client Added",
         description: `Client "${newClientName.trim()}" has been successfully added.`,
@@ -113,7 +116,13 @@ export default function ClientManagementPage() {
   const handleDeleteClient = async (clientId: string, clientName: string) => {
     setIsSubmitting(true); // Use same state for general operations
     try {
-      await deleteDoc(doc(db, 'clients', clientId));
+      const response = await authorizedFetch(`/api/admin/clients/${clientId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not delete the client.');
+      }
       toast({
         title: "Client Deleted",
         description: `Client "${clientName}" has been successfully deleted.`,
@@ -147,7 +156,14 @@ export default function ClientManagementPage() {
     }
     setIsSubmitting(true);
     try {
-      await updateDoc(doc(db, 'clients', editingClient.id), { name: editedName.trim(), updatedAt: serverTimestamp() });
+      const response = await authorizedFetch(`/api/admin/clients/${editingClient.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editedName.trim() }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not update the client.');
+      }
       toast({ title: 'Client Updated', description: 'Name changed successfully.' });
       setEditingClient(null);
       setEditedName('');
@@ -184,44 +200,31 @@ export default function ClientManagementPage() {
 
   const verifyAndLinkUser = async () => {
     if (!manageClient) return;
-    if (!linkEmail || !linkPassword) {
-      toast({ variant: 'destructive', title: 'Missing Credentials', description: 'Enter email and password.' });
+    if (!linkEmail) {
+      toast({ variant: 'destructive', title: 'Missing Email', description: 'Enter the user email to link.' });
       return;
     }
     setIsSubmitting(true);
     try {
-      const appName = 'client-link-app';
-      const existing = getApps().find(a => a.name === appName);
-      const tempApp = existing || initializeApp({
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET as string,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
-      }, appName);
-      const tempAuth = getAuthMod(tempApp);
-      const cred = await signInWithEmailAndPassword(tempAuth, linkEmail.trim(), linkPassword);
-      const u = cred.user;
-      const displayName = linkName.trim() || u.displayName || (u.email ? u.email.split('@')[0] : '');
-      const payload = {
-        uid: u.uid,
-        email: u.email || linkEmail.trim(),
-        name: displayName,
-        clientId: manageClient.id,
-        clientName: manageClient.name,
-        createdAt: serverTimestamp(),
-      } as any;
-      await addDoc(collection(db, 'clientUsers'), payload);
-      await setDoc(doc(db, 'clientUsersByUid', u.uid), payload);
+      const response = await authorizedFetch('/api/admin/client-users', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'existing',
+          clientId: manageClient.id,
+          clientName: manageClient.name,
+          email: linkEmail.trim(),
+          name: linkName.trim(),
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not link the user.');
+      }
       toast({ title: 'Linked', description: 'User linked to client.' });
-      await signOutMod(tempAuth);
       setLinkEmail(''); setLinkPassword(''); setLinkName('');
     } catch (e: any) {
       console.error('Verify & Link failed:', e);
-      let msg = 'Could not verify credentials.';
-      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password') msg = 'Invalid email or password.';
-      toast({ variant: 'destructive', title: 'Link Failed', description: msg });
+      toast({ variant: 'destructive', title: 'Link Failed', description: e.message || 'Could not find or link that user.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -235,38 +238,26 @@ export default function ClientManagementPage() {
     }
     setIsSubmitting(true);
     try {
-      const appName = 'client-link-app';
-      const existing = getApps().find(a => a.name === appName);
-      const tempApp = existing || initializeApp({
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN as string,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET as string,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
-      }, appName);
-      const tempAuth = getAuthMod(tempApp);
-      const cred = await createUserWithEmailAndPassword(tempAuth, linkEmail.trim(), linkPassword);
-      if (linkName.trim()) await updateProfile(cred.user, { displayName: linkName.trim() });
-      const payload = {
-        uid: cred.user.uid,
-        email: cred.user.email || linkEmail.trim(),
-        name: linkName.trim() || cred.user.displayName || '',
-        clientId: manageClient.id,
-        clientName: manageClient.name,
-        createdAt: serverTimestamp(),
-      } as any;
-      await addDoc(collection(db, 'clientUsers'), payload);
-      await setDoc(doc(db, 'clientUsersByUid', cred.user.uid), payload);
+      const response = await authorizedFetch('/api/admin/client-users', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'create',
+          clientId: manageClient.id,
+          clientName: manageClient.name,
+          email: linkEmail.trim(),
+          password: linkPassword,
+          name: linkName.trim(),
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not create the client user.');
+      }
       toast({ title: 'User Created & Linked', description: 'Client credentials created and linked.' });
-      await signOutMod(tempAuth);
       setLinkEmail(''); setLinkPassword(''); setLinkName('');
     } catch (e: any) {
       console.error('Create & Link failed:', e);
-      let msg = 'Could not create auth user.';
-      if (e.code === 'auth/email-already-in-use') msg = 'Email already in use. Use Verify & Link instead.';
-      if (e.code === 'auth/weak-password') msg = 'Password too weak.';
-      toast({ variant: 'destructive', title: 'Creation Failed', description: msg });
+      toast({ variant: 'destructive', title: 'Creation Failed', description: e.message || 'Could not create auth user.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -275,14 +266,16 @@ export default function ClientManagementPage() {
   const unlinkUser = async (mappingId: string) => {
     setIsSubmitting(true);
     try {
-      const mapping = (linkedUsers[manageClient!.id] || []).find(u => u.id === mappingId);
-      await deleteDoc(doc(db, 'clientUsers', mappingId));
-      if (mapping?.uid) {
-        await deleteDoc(doc(db, 'clientUsersByUid', mapping.uid));
+      const response = await authorizedFetch(`/api/admin/client-users/${mappingId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not remove the link.');
       }
       toast({ title: 'Unlinked', description: 'User access removed from client.' });
-    } catch (e) {
-      toast({ variant: 'destructive', title: 'Unlink Failed', description: 'Could not remove link.' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Unlink Failed', description: e.message || 'Could not remove link.' });
     } finally {
       setIsSubmitting(false);
     }

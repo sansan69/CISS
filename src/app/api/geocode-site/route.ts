@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing address' }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENCAGE_API_KEY;
+    const apiKey = process.env.OPENCAGE_API_KEY?.trim().replace(/^['"]|['"]$/g, '');
     if (!apiKey) {
       return NextResponse.json(
         { error: 'Geocoding API key is not configured. Please set OPENCAGE_API_KEY in your environment.' },
@@ -36,8 +36,15 @@ export async function POST(req: NextRequest) {
     const res = await fetch(url.toString(), { cache: 'no-store' });
     if (!res.ok) {
       const text = await res.text();
+      let providerMessage = text || res.statusText;
+      try {
+        const parsed = JSON.parse(text) as { status?: { message?: string } };
+        providerMessage = parsed?.status?.message || providerMessage;
+      } catch {
+        // Keep the raw provider response if it is not JSON.
+      }
       return NextResponse.json(
-        { error: `Geocoding provider error (${res.status}): ${text || res.statusText}` },
+        { error: `Geocoding provider error (${res.status}): ${providerMessage}` },
         { status: 502 },
       );
     }
@@ -63,5 +70,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
 

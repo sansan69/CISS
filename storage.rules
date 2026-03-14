@@ -2,18 +2,25 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Employee uploads and downloads
-    // Public READ and WRITE (no auth required)
-    match /employees/{allPaths=**} {
-      allow read: if true;
-      allow write: if true;
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin'
+      );
     }
 
-    // Default Deny Rule for any other paths.
-    // This is a security best practice.
-    match /{path=**} {
-       allow read, write: if false;
+    match /employees/{allPaths=**} {
+      allow read: if true;
+      allow create: if request.resource.size < 5 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
+      allow update, delete: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

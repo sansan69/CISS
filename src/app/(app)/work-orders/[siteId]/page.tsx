@@ -29,6 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Employee } from '@/types/employee';
+import { resolveAppUser } from '@/lib/auth/roles';
 import { startOfToday } from 'date-fns';
 
 
@@ -473,7 +474,6 @@ export default function AssignGuardsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [user, setUser] = useState<User | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
     const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -489,21 +489,10 @@ export default function AssignGuardsPage() {
     useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                setUser(user);
-                 try {
-                    const officersRef = collection(db, "fieldOfficers");
-                    const q = query(officersRef, where("uid", "==", user.uid));
-                    const snapshot = await getDocs(q);
-                    if (!snapshot.empty) {
-                        const officerData = snapshot.docs[0].data();
-                        setUserRole('fieldOfficer');
-                        setAssignedDistricts(officerData.assignedDistricts || []);
-                    } else if (user.email === 'admin@cisskerala.app') {
-                        setUserRole('admin');
-                        setAssignedDistricts([]);
-                    } else {
-                        setUserRole('user');
-                    }
+                try {
+                    const appUser = await resolveAppUser(user);
+                    setUserRole(appUser.role);
+                    setAssignedDistricts(appUser.assignedDistricts || []);
                 } catch (e) {
                     setUserRole('user');
                     setAssignedDistricts([]);

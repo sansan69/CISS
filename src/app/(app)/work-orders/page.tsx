@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
+import { resolveAppUser } from '@/lib/auth/roles';
 import {
     Select,
     SelectContent,
@@ -62,25 +63,9 @@ export default function WorkOrderPage() {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 try {
-                    const tokenResult = await user.getIdTokenResult();
-                    const claims = tokenResult.claims;
-                    if (user.email === 'admin@cisskerala.app') {
-                        setUserRole('admin');
-                        setAssignedDistricts([]);
-                    } else {
-                        // Check if the user is a field officer from our DB
-                        const officersRef = collection(db, "fieldOfficers");
-                        const q = query(officersRef, where("uid", "==", user.uid));
-                        const snapshot = await getDocs(q);
-                        if (!snapshot.empty) {
-                            const officerData = snapshot.docs[0].data();
-                            setUserRole('fieldOfficer');
-                            setAssignedDistricts(officerData.assignedDistricts || []);
-                        } else {
-                            setUserRole('user'); // Or another default role
-                            setAssignedDistricts([]);
-                        }
-                    }
+                    const appUser = await resolveAppUser(user);
+                    setUserRole(appUser.role);
+                    setAssignedDistricts(appUser.assignedDistricts);
                 } catch (e) {
                     console.error("Error getting user role:", e);
                     setUserRole('user');
