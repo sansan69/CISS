@@ -780,13 +780,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   })}
                 </div>
 
-                <StatusSummary
-                  items={[
-                    { label: "Proofs", value: `${completedDocumentCount}/6 ready`, tone: completedDocumentCount === 6 ? "success" : "pending" },
-                    { label: "Client", value: watchedValues?.clientName || "Pending", tone: watchedValues?.clientName ? "success" : "pending" },
-                    { label: "Contact", value: watchedValues?.phoneNumber ? "Added" : "Pending", tone: watchedValues?.phoneNumber ? "success" : "pending" },
-                    { label: "Declaration", value: watchedValues?.termsAndConditions ? "Accepted" : "Pending", tone: watchedValues?.termsAndConditions ? "success" : "pending" },
-                  ]}
+                <CompactProgressSummary
+                  proofCount={completedDocumentCount}
                 />
               </div>
 
@@ -1145,38 +1140,21 @@ const ReviewRow = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-const StatusSummary = ({
-  items,
+const CompactProgressSummary = ({
+  proofCount,
 }: {
-  items: { label: string; value: string; tone: "success" | "pending" }[];
+  proofCount: number;
 }) => (
-  <div className="rounded-2xl border bg-background/80 px-3 py-3 shadow-sm sm:px-4">
-    <div className="flex flex-wrap items-center gap-2.5 text-sm">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="inline-flex min-w-0 items-center gap-2 rounded-full border bg-background px-3 py-1.5"
-        >
-          <span
-            className={cn(
-              "h-2 w-2 shrink-0 rounded-full",
-              item.tone === "success" ? "bg-green-600" : "bg-amber-500",
-            )}
-          />
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            {item.label}
-          </span>
-          <span
-            className={cn(
-              "max-w-[12rem] truncate text-sm font-semibold",
-              item.tone === "success" ? "text-green-700" : "text-amber-700",
-            )}
-            title={item.value}
-          >
-            {item.value}
-          </span>
-        </div>
-      ))}
+  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+    <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 shadow-sm">
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full",
+          proofCount === 6 ? "bg-green-600" : "bg-amber-500",
+        )}
+      />
+      <span className="font-medium text-foreground">{proofCount}/6</span>
+      <span>required uploads ready</span>
     </div>
   </div>
 );
