@@ -30,6 +30,12 @@ export const attendanceSubmissionSchema = z.object({
   siteId: z.string().min(1),
   siteName: z.string().min(1),
   clientName: z.string().optional(),
+  shiftCode: z.string().optional(),
+  shiftLabel: z.string().optional(),
+  shiftStartTime: z.string().optional(),
+  shiftEndTime: z.string().optional(),
+  nextShiftCode: z.string().optional(),
+  nextShiftStartsAt: z.string().optional(),
   siteCoords: z.object({
     lat: z.number(),
     lng: z.number(),
@@ -72,6 +78,7 @@ export interface DeviceAttendanceHistoryItem {
   district: string;
   siteName: string;
   clientName?: string;
+  shiftLabel?: string;
   location?: string;
   photoUrl?: string;
   syncStatus: AttendanceSyncStatus;

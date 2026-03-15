@@ -14,6 +14,18 @@ export const coordinateSourceSchema = z.enum([
   "current_location",
 ]);
 
+export const siteShiftModeSchema = z.enum(["none", "fixed"]);
+export const siteShiftPatternSchema = z.enum(["2x12", "3x8"]);
+
+export const shiftTemplateSchema = z.object({
+  code: z.string().min(1),
+  label: z.string().min(1),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  hours: z.number().positive(),
+  crossesMidnight: z.boolean().default(false),
+});
+
 export const geoPointLikeSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
@@ -39,6 +51,9 @@ export const clientLocationSchema = z.object({
 
 export type CoordinateStatus = z.infer<typeof coordinateStatusSchema>;
 export type CoordinateSource = z.infer<typeof coordinateSourceSchema>;
+export type SiteShiftMode = z.infer<typeof siteShiftModeSchema>;
+export type SiteShiftPattern = z.infer<typeof siteShiftPatternSchema>;
+export type ShiftTemplate = z.infer<typeof shiftTemplateSchema>;
 export type GeoPointLike = z.infer<typeof geoPointLikeSchema>;
 export type ClientLocation = z.infer<typeof clientLocationSchema>;
 
@@ -57,6 +72,9 @@ export type ManagedSite = {
   coordinateStatus?: CoordinateStatus;
   coordinateSource?: CoordinateSource;
   placeAccuracy?: string | null;
+  shiftMode?: SiteShiftMode;
+  shiftPattern?: SiteShiftPattern | null;
+  shiftTemplates?: ShiftTemplate[];
   latString?: string;
   lngString?: string;
   createdAt?: unknown;

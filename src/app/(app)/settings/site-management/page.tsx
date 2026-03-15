@@ -44,7 +44,8 @@ import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpda
 import { LocationEditorCard } from '@/components/location/location-editor-card';
 import { KERALA_DISTRICTS, OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
-import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite } from '@/types/location';
+import { buildShiftTemplates, SHIFT_PATTERN_LABELS } from '@/lib/shift-utils';
+import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite, SiteShiftPattern } from '@/types/location';
 
 
 type Site = ManagedSite;
@@ -115,22 +116,14 @@ interface SiteEditFormProps {
     onSave: (siteData: Partial<Site>) => Promise<void>;
     isSaving: boolean;
     onClose: () => void;
+    clients: ClientOption[];
     clientLocations: ClientLocationOption[];
-    operationalClient: ClientOption | null;
 }
 
-const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clientLocations, operationalClient }) => {
+const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients, clientLocations }) => {
     const [formData, setFormData] = useState<Partial<Site>>(site);
     const filteredClientLocations = clientLocations.filter((location) => location.clientId === formData.clientId);
-
-    useEffect(() => {
-        if (!operationalClient) return;
-        setFormData((current) => ({
-            ...current,
-            clientId: operationalClient.id,
-            clientName: OPERATIONAL_CLIENT_NAME,
-        }));
-    }, [operationalClient]);
+    const isTcsSite = (formData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
 
     const handleSave = () => {
         const changes: Partial<Site> = {};
@@ -151,17 +144,43 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
         }
     };
 
+    const updateShiftPattern = (pattern: SiteShiftPattern) => {
+        setFormData({
+            ...formData,
+            shiftMode: 'fixed',
+            shiftPattern: pattern,
+            shiftTemplates: buildShiftTemplates(pattern),
+        });
+    };
+
     return (
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-                <Label htmlFor="clientName">Operational Client</Label>
-                <Input
-                    id="clientName"
-                    value={operationalClient?.name ?? OPERATIONAL_CLIENT_NAME}
-                    readOnly
-                    disabled
-                />
-                <p className="text-xs text-muted-foreground">Duty sites are locked to the TCS operational client.</p>
+                <Label htmlFor="clientName">Client</Label>
+                <Select
+                    value={formData.clientId || undefined}
+                    onValueChange={(value) => {
+                        const selectedClient = clients.find((client) => client.id === value);
+                        const isTcs = (selectedClient?.name || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
+                        setFormData({
+                            ...formData,
+                            clientId: value,
+                            clientName: selectedClient?.name ?? '',
+                            clientLocationId: undefined,
+                            clientLocationName: undefined,
+                            shiftMode: isTcs ? 'none' : (formData.shiftMode === 'fixed' ? 'fixed' : 'fixed'),
+                            shiftPattern: isTcs ? null : (formData.shiftPattern ?? '2x12'),
+                            shiftTemplates: isTcs ? [] : buildShiftTemplates((formData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
+                        });
+                    }}
+                >
+                    <SelectTrigger id="clientName"><SelectValue placeholder="Select a client" /></SelectTrigger>
+                    <SelectContent>
+                        {clients.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
              <div className="grid gap-2">
                 <Label htmlFor="siteName">Site Name</Label>
@@ -172,7 +191,7 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                 <Input id="siteAddress" value={formData.siteAddress || ''} onChange={(e) => setFormData({...formData, siteAddress: e.target.value})} />
             </div>
             <div className="grid gap-2">
-                <Label htmlFor="clientLocationId">Linked Client Location</Label>
+                <Label htmlFor="clientLocationId">{isTcsSite ? 'Linked TCS Center' : 'Linked Client Location'}</Label>
                 <Select
                     value={formData.clientLocationId || 'none'}
                     onValueChange={(value) => {
@@ -199,6 +218,39 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                     </SelectContent>
                 </Select>
             </div>
+            {isTcsSite ? (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    TCS sites stay flexible. No recurring shift timing is enforced here.
+                </div>
+            ) : (
+                <div className="grid gap-3 rounded-lg border p-4">
+                    <div className="space-y-1">
+                        <Label>Shift pattern</Label>
+                        <p className="text-xs text-muted-foreground">Attendance will resolve the expected shift from this site configuration.</p>
+                    </div>
+                    <Select
+                        value={(formData.shiftPattern as string | undefined) || '2x12'}
+                        onValueChange={(value) => updateShiftPattern(value as SiteShiftPattern)}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select shift pattern" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Object.entries(SHIFT_PATTERN_LABELS).map(([key, label]) => (
+                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                        {(formData.shiftTemplates || buildShiftTemplates((formData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')).map((shift) => (
+                            <div key={shift.code} className="rounded-md border bg-muted/20 p-3 text-sm">
+                                <p className="font-medium">{shift.label}</p>
+                                <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
             <div className="grid gap-2">
                 <Label htmlFor="geofenceRadiusMeters">Geofence Radius (meters)</Label>
                 <Input
@@ -287,6 +339,7 @@ export default function SiteManagementPage() {
     const [clients, setClients] = useState<ClientOption[]>([]);
     const [clientLocations, setClientLocations] = useState<ClientLocationOption[]>([]);
     const [fieldOfficers, setFieldOfficers] = useState<FieldOfficerOption[]>([]);
+    const [selectedClient, setSelectedClient] = useState<string>('all');
     const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
     const [selectedOfficer, setSelectedOfficer] = useState<string>('all');
     const [selectedCoordinateStatus, setSelectedCoordinateStatus] = useState<string>('all');
@@ -356,6 +409,9 @@ export default function SiteManagementPage() {
             } else if (selectedDistrict !== 'all') {
                 q = query(q, where('district', '==', selectedDistrict));
             }
+            if (selectedClient !== 'all') {
+                q = query(q, where('clientName', '==', selectedClient));
+            }
             // Use a single orderBy to avoid composite index requirements across different filter combos
             q = query(q, orderBy('clientName', 'asc'));
             
@@ -374,11 +430,13 @@ export default function SiteManagementPage() {
                 .map(siteDoc => {
                     const raw = siteDoc.data() as any;
                     const resolvedClient = clients.find(client => client.name === raw.clientName);
+                    const resolvedClientName = raw.clientName ?? resolvedClient?.name ?? operationalClient?.name ?? '';
+                    const isTcs = resolvedClientName.trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
                     return {
                         id: siteDoc.id,
                         ...raw,
-                        clientId: raw.clientId ?? resolvedClient?.id ?? operationalClient?.id ?? undefined,
-                        clientName: OPERATIONAL_CLIENT_NAME,
+                        clientId: raw.clientId ?? resolvedClient?.id ?? (isTcs ? operationalClient?.id : undefined),
+                        clientName: resolvedClientName,
                         coordinateStatus: deriveCoordinateStatus(raw),
                         coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : undefined),
                         placeAccuracy: raw.placeAccuracy ?? undefined,
@@ -423,13 +481,13 @@ export default function SiteManagementPage() {
         } finally {
             setIsLoadingSites(false);
         }
-    }, [lastDoc, firstDoc, currentPage, toast, selectedDistrict, selectedOfficer, fieldOfficers, selectedCoordinateStatus, clients, operationalClient]);
+    }, [lastDoc, firstDoc, currentPage, toast, selectedClient, selectedDistrict, selectedOfficer, fieldOfficers, selectedCoordinateStatus, clients, operationalClient]);
 
     useEffect(() => {
         fetchSites('first');
         setCurrentPage(1); // Reset page number on filter change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedDistrict, selectedOfficer, selectedCoordinateStatus]); // Re-fetch when filters change
+    }, [selectedClient, selectedDistrict, selectedOfficer, selectedCoordinateStatus]); // Re-fetch when filters change
 
 
     const handleNextPage = () => {
@@ -463,8 +521,8 @@ export default function SiteManagementPage() {
     };
 
     const handleDownloadTemplate = () => {
-        const templateHeaders = ['Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District', 'Client Location Name', 'Coordinate Status', 'Coordinate Source'];
-        const templateExampleRow = ['Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam', 'TCS Kochi Branch', 'verified', 'manual'];
+        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District', 'Client Location Name', 'Shift Pattern', 'Coordinate Status', 'Coordinate Source'];
+        const templateExampleRow = [OPERATIONAL_CLIENT_NAME, 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam', 'TCS Kochi Branch', '', 'verified', 'manual'];
         const templateData = [templateHeaders, templateExampleRow];
         const ws = XLSX.utils.aoa_to_sheet(templateData);
         const wb = XLSX.utils.book_new();
@@ -515,9 +573,9 @@ export default function SiteManagementPage() {
                         return;
                     }
 
-                    const clientName = OPERATIONAL_CLIENT_NAME;
-                    const siteName = row['Site Name'];
-                    const clientOption = operationalClient;
+                const clientName = String(row['Client Name'] || '').trim() || OPERATIONAL_CLIENT_NAME;
+                const siteName = row['Site Name'];
+                const clientOption = clients.find(client => client.name.toLowerCase() === clientName.toLowerCase()) ?? null;
                     
                     const uniqueKey = buildLocationIdentity([clientName, siteName, row['District']]);
                     if (existingSites.has(uniqueKey)) {
@@ -537,13 +595,18 @@ export default function SiteManagementPage() {
                     }
                     const { lat: latitude, lng: longitude } = parsedCoords;
                     const linkedClientLocationName = String(row['Client Location Name'] || '').trim();
+                    const importedShiftPattern = String(row['Shift Pattern'] || '').trim() as SiteShiftPattern | '';
                     const linkedClientLocation = linkedClientLocationName
                         ? clientLocations.find((location) =>
-                            (location.clientId ? location.clientId === operationalClient?.id : location.clientName?.toLowerCase() === clientName.toLowerCase()) &&
+                            (location.clientId ? location.clientId === clientOption?.id : location.clientName?.toLowerCase() === clientName.toLowerCase()) &&
                             location.locationName?.toLowerCase() === linkedClientLocationName.toLowerCase(),
                         )
                         : null;
                     
+                    const normalizedShiftPattern = importedShiftPattern === '2x12' || importedShiftPattern === '3x8'
+                        ? importedShiftPattern
+                        : '2x12';
+
                     const siteData = {
                       clientId: clientOption?.id ?? null,
                       clientName: clientName,
@@ -558,6 +621,9 @@ export default function SiteManagementPage() {
                       clientLocationName: linkedClientLocation?.locationName ?? null,
                       coordinateStatus: (String(row['Coordinate Status'] || '').trim() || 'verified') as CoordinateStatus,
                       coordinateSource: (String(row['Coordinate Source'] || '').trim() || 'manual') as CoordinateSource,
+                      shiftMode: clientName.toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? 'none' : 'fixed',
+                      shiftPattern: clientName.toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? null : normalizedShiftPattern,
+                      shiftTemplates: clientName.toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? [] : buildShiftTemplates(normalizedShiftPattern),
                       locationKey: buildLocationIdentity([clientName, siteName, row['District']]),
                       ...buildFirestoreCreateAudit(),
                     };
@@ -595,7 +661,7 @@ export default function SiteManagementPage() {
                     description: `Successfully imported ${validRecords.length} new sites.`,
                     duration: 5000
                 });
-                const successRecords = validRecords.map(data => ({ data: { ...data, 'Client Name': OPERATIONAL_CLIENT_NAME }, status: 'success', message: 'Successfully imported.'} as ProcessedRecord));
+                const successRecords = validRecords.map(data => ({ data: { ...data, 'Client Name': data.clientName }, status: 'success', message: 'Successfully imported.'} as ProcessedRecord));
                 setProcessedRecords(prev => [...prev, ...successRecords]);
 
             } catch (error: any) {
@@ -610,24 +676,24 @@ export default function SiteManagementPage() {
 
     const handleUpdateSite = async (updatedData: Partial<Site>) => {
         if (!editingSite) return;
-        if (!operationalClient) {
-            toast({ variant: "destructive", title: "TCS client missing", description: "Create the TCS client record first in Client Management." });
-            return;
-        }
         setIsSubmitting(true);
         try {
             const siteDocRef = doc(db, 'sites', editingSite.id);
+            const isTcs = (updatedData.clientName ?? editingSite.clientName ?? '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
             await updateDoc(siteDocRef, {
                 ...updatedData,
-                clientId: operationalClient.id,
-                clientName: OPERATIONAL_CLIENT_NAME,
                 // If geolocation updated and we have lat/lng inputs in formData, persist the strings too
                 ...(updatedData.geolocation ? { latString: (updatedData as any).latString ?? undefined, lngString: (updatedData as any).lngString ?? undefined } : {}),
                 locationKey: buildLocationIdentity([
-                    OPERATIONAL_CLIENT_NAME,
+                    updatedData.clientName ?? editingSite.clientName,
                     updatedData.siteName ?? editingSite.siteName,
                     updatedData.district ?? editingSite.district,
                 ]),
+                shiftMode: isTcs ? 'none' : (updatedData.shiftMode ?? editingSite.shiftMode ?? 'fixed'),
+                shiftPattern: isTcs ? null : (updatedData.shiftPattern ?? editingSite.shiftPattern ?? '2x12'),
+                shiftTemplates: isTcs
+                    ? []
+                    : (updatedData.shiftTemplates ?? editingSite.shiftTemplates ?? buildShiftTemplates(((updatedData.shiftPattern ?? editingSite.shiftPattern) as SiteShiftPattern | undefined) ?? '2x12')),
                 ...buildFirestoreUpdateAudit(),
                 auditTrail: arrayUnion(
                     buildFirestoreAuditEvent('site_updated', undefined, {
@@ -907,10 +973,6 @@ export default function SiteManagementPage() {
     };
 
     const handleBackfillCoordinateMetadata = async () => {
-        if (!operationalClient) {
-            toast({ variant: 'destructive', title: 'TCS client missing', description: 'Create the TCS client record first in Client Management.' });
-            return;
-        }
         setIsSubmitting(true);
         try {
             const snapshot = await getDocs(collection(db, 'sites'));
@@ -923,12 +985,16 @@ export default function SiteManagementPage() {
             let writes = 0;
             for (const siteDoc of snapshot.docs) {
                 const raw = siteDoc.data() as any;
+                const resolvedClient = clients.find(client => client.name === raw.clientName);
+                const isTcs = String(raw.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
                 batch.update(siteDoc.ref, {
-                    clientId: operationalClient.id,
-                    clientName: OPERATIONAL_CLIENT_NAME,
+                    clientId: raw.clientId ?? resolvedClient?.id ?? null,
                     coordinateStatus: deriveCoordinateStatus(raw),
                     coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : null),
-                    locationKey: raw.locationKey ?? buildLocationIdentity([OPERATIONAL_CLIENT_NAME, raw.siteName, raw.district]),
+                    shiftMode: raw.shiftMode ?? (isTcs ? 'none' : 'fixed'),
+                    shiftPattern: raw.shiftPattern ?? (isTcs ? null : '2x12'),
+                    shiftTemplates: raw.shiftTemplates ?? (isTcs ? [] : buildShiftTemplates('2x12')),
+                    locationKey: raw.locationKey ?? buildLocationIdentity([raw.clientName, raw.siteName, raw.district]),
                     updatedAt: serverTimestamp(),
                 });
                 writes += 1;
@@ -945,8 +1011,8 @@ export default function SiteManagementPage() {
             }
 
             toast({
-                title: 'TCS duty sites normalized',
-                description: 'Existing duty sites now carry TCS client metadata and coordinate state metadata.',
+                title: 'Site metadata backfilled',
+                description: 'Existing sites now carry coordinate metadata and default shift settings.',
             });
             fetchSites('first');
         } catch (error: any) {
@@ -982,23 +1048,13 @@ export default function SiteManagementPage() {
                 <AlertTitle>Instructions & Important Notes</AlertTitle>
                 <AlertDescription>
                     <ul className="list-disc list-inside space-y-1">
-                        <li>All duty sites in this system are treated as TCS duty sites.</li>
                         <li>Duty sites remain the operational source of truth for attendance and work orders.</li>
-                        <li>Link a duty site to a TCS center when it belongs to a known branch or center.</li>
+                        <li>TCS sites stay flexible with no recurring shift timing.</li>
+                        <li>Non-TCS sites can use fixed 2-shift/12-hour or 3-shift/8-hour patterns for attendance expectations.</li>
                         <li>Bulk import still supports <code>latitude,longitude</code>, with optional coordinate metadata columns.</li>
                     </ul>
                 </AlertDescription>
             </Alert>
-
-            {!operationalClient && (
-                <Alert variant="destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>TCS client record required</AlertTitle>
-                    <AlertDescription>
-                        Create a client named <strong>{OPERATIONAL_CLIENT_NAME}</strong> in Client Management before adding or normalizing duty sites.
-                    </AlertDescription>
-                </Alert>
-            )}
 
             <Card>
                 <CardHeader>
@@ -1011,12 +1067,12 @@ export default function SiteManagementPage() {
                             <Button onClick={handleDownloadTemplate} variant="outline">
                                 <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
                             </Button>
-                            <Button onClick={handleBackfillCoordinateMetadata} variant="outline" disabled={isSubmitting || !operationalClient}>
+                            <Button onClick={handleBackfillCoordinateMetadata} variant="outline" disabled={isSubmitting}>
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                                Normalize Existing Sites to TCS
+                                Backfill Site Metadata
                             </Button>
                         </div>
-                        <Button onClick={() => setIsCreateOpen(true)} disabled={!operationalClient}>
+                        <Button onClick={() => setIsCreateOpen(true)}>
                             Add Duty Site
                         </Button>
                     </div>
@@ -1034,7 +1090,7 @@ export default function SiteManagementPage() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button onClick={processAndUpload} disabled={isProcessing || !file || !operationalClient}>
+                    <Button onClick={processAndUpload} disabled={isProcessing || !file}>
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                         {isProcessing ? 'Processing...' : 'Process & Upload File'}
                     </Button>
@@ -1089,14 +1145,29 @@ export default function SiteManagementPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="new-client">Operational Client</Label>
-                            <Input
-                                id="new-client"
-                                value={operationalClient?.name ?? OPERATIONAL_CLIENT_NAME}
-                                readOnly
-                                disabled
-                            />
-                            <p className="text-xs text-muted-foreground">Duty sites are always created under the TCS client.</p>
+                            <Label htmlFor="new-client">Client</Label>
+                            <Select
+                                value={createData.clientId || undefined}
+                                onValueChange={(value) => {
+                                    const selectedClient = clients.find(client => client.id === value);
+                                    const isTcs = (selectedClient?.name || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
+                                    setCreateData({
+                                        ...createData,
+                                        clientId: value,
+                                        clientName: selectedClient?.name ?? '',
+                                        clientLocationId: undefined,
+                                        clientLocationName: undefined,
+                                        shiftMode: isTcs ? 'none' : 'fixed',
+                                        shiftPattern: isTcs ? null : ((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
+                                        shiftTemplates: isTcs ? [] : buildShiftTemplates(((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')),
+                                    });
+                                }}
+                            >
+                                <SelectTrigger id="new-client"><SelectValue placeholder="Select client" /></SelectTrigger>
+                                <SelectContent>
+                                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-site-name">Site Name</Label>
@@ -1111,7 +1182,7 @@ export default function SiteManagementPage() {
                             <Input id="new-address" value={createData.siteAddress || ''} onChange={(e) => setCreateData({ ...createData, siteAddress: e.target.value })} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="new-client-location">Linked Client Location</Label>
+                            <Label htmlFor="new-client-location">{(createData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? 'Linked TCS Center' : 'Linked Client Location'}</Label>
                             <Select
                                 value={createData.clientLocationId || 'none'}
                                 onValueChange={(value) => {
@@ -1135,7 +1206,7 @@ export default function SiteManagementPage() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground">This links the duty site to a TCS center when one exists.</p>
+                            <p className="text-xs text-muted-foreground">This links the duty site to a known physical branch or center when one exists.</p>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-district">District</Label>
@@ -1156,6 +1227,45 @@ export default function SiteManagementPage() {
                                 onChange={(e) => setCreateData({ ...createData, geofenceRadiusMeters: Math.max(1, Number(e.target.value || 150)) })}
                             />
                         </div>
+                        {(createData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? (
+                            <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                                TCS sites stay flexible. No recurring shift timing is enforced here.
+                            </div>
+                        ) : (
+                            <div className="grid gap-3 rounded-lg border p-4">
+                                <div className="space-y-1">
+                                    <Label>Shift pattern</Label>
+                                    <p className="text-xs text-muted-foreground">Attendance will automatically expect the next shift after the current shift ends.</p>
+                                </div>
+                                <Select
+                                    value={(createData.shiftPattern as string | undefined) || '2x12'}
+                                    onValueChange={(value) => {
+                                        const pattern = value as SiteShiftPattern;
+                                        setCreateData({
+                                            ...createData,
+                                            shiftMode: 'fixed',
+                                            shiftPattern: pattern,
+                                            shiftTemplates: buildShiftTemplates(pattern),
+                                        });
+                                    }}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Select shift pattern" /></SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(SHIFT_PATTERN_LABELS).map(([key, label]) => (
+                                            <SelectItem key={key} value={key}>{label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                    {(createData.shiftTemplates || buildShiftTemplates((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')).map((shift) => (
+                                        <div key={shift.code} className="rounded-md border bg-muted/20 p-3 text-sm">
+                                            <p className="font-medium">{shift.label}</p>
+                                            <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <LocationEditorCard
                             entityType="site"
                             value={{
@@ -1186,19 +1296,16 @@ export default function SiteManagementPage() {
                     <DialogFooter>
                         <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                         <Button onClick={async () => {
-                            if (!operationalClient) {
-                                toast({ variant: 'destructive', title: 'TCS client missing', description: 'Create the TCS client record first in Client Management.' });
-                                return;
-                            }
-                            if (!createData.siteName || !createData.siteAddress || !createData.district || !hasValidCoordinates(createData.geolocation)) {
+                            if (!createData.clientId || !createData.clientName || !createData.siteName || !createData.siteAddress || !createData.district || !hasValidCoordinates(createData.geolocation)) {
                                 toast({ variant: 'destructive', title: 'Missing Data', description: 'Please fill all required fields and confirm valid coordinates.' });
                                 return;
                             }
+                            const isTcs = createData.clientName.trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
                             try {
                                 setIsSubmitting(true);
                                 await addDoc(collection(db, 'sites'), {
-                                    clientId: operationalClient.id,
-                                    clientName: OPERATIONAL_CLIENT_NAME,
+                                    clientId: createData.clientId,
+                                    clientName: createData.clientName,
                                     siteName: createData.siteName,
                                     siteId: createData.siteId || null,
                                     siteAddress: createData.siteAddress,
@@ -1210,20 +1317,23 @@ export default function SiteManagementPage() {
                                     coordinateStatus: deriveCoordinateStatus(createData),
                                     coordinateSource: createData.coordinateSource ?? 'manual',
                                     placeAccuracy: createData.placeAccuracy ?? null,
+                                    shiftMode: isTcs ? 'none' : 'fixed',
+                                    shiftPattern: isTcs ? null : ((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
+                                    shiftTemplates: isTcs ? [] : (createData.shiftTemplates || buildShiftTemplates((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')),
                                     clientLocationId: createData.clientLocationId ?? null,
                                     clientLocationName: createData.clientLocationName ?? null,
-                                    locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, createData.siteName, createData.district]),
+                                    locationKey: buildLocationIdentity([createData.clientName, createData.siteName, createData.district]),
                                     ...buildFirestoreCreateAudit(),
                                     auditTrail: arrayUnion(
                                         buildFirestoreAuditEvent('site_created', undefined, {
-                                            clientName: OPERATIONAL_CLIENT_NAME,
+                                            clientName: createData.clientName,
                                             siteName: createData.siteName,
                                         }),
                                     ),
                                 });
                                 toast({ title: 'Site Created', description: 'The new site has been added.' });
                                 setIsCreateOpen(false);
-                                setCreateData({ clientId: operationalClient.id, clientName: OPERATIONAL_CLIENT_NAME, siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, latString: '', lngString: '', coordinateStatus: 'missing' });
+                                setCreateData({ clientId: operationalClient?.id || '', clientName: operationalClient?.name || '', siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, latString: '', lngString: '', coordinateStatus: 'missing', shiftMode: operationalClient ? 'none' : undefined });
                                 fetchSites('first');
                                 setCurrentPage(1);
                             } catch (e) {
@@ -1265,14 +1375,20 @@ export default function SiteManagementPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Existing Sites</CardTitle>
-                    <CardDescription>A list of all currently managed sites in the system.</CardDescription>
+                    <CardTitle>Existing Duty Sites</CardTitle>
+                    <CardDescription>A list of all currently managed operational sites in the system.</CardDescription>
                 </CardHeader>
                  <CardContent>
-                    <div className="grid grid-cols-1 gap-4 p-4 border-b sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 p-4 border-b sm:grid-cols-2 xl:grid-cols-5">
                         <div className="space-y-1.5">
-                            <Label htmlFor="operational-client">Operational Client</Label>
-                            <Input id="operational-client" value={operationalClient?.name ?? OPERATIONAL_CLIENT_NAME} readOnly disabled />
+                            <Label htmlFor="client-filter">Filter by Client</Label>
+                            <Select value={selectedClient} onValueChange={setSelectedClient} disabled={isFilterDataLoading}>
+                                <SelectTrigger id="client-filter"><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Clients</SelectItem>
+                                    {clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="district-filter">Filter by District</Label>
@@ -1383,6 +1499,11 @@ export default function SiteManagementPage() {
                                                     </Badge>
                                                     <Badge variant="secondary">{site.clientName}</Badge>
                                                     <Badge variant="outline">{site.district}</Badge>
+                                                    <Badge variant={site.shiftMode === 'fixed' ? 'default' : 'outline'}>
+                                                        {site.shiftMode === 'fixed'
+                                                            ? SHIFT_PATTERN_LABELS[(site.shiftPattern as SiteShiftPattern | undefined) ?? '2x12']
+                                                            : 'Flexible'}
+                                                    </Badge>
                                                 </div>
                                                 <p className="text-sm text-muted-foreground">
                                                     {site.clientLocationName ? `${site.clientLocationName} · ` : ''}{site.clientName}
@@ -1441,7 +1562,7 @@ export default function SiteManagementPage() {
                         <DialogTitle>Edit Site</DialogTitle>
                         <DialogDescription>Update the details for "{editingSite?.siteName}".</DialogDescription>
                     </DialogHeader>
-                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} clientLocations={clientLocations} operationalClient={operationalClient} />}
+                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} clients={clients} clientLocations={clientLocations} />}
                 </DialogContent>
             </Dialog>
 

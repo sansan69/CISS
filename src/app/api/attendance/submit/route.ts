@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { haversineDistanceMeters } from "@/lib/geo";
+import { resolveSiteShift, getNextShift } from "@/lib/shift-utils";
+import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import {
   attendanceSubmissionSchema,
   type AttendanceSubmission,
@@ -131,35 +133,51 @@ export async function POST(request: NextRequest) {
         throw new Error("Selected site does not have valid coordinates configured.");
       }
 
-      const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
-      const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
-      const workOrdersSnapshot = await adminDb
-        .collection("workOrders")
-        .where("siteId", "==", payload.siteId)
-        .where("date", ">=", startOfDay)
-        .where("date", "<=", endOfDay)
-        .limit(5)
-        .get();
+      const isTcsSite =
+        String(siteData.clientName || "").trim().toLowerCase() ===
+        OPERATIONAL_CLIENT_NAME.toLowerCase();
+      const siteShiftMode = siteData.shiftMode === "fixed" ? "fixed" : "none";
+      const siteShiftTemplates = Array.isArray(siteData.shiftTemplates)
+        ? siteData.shiftTemplates
+        : [];
+      const resolvedShift = resolveSiteShift(siteShiftMode, siteShiftTemplates, new Date());
+      const nextShift = getNextShift(siteShiftMode, siteShiftTemplates, resolvedShift?.code);
 
-      if (workOrdersSnapshot.empty) {
-        throw new Error("No active work order exists for the selected site today.");
-      }
+      if (isTcsSite || siteShiftMode !== "fixed") {
+        const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
+        const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
+        const workOrdersSnapshot = await adminDb
+          .collection("workOrders")
+          .where("siteId", "==", payload.siteId)
+          .where("date", ">=", startOfDay)
+          .where("date", "<=", endOfDay)
+          .limit(5)
+          .get();
 
-      const matchingWorkOrder = workOrdersSnapshot.docs
-        .map((doc) => doc.data() as Record<string, any>)
-        .find((workOrder) => {
-          const assignedGuards = Array.isArray(workOrder.assignedGuards)
-            ? workOrder.assignedGuards
-            : [];
-          return (
-            assignedGuards.length === 0 ||
-            assignedGuards.some((guard) => guard?.uid === payload.employeeDocId)
+        if (workOrdersSnapshot.empty) {
+          throw new Error("No active work order exists for the selected site today.");
+        }
+
+        const matchingWorkOrder = workOrdersSnapshot.docs
+          .map((doc) => doc.data() as Record<string, any>)
+          .find((workOrder) => {
+            const assignedGuards = Array.isArray(workOrder.assignedGuards)
+              ? workOrder.assignedGuards
+              : [];
+            return (
+              assignedGuards.length === 0 ||
+              assignedGuards.some((guard) => guard?.uid === payload.employeeDocId)
+            );
+          });
+
+        if (!matchingWorkOrder) {
+          throw new Error(
+            "This employee is not assigned to the selected site for today's work order.",
           );
-        });
-
-      if (!matchingWorkOrder) {
+        }
+      } else if (!resolvedShift) {
         throw new Error(
-          "This employee is not assigned to the selected site for today's work order.",
+          "No active fixed shift matches the current time for this site. Please contact admin.",
         );
       }
 
@@ -229,6 +247,12 @@ export async function POST(request: NextRequest) {
         siteId: payload.siteId,
         siteName: payload.siteName,
         clientName: siteData.clientName || payload.clientName || null,
+        shiftCode: payload.shiftCode ?? resolvedShift?.code ?? null,
+        shiftLabel: payload.shiftLabel ?? resolvedShift?.label ?? null,
+        shiftStartTime: payload.shiftStartTime ?? resolvedShift?.startTime ?? null,
+        shiftEndTime: payload.shiftEndTime ?? resolvedShift?.endTime ?? null,
+        nextShiftCode: payload.nextShiftCode ?? nextShift?.code ?? null,
+        nextShiftStartsAt: payload.nextShiftStartsAt ?? nextShift?.startTime ?? null,
         siteCoords,
         locationText: payload.locationText,
         locationCoords: payload.locationCoords,
@@ -256,6 +280,7 @@ export async function POST(request: NextRequest) {
           employeeName: payload.employeeName,
           lastStatus: payload.status,
           lastSiteId: payload.siteId,
+          lastShiftCode: payload.shiftCode ?? resolvedShift?.code ?? null,
           lastAttendanceDate: attendanceDate,
           lastLoggedAt: now,
           updatedAt: now,
@@ -285,7 +310,7 @@ export async function POST(request: NextRequest) {
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitFailure);
     const status =
       typeof error?.message === "string" &&
-      /not found|mismatch|invalid|Duplicate|within .* meters|active employees|assigned|work order|OUT is only allowed|closed for today/i.test(
+      /not found|mismatch|invalid|Duplicate|within .* meters|active employees|assigned|work order|OUT is only allowed|closed for today|shift/i.test(
         error.message,
       )
         ? 400

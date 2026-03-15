@@ -21,12 +21,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { getNextShift, resolveSiteShift } from '@/lib/shift-utils';
 import type {
   AttendancePhotoCompliance,
   AttendanceSubmission,
   DeviceAttendanceHistoryItem,
   QueuedAttendanceSubmission,
 } from '@/types/attendance';
+import type { ShiftTemplate } from '@/types/location';
 
 type SiteOption = {
   id: string;
@@ -36,6 +38,9 @@ type SiteOption = {
   geofenceRadiusMeters?: number;
   lat?: number;
   lng?: number;
+  shiftMode?: 'none' | 'fixed';
+  shiftPattern?: '2x12' | '3x8' | null;
+  shiftTemplates?: ShiftTemplate[];
 };
 
 type ScannedEmployee = {
@@ -111,6 +116,14 @@ export default function AttendancePage() {
   const selectedSite = useMemo(
     () => allSites.find((site) => site.id === selectedSiteId) ?? null,
     [allSites, selectedSiteId],
+  );
+  const resolvedShift = useMemo(
+    () => resolveSiteShift(selectedSite?.shiftMode, selectedSite?.shiftTemplates, new Date()),
+    [selectedSite],
+  );
+  const nextResolvedShift = useMemo(
+    () => getNextShift(selectedSite?.shiftMode, selectedSite?.shiftTemplates, resolvedShift?.code),
+    [selectedSite, resolvedShift],
   );
 
   const districtSiteOptions = useMemo(() => {
@@ -196,6 +209,9 @@ export default function AttendancePage() {
             geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : undefined,
             lat,
             lng,
+            shiftMode: data.shiftMode,
+            shiftPattern: data.shiftPattern,
+            shiftTemplates: Array.isArray(data.shiftTemplates) ? data.shiftTemplates : [],
           };
         });
         setAllSites(options);
@@ -772,6 +788,7 @@ export default function AttendancePage() {
     district: payload.district,
     siteName: payload.siteName,
     clientName: payload.clientName,
+    shiftLabel: payload.shiftLabel,
     location: payload.locationText,
     photoUrl,
     syncStatus,
@@ -911,6 +928,14 @@ export default function AttendancePage() {
       });
       return;
     }
+    if (selectedSite.shiftMode === 'fixed' && !resolvedShift) {
+      toast({
+        variant: 'destructive',
+        title: 'Shift not resolved',
+        description: 'This site uses fixed shifts, but no active shift matches the current time. Please contact admin.',
+      });
+      return;
+    }
 
     // Additional safety: ensure employee is marking attendance only for their client
     if (scannedEmployee.clientName && selectedSite.clientName && scannedEmployee.clientName !== selectedSite.clientName) {
@@ -945,6 +970,12 @@ export default function AttendancePage() {
       siteId: selectedSiteId,
       siteName: selectedSite.siteName,
       clientName: selectedSite.clientName,
+      shiftCode: resolvedShift?.code,
+      shiftLabel: resolvedShift?.label,
+      shiftStartTime: resolvedShift?.startTime,
+      shiftEndTime: resolvedShift?.endTime,
+      nextShiftCode: nextResolvedShift?.code,
+      nextShiftStartsAt: nextResolvedShift?.startTime,
       siteCoords: { lat: selectedSite.lat, lng: selectedSite.lng },
       locationText: location || '',
       locationCoords,
@@ -1236,6 +1267,17 @@ export default function AttendancePage() {
                   <p className="text-sm text-muted-foreground">
                     {selectedSite ? `${selectedSite.clientName} • ${selectedDistrict}` : 'Auto-detect will choose the nearest center.'}
                   </p>
+                  {resolvedShift && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Expected shift: <span className="font-medium text-foreground">{resolvedShift.label}</span> ({resolvedShift.startTime} - {resolvedShift.endTime})
+                    </p>
+                  )}
+                  {!resolvedShift && selectedSite?.shiftMode === 'fixed' && (
+                    <p className="mt-1 text-sm text-amber-700">No active shift matched the current time. Ask admin to check the site shift setup.</p>
+                  )}
+                  {resolvedShift && nextResolvedShift && (
+                    <p className="mt-1 text-xs text-muted-foreground">Next shift expected after this window: {nextResolvedShift.label} from {nextResolvedShift.startTime}</p>
+                  )}
                   {selectedSiteDistance != null && (
                     <p className="mt-1 text-xs text-muted-foreground">About {Math.round(selectedSiteDistance)} meters away</p>
                   )}
@@ -1460,7 +1502,7 @@ export default function AttendancePage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium">{record.employeeName}</p>
-                        <p className="text-xs text-muted-foreground">{record.siteName} • {record.time}</p>
+                        <p className="text-xs text-muted-foreground">{record.siteName} • {record.shiftLabel ? `${record.shiftLabel} • ` : ''}{record.time}</p>
                       </div>
                       <div className="flex gap-2">
                         <Badge variant={record.status === 'In' ? 'default' : 'destructive'}>{record.status}</Badge>
