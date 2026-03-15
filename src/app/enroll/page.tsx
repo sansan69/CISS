@@ -731,19 +731,19 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-28 sm:pb-32">
-              <div className="space-y-4 rounded-[28px] border bg-muted/30 p-4 sm:p-6 lg:p-8">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="space-y-3 rounded-[24px] border bg-muted/30 p-3 sm:space-y-4 sm:p-6 lg:p-8">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div className="max-w-3xl">
                     <p className="text-xs font-semibold uppercase tracking-[0.32em] text-primary">Step {currentStep + 1} of {ENROLLMENT_STEPS.length}</p>
-                    <h3 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{stepConfig.title}</h3>
-                    <p className="mt-2 max-w-2xl text-base text-muted-foreground sm:text-lg">{stepConfig.description}</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-tight sm:mt-2 sm:text-4xl">{stepConfig.title}</h3>
+                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:mt-2 sm:text-lg">{stepConfig.description}</p>
                   </div>
-                  <div className="rounded-2xl border bg-background px-4 py-3 sm:px-5">
+                  <div className="rounded-2xl border bg-background px-3 py-2.5 shadow-sm sm:px-5 sm:py-3">
                     <div className="flex items-end gap-3">
-                      <p className="text-3xl font-semibold sm:text-4xl">{Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%</p>
-                      <p className="pb-1 text-sm text-muted-foreground">complete</p>
+                      <p className="text-2xl font-semibold sm:text-4xl">{Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%</p>
+                      <p className="pb-0.5 text-xs text-muted-foreground sm:pb-1 sm:text-sm">complete</p>
                     </div>
-                    <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted sm:mt-3 sm:h-2.5">
                       <div
                         className="h-full rounded-full bg-primary transition-all duration-300"
                         style={{ width: `${Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%` }}
@@ -752,7 +752,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
                     const isComplete = index < currentStep;
@@ -760,8 +760,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <button
                         key={step.key}
                         type="button"
-                        className={cn(
-                          "min-w-0 rounded-2xl border px-4 py-3 text-left transition",
+                          className={cn(
+                          "min-w-0 rounded-2xl border px-3 py-2.5 text-left transition sm:px-4 sm:py-3",
                           isActive && "border-primary bg-primary text-primary-foreground shadow-sm",
                           isComplete && "border-primary/30 bg-primary/10 text-primary",
                           !isActive && !isComplete && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
@@ -773,14 +773,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                           }
                         }}
                       >
-                        <span className="block text-[11px] uppercase tracking-[0.24em] opacity-80">{isComplete ? "Done" : `Step ${index + 1}`}</span>
-                        <span className="mt-2 block text-lg font-semibold leading-tight">{step.title}</span>
+                        <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80 sm:text-[11px] sm:tracking-[0.24em]">{isComplete ? "Done" : `Step ${index + 1}`}</span>
+                        <span className="mt-1.5 block text-base font-semibold leading-tight sm:mt-2 sm:text-lg">{step.title}</span>
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                   <StatusPill label="Required proofs" value={`${completedDocumentCount}/6 ready`} tone={completedDocumentCount === 6 ? "success" : "pending"} />
                   <StatusPill label="Client" value={watchedValues?.clientName || "Pending"} tone={watchedValues?.clientName ? "success" : "pending"} />
                   <StatusPill label="Contact" value={watchedValues?.phoneNumber ? "Added" : "Pending"} tone={watchedValues?.phoneNumber ? "success" : "pending"} />
@@ -1152,9 +1152,11 @@ const StatusPill = ({
   value: string;
   tone: "success" | "pending";
 }) => (
-  <div className="rounded-2xl border bg-background px-4 py-4 shadow-sm">
-    <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">{label}</p>
-    <p className={cn("mt-2 text-xl font-semibold leading-tight break-words", tone === "success" ? "text-green-700" : "text-amber-700")}>{value}</p>
+  <div className="rounded-2xl border bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+    <div className="flex min-h-[3rem] flex-col justify-between gap-1 sm:min-h-0 sm:block">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px] sm:tracking-[0.24em]">{label}</p>
+      <p className={cn("text-base font-semibold leading-tight break-words sm:mt-2 sm:text-xl", tone === "success" ? "text-green-700" : "text-amber-700")}>{value}</p>
+    </div>
   </div>
 );
 
