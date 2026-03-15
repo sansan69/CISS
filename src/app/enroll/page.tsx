@@ -1144,39 +1144,27 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   return (
     <>
       <Card className="mx-auto w-full max-w-6xl overflow-hidden border-t-4 border-primary shadow-xl">
-        <CardHeader className="px-5 pb-4 pt-7 text-center sm:px-8 sm:pb-5 lg:px-10">
-          <CardTitle className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">Employee Registration</CardTitle>
-          <CardDescription className="mx-auto mt-2 max-w-xl text-sm sm:text-base">Complete the form step by step.</CardDescription>
+        <CardHeader className="px-5 pb-3 pt-6 text-center sm:px-8 sm:pb-4 lg:px-10">
+          <CardTitle className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">Employee Registration</CardTitle>
+          <CardDescription className="mx-auto mt-1 max-w-lg text-xs sm:text-sm">Fill any section now and continue later from this device.</CardDescription>
         </CardHeader>
         <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} className="space-y-8 pb-28 sm:pb-32">
-              <div className="space-y-3 rounded-[24px] border bg-muted/20 p-3 sm:space-y-4 sm:p-5 lg:p-6">
+              <div className="space-y-3 rounded-[20px] border bg-muted/10 p-3 sm:p-4">
                 <div className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-primary">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                         Step {currentStep + 1} of {ENROLLMENT_STEPS.length}
-                      </span>
-                      <span className="font-semibold text-foreground">{stepConfig.title}</span>
+                      </p>
+                      <p className="text-lg font-semibold text-foreground sm:text-xl">{stepConfig.title}</p>
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs font-medium text-muted-foreground sm:text-sm">
                       {completionPercent}% complete
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-                    <span>{draftStatusLabel}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto px-0 py-0 text-xs text-primary hover:bg-transparent hover:text-primary/80"
-                      onClick={() => void clearDraft({ resetForm: true, keepPhoneNumber: !!initialPhoneNumberFromQuery })}
-                    >
-                      Clear saved draft
-                    </Button>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-300"
                       style={{ width: `${completionPercent}%` }}
@@ -1184,7 +1172,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
                     const stepErrorCount = step.fields.filter((fieldName) => validationIssuesByField.has(fieldName)).length;
@@ -1194,7 +1182,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         key={step.key}
                         type="button"
                         className={cn(
-                          "min-w-0 rounded-xl border px-3 py-2 text-left transition",
+                          "min-w-0 rounded-lg border px-2.5 py-2 text-left transition",
                           isActive && "border-primary bg-primary text-primary-foreground shadow-sm",
                           isComplete && "border-primary/30 bg-primary/10 text-primary",
                           stepErrorCount > 0 && !isActive && "border-amber-300 bg-amber-50 text-amber-900",
@@ -1202,10 +1190,10 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         )}
                         onClick={() => void goToStep(index)}
                       >
-                        <span className="block text-[10px] uppercase tracking-[0.18em] opacity-80">
+                        <span className="block text-[9px] uppercase tracking-[0.16em] opacity-80">
                           {stepErrorCount > 0 ? `${stepErrorCount} missing` : isActive ? "Current" : "Ready"}
                         </span>
-                        <span className="mt-1 block text-sm font-semibold leading-tight sm:text-base">{step.title}</span>
+                        <span className="mt-1 block text-sm font-semibold leading-tight">{step.title}</span>
                       </button>
                     );
                   })}
@@ -1453,9 +1441,18 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
               <div className="sticky bottom-3 z-10 rounded-2xl border bg-background/95 px-4 py-4 shadow-lg backdrop-blur sm:px-5 lg:px-6">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {isLastStep ? "One final check, then you can submit with confidence." : "Use Next to move forward without losing your place on mobile."}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">{draftStatusLabel}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto px-0 py-0 text-xs text-primary hover:bg-transparent hover:text-primary/80"
+                      onClick={() => void clearDraft({ resetForm: true, keepPhoneNumber: !!initialPhoneNumberFromQuery })}
+                    >
+                      Clear saved draft
+                    </Button>
+                  </div>
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <Button type="button" variant="outline" onClick={goToPreviousStep} disabled={currentStep === 0 || isLoading || form.formState.isSubmitting}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Back
