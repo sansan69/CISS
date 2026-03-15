@@ -6,6 +6,7 @@ export const attendanceSubmissionSchema = z.object({
   employeeId: z.string().min(1),
   employeeName: z.string().min(1),
   employeeDocId: z.string().min(1),
+  reportedAtClient: z.string().datetime().optional(),
   employeePhoneNumber: z.string().optional(),
   employeeClientName: z.string().optional(),
   status: attendanceStatusSchema,

@@ -56,11 +56,14 @@ const ATTENDANCE_QUEUE_STORAGE_KEY = 'ciss_attendance_queue_v1';
 const ATTENDANCE_HISTORY_STORAGE_KEY = 'ciss_attendance_history_v1';
 
 export default function AttendancePage() {
+  const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [watermarkedPhoto, setWatermarkedPhoto] = useState<string | null>(null);
   const [location, setLocation] = useState<string | null>(null);
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number; accuracyMeters?: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [reportingStartedAt, setReportingStartedAt] = useState<string | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [allSites, setAllSites] = useState<SiteOption[]>([]);
@@ -252,20 +255,26 @@ export default function AttendancePage() {
   }, [allSites, applySuggestedSite, findSuggestedSite, hasManualCenterOverride, locationCoords, scannedEmployee?.clientName]);
 
   const handleStartVerification = async () => {
-    setIsFetchingLocation(true);
-    setIsTakingPhoto(true);
+    setWorkflowStep('scanning');
+    setHasScanned(false);
+    setScanResult(null);
+    setScannedEmployee(null);
+    setCapturedPhoto(null);
+    setWatermarkedPhoto(null);
+    setReportingStartedAt(null);
+    setLocationError(null);
 
     try {
       if (!locationCoords) {
-        await getDeviceLocation();
+        setIsFetchingLocation(true);
+        void getDeviceLocation().catch((error: any) => {
+          setLocationError(error.message || 'Location could not be captured.');
+        });
       }
-      // Start scanner which will also start the camera stream
       await handleScanAndCapture();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Verification Error", description: error.message });
       resetVerificationState({ keepCenter: true, keepLocation: true });
-    } finally {
-      setIsFetchingLocation(false);
     }
   };
 
@@ -279,13 +288,13 @@ export default function AttendancePage() {
         const { latitude, longitude, accuracy } = position.coords;
         setLocationCoords({ lat: latitude, lon: longitude, accuracyMeters: accuracy });
         setLocation(`Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}${accuracy ? ` (±${Math.round(accuracy)}m)` : ''}`);
+        setLocationError(null);
         setIsFetchingLocation(false);
-        toast({ title: "Location Acquired", description: "Device location captured." });
         resolve({ lat: latitude, lon: longitude, accuracyMeters: accuracy });
       },
       (error) => {
         console.error("Error getting location:", error);
-        setLocation('Error: Could not fetch');
+        setLocation(null);
         setIsFetchingLocation(false);
         reject(new Error("Could not fetch device location. Please enable location services."));
       },
@@ -339,9 +348,32 @@ export default function AttendancePage() {
     const photoDataUrl = canvas.toDataURL('image/jpeg', 0.9);
     setCapturedPhoto(photoDataUrl);
     toast({ title: 'Photo Captured' });
-    // Stop camera/decoder after capturing photo so UI can proceed to submit
     stopScanner();
     setIsTakingPhoto(false);
+    setWorkflowStep('review');
+  };
+
+  const resolveScannedEmployee = useCallback((employee: ScannedEmployee, sourceText: string) => {
+    setScannedEmployee(employee);
+    setScanResult(sourceText);
+    setHasScanned(true);
+    setReportingStartedAt(new Date().toISOString());
+    stopScanner();
+    setWorkflowStep('review');
+    toast({ title: 'Guard identified', description: employee.fullName });
+  }, [toast]);
+
+  const beginPhotoCapture = async () => {
+    setWorkflowStep('photo');
+    setCapturedPhoto(null);
+    setWatermarkedPhoto(null);
+    setIsTakingPhoto(true);
+    try {
+      await startCameraStream();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Camera Error', description: error.message });
+      setWorkflowStep('review');
+    }
   };
 
   const parseEmployeeIdFromText = (text: string): string | null => {
@@ -396,13 +428,11 @@ export default function AttendancePage() {
           (result, err, ctrl) => {
             if (result && !hasScanned) {
               const text = result.getText();
-              setScanResult(text);
               const parsedId = parseEmployeeIdFromText(text);
               if (parsedId) {
                 fetchEmployeeByEmployeeId(parsedId).then((emp) => {
                   if (emp) {
-                    setScannedEmployee(emp);
-                    toast({ title: 'QR Code Scanned', description: `${emp.fullName} (${parsedId})` });
+                    resolveScannedEmployee(emp, text);
                   } else {
                     toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
                   }
@@ -410,7 +440,6 @@ export default function AttendancePage() {
               } else {
                 toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
               }
-              setHasScanned(true);
               setIsScanning(false);
             }
           }
@@ -424,13 +453,11 @@ export default function AttendancePage() {
           (result, e2, ctrl) => {
             if (result && !hasScanned) {
               const text = result.getText();
-              setScanResult(text);
               const parsedId = parseEmployeeIdFromText(text);
               if (parsedId) {
                 fetchEmployeeByEmployeeId(parsedId).then((emp) => {
                   if (emp) {
-                    setScannedEmployee(emp);
-                    toast({ title: 'QR Code Scanned', description: `${emp.fullName} (${parsedId})` });
+                    resolveScannedEmployee(emp, text);
                   } else {
                     toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
                   }
@@ -438,7 +465,6 @@ export default function AttendancePage() {
               } else {
                 toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
               }
-              setHasScanned(true);
               setIsScanning(false);
             }
           }
@@ -520,7 +546,9 @@ export default function AttendancePage() {
     employeeId: payload.employeeId,
     employeeName: payload.employeeName,
     status: payload.status,
-    time: new Date().toLocaleTimeString(),
+    time: payload.reportedAtClient
+      ? new Date(payload.reportedAtClient).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+      : new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
     district: payload.district,
     siteName: payload.siteName,
     clientName: payload.clientName,
@@ -697,6 +725,7 @@ export default function AttendancePage() {
       employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
       employeeDocId: scannedEmployee.id,
       employeeName: scannedEmployee.fullName,
+      reportedAtClient: reportingStartedAt || new Date().toISOString(),
       employeePhoneNumber: scannedEmployee.phoneNumber,
       employeeClientName: scannedEmployee.clientName,
       status: selectedStatus,
@@ -769,13 +798,17 @@ export default function AttendancePage() {
   };
 
   const resetVerificationState = (options?: { keepCenter?: boolean; keepLocation?: boolean }) => {
+      setWorkflowStep('idle');
       setScanResult(null);
       setCapturedPhoto(null);
       setWatermarkedPhoto(null);
+      setReportingStartedAt(null);
+      setLocationError(options?.keepLocation ? locationError : null);
       if (!options?.keepLocation) {
         setLocation(null);
         setLocationCoords(null);
         setAutoDetectedSite(null);
+        setLocationError(null);
       }
       if (!options?.keepCenter) {
         setSelectedDistrict('');
@@ -792,217 +825,211 @@ export default function AttendancePage() {
 
   const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking;
   const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning;
-  const verificationStarted = isFetchingLocation || isTakingPhoto || !!capturedPhoto || !!scannedEmployee;
-  const completionCount = [isSelectionComplete, !!scannedEmployee, !!capturedPhoto].filter(Boolean).length;
+  const verificationStarted = workflowStep !== 'idle';
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
     : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:gap-6 md:p-6">
-      <Card className="overflow-hidden border-primary/15 bg-gradient-to-br from-background via-background to-primary/5">
-        <CardContent className="grid gap-4 p-5 md:grid-cols-[1.2fr_0.8fr] md:p-6">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-full px-3 py-1 text-xs uppercase tracking-[0.18em]">
-                Attendance Terminal
-              </Badge>
-              <Badge variant={queuedAttendance.length > 0 ? 'secondary' : 'outline'} className="rounded-full px-3 py-1">
-                {queuedAttendance.length > 0 ? `${queuedAttendance.length} queued` : 'Sync ready'}
-              </Badge>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Record Attendance</h1>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
-                The app now tries to fill today&apos;s duty center from the current location. Most users only need to confirm the employee, take one photo, and submit.
-              </p>
-            </div>
+    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-md flex-col gap-4 p-4 pb-8">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Attendance</p>
+            <h1 className="text-2xl font-bold tracking-tight">Record Duty Entry</h1>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
-            <div className="rounded-2xl border bg-background/90 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                <Clock3 className="h-4 w-4" />
-                Current Time
-              </div>
-              <p className="mt-2 text-lg font-semibold">{currentTime.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-              <p className="text-sm text-muted-foreground">{currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</p>
+          <Badge variant={queuedAttendance.length > 0 ? 'secondary' : 'outline'}>
+            {queuedAttendance.length > 0 ? `${queuedAttendance.length} queued` : currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
+          </Badge>
+        </div>
+        {selectedSite && workflowStep === 'idle' && (
+          <p className="text-sm text-muted-foreground">
+            Last used center: <span className="font-medium text-foreground">{selectedSite.siteName}</span>
+          </p>
+        )}
+      </div>
+
+      {workflowStep === 'idle' && (
+        <Card className="rounded-3xl">
+          <CardContent className="space-y-5 p-6 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <QrCode className="h-8 w-8" />
             </div>
-            <div className="rounded-2xl border bg-background/90 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                <Navigation className="h-4 w-4" />
-                Duty Center
-              </div>
-              <p className="mt-2 text-base font-semibold">
-                {selectedSite ? selectedSite.siteName : 'Will auto-detect after location is available'}
-              </p>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">Start attendance</h2>
               <p className="text-sm text-muted-foreground">
-                {selectedSite ? `${selectedSite.clientName} • ${selectedDistrict}` : 'You can still choose manually if needed.'}
+                Tap once, scan the guard QR, confirm the center if needed, take one full-size photo, and submit.
               </p>
             </div>
-            <div className="rounded-2xl border bg-background/90 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                <ListChecks className="h-4 w-4" />
-                Progress
-              </div>
-              <p className="mt-2 text-base font-semibold">{completionCount}/3 steps ready</p>
-              <Progress value={(completionCount / 3) * 100} className="mt-3 h-2" />
+            <Button size="lg" className="h-14 w-full text-base" onClick={handleStartVerification} disabled={isScanning || isFetchingLocation}>
+              {isScanning || isFetchingLocation ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ScanLine className="mr-2 h-5 w-5" />}
+              Start attendance
+            </Button>
+            <div className="rounded-2xl border bg-muted/30 p-4 text-left text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">For shared-center phones</p>
+              <p className="mt-1">After one guard is submitted, the center and location stay ready so the next guard can finish faster.</p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      <Alert>
-        {queuedAttendance.length > 0 ? <WifiOff className="h-4 w-4" /> : <RefreshCcw className="h-4 w-4" />}
-        <AlertTitle>{queuedAttendance.length > 0 ? 'Offline entries waiting' : 'Sync status is healthy'}</AlertTitle>
-        <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            {queuedAttendance.length > 0
-              ? `${queuedAttendance.length} attendance entr${queuedAttendance.length === 1 ? 'y is' : 'ies are'} stored on this device and ready to sync.`
-              : 'No pending attendance entries on this device right now.'}
-          </span>
-          <Button type="button" variant="outline" size="sm" onClick={flushQueuedAttendance} disabled={isSyncingQueue || queuedAttendance.length === 0}>
-            {isSyncingQueue ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-            Sync now
-          </Button>
-        </AlertDescription>
-      </Alert>
-
-      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/30">
-            <CardTitle>Guided Attendance Flow</CardTitle>
-            <CardDescription>
-              Step 1 confirms the duty center. Step 2 identifies the employee. Step 3 captures the photo and submits the attendance mark.
-            </CardDescription>
+      {workflowStep === 'scanning' && (
+        <Card className="rounded-3xl">
+          <CardHeader className="space-y-2">
+            <CardTitle>Scan the guard QR</CardTitle>
+            <CardDescription>Hold the QR in front of the camera. Location is being captured in the background.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 p-5 md:p-6">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`rounded-full p-2 ${isSelectionComplete ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
-                    <MapPin className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">1. Duty center</p>
-                    <p className="text-xs text-muted-foreground">{isSelectionComplete ? 'Ready' : 'Needs confirmation'}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`rounded-full p-2 ${scannedEmployee ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
-                    <UserRoundSearch className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">2. Employee</p>
-                    <p className="text-xs text-muted-foreground">{scannedEmployee ? scannedEmployee.fullName : 'Scan QR or enter ID'}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`rounded-full p-2 ${capturedPhoto ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
-                    <Camera className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">3. Photo + submit</p>
-                    <p className="text-xs text-muted-foreground">{capturedPhoto ? 'Photo ready' : 'Take a live photo'}</p>
-                  </div>
-                </div>
+          <CardContent className="space-y-4">
+            <div className="relative aspect-[3/4] overflow-hidden rounded-3xl border bg-black">
+              <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
+              <div className="pointer-events-none absolute inset-x-6 top-1/2 h-44 -translate-y-1/2 rounded-3xl border-2 border-white/80" />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-center text-sm text-white">
+                Show the QR clearly inside the frame
               </div>
             </div>
 
-            <div className="rounded-2xl border bg-muted/20 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Start attendance</p>
+            <div className="space-y-3 rounded-2xl border p-4">
+              <div className="flex items-start gap-3">
+                <MapPin className={`mt-0.5 h-5 w-5 ${locationCoords ? 'text-green-600' : locationError ? 'text-destructive' : 'text-muted-foreground'}`} />
+                <div className="min-w-0">
+                  <p className="font-medium">Location status</p>
                   <p className="text-sm text-muted-foreground">
-                    This opens the camera and captures the current location for today&apos;s duty center.
+                    {locationCoords
+                      ? 'Location captured in the background.'
+                      : locationError
+                        ? locationError
+                        : 'Requesting location permission...'}
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button onClick={handleStartVerification} disabled={isLoading} className="min-w-[180px]">
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanLine className="mr-2 h-4 w-4" />}
-                    {verificationStarted ? 'Continue scanning' : 'Start attendance'}
-                  </Button>
+              </div>
+              {locationError && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={async () => {
+                    setLocationError(null);
+                    setIsFetchingLocation(true);
+                    try {
+                      await getDeviceLocation();
+                    } catch (error: any) {
+                      setLocationError(error.message || 'Location could not be captured.');
+                    }
+                  }}
+                >
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Retry location
+                </Button>
+              )}
+            </div>
+
+            <Accordion type="single" collapsible className="rounded-2xl border px-4">
+              <AccordionItem value="manual-id" className="border-none">
+                <AccordionTrigger>QR not working? Use manual employee ID</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid gap-2 pb-1">
+                    <Input placeholder="Enter employee ID" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        if (!manualEmployeeId.trim()) {
+                          toast({ variant: 'destructive', title: 'Enter employee ID' });
+                          return;
+                        }
+                        const emp = await fetchEmployeeByEmployeeId(manualEmployeeId.trim());
+                        if (emp) {
+                          resolveScannedEmployee(emp, `Manual:${manualEmployeeId.trim()}`);
+                          if (!locationCoords && !isFetchingLocation) {
+                            setIsFetchingLocation(true);
+                            void getDeviceLocation().catch((error: any) => setLocationError(error.message || 'Location could not be captured.'));
+                          }
+                        } else {
+                          toast({ variant: 'destructive', title: 'Not found', description: 'No employee with that ID.' });
+                        }
+                      }}
+                    >
+                      Continue with manual ID
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
+      {(workflowStep === 'review' || workflowStep === 'photo') && (
+        <Card className="rounded-3xl">
+          <CardHeader className="space-y-2">
+            <CardTitle>{workflowStep === 'photo' ? 'Take full-size guard photo' : 'Confirm details'}</CardTitle>
+            <CardDescription>
+              {workflowStep === 'photo'
+                ? 'Make sure the guard is clearly visible before capturing the photo.'
+                : 'Review the guard, center, time, and status before the final photo and submit.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-2xl border p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Guard identified</p>
+              <p className="mt-2 text-lg font-semibold">{scannedEmployee?.fullName || 'Pending'}</p>
+              <p className="text-sm text-muted-foreground">{scannedEmployee?.employeeCode || scanResult || 'No employee selected yet'}</p>
+              {reportingStartedAt && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Reported at {new Date(reportingStartedAt).toLocaleDateString('en-IN')} • {new Date(reportingStartedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+
+            {locationError && (
+              <Alert variant="destructive">
+                <MapPin className="h-4 w-4" />
+                <AlertTitle>Location still needed</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>Turn on location services and allow location access before submitting this attendance.</p>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setHasManualCenterOverride(false);
-                      refreshSuggestedCenter();
+                    className="w-full"
+                    onClick={async () => {
+                      setLocationError(null);
+                      setIsFetchingLocation(true);
+                      try {
+                        await getDeviceLocation();
+                      } catch (error: any) {
+                        setLocationError(error.message || 'Location could not be captured.');
+                      }
                     }}
-                    disabled={!locationCoords || isLoadingCenters}
                   >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Recheck center
+                    Retry location
                   </Button>
-                </div>
-              </div>
-            </div>
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="rounded-2xl border p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold">Detected duty center</p>
-                  <p className="mt-1 text-base font-semibold">
-                    {selectedSite ? selectedSite.siteName : 'No center selected yet'}
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Center</p>
+                  <p className="mt-2 text-base font-semibold">{selectedSite ? selectedSite.siteName : 'Waiting for location'}</p>
                   <p className="text-sm text-muted-foreground">
-                    {selectedSite
-                      ? `${selectedSite.clientName} • ${selectedDistrict}`
-                      : 'Location will suggest the nearest center automatically.'}
+                    {selectedSite ? `${selectedSite.clientName} • ${selectedDistrict}` : 'Auto-detect will choose the nearest center.'}
                   </p>
                   {selectedSiteDistance != null && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      About {Math.round(selectedSiteDistance)} meters from current location
-                    </p>
-                  )}
-                  {autoDetectedSite && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge variant="secondary">
-                        {autoDetectedSite.matchedBy === 'client' ? 'Matched to employee client' : 'Nearest center selected'}
-                      </Badge>
-                      <Badge variant={autoDetectedSite.withinGeofence ? 'outline' : 'secondary'}>
-                        {autoDetectedSite.withinGeofence ? 'Inside allowed radius' : 'Please review center before submit'}
-                      </Badge>
-                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">About {Math.round(selectedSiteDistance)} meters away</p>
                   )}
                 </div>
-                <div className="w-full max-w-sm rounded-2xl border bg-background p-3">
-                  <div className="grid gap-3">
-                    <div>
-                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Mark status</Label>
-                      <RadioGroup
-                        value={selectedStatus}
-                        onValueChange={(value) => setSelectedStatus(value as 'In' | 'Out')}
-                        className="mt-2 grid grid-cols-2 gap-2"
-                      >
-                        <Label htmlFor="status-in" className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'In' ? 'border-primary bg-primary text-primary-foreground' : 'bg-background'}`}>
-                          <RadioGroupItem value="In" id="status-in" className="sr-only" />
-                          <ArrowRight className="h-4 w-4 rotate-[-90deg]" />
-                          Mark IN
-                        </Label>
-                        <Label htmlFor="status-out" className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'Out' ? 'border-primary bg-primary text-primary-foreground' : 'bg-background'}`}>
-                          <RadioGroupItem value="Out" id="status-out" className="sr-only" />
-                          <ArrowRight className="h-4 w-4 rotate-90" />
-                          Mark OUT
-                        </Label>
-                      </RadioGroup>
-                    </div>
-                    <Button onClick={handleSubmitAttendance} disabled={!canSubmit} size="lg" className="w-full">
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Submit attendance
-                    </Button>
-                  </div>
-                </div>
+                {autoDetectedSite && (
+                  <Badge variant="outline">
+                    {hasManualCenterOverride ? 'Changed manually' : 'Auto selected'}
+                  </Badge>
+                )}
               </div>
 
               <Accordion type="single" collapsible className="mt-4">
-                <AccordionItem value="manual-center">
-                  <AccordionTrigger>Change duty center manually</AccordionTrigger>
+                <AccordionItem value="change-center">
+                  <AccordionTrigger>Change center if this is wrong</AccordionTrigger>
                   <AccordionContent>
-                    <div className="grid gap-4 pt-2 md:grid-cols-2">
+                    <div className="grid gap-3 pt-1">
                       <div className="grid gap-2">
                         <Label>District</Label>
                         <Select
@@ -1024,7 +1051,7 @@ export default function AttendancePage() {
                         </Select>
                       </div>
                       <div className="grid gap-2">
-                        <Label>Center / Site</Label>
+                        <Label>Center name</Label>
                         <Select
                           value={selectedSiteId}
                           onValueChange={(value) => {
@@ -1037,228 +1064,130 @@ export default function AttendancePage() {
                             <SelectValue placeholder={!selectedDistrict ? 'Select district first' : 'Select center'} />
                           </SelectTrigger>
                           <SelectContent>
-                            {districtSiteOptions.map((site) => {
-                              const distance = locationCoords && typeof site.lat === 'number' && typeof site.lng === 'number'
-                                ? Math.round(haversineDistanceMeters(locationCoords.lat, locationCoords.lon, site.lat, site.lng))
-                                : null;
-                              return (
-                                <SelectItem key={site.id} value={site.id}>
-                                  {site.siteName} - {site.clientName}{distance != null ? ` (${distance}m)` : ''}
-                                </SelectItem>
-                              );
-                            })}
+                            {districtSiteOptions.map((site) => (
+                              <SelectItem key={site.id} value={site.id}>
+                                {site.siteName} - {site.clientName}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
+                      <Button type="button" variant="outline" onClick={refreshSuggestedCenter} disabled={!locationCoords}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Use nearest center again
+                      </Button>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[1fr_0.95fr]">
-              <div className="space-y-4">
-                <div
-                  ref={photoContainerRef}
-                  className="relative aspect-[4/3] overflow-hidden rounded-3xl border bg-muted/40"
-                >
-                  {isTakingPhoto && <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />}
-                  {capturedPhoto && (
-                    <Image
-                      src={capturedPhoto}
-                      alt="Captured photo"
-                      fill
-                      className="object-cover"
-                      data-ai-hint="employee attendance photo"
-                    />
-                  )}
-                  {!isTakingPhoto && !capturedPhoto && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-                      <Camera className="h-10 w-10" />
-                      <div>
-                        <p className="font-medium text-foreground">Camera preview will appear here</p>
-                        <p className="text-sm">Start attendance, scan the employee, then capture the photo.</p>
-                      </div>
-                    </div>
-                  )}
-                  {capturedPhoto && (
-                    <div className="absolute inset-x-0 bottom-0 bg-black/55 p-3 text-xs text-white">
-                      <p>{currentTime.toLocaleDateString('en-IN')} • {currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</p>
-                      <p>{location || 'Location available'}</p>
-                      {selectedSite && <p>{selectedSite.siteName}, {selectedDistrict}</p>}
-                    </div>
-                  )}
-                </div>
+            <div className="rounded-2xl border p-4">
+              <Label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Attendance status</Label>
+              <RadioGroup value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as 'In' | 'Out')} className="mt-3 grid grid-cols-2 gap-2">
+                <Label htmlFor="status-in" className={`flex cursor-pointer items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'In' ? 'border-primary bg-primary text-primary-foreground' : ''}`}>
+                  <RadioGroupItem value="In" id="status-in" className="sr-only" />
+                  Mark IN
+                </Label>
+                <Label htmlFor="status-out" className={`flex cursor-pointer items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'Out' ? 'border-primary bg-primary text-primary-foreground' : ''}`}>
+                  <RadioGroupItem value="Out" id="status-out" className="sr-only" />
+                  Mark OUT
+                </Label>
+              </RadioGroup>
+            </div>
 
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Button onClick={capturePhoto} disabled={!hasScanned || isWatermarking || !isTakingPhoto} className="w-full">
+            {workflowStep === 'photo' ? (
+              <div className="space-y-4">
+                <div ref={photoContainerRef} className="relative aspect-[3/4] overflow-hidden rounded-3xl border bg-black">
+                  <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button size="lg" className="h-12 w-full" onClick={capturePhoto}>
                     <Camera className="mr-2 h-4 w-4" />
                     Capture photo
                   </Button>
                   <Button
-                    variant="secondary"
+                    type="button"
+                    variant="outline"
+                    className="h-12 w-full"
                     onClick={() => {
-                      setCapturedPhoto(null);
-                      setWatermarkedPhoto(null);
-                      setIsTakingPhoto(true);
+                      stopScanner();
+                      setWorkflowStep('review');
                     }}
-                    disabled={!verificationStarted}
-                    className="w-full"
                   >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Retake photo
-                  </Button>
-                  <Button onClick={handleRescan} variant="secondary" disabled={isLoading || !verificationStarted} className="w-full">
-                    <QrCode className="mr-2 h-4 w-4" />
-                    Rescan QR
+                    Back
                   </Button>
                 </div>
               </div>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl border p-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`rounded-full p-2 ${scannedEmployee ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
-                      <UserRoundSearch className="h-5 w-5" />
+            ) : (
+              <>
+                {capturedPhoto ? (
+                  <div className="space-y-3">
+                    <div className="relative aspect-[3/4] overflow-hidden rounded-3xl border">
+                      <Image src={capturedPhoto} alt="Guard photo" fill className="object-cover" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold">Employee</p>
-                      <p className="text-sm text-muted-foreground">
-                        {scannedEmployee ? `${scannedEmployee.fullName} (${scannedEmployee.employeeCode || scannedEmployee.id})` : 'Use QR scan first. Manual ID is available below only when needed.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Accordion type="single" collapsible className="rounded-2xl border px-4">
-                  <AccordionItem value="manual-id" className="border-none">
-                    <AccordionTrigger>Use manual employee ID instead</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid gap-2 pb-2 sm:grid-cols-[1fr_auto]">
-                        <Input placeholder="Enter employee ID" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
-                        <Button
-                          variant="outline"
-                          onClick={async () => {
-                            if (!manualEmployeeId.trim()) {
-                              toast({ variant: 'destructive', title: 'Enter employee ID' });
-                              return;
-                            }
-                            const emp = await fetchEmployeeByEmployeeId(manualEmployeeId.trim());
-                            if (emp) {
-                              setScannedEmployee(emp);
-                              setScanResult(`Manual:${manualEmployeeId.trim()}`);
-                              setHasScanned(true);
-                              toast({ title: 'Employee selected', description: emp.fullName });
-                            } else {
-                              toast({ variant: 'destructive', title: 'Not found', description: 'No employee with that ID.' });
-                            }
-                          }}
-                        >
-                          Use ID
-                        </Button>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-
-                <div className="rounded-2xl border p-4">
-                  <p className="font-semibold">Ready-to-submit review</p>
-                  <div className="mt-3 space-y-3 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-muted-foreground">Duty center</span>
-                      <span className="text-right font-medium">{selectedSite ? `${selectedSite.siteName}, ${selectedDistrict}` : 'Pending'}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-muted-foreground">Employee</span>
-                      <span className="text-right font-medium">{scannedEmployee ? scannedEmployee.fullName : 'Pending'}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-muted-foreground">Photo</span>
-                      <span className="text-right font-medium">{capturedPhoto ? 'Ready' : 'Pending'}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-muted-foreground">Attendance mark</span>
-                      <span className="text-right font-medium">{selectedStatus}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-muted-foreground">Location</span>
-                      <span className="text-right font-medium">{location || 'Will appear after GPS capture'}</span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button type="button" variant="outline" className="h-12 w-full" onClick={beginPhotoCapture}>
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Retake photo
+                      </Button>
+                      <Button size="lg" className="h-12 w-full" onClick={handleSubmitAttendance} disabled={!canSubmit}>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Submit attendance
+                      </Button>
                     </div>
                   </div>
-                </div>
-
-                {isLoading && (
-                  <div className="rounded-2xl border p-4">
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                      <span className="font-medium">Preparing attendance</span>
-                      <span className="text-muted-foreground">
-                        {isFetchingLocation ? 'Getting location' : isScanning ? 'Scanning QR' : isTakingPhoto ? 'Camera ready' : 'Finishing'}
-                      </span>
-                    </div>
-                    <Progress value={isFetchingLocation ? 25 : isTakingPhoto ? 50 : isScanning ? 70 : isWatermarking ? 90 : 0} className="h-2" />
-                  </div>
+                ) : (
+                  <Button size="lg" className="h-14 w-full text-base" onClick={beginPhotoCapture} disabled={!scannedEmployee}>
+                    <Camera className="mr-2 h-5 w-5" />
+                    Take guard photo
+                  </Button>
                 )}
-              </div>
-            </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button type="button" variant="outline" className="w-full" onClick={handleRescan}>
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Scan another QR
+                  </Button>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => resetVerificationState({ keepCenter: true, keepLocation: true })}>
+                    Start over
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
+      )}
 
-        <div className="space-y-5">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Operator tips</CardTitle>
-              <CardDescription>Designed to keep the flow simple for field use.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <div className="rounded-xl border p-3">
-                <p className="font-medium text-foreground">1. Start attendance once</p>
-                <p className="mt-1">The page will try to detect the nearest center from the current location automatically.</p>
-              </div>
-              <div className="rounded-xl border p-3">
-                <p className="font-medium text-foreground">2. Scan the employee QR</p>
-                <p className="mt-1">Only use manual ID when the QR is damaged or unavailable.</p>
-              </div>
-              <div className="rounded-xl border p-3">
-                <p className="font-medium text-foreground">3. Capture photo and submit</p>
-                <p className="mt-1">After each successful entry, the duty center stays ready for the next employee.</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Recent Attendance Logs</CardTitle>
-              <CardDescription>Latest records created on this device.</CardDescription>
-            </CardHeader>
-            <CardContent>
+      <Accordion type="single" collapsible>
+        <AccordionItem value="recent">
+          <AccordionTrigger>Recent attendance on this phone</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-3">
               {recentAttendance.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No recent attendance records on this device yet.</p>
+                <p className="text-sm text-muted-foreground">No recent records yet.</p>
               ) : (
-                <div className="space-y-3">
-                  {recentAttendance.slice(0, 5).map((record) => (
-                    <div key={record.id} className="rounded-2xl border p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium">{record.employeeName}</p>
-                          <p className="text-xs text-muted-foreground">{record.employeeId}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{record.district} • {record.siteName}</p>
-                          <p className="text-xs text-muted-foreground">{record.time}</p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Badge variant={record.status === 'In' ? 'default' : 'destructive'}>{record.status}</Badge>
-                          <Badge variant={record.syncStatus === 'synced' ? 'outline' : record.syncStatus === 'queued' ? 'secondary' : 'destructive'}>
-                            {record.syncStatus}
-                          </Badge>
-                        </div>
+                recentAttendance.slice(0, 4).map((record) => (
+                  <div key={record.id} className="rounded-2xl border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium">{record.employeeName}</p>
+                        <p className="text-xs text-muted-foreground">{record.siteName} • {record.time}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge variant={record.status === 'In' ? 'default' : 'destructive'}>{record.status}</Badge>
+                        <Badge variant={record.syncStatus === 'synced' ? 'outline' : record.syncStatus === 'queued' ? 'secondary' : 'destructive'}>
+                          {record.syncStatus}
+                        </Badge>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))
               )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }

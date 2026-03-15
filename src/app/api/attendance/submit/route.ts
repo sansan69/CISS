@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
         employeeId: payload.employeeId,
         employeeDocId: payload.employeeDocId,
         employeeName: payload.employeeName,
+        reportedAtClient: payload.reportedAtClient ?? null,
         status: payload.status,
         district: payload.district,
         siteId: payload.siteId,
