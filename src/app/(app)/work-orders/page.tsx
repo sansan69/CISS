@@ -19,6 +19,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import {
     Select,
     SelectContent,
@@ -356,7 +357,7 @@ export default function WorkOrderPage() {
                     if (!site) {
                         // Create site if missing
                         const newSiteData = {
-                            clientName: 'Unassigned',
+                            clientName: OPERATIONAL_CLIENT_NAME,
                             siteName,
                             siteId: siteCode || null,
                             siteAddress: siteAddress || '',
@@ -408,7 +409,7 @@ export default function WorkOrderPage() {
                         await setDoc(workOrderRef, {
                             siteId: site.id,
                             siteName: site.siteName,
-                            clientName: site.clientName,
+                            clientName: OPERATIONAL_CLIENT_NAME,
                             district: site.district,
                             date: existingDate,
                             maleGuardsRequired: finalMale,
@@ -463,7 +464,7 @@ export default function WorkOrderPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Upload Work Order</CardTitle>
-                        <CardDescription>Upload the work order Excel file from the client. The system will process multiple dates from one file.</CardDescription>
+                        <CardDescription>Upload the TCS duty requirement Excel file. The system will process multiple dates from one file.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid w-full items-center gap-1.5 sm:max-w-sm">
@@ -493,8 +494,8 @@ export default function WorkOrderPage() {
                             <CardTitle>Active Duty Sites</CardTitle>
                             <CardDescription>
                                 {userRole === 'admin'
-                                    ? 'List of all sites with upcoming work orders.'
-                                    : 'List of sites in your assigned districts with upcoming duties.'}
+                                    ? 'List of all TCS duty sites with upcoming work orders.'
+                                    : 'List of TCS duty sites in your assigned districts with upcoming duties.'}
                             </CardDescription>
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
@@ -566,7 +567,7 @@ export default function WorkOrderPage() {
                                         <div className='flex-1'>
                                             <h3 className="text-base font-semibold sm:text-lg">{siteInfo.siteName}</h3>
                                             <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                                <span>{siteInfo.clientName}</span>
+                                                <span>{OPERATIONAL_CLIENT_NAME}</span>
                                                 <span className="hidden sm:inline">-</span>
                                                 <Badge variant="secondary">{siteInfo.district}</Badge>
                                             </p>

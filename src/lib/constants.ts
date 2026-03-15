@@ -47,6 +47,8 @@ export const MARITAL_STATUSES = ["Married", "Unmarried"] as const;
 
 export const GENDER_OPTIONS = ["Male", "Female", "Other"] as const;
 
+export const OPERATIONAL_CLIENT_NAME = "TCS" as const;
+
 const configuredLegacyAdminEmails = [
   process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL,
   process.env.SUPER_ADMIN_EMAIL,
