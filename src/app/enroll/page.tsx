@@ -691,14 +691,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
   const stepConfig = ENROLLMENT_STEPS[currentStep];
   const isLastStep = currentStep === ENROLLMENT_STEPS.length - 1;
-  const completedDocumentCount = [
-    profilePicPreview,
-    identityProofUrlFrontPreview,
-    identityProofUrlBackPreview,
-    addressProofUrlFrontPreview,
-    addressProofUrlBackPreview,
-    signatureUrlPreview,
-  ].filter(Boolean).length;
 
   const goToNextStep = async () => {
     const isStepValid = await form.trigger(stepConfig.fields, { shouldFocus: true });
@@ -724,35 +716,35 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   return (
     <>
       <Card className="mx-auto w-full max-w-6xl overflow-hidden border-t-4 border-primary shadow-xl">
-        <CardHeader className="px-5 pb-6 pt-8 text-center sm:px-8 lg:px-10">
-          <CardTitle className="text-balance text-4xl font-bold tracking-tight sm:text-5xl">Employee Registration</CardTitle>
-          <CardDescription className="mx-auto mt-3 max-w-2xl text-base sm:text-lg">Please complete your profile with accurate information.</CardDescription>
+        <CardHeader className="px-5 pb-4 pt-7 text-center sm:px-8 sm:pb-5 lg:px-10">
+          <CardTitle className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">Employee Registration</CardTitle>
+          <CardDescription className="mx-auto mt-2 max-w-xl text-sm sm:text-base">Complete the form step by step.</CardDescription>
         </CardHeader>
         <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-28 sm:pb-32">
-              <div className="space-y-3 rounded-[24px] border bg-muted/30 p-3 sm:space-y-4 sm:p-6 lg:p-8">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="max-w-3xl">
-                    <p className="text-xs font-semibold uppercase tracking-[0.32em] text-primary">Step {currentStep + 1} of {ENROLLMENT_STEPS.length}</p>
-                    <h3 className="mt-1 text-2xl font-semibold tracking-tight sm:mt-2 sm:text-4xl">{stepConfig.title}</h3>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:mt-2 sm:text-lg">{stepConfig.description}</p>
+              <div className="space-y-3 rounded-[24px] border bg-muted/20 p-3 sm:space-y-4 sm:p-5 lg:p-6">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-primary">
+                        Step {currentStep + 1} of {ENROLLMENT_STEPS.length}
+                      </span>
+                      <span className="font-semibold text-foreground">{stepConfig.title}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}% complete
+                    </span>
                   </div>
-                  <div className="rounded-2xl border bg-background px-3 py-2.5 shadow-sm sm:px-5 sm:py-3">
-                    <div className="flex items-end gap-3">
-                      <p className="text-2xl font-semibold sm:text-4xl">{Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%</p>
-                      <p className="pb-0.5 text-xs text-muted-foreground sm:pb-1 sm:text-sm">complete</p>
-                    </div>
-                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted sm:mt-3 sm:h-2.5">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-300"
-                        style={{ width: `${Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%` }}
-                      />
-                    </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      style={{ width: `${Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%` }}
+                    />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
                     const isComplete = index < currentStep;
@@ -761,7 +753,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         key={step.key}
                         type="button"
                           className={cn(
-                          "min-w-0 rounded-2xl border px-3 py-2.5 text-left transition sm:px-4 sm:py-3",
+                          "min-w-0 rounded-xl border px-3 py-2 text-left transition",
                           isActive && "border-primary bg-primary text-primary-foreground shadow-sm",
                           isComplete && "border-primary/30 bg-primary/10 text-primary",
                           !isActive && !isComplete && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
@@ -773,16 +765,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                           }
                         }}
                       >
-                        <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80 sm:text-[11px] sm:tracking-[0.24em]">{isComplete ? "Done" : `Step ${index + 1}`}</span>
-                        <span className="mt-1.5 block text-base font-semibold leading-tight sm:mt-2 sm:text-lg">{step.title}</span>
+                        <span className="block text-[10px] uppercase tracking-[0.18em] opacity-80">{isComplete ? "Done" : `Step ${index + 1}`}</span>
+                        <span className="mt-1 block text-sm font-semibold leading-tight sm:text-base">{step.title}</span>
                       </button>
                     );
                   })}
                 </div>
-
-                <CompactProgressSummary
-                  proofCount={completedDocumentCount}
-                />
               </div>
 
               {currentStep === 0 && (
@@ -1139,26 +1127,6 @@ const ReviewRow = ({ label, value }: { label: string; value: string }) => (
     <span className="max-w-[60%] text-right font-medium">{value}</span>
   </div>
 );
-
-const CompactProgressSummary = ({
-  proofCount,
-}: {
-  proofCount: number;
-}) => (
-  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-    <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 shadow-sm">
-      <span
-        className={cn(
-          "h-2 w-2 rounded-full",
-          proofCount === 6 ? "bg-green-600" : "bg-amber-500",
-        )}
-      />
-      <span className="font-medium text-foreground">{proofCount}/6</span>
-      <span>required uploads ready</span>
-    </div>
-  </div>
-);
-
 
 function EnrollmentFormWrapper() {
   const searchParams = useSearchParams();
