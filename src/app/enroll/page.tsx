@@ -28,7 +28,7 @@ import { AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleI
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React, { Suspense, useEffect, useState, useRef } from "react";
+import React, { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { db } from "@/lib/firebase";
@@ -187,6 +187,12 @@ type StepIssue = {
   title: string;
   fields: string[];
 };
+type SerializedDraftValue = string | boolean | null | { type: "date"; value: string };
+type EnrollmentDraft = {
+  currentStep: number;
+  updatedAt: string;
+  values: Partial<Record<keyof EnrollmentFormValues, SerializedDraftValue>>;
+};
 
 interface ClientOption {
   id: string;
@@ -197,6 +203,47 @@ const keralaDistricts = [...KERALA_DISTRICTS];
 const idProofOptions = [...PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
+const ENROLLMENT_DRAFT_STORAGE_KEY = "ciss-public-enrollment-draft-v1";
+const ENROLLMENT_DRAFT_DB_NAME = "ciss-public-enrollment-draft-files";
+const ENROLLMENT_DRAFT_DB_STORE = "files";
+const DRAFT_FILE_FIELDS: (keyof EnrollmentFormValues)[] = [
+  "profilePicture",
+  "identityProofUrlFront",
+  "identityProofUrlBack",
+  "addressProofUrlFront",
+  "addressProofUrlBack",
+  "signatureUrl",
+  "bankPassbookStatement",
+  "policeClearanceCertificate",
+];
+const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
+  clientName: "",
+  resourceIdNumber: "",
+  firstName: "",
+  lastName: "",
+  fatherName: "",
+  motherName: "",
+  gender: undefined,
+  maritalStatus: undefined,
+  spouseName: "",
+  educationalQualification: undefined,
+  otherQualification: "",
+  district: "",
+  panNumber: "",
+  identityProofType: undefined,
+  identityProofNumber: "",
+  addressProofType: undefined,
+  addressProofNumber: "",
+  epfUanNumber: "",
+  esicNumber: "",
+  bankAccountNumber: "",
+  ifscCode: "",
+  bankName: "",
+  fullAddress: "",
+  emailAddress: "",
+  phoneNumber: "",
+  termsAndConditions: false,
+};
 const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   joiningDate: "Joining date",
   clientName: "Client name",
@@ -234,6 +281,127 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   emailAddress: "Email address",
   phoneNumber: "Phone number",
   termsAndConditions: "Terms and declaration",
+};
+
+const isFileValue = (value: unknown): value is File =>
+  typeof File !== "undefined" && value instanceof File;
+
+const serializeDraftValues = (values: EnrollmentFormValues): EnrollmentDraft["values"] => {
+  const serialized: EnrollmentDraft["values"] = {};
+
+  for (const [rawKey, value] of Object.entries(values) as [keyof EnrollmentFormValues, unknown][]) {
+    if (isFileValue(value) || value === undefined) {
+      continue;
+    }
+
+    if (value instanceof Date) {
+      serialized[rawKey] = { type: "date", value: value.toISOString() };
+      continue;
+    }
+
+    if (typeof value === "string" || typeof value === "boolean" || value === null) {
+      serialized[rawKey] = value;
+    }
+  }
+
+  return serialized;
+};
+
+const deserializeDraftValues = (
+  values: EnrollmentDraft["values"],
+): Partial<EnrollmentFormValues> => {
+  const restored: Record<string, unknown> = {};
+
+  for (const [rawKey, value] of Object.entries(values) as [keyof EnrollmentFormValues, SerializedDraftValue][]) {
+    if (value && typeof value === "object" && "type" in value && value.type === "date") {
+      restored[rawKey] = new Date(value.value);
+      continue;
+    }
+
+    restored[rawKey] = value;
+  }
+
+  return restored as Partial<EnrollmentFormValues>;
+};
+
+const openEnrollmentDraftDb = (): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      reject(new Error("IndexedDB is not available."));
+      return;
+    }
+
+    const request = window.indexedDB.open(ENROLLMENT_DRAFT_DB_NAME, 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(ENROLLMENT_DRAFT_DB_STORE)) {
+        db.createObjectStore(ENROLLMENT_DRAFT_DB_STORE, { keyPath: "field" });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Could not open enrollment draft storage."));
+  });
+
+const saveEnrollmentDraftFiles = async (values: Partial<EnrollmentFormValues>) => {
+  const db = await openEnrollmentDraftDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(ENROLLMENT_DRAFT_DB_STORE, "readwrite");
+    const store = transaction.objectStore(ENROLLMENT_DRAFT_DB_STORE);
+
+    DRAFT_FILE_FIELDS.forEach((field) => {
+      const value = values[field];
+      if (isFileValue(value)) {
+        store.put({ field, file: value });
+      } else {
+        store.delete(field);
+      }
+    });
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("Could not save enrollment draft files."));
+  });
+
+  db.close();
+};
+
+const readEnrollmentDraftFiles = async (): Promise<Partial<Record<keyof EnrollmentFormValues, File>>> => {
+  const db = await openEnrollmentDraftDb();
+
+  const result = await new Promise<Partial<Record<keyof EnrollmentFormValues, File>>>((resolve, reject) => {
+    const transaction = db.transaction(ENROLLMENT_DRAFT_DB_STORE, "readonly");
+    const store = transaction.objectStore(ENROLLMENT_DRAFT_DB_STORE);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const files: Partial<Record<keyof EnrollmentFormValues, File>> = {};
+      for (const item of request.result as { field: keyof EnrollmentFormValues; file: File }[]) {
+        files[item.field] = item.file;
+      }
+      resolve(files);
+    };
+    request.onerror = () => reject(request.error ?? new Error("Could not read saved enrollment files."));
+  });
+
+  db.close();
+  return result;
+};
+
+const clearEnrollmentDraftFiles = async () => {
+  const db = await openEnrollmentDraftDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(ENROLLMENT_DRAFT_DB_STORE, "readwrite");
+    const store = transaction.objectStore(ENROLLMENT_DRAFT_DB_STORE);
+    const request = store.clear();
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error ?? new Error("Could not clear saved enrollment files."));
+  });
+
+  db.close();
 };
 
 
@@ -399,39 +567,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [submissionIssues, setSubmissionIssues] = useState<StepIssue[]>([]);
+  const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved" | "restored">("idle");
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
+  const [isDraftReady, setIsDraftReady] = useState(false);
+  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
   const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentFormSchema),
     mode: 'onTouched', 
-    defaultValues: {
-        clientName: '',
-        resourceIdNumber: '',
-        firstName: '',
-        lastName: '',
-        fatherName: '',
-        motherName: '',
-        gender: undefined,
-        maritalStatus: undefined,
-        spouseName: '',
-        educationalQualification: undefined,
-        otherQualification: '',
-        district: '',
-        panNumber: '',
-        identityProofType: undefined,
-        identityProofNumber: '',
-        addressProofType: undefined,
-        addressProofNumber: '',
-        epfUanNumber: '',
-        esicNumber: '',
-        bankAccountNumber: '',
-        ifscCode: '',
-        bankName: '',
-        fullAddress: '',
-        emailAddress: '',
-        phoneNumber: '',
-        termsAndConditions: false,
-     },
+    defaultValues: DEFAULT_ENROLLMENT_VALUES,
   });
 
   const watchClientName = form.watch("clientName");
@@ -459,6 +604,206 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       form.setValue('phoneNumber', initialPhoneNumberFromQuery, { shouldValidate: true });
     }
   }, [initialPhoneNumberFromQuery, form]);
+
+  const setPreviewForField = useCallback((fieldName: CameraField, previewUrl: string | null) => {
+    switch (fieldName) {
+      case "profilePicture":
+        setProfilePicPreview(previewUrl);
+        break;
+      case "identityProofUrlFront":
+        setIdentityProofUrlFrontPreview(previewUrl);
+        break;
+      case "identityProofUrlBack":
+        setIdentityProofUrlBackPreview(previewUrl);
+        break;
+      case "addressProofUrlFront":
+        setAddressProofUrlFrontPreview(previewUrl);
+        break;
+      case "addressProofUrlBack":
+        setAddressProofUrlBackPreview(previewUrl);
+        break;
+      case "signatureUrl":
+        setSignatureUrlPreview(previewUrl);
+        break;
+      case "bankPassbookStatement":
+        setBankPassbookPreview(previewUrl);
+        break;
+      case "policeClearanceCertificate":
+        setPoliceCertPreview(previewUrl);
+        break;
+    }
+  }, []);
+
+  const applySelectedFile = useCallback((fieldName: CameraField, file: File, options?: { shouldValidate?: boolean }) => {
+    form.setValue(fieldName as keyof EnrollmentFormValues, file as EnrollmentFormValues[keyof EnrollmentFormValues], {
+      shouldValidate: options?.shouldValidate ?? true,
+      shouldDirty: true,
+    });
+
+    const previewUrl = file.type === "application/pdf" ? "/pdf-icon.png" : URL.createObjectURL(file);
+    setPreviewForField(fieldName, previewUrl);
+  }, [form, setPreviewForField]);
+
+  const clearDraft = async (options?: { resetForm?: boolean; keepPhoneNumber?: boolean }) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(ENROLLMENT_DRAFT_STORAGE_KEY);
+    }
+
+    try {
+      await clearEnrollmentDraftFiles();
+    } catch (error) {
+      console.error("Could not clear saved enrollment files:", error);
+    }
+
+    setDraftStatus("idle");
+    setDraftUpdatedAt(null);
+    setSubmissionIssues([]);
+
+    if (options?.resetForm) {
+      form.reset({
+        ...DEFAULT_ENROLLMENT_VALUES,
+        phoneNumber: options.keepPhoneNumber && initialPhoneNumberFromQuery ? initialPhoneNumberFromQuery : "",
+      });
+      setCurrentStep(0);
+      setProfilePicPreview(null);
+      setIdentityProofUrlFrontPreview(null);
+      setIdentityProofUrlBackPreview(null);
+      setAddressProofUrlFrontPreview(null);
+      setAddressProofUrlBackPreview(null);
+      setSignatureUrlPreview(null);
+      setBankPassbookPreview(null);
+      setPoliceCertPreview(null);
+    }
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const restoreDraft = async () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      const storedDraft = window.localStorage.getItem(ENROLLMENT_DRAFT_STORAGE_KEY);
+      if (!storedDraft) {
+        setIsDraftReady(true);
+        return;
+      }
+
+      try {
+        const parsedDraft = JSON.parse(storedDraft) as EnrollmentDraft;
+        const restoredValues = deserializeDraftValues(parsedDraft.values);
+
+        form.reset({
+          ...DEFAULT_ENROLLMENT_VALUES,
+          ...restoredValues,
+          phoneNumber: initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery)
+            ? initialPhoneNumberFromQuery
+            : (restoredValues.phoneNumber ?? ""),
+        });
+
+        const storedFiles = await readEnrollmentDraftFiles().catch((error) => {
+          console.error("Could not read saved enrollment files:", error);
+          return {};
+        });
+
+        if (!isCancelled) {
+          for (const [fieldName, file] of Object.entries(storedFiles) as [CameraField, File][]) {
+            applySelectedFile(fieldName, file, { shouldValidate: false });
+          }
+
+          setCurrentStep(Math.min(parsedDraft.currentStep ?? 0, ENROLLMENT_STEPS.length - 1));
+          setDraftStatus("restored");
+          setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
+          toast({
+            title: "Saved draft restored",
+            description: "Your enrollment details were loaded from this device so you can continue where you left off.",
+          });
+        }
+      } catch (error) {
+        console.error("Could not restore enrollment draft:", error);
+      } finally {
+        if (!isCancelled) {
+          setIsDraftReady(true);
+        }
+      }
+    };
+
+    void restoreDraft();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [applySelectedFile, form, initialPhoneNumberFromQuery, toast]);
+
+  useEffect(() => {
+    if (!isDraftReady || typeof window === "undefined") {
+      return;
+    }
+
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      const values = form.getValues();
+      const hasMeaningfulDraftContent =
+        currentStep > 0 ||
+        Object.entries(values).some(([fieldName, value]) => {
+          if (isFileValue(value)) {
+            return true;
+          }
+          if (value instanceof Date) {
+            return true;
+          }
+          if (typeof value === "boolean") {
+            return value;
+          }
+          if (typeof value === "string") {
+            if (fieldName === "phoneNumber" && initialPhoneNumberFromQuery && value === initialPhoneNumberFromQuery) {
+              return false;
+            }
+            return value.trim() !== "";
+          }
+          return false;
+        });
+
+      if (!hasMeaningfulDraftContent) {
+        window.localStorage.removeItem(ENROLLMENT_DRAFT_STORAGE_KEY);
+        void clearEnrollmentDraftFiles().catch((error) => {
+          console.error("Could not clear empty enrollment draft:", error);
+        });
+        setDraftStatus("idle");
+        setDraftUpdatedAt(null);
+        return;
+      }
+
+      const nextDraft: EnrollmentDraft = {
+        currentStep,
+        updatedAt: new Date().toISOString(),
+        values: serializeDraftValues(values),
+      };
+
+      setDraftStatus("saving");
+
+      window.localStorage.setItem(ENROLLMENT_DRAFT_STORAGE_KEY, JSON.stringify(nextDraft));
+      void saveEnrollmentDraftFiles(values)
+        .then(() => {
+          setDraftStatus("saved");
+          setDraftUpdatedAt(nextDraft.updatedAt);
+        })
+        .catch((error) => {
+          console.error("Could not save enrollment draft:", error);
+          setDraftStatus("idle");
+        });
+    }, 700);
+
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, [currentStep, form, initialPhoneNumberFromQuery, isDraftReady, watchedValues]);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -554,20 +899,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       try {
         const fileName = `${activeCameraField}_capture_${Date.now()}.jpg`;
         const capturedFile = await dataURLtoFile(dataUrl, fileName);
-        
-        form.setValue(activeCameraField as any, capturedFile, { shouldValidate: true });
 
-        const previewUrl = URL.createObjectURL(capturedFile);
-        switch(activeCameraField) {
-            case "profilePicture": setProfilePicPreview(previewUrl); break;
-            case "identityProofUrlFront": setIdentityProofUrlFrontPreview(previewUrl); break;
-            case "identityProofUrlBack": setIdentityProofUrlBackPreview(previewUrl); break;
-            case "addressProofUrlFront": setAddressProofUrlFrontPreview(previewUrl); break;
-            case "addressProofUrlBack": setAddressProofUrlBackPreview(previewUrl); break;
-            case "signatureUrl": setSignatureUrlPreview(previewUrl); break;
-            case "bankPassbookStatement": setBankPassbookPreview(previewUrl); break;
-            case "policeClearanceCertificate": setPoliceCertPreview(previewUrl); break;
-        }
+        applySelectedFile(activeCameraField, capturedFile);
         
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
       } catch (error) {
@@ -594,12 +927,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         return;
       }
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
-         form.setValue(fieldName, file, { shouldValidate: true });
-         if (file.type.startsWith("image/")) {
-            setPreview(URL.createObjectURL(file));
-         } else if (file.type === "application/pdf") {
-             setPreview("/pdf-icon.png");
-         }
+         applySelectedFile(fieldName as CameraField, file);
       } else {
         form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP, HEIC, HEIF or PDF." });
         setPreview(null);
@@ -710,7 +1038,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             duration: 7000,
         });
 
-        form.reset();
+        await clearDraft({ resetForm: true, keepPhoneNumber: !!initialPhoneNumberFromQuery });
         router.push(`/profile/${responseBody.id}`);
 
     } catch (error: any) {
@@ -736,6 +1064,31 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const stepConfig = ENROLLMENT_STEPS[currentStep];
   const isLastStep = currentStep === ENROLLMENT_STEPS.length - 1;
   const completionPercent = Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100);
+  const validationIssuesByField = (() => {
+    const parsed = enrollmentFormSchema.safeParse(form.getValues());
+    const issues = new Map<keyof EnrollmentFormValues, number>();
+
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        const fieldName = issue.path[0] as keyof EnrollmentFormValues | undefined;
+        if (!fieldName) continue;
+        issues.set(fieldName, (issues.get(fieldName) ?? 0) + 1);
+      }
+    }
+
+    return issues;
+  })();
+  const draftStatusLabel =
+    draftStatus === "saving"
+      ? "Saving on this device..."
+      : draftUpdatedAt
+        ? `Saved on this device at ${new Date(draftUpdatedAt).toLocaleString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })}`
+        : "Changes stay saved on this device as you go.";
 
   const getStepIssues = () =>
     ENROLLMENT_STEPS.map((step, stepIndex) => {
@@ -771,18 +1124,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   };
 
   const goToNextStep = async () => {
-    const isStepValid = await form.trigger(stepConfig.fields, { shouldFocus: true });
-    if (!isStepValid) {
-      const issues = getStepIssues();
-      setSubmissionIssues(issues);
-      toast({
-        variant: "destructive",
-        title: "Please complete this step",
-        description: `Check the highlighted fields in ${stepConfig.title.toLowerCase()} before continuing.`,
-      });
-      return;
-    }
-
     setSubmissionIssues([]);
     setCurrentStep((current) => Math.min(current + 1, ENROLLMENT_STEPS.length - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -795,29 +1136,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   const goToStep = async (targetStep: number) => {
     if (targetStep === currentStep) return;
-    if (targetStep < currentStep) {
-      setSubmissionIssues([]);
-      jumpToStep(targetStep);
-      return;
-    }
-
-    for (let stepIndex = currentStep; stepIndex < targetStep; stepIndex += 1) {
-      const isValid = await form.trigger(ENROLLMENT_STEPS[stepIndex].fields, {
-        shouldFocus: stepIndex === currentStep,
-      });
-      if (!isValid) {
-        const issues = getStepIssues();
-        setSubmissionIssues(issues);
-        jumpToStep(stepIndex);
-        toast({
-          variant: "destructive",
-          title: "Finish the current step first",
-          description: `Before opening ${ENROLLMENT_STEPS[targetStep].title.toLowerCase()}, complete the missing fields in ${ENROLLMENT_STEPS[stepIndex].title.toLowerCase()}.`,
-        });
-        return;
-      }
-    }
-
     setSubmissionIssues([]);
     jumpToStep(targetStep);
   };
@@ -846,6 +1164,18 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       {completionPercent}% complete
                     </span>
                   </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                    <span>{draftStatusLabel}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto px-0 py-0 text-xs text-primary hover:bg-transparent hover:text-primary/80"
+                      onClick={() => void clearDraft({ resetForm: true, keepPhoneNumber: !!initialPhoneNumberFromQuery })}
+                    >
+                      Clear saved draft
+                    </Button>
+                  </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-300"
@@ -857,8 +1187,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
-                    const isComplete = index < currentStep;
-                    const stepErrorCount = step.fields.filter((fieldName) => Boolean(form.getFieldState(fieldName).error)).length;
+                    const stepErrorCount = step.fields.filter((fieldName) => validationIssuesByField.has(fieldName)).length;
+                    const isComplete = stepErrorCount === 0;
                     return (
                       <button
                         key={step.key}
@@ -873,7 +1203,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         onClick={() => void goToStep(index)}
                       >
                         <span className="block text-[10px] uppercase tracking-[0.18em] opacity-80">
-                          {stepErrorCount > 0 ? `${stepErrorCount} to fix` : isComplete ? "Done" : `Step ${index + 1}`}
+                          {stepErrorCount > 0 ? `${stepErrorCount} missing` : isActive ? "Current" : "Ready"}
                         </span>
                         <span className="mt-1 block text-sm font-semibold leading-tight sm:text-base">{step.title}</span>
                       </button>
