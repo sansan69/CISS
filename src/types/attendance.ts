@@ -55,6 +55,7 @@ export type AttendanceSubmission = z.infer<typeof attendanceSubmissionSchema>;
 export const attendanceLogSchema = attendanceSubmissionSchema.extend({
   id: z.string().optional(),
   attendanceDate: z.string().optional(),
+  reportedAt: z.any().optional(),
   createdAt: z.any().optional(),
 });
 

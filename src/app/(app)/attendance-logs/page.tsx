@@ -27,8 +27,19 @@ type AttendanceLog = {
   locationText?: string;
   photoUrl?: string;
   photoCompliance?: AttendancePhotoCompliance | null;
+  reportedAtClient?: string | null;
+  reportedAt?: Timestamp;
   createdAt?: Timestamp;
 };
+
+function getReportedAt(log: AttendanceLog) {
+  if (log.reportedAt?.toDate) return log.reportedAt.toDate();
+  if (log.reportedAtClient) {
+    const parsed = new Date(log.reportedAtClient);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return log.createdAt?.toDate ? log.createdAt.toDate() : null;
+}
 
 function downloadBlob(content: BlobPart, filename: string, type: string) {
   const blob = new Blob([content], { type });
@@ -235,8 +246,8 @@ export default function AttendanceLogsPage() {
                         </div>
                         <div className="mt-3 grid gap-2 text-sm">
                           <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Time</p>
-                            <p>{log.createdAt ? format(log.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "Pending"}</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Reported at</p>
+                            <p>{getReportedAt(log) ? format(getReportedAt(log)!, "dd MMM yyyy, hh:mm a") : "Pending"}</p>
                           </div>
                           <div>
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">Site</p>
@@ -285,7 +296,7 @@ export default function AttendanceLogsPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Employee</TableHead>
-                          <TableHead>Time</TableHead>
+                          <TableHead>Reported at</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Site</TableHead>
                           <TableHead>District</TableHead>
@@ -300,7 +311,7 @@ export default function AttendanceLogsPage() {
                               <div className="text-xs text-muted-foreground">{log.employeeId}</div>
                             </TableCell>
                             <TableCell>
-                              {log.createdAt ? format(log.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "Pending"}
+                              {getReportedAt(log) ? format(getReportedAt(log)!, "dd MMM yyyy, hh:mm a") : "Pending"}
                             </TableCell>
                             <TableCell>
                               <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>

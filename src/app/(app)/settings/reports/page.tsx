@@ -27,6 +27,7 @@ type AttendanceReportRow = {
   district: string;
   siteName: string;
   locationText: string;
+  reportedAt?: string;
   createdAt: string;
 };
 
@@ -324,7 +325,7 @@ export default function ReportsPage() {
             <>
               <div className="grid gap-3 md:hidden">
                 {rows.slice(0, 20).map((row) => (
-                  <div key={`${row.employeeId}-${row.createdAt}`} className="rounded-lg border p-3">
+                  <div key={`${row.employeeId}-${row.reportedAt || row.createdAt}`} className="rounded-lg border p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium break-words">{row.employeeName}</p>
@@ -334,8 +335,8 @@ export default function ReportsPage() {
                     </div>
                     <div className="mt-3 grid gap-2 text-sm">
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Time</p>
-                        <p>{row.createdAt ? format(new Date(row.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Reported at</p>
+                        <p>{(row.reportedAt || row.createdAt) ? format(new Date(row.reportedAt || row.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}</p>
                       </div>
                       <div>
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Site</p>
@@ -356,7 +357,7 @@ export default function ReportsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Employee</TableHead>
-                      <TableHead>Time</TableHead>
+                      <TableHead>Reported at</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Site</TableHead>
                       <TableHead>District</TableHead>
@@ -364,12 +365,12 @@ export default function ReportsPage() {
                   </TableHeader>
                   <TableBody>
                     {rows.slice(0, 20).map((row) => (
-                      <TableRow key={`${row.employeeId}-${row.createdAt}`}>
+                      <TableRow key={`${row.employeeId}-${row.reportedAt || row.createdAt}`}>
                         <TableCell>
                           <div className="font-medium">{row.employeeName}</div>
                           <div className="text-xs text-muted-foreground">{row.employeeId}</div>
                         </TableCell>
-                        <TableCell>{row.createdAt ? format(new Date(row.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}</TableCell>
+                        <TableCell>{(row.reportedAt || row.createdAt) ? format(new Date(row.reportedAt || row.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}</TableCell>
                         <TableCell>{row.status}</TableCell>
                         <TableCell>
                           <div>{row.siteName || "Unknown site"}</div>

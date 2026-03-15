@@ -84,6 +84,9 @@ export async function POST(request: NextRequest) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { Timestamp } = await import("firebase-admin/firestore");
     const now = Timestamp.now();
+    const reportedAt = payload.reportedAtClient
+      ? Timestamp.fromDate(new Date(payload.reportedAtClient))
+      : now;
     const attendanceDate = INDIA_DATE_FORMATTER.format(new Date());
     const employeeRef = adminDb.collection("employees").doc(payload.employeeDocId);
     const siteRef = adminDb.collection("sites").doc(payload.siteId);
@@ -220,6 +223,7 @@ export async function POST(request: NextRequest) {
         employeeDocId: payload.employeeDocId,
         employeeName: payload.employeeName,
         reportedAtClient: payload.reportedAtClient ?? null,
+        reportedAt,
         status: payload.status,
         district: payload.district,
         siteId: payload.siteId,

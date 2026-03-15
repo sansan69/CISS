@@ -529,7 +529,7 @@ export default function DashboardPage() {
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <Badge variant={l.status === 'In' ? 'default' : 'secondary'}>{l.status}</Badge>
-                                            <span className="text-xs text-muted-foreground">{l.createdAt?.toDate ? format(l.createdAt.toDate(), 'hh:mm a') : ''}</span>
+                                            <span className="text-xs text-muted-foreground">{getAttendanceReportedTime(l) ? format(getAttendanceReportedTime(l)!, 'hh:mm a') : ''}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -541,3 +541,11 @@ export default function DashboardPage() {
         </div>
     );
 }
+    const getAttendanceReportedTime = (log: any) => {
+        if (log?.reportedAt?.toDate) return log.reportedAt.toDate();
+        if (typeof log?.reportedAtClient === 'string') {
+            const parsed = new Date(log.reportedAtClient);
+            if (!Number.isNaN(parsed.getTime())) return parsed;
+        }
+        return log?.createdAt?.toDate ? log.createdAt.toDate() : null;
+    };
