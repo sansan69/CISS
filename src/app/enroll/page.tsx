@@ -182,6 +182,11 @@ const enrollmentFormSchema = z.object({
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 type EnrollmentStepKey = "client" | "personal" | "documents" | "details" | "review";
+type StepIssue = {
+  stepIndex: number;
+  title: string;
+  fields: string[];
+};
 
 interface ClientOption {
   id: string;
@@ -192,6 +197,44 @@ const keralaDistricts = [...KERALA_DISTRICTS];
 const idProofOptions = [...PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
+const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
+  joiningDate: "Joining date",
+  clientName: "Client name",
+  resourceIdNumber: "Resource ID number",
+  profilePicture: "Profile picture",
+  firstName: "First name",
+  lastName: "Last name",
+  fatherName: "Father's name",
+  motherName: "Mother's name",
+  dateOfBirth: "Date of birth",
+  gender: "Gender",
+  maritalStatus: "Marital status",
+  spouseName: "Spouse name",
+  educationalQualification: "Educational qualification",
+  otherQualification: "Other qualification",
+  district: "District",
+  panNumber: "PAN number",
+  identityProofType: "Identity proof type",
+  identityProofNumber: "Identity proof number",
+  identityProofUrlFront: "Identity proof front",
+  identityProofUrlBack: "Identity proof back",
+  addressProofType: "Address proof type",
+  addressProofNumber: "Address proof number",
+  addressProofUrlFront: "Address proof front",
+  addressProofUrlBack: "Address proof back",
+  signatureUrl: "Signature",
+  policeClearanceCertificate: "Police clearance certificate",
+  epfUanNumber: "EPF UAN number",
+  esicNumber: "ESIC number",
+  bankAccountNumber: "Bank account number",
+  ifscCode: "IFSC code",
+  bankName: "Bank name",
+  bankPassbookStatement: "Bank passbook or statement",
+  fullAddress: "Full address",
+  emailAddress: "Email address",
+  phoneNumber: "Phone number",
+  termsAndConditions: "Terms and declaration",
+};
 
 
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
@@ -355,6 +398,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [submissionIssues, setSubmissionIssues] = useState<StepIssue[]>([]);
 
 
   const form = useForm<EnrollmentFormValues>({
@@ -691,10 +735,46 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
   const stepConfig = ENROLLMENT_STEPS[currentStep];
   const isLastStep = currentStep === ENROLLMENT_STEPS.length - 1;
+  const completionPercent = Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100);
+
+  const getStepIssues = () =>
+    ENROLLMENT_STEPS.map((step, stepIndex) => {
+      const fields = step.fields
+        .filter((fieldName) => Boolean(form.getFieldState(fieldName).error))
+        .map((fieldName) => FIELD_LABELS[fieldName] || step.title);
+
+      return {
+        stepIndex,
+        title: step.title,
+        fields,
+      };
+    }).filter((issue) => issue.fields.length > 0);
+
+  const jumpToStep = (stepIndex: number) => {
+    setCurrentStep(stepIndex);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleInvalidSubmission = () => {
+    const issues = getStepIssues();
+    setSubmissionIssues(issues);
+
+    if (issues.length > 0) {
+      jumpToStep(issues[0].stepIndex);
+      toast({
+        variant: "destructive",
+        title: "Some required information is missing",
+        description: `Please review ${issues[0].title.toLowerCase()} first. Missing: ${issues[0].fields.slice(0, 2).join(", ")}${issues[0].fields.length > 2 ? "..." : ""}.`,
+        duration: 7000,
+      });
+    }
+  };
 
   const goToNextStep = async () => {
     const isStepValid = await form.trigger(stepConfig.fields, { shouldFocus: true });
     if (!isStepValid) {
+      const issues = getStepIssues();
+      setSubmissionIssues(issues);
       toast({
         variant: "destructive",
         title: "Please complete this step",
@@ -703,6 +783,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       return;
     }
 
+    setSubmissionIssues([]);
     setCurrentStep((current) => Math.min(current + 1, ENROLLMENT_STEPS.length - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -710,6 +791,35 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const goToPreviousStep = () => {
     setCurrentStep((current) => Math.max(current - 1, 0));
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goToStep = async (targetStep: number) => {
+    if (targetStep === currentStep) return;
+    if (targetStep < currentStep) {
+      setSubmissionIssues([]);
+      jumpToStep(targetStep);
+      return;
+    }
+
+    for (let stepIndex = currentStep; stepIndex < targetStep; stepIndex += 1) {
+      const isValid = await form.trigger(ENROLLMENT_STEPS[stepIndex].fields, {
+        shouldFocus: stepIndex === currentStep,
+      });
+      if (!isValid) {
+        const issues = getStepIssues();
+        setSubmissionIssues(issues);
+        jumpToStep(stepIndex);
+        toast({
+          variant: "destructive",
+          title: "Finish the current step first",
+          description: `Before opening ${ENROLLMENT_STEPS[targetStep].title.toLowerCase()}, complete the missing fields in ${ENROLLMENT_STEPS[stepIndex].title.toLowerCase()}.`,
+        });
+        return;
+      }
+    }
+
+    setSubmissionIssues([]);
+    jumpToStep(targetStep);
   };
 
 
@@ -722,7 +832,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         </CardHeader>
         <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-28 sm:pb-32">
+            <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} className="space-y-8 pb-28 sm:pb-32">
               <div className="space-y-3 rounded-[24px] border bg-muted/20 p-3 sm:space-y-4 sm:p-5 lg:p-6">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -733,13 +843,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <span className="font-semibold text-foreground">{stepConfig.title}</span>
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}% complete
+                      {completionPercent}% complete
                     </span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-300"
-                      style={{ width: `${Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%` }}
+                      style={{ width: `${completionPercent}%` }}
                     />
                   </div>
                 </div>
@@ -748,30 +858,61 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
                     const isComplete = index < currentStep;
+                    const stepErrorCount = step.fields.filter((fieldName) => Boolean(form.getFieldState(fieldName).error)).length;
                     return (
                       <button
                         key={step.key}
                         type="button"
-                          className={cn(
+                        className={cn(
                           "min-w-0 rounded-xl border px-3 py-2 text-left transition",
                           isActive && "border-primary bg-primary text-primary-foreground shadow-sm",
                           isComplete && "border-primary/30 bg-primary/10 text-primary",
-                          !isActive && !isComplete && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                          stepErrorCount > 0 && !isActive && "border-amber-300 bg-amber-50 text-amber-900",
+                          !isActive && !isComplete && stepErrorCount === 0 && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
                         )}
-                        onClick={() => {
-                          if (index <= currentStep) {
-                            setCurrentStep(index);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }
-                        }}
+                        onClick={() => void goToStep(index)}
                       >
-                        <span className="block text-[10px] uppercase tracking-[0.18em] opacity-80">{isComplete ? "Done" : `Step ${index + 1}`}</span>
+                        <span className="block text-[10px] uppercase tracking-[0.18em] opacity-80">
+                          {stepErrorCount > 0 ? `${stepErrorCount} to fix` : isComplete ? "Done" : `Step ${index + 1}`}
+                        </span>
                         <span className="mt-1 block text-sm font-semibold leading-tight sm:text-base">{step.title}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {submissionIssues.length > 0 && (
+                <Alert variant="destructive" className="rounded-2xl border-red-200 bg-red-50 text-red-950">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Required information is still missing</AlertTitle>
+                  <AlertDescription className="mt-3 space-y-3">
+                    <p>Please use the step buttons below to jump directly to the missing sections.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {submissionIssues.map((issue) => (
+                        <Button
+                          key={issue.title}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-red-200 bg-background text-red-900 hover:bg-red-100"
+                          onClick={() => jumpToStep(issue.stepIndex)}
+                        >
+                          {issue.title} ({issue.fields.length})
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {submissionIssues.map((issue) => (
+                        <div key={`${issue.title}-fields`} className="rounded-xl border border-red-200 bg-background px-3 py-2">
+                          <p className="text-sm font-semibold text-red-900">{issue.title}</p>
+                          <p className="mt-1 text-sm text-red-800">{issue.fields.join(", ")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {currentStep === 0 && (
                 <FormSection title="Client Information">
