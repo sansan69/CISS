@@ -283,8 +283,44 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   termsAndConditions: "Terms and declaration",
 };
 
+const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
+  "joiningDate",
+  "clientName",
+  "profilePicture",
+  "firstName",
+  "lastName",
+  "fatherName",
+  "motherName",
+  "dateOfBirth",
+  "gender",
+  "maritalStatus",
+  "educationalQualification",
+  "district",
+  "identityProofType",
+  "identityProofNumber",
+  "identityProofUrlFront",
+  "identityProofUrlBack",
+  "addressProofType",
+  "addressProofNumber",
+  "addressProofUrlFront",
+  "addressProofUrlBack",
+  "signatureUrl",
+  "fullAddress",
+  "emailAddress",
+  "phoneNumber",
+  "termsAndConditions",
+];
+
 const isFileValue = (value: unknown): value is File =>
   typeof File !== "undefined" && value instanceof File;
+
+const hasMeaningfulValue = (value: unknown) => {
+  if (isFileValue(value)) return true;
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.trim().length > 0;
+  return false;
+};
 
 const serializeDraftValues = (values: EnrollmentFormValues): EnrollmentDraft["values"] => {
   const serialized: EnrollmentDraft["values"] = {};
@@ -1063,9 +1099,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
   const stepConfig = ENROLLMENT_STEPS[currentStep];
   const isLastStep = currentStep === ENROLLMENT_STEPS.length - 1;
-  const completionPercent = Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100);
+  const formValues = form.getValues();
   const validationIssuesByField = (() => {
-    const parsed = enrollmentFormSchema.safeParse(form.getValues());
+    const parsed = enrollmentFormSchema.safeParse(formValues);
     const issues = new Map<keyof EnrollmentFormValues, number>();
 
     if (!parsed.success) {
@@ -1078,6 +1114,30 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
     return issues;
   })();
+  const applicableRequiredFields = (() => {
+    const fields = [...BASE_REQUIRED_FIELDS];
+
+    if (formValues.clientName === "TCS") {
+      fields.push("resourceIdNumber");
+    }
+    if (formValues.maritalStatus === "Married") {
+      fields.push("spouseName");
+    }
+    if (formValues.educationalQualification === "Any Other Qualification") {
+      fields.push("otherQualification");
+    }
+
+    return fields;
+  })();
+  const completedRequiredCount = applicableRequiredFields.filter(
+    (fieldName) =>
+      !validationIssuesByField.has(fieldName) &&
+      hasMeaningfulValue(formValues[fieldName]),
+  ).length;
+  const completionPercent =
+    applicableRequiredFields.length > 0
+      ? Math.round((completedRequiredCount / applicableRequiredFields.length) * 100)
+      : 0;
   const draftStatusLabel =
     draftStatus === "saving"
       ? "Saving on this device..."
@@ -1175,8 +1235,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
-                    const stepErrorCount = step.fields.filter((fieldName) => validationIssuesByField.has(fieldName)).length;
-                    const isComplete = stepErrorCount === 0;
+                    const applicableStepFields = step.fields.filter((fieldName) => applicableRequiredFields.includes(fieldName));
+                    const stepErrorCount = applicableStepFields.filter((fieldName) => validationIssuesByField.has(fieldName)).length;
+                    const completedStepCount = applicableStepFields.filter(
+                      (fieldName) =>
+                        !validationIssuesByField.has(fieldName) &&
+                        hasMeaningfulValue(formValues[fieldName]),
+                    ).length;
+                    const isComplete = applicableStepFields.length > 0 && completedStepCount === applicableStepFields.length;
                     return (
                       <button
                         key={step.key}
@@ -1191,7 +1257,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         onClick={() => void goToStep(index)}
                       >
                         <span className="block text-[9px] uppercase tracking-[0.16em] opacity-80">
-                          {stepErrorCount > 0 ? `${stepErrorCount} missing` : isActive ? "Current" : "Ready"}
+                          {isComplete
+                            ? "Done"
+                            : stepErrorCount > 0
+                              ? `${stepErrorCount} missing`
+                              : isActive
+                                ? "Current"
+                                : `${completedStepCount}/${applicableStepFields.length || step.fields.length}`}
                         </span>
                         <span className="mt-1 block text-sm font-semibold leading-tight">{step.title}</span>
                       </button>
