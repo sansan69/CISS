@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import {
+  buildServerAuditEvent,
+  buildServerCreateAudit,
+} from "@/lib/server/audit";
+import {
+  SYSTEM_METRIC_NAMES,
+  incrementSystemMetric,
+} from "@/lib/server/monitoring";
 
 type OfficerRequest = {
   uid?: string;
@@ -60,13 +68,31 @@ export async function POST(request: Request) {
       email: body.email,
       name,
       assignedDistricts,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      updatedBy: adminUser.uid,
+      ...buildServerCreateAudit({
+        uid: adminUser.uid,
+        email: adminUser.email,
+      }),
+      auditTrail: [
+        buildServerAuditEvent(
+          body.uid ? "field_officer_linked" : "field_officer_created",
+          {
+            uid: adminUser.uid,
+            email: adminUser.email,
+          },
+          {
+            targetUid: uid,
+            targetEmail: body.email,
+            assignedDistricts,
+          },
+        ),
+      ],
     });
+
+    await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionSuccess);
 
     return NextResponse.json({ id: docRef.id, uid, email: body.email, name, assignedDistricts });
   } catch (error: any) {
+    await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionFailure);
     const status = error?.message === "Admin access required." ? 403 : 401;
     return unauthorizedResponse(error?.message || "Unauthorized", status);
   }

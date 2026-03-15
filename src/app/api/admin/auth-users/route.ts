@@ -12,6 +12,7 @@ export async function GET(request: Request) {
         uid: user.uid,
         email: user.email,
         name: user.displayName,
+        customClaims: user.customClaims || {},
       })),
     });
   } catch (error: any) {

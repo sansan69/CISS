@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, XCircle, Info, Loader2, ListChecks } from 'lucide-react';
+import { QrCode, Camera, MapPin, CheckCircle, XCircle, Info, Loader2, ListChecks, RefreshCcw, WifiOff } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
@@ -22,25 +22,21 @@ import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storag
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters } from '@/lib/geo';
+import type {
+  AttendanceSubmission,
+  DeviceAttendanceHistoryItem,
+  QueuedAttendanceSubmission,
+} from '@/types/attendance';
 
 type SiteOption = {
   id: string;
   siteName: string;
   clientName: string;
   district: string;
+  geofenceRadiusMeters?: number;
   lat?: number;
   lng?: number;
 };
-
-interface AttendanceRecord {
-  id: string;
-  name: string;
-  employeeId: string;
-  time: string;
-  status: 'In' | 'Out';
-  location?: string;
-  photoUrl?: string;
-}
 
 type ScannedEmployee = {
   id: string;                 // Firestore document ID
@@ -49,6 +45,9 @@ type ScannedEmployee = {
   phoneNumber?: string;
   clientName?: string;
 };
+
+const ATTENDANCE_QUEUE_STORAGE_KEY = 'ciss_attendance_queue_v1';
+const ATTENDANCE_HISTORY_STORAGE_KEY = 'ciss_attendance_history_v1';
 
 export default function AttendancePage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -72,7 +71,9 @@ export default function AttendancePage() {
   const [manualIdOpen, setManualIdOpen] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
 
-  const [recentAttendance, setRecentAttendance] = useState<AttendanceRecord[]>([]);
+  const [recentAttendance, setRecentAttendance] = useState<DeviceAttendanceHistoryItem[]>([]);
+  const [queuedAttendance, setQueuedAttendance] = useState<QueuedAttendanceSubmission[]>([]);
+  const [isSyncingQueue, setIsSyncingQueue] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BrowserMultiFormatReader | null>(null);
@@ -114,6 +115,46 @@ export default function AttendancePage() {
     return siteOptions.filter(s => s.clientName === targetClient);
   }, [siteOptions, clientFilter, scannedEmployee?.clientName]);
 
+  const appendRecentAttendance = useCallback((item: DeviceAttendanceHistoryItem) => {
+    setRecentAttendance((previous) => {
+      const next = [item, ...previous.filter((entry) => entry.id !== item.id)].slice(0, 10);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ATTENDANCE_HISTORY_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const updateRecentAttendance = useCallback((id: string, patch: Partial<DeviceAttendanceHistoryItem>) => {
+    setRecentAttendance((previous) => {
+      const next = previous.map((entry) => entry.id === id ? { ...entry, ...patch } : entry);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ATTENDANCE_HISTORY_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const removeQueuedAttendance = useCallback((id: string) => {
+    setQueuedAttendance((previous) => {
+      const next = previous.filter((item) => item.id !== id);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ATTENDANCE_QUEUE_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const queueAttendanceSubmission = useCallback((queuedItem: QueuedAttendanceSubmission) => {
+    setQueuedAttendance((previous) => {
+      const next = [...previous, queuedItem];
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ATTENDANCE_QUEUE_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const fetchSites = async () => {
       if (!selectedDistrict) { setSiteOptions([]); setSelectedSiteId(""); return; }
@@ -132,6 +173,7 @@ export default function AttendancePage() {
             siteName: data.siteName, 
             clientName: data.clientName, 
             district: data.district,
+            geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : undefined,
             lat,
             lng,
           };
@@ -389,6 +431,129 @@ export default function AttendancePage() {
     const dd = String(now.getDate()).padStart(2, '0');
     return `${employeeId}:${siteId}:${yyyy}-${mm}-${dd}:${status}`;
   };
+
+  const buildHistoryItem = useCallback((
+    id: string,
+    payload: Omit<AttendanceSubmission, 'photoUrl'>,
+    photoUrl?: string,
+    syncStatus: DeviceAttendanceHistoryItem['syncStatus'] = 'synced',
+  ): DeviceAttendanceHistoryItem => ({
+    id,
+    employeeId: payload.employeeId,
+    employeeName: payload.employeeName,
+    status: payload.status,
+    time: new Date().toLocaleTimeString(),
+    district: payload.district,
+    siteName: payload.siteName,
+    clientName: payload.clientName,
+    location: payload.locationText,
+    photoUrl,
+    syncStatus,
+  }), []);
+
+  const isRetryableAttendanceError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return /failed to fetch|network|fetch|timeout|offline/i.test(message);
+  };
+
+  const submitAttendanceOnline = useCallback(async (
+    payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'>,
+    photoDataUrl: string,
+  ) => {
+    const ts = Date.now();
+    const phone = payloadWithoutPhotoUrl.employeePhoneNumber || 'unknown';
+    const path = `employees/${phone}/attendance/${ts}_attendance.jpg`;
+    const ref = storageRef(storage, path);
+
+    await withRetry(() => uploadString(ref, photoDataUrl, 'data_url'));
+    const photoUrl = await withRetry(() => getDownloadURL(ref));
+
+    const response = await fetch('/api/attendance/submit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payloadWithoutPhotoUrl,
+        photoUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.json().catch(() => ({}));
+      throw new Error(responseBody.error || 'Could not submit attendance.');
+    }
+
+    return {
+      photoUrl,
+      recordId: `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
+    };
+  }, []);
+
+  const flushQueuedAttendance = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    if (isSyncingQueue || queuedAttendance.length === 0) return;
+
+    setIsSyncingQueue(true);
+    try {
+      for (const queuedItem of queuedAttendance) {
+        try {
+          const { photoDataUrl, ...payloadWithoutPhotoUrl } = queuedItem.payload;
+          const result = await submitAttendanceOnline(payloadWithoutPhotoUrl, photoDataUrl);
+          updateRecentAttendance(queuedItem.id, {
+            syncStatus: 'synced',
+            photoUrl: result.photoUrl,
+          });
+          removeQueuedAttendance(queuedItem.id);
+        } catch (error) {
+          if (isRetryableAttendanceError(error)) {
+            break;
+          }
+
+          updateRecentAttendance(queuedItem.id, {
+            syncStatus: 'failed',
+          });
+          removeQueuedAttendance(queuedItem.id);
+        }
+      }
+    } finally {
+      setIsSyncingQueue(false);
+    }
+  }, [isSyncingQueue, queuedAttendance, removeQueuedAttendance, submitAttendanceOnline, updateRecentAttendance]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedQueue = window.localStorage.getItem(ATTENDANCE_QUEUE_STORAGE_KEY);
+      const storedHistory = window.localStorage.getItem(ATTENDANCE_HISTORY_STORAGE_KEY);
+      if (storedQueue) {
+        setQueuedAttendance(JSON.parse(storedQueue));
+      }
+      if (storedHistory) {
+        setRecentAttendance(JSON.parse(storedHistory));
+      }
+    } catch (error) {
+      console.error('Could not restore attendance cache:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOnline = () => {
+      flushQueuedAttendance();
+    };
+
+    window.addEventListener('online', handleOnline);
+    if (navigator.onLine) {
+      flushQueuedAttendance();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [flushQueuedAttendance]);
   
   // Simplified: no heavy verification; treat captured photo as ready for upload
   useEffect(() => {
@@ -445,7 +610,7 @@ export default function AttendancePage() {
     }
 
     const distance = haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng);
-    const allowedRadius = 150; // meters
+    const allowedRadius = selectedSite.geofenceRadiusMeters || 150;
     if (distance > allowedRadius) {
       toast({
         variant: 'destructive',
@@ -454,65 +619,78 @@ export default function AttendancePage() {
       });
       return;
     }
-    try {
-      // Upload captured photo to Storage with retry
-      const ts = Date.now();
-      const phone = scannedEmployee.phoneNumber || 'unknown';
-      const path = `employees/${phone}/attendance/${ts}_attendance.jpg`;
-      const ref = storageRef(storage, path);
-      const imageToUpload = watermarkedPhoto || capturedPhoto;
-      await withRetry(() => uploadString(ref, imageToUpload!, 'data_url'));
-      const photoUrl = await withRetry(() => getDownloadURL(ref));
 
-      // Write Firestore attendance log (no pre-read to avoid auth issues)
-      const payload = {
-        employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
-        employeeDocId: scannedEmployee.id,
-        employeeName: scannedEmployee.fullName,
-        employeePhoneNumber: scannedEmployee.phoneNumber,
-        employeeClientName: scannedEmployee.clientName,
-        status: selectedStatus,
-        district: selectedDistrict,
-        siteId: selectedSiteId,
-        siteName: selectedSite.siteName,
-        clientName: selectedSite.clientName,
-        siteCoords: { lat: selectedSite.lat, lng: selectedSite.lng },
-        locationText: location,
-        locationCoords,
-        distanceMeters: Math.round(distance),
-        locationAccuracyMeters: locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null,
-        photoUrl,
-        deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
-      } as const;
-      await withRetry(async () => {
-        const response = await fetch('/api/attendance/submit', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const responseBody = await response.json().catch(() => ({}));
-          throw new Error(responseBody.error || 'Could not submit attendance.');
-        }
-      });
-
-    const newRecord: AttendanceRecord = {
-        id: String(ts),
-        name: scannedEmployee.fullName,
-        employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
-      time: new Date().toLocaleTimeString(),
-        status: selectedStatus,
-      location: location!,
-        photoUrl,
+    const payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'> = {
+      employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
+      employeeDocId: scannedEmployee.id,
+      employeeName: scannedEmployee.fullName,
+      employeePhoneNumber: scannedEmployee.phoneNumber,
+      employeeClientName: scannedEmployee.clientName,
+      status: selectedStatus,
+      district: selectedDistrict,
+      siteId: selectedSiteId,
+      siteName: selectedSite.siteName,
+      clientName: selectedSite.clientName,
+      siteCoords: { lat: selectedSite.lat, lng: selectedSite.lng },
+      locationText: location || '',
+      locationCoords,
+      distanceMeters: Math.round(distance),
+      locationAccuracyMeters: locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null,
+      deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
     };
-    setRecentAttendance(prev => [newRecord, ...prev.slice(0, 4)]);
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const queuedItem: QueuedAttendanceSubmission = {
+        id: `${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        payload: {
+          ...payloadWithoutPhotoUrl,
+          photoDataUrl: watermarkedPhoto || capturedPhoto,
+        },
+      };
+      queueAttendanceSubmission(queuedItem);
+      appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
+      toast({
+        title: 'Attendance queued',
+        description: 'You are offline. The attendance entry will sync automatically when the connection returns.',
+      });
+      resetState();
+      return;
+    }
+
+    try {
+      const result = await submitAttendanceOnline(
+        payloadWithoutPhotoUrl,
+        watermarkedPhoto || capturedPhoto,
+      );
+      appendRecentAttendance(
+        buildHistoryItem(result.recordId, payloadWithoutPhotoUrl, result.photoUrl, 'synced'),
+      );
       toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} ${selectedStatus.toLowerCase()} recorded.` });
-    resetState();
+      resetState();
     } catch (e: any) {
       console.error('Submit failed', e);
+      if (isRetryableAttendanceError(e)) {
+        const queuedItem: QueuedAttendanceSubmission = {
+          id: `${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          payload: {
+            ...payloadWithoutPhotoUrl,
+            photoDataUrl: watermarkedPhoto || capturedPhoto,
+          },
+        };
+        queueAttendanceSubmission(queuedItem);
+        appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
+        toast({
+          title: 'Attendance queued',
+          description: 'Network issue detected. The entry was saved locally and will retry automatically.',
+        });
+        resetState();
+        return;
+      }
+
+      const failedId = `${Date.now()}`;
+      appendRecentAttendance(buildHistoryItem(failedId, payloadWithoutPhotoUrl, undefined, 'failed'));
       toast({ variant: 'destructive', title: 'Submit Failed', description: e?.message || 'Could not submit attendance.' });
     }
   };
@@ -636,6 +814,22 @@ export default function AttendancePage() {
           {!verificationStarted && 'Click "Start Verification" to access your camera and location.'}
           {verificationStarted && !scanResult && 'Point your QR code at the camera and click "Scan QR & Capture".'}
           {scanResult && 'Once all data is captured, click "Mark IN" or "Mark OUT".'}
+        </AlertDescription>
+      </Alert>
+
+      <Alert>
+        {queuedAttendance.length > 0 ? <WifiOff className="h-4 w-4" /> : <RefreshCcw className="h-4 w-4" />}
+        <AlertTitle>Attendance Sync</AlertTitle>
+        <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            {queuedAttendance.length > 0
+              ? `${queuedAttendance.length} attendance entr${queuedAttendance.length === 1 ? 'y is' : 'ies are'} queued for sync.`
+              : 'All locally saved attendance entries are synced.'}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={flushQueuedAttendance} disabled={isSyncingQueue || queuedAttendance.length === 0}>
+            {isSyncingQueue ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+            Sync Now
+          </Button>
         </AlertDescription>
       </Alert>
 
@@ -793,19 +987,22 @@ export default function AttendancePage() {
               {recentAttendance.map(record => (
                 <li key={record.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-md shadow-sm gap-4">
                   <div className="flex items-center gap-3">
-                    {record.photoUrl && <Image src={record.photoUrl} alt={record.name} width={80} height={60} className="rounded-md" data-ai-hint="employee avatar" />}
+                    {record.photoUrl && <Image src={record.photoUrl} alt={record.employeeName} width={80} height={60} className="rounded-md" data-ai-hint="employee avatar" />}
                     <div>
-                      <p className="font-medium">{record.name}</p>
+                      <p className="font-medium">{record.employeeName}</p>
                       <p className="text-sm text-muted-foreground">ID: {record.employeeId} | Time: {record.time}</p>
                       <p className="text-xs text-muted-foreground">Location: {record.location}</p>
-                      {isSelectionComplete && (
-                        <p className="text-xs text-muted-foreground">Duty: {selectedDistrict} — {siteOptions.find(s => s.id === selectedSiteId)?.siteName}</p>
-                      )}
+                      <p className="text-xs text-muted-foreground">Duty: {record.district} — {record.siteName}</p>
                     </div>
                   </div>
-                  <Badge variant={record.status === 'In' ? 'default' : 'destructive'} className="shrink-0">
-                    {record.status}
-                  </Badge>
+                  <div className="flex gap-2">
+                    <Badge variant={record.status === 'In' ? 'default' : 'destructive'} className="shrink-0">
+                      {record.status}
+                    </Badge>
+                    <Badge variant={record.syncStatus === 'synced' ? 'default' : record.syncStatus === 'queued' ? 'secondary' : 'destructive'}>
+                      {record.syncStatus}
+                    </Badge>
+                  </div>
                 </li>
               ))}
             </ul>

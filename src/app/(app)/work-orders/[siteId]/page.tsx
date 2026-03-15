@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp, deleteDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 
@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Employee } from '@/types/employee';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { startOfToday } from 'date-fns';
+import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 
 
 // Safely compute initials for avatar fallbacks
@@ -107,7 +108,14 @@ const AssignGuardsDialog: React.FC<{
             const workOrderRef = doc(db, "workOrders", workOrder.id);
             await updateDoc(workOrderRef, {
                 assignedGuards: selectedGuards,
-                updatedAt: serverTimestamp(),
+                ...buildFirestoreUpdateAudit(),
+                assignmentHistory: arrayUnion(
+                  buildFirestoreAuditEvent('work_order_assignments_updated', undefined, {
+                    siteId: workOrder.siteId,
+                    assignedGuardIds: selectedGuards.map((guard) => guard.uid),
+                    assignedCount: selectedGuards.length,
+                  }),
+                ),
             });
             toast({ title: "Success", description: "Guard assignments have been updated." });
             onClose();
@@ -673,7 +681,19 @@ export default function AssignGuardsPage() {
                                                             const ref = doc(db, 'workOrders', order.id);
                                                             const male = Number.isFinite(editMale) ? editMale : 0;
                                                             const female = Number.isFinite(editFemale) ? editFemale : 0;
-                                                            await updateDoc(ref, { maleGuardsRequired: male, femaleGuardsRequired: female, totalManpower: male + female, updatedAt: serverTimestamp() });
+                                                            await updateDoc(ref, {
+                                                              maleGuardsRequired: male,
+                                                              femaleGuardsRequired: female,
+                                                              totalManpower: male + female,
+                                                              ...buildFirestoreUpdateAudit(),
+                                                              assignmentHistory: arrayUnion(
+                                                                buildFirestoreAuditEvent('work_order_manpower_updated', undefined, {
+                                                                  maleGuardsRequired: male,
+                                                                  femaleGuardsRequired: female,
+                                                                  totalManpower: male + female,
+                                                                }),
+                                                              ),
+                                                            });
                                                             setEditCountsFor(null);
                                                         } catch (e) {
                                                             console.error(e);

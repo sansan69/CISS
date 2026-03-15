@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { buildServerUpdateAudit } from "@/lib/server/audit";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin(request);
+    const adminUser = await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
     const body = (await request.json()) as { name?: string };
@@ -18,7 +19,10 @@ export async function PATCH(
 
     await adminDb.collection("clients").doc(id).update({
       name,
-      updatedAt: new Date(),
+      ...buildServerUpdateAudit({
+        uid: adminUser.uid,
+        email: adminUser.email,
+      }),
     });
 
     return NextResponse.json({ id, name });

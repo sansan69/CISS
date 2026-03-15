@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  SYSTEM_METRIC_NAMES,
+  incrementSystemMetric,
+} from "@/lib/server/monitoring";
 
 // Simple server-side geocoding proxy so that the API key is never exposed to the browser.
 // Configure one of the supported providers via environment variables.
@@ -21,6 +25,7 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.OPENCAGE_API_KEY?.trim().replace(/^['"]|['"]$/g, '');
     if (!apiKey) {
+      await incrementSystemMetric(SYSTEM_METRIC_NAMES.geocodeFailure);
       return NextResponse.json(
         { error: 'Geocoding API key is not configured. Please set OPENCAGE_API_KEY in your environment.' },
         { status: 500 },
@@ -43,6 +48,7 @@ export async function POST(req: NextRequest) {
       } catch {
         // Keep the raw provider response if it is not JSON.
       }
+      await incrementSystemMetric(SYSTEM_METRIC_NAMES.geocodeFailure);
       return NextResponse.json(
         { error: `Geocoding provider error (${res.status}): ${providerMessage}` },
         { status: 502 },
@@ -55,19 +61,21 @@ export async function POST(req: NextRequest) {
     const lng = first?.geometry?.lng;
 
     if (typeof lat !== 'number' || typeof lng !== 'number') {
+      await incrementSystemMetric(SYSTEM_METRIC_NAMES.geocodeFailure);
       return NextResponse.json(
         { error: 'No coordinates found for the given address.' },
         { status: 404 },
       );
     }
 
+    await incrementSystemMetric(SYSTEM_METRIC_NAMES.geocodeSuccess);
     return NextResponse.json({ lat, lng });
   } catch (e: any) {
     console.error('Geocode API error', e);
+    await incrementSystemMetric(SYSTEM_METRIC_NAMES.geocodeFailure);
     return NextResponse.json(
       { error: e?.message || 'Unexpected server error while geocoding.' },
       { status: 500 },
     );
   }
 }
-

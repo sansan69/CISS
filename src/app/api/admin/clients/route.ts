@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { buildServerCreateAudit } from "@/lib/server/audit";
 
 export async function POST(request: Request) {
   try {
-    await requireAdmin(request);
+    const adminUser = await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const body = (await request.json()) as { name?: string };
     const name = body.name?.trim();
@@ -14,8 +15,10 @@ export async function POST(request: Request) {
 
     const docRef = await adminDb.collection("clients").add({
       name,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      ...buildServerCreateAudit({
+        uid: adminUser.uid,
+        email: adminUser.email,
+      }),
     });
 
     return NextResponse.json({ id: docRef.id, name });

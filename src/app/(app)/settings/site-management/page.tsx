@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast, addDoc } from 'firebase/firestore';
+import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast, addDoc, arrayUnion } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
@@ -40,6 +40,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 
 
 interface Site {
@@ -50,6 +51,7 @@ interface Site {
     siteAddress: string;
     district: string;
     geolocation: GeoPoint;
+    geofenceRadiusMeters?: number;
     latString?: string;
     lngString?: string;
 }
@@ -134,10 +136,10 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
         (Object.keys(formData) as Array<keyof Site>).forEach(key => {
             if (key === 'geolocation') {
                 if (formData.geolocation?.latitude !== site.geolocation?.latitude || formData.geolocation?.longitude !== site.geolocation?.longitude) {
-                    changes[key] = formData[key];
+                    (changes as any)[key] = formData[key];
                 }
             } else if (formData[key] !== site[key]) {
-                changes[key] = formData[key];
+                (changes as any)[key] = formData[key];
             }
         });
         
@@ -196,6 +198,16 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                 {geoError && <p className="text-sm text-destructive">{geoError}</p>}
             </div>
             <div className="grid gap-2">
+                <Label htmlFor="geofenceRadiusMeters">Geofence Radius (meters)</Label>
+                <Input
+                    id="geofenceRadiusMeters"
+                    type="number"
+                    min={1}
+                    value={formData.geofenceRadiusMeters ?? 150}
+                    onChange={(e) => setFormData({ ...formData, geofenceRadiusMeters: Math.max(1, Number(e.target.value || 150)) })}
+                />
+            </div>
+            <div className="grid gap-2">
                 <Label htmlFor="district">District</Label>
                  <Select value={formData.district} onValueChange={(value) => setFormData({...formData, district: value})}>
                     <SelectTrigger><SelectValue placeholder="Select a district" /></SelectTrigger>
@@ -229,7 +241,7 @@ export default function SiteManagementPage() {
     const [deletingSite, setDeletingSite] = useState<Site | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [createData, setCreateData] = useState<Partial<Site>>({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), latString: '', lngString: '' });
+    const [createData, setCreateData] = useState<Partial<Site>>({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), geofenceRadiusMeters: 150, latString: '', lngString: '' });
     
     // Filters
     const [clients, setClients] = useState<ClientOption[]>([]);
@@ -522,7 +534,13 @@ export default function SiteManagementPage() {
                 ...updatedData,
                 // If geolocation updated and we have lat/lng inputs in formData, persist the strings too
                 ...(updatedData.geolocation ? { latString: (updatedData as any).latString ?? undefined, lngString: (updatedData as any).lngString ?? undefined } : {}),
-                updatedAt: serverTimestamp(),
+                ...buildFirestoreUpdateAudit(),
+                auditTrail: arrayUnion(
+                    buildFirestoreAuditEvent('site_updated', undefined, {
+                        siteId: editingSite.id,
+                        siteName: updatedData.siteName ?? editingSite.siteName,
+                    }),
+                ),
             });
             toast({ title: "Site Updated", description: "The site details have been saved." });
             fetchSites(currentPage === 1 ? 'first' : 'next');
@@ -950,6 +968,16 @@ export default function SiteManagementPage() {
                                 }} />
                             </div>
                         </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="new-geofence-radius">Geofence Radius (meters)</Label>
+                            <Input
+                                id="new-geofence-radius"
+                                type="number"
+                                min={1}
+                                value={createData.geofenceRadiusMeters ?? 150}
+                                onChange={(e) => setCreateData({ ...createData, geofenceRadiusMeters: Math.max(1, Number(e.target.value || 150)) })}
+                            />
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
@@ -967,14 +995,14 @@ export default function SiteManagementPage() {
                                     siteAddress: createData.siteAddress,
                                     district: createData.district,
                                     geolocation: createData.geolocation,
+                                    geofenceRadiusMeters: createData.geofenceRadiusMeters ?? 150,
                                     latString: createData.latString,
                                     lngString: createData.lngString,
-                                    createdAt: serverTimestamp(),
-                                    updatedAt: serverTimestamp(),
+                                    ...buildFirestoreCreateAudit(),
                                 });
                                 toast({ title: 'Site Created', description: 'The new site has been added.' });
                                 setIsCreateOpen(false);
-                                setCreateData({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), latString: '', lngString: '' });
+                                setCreateData({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), geofenceRadiusMeters: 150, latString: '', lngString: '' });
                                 fetchSites('first');
                                 setCurrentPage(1);
                             } catch (e) {

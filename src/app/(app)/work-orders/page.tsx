@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
 import { resolveAppUser } from '@/lib/auth/roles';
+import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import {
     Select,
     SelectContent,
@@ -337,8 +338,7 @@ export default function WorkOrderPage() {
                             siteAddress: siteAddress || '',
                             district: district || '',
                             state: state || 'Kerala',
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp(),
+                            ...buildFirestoreCreateAudit(),
                         } as any;
                         const newRef = await addDoc(collection(db, 'sites'), newSiteData);
                         site = { id: newRef.id, ...newSiteData };
@@ -393,7 +393,17 @@ export default function WorkOrderPage() {
                             // Preserve any existing guard assignments when re-importing
                             assignedGuards: existingAssigned,
                             createdAt: existingCreatedAt ?? serverTimestamp(),
-                            updatedAt: serverTimestamp(),
+                            ...buildFirestoreUpdateAudit(),
+                            importHistory: arrayUnion(
+                                buildFirestoreAuditEvent('work_order_imported', undefined, {
+                                    siteId: site.id,
+                                    siteName: site.siteName,
+                                    date: dateString,
+                                    maleGuardsRequired: finalMale,
+                                    femaleGuardsRequired: finalFemale,
+                                    totalManpower,
+                                }),
+                            ),
                         }, { merge: true });
 
                         operationsCount++;

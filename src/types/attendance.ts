@@ -32,3 +32,35 @@ export const attendanceSubmissionSchema = z.object({
 });
 
 export type AttendanceSubmission = z.infer<typeof attendanceSubmissionSchema>;
+
+export const attendanceLogSchema = attendanceSubmissionSchema.extend({
+  id: z.string().optional(),
+  attendanceDate: z.string().optional(),
+  createdAt: z.any().optional(),
+});
+
+export type AttendanceLog = z.infer<typeof attendanceLogSchema>;
+
+export type AttendanceSyncStatus = "queued" | "synced" | "failed";
+
+export interface DeviceAttendanceHistoryItem {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  status: "In" | "Out";
+  time: string;
+  district: string;
+  siteName: string;
+  clientName?: string;
+  location?: string;
+  photoUrl?: string;
+  syncStatus: AttendanceSyncStatus;
+}
+
+export interface QueuedAttendanceSubmission {
+  id: string;
+  createdAt: string;
+  payload: Omit<AttendanceSubmission, "photoUrl"> & {
+    photoDataUrl: string;
+  };
+}

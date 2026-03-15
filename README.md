@@ -25,9 +25,10 @@ The application serves two primary user roles:
 
 1. Copy `.env.example` to `.env.local` and fill in the Firebase web config values.
 2. Add server-side Firebase credentials with either `FIREBASE_ADMIN_SDK_CONFIG_BASE64` or the split admin variables.
-3. Install dependencies with `npm install`.
-4. Start the app with `npm run dev`.
-5. Verify the baseline with:
+3. Use Node.js `22.x` locally. Other major versions, especially `25.x`, are not considered supported for this project.
+4. Install dependencies with `npm install`.
+5. Start the app with `npm run dev`.
+6. Verify the baseline with:
    - `npm run lint`
    - `npm run typecheck`
    - `npm run build`
@@ -45,6 +46,8 @@ For server-side functionality like PDF generation to work, you must configure en
     -   Encode the entire content of that JSON file into a single-line Base64 string. You can use an online tool or a terminal command:
         `cat /path/to/your/service-account.json | base64`
     -   Copy the resulting Base64 string and add it as the value for this environment variable in Vercel.
+3.  **`DEFAULT_GEOFENCE_RADIUS_METERS`** (Optional): Default attendance radius when a site does not define its own geofence. Defaults to `150`.
+4.  **`OPENCAGE_API_KEY`**: Required for server-side site geocoding.
 
 ---
 

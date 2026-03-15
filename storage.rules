@@ -2,6 +2,18 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function isAllowedSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isDocument() {
+      return isImage() || request.resource.contentType == 'application/pdf';
+    }
+
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.admin == true ||
@@ -9,13 +21,45 @@ service firebase.storage {
       );
     }
 
-    match /employees/{allPaths=**} {
+    match /employees/{employeeKey}/profilePictures/{fileName} {
       allow read: if true;
-      allow create: if request.resource.size < 5 * 1024 * 1024
-        && (
-          request.resource.contentType.matches('image/.*') ||
-          request.resource.contentType == 'application/pdf'
-        );
+      allow create: if isAllowedSize() && isImage();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/signatures/{fileName} {
+      allow read: if true;
+      allow create: if isAllowedSize() && isImage();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/attendance/{fileName} {
+      allow read: if true;
+      allow create: if isAllowedSize() && isImage();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/idProofs/{fileName} {
+      allow read: if true;
+      allow create: if isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/addressProofs/{fileName} {
+      allow read: if true;
+      allow create: if isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/bankDocuments/{fileName} {
+      allow read: if true;
+      allow create: if isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/policeCertificates/{fileName} {
+      allow read: if true;
+      allow create: if isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 

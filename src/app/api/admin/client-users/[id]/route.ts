@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { buildServerAuditEvent } from "@/lib/server/audit";
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin(request);
+    const adminUser = await requireAdmin(request);
     const { auth: adminAuth, db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
     const mappingRef = adminDb.collection("clientUsers").doc(id);
@@ -17,6 +18,19 @@ export async function DELETE(
     }
 
     const mapping = mappingSnap.data() as { uid?: string };
+    await adminDb.collection("clientUserAudit").add({
+      ...buildServerAuditEvent(
+        "client_user_unlinked",
+        {
+          uid: adminUser.uid,
+          email: adminUser.email,
+        },
+        {
+          mappingId: id,
+          targetUid: mapping.uid ?? null,
+        },
+      ),
+    });
     await mappingRef.delete();
 
     if (mapping.uid) {

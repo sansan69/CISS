@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon, Wrench } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -51,6 +51,18 @@ interface AuthUser {
   uid: string;
   email: string;
   name?: string;
+  customClaims?: Record<string, unknown>;
+}
+
+interface ClaimRepairHealth {
+  totalMismatches: number;
+  items: {
+    uid: string;
+    email?: string;
+    expectedRole: string;
+    currentRole: string | null;
+    source: string;
+  }[];
 }
 
 
@@ -268,6 +280,8 @@ export default function FieldOfficerManagementPage() {
   const [deletingOfficer, setDeletingOfficer] = useState<FieldOfficer | null>(null);
   
   const [authStatus, setAuthStatus] = useState<'loading' | 'admin' | 'other'>('loading');
+  const [claimRepairHealth, setClaimRepairHealth] = useState<ClaimRepairHealth | null>(null);
+  const [isRepairingClaims, setIsRepairingClaims] = useState(false);
 
   const { toast } = useToast();
   
@@ -298,12 +312,19 @@ export default function FieldOfficerManagementPage() {
     // Simulating that fetch here.
     const fetchAllData = async () => {
         try {
-            const response = await authorizedFetch('/api/admin/auth-users');
+            const [response, claimsResponse] = await Promise.all([
+              authorizedFetch('/api/admin/auth-users'),
+              authorizedFetch('/api/admin/claims/repair'),
+            ]);
             const data = await response.json().catch(() => ({}));
+            const claimsData = await claimsResponse.json().catch(() => ({}));
             if (!response.ok) {
                 throw new Error(data.error || 'Could not load auth users.');
             }
             setAllAuthUsers(data.users || []);
+            if (claimsResponse.ok) {
+              setClaimRepairHealth(claimsData);
+            }
         } catch (error) {
              console.error("Error fetching auth users (simulation): ", error);
              toast({ variant: "destructive", title: "Error", description: "Could not load user list." });
@@ -429,6 +450,35 @@ export default function FieldOfficerManagementPage() {
       setEditingOfficer(undefined);
   }
 
+  const handleRepairClaims = async () => {
+    setIsRepairingClaims(true);
+    try {
+      const response = await authorizedFetch('/api/admin/claims/repair', {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Could not repair role claims.');
+      }
+      toast({
+        title: 'Role claims repaired',
+        description: `${data.repaired || 0} user accounts were refreshed.`,
+      });
+      setClaimRepairHealth({
+        totalMismatches: 0,
+        items: [],
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Repair failed',
+        description: error.message || 'Could not repair missing role claims.',
+      });
+    } finally {
+      setIsRepairingClaims(false);
+    }
+  }
+
   if (authStatus === 'loading' || isLoading) {
        return (
         <div className="flex justify-center items-center h-40">
@@ -462,6 +512,38 @@ export default function FieldOfficerManagementPage() {
             Assign the "Field Officer" role to existing users. You must first create a user in the Firebase Authentication console. Then, assign them here and specify which districts they can manage.
           </AlertDescription>
         </Alert>
+
+        {claimRepairHealth && (
+          <Alert>
+            <ShieldCheck className="h-4 w-4" />
+            <AlertTitle>Role Claim Health</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3">
+              <div>
+                {claimRepairHealth.totalMismatches === 0
+                  ? 'All mapped admins, field officers, and client users currently have the expected Firebase custom claims.'
+                  : `${claimRepairHealth.totalMismatches} mapped accounts are missing their expected Firebase role claims.`}
+              </div>
+              {claimRepairHealth.totalMismatches > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {claimRepairHealth.items.slice(0, 5).map((item) => (
+                    <Badge key={item.uid} variant="secondary">
+                      {(item.email || item.uid)} {'->'} {item.expectedRole}
+                    </Badge>
+                  ))}
+                  {claimRepairHealth.items.length > 5 && (
+                    <Badge variant="outline">+{claimRepairHealth.items.length - 5} more</Badge>
+                  )}
+                </div>
+              )}
+              <div>
+                <Button type="button" variant="outline" onClick={handleRepairClaims} disabled={isRepairingClaims}>
+                  {isRepairingClaims ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
+                  Repair Missing Claims
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader>

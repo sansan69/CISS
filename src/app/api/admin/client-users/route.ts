@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import {
+  buildServerAuditEvent,
+  buildServerCreateAudit,
+} from "@/lib/server/audit";
+import {
+  SYSTEM_METRIC_NAMES,
+  incrementSystemMetric,
+} from "@/lib/server/monitoring";
 
 type ClientUserRequest = {
   mode: "existing" | "create";
@@ -52,9 +60,25 @@ export async function POST(request: Request) {
       name: body.name?.trim() || userRecord.displayName || email.split("@")[0],
       clientId,
       clientName,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      updatedBy: adminUser.uid,
+      ...buildServerCreateAudit({
+        uid: adminUser.uid,
+        email: adminUser.email,
+      }),
+      auditTrail: [
+        buildServerAuditEvent(
+          body.mode === "create" ? "client_user_created" : "client_user_linked",
+          {
+            uid: adminUser.uid,
+            email: adminUser.email,
+          },
+          {
+            clientId,
+            clientName,
+            targetUid: userRecord.uid,
+            targetEmail: userRecord.email || email,
+          },
+        ),
+      ],
     };
 
     const existing = await adminDb
@@ -74,8 +98,11 @@ export async function POST(request: Request) {
     const mappingRef = await adminDb.collection("clientUsers").add(payload);
     await adminDb.collection("clientUsersByUid").doc(userRecord.uid).set(payload);
 
+    await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionSuccess);
+
     return NextResponse.json({ id: mappingRef.id, ...payload });
   } catch (error: any) {
+    await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionFailure);
     const status = error?.message === "Admin access required." ? 403 : 401;
     return unauthorizedResponse(error?.message || "Unauthorized", status);
   }

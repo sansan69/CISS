@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { db, auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, startAt, endAt } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, startAt, endAt, arrayUnion } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
 import { resolveAppUser } from '@/lib/auth/roles';
+import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
@@ -346,7 +347,16 @@ export default function EmployeeDirectoryPage() {
         setIsUpdatingStatus(true);
         try {
           const employeeDocRef = doc(db, "employees", selectedEmployeeForStatusChange.id);
-          const updateData: any = { status: newStatus, updatedAt: serverTimestamp() };
+          const updateData: any = {
+            status: newStatus,
+            ...buildFirestoreUpdateAudit(),
+            statusHistory: arrayUnion(
+              buildFirestoreAuditEvent('employee_status_updated', undefined, {
+                previousStatus: selectedEmployeeForStatusChange.status,
+                nextStatus: newStatus,
+              }),
+            ),
+          };
           if (newStatus === 'Exited') {
             if (!exitDate) {
               toast({ variant: "destructive", title: "Error", description: "Exit date is required." });
