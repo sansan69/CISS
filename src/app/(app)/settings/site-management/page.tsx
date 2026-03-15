@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, Filter } from 'lucide-react';
+import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, MapPinned, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast, addDoc, arrayUnion } from 'firebase/firestore';
@@ -41,20 +41,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { LocationEditorCard } from '@/components/location/location-editor-card';
+import { KERALA_DISTRICTS } from '@/lib/constants';
+import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
+import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite } from '@/types/location';
 
 
-interface Site {
-    id: string;
-    clientName: string;
-    siteName: string;
-    siteId?: string;
-    siteAddress: string;
-    district: string;
-    geolocation: GeoPoint;
-    geofenceRadiusMeters?: number;
-    latString?: string;
-    lngString?: string;
-}
+type Site = ManagedSite;
 
 interface ClientOption {
     id: string;
@@ -64,6 +57,11 @@ interface FieldOfficerOption {
     id: string;
     name: string;
     assignedDistricts: string[];
+}
+interface ClientLocationOption extends ClientLocation {
+    id: string;
+    latString?: string;
+    lngString?: string;
 }
 
 
@@ -77,14 +75,9 @@ const requiredFields = [
     'Client Name', 'Site Name', 'Site Address', 'Geolocation', 'District'
 ];
 
-const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep" ];
+const keralaDistricts = [...KERALA_DISTRICTS];
 const SITES_PER_PAGE = 10;
-
-
-const formatCoord = (n: number): string => {
-    if (typeof n !== 'number' || isNaN(n)) return '';
-    return n.toFixed(6).replace(/\.?0+$/, '');
-};
+const formatCoord = formatCoordinate;
 
 const toRadians = (deg: number) => (deg * Math.PI) / 180;
 const haversineDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -123,13 +116,12 @@ interface SiteEditFormProps {
     isSaving: boolean;
     onClose: () => void;
     clients: ClientOption[];
+    clientLocations: ClientLocationOption[];
 }
 
-const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients }) => {
+const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients, clientLocations }) => {
     const [formData, setFormData] = useState<Partial<Site>>(site);
-    const [latInput, setLatInput] = useState<string>(site.latString ?? (site.geolocation ? String(site.geolocation.latitude) : ''));
-    const [lngInput, setLngInput] = useState<string>(site.lngString ?? (site.geolocation ? String(site.geolocation.longitude) : ''));
-    const [geoError, setGeoError] = useState<string | null>(null);
+    const filteredClientLocations = clientLocations.filter((location) => location.clientId === formData.clientId);
 
     const handleSave = () => {
         const changes: Partial<Site> = {};
@@ -154,11 +146,23 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
                 <Label htmlFor="clientName">Client Name</Label>
-                <Select value={formData.clientName} onValueChange={(value) => setFormData({ ...formData, clientName: value })}>
+                <Select
+                    value={formData.clientId || undefined}
+                    onValueChange={(value) => {
+                        const selectedClient = clients.find((client) => client.id === value);
+                        setFormData({
+                            ...formData,
+                            clientId: value,
+                            clientName: selectedClient?.name ?? '',
+                            clientLocationId: undefined,
+                            clientLocationName: undefined,
+                        });
+                    }}
+                >
                     <SelectTrigger id="clientName"><SelectValue placeholder="Select a client" /></SelectTrigger>
                     <SelectContent>
                         {clients.map(c => (
-                            <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -172,30 +176,32 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                 <Input id="siteAddress" value={formData.siteAddress || ''} onChange={(e) => setFormData({...formData, siteAddress: e.target.value})} />
             </div>
             <div className="grid gap-2">
-                <Label>Geolocation (Latitude, Longitude)</Label>
-                <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="Latitude" value={latInput} onChange={(e)=>{
-                        const v = e.target.value; setLatInput(v);
-                        const lat = parseFloat(v); const lng = parseFloat(lngInput);
-                        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                            setGeoError(null);
-                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng), latString: v, lngString: lngInput });
-                        } else {
-                            setGeoError('Enter valid coordinates');
+                <Label htmlFor="clientLocationId">Linked Client Location</Label>
+                <Select
+                    value={formData.clientLocationId || 'none'}
+                    onValueChange={(value) => {
+                        if (value === 'none') {
+                            setFormData({ ...formData, clientLocationId: undefined, clientLocationName: undefined });
+                            return;
                         }
-                    }} />
-                    <Input placeholder="Longitude" value={lngInput} onChange={(e)=>{
-                        const v = e.target.value; setLngInput(v);
-                        const lat = parseFloat(latInput); const lng = parseFloat(v);
-                        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                            setGeoError(null);
-                            setFormData({ ...formData, geolocation: new GeoPoint(lat, lng), latString: latInput, lngString: v });
-                        } else {
-                            setGeoError('Enter valid coordinates');
-                        }
-                    }} />
-                </div>
-                {geoError && <p className="text-sm text-destructive">{geoError}</p>}
+                        const linkedLocation = filteredClientLocations.find((location) => location.id === value);
+                        setFormData({
+                            ...formData,
+                            clientLocationId: value,
+                            clientLocationName: linkedLocation?.locationName ?? undefined,
+                        });
+                    }}
+                >
+                    <SelectTrigger id="clientLocationId"><SelectValue placeholder="Optional linked client location" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">No linked client location</SelectItem>
+                        {filteredClientLocations.map((location) => (
+                            <SelectItem key={location.id} value={location.id}>
+                                {location.locationName}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="grid gap-2">
                 <Label htmlFor="geofenceRadiusMeters">Geofence Radius (meters)</Label>
@@ -216,6 +222,34 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                     </SelectContent>
                 </Select>
             </div>
+            <LocationEditorCard
+                entityType="site"
+                value={{
+                    address: formData.siteAddress || '',
+                    district: formData.district,
+                    geolocation: formData.geolocation,
+                    latString: formData.latString,
+                    lngString: formData.lngString,
+                    coordinateStatus: formData.coordinateStatus,
+                    coordinateSource: formData.coordinateSource,
+                    placeAccuracy: formData.placeAccuracy,
+                }}
+                onChange={(patch) =>
+                    setFormData({
+                        ...formData,
+                        siteAddress: patch.address ?? formData.siteAddress,
+                        district: patch.district ?? formData.district,
+                        geolocation: patch.geolocation,
+                        latString: patch.latString,
+                        lngString: patch.lngString,
+                        coordinateStatus: patch.coordinateStatus,
+                        coordinateSource: patch.coordinateSource,
+                        placeAccuracy: patch.placeAccuracy ?? undefined,
+                    })
+                }
+                title="Duty-site coordinates"
+                description="Geocode or verify this duty site without exposing the API key in the browser."
+            />
             <DialogFooter>
                 <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button onClick={handleSave} disabled={isSaving}>
@@ -241,14 +275,26 @@ export default function SiteManagementPage() {
     const [deletingSite, setDeletingSite] = useState<Site | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [createData, setCreateData] = useState<Partial<Site>>({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), geofenceRadiusMeters: 150, latString: '', lngString: '' });
+    const [createData, setCreateData] = useState<Partial<Site>>({
+        clientId: '',
+        clientName: '',
+        siteName: '',
+        siteAddress: '',
+        district: '',
+        geofenceRadiusMeters: 150,
+        latString: '',
+        lngString: '',
+        coordinateStatus: 'missing',
+    });
     
     // Filters
     const [clients, setClients] = useState<ClientOption[]>([]);
+    const [clientLocations, setClientLocations] = useState<ClientLocationOption[]>([]);
     const [fieldOfficers, setFieldOfficers] = useState<FieldOfficerOption[]>([]);
     const [selectedClient, setSelectedClient] = useState<string>('all');
     const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
     const [selectedOfficer, setSelectedOfficer] = useState<string>('all');
+    const [selectedCoordinateStatus, setSelectedCoordinateStatus] = useState<string>('all');
     const [isFilterDataLoading, setIsFilterDataLoading] = useState(true);
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -270,6 +316,12 @@ export default function SiteManagementPage() {
             try {
                 const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
                 setClients(clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name } as ClientOption)));
+
+                const clientLocationsSnapshot = await getDocs(query(collection(db, 'clientLocations'), orderBy('clientName')));
+                setClientLocations(clientLocationsSnapshot.docs.map((clientLocationDoc) => ({
+                    id: clientLocationDoc.id,
+                    ...(clientLocationDoc.data() as any),
+                } as ClientLocationOption)));
 
                 const officersSnapshot = await getDocs(query(collection(db, 'fieldOfficers'), orderBy('name')));
                 setFieldOfficers(officersSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, assignedDistricts: doc.data().assignedDistricts } as FieldOfficerOption)));
@@ -315,7 +367,24 @@ export default function SiteManagementPage() {
             }
 
             const documentSnapshots = await getDocs(finalQuery);
-            const fetchedSites = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Site));
+            const fetchedSites = documentSnapshots.docs
+                .map(siteDoc => {
+                    const raw = siteDoc.data() as any;
+                    const resolvedClient = clients.find(client => client.name === raw.clientName);
+                    return {
+                        id: siteDoc.id,
+                        ...raw,
+                        clientId: raw.clientId ?? resolvedClient?.id ?? undefined,
+                        coordinateStatus: deriveCoordinateStatus(raw),
+                        coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : undefined),
+                        placeAccuracy: raw.placeAccuracy ?? undefined,
+                    } as Site;
+                })
+                .filter(site =>
+                    selectedCoordinateStatus === 'all'
+                        ? true
+                        : deriveCoordinateStatus(site) === selectedCoordinateStatus,
+                );
             
             if (!documentSnapshots.empty) {
                 setSites(fetchedSites);
@@ -350,13 +419,13 @@ export default function SiteManagementPage() {
         } finally {
             setIsLoadingSites(false);
         }
-    }, [lastDoc, firstDoc, currentPage, toast, selectedClient, selectedDistrict, selectedOfficer, fieldOfficers]);
+    }, [lastDoc, firstDoc, currentPage, toast, selectedClient, selectedDistrict, selectedOfficer, fieldOfficers, selectedCoordinateStatus, clients]);
 
     useEffect(() => {
         fetchSites('first');
         setCurrentPage(1); // Reset page number on filter change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedClient, selectedDistrict, selectedOfficer]); // Re-fetch when filters change
+    }, [selectedClient, selectedDistrict, selectedOfficer, selectedCoordinateStatus]); // Re-fetch when filters change
 
 
     const handleNextPage = () => {
@@ -390,8 +459,8 @@ export default function SiteManagementPage() {
     };
 
     const handleDownloadTemplate = () => {
-        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District'];
-        const templateExampleRow = ['Example Client Inc.', 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam'];
+        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District', 'Client Location Name', 'Coordinate Status', 'Coordinate Source'];
+        const templateExampleRow = ['Example Client Inc.', 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam', 'Example Client Kochi Branch', 'verified', 'manual'];
         const templateData = [templateHeaders, templateExampleRow];
         const ws = XLSX.utils.aoa_to_sheet(templateData);
         const wb = XLSX.utils.book_new();
@@ -429,7 +498,7 @@ export default function SiteManagementPage() {
                 const existingSitesSnapshot = await getDocs(collection(db, 'sites'));
                 const existingSites = new Set(existingSitesSnapshot.docs.map(doc => {
                     const data = doc.data();
-                    return `${data.clientName?.toLowerCase()}_${data.siteName?.toLowerCase()}`;
+                    return buildLocationIdentity([data.clientName, data.siteName, data.district]);
                 }));
 
                 let validRecords: any[] = [];
@@ -444,8 +513,9 @@ export default function SiteManagementPage() {
 
                     const clientName = row['Client Name'];
                     const siteName = row['Site Name'];
+                    const clientOption = clients.find(client => client.name.toLowerCase() === String(clientName).trim().toLowerCase());
                     
-                    const uniqueKey = `${clientName?.toLowerCase()}_${siteName?.toLowerCase()}`;
+                    const uniqueKey = buildLocationIdentity([clientName, siteName, row['District']]);
                     if (existingSites.has(uniqueKey)) {
                         localProcessedRecords.push({ data: row, status: 'duplicate', message: `Row ${index + 2}: This site already exists and was skipped.` });
                         return;
@@ -456,27 +526,36 @@ export default function SiteManagementPage() {
                         return;
                     }
 
-                    const geoString = String(row.Geolocation).trim();
-                    const geoParts = geoString.split(',').map(part => parseFloat(part.trim()));
-                    if (geoParts.length !== 2 || isNaN(geoParts[0]) || isNaN(geoParts[1])) {
+                    const parsedCoords = parseGeoString(String(row.Geolocation || '').trim());
+                    if (!parsedCoords) {
                         localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Invalid Geolocation format. Expected "latitude,longitude".` });
                         return;
                     }
-                    const [latitude, longitude] = geoParts;
-                    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-                         localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Invalid Geolocation values.` });
-                        return;
-                    }
+                    const { lat: latitude, lng: longitude } = parsedCoords;
+                    const linkedClientLocationName = String(row['Client Location Name'] || '').trim();
+                    const linkedClientLocation = linkedClientLocationName
+                        ? clientLocations.find((location) =>
+                            location.clientName?.toLowerCase() === String(clientName).trim().toLowerCase() &&
+                            location.locationName?.toLowerCase() === linkedClientLocationName.toLowerCase(),
+                        )
+                        : null;
                     
                     const siteData = {
+                      clientId: clientOption?.id ?? null,
                       clientName: clientName,
                       siteName: siteName,
                       siteId: row['Site ID'] || null,
                       siteAddress: row['Site Address'],
                       district: row['District'],
                       geolocation: new GeoPoint(latitude, longitude),
-                      createdAt: serverTimestamp(),
-                      updatedAt: serverTimestamp(),
+                      latString: formatCoord(latitude),
+                      lngString: formatCoord(longitude),
+                      clientLocationId: linkedClientLocation?.id ?? null,
+                      clientLocationName: linkedClientLocation?.locationName ?? null,
+                      coordinateStatus: (String(row['Coordinate Status'] || '').trim() || 'verified') as CoordinateStatus,
+                      coordinateSource: (String(row['Coordinate Source'] || '').trim() || 'manual') as CoordinateSource,
+                      locationKey: buildLocationIdentity([clientName, siteName, row['District']]),
+                      ...buildFirestoreCreateAudit(),
                     };
                     
                     validRecords.push(siteData);
@@ -534,6 +613,11 @@ export default function SiteManagementPage() {
                 ...updatedData,
                 // If geolocation updated and we have lat/lng inputs in formData, persist the strings too
                 ...(updatedData.geolocation ? { latString: (updatedData as any).latString ?? undefined, lngString: (updatedData as any).lngString ?? undefined } : {}),
+                locationKey: buildLocationIdentity([
+                    updatedData.clientName ?? editingSite.clientName,
+                    updatedData.siteName ?? editingSite.siteName,
+                    updatedData.district ?? editingSite.district,
+                ]),
                 ...buildFirestoreUpdateAudit(),
                 auditTrail: arrayUnion(
                     buildFirestoreAuditEvent('site_updated', undefined, {
@@ -683,6 +767,9 @@ export default function SiteManagementPage() {
                         geolocation: new GeoPoint(lat, lng),
                         latString: formatCoord(lat),
                         lngString: formatCoord(lng),
+                        coordinateStatus: 'geocoded',
+                        coordinateSource: 'geocode',
+                        placeAccuracy: data.placeAccuracy ?? null,
                         updatedAt: serverTimestamp(),
                     });
                     pendingWrites++;
@@ -747,6 +834,7 @@ export default function SiteManagementPage() {
     const successCount = processedRecords.filter(r => r.status === 'success').length;
     const errorCount = processedRecords.filter(r => r.status === 'error').length;
     const duplicateCount = processedRecords.filter(r => r.status === 'duplicate').length;
+    const createClientLocations = clientLocations.filter(location => location.clientId === createData.clientId);
 
     const toggleSiteSelection = (siteId: string) => {
         setSelectedSiteIds(prev =>
@@ -808,6 +896,57 @@ export default function SiteManagementPage() {
         }
     };
 
+    const handleBackfillCoordinateMetadata = async () => {
+        setIsSubmitting(true);
+        try {
+            const snapshot = await getDocs(collection(db, 'sites'));
+            if (snapshot.empty) {
+                toast({ title: 'No sites found', description: 'There are no duty sites to backfill.' });
+                return;
+            }
+
+            let batch = writeBatch(db);
+            let writes = 0;
+            for (const siteDoc of snapshot.docs) {
+                const raw = siteDoc.data() as any;
+                const resolvedClient = clients.find(client => client.name === raw.clientName);
+                batch.update(siteDoc.ref, {
+                    clientId: raw.clientId ?? resolvedClient?.id ?? null,
+                    coordinateStatus: deriveCoordinateStatus(raw),
+                    coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : null),
+                    locationKey: raw.locationKey ?? buildLocationIdentity([raw.clientName, raw.siteName, raw.district]),
+                    updatedAt: serverTimestamp(),
+                });
+                writes += 1;
+
+                if (writes >= 400) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    writes = 0;
+                }
+            }
+
+            if (writes > 0) {
+                await batch.commit();
+            }
+
+            toast({
+                title: 'Metadata backfilled',
+                description: 'Existing duty sites now carry coordinate state metadata.',
+            });
+            fetchSites('first');
+        } catch (error: any) {
+            console.error('Backfill failed', error);
+            toast({
+                variant: 'destructive',
+                title: 'Backfill failed',
+                description: error?.message || 'Could not backfill site metadata.',
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
 
     return (
         <div className="flex flex-col gap-6">
@@ -818,7 +957,10 @@ export default function SiteManagementPage() {
                         <span className="sr-only">Back to Settings</span>
                     </Link>
                 </Button>
-                <h1 className="text-3xl font-bold tracking-tight">Site Management</h1>
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Duty Sites</h1>
+                    <p className="text-muted-foreground">Operational attendance and work-order locations linked to optional client locations.</p>
+                </div>
             </div>
 
             <Alert>
@@ -826,17 +968,17 @@ export default function SiteManagementPage() {
                 <AlertTitle>Instructions & Important Notes</AlertTitle>
                 <AlertDescription>
                     <ul className="list-disc list-inside space-y-1">
-                        <li>Use the forms below to import sites in bulk or manage existing sites individually.</li>
-                        <li>**Bulk Import**: Download the template, fill it, and upload. This tool will not overwrite existing sites based on Client and Site Name.</li>
-                        <li>**Geolocation** format must be: <code>latitude,longitude</code> (e.g., <code>10.1234,76.5432</code>).</li>
+                        <li>Duty sites remain the operational source of truth for attendance and work orders.</li>
+                        <li>Link a duty site to a client location when it belongs to a known branch or center.</li>
+                        <li>Bulk import still supports <code>latitude,longitude</code>, with optional coordinate metadata columns.</li>
                     </ul>
                 </AlertDescription>
             </Alert>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Bulk Site Import</CardTitle>
-                    <CardDescription>Upload an Excel file to add multiple new sites at once.</CardDescription>
+                    <CardTitle>Bulk Duty-Site Import</CardTitle>
+                    <CardDescription>Upload an Excel file to add multiple attendance/work-order sites at once.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
@@ -844,9 +986,13 @@ export default function SiteManagementPage() {
                             <Button onClick={handleDownloadTemplate} variant="outline">
                                 <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
                             </Button>
+                            <Button onClick={handleBackfillCoordinateMetadata} variant="outline" disabled={isSubmitting}>
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                                Backfill Metadata
+                            </Button>
                         </div>
                         <Button onClick={() => setIsCreateOpen(true)}>
-                            Add New Site
+                            Add Duty Site
                         </Button>
                     </div>
                      <div className="flex flex-col sm:flex-row gap-4 items-center">
@@ -911,18 +1057,30 @@ export default function SiteManagementPage() {
             </Card>
             {/* Create New Site Dialog */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                     <DialogHeader>
-                        <DialogTitle>Add New Site</DialogTitle>
-                        <DialogDescription>Enter the details below to create a new site.</DialogDescription>
+                        <DialogTitle>Add Duty Site</DialogTitle>
+                        <DialogDescription>Enter the operational site details used by attendance and work orders.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-2">
                         <div className="grid gap-2">
                             <Label htmlFor="new-client">Client Name</Label>
-                            <Select value={createData.clientName} onValueChange={(value) => setCreateData({ ...createData, clientName: value })}>
+                            <Select
+                                value={createData.clientId || undefined}
+                                onValueChange={(value) => {
+                                    const selectedClient = clients.find(client => client.id === value);
+                                    setCreateData({
+                                        ...createData,
+                                        clientId: value,
+                                        clientName: selectedClient?.name ?? '',
+                                        clientLocationId: undefined,
+                                        clientLocationName: undefined,
+                                    });
+                                }}
+                            >
                                 <SelectTrigger id="new-client"><SelectValue placeholder="Select client" /></SelectTrigger>
                                 <SelectContent>
-                                    {clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -939,6 +1097,32 @@ export default function SiteManagementPage() {
                             <Input id="new-address" value={createData.siteAddress || ''} onChange={(e) => setCreateData({ ...createData, siteAddress: e.target.value })} />
                         </div>
                         <div className="grid gap-2">
+                            <Label htmlFor="new-client-location">Linked Client Location</Label>
+                            <Select
+                                value={createData.clientLocationId || 'none'}
+                                onValueChange={(value) => {
+                                    if (value === 'none') {
+                                        setCreateData({ ...createData, clientLocationId: undefined, clientLocationName: undefined });
+                                        return;
+                                    }
+                                    const linkedLocation = createClientLocations.find(location => location.id === value);
+                                    setCreateData({
+                                        ...createData,
+                                        clientLocationId: value,
+                                        clientLocationName: linkedLocation?.locationName ?? undefined,
+                                    });
+                                }}
+                            >
+                                <SelectTrigger id="new-client-location"><SelectValue placeholder="Optional linked client location" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">No linked client location</SelectItem>
+                                    {createClientLocations.map(location => (
+                                        <SelectItem key={location.id} value={location.id}>{location.locationName}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
                             <Label htmlFor="new-district">District</Label>
                             <Select value={createData.district} onValueChange={(value) => setCreateData({ ...createData, district: value })}>
                                 <SelectTrigger id="new-district"><SelectValue placeholder="Select district" /></SelectTrigger>
@@ -946,27 +1130,6 @@ export default function SiteManagementPage() {
                                     {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                                 </SelectContent>
                             </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label>Geolocation (Latitude, Longitude)</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <Input placeholder="Latitude" value={createData.latString || ''} onChange={(e)=>{
-                                    const v = e.target.value;
-                                    const lat = parseFloat(v);
-                                    const lng = (createData.geolocation ? createData.geolocation.longitude : NaN);
-                                    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng), latString: v });
-                                    }
-                                }} />
-                                <Input placeholder="Longitude" value={createData.lngString || ''} onChange={(e)=>{
-                                    const v = e.target.value;
-                                    const lng = parseFloat(v);
-                                    const lat = (createData.geolocation ? createData.geolocation.latitude : NaN);
-                                    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                                        setCreateData({ ...createData, geolocation: new GeoPoint(lat, lng), lngString: v });
-                                    }
-                                }} />
-                            </div>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-geofence-radius">Geofence Radius (meters)</Label>
@@ -978,31 +1141,70 @@ export default function SiteManagementPage() {
                                 onChange={(e) => setCreateData({ ...createData, geofenceRadiusMeters: Math.max(1, Number(e.target.value || 150)) })}
                             />
                         </div>
+                        <LocationEditorCard
+                            entityType="site"
+                            value={{
+                                address: createData.siteAddress || '',
+                                district: createData.district,
+                                geolocation: createData.geolocation,
+                                latString: createData.latString,
+                                lngString: createData.lngString,
+                                coordinateStatus: createData.coordinateStatus,
+                                coordinateSource: createData.coordinateSource,
+                                placeAccuracy: createData.placeAccuracy,
+                            }}
+                            onChange={(patch) => setCreateData({
+                                ...createData,
+                                siteAddress: patch.address ?? createData.siteAddress,
+                                district: patch.district ?? createData.district,
+                                geolocation: patch.geolocation,
+                                latString: patch.latString,
+                                lngString: patch.lngString,
+                                coordinateStatus: patch.coordinateStatus,
+                                coordinateSource: patch.coordinateSource,
+                                placeAccuracy: patch.placeAccuracy ?? undefined,
+                            })}
+                            title="Duty-site coordinates"
+                            description="Use geocoding or current location first. Manual entry stays available as a fallback."
+                        />
                     </div>
                     <DialogFooter>
                         <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                         <Button onClick={async () => {
-                            if (!createData.clientName || !createData.siteName || !createData.siteAddress || !createData.district || !createData.geolocation) {
-                                toast({ variant: 'destructive', title: 'Missing Data', description: 'Please fill all required fields.' });
+                            if (!createData.clientId || !createData.clientName || !createData.siteName || !createData.siteAddress || !createData.district || !hasValidCoordinates(createData.geolocation)) {
+                                toast({ variant: 'destructive', title: 'Missing Data', description: 'Please fill all required fields and confirm valid coordinates.' });
                                 return;
                             }
                             try {
                                 setIsSubmitting(true);
                                 await addDoc(collection(db, 'sites'), {
+                                    clientId: createData.clientId,
                                     clientName: createData.clientName,
                                     siteName: createData.siteName,
                                     siteId: createData.siteId || null,
                                     siteAddress: createData.siteAddress,
                                     district: createData.district,
-                                    geolocation: createData.geolocation,
+                                    geolocation: new GeoPoint(createData.geolocation!.latitude, createData.geolocation!.longitude),
                                     geofenceRadiusMeters: createData.geofenceRadiusMeters ?? 150,
-                                    latString: createData.latString,
-                                    lngString: createData.lngString,
+                                    latString: createData.latString ?? formatCoord(createData.geolocation!.latitude),
+                                    lngString: createData.lngString ?? formatCoord(createData.geolocation!.longitude),
+                                    coordinateStatus: deriveCoordinateStatus(createData),
+                                    coordinateSource: createData.coordinateSource ?? 'manual',
+                                    placeAccuracy: createData.placeAccuracy ?? null,
+                                    clientLocationId: createData.clientLocationId ?? null,
+                                    clientLocationName: createData.clientLocationName ?? null,
+                                    locationKey: buildLocationIdentity([createData.clientName, createData.siteName, createData.district]),
                                     ...buildFirestoreCreateAudit(),
+                                    auditTrail: arrayUnion(
+                                        buildFirestoreAuditEvent('site_created', undefined, {
+                                            clientName: createData.clientName,
+                                            siteName: createData.siteName,
+                                        }),
+                                    ),
                                 });
                                 toast({ title: 'Site Created', description: 'The new site has been added.' });
                                 setIsCreateOpen(false);
-                                setCreateData({ clientName: '', siteName: '', siteAddress: '', district: '', geolocation: new GeoPoint(0,0), geofenceRadiusMeters: 150, latString: '', lngString: '' });
+                                setCreateData({ clientId: '', clientName: '', siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, latString: '', lngString: '', coordinateStatus: 'missing' });
                                 fetchSites('first');
                                 setCurrentPage(1);
                             } catch (e) {
@@ -1048,7 +1250,7 @@ export default function SiteManagementPage() {
                     <CardDescription>A list of all currently managed sites in the system.</CardDescription>
                 </CardHeader>
                  <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b">
+                    <div className="grid grid-cols-1 gap-4 p-4 border-b sm:grid-cols-2 xl:grid-cols-5">
                         <div className="space-y-1.5">
                             <Label htmlFor="client-filter">Filter by Client</Label>
                             <Select value={selectedClient} onValueChange={setSelectedClient} disabled={isFilterDataLoading}>
@@ -1069,13 +1271,25 @@ export default function SiteManagementPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                         <div className="space-y-1.5">
+                        <div className="space-y-1.5">
                             <Label htmlFor="officer-filter">Filter by Field Officer</Label>
                             <Select value={selectedOfficer} onValueChange={setSelectedOfficer} disabled={isFilterDataLoading}>
                                 <SelectTrigger id="officer-filter"><SelectValue/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Officers</SelectItem>
                                     {fieldOfficers.map(fo => <SelectItem key={fo.id} value={fo.id}>{fo.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="coordinate-status-filter">Coordinate State</Label>
+                            <Select value={selectedCoordinateStatus} onValueChange={setSelectedCoordinateStatus} disabled={isFilterDataLoading}>
+                                <SelectTrigger id="coordinate-status-filter"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All states</SelectItem>
+                                    {Object.entries(coordinateStatusLabels).map(([key, label]) => (
+                                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1149,18 +1363,40 @@ export default function SiteManagementPage() {
                                                 onChange={() => toggleSiteSelection(site.id)}
                                             />
                                             <div className="flex-1">
-                                                <h3 className="font-semibold">{site.siteName}</h3>
-                                                <p className="text-sm text-muted-foreground">{site.clientName}</p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="font-semibold">{site.siteName}</h3>
+                                                    <Badge variant={deriveCoordinateStatus(site) === 'missing' ? 'destructive' : 'outline'}>
+                                                        {coordinateStatusLabels[deriveCoordinateStatus(site)]}
+                                                    </Badge>
+                                                    <Badge variant="secondary">{site.clientName}</Badge>
+                                                    <Badge variant="outline">{site.district}</Badge>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {site.clientLocationName ? `${site.clientLocationName} · ` : ''}{site.clientName}
+                                                </p>
                                                 <p className="text-xs text-muted-foreground mt-1">{site.siteAddress}</p>
                                                 {site.geolocation && (
                                                     <p className="text-xs text-muted-foreground mt-1">
                                                         Lat, Long: {site.latString ?? formatCoord(site.geolocation.latitude)}, {site.lngString ?? formatCoord(site.geolocation.longitude)}
                                                     </p>
                                                 )}
-                                                <Badge variant="outline" className="mt-2">{site.district}</Badge>
+                                                {site.placeAccuracy ? (
+                                                    <p className="text-xs text-muted-foreground mt-1">{site.placeAccuracy}</p>
+                                                ) : null}
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 self-start sm:self-center">
+                                        <div className="flex flex-wrap gap-2 self-start sm:self-center">
+                                            {site.geolocation ? (
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a
+                                                        href={buildGoogleMapsLink(site.geolocation.latitude, site.geolocation.longitude, site.siteName)}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                    >
+                                                        Open map
+                                                    </a>
+                                                </Button>
+                                            ) : null}
                                             <Button variant="outline" size="sm" onClick={() => setEditingSite(site)}><Edit className="mr-2 h-4 w-4"/>Edit</Button>
                                             <Button variant="destructive" size="sm" onClick={() => setDeletingSite(site)}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
                                         </div>
@@ -1192,7 +1428,7 @@ export default function SiteManagementPage() {
                         <DialogTitle>Edit Site</DialogTitle>
                         <DialogDescription>Update the details for "{editingSite?.siteName}".</DialogDescription>
                     </DialogHeader>
-                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} clients={clients} />}
+                    {editingSite && <SiteEditForm site={editingSite} onSave={handleUpdateSite} isSaving={isSubmitting} onClose={() => setEditingSite(null)} clients={clients} clientLocations={clientLocations} />}
                 </DialogContent>
             </Dialog>
 

@@ -71,6 +71,16 @@
       "collectionGroup": "sites",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "clientLocationId", "order": "ASCENDING" },
+        { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "siteName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sites",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "district", "order": "ASCENDING" },
         { "fieldPath": "siteName", "order": "ASCENDING" }
       ]
@@ -81,6 +91,24 @@
       "fields": [
         { "fieldPath": "clientName", "order": "ASCENDING" },
         { "fieldPath": "siteName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clientLocations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "locationName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clientLocations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "locationName", "order": "ASCENDING" }
       ]
     },
     {
@@ -182,5 +210,4 @@
   ],
   "fieldOverrides": []
 }
-
 

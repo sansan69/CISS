@@ -20,6 +20,7 @@ import {
   QrCode,
   Loader2,
   Landmark,
+  MapPinned,
   DownloadCloud,
   ChevronLeft,
   ShieldAlert,
@@ -62,7 +63,8 @@ const allNavItems: NavItem[] = [
 
 const settingsSubItems: NavItem[] = [
     { href: '/settings/client-management', label: 'Clients', icon: Briefcase },
-    { href: '/settings/site-management', label: 'Site Management', icon: Landmark },
+    { href: '/settings/client-locations', label: 'Client Locations', icon: MapPinned },
+    { href: '/settings/site-management', label: 'Duty Sites', icon: Landmark },
     { href: '/settings/bulk-import', label: 'Bulk Import', icon: FileUp },
     { href: '/settings/data-export', label: 'Data Export', icon: DownloadCloud },
     { href: '/settings/qr-management', label: 'QR Codes', icon: QrCode },

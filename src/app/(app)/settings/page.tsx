@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, Users } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users } from "lucide-react";
 import Link from "next/link";
 
 const settingsOptions = [
@@ -13,9 +13,15 @@ const settingsOptions = [
     icon: Briefcase,
     href: "/settings/client-management",
   },
+  {
+    title: "Client Locations",
+    description: "Manage branch, office, and center coordinates for each client.",
+    icon: MapPinned,
+    href: "/settings/client-locations",
+  },
    {
-    title: "Site Management",
-    description: "Bulk upload and manage site locations and details.",
+    title: "Duty Sites",
+    description: "Bulk upload and manage operational attendance/work-order sites.",
     icon: Landmark,
     href: "/settings/site-management",
   },
