@@ -723,64 +723,68 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   return (
     <>
-      <Card className="w-full max-w-4xl mx-auto shadow-lg border-t-4 border-primary">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">Employee Registration</CardTitle>
-          <CardDescription>Please complete your profile with accurate information.</CardDescription>
+      <Card className="mx-auto w-full max-w-6xl overflow-hidden border-t-4 border-primary shadow-xl">
+        <CardHeader className="px-5 pb-6 pt-8 text-center sm:px-8 lg:px-10">
+          <CardTitle className="text-balance text-4xl font-bold tracking-tight sm:text-5xl">Employee Registration</CardTitle>
+          <CardDescription className="mx-auto mt-3 max-w-2xl text-base sm:text-lg">Please complete your profile with accurate information.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <div className="grid gap-4 md:grid-cols-[1.4fr_0.6fr]">
-                <div className="rounded-2xl border bg-muted/30 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Step {currentStep + 1} of {ENROLLMENT_STEPS.length}</p>
-                      <h3 className="text-xl font-semibold">{stepConfig.title}</h3>
-                      <p className="text-sm text-muted-foreground">{stepConfig.description}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-semibold">{Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%</p>
-                      <p className="text-xs text-muted-foreground">complete</p>
-                    </div>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-28 sm:pb-32">
+              <div className="space-y-4 rounded-[28px] border bg-muted/30 p-4 sm:p-6 lg:p-8">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-3xl">
+                    <p className="text-xs font-semibold uppercase tracking-[0.32em] text-primary">Step {currentStep + 1} of {ENROLLMENT_STEPS.length}</p>
+                    <h3 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{stepConfig.title}</h3>
+                    <p className="mt-2 max-w-2xl text-base text-muted-foreground sm:text-lg">{stepConfig.description}</p>
                   </div>
-                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-                    {ENROLLMENT_STEPS.map((step, index) => {
-                      const isActive = index === currentStep;
-                      const isComplete = index < currentStep;
-                      return (
-                        <button
-                          key={step.key}
-                          type="button"
-                          className={cn(
-                            "min-w-[120px] rounded-full border px-4 py-2 text-left text-sm transition",
-                            isActive && "border-primary bg-primary text-primary-foreground",
-                            isComplete && "border-primary/30 bg-primary/10 text-primary",
-                            !isActive && !isComplete && "bg-background text-muted-foreground",
-                          )}
-                          onClick={() => {
-                            if (index <= currentStep) {
-                              setCurrentStep(index);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }
-                          }}
-                        >
-                          <span className="block text-[11px] uppercase tracking-wide opacity-80">{isComplete ? "Done" : `Step ${index + 1}`}</span>
-                          <span className="block font-medium">{step.title}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="rounded-2xl border bg-background px-4 py-3 sm:px-5">
+                    <div className="flex items-end gap-3">
+                      <p className="text-3xl font-semibold sm:text-4xl">{Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%</p>
+                      <p className="pb-1 text-sm text-muted-foreground">complete</p>
+                    </div>
+                    <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        style={{ width: `${Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border bg-background p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Quick Status</p>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <StatusPill label="Required proofs" value={`${completedDocumentCount}/6 ready`} tone={completedDocumentCount === 6 ? "success" : "pending"} />
-                    <StatusPill label="Client" value={watchedValues?.clientName || "Pending"} tone={watchedValues?.clientName ? "success" : "pending"} />
-                    <StatusPill label="Contact" value={watchedValues?.phoneNumber ? "Added" : "Pending"} tone={watchedValues?.phoneNumber ? "success" : "pending"} />
-                    <StatusPill label="Declaration" value={watchedValues?.termsAndConditions ? "Accepted" : "Pending"} tone={watchedValues?.termsAndConditions ? "success" : "pending"} />
-                  </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  {ENROLLMENT_STEPS.map((step, index) => {
+                    const isActive = index === currentStep;
+                    const isComplete = index < currentStep;
+                    return (
+                      <button
+                        key={step.key}
+                        type="button"
+                        className={cn(
+                          "min-w-0 rounded-2xl border px-4 py-3 text-left transition",
+                          isActive && "border-primary bg-primary text-primary-foreground shadow-sm",
+                          isComplete && "border-primary/30 bg-primary/10 text-primary",
+                          !isActive && !isComplete && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                        )}
+                        onClick={() => {
+                          if (index <= currentStep) {
+                            setCurrentStep(index);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }
+                        }}
+                      >
+                        <span className="block text-[11px] uppercase tracking-[0.24em] opacity-80">{isComplete ? "Done" : `Step ${index + 1}`}</span>
+                        <span className="mt-2 block text-lg font-semibold leading-tight">{step.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatusPill label="Required proofs" value={`${completedDocumentCount}/6 ready`} tone={completedDocumentCount === 6 ? "success" : "pending"} />
+                  <StatusPill label="Client" value={watchedValues?.clientName || "Pending"} tone={watchedValues?.clientName ? "success" : "pending"} />
+                  <StatusPill label="Contact" value={watchedValues?.phoneNumber ? "Added" : "Pending"} tone={watchedValues?.phoneNumber ? "success" : "pending"} />
+                  <StatusPill label="Declaration" value={watchedValues?.termsAndConditions ? "Accepted" : "Pending"} tone={watchedValues?.termsAndConditions ? "success" : "pending"} />
                 </div>
               </div>
 
@@ -991,8 +995,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 </FormSection>
               )}
 
-              <div className="sticky bottom-0 z-10 -mx-6 border-t bg-background/95 px-6 py-4 backdrop-blur">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sticky bottom-3 z-10 rounded-2xl border bg-background/95 px-4 py-4 shadow-lg backdrop-blur sm:px-5 lg:px-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <p className="text-sm text-muted-foreground">
                     {isLastStep ? "One final check, then you can submit with confidence." : "Use Next to move forward without losing your place on mobile."}
                   </p>
@@ -1148,9 +1152,9 @@ const StatusPill = ({
   value: string;
   tone: "success" | "pending";
 }) => (
-  <div className="rounded-xl border p-3">
-    <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-    <p className={cn("mt-1 font-semibold", tone === "success" ? "text-green-700" : "text-amber-700")}>{value}</p>
+  <div className="rounded-2xl border bg-background px-4 py-4 shadow-sm">
+    <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">{label}</p>
+    <p className={cn("mt-2 text-xl font-semibold leading-tight break-words", tone === "success" ? "text-green-700" : "text-amber-700")}>{value}</p>
   </div>
 );
 
@@ -1181,9 +1185,9 @@ function EnrollmentPageSkeleton() {
 
 export default function EnrollEmployeePage() {
   return (
-    <div className="w-full bg-muted/30">
-        <div className="max-w-4xl mx-auto py-8 sm:py-12 px-4">
-          <div className="mb-6">
+    <div className="min-h-screen w-full bg-[linear-gradient(180deg,rgba(224,239,255,0.55),rgba(255,255,255,0.95)_16%,rgba(245,247,251,0.9)_100%)]">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+          <div className="mb-4 sm:mb-6">
             <Button asChild variant="ghost" size="sm">
                 <Link href="/" className="flex items-center text-sm text-primary hover:underline">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
