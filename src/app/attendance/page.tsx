@@ -1,16 +1,15 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, XCircle, Info, Loader2, ListChecks, RefreshCcw, WifiOff } from 'lucide-react';
+import { QrCode, Camera, MapPin, CheckCircle, Clock3, Loader2, ListChecks, RefreshCcw, WifiOff, ScanLine, UserRoundSearch, Navigation, Sparkles, ArrowRight, RotateCcw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import html2canvas from 'html2canvas';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { Label } from '@/components/ui/label';
@@ -22,6 +21,7 @@ import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storag
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters } from '@/lib/geo';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import type {
   AttendanceSubmission,
   DeviceAttendanceHistoryItem,
@@ -46,6 +46,12 @@ type ScannedEmployee = {
   clientName?: string;
 };
 
+type SuggestedSite = SiteOption & {
+  distanceMeters: number;
+  withinGeofence: boolean;
+  matchedBy: 'client' | 'nearest';
+};
+
 const ATTENDANCE_QUEUE_STORAGE_KEY = 'ciss_attendance_queue_v1';
 const ATTENDANCE_HISTORY_STORAGE_KEY = 'ciss_attendance_history_v1';
 
@@ -57,18 +63,19 @@ export default function AttendancePage() {
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number; accuracyMeters?: number } | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
-  const [siteOptions, setSiteOptions] = useState<SiteOption[]>([]);
-  const [isLoadingSites, setIsLoadingSites] = useState(false);
+  const [allSites, setAllSites] = useState<SiteOption[]>([]);
+  const [isLoadingCenters, setIsLoadingCenters] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<'In' | 'Out'>('In');
   const [scannedEmployee, setScannedEmployee] = useState<ScannedEmployee | null>(null);
-  const [clientFilter, setClientFilter] = useState<'auto' | 'all' | string>('auto');
   const [hasScanned, setHasScanned] = useState(false);
+  const [hasManualCenterOverride, setHasManualCenterOverride] = useState(false);
+  const [autoDetectedSite, setAutoDetectedSite] = useState<SuggestedSite | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   
   const [isScanning, setIsScanning] = useState(false);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [isWatermarking, setIsWatermarking] = useState(false);
-  const [manualIdOpen, setManualIdOpen] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
 
   const [recentAttendance, setRecentAttendance] = useState<DeviceAttendanceHistoryItem[]>([]);
@@ -82,38 +89,40 @@ export default function AttendancePage() {
   const { toast } = useToast();
 
   // Simplified: we only require a captured photo and a resolved employee
-  const allVerificationsComplete = !!capturedPhoto && !!scanResult;
   const isSelectionComplete = !!selectedDistrict && !!selectedSiteId;
+  const districtOptions = useMemo(
+    () => Array.from(new Set(allSites.map((site) => site.district).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [allSites],
+  );
 
-  const keralaDistricts = [
-    "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam",
-    "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram",
-    "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
-  ];
+  const selectedSite = useMemo(
+    () => allSites.find((site) => site.id === selectedSiteId) ?? null,
+    [allSites, selectedSiteId],
+  );
 
-  const availableClients = React.useMemo(() => {
-    const set = new Set<string>();
-    siteOptions.forEach(s => {
-      if (s.clientName) set.add(s.clientName);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [siteOptions]);
+  const districtSiteOptions = useMemo(() => {
+    if (!selectedDistrict) return [];
 
-  const filteredSiteOptions = React.useMemo(() => {
-    if (!siteOptions.length) return [];
-    let targetClient: string | null = null;
-
-    if (clientFilter === 'all') {
-      targetClient = null;
-    } else if (clientFilter === 'auto') {
-      targetClient = scannedEmployee?.clientName ?? null;
-    } else {
-      targetClient = clientFilter;
+    const options = allSites.filter((site) => site.district === selectedDistrict);
+    if (!locationCoords) {
+      return options.sort((a, b) => {
+        if (a.clientName === b.clientName) {
+          return a.siteName.localeCompare(b.siteName);
+        }
+        return a.clientName.localeCompare(b.clientName);
+      });
     }
 
-    if (!targetClient) return siteOptions;
-    return siteOptions.filter(s => s.clientName === targetClient);
-  }, [siteOptions, clientFilter, scannedEmployee?.clientName]);
+    return [...options].sort((a, b) => {
+      const aDistance = typeof a.lat === 'number' && typeof a.lng === 'number'
+        ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, a.lat, a.lng)
+        : Number.POSITIVE_INFINITY;
+      const bDistance = typeof b.lat === 'number' && typeof b.lng === 'number'
+        ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, b.lat, b.lng)
+        : Number.POSITIVE_INFINITY;
+      return aDistance - bDistance;
+    });
+  }, [allSites, locationCoords, selectedDistrict]);
 
   const appendRecentAttendance = useCallback((item: DeviceAttendanceHistoryItem) => {
     setRecentAttendance((previous) => {
@@ -157,58 +166,104 @@ export default function AttendancePage() {
 
   useEffect(() => {
     const fetchSites = async () => {
-      if (!selectedDistrict) { setSiteOptions([]); setSelectedSiteId(""); return; }
-      setIsLoadingSites(true);
+      setIsLoadingCenters(true);
       try {
-        const q = query(collection(db, 'sites'), where('district', '==', selectedDistrict));
-        const snap = await getDocs(q);
-        const options: SiteOption[] = snap.docs.map(d => {
+        const snap = await getDocs(collection(db, 'sites'));
+        const options: SiteOption[] = snap.docs.map((d) => {
           const data = d.data() as any;
           const geo = data.geolocation;
-          // Parse from GeoPoint or fallback to stored string values
           const lat = typeof geo?.latitude === 'number' ? geo.latitude : (geo?.lat || parseFloat(data.latString || '0'));
           const lng = typeof geo?.longitude === 'number' ? geo.longitude : (geo?.lng || parseFloat(data.lngString || '0'));
-          return { 
-            id: d.id, 
-            siteName: data.siteName, 
-            clientName: data.clientName, 
+
+          return {
+            id: d.id,
+            siteName: data.siteName,
+            clientName: data.clientName,
             district: data.district,
             geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : undefined,
             lat,
             lng,
           };
-        }).sort((a, b) => {
-          if (a.clientName === b.clientName) {
-            return a.siteName.localeCompare(b.siteName);
-          }
-          return String(a.clientName || '').localeCompare(String(b.clientName || ''));
         });
-        setSiteOptions(options);
-        if (options.length === 0) {
-          toast({ title: 'No sites found', description: `No sites under ${selectedDistrict}.` });
-        }
+        setAllSites(options);
       } catch (e: any) {
         console.error('Failed loading sites', e);
-        toast({ variant: 'destructive', title: 'Error loading sites', description: e.message || 'Try again.' });
+        toast({ variant: 'destructive', title: 'Error loading centers', description: e.message || 'Try again.' });
       } finally {
-        setIsLoadingSites(false);
+        setIsLoadingCenters(false);
       }
     };
     fetchSites();
-  }, [selectedDistrict, toast]);
+  }, [toast]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const findSuggestedSite = useCallback((coords: { lat: number; lon: number }, preferredClient?: string | null) => {
+    const candidates = allSites
+      .filter((site) => typeof site.lat === 'number' && typeof site.lng === 'number')
+      .map((site) => {
+        const distanceMeters = haversineDistanceMeters(coords.lat, coords.lon, site.lat!, site.lng!);
+        const allowedRadius = site.geofenceRadiusMeters || 150;
+        return {
+          ...site,
+          distanceMeters,
+          withinGeofence: distanceMeters <= allowedRadius,
+          matchedBy: preferredClient && site.clientName === preferredClient ? 'client' as const : 'nearest' as const,
+        };
+      });
+
+    if (candidates.length === 0) return null;
+
+    const preferredMatches = preferredClient
+      ? candidates.filter((site) => site.clientName === preferredClient)
+      : [];
+    const pool = preferredMatches.length > 0 ? preferredMatches : candidates;
+
+    return [...pool].sort((a, b) => {
+      if (a.withinGeofence !== b.withinGeofence) {
+        return a.withinGeofence ? -1 : 1;
+      }
+      return a.distanceMeters - b.distanceMeters;
+    })[0] ?? null;
+  }, [allSites]);
+
+  const applySuggestedSite = useCallback((site: SuggestedSite | null, options?: { silent?: boolean }) => {
+    if (!site) return;
+
+    setAutoDetectedSite(site);
+    setSelectedDistrict(site.district);
+    setSelectedSiteId(site.id);
+
+    if (!options?.silent) {
+      toast({
+        title: site.withinGeofence ? 'Duty center detected' : 'Nearest duty center suggested',
+        description: `${site.siteName}, ${site.district}${Number.isFinite(site.distanceMeters) ? ` • ${Math.round(site.distanceMeters)}m away` : ''}`,
+      });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (!locationCoords || allSites.length === 0 || hasManualCenterOverride) return;
+    const suggestion = findSuggestedSite(locationCoords, scannedEmployee?.clientName ?? null);
+    applySuggestedSite(suggestion, { silent: true });
+  }, [allSites, applySuggestedSite, findSuggestedSite, hasManualCenterOverride, locationCoords, scannedEmployee?.clientName]);
 
   const handleStartVerification = async () => {
     setIsFetchingLocation(true);
     setIsTakingPhoto(true);
 
     try {
-      // Capture GPS once at the beginning of the flow
-      await getDeviceLocation();
+      if (!locationCoords) {
+        await getDeviceLocation();
+      }
       // Start scanner which will also start the camera stream
       await handleScanAndCapture();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Verification Error", description: error.message });
-      resetState();
+      resetVerificationState({ keepCenter: true, keepLocation: true });
     } finally {
       setIsFetchingLocation(false);
     }
@@ -222,8 +277,7 @@ export default function AttendancePage() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
-        setLocationCoords({ lat: latitude, lon: longitude });
-        // Using a reverse geocoding API would be ideal here. For now, just show coords.
+        setLocationCoords({ lat: latitude, lon: longitude, accuracyMeters: accuracy });
         setLocation(`Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}${accuracy ? ` (±${Math.round(accuracy)}m)` : ''}`);
         setIsFetchingLocation(false);
         toast({ title: "Location Acquired", description: "Device location captured." });
@@ -410,6 +464,30 @@ export default function AttendancePage() {
     handleScanAndCapture();
   };
 
+  const refreshSuggestedCenter = useCallback(() => {
+    if (!locationCoords) {
+      toast({
+        variant: 'destructive',
+        title: 'Location needed',
+        description: 'Start attendance once so the app can detect the nearest duty center.',
+      });
+      return;
+    }
+
+    const suggestion = findSuggestedSite(locationCoords, scannedEmployee?.clientName ?? null);
+    if (!suggestion) {
+      toast({
+        variant: 'destructive',
+        title: 'No nearby center found',
+        description: 'Please choose the duty center manually.',
+      });
+      return;
+    }
+
+    setHasManualCenterOverride(false);
+    applySuggestedSite(suggestion);
+  }, [applySuggestedSite, findSuggestedSite, locationCoords, scannedEmployee?.clientName, toast]);
+
   const withRetry = async <T,>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> => {
     let lastErr: any;
     for (let i = 0; i < attempts; i++) {
@@ -571,10 +649,6 @@ export default function AttendancePage() {
     };
   }, []);
 
-  const handleMarkAttendance = (status: 'In' | 'Out') => {
-    // kept for compatibility; no-op in new flow
-  };
-
   const handleSubmitAttendance = async () => {
     if (!isSelectionComplete) {
       toast({ variant: 'destructive', title: 'Select District & Site', description: 'Please choose district and site before submitting.' });
@@ -585,7 +659,6 @@ export default function AttendancePage() {
       return;
     }
     // Geofence: ensure within 150 meters of selected site
-    const selectedSite = siteOptions.find(s => s.id === selectedSiteId);
     if (!selectedSite || selectedSite.lat == null || selectedSite.lng == null) {
       toast({ variant: 'destructive', title: 'Site Location Missing', description: 'Selected site does not have coordinates configured.' });
       return;
@@ -654,7 +727,7 @@ export default function AttendancePage() {
         title: 'Attendance queued',
         description: 'You are offline. The attendance entry will sync automatically when the connection returns.',
       });
-      resetState();
+      resetVerificationState({ keepCenter: true, keepLocation: true });
       return;
     }
 
@@ -667,7 +740,7 @@ export default function AttendancePage() {
         buildHistoryItem(result.recordId, payloadWithoutPhotoUrl, result.photoUrl, 'synced'),
       );
       toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} ${selectedStatus.toLowerCase()} recorded.` });
-      resetState();
+      resetVerificationState({ keepCenter: true, keepLocation: true });
     } catch (e: any) {
       console.error('Submit failed', e);
       if (isRetryableAttendanceError(e)) {
@@ -685,7 +758,7 @@ export default function AttendancePage() {
           title: 'Attendance queued',
           description: 'Network issue detected. The entry was saved locally and will retry automatically.',
         });
-        resetState();
+        resetVerificationState({ keepCenter: true, keepLocation: true });
         return;
       }
 
@@ -695,320 +768,497 @@ export default function AttendancePage() {
     }
   };
 
-  const resetState = () => {
+  const resetVerificationState = (options?: { keepCenter?: boolean; keepLocation?: boolean }) => {
       setScanResult(null);
       setCapturedPhoto(null);
       setWatermarkedPhoto(null);
-      setLocation(null);
-      setLocationCoords(null);
+      if (!options?.keepLocation) {
+        setLocation(null);
+        setLocationCoords(null);
+        setAutoDetectedSite(null);
+      }
+      if (!options?.keepCenter) {
+        setSelectedDistrict('');
+        setSelectedSiteId('');
+        setHasManualCenterOverride(false);
+      }
       setScannedEmployee(null);
       setHasScanned(false);
       setIsScanning(false);
       setIsTakingPhoto(false);
       setIsFetchingLocation(false);
       setIsWatermarking(false);
-  }
+  };
 
   const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking;
-  // Enable submit when all green badges are met and watermarked photo is ready
   const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning;
-  const verificationStarted = isFetchingLocation || isTakingPhoto;
+  const verificationStarted = isFetchingLocation || isTakingPhoto || !!capturedPhoto || !!scannedEmployee;
+  const completionCount = [isSelectionComplete, !!scannedEmployee, !!capturedPhoto].filter(Boolean).length;
+  const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
+    ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
+    : null;
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
-      <h1 className="text-3xl font-bold tracking-tight">Attendance Tracking</h1>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Duty Selection</CardTitle>
-          <CardDescription>
-            Select your district, client (if different from your primary client), and site for today&apos;s duty.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="grid gap-2">
-            <Label>District</Label>
-            <Select
-              value={selectedDistrict}
-              onValueChange={(v) => {
-                setSelectedDistrict(v);
-                setSelectedSiteId("");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a district" />
-              </SelectTrigger>
-              <SelectContent>
-                {keralaDistricts.map(d => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-4 md:gap-6 md:p-6">
+      <Card className="overflow-hidden border-primary/15 bg-gradient-to-br from-background via-background to-primary/5">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-[1.2fr_0.8fr] md:p-6">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-full px-3 py-1 text-xs uppercase tracking-[0.18em]">
+                Attendance Terminal
+              </Badge>
+              <Badge variant={queuedAttendance.length > 0 ? 'secondary' : 'outline'} className="rounded-full px-3 py-1">
+                {queuedAttendance.length > 0 ? `${queuedAttendance.length} queued` : 'Sync ready'}
+              </Badge>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Record Attendance</h1>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
+                The app now tries to fill today&apos;s duty center from the current location. Most users only need to confirm the employee, take one photo, and submit.
+              </p>
+            </div>
           </div>
-
-          <div className="grid gap-2">
-            <Label>Client (for today)</Label>
-            <Select
-              value={clientFilter}
-              onValueChange={(v) => {
-                setClientFilter(v as any);
-                setSelectedSiteId("");
-              }}
-              disabled={!selectedDistrict || availableClients.length === 0}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select client filter" />
-              </SelectTrigger>
-              <SelectContent>
-                {scannedEmployee?.clientName && (
-                  <SelectItem value="auto">
-                    Same as employee ({scannedEmployee.clientName})
-                  </SelectItem>
-                )}
-                <SelectItem value="all">All clients in district</SelectItem>
-                {availableClients.map(client => (
-                  <SelectItem key={client} value={client}>
-                    {client}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Site</Label>
-            <Select
-              value={selectedSiteId}
-              onValueChange={(v) => setSelectedSiteId(v)}
-              disabled={!selectedDistrict || isLoadingSites || filteredSiteOptions.length === 0}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    isLoadingSites
-                      ? 'Loading sites...'
-                      : (!selectedDistrict
-                          ? 'Select district first'
-                          : (filteredSiteOptions.length === 0
-                              ? 'No sites for selected client'
-                              : 'Select a site'))
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredSiteOptions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.clientName} — {s.siteName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
+            <div className="rounded-2xl border bg-background/90 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <Clock3 className="h-4 w-4" />
+                Current Time
+              </div>
+              <p className="mt-2 text-lg font-semibold">{currentTime.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p className="text-sm text-muted-foreground">{currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</p>
+            </div>
+            <div className="rounded-2xl border bg-background/90 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <Navigation className="h-4 w-4" />
+                Duty Center
+              </div>
+              <p className="mt-2 text-base font-semibold">
+                {selectedSite ? selectedSite.siteName : 'Will auto-detect after location is available'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {selectedSite ? `${selectedSite.clientName} • ${selectedDistrict}` : 'You can still choose manually if needed.'}
+              </p>
+            </div>
+            <div className="rounded-2xl border bg-background/90 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <ListChecks className="h-4 w-4" />
+                Progress
+              </div>
+              <p className="mt-2 text-base font-semibold">{completionCount}/3 steps ready</p>
+              <Progress value={(completionCount / 3) * 100} className="mt-3 h-2" />
+            </div>
           </div>
         </CardContent>
       </Card>
-      
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertTitle>How to Mark Attendance</AlertTitle>
-        <AlertDescription>
-          {!verificationStarted && 'Click "Start Verification" to access your camera and location.'}
-          {verificationStarted && !scanResult && 'Point your QR code at the camera and click "Scan QR & Capture".'}
-          {scanResult && 'Once all data is captured, click "Mark IN" or "Mark OUT".'}
-        </AlertDescription>
-      </Alert>
 
       <Alert>
         {queuedAttendance.length > 0 ? <WifiOff className="h-4 w-4" /> : <RefreshCcw className="h-4 w-4" />}
-        <AlertTitle>Attendance Sync</AlertTitle>
+        <AlertTitle>{queuedAttendance.length > 0 ? 'Offline entries waiting' : 'Sync status is healthy'}</AlertTitle>
         <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span>
             {queuedAttendance.length > 0
-              ? `${queuedAttendance.length} attendance entr${queuedAttendance.length === 1 ? 'y is' : 'ies are'} queued for sync.`
-              : 'All locally saved attendance entries are synced.'}
+              ? `${queuedAttendance.length} attendance entr${queuedAttendance.length === 1 ? 'y is' : 'ies are'} stored on this device and ready to sync.`
+              : 'No pending attendance entries on this device right now.'}
           </span>
           <Button type="button" variant="outline" size="sm" onClick={flushQueuedAttendance} disabled={isSyncingQueue || queuedAttendance.length === 0}>
             {isSyncingQueue ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-            Sync Now
+            Sync now
           </Button>
         </AlertDescription>
       </Alert>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Attendance Terminal</CardTitle>
-          <CardDescription>Verify your identity to mark attendance.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {!verificationStarted ? (
-            <Button onClick={handleStartVerification} className="w-full sm:w-auto">
-              <Camera className="mr-2 h-4 w-4" /> Start Verification
-            </Button>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Side: Camera and Capture */}
-              <div className="space-y-4">
-                 <div ref={photoContainerRef} className="relative w-full bg-muted rounded-lg overflow-hidden flex items-center justify-center"
-                      style={{ aspectRatio: typeof window !== 'undefined' && window.innerWidth < 640 ? '3 / 4' : '4 / 3' }}>
-                    {isTakingPhoto && <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />}
-                    {capturedPhoto && <Image src={capturedPhoto} alt="Captured photo" layout="fill" objectFit="cover" data-ai-hint="employee attendance photo"/>}
-                    {(capturedPhoto && location) && (
-                       <div className="absolute bottom-0 left-0 w-full bg-black/50 text-white p-2 text-xs">
-                          <p>{new Date().toLocaleString()}</p>
-                          <p>{location}</p>
-                          {isSelectionComplete && (
-                            <p>{selectedDistrict} — {siteOptions.find(s => s.id === selectedSiteId)?.siteName}</p>
-                          )}
-                       </div>
-                    )}
-                    {isWatermarking && (
-                        <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white">
-                            <Loader2 className="h-8 w-8 animate-spin" />
-                            <p className="mt-2">Verifying...</p>
-                        </div>
-                    )}
-                 </div>
-                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                   <Button onClick={capturePhoto} disabled={!hasScanned || isWatermarking} className="w-full">
-                     <Camera className="mr-2 h-4 w-4" /> Capture Photo
-                   </Button>
-                   <Button onClick={() => { setCapturedPhoto(null); setWatermarkedPhoto(null); setIsTakingPhoto(true); }} variant="secondary" className="w-full">
-                     <Camera className="mr-2 h-4 w-4" /> Retake Photo
-                   </Button>
-                   <Button onClick={handleRescan} variant="secondary" disabled={isLoading} className="w-full">
-                     <QrCode className="mr-2 h-4 w-4" /> Rescan QR
-                 </Button>
-                 </div>
-                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                   <Input placeholder="Enter Employee ID (fallback)" value={manualEmployeeId} onChange={(e)=> setManualEmployeeId(e.target.value)} />
-                   <Button variant="outline" onClick={async ()=>{
-                     if (!manualEmployeeId.trim()) { toast({ variant: 'destructive', title: 'Enter Employee ID' }); return; }
-                     const emp = await fetchEmployeeByEmployeeId(manualEmployeeId.trim());
-                     if (emp) {
-                       setScannedEmployee(emp);
-                       setScanResult(`Manual:${manualEmployeeId.trim()}`);
-                       setHasScanned(true);
-                       toast({ title: 'Employee Selected', description: emp.fullName });
-                     } else {
-                       toast({ variant: 'destructive', title: 'Not Found', description: 'No employee with that ID' });
-                     }
-                   }}>Use Manual ID</Button>
-                   <div />
-                 </div>
+      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/30">
+            <CardTitle>Guided Attendance Flow</CardTitle>
+            <CardDescription>
+              Step 1 confirms the duty center. Step 2 identifies the employee. Step 3 captures the photo and submits the attendance mark.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 p-5 md:p-6">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-full p-2 ${isSelectionComplete ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">1. Duty center</p>
+                    <p className="text-xs text-muted-foreground">{isSelectionComplete ? 'Ready' : 'Needs confirmation'}</p>
+                  </div>
+                </div>
               </div>
-              
-              {/* Right Side: Status */}
-              <div className="space-y-4">
-                 <h3 className="font-semibold text-lg">Verification Status</h3>
-                 <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 border rounded-md">
-                        <Camera className={`h-6 w-6 ${capturedPhoto ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <div>
-                            <p className="font-medium">Photo</p>
-                            <p className={`text-sm ${capturedPhoto ? 'text-green-500' : 'text-muted-foreground'}`}>{capturedPhoto ? 'Captured' : 'Pending'}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-center gap-3 p-3 border rounded-md">
-                        <MapPin className={`h-6 w-6 ${location ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <div>
-                            <p className="font-medium">Location</p>
-                            <p className={`text-sm ${location ? 'text-green-500' : 'text-muted-foreground'}`}>{location || 'Will be checked on submit'}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-center gap-3 p-3 border rounded-md">
-                        <QrCode className={`h-6 w-6 ${scannedEmployee ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <div>
-                            <p className="font-medium">QR Scan</p>
-                            <p className={`text-sm ${scannedEmployee ? 'text-green-500' : 'text-muted-foreground'}`}>{scannedEmployee ? `${scannedEmployee.fullName}` : (scanResult || 'Pending')}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-center gap-3 p-3 border rounded-md">
-                        <ListChecks className={`h-6 w-6 ${isSelectionComplete ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <div>
-                            <p className="font-medium">Duty Selection</p>
-                            <p className={`text-sm ${isSelectionComplete ? 'text-green-500' : 'text-muted-foreground'}`}>{isSelectionComplete ? `${selectedDistrict} — ${siteOptions.find(s => s.id === selectedSiteId)?.siteName}` : 'Pending'}</p>
-                        </div>
-                     </div>
-                     <div className="p-3 border rounded-md">
-                        <p className="font-medium mb-2">Status</p>
-                        <RadioGroup value={selectedStatus} onValueChange={(v)=> setSelectedStatus((v as 'In'|'Out'))} className="flex items-center gap-4">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="In" id="status-in" />
-                            <Label htmlFor="status-in">Mark IN</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="Out" id="status-out" />
-                            <Label htmlFor="status-out">Mark OUT</Label>
-                          </div>
-                        </RadioGroup>
-                    </div>
-                 </div>
-                 {watermarkedPhoto && (
-                    <div className="mt-4">
-                        <p className="font-semibold mb-2">Verified Photo:</p>
-                        <Image src={watermarkedPhoto} alt="Watermarked employee photo" width={200} height={150} className="rounded-md border" data-ai-hint="verified employee photo"/>
-                    </div>
-                 )}
-                  {(hasScanned || watermarkedPhoto) && (
-                    <div className="mt-4 p-3 border rounded-md space-y-1">
-                      <p className="font-semibold">Review</p>
-                      <p className="text-sm">Employee: {scannedEmployee ? scannedEmployee.fullName : '—'}</p>
-                      <p className="text-sm">Status: {selectedStatus}</p>
-                      <p className="text-sm">District/Site: {isSelectionComplete ? `${selectedDistrict} — ${siteOptions.find(s => s.id === selectedSiteId)?.siteName}` : '—'}</p>
-                      <p className="text-sm">Location: {location || '—'}</p>
-                      <p className="text-xs text-muted-foreground">Ensure QR was read, duty selected, photo captured, then submit.</p>
-                    </div>
-                 )}
+              <div className="rounded-2xl border p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-full p-2 ${scannedEmployee ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
+                    <UserRoundSearch className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">2. Employee</p>
+                    <p className="text-xs text-muted-foreground">{scannedEmployee ? scannedEmployee.fullName : 'Scan QR or enter ID'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-full p-2 ${capturedPhoto ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
+                    <Camera className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">3. Photo + submit</p>
+                    <p className="text-xs text-muted-foreground">{capturedPhoto ? 'Photo ready' : 'Take a live photo'}</p>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-          
-          {isLoading && (
-            <Progress value={isFetchingLocation ? 20 : isTakingPhoto ? 40 : isScanning ? 60 : isWatermarking ? 80 : 0} className="w-full mt-2" />
-          )}
 
-        </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2">
-          <Button onClick={handleSubmitAttendance} disabled={!canSubmit} className="w-full sm:w-auto">
-            <CheckCircle className="mr-2 h-4 w-4" /> Submit Attendance
-          </Button>
-        </CardFooter>
-      </Card>
+            <div className="rounded-2xl border bg-muted/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Start attendance</p>
+                  <p className="text-sm text-muted-foreground">
+                    This opens the camera and captures the current location for today&apos;s duty center.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button onClick={handleStartVerification} disabled={isLoading} className="min-w-[180px]">
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanLine className="mr-2 h-4 w-4" />}
+                    {verificationStarted ? 'Continue scanning' : 'Start attendance'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setHasManualCenterOverride(false);
+                      refreshSuggestedCenter();
+                    }}
+                    disabled={!locationCoords || isLoadingCenters}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Recheck center
+                  </Button>
+                </div>
+              </div>
+            </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Attendance Logs (This Device)</CardTitle>
-          <CardDescription>Last 5 attendance records marked on this device.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {recentAttendance.length === 0 ? (
-            <p className="text-muted-foreground">No recent attendance records.</p>
-          ) : (
-            <ul className="space-y-3">
-              {recentAttendance.map(record => (
-                <li key={record.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-md shadow-sm gap-4">
-                  <div className="flex items-center gap-3">
-                    {record.photoUrl && <Image src={record.photoUrl} alt={record.employeeName} width={80} height={60} className="rounded-md" data-ai-hint="employee avatar" />}
+            <div className="rounded-2xl border p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Detected duty center</p>
+                  <p className="mt-1 text-base font-semibold">
+                    {selectedSite ? selectedSite.siteName : 'No center selected yet'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedSite
+                      ? `${selectedSite.clientName} • ${selectedDistrict}`
+                      : 'Location will suggest the nearest center automatically.'}
+                  </p>
+                  {selectedSiteDistance != null && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      About {Math.round(selectedSiteDistance)} meters from current location
+                    </p>
+                  )}
+                  {autoDetectedSite && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="secondary">
+                        {autoDetectedSite.matchedBy === 'client' ? 'Matched to employee client' : 'Nearest center selected'}
+                      </Badge>
+                      <Badge variant={autoDetectedSite.withinGeofence ? 'outline' : 'secondary'}>
+                        {autoDetectedSite.withinGeofence ? 'Inside allowed radius' : 'Please review center before submit'}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+                <div className="w-full max-w-sm rounded-2xl border bg-background p-3">
+                  <div className="grid gap-3">
                     <div>
-                      <p className="font-medium">{record.employeeName}</p>
-                      <p className="text-sm text-muted-foreground">ID: {record.employeeId} | Time: {record.time}</p>
-                      <p className="text-xs text-muted-foreground">Location: {record.location}</p>
-                      <p className="text-xs text-muted-foreground">Duty: {record.district} — {record.siteName}</p>
+                      <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Mark status</Label>
+                      <RadioGroup
+                        value={selectedStatus}
+                        onValueChange={(value) => setSelectedStatus(value as 'In' | 'Out')}
+                        className="mt-2 grid grid-cols-2 gap-2"
+                      >
+                        <Label htmlFor="status-in" className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'In' ? 'border-primary bg-primary text-primary-foreground' : 'bg-background'}`}>
+                          <RadioGroupItem value="In" id="status-in" className="sr-only" />
+                          <ArrowRight className="h-4 w-4 rotate-[-90deg]" />
+                          Mark IN
+                        </Label>
+                        <Label htmlFor="status-out" className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'Out' ? 'border-primary bg-primary text-primary-foreground' : 'bg-background'}`}>
+                          <RadioGroupItem value="Out" id="status-out" className="sr-only" />
+                          <ArrowRight className="h-4 w-4 rotate-90" />
+                          Mark OUT
+                        </Label>
+                      </RadioGroup>
+                    </div>
+                    <Button onClick={handleSubmitAttendance} disabled={!canSubmit} size="lg" className="w-full">
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Submit attendance
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <Accordion type="single" collapsible className="mt-4">
+                <AccordionItem value="manual-center">
+                  <AccordionTrigger>Change duty center manually</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-4 pt-2 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>District</Label>
+                        <Select
+                          value={selectedDistrict}
+                          onValueChange={(value) => {
+                            setHasManualCenterOverride(true);
+                            setSelectedDistrict(value);
+                            setSelectedSiteId('');
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingCenters ? 'Loading districts...' : 'Select district'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {districtOptions.map((district) => (
+                              <SelectItem key={district} value={district}>{district}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Center / Site</Label>
+                        <Select
+                          value={selectedSiteId}
+                          onValueChange={(value) => {
+                            setHasManualCenterOverride(true);
+                            setSelectedSiteId(value);
+                          }}
+                          disabled={!selectedDistrict || districtSiteOptions.length === 0}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={!selectedDistrict ? 'Select district first' : 'Select center'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {districtSiteOptions.map((site) => {
+                              const distance = locationCoords && typeof site.lat === 'number' && typeof site.lng === 'number'
+                                ? Math.round(haversineDistanceMeters(locationCoords.lat, locationCoords.lon, site.lat, site.lng))
+                                : null;
+                              return (
+                                <SelectItem key={site.id} value={site.id}>
+                                  {site.siteName} - {site.clientName}{distance != null ? ` (${distance}m)` : ''}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.95fr]">
+              <div className="space-y-4">
+                <div
+                  ref={photoContainerRef}
+                  className="relative aspect-[4/3] overflow-hidden rounded-3xl border bg-muted/40"
+                >
+                  {isTakingPhoto && <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />}
+                  {capturedPhoto && (
+                    <Image
+                      src={capturedPhoto}
+                      alt="Captured photo"
+                      fill
+                      className="object-cover"
+                      data-ai-hint="employee attendance photo"
+                    />
+                  )}
+                  {!isTakingPhoto && !capturedPhoto && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+                      <Camera className="h-10 w-10" />
+                      <div>
+                        <p className="font-medium text-foreground">Camera preview will appear here</p>
+                        <p className="text-sm">Start attendance, scan the employee, then capture the photo.</p>
+                      </div>
+                    </div>
+                  )}
+                  {capturedPhoto && (
+                    <div className="absolute inset-x-0 bottom-0 bg-black/55 p-3 text-xs text-white">
+                      <p>{currentTime.toLocaleDateString('en-IN')} • {currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</p>
+                      <p>{location || 'Location available'}</p>
+                      {selectedSite && <p>{selectedSite.siteName}, {selectedDistrict}</p>}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Button onClick={capturePhoto} disabled={!hasScanned || isWatermarking || !isTakingPhoto} className="w-full">
+                    <Camera className="mr-2 h-4 w-4" />
+                    Capture photo
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setCapturedPhoto(null);
+                      setWatermarkedPhoto(null);
+                      setIsTakingPhoto(true);
+                    }}
+                    disabled={!verificationStarted}
+                    className="w-full"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Retake photo
+                  </Button>
+                  <Button onClick={handleRescan} variant="secondary" disabled={isLoading || !verificationStarted} className="w-full">
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Rescan QR
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={`rounded-full p-2 ${scannedEmployee ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
+                      <UserRoundSearch className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold">Employee</p>
+                      <p className="text-sm text-muted-foreground">
+                        {scannedEmployee ? `${scannedEmployee.fullName} (${scannedEmployee.employeeCode || scannedEmployee.id})` : 'Use QR scan first. Manual ID is available below only when needed.'}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Badge variant={record.status === 'In' ? 'default' : 'destructive'} className="shrink-0">
-                      {record.status}
-                    </Badge>
-                    <Badge variant={record.syncStatus === 'synced' ? 'default' : record.syncStatus === 'queued' ? 'secondary' : 'destructive'}>
-                      {record.syncStatus}
-                    </Badge>
+                </div>
+
+                <Accordion type="single" collapsible className="rounded-2xl border px-4">
+                  <AccordionItem value="manual-id" className="border-none">
+                    <AccordionTrigger>Use manual employee ID instead</AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid gap-2 pb-2 sm:grid-cols-[1fr_auto]">
+                        <Input placeholder="Enter employee ID" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
+                        <Button
+                          variant="outline"
+                          onClick={async () => {
+                            if (!manualEmployeeId.trim()) {
+                              toast({ variant: 'destructive', title: 'Enter employee ID' });
+                              return;
+                            }
+                            const emp = await fetchEmployeeByEmployeeId(manualEmployeeId.trim());
+                            if (emp) {
+                              setScannedEmployee(emp);
+                              setScanResult(`Manual:${manualEmployeeId.trim()}`);
+                              setHasScanned(true);
+                              toast({ title: 'Employee selected', description: emp.fullName });
+                            } else {
+                              toast({ variant: 'destructive', title: 'Not found', description: 'No employee with that ID.' });
+                            }
+                          }}
+                        >
+                          Use ID
+                        </Button>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
+                <div className="rounded-2xl border p-4">
+                  <p className="font-semibold">Ready-to-submit review</p>
+                  <div className="mt-3 space-y-3 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-muted-foreground">Duty center</span>
+                      <span className="text-right font-medium">{selectedSite ? `${selectedSite.siteName}, ${selectedDistrict}` : 'Pending'}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-muted-foreground">Employee</span>
+                      <span className="text-right font-medium">{scannedEmployee ? scannedEmployee.fullName : 'Pending'}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-muted-foreground">Photo</span>
+                      <span className="text-right font-medium">{capturedPhoto ? 'Ready' : 'Pending'}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-muted-foreground">Attendance mark</span>
+                      <span className="text-right font-medium">{selectedStatus}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-muted-foreground">Location</span>
+                      <span className="text-right font-medium">{location || 'Will appear after GPS capture'}</span>
+                    </div>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+
+                {isLoading && (
+                  <div className="rounded-2xl border p-4">
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="font-medium">Preparing attendance</span>
+                      <span className="text-muted-foreground">
+                        {isFetchingLocation ? 'Getting location' : isScanning ? 'Scanning QR' : isTakingPhoto ? 'Camera ready' : 'Finishing'}
+                      </span>
+                    </div>
+                    <Progress value={isFetchingLocation ? 25 : isTakingPhoto ? 50 : isScanning ? 70 : isWatermarking ? 90 : 0} className="h-2" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Operator tips</CardTitle>
+              <CardDescription>Designed to keep the flow simple for field use.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border p-3">
+                <p className="font-medium text-foreground">1. Start attendance once</p>
+                <p className="mt-1">The page will try to detect the nearest center from the current location automatically.</p>
+              </div>
+              <div className="rounded-xl border p-3">
+                <p className="font-medium text-foreground">2. Scan the employee QR</p>
+                <p className="mt-1">Only use manual ID when the QR is damaged or unavailable.</p>
+              </div>
+              <div className="rounded-xl border p-3">
+                <p className="font-medium text-foreground">3. Capture photo and submit</p>
+                <p className="mt-1">After each successful entry, the duty center stays ready for the next employee.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Recent Attendance Logs</CardTitle>
+              <CardDescription>Latest records created on this device.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentAttendance.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No recent attendance records on this device yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentAttendance.slice(0, 5).map((record) => (
+                    <div key={record.id} className="rounded-2xl border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{record.employeeName}</p>
+                          <p className="text-xs text-muted-foreground">{record.employeeId}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{record.district} • {record.siteName}</p>
+                          <p className="text-xs text-muted-foreground">{record.time}</p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Badge variant={record.status === 'In' ? 'default' : 'destructive'}>{record.status}</Badge>
+                          <Badge variant={record.syncStatus === 'synced' ? 'outline' : record.syncStatus === 'queued' ? 'secondary' : 'destructive'}>
+                            {record.syncStatus}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
