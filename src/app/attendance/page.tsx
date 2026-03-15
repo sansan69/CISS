@@ -248,6 +248,12 @@ export default function AttendancePage() {
     }
   }, [toast]);
 
+  const waitForVideoSurface = () => new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+
   useEffect(() => {
     if (!locationCoords || allSites.length === 0 || hasManualCenterOverride) return;
     const suggestion = findSuggestedSite(locationCoords, scannedEmployee?.clientName ?? null);
@@ -271,6 +277,7 @@ export default function AttendancePage() {
           setLocationError(error.message || 'Location could not be captured.');
         });
       }
+      await waitForVideoSurface();
       await handleScanAndCapture();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Verification Error", description: error.message });
@@ -369,6 +376,7 @@ export default function AttendancePage() {
     setWatermarkedPhoto(null);
     setIsTakingPhoto(true);
     try {
+      await waitForVideoSurface();
       await startCameraStream();
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Camera Error', description: error.message });
