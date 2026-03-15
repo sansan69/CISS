@@ -390,14 +390,14 @@ export default function EmployeeDirectoryPage() {
     };
 
     return (
-        <div className="flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Employee Directory</h1>
                     <p className="text-muted-foreground">Manage and view all employee profiles.</p>
                 </div>
                 {userRole === 'admin' && (
-                  <Button asChild><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
+                  <Button asChild className="w-full sm:w-auto"><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
                 )}
             </div>
 
@@ -457,25 +457,27 @@ export default function EmployeeDirectoryPage() {
                             employees.map((emp) => {
                                 const pendingItems = getPendingDetails(emp);
                                 return (
-                                    <div key={emp.id} className="p-3 border rounded-lg flex items-center gap-3">
-                                        <Avatar className="h-10 w-10 shrink-0">
-                                            <AvatarImage src={emp.profilePictureUrl} data-ai-hint="employee avatar" />
-                                            <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('') || 'U'}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="truncate font-medium">{emp.fullName}</div>
-                                                <Badge variant={getStatusBadgeVariant(emp.status)} className="shrink-0">{emp.status}</Badge>
+                                    <div key={emp.id} className="rounded-lg border p-3">
+                                        <div className="flex items-start gap-3">
+                                            <Avatar className="h-10 w-10 shrink-0">
+                                                <AvatarImage src={emp.profilePictureUrl} data-ai-hint="employee avatar" />
+                                                <AvatarFallback>{emp.fullName?.split(' ').map(n => n[0]).join('') || 'U'}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div className="break-words font-medium">{emp.fullName}</div>
+                                                    <Badge variant={getStatusBadgeVariant(emp.status)} className="w-fit shrink-0">{emp.status}</Badge>
+                                                </div>
+                                                <div className="mt-1 break-words text-xs text-muted-foreground">{emp.clientName} • {emp.employeeId}</div>
+                                                {pendingItems.length === 0 ? (
+                                                    <div className="mt-1 text-xs text-green-600">Complete</div>
+                                                ) : (
+                                                    <div className="mt-1 text-xs text-amber-600">{pendingItems.length} Pending</div>
+                                                )}
                                             </div>
-                                            <div className="text-xs text-muted-foreground truncate">{emp.clientName} • {emp.employeeId}</div>
-                                            {pendingItems.length === 0 ? (
-                                                <div className="mt-1 text-xs text-green-600">Complete</div>
-                                            ) : (
-                                                <div className="mt-1 text-xs text-amber-600">{pendingItems.length} Pending</div>
-                                            )}
                                         </div>
-                                        <div className="flex flex-col gap-2 items-end">
-                                            <Button size="sm" onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}>View</Button>
+                                        <div className="mt-3 flex justify-end">
+                                            <Button size="sm" className="w-full sm:w-auto" onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}>View</Button>
                                         </div>
                                     </div>
                                 )
@@ -585,15 +587,15 @@ export default function EmployeeDirectoryPage() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                     <div className="flex justify-between items-center w-full">
+                     <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-sm text-muted-foreground">
                             Page {currentPage}
                         </span>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={isLoading || !hasPreviousPage}>
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handlePrevPage} disabled={isLoading || !hasPreviousPage}>
                                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={isLoading || !hasNextPage}>
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleNextPage} disabled={isLoading || !hasNextPage}>
                                 Next <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>

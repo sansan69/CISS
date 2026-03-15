@@ -108,7 +108,7 @@ function MobileNav({isSettingsPage}: {isSettingsPage: boolean}) {
                         <span className="text-lg">CISS Workforce</span>
                     </Link>
                 </div>
-                <nav className="grid gap-2 p-4 text-base font-medium">
+                <nav className="grid gap-2 overflow-y-auto p-4 text-base font-medium">
                     {isSettingsPage && (
                          <Link href="/dashboard" className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary mb-2">
                             <ChevronLeft className="h-4 w-4" />
@@ -212,15 +212,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
-      <div className="flex flex-col">
-        <header className="flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6 sticky top-0 z-30">
+      <div className="flex min-w-0 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background px-3 sm:px-4 lg:px-6">
             <MobileNav isSettingsPage={isSettingsPage}/>
-            <div className="w-full flex-1">
-                {/* Header content can go here */}
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground md:hidden">
+                  {isSettingsPage ? "Settings" : "CISS Workforce"}
+                </p>
             </div>
             <UserNav user={authUser} onLogout={handleLogout} />
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6 bg-muted/30 overflow-auto">
+        <main className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden bg-muted/30 p-3 sm:p-6">
           {children}
         </main>
         <Toaster />

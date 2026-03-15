@@ -55,26 +55,26 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Settings</h1>
         <p className="text-muted-foreground">Manage system-wide configurations and data.</p>
       </div>
       
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
         {settingsOptions.map((option) => (
           <Card key={option.title} className="flex flex-col">
             <CardHeader>
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                    <CardTitle className="text-lg font-semibold">{option.title}</CardTitle>
+                    <CardTitle className="text-base font-semibold sm:text-lg">{option.title}</CardTitle>
                     <CardDescription className="mt-1">{option.description}</CardDescription>
                 </div>
-                 <option.icon className="h-8 w-8 text-muted-foreground" />
+                 <option.icon className="h-7 w-7 shrink-0 text-muted-foreground sm:h-8 sm:w-8" />
               </div>
             </CardHeader>
             <CardContent className="mt-auto">
-             <Button asChild variant="outline" className="w-full justify-between">
+             <Button asChild variant="outline" className="w-full justify-between px-4 py-3">
                 <Link href={option.href}>
-                  <span>Go to {option.title}</span>
+                  <span className="text-left">Open {option.title}</span>
                   <ChevronRight className="h-4 w-4" />
                 </Link>
               </Button>

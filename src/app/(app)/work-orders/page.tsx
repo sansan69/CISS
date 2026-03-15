@@ -430,8 +430,8 @@ export default function WorkOrderPage() {
     const pageTitle = userRole === 'fieldOfficer' ? "Upcoming Duty Schedules" : "Work Order Management";
 
     return (
-        <div className="flex flex-col gap-6">
-            <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{pageTitle}</h1>
 
             {userRole === 'admin' && (
                 <Card>
@@ -440,7 +440,7 @@ export default function WorkOrderPage() {
                         <CardDescription>Upload the work order Excel file from the client. The system will process multiple dates from one file.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                        <div className="grid w-full items-center gap-1.5 sm:max-w-sm">
                             <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
                             <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
                         </div>
@@ -452,7 +452,7 @@ export default function WorkOrderPage() {
                         )}
                     </CardContent>
                     <CardFooter>
-                         <Button onClick={handleUploadAndProcess} disabled={isProcessing || !file}>
+                         <Button onClick={handleUploadAndProcess} disabled={isProcessing || !file} className="w-full sm:w-auto">
                             {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                             {isProcessing ? 'Processing...' : 'Upload & Process File'}
                         </Button>
@@ -542,22 +542,26 @@ export default function WorkOrderPage() {
                             {filteredEntries.map(([siteId, orders]) => {
                                 const siteInfo = orders[0];
                                 return (
-                                <div key={siteId} className="p-4 border rounded-lg">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                <div key={siteId} className="rounded-lg border p-4">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                         <div className='flex-1'>
-                                            <h3 className="font-semibold text-lg">{siteInfo.siteName}</h3>
-                                            <p className="text-sm text-muted-foreground">{siteInfo.clientName} - <Badge variant="secondary">{siteInfo.district}</Badge></p>
+                                            <h3 className="text-base font-semibold sm:text-lg">{siteInfo.siteName}</h3>
+                                            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                                <span>{siteInfo.clientName}</span>
+                                                <span className="hidden sm:inline">-</span>
+                                                <Badge variant="secondary">{siteInfo.district}</Badge>
+                                            </p>
                                         </div>
-                                         <div className="flex gap-2">
+                                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                                          {userRole === 'admin' && (
-                                            <Button size="sm" variant="outline" asChild>
+                                            <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
                                                 <Link href={`/work-orders/${siteId}`}>
                                                     <Edit3 className="mr-2 h-4 w-4" />
                                                     Edit Duties
                                                 </Link>
                                             </Button>
                                          )}
-                                         <Button size="sm" variant="outline" asChild>
+                                         <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
                                             <Link href={`/work-orders/${siteId}`}>
                                                 <UserPlus className="mr-2 h-4 w-4" />
                                                 Assign Guards
@@ -567,7 +571,7 @@ export default function WorkOrderPage() {
                                     </div>
                                     <div className="mt-4">
                                         <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="grid gap-2 sm:flex sm:flex-wrap">
                                             {orders.map(order => {
                                                 const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
                                                 const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
@@ -577,12 +581,12 @@ export default function WorkOrderPage() {
                                                     ? 'bg-red-100 text-red-700 border-red-200'
                                                     : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
                                                 return (
-                                                    <div key={order.id} className={`relative p-2 border rounded-md text-center min-w-[160px] ${assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40')}`}>
-                                                        <div className="flex items-center justify-between gap-2">
+                                                    <div key={order.id} className={`relative w-full rounded-md border p-3 text-center sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40')}`}>
+                                                        <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-center sm:justify-between sm:text-center">
                                                             <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                            <span className={`text-[10px] px-2 py-0.5 rounded border ${statusClasses}`}>{status}</span>
+                                                            <span className={`w-fit rounded border px-2 py-0.5 text-[10px] sm:ml-auto ${statusClasses}`}>{status}</span>
                                                         </div>
-                                                        <div className="flex justify-around items-center mt-1 pt-1 border-t">
+                                                        <div className="mt-2 grid grid-cols-3 items-center gap-2 border-t pt-2">
                                                             <div className="text-center px-1">
                                                                 <p className="text-lg font-bold">{order.maleGuardsRequired}</p>
                                                                 <p className="text-xs text-muted-foreground">Male</p>

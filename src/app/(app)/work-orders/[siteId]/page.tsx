@@ -137,9 +137,9 @@ const AssignGuardsDialog: React.FC<{
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-[95vw] sm:w-[90vw] md:w-auto max-w-full md:max-w-4xl lg:max-w-5xl h-[90vh] sm:h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-                <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b flex-shrink-0">
-                    <DialogTitle className="text-lg sm:text-xl">Assign Guards for {workOrder.siteName}</DialogTitle>
+            <DialogContent className="flex h-[min(92dvh,56rem)] w-[calc(100vw-1rem)] max-w-full flex-col gap-0 overflow-hidden p-0 sm:h-[85vh] sm:w-[90vw] md:max-w-4xl lg:max-w-5xl">
+                <DialogHeader className="flex-shrink-0 border-b px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-6">
+                    <DialogTitle className="pr-8 text-base leading-tight sm:text-xl">Assign Guards for {workOrder.siteName}</DialogTitle>
                     <DialogDescription className="text-sm">
                         {workOrder.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </DialogDescription>
@@ -200,28 +200,30 @@ const AssignGuardsDialog: React.FC<{
                                                 return (
                                                     <div 
                                                         key={guard.id} 
-                                                        className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                                                        className={`flex flex-col gap-3 rounded-lg border p-3 transition-colors sm:flex-row sm:items-center ${
                                                             isSelected ? 'bg-primary/5 border-primary/20' : 'bg-card hover:bg-muted/50'
                                                         }`}
                                                     >
-                                                        <Avatar className="h-10 w-10 flex-shrink-0">
-                                                            <AvatarImage src={guard.profilePictureUrl} />
-                                                            <AvatarFallback className="text-xs">
-                                                                {getInitials(guard.fullName as any, (guard as any).employeeId)}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-medium text-sm truncate">{guard.fullName}</p>
-                                                            <p className="text-xs text-muted-foreground truncate">{guard.employeeId}</p>
-                                                            <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
-                                                                {guard.gender}
-                                                            </Badge>
+                                                        <div className="flex items-start gap-3">
+                                                            <Avatar className="h-10 w-10 flex-shrink-0">
+                                                                <AvatarImage src={guard.profilePictureUrl} />
+                                                                <AvatarFallback className="text-xs">
+                                                                    {getInitials(guard.fullName as any, (guard as any).employeeId)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="font-medium text-sm break-words">{guard.fullName}</p>
+                                                                <p className="text-xs text-muted-foreground break-all">{guard.employeeId}</p>
+                                                                <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
+                                                                    {guard.gender}
+                                                                </Badge>
+                                                            </div>
                                                         </div>
                                                         <Button
                                                             size="sm"
                                                             variant={isSelected ? "destructive" : "default"}
                                                             onClick={() => handleToggleGuard(guard)}
-                                                            className="flex-shrink-0 h-8 px-3 text-xs"
+                                                            className="w-full flex-shrink-0 text-xs sm:w-auto"
                                                         >
                                                             {isSelected ? (
                                                                 <>
@@ -280,28 +282,31 @@ const AssignGuardsDialog: React.FC<{
                                                 return (
                                                     <div 
                                                         key={guard.uid} 
-                                                        className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20"
+                                                        className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row sm:items-center"
                                                     >
-                                                        <Avatar className="h-10 w-10 flex-shrink-0">
-                                                            <AvatarImage src={guardDetails?.profilePictureUrl} />
-                                                            <AvatarFallback className="text-xs">
-                                                                {getInitials(guard.name, guard.employeeId)}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-medium text-sm truncate">{guard.name}</p>
-                                                            <p className="text-xs text-muted-foreground truncate">{guard.employeeId}</p>
-                                                            <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
-                                                                {guard.gender}
-                                                            </Badge>
+                                                        <div className="flex items-start gap-3">
+                                                            <Avatar className="h-10 w-10 flex-shrink-0">
+                                                                <AvatarImage src={guardDetails?.profilePictureUrl} />
+                                                                <AvatarFallback className="text-xs">
+                                                                    {getInitials(guard.name, guard.employeeId)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="font-medium text-sm break-words">{guard.name}</p>
+                                                                <p className="text-xs text-muted-foreground break-all">{guard.employeeId}</p>
+                                                                <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
+                                                                    {guard.gender}
+                                                                </Badge>
+                                                            </div>
                                                         </div>
                                                         <Button 
                                                             size="sm" 
                                                             variant="destructive" 
                                                             onClick={() => setSelectedGuards(prev => prev.filter(g => g.uid !== guard.uid))}
-                                                            className="flex-shrink-0 h-8 px-3 text-xs"
+                                                            className="w-full flex-shrink-0 text-xs sm:w-auto"
                                                         >
-                                                            <X className="h-3 w-3" />
+                                                            <X className="h-3 w-3 sm:mr-1" />
+                                                            <span className="sm:hidden">Remove Guard</span>
                                                         </Button>
                                                     </div>
                                                 );
@@ -612,9 +617,9 @@ export default function AssignGuardsPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
             <div className="flex items-center gap-4">
-                 <Button variant="outline" size="sm" asChild>
+                 <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
                     <Link href="/work-orders">
                         <ArrowLeft className="mr-2 h-4 w-4"/>
                         Back to All Sites
@@ -624,7 +629,7 @@ export default function AssignGuardsPage() {
             
              <Card>
                 <CardHeader>
-                    <CardTitle className="text-2xl">Guard Assignment for {site?.siteName}</CardTitle>
+                    <CardTitle className="text-xl leading-tight sm:text-2xl">Guard Assignment for {site?.siteName}</CardTitle>
                     <CardDescription>
                         Assign guards for the upcoming shifts at <span className="font-semibold">{site?.clientName} - {site?.district}</span>.
                     </CardDescription>
@@ -642,11 +647,12 @@ export default function AssignGuardsPage() {
                                 const cardBg = assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40');
                                 const badgeClass = assignedCount === 0 ? 'bg-red-100 text-red-700 border-red-200' : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
                                 return (
-                                    <div key={order.id} className={`p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${cardBg}`}>
+                                    <div key={order.id} className={`rounded-lg border p-4 ${cardBg}`}>
+                                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="w-full sm:w-auto">
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-bold text-lg">{order.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded border ${badgeClass}`}>{status}</span>
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                                <p className="text-base font-bold sm:text-lg">{order.date.toDate().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                                <span className={`w-fit rounded border px-2 py-0.5 text-[10px] ${badgeClass}`}>{status}</span>
                                             </div>
                                             <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                                                 {editCountsFor === order.id ? (
@@ -673,10 +679,10 @@ export default function AssignGuardsPage() {
                                                 <p className="text-[11px] text-muted-foreground mt-1">{percent}% assigned</p>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                                             {userRole === 'admin' && (
                                                 editCountsFor === order.id ? (
-                                                    <Button size="sm" onClick={async ()=>{
+                                                    <Button size="sm" className="w-full sm:w-auto" onClick={async ()=>{
                                                         try {
                                                             const ref = doc(db, 'workOrders', order.id);
                                                             const male = Number.isFinite(editMale) ? editMale : 0;
@@ -702,13 +708,13 @@ export default function AssignGuardsPage() {
                                                         <Save className="mr-2 h-4 w-4"/> Save
                                                     </Button>
                                                 ) : (
-                                                    <Button variant="outline" size="sm" onClick={()=>{ setEditCountsFor(order.id); setEditMale(order.maleGuardsRequired); setEditFemale(order.femaleGuardsRequired); }}>
+                                                    <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={()=>{ setEditCountsFor(order.id); setEditMale(order.maleGuardsRequired); setEditFemale(order.femaleGuardsRequired); }}>
                                                         <Edit3 className="mr-2 h-4 w-4"/> Edit
                                                     </Button>
                                                 )
                                             )}
                                             {userRole === 'admin' && (
-                                                <Button size="sm" variant="destructive" onClick={async ()=>{
+                                                <Button size="sm" variant="destructive" className="w-full sm:w-auto" onClick={async ()=>{
                                                     try {
                                                         await deleteDoc(doc(db,'workOrders', order.id));
                                                     } catch (e) {
@@ -718,9 +724,10 @@ export default function AssignGuardsPage() {
                                                     <Trash2 className="mr-2 h-4 w-4"/> Delete
                                                 </Button>
                                             )}
-                                            <Button onClick={() => handleOpenAssignDialog(order)} size="sm">
+                                            <Button onClick={() => handleOpenAssignDialog(order)} size="sm" className="w-full sm:w-auto">
                                                 <UserPlus className="mr-2 h-4 w-4" /> Assign
                                             </Button>
+                                        </div>
                                         </div>
                                     </div>
                                 );

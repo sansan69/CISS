@@ -37,9 +37,9 @@ interface ClientDistributionData {
 const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementType; isLoading: boolean; error: string | null; helpText?: string }> = 
 ({ title, value, icon: Icon, isLoading, error, helpText }) => (
     <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            <Icon className="h-4 w-4 text-muted-foreground" />
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         </CardHeader>
         <CardContent>
             {isLoading ? (
@@ -393,12 +393,12 @@ export default function DashboardPage() {
                         ) : upcomingDuties.length > 0 ? (
                             <div className="space-y-3">
                                 {upcomingDuties.map(duty => (
-                                    <div key={duty.id} className="flex items-center justify-between p-3 border rounded-md">
+                                    <div key={duty.id} className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
                                             <p className="font-semibold">{duty.siteName} <span className="font-normal text-muted-foreground">({duty.clientName})</span></p>
                                             <p className="text-sm text-muted-foreground">{format(duty.date, "EEEE, dd MMM yyyy")}</p>
                                         </div>
-                                        <Badge>Total Required: {duty.totalManpower}</Badge>
+                                        <Badge className="w-fit">Total Required: {duty.totalManpower}</Badge>
                                     </div>
                                 ))}
                             </div>
@@ -455,7 +455,7 @@ export default function DashboardPage() {
                                                 <Cell key={`cell-${index}`} fill={clientChartColors[index % clientChartColors.length]} />
                                             ))}
                                         </Pie>
-                                        <Legend />
+                                        <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "12px" }} />
                                     </PieChart>
                                 </ChartContainer>
                             ) : (
@@ -484,16 +484,16 @@ export default function DashboardPage() {
                             ))
                         ) : recentActivity.length > 0 ? (
                             recentActivity.map((activity) => (
-                                <div key={activity.id} className="flex items-center gap-4">
+                                <div key={activity.id} className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                      <Avatar className="hidden h-10 w-10 sm:flex">
                                         <AvatarFallback><UserPlus className="h-5 w-5" /></AvatarFallback>
                                     </Avatar>
-                                    <div className="grid gap-1">
+                                    <div className="grid gap-1 sm:flex-1">
                                         <p className="text-sm font-medium leading-none">{activity.text}</p>
                                         <p className="text-sm text-muted-foreground">{activity.subtext}</p>
                                     </div>
-                                    <Link href={`/employees/${activity.id}`} className="ml-auto">
-                                       <Button variant="ghost" size="sm">View</Button>
+                                    <Link href={`/employees/${activity.id}`} className="sm:ml-auto">
+                                       <Button variant="ghost" size="sm" className="w-full sm:w-auto">View</Button>
                                     </Link>
                                 </div>
                             ))
@@ -522,7 +522,7 @@ export default function DashboardPage() {
                         ) : (
                             <div className="space-y-3">
                                 {todayLogs.slice(0, 12).map((l) => (
-                                    <div key={l.id} className="flex items-center justify-between p-3 border rounded-md">
+                                    <div key={l.id} className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="min-w-0">
                                             <p className="font-medium truncate">{l.employeeName || l.employeeId}</p>
                                             <p className="text-xs text-muted-foreground truncate">{l.siteName}</p>
