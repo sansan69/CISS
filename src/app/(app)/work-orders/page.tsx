@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,14 +52,37 @@ export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const { toast } = useToast();
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
     const [isLoading, setIsLoading] = useState(true);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
-    const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-    const [dateSort, setDateSort] = useState<'asc' | 'desc'>('asc');
+    const selectedDistrict = searchParams.get('district') || 'all';
+    const dateSort = searchParams.get('dateSort') === 'desc' ? 'desc' : 'asc';
+    const selectedDateValue = searchParams.get('date') || '';
+    const selectedDate = useMemo(() => {
+        if (!selectedDateValue) return null;
+        const parsed = new Date(`${selectedDateValue}T00:00:00`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }, [selectedDateValue]);
+
+    const updateUrlParams = (updates: Record<string, string | null>) => {
+        const params = new URLSearchParams(searchParams.toString());
+
+        Object.entries(updates).forEach(([key, value]) => {
+            if (!value || value === 'all') {
+                params.delete(key);
+            } else {
+                params.set(key, value);
+            }
+        });
+
+        const next = params.toString();
+        router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    };
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -428,6 +452,8 @@ export default function WorkOrderPage() {
     };
     
     const pageTitle = userRole === 'fieldOfficer' ? "Upcoming Duty Schedules" : "Work Order Management";
+    const listQueryString = searchParams.toString();
+    const siteHref = (siteId: string) => (listQueryString ? `/work-orders/${siteId}?${listQueryString}` : `/work-orders/${siteId}`);
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
@@ -479,14 +505,7 @@ export default function WorkOrderPage() {
                                     value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
                                     onChange={(e) => {
                                         const value = e.target.value;
-                                        if (!value) {
-                                            setSelectedDate(null);
-                                            return;
-                                        }
-                                        const parsed = new Date(value + 'T00:00:00');
-                                        if (!isNaN(parsed.getTime())) {
-                                            setSelectedDate(parsed);
-                                        }
+                                        updateUrlParams({ date: value || null });
                                     }}
                                     className="h-9"
                                 />
@@ -495,7 +514,7 @@ export default function WorkOrderPage() {
                                 <Label className="text-xs font-medium text-muted-foreground">Filter by district</Label>
                                 <Select
                                     value={selectedDistrict}
-                                    onValueChange={(val) => setSelectedDistrict(val)}
+                                    onValueChange={(val) => updateUrlParams({ district: val })}
                                 >
                                     <SelectTrigger className="h-9">
                                         <SelectValue placeholder="All districts" />
@@ -514,7 +533,7 @@ export default function WorkOrderPage() {
                                 <Label className="text-xs font-medium text-muted-foreground">Sort by date</Label>
                                 <Select
                                     value={dateSort}
-                                    onValueChange={(val) => setDateSort(val as 'asc' | 'desc')}
+                                    onValueChange={(val) => updateUrlParams({ dateSort: val })}
                                 >
                                     <SelectTrigger className="h-9">
                                         <SelectValue />
@@ -555,14 +574,14 @@ export default function WorkOrderPage() {
                                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                                          {userRole === 'admin' && (
                                             <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-                                                <Link href={`/work-orders/${siteId}`}>
+                                                <Link href={siteHref(siteId)}>
                                                     <Edit3 className="mr-2 h-4 w-4" />
                                                     Edit Duties
                                                 </Link>
                                             </Button>
                                          )}
                                          <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-                                            <Link href={`/work-orders/${siteId}`}>
+                                            <Link href={siteHref(siteId)}>
                                                 <UserPlus className="mr-2 h-4 w-4" />
                                                 Assign Guards
                                             </Link>

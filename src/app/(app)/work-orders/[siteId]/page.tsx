@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc, getDocs, serverTimestamp, deleteDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -480,7 +480,9 @@ const AssignGuardsDialog: React.FC<{
 export default function AssignGuardsPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const siteId = params.siteId as string;
+    const backHref = searchParams.toString() ? `/work-orders?${searchParams.toString()}` : '/work-orders';
 
     const [site, setSite] = useState<Site | null>(null);
     const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -610,7 +612,7 @@ export default function AssignGuardsPage() {
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
                 <Button asChild variant="secondary" className="mt-4">
-                    <Link href="/work-orders"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Schedules</Link>
+                    <Link href={backHref}><ArrowLeft className="mr-2 h-4 w-4"/>Back to Schedules</Link>
                 </Button>
             </Alert>
          )
@@ -620,7 +622,7 @@ export default function AssignGuardsPage() {
         <div className="flex flex-col gap-4 sm:gap-6">
             <div className="flex items-center gap-4">
                  <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-                    <Link href="/work-orders">
+                    <Link href={backHref}>
                         <ArrowLeft className="mr-2 h-4 w-4"/>
                         Back to All Sites
                     </Link>
