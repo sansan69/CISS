@@ -35,18 +35,28 @@ import Link from "next/link";
 import Image from "next/image";
 import { db } from "@/lib/firebase"; 
 import { collection, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
-import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils"; 
+import {
+  dataURLtoFile,
+  deleteFileFromStorage,
+  ENROLLMENT_DOCUMENT_ACCEPT,
+  ENROLLMENT_IMAGE_ACCEPT,
+  getUploadFileExtension,
+  prepareFileForUpload,
+  uploadFileToStorage,
+} from "@/lib/storageUtils";
+import {
+  assertEnrollmentUploadSize,
+  getEnrollmentFileSelectionError,
+  isEnrollmentFileSelectionValid,
+} from "@/lib/enrollmentFiles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { EDUCATION_OPTIONS, KERALA_DISTRICTS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
 
 
-const MAX_FILE_SIZE_MB = 5;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
 const fileSchema = z.instanceof(File, { message: "This field is required." })
-  .refine(file => file.size <= MAX_FILE_SIZE_BYTES, `Max file size is ${MAX_FILE_SIZE_MB}MB.`);
+  .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 5MB are allowed.");
 
 const optionalFileSchema = fileSchema.optional();
 
@@ -174,6 +184,16 @@ const educationOptions = [...EDUCATION_OPTIONS];
 
 
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+
+function buildEnrollmentStoragePath(
+  phoneNumber: string,
+  folder: string,
+  fileStem: string,
+  file: File,
+): string {
+  const extension = getUploadFileExtension(file, "bin");
+  return `employees/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}`;
+}
 
 
 const handleUploadError = (err: any, documentName: string): never => {
@@ -430,10 +450,11 @@ export default function EnrollEmployeePage() {
   ) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        form.setError(fieldName, { type: "manual", message: `File is too large. Max ${MAX_FILE_SIZE_MB}MB.` });
+      const selectionError = getEnrollmentFileSelectionError(file);
+      if (selectionError) {
+        form.setError(fieldName, { type: "manual", message: selectionError });
         setPreview(null);
-        if (event.target) event.target.value = ""; 
+        if (event.target) event.target.value = "";
         return;
       }
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
@@ -444,7 +465,7 @@ export default function EnrollEmployeePage() {
              setPreview("/pdf-icon.png"); 
          }
       } else {
-        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP or PDF." });
+        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP, HEIC, HEIF or PDF." });
         setPreview(null);
       }
     } else {
@@ -473,25 +494,25 @@ export default function EnrollEmployeePage() {
     };
 
     try {
-      const filesToUpload: { name: string; file?: File; path: string; isImage: boolean, key: keyof typeof uploadedUrls }[] = [
-            { name: "Profile Picture", file: data.profilePicture, path: `employees/${phoneNumber}/profilePictures/${Date.now()}_profile.jpg`, isImage: true, key: 'profilePictureUrl' },
-            { name: "Identity Proof (Front)", file: data.identityProofUrlFront, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_front.${data.identityProofUrlFront.name.split('.').pop()}`, isImage: data.identityProofUrlFront.type.startsWith("image/"), key: 'identityProofUrlFront' },
-            { name: "Identity Proof (Back)", file: data.identityProofUrlBack, path: `employees/${phoneNumber}/idProofs/${Date.now()}_id_back.${data.identityProofUrlBack.name.split('.').pop()}`, isImage: data.identityProofUrlBack.type.startsWith("image/"), key: 'identityProofUrlBack' },
-            { name: "Address Proof (Front)", file: data.addressProofUrlFront, path: `employees/${phoneNumber}/addressProofs/${Date.now()}_addr_front.${data.addressProofUrlFront.name.split('.').pop()}`, isImage: data.addressProofUrlFront.type.startsWith("image/"), key: 'addressProofUrlFront' },
-            { name: "Address Proof (Back)", file: data.addressProofUrlBack, path: `employees/${phoneNumber}/addressProofs/${Date.now()}_addr_back.${data.addressProofUrlBack.name.split('.').pop()}`, isImage: data.addressProofUrlBack.type.startsWith("image/"), key: 'addressProofUrlBack' },
-            { name: "Signature", file: data.signatureUrl, path: `employees/${phoneNumber}/signatures/${Date.now()}_sig.jpg`, isImage: true, key: 'signatureUrl' },
-            { name: "Bank Document", file: data.bankPassbookStatement, path: `employees/${phoneNumber}/bankDocuments/${Date.now()}_bank.${data.bankPassbookStatement?.name.split('.').pop()}`, isImage: data.bankPassbookStatement?.type.startsWith("image/") ?? false, key: 'bankPassbookStatementUrl' },
-            { name: "Police Certificate", file: data.policeClearanceCertificate, path: `employees/${phoneNumber}/policeCertificates/${Date.now()}_pcc.${data.policeClearanceCertificate?.name.split('.').pop()}`, isImage: data.policeClearanceCertificate?.type.startsWith("image/") ?? false, key: 'policeClearanceCertificateUrl' },
+      const filesToUpload: { name: string; file?: File; folder: string; fileStem: string; key: keyof typeof uploadedUrls }[] = [
+            { name: "Profile Picture", file: data.profilePicture, folder: "profilePictures", fileStem: "profile", key: 'profilePictureUrl' },
+            { name: "Identity Proof (Front)", file: data.identityProofUrlFront, folder: "idProofs", fileStem: "id_front", key: 'identityProofUrlFront' },
+            { name: "Identity Proof (Back)", file: data.identityProofUrlBack, folder: "idProofs", fileStem: "id_back", key: 'identityProofUrlBack' },
+            { name: "Address Proof (Front)", file: data.addressProofUrlFront, folder: "addressProofs", fileStem: "addr_front", key: 'addressProofUrlFront' },
+            { name: "Address Proof (Back)", file: data.addressProofUrlBack, folder: "addressProofs", fileStem: "addr_back", key: 'addressProofUrlBack' },
+            { name: "Signature", file: data.signatureUrl, folder: "signatures", fileStem: "sig", key: 'signatureUrl' },
+            { name: "Bank Document", file: data.bankPassbookStatement, folder: "bankDocuments", fileStem: "bank", key: 'bankPassbookStatementUrl' },
+            { name: "Police Certificate", file: data.policeClearanceCertificate, folder: "policeCertificates", fileStem: "pcc", key: 'policeClearanceCertificateUrl' },
         ];
 
 
-      for (const { name, file, path, isImage, key } of filesToUpload) {
+      for (const { name, file, folder, fileStem, key } of filesToUpload) {
             if (!file) continue;
             toast({ title: `Uploading ${name}...`});
             try {
-                const fileToUpload = isImage
-                    ? await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.7 })
-                    : file;
+                const fileToUpload = await prepareFileForUpload(file);
+                assertEnrollmentUploadSize(fileToUpload);
+                const path = buildEnrollmentStoragePath(phoneNumber, folder, fileStem, fileToUpload);
                 const url = await uploadFileToStorage(fileToUpload, path);
                 uploadedUrls[key] = url;
             } catch (err) {
@@ -706,7 +727,7 @@ export default function EnrollEmployeePage() {
                             id="profilePictureInput"
                             type="file" 
                             className="hidden" 
-                            accept="image/jpeg,image/png,image/webp" 
+                            accept={ENROLLMENT_IMAGE_ACCEPT}
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
@@ -1014,7 +1035,7 @@ const ImagePreviewAndUpload: React.FC<{
                 <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`${fieldName}Input`)?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
             </div>
-            <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,.pdf" onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
+            <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept={ENROLLMENT_DOCUMENT_ACCEPT} onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
         </div>
     );
 };
