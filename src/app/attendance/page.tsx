@@ -88,6 +88,7 @@ export default function AttendancePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BrowserMultiFormatReader | null>(null);
   const photoContainerRef = useRef<HTMLDivElement>(null);
+  const scanLockedRef = useRef(false);
 
   const { toast } = useToast();
 
@@ -262,6 +263,7 @@ export default function AttendancePage() {
 
   const handleStartVerification = async () => {
     setWorkflowStep('scanning');
+    scanLockedRef.current = false;
     setHasScanned(false);
     setScanResult(null);
     setScannedEmployee(null);
@@ -367,7 +369,7 @@ export default function AttendancePage() {
     setReportingStartedAt(new Date().toISOString());
     stopScanner();
     setWorkflowStep('review');
-    toast({ title: 'Guard identified', description: employee.fullName });
+    toast({ title: 'Guard identified', description: employee.fullName, duration: 1600 });
   }, [toast]);
 
   const beginPhotoCapture = async () => {
@@ -434,7 +436,8 @@ export default function AttendancePage() {
           constraints,
           videoRef.current!,
           (result, err, ctrl) => {
-            if (result && !hasScanned) {
+            if (result && !scanLockedRef.current) {
+              scanLockedRef.current = true;
               const text = result.getText();
               const parsedId = parseEmployeeIdFromText(text);
               if (parsedId) {
@@ -442,10 +445,12 @@ export default function AttendancePage() {
                   if (emp) {
                     resolveScannedEmployee(emp, text);
                   } else {
+                    scanLockedRef.current = false;
                     toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
                   }
                 });
               } else {
+                scanLockedRef.current = false;
                 toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
               }
               setIsScanning(false);
@@ -459,7 +464,8 @@ export default function AttendancePage() {
           minimal,
           videoRef.current!,
           (result, e2, ctrl) => {
-            if (result && !hasScanned) {
+            if (result && !scanLockedRef.current) {
+              scanLockedRef.current = true;
               const text = result.getText();
               const parsedId = parseEmployeeIdFromText(text);
               if (parsedId) {
@@ -467,10 +473,12 @@ export default function AttendancePage() {
                   if (emp) {
                     resolveScannedEmployee(emp, text);
                   } else {
+                    scanLockedRef.current = false;
                     toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
                   }
                 });
               } else {
+                scanLockedRef.current = false;
                 toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
               }
               setIsScanning(false);
@@ -487,6 +495,7 @@ export default function AttendancePage() {
   };
 
   const handleRescan = () => {
+    scanLockedRef.current = false;
     setHasScanned(false);
     setScanResult(null);
     setScannedEmployee(null);
@@ -806,6 +815,7 @@ export default function AttendancePage() {
   };
 
   const resetVerificationState = (options?: { keepCenter?: boolean; keepLocation?: boolean }) => {
+      scanLockedRef.current = false;
       setWorkflowStep('idle');
       setScanResult(null);
       setCapturedPhoto(null);
