@@ -2,6 +2,22 @@ import { z } from "zod";
 
 export const attendanceStatusSchema = z.enum(["In", "Out"]);
 
+export const attendancePhotoComplianceSchema = z.object({
+  overallStatus: z.enum(["clear", "warning", "analysis_failed"]),
+  adminFlag: z.boolean().default(false),
+  warnings: z.array(z.string()).default([]),
+  summary: z.string().default(""),
+  missingShoes: z.boolean().default(false),
+  missingIdCard: z.boolean().default(false),
+  uniformIssue: z.boolean().default(false),
+  fullBodyVisible: z.boolean().default(false),
+  onePersonVisible: z.boolean().default(true),
+});
+
+export type AttendancePhotoCompliance = z.infer<
+  typeof attendancePhotoComplianceSchema
+>;
+
 export const attendanceSubmissionSchema = z.object({
   employeeId: z.string().min(1),
   employeeName: z.string().min(1),
@@ -27,6 +43,8 @@ export const attendanceSubmissionSchema = z.object({
   distanceMeters: z.number().nonnegative(),
   locationAccuracyMeters: z.number().nullable().optional(),
   photoUrl: z.string().url(),
+  photoCapturedAt: z.string().datetime().optional(),
+  photoCompliance: attendancePhotoComplianceSchema.optional(),
   deviceInfo: z.object({
     userAgent: z.string(),
   }),

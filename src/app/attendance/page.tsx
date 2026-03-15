@@ -4,10 +4,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, Clock3, Loader2, ListChecks, RefreshCcw, WifiOff, ScanLine, UserRoundSearch, Navigation, Sparkles, ArrowRight, RotateCcw } from 'lucide-react';
+import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, Sparkles, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { BrowserMultiFormatReader } from '@zxing/browser';
@@ -23,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import type {
+  AttendancePhotoCompliance,
   AttendanceSubmission,
   DeviceAttendanceHistoryItem,
   QueuedAttendanceSubmission,
@@ -54,6 +54,11 @@ type SuggestedSite = SiteOption & {
 
 const ATTENDANCE_QUEUE_STORAGE_KEY = 'ciss_attendance_queue_v1';
 const ATTENDANCE_HISTORY_STORAGE_KEY = 'ciss_attendance_history_v1';
+const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Kolkata',
+});
 
 export default function AttendancePage() {
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
@@ -73,13 +78,17 @@ export default function AttendancePage() {
   const [hasScanned, setHasScanned] = useState(false);
   const [hasManualCenterOverride, setHasManualCenterOverride] = useState(false);
   const [autoDetectedSite, setAutoDetectedSite] = useState<SuggestedSite | null>(null);
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   
   const [isScanning, setIsScanning] = useState(false);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [isWatermarking, setIsWatermarking] = useState(false);
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
+  const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
+  const [photoCompliance, setPhotoCompliance] = useState<AttendancePhotoCompliance | null>(null);
+  const [photoComplianceError, setPhotoComplianceError] = useState<string | null>(null);
 
   const [recentAttendance, setRecentAttendance] = useState<DeviceAttendanceHistoryItem[]>([]);
   const [queuedAttendance, setQueuedAttendance] = useState<QueuedAttendanceSubmission[]>([]);
@@ -201,6 +210,7 @@ export default function AttendancePage() {
   }, [toast]);
 
   useEffect(() => {
+    setCurrentTime(new Date());
     const timer = window.setInterval(() => setCurrentTime(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
@@ -255,6 +265,114 @@ export default function AttendancePage() {
     });
   });
 
+  const buildAttendanceStampLines = useCallback((capturedAtIso?: string | null) => {
+    const capturedAt = capturedAtIso || new Date().toISOString();
+    const coordsText = locationCoords
+      ? `Lat ${locationCoords.lat.toFixed(6)} • Long ${locationCoords.lon.toFixed(6)}`
+      : 'Lat/Long unavailable';
+
+    return [
+      selectedSite?.siteName || 'Duty center pending',
+      [selectedDistrict, selectedSite?.clientName].filter(Boolean).join(' • ') || 'Client pending',
+      location || 'Location unavailable',
+      coordsText,
+      `${INDIA_DATE_TIME_FORMATTER.format(new Date(capturedAt))} • ${selectedStatus} duty`,
+      scannedEmployee
+        ? `${scannedEmployee.fullName} • ${scannedEmployee.employeeCode || scannedEmployee.id}`
+        : 'Guard details pending',
+      'Captured by CISS Attendance',
+    ];
+  }, [location, locationCoords, scannedEmployee, selectedDistrict, selectedSite, selectedStatus]);
+
+  const createWatermarkedAttendancePhoto = useCallback(async (
+    originalDataUrl: string,
+    capturedAtIso: string,
+  ) => {
+    const image = new window.Image();
+    image.crossOrigin = 'anonymous';
+    image.src = originalDataUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Photo could not be prepared.'));
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Photo canvas is unavailable.');
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const overlayHeight = Math.max(220, Math.round(canvas.height * 0.28));
+    const overlayY = canvas.height - overlayHeight - 24;
+    const overlayX = 24;
+    const overlayWidth = canvas.width - 48;
+    const radius = 28;
+
+    context.fillStyle = 'rgba(8, 14, 30, 0.72)';
+    context.beginPath();
+    context.moveTo(overlayX + radius, overlayY);
+    context.lineTo(overlayX + overlayWidth - radius, overlayY);
+    context.quadraticCurveTo(overlayX + overlayWidth, overlayY, overlayX + overlayWidth, overlayY + radius);
+    context.lineTo(overlayX + overlayWidth, overlayY + overlayHeight - radius);
+    context.quadraticCurveTo(overlayX + overlayWidth, overlayY + overlayHeight, overlayX + overlayWidth - radius, overlayY + overlayHeight);
+    context.lineTo(overlayX + radius, overlayY + overlayHeight);
+    context.quadraticCurveTo(overlayX, overlayY + overlayHeight, overlayX, overlayY + overlayHeight - radius);
+    context.lineTo(overlayX, overlayY + radius);
+    context.quadraticCurveTo(overlayX, overlayY, overlayX + radius, overlayY);
+    context.closePath();
+    context.fill();
+
+    context.fillStyle = 'rgba(255,255,255,0.95)';
+    context.font = `700 ${Math.max(26, Math.round(canvas.width * 0.032))}px Arial`;
+    const lines = buildAttendanceStampLines(capturedAtIso);
+    let cursorY = overlayY + 52;
+    lines.forEach((line, index) => {
+      context.fillStyle = index === 0 ? '#FFFFFF' : 'rgba(255,255,255,0.92)';
+      context.font = `${index === 0 ? 700 : index === lines.length - 1 ? 600 : 500} ${index === 0 ? Math.max(26, Math.round(canvas.width * 0.032)) : Math.max(18, Math.round(canvas.width * 0.022))}px Arial`;
+      context.fillText(line, overlayX + 32, cursorY, overlayWidth - 64);
+      cursorY += index === 0 ? 42 : 32;
+    });
+
+    context.fillStyle = selectedStatus === 'In' ? '#22C55E' : '#F97316';
+    context.fillRect(overlayX + overlayWidth - 220, overlayY + 24, 164, 40);
+    context.fillStyle = '#07101F';
+    context.font = `700 ${Math.max(18, Math.round(canvas.width * 0.02))}px Arial`;
+    context.fillText(selectedStatus === 'In' ? 'CHECK IN' : 'CHECK OUT', overlayX + overlayWidth - 200, overlayY + 51);
+
+    return canvas.toDataURL('image/jpeg', 0.92);
+  }, [buildAttendanceStampLines, selectedStatus]);
+
+  const analyzeCapturedPhoto = useCallback(async (
+    originalPhotoDataUrl: string,
+  ): Promise<AttendancePhotoCompliance> => {
+    const response = await fetch('/api/attendance/analyze-photo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        photoDataUrl: originalPhotoDataUrl,
+        employeeName: scannedEmployee?.fullName,
+        employeeId: scannedEmployee?.employeeCode || scannedEmployee?.id,
+        siteName: selectedSite?.siteName,
+        district: selectedDistrict,
+        clientName: selectedSite?.clientName,
+      }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Uniform review could not be completed.');
+    }
+
+    return body.compliance as AttendancePhotoCompliance;
+  }, [scannedEmployee, selectedDistrict, selectedSite]);
+
   useEffect(() => {
     if (!locationCoords || allSites.length === 0 || hasManualCenterOverride) return;
     const suggestion = findSuggestedSite(locationCoords, scannedEmployee?.clientName ?? null);
@@ -269,6 +387,9 @@ export default function AttendancePage() {
     setScannedEmployee(null);
     setCapturedPhoto(null);
     setWatermarkedPhoto(null);
+    setPhotoCapturedAt(null);
+    setPhotoCompliance(null);
+    setPhotoComplianceError(null);
     setReportingStartedAt(null);
     setLocationError(null);
 
@@ -346,7 +467,7 @@ export default function AttendancePage() {
     setIsScanning(false);
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (!videoRef.current) return;
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth || 1280;
@@ -354,12 +475,61 @@ export default function AttendancePage() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    const photoDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    const photoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const capturedAtIso = new Date().toISOString();
     setCapturedPhoto(photoDataUrl);
-    toast({ title: 'Photo Captured' });
+    setPhotoCapturedAt(capturedAtIso);
+    setPhotoCompliance(null);
+    setPhotoComplianceError(null);
     stopScanner();
     setIsTakingPhoto(false);
     setWorkflowStep('review');
+    setIsWatermarking(true);
+    setIsAnalyzingPhoto(true);
+
+    try {
+      const [stampedPhoto, compliance] = await Promise.all([
+        createWatermarkedAttendancePhoto(photoDataUrl, capturedAtIso),
+        analyzeCapturedPhoto(photoDataUrl).catch((error: any) => {
+          setPhotoComplianceError(error?.message || 'Uniform review could not be completed.');
+          return {
+            overallStatus: 'analysis_failed',
+            adminFlag: true,
+            warnings: ['Uniform review could not be completed automatically.'],
+            summary: error?.message || 'Uniform review could not be completed automatically.',
+            missingShoes: false,
+            missingIdCard: false,
+            uniformIssue: false,
+            fullBodyVisible: false,
+            onePersonVisible: true,
+          } satisfies AttendancePhotoCompliance;
+        }),
+      ]);
+      setWatermarkedPhoto(stampedPhoto);
+      setPhotoCompliance(compliance);
+      if (compliance.overallStatus === 'warning') {
+        toast({
+          variant: 'destructive',
+          title: 'Uniform check found issues',
+          description: compliance.warnings[0] || 'Review the photo and retake it if needed.',
+        });
+      } else if (compliance.overallStatus === 'clear') {
+        toast({ title: 'Photo captured', description: 'Uniform details look clear.' });
+      } else {
+        toast({ title: 'Photo captured', description: 'Attendance can continue, but uniform review needs admin attention.' });
+      }
+    } catch (error: any) {
+      setWatermarkedPhoto(photoDataUrl);
+      setPhotoComplianceError(error?.message || 'Photo overlay could not be prepared.');
+      toast({
+        variant: 'destructive',
+        title: 'Photo prepared with limited checks',
+        description: error?.message || 'You can still retake the photo or continue.',
+      });
+    } finally {
+      setIsWatermarking(false);
+      setIsAnalyzingPhoto(false);
+    }
   };
 
   const resolveScannedEmployee = useCallback((employee: ScannedEmployee, sourceText: string) => {
@@ -376,6 +546,9 @@ export default function AttendancePage() {
     setWorkflowStep('photo');
     setCapturedPhoto(null);
     setWatermarkedPhoto(null);
+    setPhotoCapturedAt(null);
+    setPhotoCompliance(null);
+    setPhotoComplianceError(null);
     setIsTakingPhoto(true);
     try {
       await waitForVideoSurface();
@@ -501,6 +674,9 @@ export default function AttendancePage() {
     setScannedEmployee(null);
     setCapturedPhoto(null);
     setWatermarkedPhoto(null);
+    setPhotoCapturedAt(null);
+    setPhotoCompliance(null);
+    setPhotoComplianceError(null);
     toast({ title: 'Ready to rescan', description: 'Show the QR code to the camera.' });
     // restart scanner
     setIsTakingPhoto(true);
@@ -678,14 +854,6 @@ export default function AttendancePage() {
     };
   }, [flushQueuedAttendance]);
   
-  // Simplified: no heavy verification; treat captured photo as ready for upload
-  useEffect(() => {
-    if (capturedPhoto) {
-      setWatermarkedPhoto(capturedPhoto);
-            setIsWatermarking(false);
-        }
-  }, [capturedPhoto]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -755,6 +923,8 @@ export default function AttendancePage() {
       locationCoords,
       distanceMeters: Math.round(distance),
       locationAccuracyMeters: locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null,
+      photoCapturedAt: photoCapturedAt || new Date().toISOString(),
+      photoCompliance: photoCompliance ?? undefined,
       deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
     };
 
@@ -820,6 +990,9 @@ export default function AttendancePage() {
       setScanResult(null);
       setCapturedPhoto(null);
       setWatermarkedPhoto(null);
+      setPhotoCapturedAt(null);
+      setPhotoCompliance(null);
+      setPhotoComplianceError(null);
       setReportingStartedAt(null);
       setLocationError(options?.keepLocation ? locationError : null);
       if (!options?.keepLocation) {
@@ -841,8 +1014,8 @@ export default function AttendancePage() {
       setIsWatermarking(false);
   };
 
-  const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking;
-  const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning;
+  const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking || isAnalyzingPhoto;
+  const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning && !isWatermarking && !isAnalyzingPhoto;
   const verificationStarted = workflowStep !== 'idle';
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
@@ -857,7 +1030,11 @@ export default function AttendancePage() {
             <h1 className="text-2xl font-bold tracking-tight">Record Duty Entry</h1>
           </div>
           <Badge variant={queuedAttendance.length > 0 ? 'secondary' : 'outline'}>
-            {queuedAttendance.length > 0 ? `${queuedAttendance.length} queued` : currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
+            {queuedAttendance.length > 0
+              ? `${queuedAttendance.length} queued`
+              : currentTime
+                ? currentTime.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+                : 'Ready'}
           </Badge>
         </div>
         {selectedSite && workflowStep === 'idle' && (
@@ -1118,9 +1295,13 @@ export default function AttendancePage() {
               <div className="space-y-4">
                 <div ref={photoContainerRef} className="relative aspect-[3/4] overflow-hidden rounded-3xl border bg-black">
                   <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
+                  <div className="pointer-events-none absolute inset-x-5 top-5 rounded-2xl bg-black/55 px-4 py-3 text-sm text-white">
+                    Keep one guard only in the frame. Make sure face, ID card, uniform, and shoes are visible.
+                  </div>
+                  <div className="pointer-events-none absolute inset-x-8 top-24 bottom-10 rounded-[2rem] border-2 border-dashed border-white/75" />
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <Button size="lg" className="h-12 w-full" onClick={capturePhoto}>
+                  <Button size="lg" className="h-12 w-full" onClick={() => void capturePhoto()}>
                     <Camera className="mr-2 h-4 w-4" />
                     Capture photo
                   </Button>
@@ -1142,8 +1323,70 @@ export default function AttendancePage() {
                 {capturedPhoto ? (
                   <div className="space-y-3">
                     <div className="relative aspect-[3/4] overflow-hidden rounded-3xl border">
-                      <Image src={capturedPhoto} alt="Guard photo" fill className="object-cover" />
+                      <Image src={watermarkedPhoto || capturedPhoto} alt="Guard photo" fill className="object-cover" />
                     </div>
+                    {(isWatermarking || isAnalyzingPhoto) && (
+                      <div className="rounded-2xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 font-medium text-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Preparing attendance photo
+                        </div>
+                        <p className="mt-2">Adding attendance details to the image and checking shoes, ID card, and uniform visibility.</p>
+                      </div>
+                    )}
+                    {photoCompliance && !isAnalyzingPhoto && (
+                      <Alert variant={photoCompliance.overallStatus === 'warning' ? 'destructive' : 'default'}>
+                        {photoCompliance.overallStatus === 'clear' ? (
+                          <BadgeCheck className="h-4 w-4" />
+                        ) : (
+                          <ShieldAlert className="h-4 w-4" />
+                        )}
+                        <AlertTitle>
+                          {photoCompliance.overallStatus === 'clear'
+                            ? 'Uniform check looks good'
+                            : photoCompliance.overallStatus === 'warning'
+                              ? 'Please review the photo'
+                              : 'Uniform check needs admin review'}
+                        </AlertTitle>
+                        <AlertDescription className="space-y-3">
+                          <p>{photoCompliance.summary || 'Review the photo before submitting.'}</p>
+                          {photoCompliance.warnings.length > 0 && (
+                            <ul className="list-disc pl-5">
+                              {photoCompliance.warnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant={photoCompliance.missingShoes ? 'destructive' : 'outline'}>
+                              Shoes {photoCompliance.missingShoes ? 'not visible' : 'visible'}
+                            </Badge>
+                            <Badge variant={photoCompliance.missingIdCard ? 'destructive' : 'outline'}>
+                              ID card {photoCompliance.missingIdCard ? 'not visible' : 'visible'}
+                            </Badge>
+                            <Badge variant={photoCompliance.uniformIssue ? 'destructive' : 'outline'}>
+                              <Shirt className="mr-1 h-3 w-3" />
+                              {photoCompliance.uniformIssue ? 'Uniform issue' : 'Uniform looks okay'}
+                            </Badge>
+                            <Badge variant={!photoCompliance.fullBodyVisible ? 'destructive' : 'outline'}>
+                              Full body {photoCompliance.fullBodyVisible ? 'visible' : 'unclear'}
+                            </Badge>
+                          </div>
+                          {photoCompliance.adminFlag && (
+                            <p className="text-sm font-medium">
+                              This record will be marked for admin review even if you submit now.
+                            </p>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {photoComplianceError && !isAnalyzingPhoto && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Uniform review could not finish fully</AlertTitle>
+                        <AlertDescription>{photoComplianceError}</AlertDescription>
+                      </Alert>
+                    )}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Button type="button" variant="outline" className="h-12 w-full" onClick={beginPhotoCapture}>
                         <RotateCcw className="mr-2 h-4 w-4" />
@@ -1158,7 +1401,7 @@ export default function AttendancePage() {
                 ) : (
                   <Button size="lg" className="h-14 w-full text-base" onClick={beginPhotoCapture} disabled={!scannedEmployee}>
                     <Camera className="mr-2 h-5 w-5" />
-                    Take guard photo
+                    Take full-size guard photo
                   </Button>
                 )}
 

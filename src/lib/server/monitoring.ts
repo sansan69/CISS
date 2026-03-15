@@ -1,6 +1,8 @@
 export const SYSTEM_METRIC_NAMES = {
   attendanceSubmitFailure: "attendance_submit_failure",
   attendanceSubmitSuccess: "attendance_submit_success",
+  attendancePhotoAnalysisFailure: "attendance_photo_analysis_failure",
+  attendancePhotoAnalysisSuccess: "attendance_photo_analysis_success",
   geocodeFailure: "geocode_failure",
   geocodeSuccess: "geocode_success",
   adminProvisionFailure: "admin_provision_failure",

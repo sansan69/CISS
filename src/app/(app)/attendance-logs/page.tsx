@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { KERALA_DISTRICTS } from "@/lib/constants";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
+import type { AttendancePhotoCompliance } from "@/types/attendance";
 
 type AttendanceLog = {
   id: string;
@@ -25,6 +26,7 @@ type AttendanceLog = {
   siteName?: string;
   locationText?: string;
   photoUrl?: string;
+  photoCompliance?: AttendancePhotoCompliance | null;
   createdAt?: Timestamp;
 };
 
@@ -245,6 +247,34 @@ export default function AttendanceLogsPage() {
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">District</p>
                             <p>{log.district || "N/A"}</p>
                           </div>
+                          {log.photoCompliance && (
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Uniform review</p>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <Badge
+                                  variant={
+                                    log.photoCompliance.overallStatus === "clear"
+                                      ? "outline"
+                                      : "destructive"
+                                  }
+                                >
+                                  {log.photoCompliance.overallStatus === "clear"
+                                    ? "Clear"
+                                    : log.photoCompliance.overallStatus === "warning"
+                                      ? "Review required"
+                                      : "AI check unavailable"}
+                                </Badge>
+                                {log.photoCompliance.adminFlag && (
+                                  <Badge variant="secondary">Admin flag</Badge>
+                                )}
+                              </div>
+                              {log.photoCompliance.warnings.length > 0 && (
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                  {log.photoCompliance.warnings.join(" • ")}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -259,6 +289,7 @@ export default function AttendanceLogsPage() {
                           <TableHead>Status</TableHead>
                           <TableHead>Site</TableHead>
                           <TableHead>District</TableHead>
+                          <TableHead>Uniform review</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -279,6 +310,37 @@ export default function AttendanceLogsPage() {
                               <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
                             </TableCell>
                             <TableCell>{log.district || "N/A"}</TableCell>
+                            <TableCell>
+                              {log.photoCompliance ? (
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap gap-2">
+                                    <Badge
+                                      variant={
+                                        log.photoCompliance.overallStatus === "clear"
+                                          ? "outline"
+                                          : "destructive"
+                                      }
+                                    >
+                                      {log.photoCompliance.overallStatus === "clear"
+                                        ? "Clear"
+                                        : log.photoCompliance.overallStatus === "warning"
+                                          ? "Review required"
+                                          : "AI check unavailable"}
+                                    </Badge>
+                                    {log.photoCompliance.adminFlag && (
+                                      <Badge variant="secondary">Admin flag</Badge>
+                                    )}
+                                  </div>
+                                  {log.photoCompliance.warnings.length > 0 && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {log.photoCompliance.warnings.join(" • ")}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">Not reviewed</span>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

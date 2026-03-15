@@ -231,6 +231,8 @@ export async function POST(request: NextRequest) {
         distanceMeters: Math.round(actualDistance),
         locationAccuracyMeters: payload.locationAccuracyMeters ?? null,
         photoUrl: payload.photoUrl,
+        photoCapturedAt: payload.photoCapturedAt ?? null,
+        photoCompliance: payload.photoCompliance ?? null,
         deviceInfo: payload.deviceInfo,
         attendanceDate,
         createdAt: now,

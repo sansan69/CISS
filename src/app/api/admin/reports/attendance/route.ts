@@ -3,7 +3,7 @@ import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
-    return "employeeName,employeeId,status,clientName,district,siteName,locationText,createdAt\n";
+    return "employeeName,employeeId,status,clientName,district,siteName,locationText,complianceStatus,complianceWarnings,createdAt\n";
   }
 
   const headers = Object.keys(rows[0]);
@@ -53,6 +53,10 @@ export async function GET(request: NextRequest) {
         district: data.district || "",
         siteName: data.siteName || "",
         locationText: data.locationText || "",
+        complianceStatus: data.photoCompliance?.overallStatus || "",
+        complianceWarnings: Array.isArray(data.photoCompliance?.warnings)
+          ? data.photoCompliance.warnings.join(" | ")
+          : "",
         createdAt:
           typeof data.createdAt?.toDate === "function"
             ? data.createdAt.toDate().toISOString()
