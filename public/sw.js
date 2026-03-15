@@ -1,7 +1,7 @@
 // A robust, production-ready service worker.
 // See: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
 
-const CACHE_NAME = 'ciss-workforce-cache-v3'; // Increment version to force update
+const CACHE_NAME = 'ciss-workforce-cache-v4'; // Increment version to force update
 const APP_SHELL_URLS = [
   '/',
   '/admin-login',
