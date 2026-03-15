@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleIcon, AlertTriangle, FileUp, Loader2, Upload, UserCircle2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleIcon, AlertTriangle, ChevronDown, ChevronUp, FileUp, Loader2, Upload, UserCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -606,6 +606,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved" | "restored">("idle");
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [isDraftReady, setIsDraftReady] = useState(false);
+  const [isMobileHeaderOpen, setIsMobileHeaderOpen] = useState(false);
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
@@ -1168,11 +1169,18 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const collapseHeaderOnMobile = () => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setIsMobileHeaderOpen(false);
+    }
+  };
+
   const handleInvalidSubmission = () => {
     const issues = getStepIssues();
     setSubmissionIssues(issues);
 
     if (issues.length > 0) {
+      setIsMobileHeaderOpen(true);
       jumpToStep(issues[0].stepIndex);
       toast({
         variant: "destructive",
@@ -1186,17 +1194,20 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const goToNextStep = async () => {
     setSubmissionIssues([]);
     setCurrentStep((current) => Math.min(current + 1, ENROLLMENT_STEPS.length - 1));
+    collapseHeaderOnMobile();
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const goToPreviousStep = () => {
     setCurrentStep((current) => Math.max(current - 1, 0));
+    collapseHeaderOnMobile();
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const goToStep = async (targetStep: number) => {
     if (targetStep === currentStep) return;
     setSubmissionIssues([]);
+    collapseHeaderOnMobile();
     jumpToStep(targetStep);
   };
 
@@ -1211,20 +1222,49 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} className="space-y-8 pb-28 sm:pb-32">
-              <div className="space-y-3 rounded-[20px] border bg-muted/10 p-3 sm:p-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-end justify-between gap-2">
-                    <div>
+              <div className="rounded-[20px] border bg-muted/10 p-3 sm:p-4">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                         Step {currentStep + 1} of {ENROLLMENT_STEPS.length}
                       </p>
-                      <p className="text-lg font-semibold text-foreground sm:text-xl">{stepConfig.title}</p>
+                      <p className="truncate text-base font-semibold text-foreground sm:text-xl">{stepConfig.title}</p>
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+
+                    <div className="hidden items-center gap-2 sm:flex">
+                      <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+                        {completionPercent}% complete
+                      </span>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 shrink-0 rounded-full px-3 text-xs font-medium sm:hidden"
+                      aria-expanded={isMobileHeaderOpen}
+                      aria-label={isMobileHeaderOpen ? "Collapse enrollment sections" : "Expand enrollment sections"}
+                      onClick={() => setIsMobileHeaderOpen((current) => !current)}
+                    >
+                      <span>{isMobileHeaderOpen ? "Hide sections" : "Show sections"}</span>
+                      {isMobileHeaderOpen ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-3 sm:hidden">
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
                       {completionPercent}% complete
                     </span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        style={{ width: `${completionPercent}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+
+                  <div className="hidden h-1.5 w-full overflow-hidden rounded-full bg-muted sm:block">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-300"
                       style={{ width: `${completionPercent}%` }}
@@ -1232,7 +1272,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
+                <div
+                  className={cn(
+                    "overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out",
+                    isMobileHeaderOpen ? "mt-3 max-h-[28rem] opacity-100" : "max-h-0 opacity-0 sm:mt-3",
+                    "sm:max-h-none sm:opacity-100",
+                  )}
+                >
+                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
                     const isActive = index === currentStep;
                     const applicableStepFields = step.fields.filter((fieldName) => applicableRequiredFields.includes(fieldName));
@@ -1269,6 +1316,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       </button>
                     );
                   })}
+                  </div>
                 </div>
               </div>
 
