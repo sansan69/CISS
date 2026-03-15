@@ -282,15 +282,15 @@ export default function ClientManagementPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" asChild>
+    <div className="flex flex-col gap-4 sm:gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
           <Link href="/settings">
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Back to Settings</span>
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            <span>Back to Settings</span>
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Client Management</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Client Management</h1>
       </div>
 
 
@@ -344,19 +344,20 @@ export default function ClientManagementPage() {
           ) : (
             <ul className="space-y-3">
               {clients.map((client) => (
-                <li key={client.id} className="flex items-center justify-between p-3 border rounded-md shadow-sm bg-muted/20">
-                  <span className="font-medium">{client.name}</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenEdit(client)}>
+                <li key={client.id} className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-medium break-words">{client.name}</span>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => handleOpenEdit(client)}>
                       <Edit className="h-4 w-4 mr-1" /> Rename
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => openManageUsers(client)}>
+                    <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => openManageUsers(client)}>
                       <LinkIcon className="h-4 w-4 mr-1" /> Manage Logins
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" disabled={isSubmitting}>
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="destructive" size="sm" className="w-full sm:w-auto" disabled={isSubmitting}>
+                          <Trash2 className="h-4 w-4 sm:mr-0 mr-1" />
+                          <span className="sm:hidden">Delete Client</span>
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -425,12 +426,12 @@ export default function ClientManagementPage() {
               {manageClient && (linkedUsers[manageClient.id]?.length ? (
                 <ul className="space-y-2">
                   {linkedUsers[manageClient.id]!.map(u => (
-                    <li key={u.id} className="flex items-center justify-between p-2 border rounded-md">
+                    <li key={u.id} className="flex flex-col gap-3 rounded-md border p-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="font-medium">{u.name || u.email}</div>
                         <div className="text-xs text-muted-foreground">{u.email}</div>
                       </div>
-                      <Button variant="destructive" size="sm" onClick={() => unlinkUser(u.id)} disabled={isSubmitting}>
+                      <Button variant="destructive" size="sm" className="w-full sm:w-auto" onClick={() => unlinkUser(u.id)} disabled={isSubmitting}>
                         <Unlink className="h-4 w-4 mr-1" /> Remove Access
                       </Button>
                     </li>
@@ -448,9 +449,9 @@ export default function ClientManagementPage() {
                 <Input type="password" placeholder="Password" value={linkPassword} onChange={(e) => setLinkPassword(e.target.value)} />
                 <Input type="text" placeholder="Display name (optional)" value={linkName} onChange={(e) => setLinkName(e.target.value)} />
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={verifyAndLinkUser} disabled={isSubmitting}><UserPlus className="h-4 w-4 mr-1" /> Verify & Link</Button>
-                <Button onClick={createAndLinkUser} disabled={isSubmitting}><UserPlus className="h-4 w-4 mr-1" /> Create & Link</Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={verifyAndLinkUser} disabled={isSubmitting}><UserPlus className="h-4 w-4 mr-1" /> Verify & Link</Button>
+                <Button className="w-full sm:w-auto" onClick={createAndLinkUser} disabled={isSubmitting}><UserPlus className="h-4 w-4 mr-1" /> Create & Link</Button>
               </div>
               <p className="text-xs text-muted-foreground">We use a secure secondary session to verify/create the user. Credentials are not stored.</p>
             </div>

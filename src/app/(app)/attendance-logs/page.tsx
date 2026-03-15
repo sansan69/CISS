@@ -123,19 +123,19 @@ export default function AttendanceLogsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Attendance Logs</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Attendance Logs</h1>
           <p className="text-muted-foreground">Live attendance activity from the latest 200 records.</p>
         </div>
-        <Button onClick={handleExport} disabled={isExporting}>
+        <Button onClick={handleExport} disabled={isExporting} className="w-full lg:w-auto">
           {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
           Export CSV
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total records</CardDescription>
@@ -214,46 +214,79 @@ export default function AttendanceLogsPage() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Site</TableHead>
-                  <TableHead>District</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      No attendance records match the current filters.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell>
-                        <div className="font-medium">{log.employeeName || "Unknown employee"}</div>
-                        <div className="text-xs text-muted-foreground">{log.employeeId}</div>
-                      </TableCell>
-                      <TableCell>
-                        {log.createdAt ? format(log.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "Pending"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div>{log.siteName || "Unknown site"}</div>
-                        <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
-                      </TableCell>
-                      <TableCell>{log.district || "N/A"}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <>
+              {filteredLogs.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                  No attendance records match the current filters.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 md:hidden">
+                    {filteredLogs.map((log) => (
+                      <div key={log.id} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium break-words">{log.employeeName || "Unknown employee"}</p>
+                            <p className="text-xs text-muted-foreground break-all">{log.employeeId}</p>
+                          </div>
+                          <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Time</p>
+                            <p>{log.createdAt ? format(log.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "Pending"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Site</p>
+                            <p>{log.siteName || "Unknown site"}</p>
+                            <p className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">District</p>
+                            <p>{log.district || "N/A"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Employee</TableHead>
+                          <TableHead>Time</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>District</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredLogs.map((log) => (
+                          <TableRow key={log.id}>
+                            <TableCell>
+                              <div className="font-medium">{log.employeeName || "Unknown employee"}</div>
+                              <div className="text-xs text-muted-foreground">{log.employeeId}</div>
+                            </TableCell>
+                            <TableCell>
+                              {log.createdAt ? format(log.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "Pending"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div>{log.siteName || "Unknown site"}</div>
+                              <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
+                            </TableCell>
+                            <TableCell>{log.district || "N/A"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

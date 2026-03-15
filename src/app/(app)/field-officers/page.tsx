@@ -217,11 +217,11 @@ const OfficerForm: React.FC<{
                         <Input type="email" placeholder="user@example.com" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
                         <Input type="password" placeholder="Password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
                         <div className="flex justify-end">
-                            <div className="flex gap-2">
-                                <Button type="button" variant="outline" onClick={handleVerifyCredentials} disabled={isVerifyingUser || isSaving}>
+                            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleVerifyCredentials} disabled={isVerifyingUser || isSaving}>
                                     {isVerifyingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify & Load
                                 </Button>
-                                <Button type="button" onClick={handleSave} disabled={isVerifyingUser || isSaving}>
+                                <Button type="button" className="w-full sm:w-auto" onClick={handleSave} disabled={isVerifyingUser || isSaving}>
                                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create Auth User & Officer
                                 </Button>
                             </div>
@@ -259,8 +259,8 @@ const OfficerForm: React.FC<{
                 </div>
             </div>
             <DialogFooter>
-                <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-                <Button onClick={handleSave} disabled={isSaving}>
+                <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={onClose}>Cancel</Button>
+                <Button className="w-full sm:w-auto" onClick={handleSave} disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {isEditing ? 'Update Officer' : 'Create Officer'}
                 </Button>
@@ -499,10 +499,10 @@ export default function FieldOfficerManagementPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold tracking-tight">Field Officer Management</h1>
-            <Button onClick={openAddDialog}><UserPlus className="mr-2 h-4 w-4" /> Add New Officer</Button>
+      <div className="flex flex-col gap-4 sm:gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Field Officer Management</h1>
+            <Button className="w-full sm:w-auto" onClick={openAddDialog}><UserPlus className="mr-2 h-4 w-4" /> Add New Officer</Button>
         </div>
 
         <Alert>
@@ -536,7 +536,7 @@ export default function FieldOfficerManagementPage() {
                 </div>
               )}
               <div>
-                <Button type="button" variant="outline" onClick={handleRepairClaims} disabled={isRepairingClaims}>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRepairClaims} disabled={isRepairingClaims}>
                   {isRepairingClaims ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
                   Repair Missing Claims
                 </Button>
@@ -559,7 +559,7 @@ export default function FieldOfficerManagementPage() {
             ) : (
               <div className="space-y-4">
                 {officers.map((officer) => (
-                  <div key={officer.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg shadow-sm">
+                  <div key={officer.id} className="flex flex-col gap-3 rounded-lg border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex-1 mb-3 sm:mb-0">
                       <h3 className="font-semibold text-lg">{officer.name}</h3>
                       <p className="text-sm text-muted-foreground">{officer.email}</p>
@@ -571,11 +571,11 @@ export default function FieldOfficerManagementPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2 self-start sm:self-center">
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(officer)}>
+                    <div className="flex w-full flex-col gap-2 self-start sm:w-auto sm:flex-row sm:self-center">
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => openEditDialog(officer)}>
                             <Edit className="mr-1 h-4 w-4" /> Edit
                         </Button>
-                        <Button variant="destructive" size="sm" onClick={() => setDeletingOfficer(officer)}>
+                        <Button variant="destructive" size="sm" className="w-full sm:w-auto" onClick={() => setDeletingOfficer(officer)}>
                             <Trash2 className="mr-1 h-4 w-4" /> Delete
                         </Button>
                     </div>

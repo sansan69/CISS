@@ -59,15 +59,15 @@ export default function QrManagementPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" asChild>
+    <div className="flex flex-col gap-4 sm:gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
           <Link href="/settings">
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Back to Settings</span>
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            <span>Back to Settings</span>
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">QR Code Management</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">QR Code Management</h1>
       </div>
       
       <Alert variant="default">
