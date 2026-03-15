@@ -10,7 +10,7 @@ import {
 
 export const runtime = "nodejs";
 
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
 const MAX_RESPONSE_TOKENS = 180;
 
 function parseDataUrl(dataUrl: string) {
