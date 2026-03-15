@@ -22,13 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, X, CheckCircle as CheckCircleIcon, AlertTriangle } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleIcon, AlertTriangle, FileUp, Loader2, Upload, UserCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, subYears, addYears } from "date-fns";
+import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import React, { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
@@ -183,6 +181,7 @@ const enrollmentFormSchema = z.object({
 });
 
 type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
+type EnrollmentStepKey = "client" | "personal" | "documents" | "details" | "review";
 
 interface ClientOption {
   id: string;
@@ -200,6 +199,79 @@ type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUr
 interface ActualEnrollmentFormProps {
   initialPhoneNumberFromQuery?: string | null;
 }
+
+const ENROLLMENT_STEPS: {
+  key: EnrollmentStepKey;
+  title: string;
+  description: string;
+  fields: (keyof EnrollmentFormValues)[];
+}[] = [
+  {
+    key: "client",
+    title: "Client",
+    description: "Deployment basics first, so the rest of the form can stay contextual.",
+    fields: ["joiningDate", "clientName", "resourceIdNumber"],
+  },
+  {
+    key: "personal",
+    title: "Personal",
+    description: "Add the applicant details and photo without scrolling through the whole form.",
+    fields: [
+      "profilePicture",
+      "firstName",
+      "lastName",
+      "fatherName",
+      "motherName",
+      "dateOfBirth",
+      "gender",
+      "maritalStatus",
+      "spouseName",
+      "educationalQualification",
+      "otherQualification",
+    ],
+  },
+  {
+    key: "documents",
+    title: "Documents",
+    description: "Upload each proof separately. Front and back stay as distinct required fields.",
+    fields: [
+      "identityProofType",
+      "identityProofNumber",
+      "identityProofUrlFront",
+      "identityProofUrlBack",
+      "addressProofType",
+      "addressProofNumber",
+      "addressProofUrlFront",
+      "addressProofUrlBack",
+      "signatureUrl",
+    ],
+  },
+  {
+    key: "details",
+    title: "Details",
+    description: "Finish statutory, bank, and contact details in one place.",
+    fields: [
+      "district",
+      "panNumber",
+      "epfUanNumber",
+      "esicNumber",
+      "policeClearanceCertificate",
+      "bankAccountNumber",
+      "ifscCode",
+      "bankName",
+      "bankPassbookStatement",
+      "fullAddress",
+      "emailAddress",
+      "phoneNumber",
+    ],
+  },
+  {
+    key: "review",
+    title: "Review",
+    description: "Quickly verify the summary and confirm the declaration before submission.",
+    fields: ["termsAndConditions"],
+  },
+];
 
 function buildEnrollmentStoragePath(
   phoneNumber: string,
@@ -282,9 +354,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
-  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
 
 
   const form = useForm<EnrollmentFormValues>({
@@ -323,6 +393,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const watchClientName = form.watch("clientName");
   const watchMaritalStatus = form.watch("maritalStatus");
   const watchEducationalQualification = form.watch("educationalQualification");
+  const watchedValues = useWatch({ control: form.control });
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
 
@@ -618,11 +689,36 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
 
   const isPhoneNumberPrefilled = !!(initialPhoneNumberFromQuery && /^\d{10}$/.test(initialPhoneNumberFromQuery));
-  
-  const fromYear = new Date().getFullYear() - 65;
-  const toYear = new Date().getFullYear() - 18;
-  const defaultCalendarMonth = new Date();
-  defaultCalendarMonth.setFullYear(toYear - 10);
+  const stepConfig = ENROLLMENT_STEPS[currentStep];
+  const isLastStep = currentStep === ENROLLMENT_STEPS.length - 1;
+  const completedDocumentCount = [
+    profilePicPreview,
+    identityProofUrlFrontPreview,
+    identityProofUrlBackPreview,
+    addressProofUrlFrontPreview,
+    addressProofUrlBackPreview,
+    signatureUrlPreview,
+  ].filter(Boolean).length;
+
+  const goToNextStep = async () => {
+    const isStepValid = await form.trigger(stepConfig.fields, { shouldFocus: true });
+    if (!isStepValid) {
+      toast({
+        variant: "destructive",
+        title: "Please complete this step",
+        description: `Check the highlighted fields in ${stepConfig.title.toLowerCase()} before continuing.`,
+      });
+      return;
+    }
+
+    setCurrentStep((current) => Math.min(current + 1, ENROLLMENT_STEPS.length - 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goToPreviousStep = () => {
+    setCurrentStep((current) => Math.max(current - 1, 0));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
 
   return (
@@ -634,179 +730,287 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-12">
-
-              <FormSection title="Client Information">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField control={form.control} name="joiningDate" render={({ field }) => (
-                      <FormItem className="flex flex-col"><FormLabel>Joining Date <span className="text-destructive">*</span></FormLabel>
-                        <Popover open={isJoiningDatePopoverOpen} onOpenChange={setIsJoiningDatePopoverOpen}>
-                          <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(date) => { field.onChange(date); setIsJoiningDatePopoverOpen(false); }} initialFocus disabled={(date) => date > new Date()} /></PopoverContent>
-                        </Popover><FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField control={form.control} name="clientName" render={({ field }) => (
-                      <FormItem><FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}>
-                          <FormControl><SelectTrigger><SelectValue placeholder={isLoadingClients ? "Loading clients..." : "Select client"} /></SelectTrigger></FormControl>
-                          <SelectContent>{isLoadingClients ? (<SelectItem value="loading" disabled>Loading...</SelectItem>) : availableClients.length === 0 ? (<SelectItem value="no-clients" disabled>No clients available</SelectItem>) : (availableClients.map(client => <SelectItem key={client.id} value={client.name}>{client.name}</SelectItem>))}</SelectContent>
-                        </Select><FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {watchClientName === "TCS" && (
-                    <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (
-                        <FormItem className="md:col-span-2"><FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl><FormMessage /></FormItem>
-                      )} 
-                    />
-                  )}
-                </div>
-              </FormSection>
-
-              <FormSection title="Personal Information">
-                <FormField control={form.control} name="profilePicture" render={({ field }) => ( 
-                    <FormItem className="mb-6 text-center"><FormLabel className="block mb-2 font-semibold">Profile Picture <span className="text-destructive">*</span></FormLabel>
-                       <div className="flex flex-col items-center gap-4">
-                        {profilePicPreview ? (<Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border-2 border-primary" data-ai-hint="profile photo"/>) : (<div className="flex items-center justify-center h-32 w-32 rounded-full bg-muted border"><UserCircle2 className="h-20 w-20 text-muted-foreground" /></div>)}
-                        <div className="flex gap-2">
-                           <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
-                           <Button type="button" variant="outline" size="sm" onClick={() => openCamera("profilePicture")}><Camera className="mr-2 h-4 w-4" /> Take Photo</Button>
-                        </div>
-                        <FormControl><Input id="profilePictureInput" type="file" className="hidden" accept={ENROLLMENT_IMAGE_ACCEPT} onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}/></FormControl>
-                        <FormMessage />
-                       </div>
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
-                  <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter father's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter mother's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                   <FormField control={form.control} name="dateOfBirth" render={({ field }) => (
-                      <FormItem className="flex flex-col"><FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
-                        <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
-                          <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>dd-mm-yyyy</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={(date) => { field.onChange(date); setIsDobPopoverOpen(false);}} captionLayout="dropdown-buttons" fromYear={fromYear} toYear={toYear} defaultMonth={defaultCalendarMonth} disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}/>
-                          </PopoverContent>
-                        </Popover><FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField control={form.control} name="gender" render={({ field }) => (
-                      <FormItem><FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                   <FormField control={form.control} name="maritalStatus" render={({ field }) => (
-                      <FormItem><FormLabel>Marital Status <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select marital status" /></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select><FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {watchMaritalStatus === "Married" && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
-                  <FormField control={form.control} name="educationalQualification" render={({ field }) => (
-                      <FormItem><FormLabel>Educational Qualification <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl><SelectContent>{educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select><FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {watchEducationalQualification === "Any Other Qualification" && <FormField control={form.control} name="otherQualification" render={({ field }) => (<FormItem><FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
-                </div>
-              </FormSection>
-              
-              <FormSection title="Identification Documents">
-                <div className="p-4 border rounded-lg mt-4 space-y-4 bg-muted/20">
-                    <h3 className="font-medium text-lg">Identity Proof (Name, DOB, Father's Name)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                        <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <div className="grid gap-4 md:grid-cols-[1.4fr_0.6fr]">
+                <div className="rounded-2xl border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Step {currentStep + 1} of {ENROLLMENT_STEPS.length}</p>
+                      <h3 className="text-xl font-semibold">{stepConfig.title}</h3>
+                      <p className="text-sm text-muted-foreground">{stepConfig.description}</p>
                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        <FormField control={form.control} name="identityProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlFront" preview={identityProofUrlFrontPreview} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
-                        <FormField control={form.control} name="identityProofUrlBack" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Back Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlBack" preview={identityProofUrlBackPreview} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
+                    <div className="text-right">
+                      <p className="text-2xl font-semibold">{Math.round(((currentStep + 1) / ENROLLMENT_STEPS.length) * 100)}%</p>
+                      <p className="text-xs text-muted-foreground">complete</p>
                     </div>
-                </div>
-
-                <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
-                    <h3 className="font-medium text-lg">Address Proof</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                         <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
-                    </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        <FormField control={form.control} name="addressProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlFront" preview={addressProofUrlFrontPreview} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
-                        <FormField control={form.control} name="addressProofUrlBack" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Back Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlBack" preview={addressProofUrlBackPreview} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormMessage /></FormItem> )} />
-                    </div>
-                </div>
-
-                 <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
-                    <h3 className="font-medium text-lg">Signature</h3>
-                     <FormField control={form.control} name="signatureUrl" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Employee Signature <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="signatureUrl" preview={signatureUrlPreview} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={openCamera} isSignature={true} /><FormDescription>Sign on a plain white paper and take a clear photo.</FormDescription><FormMessage /></FormItem> )} />
-                </div>
-              </FormSection>
-              
-              <FormSection title="Statutory & Other Details">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 </div>
-                 <div className="grid grid-cols-1 mt-6"><FormField control={form.control} name="policeClearanceCertificate" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Police Clearance Certificate</FormLabel><ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormDescription>(Optional) Upload a valid PCC document.</FormDescription><FormMessage /></FormItem> )}/></div>
-              </FormSection>
-              
-              <FormSection title="Bank Account Details">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                 </div>
-                 <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} /><FormDescription>(Optional) Upload a clear copy of your passbook or statement.</FormDescription><FormMessage /></FormItem>)}/>
-              </FormSection>
-
-              <FormSection title="Contact Information">
-                 <div className="grid grid-cols-1 gap-6">
-                  <FormField control={form.control} name="fullAddress" render={({ field }) => ( 
-                    <FormItem>
-                        <div className="flex justify-between items-center"><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
-                            {pinStatus === 'found' && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
-                            {pinStatus === 'not_found' && <span className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
-                        </div><FormControl><Textarea placeholder="Enter your complete residential address, including PIN code" {...field} /></FormControl><FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "(Pre-filled from login)" : ""}</FormDescription><FormMessage /></FormItem>)}/>
-                </div>
-              </FormSection>
-
-              <FormSection title="Terms & Conditions">
-                <div className="space-y-4">
-                  <div className="h-48 overflow-y-auto p-4 border rounded-md text-xs text-muted-foreground space-y-2 bg-muted/20">
-                    <p className="font-bold">I. General Eligibility and Compliance</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li><li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li><li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li></ul>
-                    <p className="font-bold">II. Employment Terms & Responsibilities</p><ul className="list-disc list-outside pl-4 space-y-1"><li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li><li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li><li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li><li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li></ul>
-                    <p className="font-bold">III. Disciplinary Action</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li></ul>
-                    <p className="font-bold">IV. Declaration</p><p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
                   </div>
-                  <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
-                        <div className="space-y-1 leading-none"><FormLabel>I have read, understood, and agree to the Terms and Conditions of Enrollment.</FormLabel><FormMessage /></div>
+                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                    {ENROLLMENT_STEPS.map((step, index) => {
+                      const isActive = index === currentStep;
+                      const isComplete = index < currentStep;
+                      return (
+                        <button
+                          key={step.key}
+                          type="button"
+                          className={cn(
+                            "min-w-[120px] rounded-full border px-4 py-2 text-left text-sm transition",
+                            isActive && "border-primary bg-primary text-primary-foreground",
+                            isComplete && "border-primary/30 bg-primary/10 text-primary",
+                            !isActive && !isComplete && "bg-background text-muted-foreground",
+                          )}
+                          onClick={() => {
+                            if (index <= currentStep) {
+                              setCurrentStep(index);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }
+                          }}
+                        >
+                          <span className="block text-[11px] uppercase tracking-wide opacity-80">{isComplete ? "Done" : `Step ${index + 1}`}</span>
+                          <span className="block font-medium">{step.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border bg-background p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Quick Status</p>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <StatusPill label="Required proofs" value={`${completedDocumentCount}/6 ready`} tone={completedDocumentCount === 6 ? "success" : "pending"} />
+                    <StatusPill label="Client" value={watchedValues?.clientName || "Pending"} tone={watchedValues?.clientName ? "success" : "pending"} />
+                    <StatusPill label="Contact" value={watchedValues?.phoneNumber ? "Added" : "Pending"} tone={watchedValues?.phoneNumber ? "success" : "pending"} />
+                    <StatusPill label="Declaration" value={watchedValues?.termsAndConditions ? "Accepted" : "Pending"} tone={watchedValues?.termsAndConditions ? "success" : "pending"} />
+                  </div>
+                </div>
+              </div>
+
+              {currentStep === 0 && (
+                <FormSection title="Client Information">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <DateInputField
+                      control={form.control}
+                      name="joiningDate"
+                      label="Joining Date"
+                      max={format(new Date(), "yyyy-MM-dd")}
+                      description="A native date picker is used here so it is easier on phones."
+                    />
+                    <FormField control={form.control} name="clientName" render={({ field }) => (
+                        <FormItem><FormLabel>Client Name <span className="text-destructive">*</span></FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoadingClients}>
+                            <FormControl><SelectTrigger><SelectValue placeholder={isLoadingClients ? "Loading clients..." : "Select client"} /></SelectTrigger></FormControl>
+                            <SelectContent>{isLoadingClients ? (<SelectItem value="loading" disabled>Loading...</SelectItem>) : availableClients.length === 0 ? (<SelectItem value="no-clients" disabled>No clients available</SelectItem>) : (availableClients.map(client => <SelectItem key={client.id} value={client.name}>{client.name}</SelectItem>))}</SelectContent>
+                          </Select>
+                          <FormDescription>Choose the deployment client first. The remaining review stays aligned to this selection.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {watchClientName === "TCS" && (
+                      <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (
+                          <FormItem className="md:col-span-2"><FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} 
+                      />
+                    )}
+                  </div>
+                </FormSection>
+              )}
+
+              {currentStep === 1 && (
+                <FormSection title="Personal Information">
+                  <FormField control={form.control} name="profilePicture" render={({ field }) => ( 
+                      <FormItem className="mb-6 text-center"><FormLabel className="block mb-2 font-semibold">Profile Picture <span className="text-destructive">*</span></FormLabel>
+                         <div className="flex flex-col items-center gap-4">
+                          {profilePicPreview ? (<Image src={profilePicPreview} alt="Profile preview" width={128} height={128} className="rounded-full object-cover h-32 w-32 border-2 border-primary" data-ai-hint="profile photo"/>) : (<div className="flex items-center justify-center h-32 w-32 rounded-full bg-muted border"><UserCircle2 className="h-20 w-20 text-muted-foreground" /></div>)}
+                          <div className="flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+                             <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
+                             <Button type="button" variant="outline" size="sm" onClick={() => openCamera("profilePicture")}><Camera className="mr-2 h-4 w-4" /> Take Photo</Button>
+                          </div>
+                          <FormControl><Input id="profilePictureInput" type="file" className="hidden" accept={ENROLLMENT_IMAGE_ACCEPT} onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}/></FormControl>
+                          <FormDescription>Phone photos and gallery images work better here now, including larger photos before compression.</FormDescription>
+                          <FormMessage />
+                         </div>
                       </FormItem>
                     )}
                   />
-                </div>
-              </FormSection>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+                    <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter father's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter mother's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <DateInputField
+                      control={form.control}
+                      name="dateOfBirth"
+                      label="Date of Birth"
+                      min={format(new Date(new Date().getFullYear() - 65, 0, 1), "yyyy-MM-dd")}
+                      max={format(new Date(new Date().getFullYear() - 18, 11, 31), "yyyy-MM-dd")}
+                      description="Using a direct date field reduces taps on mobile devices."
+                    />
+                    <FormField control={form.control} name="gender" render={({ field }) => (
+                        <FormItem><FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField control={form.control} name="maritalStatus" render={({ field }) => (
+                        <FormItem><FormLabel>Marital Status <span className="text-destructive">*</span></FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select marital status" /></SelectTrigger></FormControl><SelectContent>{maritalStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select><FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {watchMaritalStatus === "Married" && <FormField control={form.control} name="spouseName" render={({ field }) => (<FormItem><FormLabel>Spouse Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter spouse's name" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
+                    <FormField control={form.control} name="educationalQualification" render={({ field }) => (
+                        <FormItem><FormLabel>Educational Qualification <span className="text-destructive">*</span></FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select qualification" /></SelectTrigger></FormControl><SelectContent>{educationOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select><FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {watchEducationalQualification === "Any Other Qualification" && <FormField control={form.control} name="otherQualification" render={({ field }) => (<FormItem><FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
+                  </div>
+                </FormSection>
+              )}
 
-              <div className="flex justify-end pt-6">
-                <Button type="submit" className="w-full md:w-auto" size="lg" disabled={isLoading || form.formState.isSubmitting}>
-                  {isLoading || form.formState.isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>) : "Complete Registration"}
-                </Button>
+              {currentStep === 2 && (
+                <FormSection title="Identification Documents">
+                  <div className="p-4 border rounded-lg mt-4 space-y-4 bg-muted/20">
+                      <h3 className="font-medium text-lg">Identity Proof</h3>
+                      <p className="text-sm text-muted-foreground">Front and back stay separate on purpose so the review and verification stay clear.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                          <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
+                      </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                          <FormField control={form.control} name="identityProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlFront" preview={identityProofUrlFrontPreview} setPreview={setIdentityProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the front side only." /><FormMessage /></FormItem> )} />
+                          <FormField control={form.control} name="identityProofUrlBack" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Back Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="identityProofUrlBack" preview={identityProofUrlBackPreview} setPreview={setIdentityProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the back side only." /><FormMessage /></FormItem> )} />
+                      </div>
+                  </div>
+
+                  <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
+                      <h3 className="font-medium text-lg">Address Proof</h3>
+                      <p className="text-sm text-muted-foreground">Use a different proof type than the identity proof and upload both sides separately.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                           <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
+                      </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                          <FormField control={form.control} name="addressProofUrlFront" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Front Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlFront" preview={addressProofUrlFrontPreview} setPreview={setAddressProofUrlFrontPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the front side only." /><FormMessage /></FormItem> )} />
+                          <FormField control={form.control} name="addressProofUrlBack" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Back Page <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="addressProofUrlBack" preview={addressProofUrlBackPreview} setPreview={setAddressProofUrlBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the back side only." /><FormMessage /></FormItem> )} />
+                      </div>
+                  </div>
+
+                   <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
+                      <h3 className="font-medium text-lg">Signature</h3>
+                       <FormField control={form.control} name="signatureUrl" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Employee Signature <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="signatureUrl" preview={signatureUrlPreview} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={openCamera} isSignature={true} helperText="Sign on plain paper, then upload a clear photo." /><FormMessage /></FormItem> )} />
+                  </div>
+                </FormSection>
+              )}
+
+              {currentStep === 3 && (
+                <>
+                  <FormSection title="Statutory & Other Details">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                    <div className="grid grid-cols-1 mt-6"><FormField control={form.control} name="policeClearanceCertificate" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Police Clearance Certificate</FormLabel><ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} optional helperText="Optional. Upload only if available." /><FormMessage /></FormItem> )}/></div>
+                  </FormSection>
+
+                  <FormSection title="Bank Account Details">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                    <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} optional helperText="Optional. A clear copy helps speed up verification." /><FormMessage /></FormItem>)}/>
+                  </FormSection>
+
+                  <FormSection title="Contact Information">
+                    <div className="grid grid-cols-1 gap-6">
+                      <FormField control={form.control} name="fullAddress" render={({ field }) => ( 
+                        <FormItem>
+                            <div className="flex justify-between items-center"><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
+                                {pinStatus === 'found' && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
+                                {pinStatus === 'not_found' && <span className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
+                            </div><FormControl><Textarea placeholder="Enter your complete residential address, including PIN code" {...field} /></FormControl><FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "(Pre-filled from login)" : "This is used for your employee profile and document folder."}</FormDescription><FormMessage /></FormItem>)}/>
+                    </div>
+                  </FormSection>
+                </>
+              )}
+
+              {currentStep === 4 && (
+                <FormSection title="Review & Declaration">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <ReviewCard title="Client">
+                      <ReviewRow label="Joining Date" value={watchedValues?.joiningDate ? format(watchedValues.joiningDate, "dd-MM-yyyy") : "Not added"} />
+                      <ReviewRow label="Client" value={watchedValues?.clientName || "Not selected"} />
+                      {watchedValues?.clientName === "TCS" && <ReviewRow label="Resource ID" value={watchedValues?.resourceIdNumber || "Missing"} />}
+                    </ReviewCard>
+                    <ReviewCard title="Personal">
+                      <ReviewRow label="Name" value={[watchedValues?.firstName, watchedValues?.lastName].filter(Boolean).join(" ") || "Not added"} />
+                      <ReviewRow label="DOB" value={watchedValues?.dateOfBirth ? format(watchedValues.dateOfBirth, "dd-MM-yyyy") : "Not added"} />
+                      <ReviewRow label="Gender" value={watchedValues?.gender || "Not selected"} />
+                      <ReviewRow label="Qualification" value={watchedValues?.educationalQualification || "Not selected"} />
+                    </ReviewCard>
+                    <ReviewCard title="Documents">
+                      <ReviewRow label="Profile picture" value={profilePicPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="ID proof front" value={identityProofUrlFrontPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="ID proof back" value={identityProofUrlBackPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Address proof front" value={addressProofUrlFrontPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Address proof back" value={addressProofUrlBackPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Signature" value={signatureUrlPreview ? "Ready" : "Missing"} />
+                    </ReviewCard>
+                    <ReviewCard title="Contact">
+                      <ReviewRow label="Phone" value={watchedValues?.phoneNumber || "Not added"} />
+                      <ReviewRow label="Email" value={watchedValues?.emailAddress || "Not added"} />
+                      <ReviewRow label="District" value={watchedValues?.district || "Not selected"} />
+                      <ReviewRow label="Address" value={watchedValues?.fullAddress || "Not added"} />
+                    </ReviewCard>
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
+                    <div className="h-48 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground space-y-2">
+                      <p className="font-bold">I. General Eligibility and Compliance</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li><li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li><li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li></ul>
+                      <p className="font-bold">II. Employment Terms & Responsibilities</p><ul className="list-disc list-outside pl-4 space-y-1"><li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li><li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li><li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li><li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li></ul>
+                      <p className="font-bold">III. Disciplinary Action</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li></ul>
+                      <p className="font-bold">IV. Declaration</p><p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
+                    </div>
+                    <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
+                          <div className="space-y-1 leading-none"><FormLabel>I have reviewed the summary and agree to the Terms and Conditions of Enrollment.</FormLabel><FormMessage /></div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </FormSection>
+              )}
+
+              <div className="sticky bottom-0 z-10 -mx-6 border-t bg-background/95 px-6 py-4 backdrop-blur">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {isLastStep ? "One final check, then you can submit with confidence." : "Use Next to move forward without losing your place on mobile."}
+                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button type="button" variant="outline" onClick={goToPreviousStep} disabled={currentStep === 0 || isLoading || form.formState.isSubmitting}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                    {isLastStep ? (
+                      <Button type="submit" className="w-full sm:w-auto" size="lg" disabled={isLoading || form.formState.isSubmitting}>
+                        {isLoading || form.formState.isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>) : "Complete Registration"}
+                      </Button>
+                    ) : (
+                      <Button type="button" className="w-full sm:w-auto" size="lg" onClick={goToNextStep} disabled={isLoading || form.formState.isSubmitting}>
+                        Next <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </form>
           </Form>
@@ -839,19 +1043,30 @@ const ImagePreviewAndUpload: React.FC<{
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>, fieldName: any, setPreview: any) => void;
   openCamera: (fieldName: any) => void;
   isSignature?: boolean;
-}> = ({ fieldName, preview, setPreview, handleFileChange, openCamera, isSignature }) => {
+  helperText?: string;
+  optional?: boolean;
+}> = ({ fieldName, preview, setPreview, handleFileChange, openCamera, isSignature, helperText, optional }) => {
     return (
-        <div>
+        <div className="rounded-2xl border bg-background p-4">
+            <div className="mb-3 flex items-center justify-between gap-3 text-xs">
+                <span className={cn("rounded-full px-2.5 py-1 font-medium", preview ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}>
+                    {preview ? "Ready to upload" : optional ? "Optional" : "Required"}
+                </span>
+                <span className="text-right text-muted-foreground">
+                    {preview ? "Looks good for submission." : "No file selected yet."}
+                </span>
+            </div>
             {preview && (preview === "/pdf-icon.png" ? 
                 <Image src={preview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32 bg-white rounded" data-ai-hint="document pdf"/> :
                 <Image src={preview} alt={`${fieldName} Preview`} width={200} height={isSignature ? 100 : 120} className="mx-auto mb-2 border object-contain h-32 rounded" data-ai-hint="id document"/>
             )}
             {!preview && <div className="flex items-center justify-center h-32 w-full bg-slate-200 dark:bg-slate-800 border-2 border-dashed rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
-            <div className="flex justify-center gap-2">
+            <div className="flex flex-col justify-center gap-2 sm:flex-row">
                 <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`${fieldName}Input`)?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Camera</Button>
             </div>
             <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept={ENROLLMENT_DOCUMENT_ACCEPT} onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
+            {helperText && <p className="mt-3 text-sm text-muted-foreground">{helperText}</p>}
         </div>
     );
 };
@@ -868,6 +1083,75 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
     </div>
     {children}
   </section>
+);
+
+const DateInputField = ({
+  control,
+  name,
+  label,
+  description,
+  min,
+  max,
+}: {
+  control: any;
+  name: "joiningDate" | "dateOfBirth";
+  label: string;
+  description: string;
+  min?: string;
+  max?: string;
+}) => (
+  <FormField
+    control={control}
+    name={name}
+    render={({ field }) => (
+      <FormItem>
+        <FormLabel>{label} <span className="text-destructive">*</span></FormLabel>
+        <FormControl>
+          <Input
+            type="date"
+            value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+            min={min}
+            max={max}
+            onChange={(event) => {
+              const value = event.target.value;
+              field.onChange(value ? new Date(`${value}T00:00:00`) : undefined);
+            }}
+          />
+        </FormControl>
+        <FormDescription>{description}</FormDescription>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
+);
+
+const ReviewCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="rounded-2xl border bg-background p-4">
+    <h3 className="text-base font-semibold">{title}</h3>
+    <div className="mt-3 space-y-2 text-sm">{children}</div>
+  </div>
+);
+
+const ReviewRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-start justify-between gap-3 border-b border-dashed pb-2 last:border-b-0 last:pb-0">
+    <span className="text-muted-foreground">{label}</span>
+    <span className="max-w-[60%] text-right font-medium">{value}</span>
+  </div>
+);
+
+const StatusPill = ({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "success" | "pending";
+}) => (
+  <div className="rounded-xl border p-3">
+    <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+    <p className={cn("mt-1 font-semibold", tone === "success" ? "text-green-700" : "text-amber-700")}>{value}</p>
+  </div>
 );
 
 
