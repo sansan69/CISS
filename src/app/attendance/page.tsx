@@ -347,16 +347,43 @@ export default function AttendancePage() {
     return canvas.toDataURL('image/jpeg', 0.92);
   }, [buildAttendanceStampLines, selectedStatus]);
 
+  const createAnalysisPhoto = useCallback(async (originalDataUrl: string) => {
+    const image = new window.Image();
+    image.crossOrigin = 'anonymous';
+    image.src = originalDataUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Photo could not be prepared for uniform review.'));
+    });
+
+    const maxEdge = 960;
+    const width = image.width || 1280;
+    const height = image.height || 720;
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Photo canvas is unavailable.');
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.72);
+  }, []);
+
   const analyzeCapturedPhoto = useCallback(async (
     originalPhotoDataUrl: string,
   ): Promise<AttendancePhotoCompliance> => {
+    const analysisPhotoDataUrl = await createAnalysisPhoto(originalPhotoDataUrl);
     const response = await fetch('/api/attendance/analyze-photo', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        photoDataUrl: originalPhotoDataUrl,
+        photoDataUrl: analysisPhotoDataUrl,
         employeeName: scannedEmployee?.fullName,
         employeeId: scannedEmployee?.employeeCode || scannedEmployee?.id,
         siteName: selectedSite?.siteName,
@@ -371,7 +398,7 @@ export default function AttendancePage() {
     }
 
     return body.compliance as AttendancePhotoCompliance;
-  }, [scannedEmployee, selectedDistrict, selectedSite]);
+  }, [createAnalysisPhoto, scannedEmployee, selectedDistrict, selectedSite]);
 
   useEffect(() => {
     if (!locationCoords || allSites.length === 0 || hasManualCenterOverride) return;

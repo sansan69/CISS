@@ -11,6 +11,7 @@ import {
 export const runtime = "nodejs";
 
 const GEMINI_MODEL = "gemini-1.5-flash";
+const MAX_RESPONSE_TOKENS = 180;
 
 function parseDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
@@ -74,19 +75,13 @@ export async function POST(request: NextRequest) {
 
     const image = parseDataUrl(body.photoDataUrl);
     const prompt = [
-      "You are reviewing one attendance photo of a single security guard for uniform compliance.",
-      "Return JSON only with keys:",
-      "overallStatus, adminFlag, warnings, summary, missingShoes, missingIdCard, uniformIssue, fullBodyVisible, onePersonVisible.",
-      'Set overallStatus to "clear" when there are no visible issues, "warning" when there are likely issues, or "analysis_failed" only when the photo is too unclear to assess.',
-      "Set adminFlag true when any warning exists or the image is unclear.",
-      "Check carefully for:",
-      "1. Shoes clearly visible.",
-      "2. ID card clearly visible on the person.",
-      "3. CISS-style uniform visible: black/navy CISS tshirt, blue shirt, or blue/grey churidhar with black shawl as seen in security duty photos.",
-      "4. Full body or at least enough lower body to confirm shoes and uniform.",
-      "5. Whether exactly one primary guard is visible. If multiple people are prominent, warn that this should be a single-guard attendance photo.",
-      "Keep warnings short and practical. If uncertain, warn instead of claiming compliance.",
-      `Context: employee=${body.employeeName || "unknown"} (${body.employeeId || "unknown"}), site=${body.siteName || "unknown"}, district=${body.district || "unknown"}, client=${body.clientName || "unknown"}.`,
+      "Review this single-guard attendance photo.",
+      "Return JSON only with keys overallStatus, adminFlag, warnings, summary, missingShoes, missingIdCard, uniformIssue, fullBodyVisible, onePersonVisible.",
+      'overallStatus: "clear", "warning", or "analysis_failed".',
+      "Warn if shoes are not visible, ID card is not visible, CISS uniform is missing/unclear, full body is not visible, or multiple people are prominent.",
+      "Allowed uniform examples: black/navy CISS tshirt, blue security shirt, blue or grey churidhar with black shawl.",
+      "If unsure, warn. Keep warnings and summary very short.",
+      `Context: ${body.employeeName || "unknown"} (${body.employeeId || "unknown"}), ${body.siteName || "unknown"}, ${body.district || "unknown"}, ${body.clientName || "unknown"}.`,
     ].join("\n");
 
     const response = await fetch(
@@ -113,6 +108,7 @@ export async function POST(request: NextRequest) {
           generationConfig: {
             responseMimeType: "application/json",
             temperature: 0.1,
+            maxOutputTokens: MAX_RESPONSE_TOKENS,
           },
         }),
       },
