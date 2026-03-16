@@ -26,6 +26,10 @@ type AttendanceLog = {
   clientName?: string;
   siteName?: string;
   locationText?: string;
+  gpsAccuracyMeters?: number | null;
+  geofenceRadiusAtTime?: number | null;
+  isMockLocationSuspected?: boolean;
+  requiresLocationReview?: boolean;
   photoUrl?: string;
   photoCompliance?: AttendancePhotoCompliance | null;
   reportedAtClient?: string | null;
@@ -284,6 +288,12 @@ export default function AttendanceLogsPage() {
                                 {log.photoCompliance.adminFlag && (
                                   <Badge variant="secondary">Admin flag</Badge>
                                 )}
+                                {log.requiresLocationReview && (
+                                  <Badge variant="secondary">Location review</Badge>
+                                )}
+                                {log.isMockLocationSuspected && (
+                                  <Badge variant="destructive">Mock location suspected</Badge>
+                                )}
                               </div>
                               {log.photoCompliance.warnings.length > 0 && (
                                 <p className="mt-2 text-sm text-muted-foreground">
@@ -346,6 +356,12 @@ export default function AttendanceLogsPage() {
                                     </Badge>
                                     {log.photoCompliance.adminFlag && (
                                       <Badge variant="secondary">Admin flag</Badge>
+                                    )}
+                                    {log.requiresLocationReview && (
+                                      <Badge variant="secondary">Location review</Badge>
+                                    )}
+                                    {log.isMockLocationSuspected && (
+                                      <Badge variant="destructive">Mock location suspected</Badge>
                                     )}
                                   </div>
                                   {log.photoCompliance.warnings.length > 0 && (

@@ -14,6 +14,8 @@ export const coordinateSourceSchema = z.enum([
   "current_location",
 ]);
 
+export const siteTypeSchema = z.enum(["main", "branch", "site"]);
+
 export const siteShiftModeSchema = z.enum(["none", "fixed"]);
 export const siteShiftPatternSchema = z.enum(["2x12", "3x8"]);
 
@@ -43,6 +45,10 @@ export const clientLocationSchema = z.object({
   coordinateSource: coordinateSourceSchema.optional(),
   placeAccuracy: z.string().nullable().optional(),
   geofenceRadiusMeters: z.number().optional(),
+  strictGeofence: z.boolean().optional(),
+  siteType: siteTypeSchema.optional(),
+  placeId: z.string().nullable().optional(),
+  geocodedAt: z.any().optional(),
   createdAt: z.any().optional(),
   updatedAt: z.any().optional(),
   createdBy: z.string().nullable().optional(),
@@ -51,6 +57,7 @@ export const clientLocationSchema = z.object({
 
 export type CoordinateStatus = z.infer<typeof coordinateStatusSchema>;
 export type CoordinateSource = z.infer<typeof coordinateSourceSchema>;
+export type SiteType = z.infer<typeof siteTypeSchema>;
 export type SiteShiftMode = z.infer<typeof siteShiftModeSchema>;
 export type SiteShiftPattern = z.infer<typeof siteShiftPatternSchema>;
 export type ShiftTemplate = z.infer<typeof shiftTemplateSchema>;
@@ -67,11 +74,15 @@ export type ManagedSite = {
   district: string;
   geolocation?: GeoPointLike;
   geofenceRadiusMeters?: number;
+  strictGeofence?: boolean;
   clientLocationId?: string | null;
   clientLocationName?: string | null;
   coordinateStatus?: CoordinateStatus;
   coordinateSource?: CoordinateSource;
   placeAccuracy?: string | null;
+  placeId?: string | null;
+  siteType?: SiteType;
+  geocodedAt?: unknown;
   shiftMode?: SiteShiftMode;
   shiftPattern?: SiteShiftPattern | null;
   shiftTemplates?: ShiftTemplate[];

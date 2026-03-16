@@ -47,7 +47,11 @@ export const attendanceSubmissionSchema = z.object({
     accuracyMeters: z.number().optional(),
   }),
   distanceMeters: z.number().nonnegative(),
+  gpsAccuracyMeters: z.number().nullable().optional(),
   locationAccuracyMeters: z.number().nullable().optional(),
+  geofenceRadiusAtTime: z.number().positive().optional(),
+  isMockLocationSuspected: z.boolean().optional(),
+  mockLocationReason: z.string().nullable().optional(),
   photoUrl: z.string().url(),
   photoCapturedAt: z.string().datetime().optional(),
   photoCompliance: attendancePhotoComplianceSchema.optional(),
@@ -75,11 +79,18 @@ export interface DeviceAttendanceHistoryItem {
   employeeName: string;
   status: "In" | "Out";
   time: string;
+  reportedAtIso?: string;
   district: string;
   siteName: string;
   clientName?: string;
   shiftLabel?: string;
   location?: string;
+  locationCoords?: {
+    lat: number;
+    lon: number;
+    accuracyMeters?: number;
+  };
+  mockLocationWarning?: boolean;
   photoUrl?: string;
   syncStatus: AttendanceSyncStatus;
 }

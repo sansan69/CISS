@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
+import { GeoPoint, collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
+import { buildLocationIdentity } from '@/lib/location-utils';
 import { PageHeader } from '@/components/layout/page-header';
 import {
     Select,
@@ -70,6 +71,29 @@ export default function WorkOrderPage() {
         const parsed = new Date(`${selectedDateValue}T00:00:00`);
         return Number.isNaN(parsed.getTime()) ? null : parsed;
     }, [selectedDateValue]);
+
+    const geocodeDutySite = async (siteAddress: string, district: string) => {
+        if (!siteAddress.trim()) return null;
+        const response = await fetch('/api/locations/geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                address: siteAddress,
+                district,
+                entityType: 'site',
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || typeof data.lat !== 'number' || typeof data.lng !== 'number') {
+            return null;
+        }
+        return data as {
+            lat: number;
+            lng: number;
+            formattedAddress?: string;
+            placeAccuracy?: string;
+        };
+    };
 
     const updateUrlParams = (updates: Record<string, string | null>) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -357,13 +381,28 @@ export default function WorkOrderPage() {
 
                     if (!site) {
                         // Create site if missing
+                        const geocode = await geocodeDutySite(siteAddress || '', district || '');
                         const newSiteData = {
                             clientName: OPERATIONAL_CLIENT_NAME,
+                            clientId: null,
                             siteName,
                             siteId: siteCode || null,
                             siteAddress: siteAddress || '',
                             district: district || '',
                             state: state || 'Kerala',
+                            geolocation: geocode ? new GeoPoint(geocode.lat, geocode.lng) : null,
+                            latString: geocode ? geocode.lat.toFixed(6) : null,
+                            lngString: geocode ? geocode.lng.toFixed(6) : null,
+                            coordinateStatus: geocode ? 'geocoded' : 'missing',
+                            coordinateSource: geocode ? 'geocode' : null,
+                            placeAccuracy: geocode?.placeAccuracy ?? null,
+                            geocodedAt: geocode ? serverTimestamp() : null,
+                            geofenceRadiusMeters: 150,
+                            strictGeofence: true,
+                            shiftMode: 'none',
+                            shiftPattern: null,
+                            shiftTemplates: [],
+                            locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, siteName, district]),
                             ...buildFirestoreCreateAudit(),
                         } as any;
                         const newRef = await addDoc(collection(db, 'sites'), newSiteData);

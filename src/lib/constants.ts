@@ -48,6 +48,9 @@ export const MARITAL_STATUSES = ["Married", "Unmarried"] as const;
 export const GENDER_OPTIONS = ["Male", "Female", "Other"] as const;
 
 export const OPERATIONAL_CLIENT_NAME = "TCS" as const;
+export const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
+export const DEFAULT_GPS_ACCURACY_LIMIT_METERS = 100;
+export const OFFLINE_ATTENDANCE_MAX_AGE_HOURS = 4;
 
 const configuredLegacyAdminEmails = [
   process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL,

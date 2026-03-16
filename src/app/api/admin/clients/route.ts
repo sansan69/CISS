@@ -6,7 +6,12 @@ export async function POST(request: Request) {
   try {
     const adminUser = await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const body = (await request.json()) as { name?: string };
+    const body = (await request.json()) as {
+      name?: string;
+      nationalHolidayList?: string[];
+      uniformAllowanceMonthly?: number;
+      fieldAllowanceMonthly?: number;
+    };
     const name = body.name?.trim();
 
     if (!name) {
@@ -15,6 +20,17 @@ export async function POST(request: Request) {
 
     const docRef = await adminDb.collection("clients").add({
       name,
+      nationalHolidayList: Array.isArray(body.nationalHolidayList)
+        ? body.nationalHolidayList.filter(Boolean)
+        : [],
+      uniformAllowanceMonthly:
+        typeof body.uniformAllowanceMonthly === "number"
+          ? body.uniformAllowanceMonthly
+          : 0,
+      fieldAllowanceMonthly:
+        typeof body.fieldAllowanceMonthly === "number"
+          ? body.fieldAllowanceMonthly
+          : 0,
       ...buildServerCreateAudit({
         uid: adminUser.uid,
         email: adminUser.email,

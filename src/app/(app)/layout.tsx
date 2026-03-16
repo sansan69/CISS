@@ -26,13 +26,6 @@ import {
   ClipboardList,
   MoreHorizontal,
   X,
-  GraduationCap,
-  Trophy,
-  Wallet,
-  CalendarDays,
-  FileText,
-  BookOpen,
-  Building2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -87,30 +80,6 @@ const mainNavGroups: NavGroup[] = [
     items: [
       { href: '/work-orders', label: 'Work Orders', fieldOfficerLabel: 'Upcoming Duties', icon: ClipboardList },
       { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Training',
-    adminOnly: true,
-    items: [
-      { href: '/training', label: 'Training Modules', icon: GraduationCap, adminOnly: true },
-      { href: '/evaluations', label: 'Evaluations', icon: BookOpen, adminOnly: true },
-      { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Payroll',
-    adminOnly: true,
-    items: [
-      { href: '/payroll', label: 'Payroll Runs', icon: Wallet, adminOnly: true },
-      { href: '/leave', label: 'Leave', icon: CalendarDays, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [
-      { href: '/visit-reports', label: 'Visit Reports', icon: FileText },
-      { href: '/branch-ops', label: 'Branch Ops', icon: Building2, adminOnly: true },
     ],
   },
   {

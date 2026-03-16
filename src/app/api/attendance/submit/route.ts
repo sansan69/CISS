@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { haversineDistanceMeters } from "@/lib/geo";
 import { resolveSiteShift, getNextShift } from "@/lib/shift-utils";
-import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
+import {
+  DEFAULT_GEOFENCE_RADIUS_METERS,
+  DEFAULT_GPS_ACCURACY_LIMIT_METERS,
+  OFFLINE_ATTENDANCE_MAX_AGE_HOURS,
+  OPERATIONAL_CLIENT_NAME,
+} from "@/lib/constants";
 import {
   attendanceSubmissionSchema,
   type AttendanceSubmission,
+  type AttendancePhotoCompliance,
 } from "@/types/attendance";
 import { buildServerAuditEvent } from "@/lib/server/audit";
 import {
@@ -84,8 +90,40 @@ function getAllowedRadiusMeters(siteData: Record<string, any>) {
     return siteRadius;
   }
 
-  const defaultRadius = Number(process.env.DEFAULT_GEOFENCE_RADIUS_METERS || 150);
-  return Number.isFinite(defaultRadius) && defaultRadius > 0 ? defaultRadius : 150;
+  const defaultRadius = Number(
+    process.env.DEFAULT_GEOFENCE_RADIUS_METERS || DEFAULT_GEOFENCE_RADIUS_METERS,
+  );
+  return Number.isFinite(defaultRadius) && defaultRadius > 0
+    ? defaultRadius
+    : DEFAULT_GEOFENCE_RADIUS_METERS;
+}
+
+function getGpsAccuracyLimitMeters() {
+  const limit = Number(
+    process.env.DEFAULT_GPS_ACCURACY_LIMIT_METERS || DEFAULT_GPS_ACCURACY_LIMIT_METERS,
+  );
+  return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_GPS_ACCURACY_LIMIT_METERS;
+}
+
+function mergePhotoCompliance(
+  existing: AttendancePhotoCompliance | undefined,
+  warning: string,
+) {
+  const warnings = existing?.warnings ?? [];
+  return {
+    overallStatus: "warning" as const,
+    adminFlag: true,
+    warnings: warnings.includes(warning) ? warnings : [...warnings, warning],
+    summary:
+      existing?.summary && existing.overallStatus !== "clear"
+        ? existing.summary
+        : warning,
+    missingShoes: existing?.missingShoes ?? false,
+    missingIdCard: existing?.missingIdCard ?? false,
+    uniformIssue: existing?.uniformIssue ?? false,
+    fullBodyVisible: existing?.fullBodyVisible ?? false,
+    onePersonVisible: existing?.onePersonVisible ?? true,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -97,7 +135,15 @@ export async function POST(request: NextRequest) {
     const reportedAt = payload.reportedAtClient
       ? Timestamp.fromDate(new Date(payload.reportedAtClient))
       : now;
-    const attendanceDate = INDIA_DATE_FORMATTER.format(new Date());
+    const reportedAtDate = reportedAt.toDate();
+    const maxQueueAgeMs =
+      OFFLINE_ATTENDANCE_MAX_AGE_HOURS * 60 * 60 * 1000;
+    if (Date.now() - reportedAtDate.getTime() > maxQueueAgeMs) {
+      throw new AttendanceError(
+        `Queued attendance older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours cannot be submitted. Please record attendance again.`,
+      );
+    }
+    const attendanceDate = INDIA_DATE_FORMATTER.format(reportedAtDate);
     const employeeRef = adminDb.collection("employees").doc(payload.employeeDocId);
     const siteRef = adminDb.collection("sites").doc(payload.siteId);
     const attendanceStateRef = adminDb
@@ -197,7 +243,25 @@ export async function POST(request: NextRequest) {
       );
 
       const allowedRadiusMeters = getAllowedRadiusMeters(siteData);
-      if (actualDistance > allowedRadiusMeters) {
+      const siteIsStrictGeofence = siteData.strictGeofence !== false;
+      const gpsAccuracyMeters =
+        payload.gpsAccuracyMeters ??
+        payload.locationAccuracyMeters ??
+        payload.locationCoords.accuracyMeters ??
+        null;
+      const gpsAccuracyLimitMeters = getGpsAccuracyLimitMeters();
+
+      if (
+        typeof gpsAccuracyMeters === "number" &&
+        Number.isFinite(gpsAccuracyMeters) &&
+        gpsAccuracyMeters > gpsAccuracyLimitMeters
+      ) {
+        throw new AttendanceError(
+          `GPS accuracy is too weak (±${Math.round(gpsAccuracyMeters)}m). Please move outdoors or wait for a better fix before submitting attendance.`,
+        );
+      }
+
+      if (actualDistance > allowedRadiusMeters && siteIsStrictGeofence) {
         throw new AttendanceError(
           `Attendance can only be recorded within ${allowedRadiusMeters} meters of the site. Current distance: ${Math.round(actualDistance)} meters.`,
         );
@@ -244,6 +308,18 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const isMockLocationSuspected =
+        payload.isMockLocationSuspected === true ||
+        (typeof payload.mockLocationReason === "string" &&
+          payload.mockLocationReason.trim().length > 0);
+      const locationReviewWarning =
+        actualDistance > allowedRadiusMeters && !siteIsStrictGeofence
+          ? `Location is ${Math.round(actualDistance)}m away from the configured site radius of ${allowedRadiusMeters}m.`
+          : isMockLocationSuspected
+            ? payload.mockLocationReason?.trim() ||
+              "Location looks suspicious and requires admin review."
+            : null;
+
       transaction.set(attendanceLogRef, {
         employeeId: payload.employeeId,
         employeeDocId: payload.employeeDocId,
@@ -265,10 +341,19 @@ export async function POST(request: NextRequest) {
         locationText: payload.locationText,
         locationCoords: payload.locationCoords,
         distanceMeters: Math.round(actualDistance),
+        gpsAccuracyMeters:
+          typeof gpsAccuracyMeters === "number" ? Math.round(gpsAccuracyMeters) : null,
         locationAccuracyMeters: payload.locationAccuracyMeters ?? null,
+        geofenceRadiusAtTime: allowedRadiusMeters,
+        strictGeofence: siteIsStrictGeofence,
+        isMockLocationSuspected,
+        mockLocationReason: payload.mockLocationReason ?? null,
+        requiresLocationReview: Boolean(locationReviewWarning),
         photoUrl: payload.photoUrl,
         photoCapturedAt: payload.photoCapturedAt ?? null,
-        photoCompliance: payload.photoCompliance ?? null,
+        photoCompliance: locationReviewWarning
+          ? mergePhotoCompliance(payload.photoCompliance, locationReviewWarning)
+          : payload.photoCompliance ?? null,
         deviceInfo: payload.deviceInfo,
         attendanceDate,
         createdAt: now,

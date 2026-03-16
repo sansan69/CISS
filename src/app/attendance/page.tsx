@@ -22,6 +22,8 @@ import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getNextShift, resolveSiteShift } from '@/lib/shift-utils';
+import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
+import { DEFAULT_GPS_ACCURACY_LIMIT_METERS, OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from '@/lib/constants';
 import type {
   AttendancePhotoCompliance,
   AttendanceSubmission,
@@ -36,6 +38,7 @@ type SiteOption = {
   clientName: string;
   district: string;
   geofenceRadiusMeters?: number;
+  strictGeofence?: boolean;
   lat?: number;
   lng?: number;
   shiftMode?: 'none' | 'fixed';
@@ -59,6 +62,8 @@ type SuggestedSite = SiteOption & {
 
 const ATTENDANCE_QUEUE_STORAGE_KEY = 'ciss_attendance_queue_v1';
 const ATTENDANCE_HISTORY_STORAGE_KEY = 'ciss_attendance_history_v1';
+const GPS_ACCURACY_LIMIT_METERS = DEFAULT_GPS_ACCURACY_LIMIT_METERS;
+const OFFLINE_ATTENDANCE_MAX_AGE_MS = OFFLINE_ATTENDANCE_MAX_AGE_HOURS * 60 * 60 * 1000;
 const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -74,6 +79,7 @@ export default function AttendancePage() {
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number; accuracyMeters?: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [reportingStartedAt, setReportingStartedAt] = useState<string | null>(null);
+  const [locationCapturedAt, setLocationCapturedAt] = useState<string | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [allSites, setAllSites] = useState<SiteOption[]>([]);
@@ -153,9 +159,12 @@ export default function AttendancePage() {
   const appendRecentAttendance = useCallback((item: DeviceAttendanceHistoryItem) => {
     setRecentAttendance((previous) => {
       const next = [item, ...previous.filter((entry) => entry.id !== item.id)].slice(0, 10);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ATTENDANCE_HISTORY_STORAGE_KEY, JSON.stringify(next));
-      }
+      void saveAttendanceHistory(next).catch((error) => {
+        console.error('Could not persist attendance history:', error);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(ATTENDANCE_HISTORY_STORAGE_KEY, JSON.stringify(next));
+        }
+      });
       return next;
     });
   }, []);
@@ -163,9 +172,12 @@ export default function AttendancePage() {
   const updateRecentAttendance = useCallback((id: string, patch: Partial<DeviceAttendanceHistoryItem>) => {
     setRecentAttendance((previous) => {
       const next = previous.map((entry) => entry.id === id ? { ...entry, ...patch } : entry);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ATTENDANCE_HISTORY_STORAGE_KEY, JSON.stringify(next));
-      }
+      void saveAttendanceHistory(next).catch((error) => {
+        console.error('Could not persist attendance history:', error);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(ATTENDANCE_HISTORY_STORAGE_KEY, JSON.stringify(next));
+        }
+      });
       return next;
     });
   }, []);
@@ -173,9 +185,12 @@ export default function AttendancePage() {
   const removeQueuedAttendance = useCallback((id: string) => {
     setQueuedAttendance((previous) => {
       const next = previous.filter((item) => item.id !== id);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ATTENDANCE_QUEUE_STORAGE_KEY, JSON.stringify(next));
-      }
+      void saveQueuedAttendance(next).catch((error) => {
+        console.error('Could not persist attendance queue:', error);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(ATTENDANCE_QUEUE_STORAGE_KEY, JSON.stringify(next));
+        }
+      });
       return next;
     });
   }, []);
@@ -183,9 +198,12 @@ export default function AttendancePage() {
   const queueAttendanceSubmission = useCallback((queuedItem: QueuedAttendanceSubmission) => {
     setQueuedAttendance((previous) => {
       const next = [...previous, queuedItem];
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ATTENDANCE_QUEUE_STORAGE_KEY, JSON.stringify(next));
-      }
+      void saveQueuedAttendance(next).catch((error) => {
+        console.error('Could not persist attendance queue:', error);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(ATTENDANCE_QUEUE_STORAGE_KEY, JSON.stringify(next));
+        }
+      });
       return next;
     });
   }, []);
@@ -207,6 +225,7 @@ export default function AttendancePage() {
             clientName: data.clientName,
             district: data.district,
             geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : undefined,
+            strictGeofence: data.strictGeofence !== false,
             lat,
             lng,
             shiftMode: data.shiftMode,
@@ -450,10 +469,15 @@ export default function AttendancePage() {
     setPhotoCompliance(null);
     setPhotoComplianceError(null);
     setReportingStartedAt(null);
+    setLocationCapturedAt(null);
     setLocationError(null);
 
     try {
-      if (!locationCoords) {
+      const shouldRefreshLocation =
+        !locationCoords ||
+        !locationCapturedAt ||
+        Date.now() - Date.parse(locationCapturedAt) > 2 * 60 * 1000;
+      if (shouldRefreshLocation) {
         setIsFetchingLocation(true);
         void getDeviceLocation().catch((error: any) => {
           setLocationError(error.message || 'Location could not be captured.');
@@ -475,7 +499,9 @@ export default function AttendancePage() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
+        const capturedAt = new Date().toISOString();
         setLocationCoords({ lat: latitude, lon: longitude, accuracyMeters: accuracy });
+        setLocationCapturedAt(capturedAt);
         setLocation(`Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}${accuracy ? ` (±${Math.round(accuracy)}m)` : ''}`);
         setLocationError(null);
         setIsFetchingLocation(false);
@@ -788,6 +814,41 @@ export default function AttendancePage() {
     return `${employeeId}:${siteId}:${yyyy}-${mm}-${dd}:${status}`;
   };
 
+  const detectMockLocationRisk = useCallback(() => {
+    if (!locationCoords) return { suspected: false, reason: null as string | null };
+
+    if (typeof locationCoords.accuracyMeters === 'number' && locationCoords.accuracyMeters <= 0) {
+      return { suspected: true, reason: 'GPS accuracy metadata from the device looks invalid.' };
+    }
+
+    const latestKnownLocation = recentAttendance.find((item) => item.locationCoords);
+    if (!latestKnownLocation?.locationCoords) {
+      return { suspected: false, reason: null as string | null };
+    }
+
+    const lastTime = Date.parse(latestKnownLocation.reportedAtIso || '');
+    const currentTimeValue = reportingStartedAt ? Date.parse(reportingStartedAt) : Date.now();
+    if (!Number.isFinite(lastTime) || !Number.isFinite(currentTimeValue)) {
+      return { suspected: false, reason: null as string | null };
+    }
+
+    const elapsedMinutes = Math.abs(currentTimeValue - lastTime) / (60 * 1000);
+    const travelDistance = haversineDistanceMeters(
+      latestKnownLocation.locationCoords.lat,
+      latestKnownLocation.locationCoords.lon,
+      locationCoords.lat,
+      locationCoords.lon,
+    );
+    if (elapsedMinutes < 30 && travelDistance > 100000) {
+      return {
+        suspected: true,
+        reason: 'This device appears to have moved an unrealistic distance in a very short time.',
+      };
+    }
+
+    return { suspected: false, reason: null as string | null };
+  }, [locationCoords, recentAttendance, reportingStartedAt]);
+
   const buildHistoryItem = useCallback((
     id: string,
     payload: Omit<AttendanceSubmission, 'photoUrl'>,
@@ -801,11 +862,14 @@ export default function AttendancePage() {
     time: payload.reportedAtClient
       ? new Date(payload.reportedAtClient).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
       : new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
+    reportedAtIso: payload.reportedAtClient || new Date().toISOString(),
     district: payload.district,
     siteName: payload.siteName,
     clientName: payload.clientName,
     shiftLabel: payload.shiftLabel,
     location: payload.locationText,
+    locationCoords: payload.locationCoords,
+    mockLocationWarning: payload.isMockLocationSuspected ?? false,
     photoUrl,
     syncStatus,
   }), []);
@@ -838,14 +902,14 @@ export default function AttendancePage() {
       }),
     });
 
+    const responseBody = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const responseBody = await response.json().catch(() => ({}));
       throw new Error(responseBody.error || 'Could not submit attendance.');
     }
 
     return {
       photoUrl,
-      recordId: `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
+      recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
     };
   }, []);
 
@@ -856,6 +920,18 @@ export default function AttendancePage() {
     setIsSyncingQueue(true);
     try {
       for (const queuedItem of queuedAttendance) {
+        if (Date.now() - Date.parse(queuedItem.createdAt) > OFFLINE_ATTENDANCE_MAX_AGE_MS) {
+          updateRecentAttendance(queuedItem.id, {
+            syncStatus: 'failed',
+          });
+          removeQueuedAttendance(queuedItem.id);
+          toast({
+            variant: 'destructive',
+            title: 'Queued attendance expired',
+            description: `One queued entry was older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours and was not synced.`,
+          });
+          continue;
+        }
         try {
           const { photoDataUrl, ...payloadWithoutPhotoUrl } = queuedItem.payload;
           const result = await submitAttendanceOnline(payloadWithoutPhotoUrl, photoDataUrl);
@@ -878,23 +954,47 @@ export default function AttendancePage() {
     } finally {
       setIsSyncingQueue(false);
     }
-  }, [isSyncingQueue, queuedAttendance, removeQueuedAttendance, submitAttendanceOnline, updateRecentAttendance]);
+  }, [isSyncingQueue, queuedAttendance, removeQueuedAttendance, submitAttendanceOnline, toast, updateRecentAttendance]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    try {
-      const storedQueue = window.localStorage.getItem(ATTENDANCE_QUEUE_STORAGE_KEY);
-      const storedHistory = window.localStorage.getItem(ATTENDANCE_HISTORY_STORAGE_KEY);
-      if (storedQueue) {
-        setQueuedAttendance(JSON.parse(storedQueue));
+    let cancelled = false;
+    const restoreCache = async () => {
+      try {
+        const [storedQueue, storedHistory] = await Promise.all([
+          loadQueuedAttendance(),
+          loadAttendanceHistory(),
+        ]);
+        if (!cancelled) {
+          if (storedQueue.length) {
+            setQueuedAttendance(storedQueue);
+          }
+          if (storedHistory.length) {
+            setRecentAttendance(storedHistory);
+          }
+        }
+      } catch (error) {
+        console.error('Could not restore attendance cache from IndexedDB:', error);
+        try {
+          const legacyQueue = window.localStorage.getItem(ATTENDANCE_QUEUE_STORAGE_KEY);
+          const legacyHistory = window.localStorage.getItem(ATTENDANCE_HISTORY_STORAGE_KEY);
+          if (!cancelled && legacyQueue) {
+            setQueuedAttendance(JSON.parse(legacyQueue));
+          }
+          if (!cancelled && legacyHistory) {
+            setRecentAttendance(JSON.parse(legacyHistory));
+          }
+        } catch (legacyError) {
+          console.error('Could not restore legacy attendance cache:', legacyError);
+        }
       }
-      if (storedHistory) {
-        setRecentAttendance(JSON.parse(storedHistory));
-      }
-    } catch (error) {
-      console.error('Could not restore attendance cache:', error);
-    }
+    };
+
+    void restoreCache();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -965,7 +1065,16 @@ export default function AttendancePage() {
 
     const distance = haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng);
     const allowedRadius = selectedSite.geofenceRadiusMeters || 150;
-    if (distance > allowedRadius) {
+    const gpsAccuracyMeters = locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null;
+    if (gpsAccuracyMeters && gpsAccuracyMeters > GPS_ACCURACY_LIMIT_METERS) {
+      toast({
+        variant: 'destructive',
+        title: 'GPS fix is too weak',
+        description: `Current accuracy is ±${gpsAccuracyMeters}m. Please move outdoors or wait for a better GPS signal before submitting.`,
+      });
+      return;
+    }
+    if (distance > allowedRadius && selectedSite.strictGeofence !== false) {
       toast({
         variant: 'destructive',
         title: 'Outside Allowed Radius',
@@ -973,6 +1082,14 @@ export default function AttendancePage() {
       });
       return;
     }
+    if (distance > allowedRadius && selectedSite.strictGeofence === false) {
+      toast({
+        title: 'Outside site radius',
+        description: `This site is using soft geofence mode. Attendance can still be submitted, but admin review will be required.`,
+      });
+    }
+
+    const mockLocationRisk = detectMockLocationRisk();
 
     const payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'> = {
       employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
@@ -996,7 +1113,11 @@ export default function AttendancePage() {
       locationText: location || '',
       locationCoords,
       distanceMeters: Math.round(distance),
+      gpsAccuracyMeters,
       locationAccuracyMeters: locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null,
+      geofenceRadiusAtTime: allowedRadius,
+      isMockLocationSuspected: mockLocationRisk.suspected,
+      mockLocationReason: mockLocationRisk.reason,
       photoCapturedAt: photoCapturedAt || new Date().toISOString(),
       photoCompliance: photoCompliance ?? undefined,
       deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
@@ -1068,6 +1189,7 @@ export default function AttendancePage() {
       setPhotoCompliance(null);
       setPhotoComplianceError(null);
       setReportingStartedAt(null);
+      setLocationCapturedAt(options?.keepLocation ? locationCapturedAt : null);
       setLocationError(options?.keepLocation ? locationError : null);
       if (!options?.keepLocation) {
         setLocation(null);
@@ -1094,6 +1216,7 @@ export default function AttendancePage() {
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
     : null;
+  const mockLocationRiskSummary = useMemo(() => detectMockLocationRisk(), [detectMockLocationRisk]);
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-md flex-col gap-4 p-4 pb-8">
@@ -1275,6 +1398,26 @@ export default function AttendancePage() {
               </Alert>
             )}
 
+            {locationCoords && locationCoords.accuracyMeters && locationCoords.accuracyMeters > GPS_ACCURACY_LIMIT_METERS && (
+              <Alert variant="destructive">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>GPS fix is too weak</AlertTitle>
+                <AlertDescription>
+                  Current accuracy is about ±{Math.round(locationCoords.accuracyMeters)}m. Move outdoors or wait for a stronger GPS fix before submitting.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {mockLocationRiskSummary.suspected && (
+              <Alert variant="destructive">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle>Location looks unusual</AlertTitle>
+                <AlertDescription>
+                  {mockLocationRiskSummary.reason || 'This attendance will be flagged for admin review if you continue.'}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1296,6 +1439,16 @@ export default function AttendancePage() {
                   )}
                   {selectedSiteDistance != null && (
                     <p className="mt-1 text-xs text-muted-foreground">About {Math.round(selectedSiteDistance)} meters away</p>
+                  )}
+                  {locationCapturedAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Location captured at {new Date(locationCapturedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  )}
+                  {selectedSiteDistance != null && selectedSite?.strictGeofence === false && selectedSiteDistance > (selectedSite?.geofenceRadiusMeters || 150) && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      This site allows soft geofence warnings. Attendance can continue, but admin review will be required.
+                    </p>
                   )}
                 </div>
                 {autoDetectedSite && (

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, MapPinned, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -47,9 +48,11 @@ import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, der
 import { buildShiftTemplates, SHIFT_PATTERN_LABELS } from '@/lib/shift-utils';
 import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite, SiteShiftPattern } from '@/types/location';
 import { PageHeader } from '@/components/layout/page-header';
+import { authorizedFetch } from '@/lib/api-client';
 
 
 type Site = ManagedSite;
+type SiteReviewItem = Site & { id: string };
 
 interface ClientOption {
     id: string;
@@ -96,7 +99,7 @@ const haversineDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2:
     return R * c;
 };
 
-type GeocodeStatus = 'created' | 'updated' | 'kept' | 'failed' | 'noResult';
+type GeocodeStatus = 'created' | 'updated' | 'kept' | 'failed' | 'noResult' | 'no_result';
 
 interface GeocodeResult {
     clientName?: string;
@@ -123,6 +126,7 @@ interface SiteEditFormProps {
 
 const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients, clientLocations }) => {
     const [formData, setFormData] = useState<Partial<Site>>(site);
+    const { toast } = useToast();
     const filteredClientLocations = clientLocations.filter((location) => location.clientId === formData.clientId);
     const isTcsSite = (formData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
 
@@ -262,6 +266,17 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                     onChange={(e) => setFormData({ ...formData, geofenceRadiusMeters: Math.max(1, Number(e.target.value || 150)) })}
                 />
             </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-1">
+                    <Label htmlFor="strictGeofence">Strict geofence</Label>
+                    <p className="text-xs text-muted-foreground">Block attendance outside this radius instead of only warning for admin review.</p>
+                </div>
+                <Switch
+                    id="strictGeofence"
+                    checked={formData.strictGeofence !== false}
+                    onCheckedChange={(checked) => setFormData({ ...formData, strictGeofence: checked })}
+                />
+            </div>
             <div className="grid gap-2">
                 <Label htmlFor="district">District</Label>
                  <Select value={formData.district} onValueChange={(value) => setFormData({...formData, district: value})}>
@@ -299,6 +314,47 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                 title="Duty-site coordinates"
                 description="Geocode or verify this duty site without exposing the API key in the browser."
             />
+            {hasValidCoordinates(formData.geolocation) ? (
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                        if (!formData.geolocation) return;
+                        try {
+                            const response = await authorizedFetch(`/api/admin/sites/${site.id}/verify-coordinates`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({
+                                    lat: formData.geolocation.latitude,
+                                    lng: formData.geolocation.longitude,
+                                    address: formData.siteAddress,
+                                    district: formData.district,
+                                    coordinateSource: formData.coordinateSource ?? 'manual',
+                                    placeAccuracy: formData.placeAccuracy ?? null,
+                                    geofenceRadiusMeters: formData.geofenceRadiusMeters ?? 150,
+                                    strictGeofence: formData.strictGeofence !== false,
+                                }),
+                            });
+                            if (!response.ok) {
+                                const body = await response.json().catch(() => ({}));
+                                throw new Error(body.error || 'Could not verify this site.');
+                            }
+                            setFormData({
+                                ...formData,
+                                coordinateStatus:
+                                    formData.coordinateSource === 'manual' || formData.coordinateSource === 'map_pin'
+                                        ? 'overridden'
+                                        : 'verified',
+                            });
+                            toast({ title: 'Coordinates verified', description: 'Attendance will now use this confirmed site position.' });
+                        } catch (error: any) {
+                            toast({ variant: 'destructive', title: 'Verification failed', description: error?.message || 'Could not verify this site.' });
+                        }
+                    }}
+                >
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Mark coordinates verified
+                </Button>
+            ) : null}
             <DialogFooter>
                 <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button onClick={handleSave} disabled={isSaving}>
@@ -331,6 +387,8 @@ export default function SiteManagementPage() {
         siteAddress: '',
         district: '',
         geofenceRadiusMeters: 150,
+        strictGeofence: true,
+        siteType: 'site',
         latString: '',
         lngString: '',
         coordinateStatus: 'missing',
@@ -355,6 +413,7 @@ export default function SiteManagementPage() {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [geocodeReport, setGeocodeReport] = useState<string>('');
     const [geocodeResults, setGeocodeResults] = useState<GeocodeResult[]>([]);
+    const [needsReviewSites, setNeedsReviewSites] = useState<SiteReviewItem[]>([]);
     const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
     const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
     const [bulkDeleteMode, setBulkDeleteMode] = useState<'selected' | 'all' | null>(null);
@@ -397,6 +456,24 @@ export default function SiteManagementPage() {
         }));
     }, [operationalClient]);
 
+    const fetchNeedsReviewSites = useCallback(async () => {
+        try {
+            const response = await authorizedFetch('/api/admin/sites/unverified');
+            if (!response.ok) {
+                throw new Error('Could not load the site review queue.');
+            }
+            const data = await response.json();
+            setNeedsReviewSites((data.sites || []) as SiteReviewItem[]);
+        } catch (error) {
+            console.error('Could not load site review queue', error);
+            setNeedsReviewSites([]);
+        }
+    }, []);
+
+    useEffect(() => {
+        void fetchNeedsReviewSites();
+    }, [fetchNeedsReviewSites]);
+
 
     const fetchSites = useCallback(async (pageDirection: 'next' | 'prev' | 'first' = 'first') => {
         setIsLoadingSites(true);
@@ -438,9 +515,13 @@ export default function SiteManagementPage() {
                         ...raw,
                         clientId: raw.clientId ?? resolvedClient?.id ?? (isTcs ? operationalClient?.id : undefined),
                         clientName: resolvedClientName,
+                        geofenceRadiusMeters: raw.geofenceRadiusMeters ?? 150,
+                        strictGeofence: raw.strictGeofence !== false,
                         coordinateStatus: deriveCoordinateStatus(raw),
                         coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : undefined),
                         placeAccuracy: raw.placeAccuracy ?? undefined,
+                        siteType: raw.siteType ?? 'site',
+                        geocodedAt: raw.geocodedAt ?? undefined,
                     } as Site;
                 })
                 .filter(site =>
@@ -522,8 +603,8 @@ export default function SiteManagementPage() {
     };
 
     const handleDownloadTemplate = () => {
-        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District', 'Client Location Name', 'Shift Pattern', 'Coordinate Status', 'Coordinate Source'];
-        const templateExampleRow = [OPERATIONAL_CLIENT_NAME, 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam', 'TCS Kochi Branch', '', 'verified', 'manual'];
+        const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District', 'Client Location Name', 'Shift Pattern', 'Coordinate Status', 'Coordinate Source', 'Strict Geofence', 'Site Type'];
+        const templateExampleRow = [OPERATIONAL_CLIENT_NAME, 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam', 'TCS Kochi Branch', '', 'verified', 'manual', 'TRUE', 'site'];
         const templateData = [templateHeaders, templateExampleRow];
         const ws = XLSX.utils.aoa_to_sheet(templateData);
         const wb = XLSX.utils.book_new();
@@ -622,6 +703,8 @@ export default function SiteManagementPage() {
                       clientLocationName: linkedClientLocation?.locationName ?? null,
                       coordinateStatus: (String(row['Coordinate Status'] || '').trim() || 'verified') as CoordinateStatus,
                       coordinateSource: (String(row['Coordinate Source'] || '').trim() || 'manual') as CoordinateSource,
+                      strictGeofence: String(row['Strict Geofence'] || 'TRUE').trim().toLowerCase() !== 'false',
+                      siteType: (String(row['Site Type'] || '').trim().toLowerCase() || 'site') as any,
                       shiftMode: clientName.toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? 'none' : 'fixed',
                       shiftPattern: clientName.toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? null : normalizedShiftPattern,
                       shiftTemplates: clientName.toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? [] : buildShiftTemplates(normalizedShiftPattern),
@@ -690,6 +773,11 @@ export default function SiteManagementPage() {
                     updatedData.siteName ?? editingSite.siteName,
                     updatedData.district ?? editingSite.district,
                 ]),
+                strictGeofence:
+                    typeof updatedData.strictGeofence === 'boolean'
+                        ? updatedData.strictGeofence
+                        : editingSite.strictGeofence !== false,
+                siteType: updatedData.siteType ?? editingSite.siteType ?? 'site',
                 shiftMode: isTcs ? 'none' : (updatedData.shiftMode ?? editingSite.shiftMode ?? 'fixed'),
                 shiftPattern: isTcs ? null : (updatedData.shiftPattern ?? editingSite.shiftPattern ?? '2x12'),
                 shiftTemplates: isTcs
@@ -705,6 +793,7 @@ export default function SiteManagementPage() {
             });
             toast({ title: "Site Updated", description: "The site details have been saved." });
             fetchSites(currentPage === 1 ? 'first' : 'next');
+            void fetchNeedsReviewSites();
         } catch (error) {
             toast({ variant: "destructive", title: "Update Failed", description: "Could not update the site." });
         } finally {
@@ -720,6 +809,7 @@ export default function SiteManagementPage() {
             await deleteDoc(doc(db, 'sites', deletingSite.id));
             toast({ title: "Site Deleted", description: "The site has been removed." });
             fetchSites(currentPage === 1 ? 'first' : 'next');
+            void fetchNeedsReviewSites();
         } catch (error) {
             toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the site." });
         } finally {
@@ -761,28 +851,18 @@ export default function SiteManagementPage() {
         setGeocodeReport('');
         setGeocodeResults([]);
         try {
-            // Load all sites and only geocode records that are still missing valid coordinates.
-            const snap = await getDocs(collection(db, 'sites'));
-            const allSites = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-            const sitesNeedingGeocodes = allSites.filter((site) => {
-                const lat = site?.geolocation?.latitude;
-                const lng = site?.geolocation?.longitude;
-                return !Number.isFinite(lat) || !Number.isFinite(lng);
+            const response = await authorizedFetch('/api/admin/sites/batch-geocode', {
+                method: 'POST',
+                body: JSON.stringify({ includeGeocoded: false }),
             });
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.error || 'An error occurred during geocoding.');
+            }
 
-            const reportLines: string[] = [];
-            const structuredResults: GeocodeResult[] = [];
-            let batch = writeBatch(db);
-            let pendingWrites = 0;
-
-            const flushBatch = async () => {
-                if (pendingWrites === 0) return;
-                await batch.commit();
-                batch = writeBatch(db);
-                pendingWrites = 0;
-            };
-
-            if (sitesNeedingGeocodes.length === 0) {
+            const data = await response.json();
+            const structuredResults = (data.results || []) as GeocodeResult[];
+            if (structuredResults.length === 0) {
                 setGeocodeReport('ℹ️ All sites already have valid coordinates saved.');
                 setGeocodeResults([]);
                 toast({
@@ -791,104 +871,17 @@ export default function SiteManagementPage() {
                 });
                 return;
             }
+            const reportLines = structuredResults.map((result) => {
+                const marker =
+                    result.status === 'updated' ? '✅' :
+                    result.status === 'kept' ? 'ℹ️' :
+                    result.status === 'noResult' ? '⚠️' :
+                    '❌';
+                return `${marker} ${result.siteName} (${result.clientName || 'Unknown client'}) – ${result.message}`;
+            });
 
-            for (const site of sitesNeedingGeocodes) {
-                const addressParts = [
-                    site.siteAddress,
-                    site.district,
-                    'Kerala',
-                    'India',
-                ].filter(Boolean);
-                const address = addressParts.join(', ');
-
-                try {
-                    const res = await fetch('/api/geocode-site', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ address }),
-                    });
-
-                    if (!res.ok) {
-                        const errText = await res.text();
-                        const message = errText || 'Geocoding failed.';
-                        reportLines.push(`❌ ${site.siteName} (${site.clientName}) – ${message}`);
-                        structuredResults.push({
-                            clientName: site.clientName,
-                            siteName: site.siteName,
-                            district: site.district,
-                            siteAddress: site.siteAddress,
-                            status: 'failed',
-                            message,
-                        });
-                        continue;
-                    }
-
-                    const data = await res.json();
-                    if (typeof data.lat !== 'number' || typeof data.lng !== 'number') {
-                        const message = `No coordinates returned for address "${address}".`;
-                        reportLines.push(`⚠️ ${site.siteName} (${site.clientName}) – ${message}`);
-                        structuredResults.push({
-                            clientName: site.clientName,
-                            siteName: site.siteName,
-                            district: site.district,
-                            siteAddress: site.siteAddress,
-                            status: 'noResult',
-                            message,
-                        });
-                        continue;
-                    }
-
-                    const lat = data.lat;
-                    const lng = data.lng;
-                    batch.update(doc(db, 'sites', site.id), {
-                        geolocation: new GeoPoint(lat, lng),
-                        latString: formatCoord(lat),
-                        lngString: formatCoord(lng),
-                        coordinateStatus: 'geocoded',
-                        coordinateSource: 'geocode',
-                        placeAccuracy: data.placeAccuracy ?? null,
-                        updatedAt: serverTimestamp(),
-                    });
-                    pendingWrites++;
-
-                    if (pendingWrites >= 400) {
-                        await flushBatch();
-                    }
-                    reportLines.push(
-                        `✅ ${site.siteName} (${site.clientName}) – ${formatCoord(lat)}, ${formatCoord(
-                            lng,
-                        )} (created)`,
-                    );
-                    structuredResults.push({
-                        clientName: site.clientName,
-                        siteName: site.siteName,
-                        district: site.district,
-                        siteAddress: site.siteAddress,
-                        status: 'created',
-                        message: 'created',
-                        newLat: lat,
-                        newLng: lng,
-                    });
-                } catch (e: any) {
-                    console.error('Geocode failed for site', site.id, e);
-                    const message = e?.message || 'Unexpected error during geocoding.';
-                    reportLines.push(`❌ ${site.siteName} (${site.clientName}) – ${message}`);
-                    structuredResults.push({
-                        clientName: site.clientName,
-                        siteName: site.siteName,
-                        district: site.district,
-                        siteAddress: site.siteAddress,
-                        status: 'failed',
-                        message,
-                    });
-                }
-            }
-
-            if (reportLines.length > 0) {
-                await flushBatch();
-                setGeocodeReport(reportLines.join('\n'));
-                setGeocodeResults(structuredResults);
-            }
+            setGeocodeReport(reportLines.join('\n'));
+            setGeocodeResults(structuredResults);
 
             toast({
                 title: 'Geocoding Completed',
@@ -896,6 +889,7 @@ export default function SiteManagementPage() {
             });
             fetchSites('first');
             setCurrentPage(1);
+            void fetchNeedsReviewSites();
         } catch (e: any) {
             console.error('Bulk geocoding error', e);
             toast({
@@ -965,6 +959,7 @@ export default function SiteManagementPage() {
             setSelectedSiteIds([]);
             fetchSites('first');
             setCurrentPage(1);
+            void fetchNeedsReviewSites();
         } catch (error: any) {
             console.error('Bulk delete failed', error);
             toast({ variant: 'destructive', title: 'Delete Failed', description: error?.message || 'Could not delete selected sites.' });
@@ -990,8 +985,11 @@ export default function SiteManagementPage() {
                 const isTcs = String(raw.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
                 batch.update(siteDoc.ref, {
                     clientId: raw.clientId ?? resolvedClient?.id ?? null,
+                    geofenceRadiusMeters: raw.geofenceRadiusMeters ?? 150,
                     coordinateStatus: deriveCoordinateStatus(raw),
                     coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : null),
+                    strictGeofence: raw.strictGeofence !== false,
+                    siteType: raw.siteType ?? 'site',
                     shiftMode: raw.shiftMode ?? (isTcs ? 'none' : 'fixed'),
                     shiftPattern: raw.shiftPattern ?? (isTcs ? null : '2x12'),
                     shiftTemplates: raw.shiftTemplates ?? (isTcs ? [] : buildShiftTemplates('2x12')),
@@ -1016,6 +1014,7 @@ export default function SiteManagementPage() {
                 description: 'Existing sites now carry coordinate metadata and default shift settings.',
             });
             fetchSites('first');
+            void fetchNeedsReviewSites();
         } catch (error: any) {
             console.error('Backfill failed', error);
             toast({
@@ -1062,6 +1061,43 @@ export default function SiteManagementPage() {
                     </ul>
                 </AlertDescription>
             </Alert>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Coordinate Review Queue</CardTitle>
+                    <CardDescription>Review missing or auto-geocoded sites before guards use attendance in the field.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {needsReviewSites.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No sites currently need coordinate review.</p>
+                    ) : (
+                        <>
+                            <div className="rounded-lg border bg-amber-50/70 p-3 text-sm text-amber-900">
+                                {needsReviewSites.length} site(s) currently need coordinate verification or manual correction.
+                            </div>
+                            <div className="space-y-2">
+                                {needsReviewSites.slice(0, 5).map((site) => (
+                                    <div key={site.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <p className="font-medium">{site.siteName}</p>
+                                                <Badge variant={deriveCoordinateStatus(site) === 'missing' ? 'destructive' : 'outline'}>
+                                                    {coordinateStatusLabels[deriveCoordinateStatus(site)]}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">{site.siteAddress}</p>
+                                        </div>
+                                        <Button variant="outline" size="sm" onClick={() => setEditingSite(site)}>
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            Review coordinates
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardHeader>
@@ -1234,6 +1270,17 @@ export default function SiteManagementPage() {
                                 onChange={(e) => setCreateData({ ...createData, geofenceRadiusMeters: Math.max(1, Number(e.target.value || 150)) })}
                             />
                         </div>
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="new-strict-geofence">Strict geofence</Label>
+                                <p className="text-xs text-muted-foreground">If disabled, out-of-radius attendance is allowed but flagged for admin review.</p>
+                            </div>
+                            <Switch
+                                id="new-strict-geofence"
+                                checked={createData.strictGeofence !== false}
+                                onCheckedChange={(checked) => setCreateData({ ...createData, strictGeofence: checked })}
+                            />
+                        </div>
                         {(createData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase() ? (
                             <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                                 TCS sites stay flexible. No recurring shift timing is enforced here.
@@ -1319,11 +1366,13 @@ export default function SiteManagementPage() {
                                     district: createData.district,
                                     geolocation: new GeoPoint(createData.geolocation!.latitude, createData.geolocation!.longitude),
                                     geofenceRadiusMeters: createData.geofenceRadiusMeters ?? 150,
+                                    strictGeofence: createData.strictGeofence !== false,
                                     latString: createData.latString ?? formatCoord(createData.geolocation!.latitude),
                                     lngString: createData.lngString ?? formatCoord(createData.geolocation!.longitude),
                                     coordinateStatus: deriveCoordinateStatus(createData),
                                     coordinateSource: createData.coordinateSource ?? 'manual',
                                     placeAccuracy: createData.placeAccuracy ?? null,
+                                    siteType: createData.siteType ?? 'site',
                                     shiftMode: isTcs ? 'none' : 'fixed',
                                     shiftPattern: isTcs ? null : ((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
                                     shiftTemplates: isTcs ? [] : (createData.shiftTemplates || buildShiftTemplates((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')),
@@ -1340,9 +1389,10 @@ export default function SiteManagementPage() {
                                 });
                                 toast({ title: 'Site Created', description: 'The new site has been added.' });
                                 setIsCreateOpen(false);
-                                setCreateData({ clientId: operationalClient?.id || '', clientName: operationalClient?.name || '', siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, latString: '', lngString: '', coordinateStatus: 'missing', shiftMode: operationalClient ? 'none' : undefined });
+                                setCreateData({ clientId: operationalClient?.id || '', clientName: operationalClient?.name || '', siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, strictGeofence: true, siteType: 'site', latString: '', lngString: '', coordinateStatus: 'missing', shiftMode: operationalClient ? 'none' : undefined });
                                 fetchSites('first');
                                 setCurrentPage(1);
+                                void fetchNeedsReviewSites();
                             } catch (e) {
                                 toast({ variant: 'destructive', title: 'Create Failed', description: 'Could not create site. Please try again.' });
                             } finally {
@@ -1511,6 +1561,9 @@ export default function SiteManagementPage() {
                                                             ? SHIFT_PATTERN_LABELS[(site.shiftPattern as SiteShiftPattern | undefined) ?? '2x12']
                                                             : 'Flexible'}
                                                     </Badge>
+                                                    <Badge variant={site.strictGeofence === false ? 'secondary' : 'default'}>
+                                                        {site.strictGeofence === false ? 'Soft geofence' : 'Strict geofence'}
+                                                    </Badge>
                                                 </div>
                                                 <p className="text-sm text-muted-foreground">
                                                     {site.clientLocationName ? `${site.clientLocationName} · ` : ''}{site.clientName}
@@ -1536,6 +1589,41 @@ export default function SiteManagementPage() {
                                                     >
                                                         Open map
                                                     </a>
+                                                </Button>
+                                            ) : null}
+                                            {site.geolocation ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const response = await authorizedFetch(`/api/admin/sites/${site.id}/verify-coordinates`, {
+                                                                method: 'PATCH',
+                                                                body: JSON.stringify({
+                                                                    lat: site.geolocation?.latitude,
+                                                                    lng: site.geolocation?.longitude,
+                                                                    address: site.siteAddress,
+                                                                    district: site.district,
+                                                                    coordinateSource: site.coordinateSource ?? 'manual',
+                                                                    placeAccuracy: site.placeAccuracy ?? null,
+                                                                    geofenceRadiusMeters: site.geofenceRadiusMeters ?? 150,
+                                                                    strictGeofence: site.strictGeofence !== false,
+                                                                }),
+                                                            });
+                                                            if (!response.ok) {
+                                                                const body = await response.json().catch(() => ({}));
+                                                                throw new Error(body.error || 'Could not verify this site.');
+                                                            }
+                                                            toast({ title: 'Coordinates verified', description: `${site.siteName} is now marked as verified.` });
+                                                            fetchSites(currentPage === 1 ? 'first' : 'next');
+                                                            void fetchNeedsReviewSites();
+                                                        } catch (error: any) {
+                                                            toast({ variant: 'destructive', title: 'Verification failed', description: error?.message || 'Could not verify this site.' });
+                                                        }
+                                                    }}
+                                                >
+                                                    <ShieldCheck className="mr-2 h-4 w-4"/>
+                                                    Verify
                                                 </Button>
                                             ) : null}
                                             <Button variant="outline" size="sm" onClick={() => setEditingSite(site)}><Edit className="mr-2 h-4 w-4"/>Edit</Button>

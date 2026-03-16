@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { PlusCircle, Trash2, Loader2, AlertCircle, ChevronLeft, Edit, UserPlus, Link as LinkIcon, Unlink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -29,6 +30,9 @@ import { PageHeader } from '@/components/layout/page-header';
 interface Client {
   id: string;
   name: string;
+  nationalHolidayList?: string[];
+  uniformAllowanceMonthly?: number;
+  fieldAllowanceMonthly?: number;
   createdAt?: any; // Firestore Timestamp
 }
 
@@ -37,6 +41,9 @@ export default function ClientManagementPage() {
   const [newClientName, setNewClientName] = useState('');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editedName, setEditedName] = useState('');
+  const [editedUniformAllowance, setEditedUniformAllowance] = useState('0');
+  const [editedFieldAllowance, setEditedFieldAllowance] = useState('0');
+  const [editedNationalHolidays, setEditedNationalHolidays] = useState('');
   const [manageClient, setManageClient] = useState<Client | null>(null);
   const [linkedUsers, setLinkedUsers] = useState<Record<string, { id: string; uid: string; email: string; name?: string }[]>>({});
   const [linkEmail, setLinkEmail] = useState('');
@@ -143,6 +150,9 @@ export default function ClientManagementPage() {
   const handleOpenEdit = (client: Client) => {
     setEditingClient(client);
     setEditedName(client.name);
+    setEditedUniformAllowance(String(client.uniformAllowanceMonthly ?? 0));
+    setEditedFieldAllowance(String(client.fieldAllowanceMonthly ?? 0));
+    setEditedNationalHolidays((client.nationalHolidayList ?? []).join('\n'));
   };
 
   const handleUpdateClient = async () => {
@@ -159,7 +169,15 @@ export default function ClientManagementPage() {
     try {
       const response = await authorizedFetch(`/api/admin/clients/${editingClient.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name: editedName.trim() }),
+        body: JSON.stringify({
+          name: editedName.trim(),
+          uniformAllowanceMonthly: Number(editedUniformAllowance || 0),
+          fieldAllowanceMonthly: Number(editedFieldAllowance || 0),
+          nationalHolidayList: editedNationalHolidays
+            .split(/\r?\n|,/)
+            .map((value) => value.trim())
+            .filter(Boolean),
+        }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -168,6 +186,9 @@ export default function ClientManagementPage() {
       toast({ title: 'Client Updated', description: 'Name changed successfully.' });
       setEditingClient(null);
       setEditedName('');
+      setEditedUniformAllowance('0');
+      setEditedFieldAllowance('0');
+      setEditedNationalHolidays('');
     } catch (e) {
       console.error('Error updating client:', e);
       toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update client. Try again.' });
@@ -355,7 +376,14 @@ export default function ClientManagementPage() {
             <ul className="space-y-3">
               {clients.map((client) => (
                 <li key={client.id} className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-medium break-words">{client.name}</span>
+                  <div className="space-y-1">
+                    <span className="font-medium break-words">{client.name}</span>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span>Uniform allowance: ₹{client.uniformAllowanceMonthly ?? 0}</span>
+                      <span>Field allowance: ₹{client.fieldAllowanceMonthly ?? 0}</span>
+                      <span>National holidays: {(client.nationalHolidayList ?? []).length}</span>
+                    </div>
+                  </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                     <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => handleOpenEdit(client)}>
                       <Edit className="h-4 w-4 mr-1" /> Rename
@@ -399,18 +427,41 @@ export default function ClientManagementPage() {
         )}
       </Card>
 
-      {/* Rename Dialog */}
+      {/* Edit Client Dialog */}
       <AlertDialog open={!!editingClient} onOpenChange={(open) => !open && setEditingClient(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Rename Client</AlertDialogTitle>
+            <AlertDialogTitle>Edit Client Settings</AlertDialogTitle>
             <AlertDialogDescription>
-              Update the name for <span className="font-semibold">{editingClient?.name}</span>.
+              Update the name, allowances, and holiday settings for <span className="font-semibold">{editingClient?.name}</span>.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="editedName">Client Name</Label>
-            <Input id="editedName" value={editedName} onChange={(e) => setEditedName(e.target.value)} />
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="editedName">Client Name</Label>
+              <Input id="editedName" value={editedName} onChange={(e) => setEditedName(e.target.value)} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="editedUniformAllowance">Uniform allowance (₹/month)</Label>
+                <Input id="editedUniformAllowance" type="number" min={0} value={editedUniformAllowance} onChange={(e) => setEditedUniformAllowance(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="editedFieldAllowance">Field allowance (₹/month)</Label>
+                <Input id="editedFieldAllowance" type="number" min={0} value={editedFieldAllowance} onChange={(e) => setEditedFieldAllowance(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="editedNationalHolidays">National holiday dates</Label>
+              <Textarea
+                id="editedNationalHolidays"
+                value={editedNationalHolidays}
+                onChange={(e) => setEditedNationalHolidays(e.target.value)}
+                placeholder="One YYYY-MM-DD date per line"
+                rows={5}
+              />
+              <p className="text-xs text-muted-foreground">Use one date per line. These dates will later drive national holiday wages for this client.</p>
+            </div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>

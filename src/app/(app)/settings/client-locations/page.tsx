@@ -56,6 +56,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/firestore-audit";
@@ -76,6 +77,7 @@ import type {
   CoordinateSource,
   CoordinateStatus,
   GeoPointLike,
+  SiteType,
 } from "@/types/location";
 
 type ClientOption = {
@@ -95,6 +97,10 @@ type ClientLocationForm = {
   coordinateStatus?: CoordinateStatus;
   coordinateSource?: CoordinateSource;
   placeAccuracy?: string | null;
+  geofenceRadiusMeters?: number;
+  strictGeofence?: boolean;
+  siteType?: SiteType;
+  placeId?: string | null;
 };
 
 function emptyForm(): ClientLocationForm {
@@ -105,6 +111,9 @@ function emptyForm(): ClientLocationForm {
     address: "",
     district: "",
     coordinateStatus: "missing",
+    geofenceRadiusMeters: 200,
+    strictGeofence: false,
+    siteType: "branch",
   };
 }
 
@@ -123,6 +132,10 @@ function toStoredLocation(form: ClientLocationForm) {
     coordinateStatus: deriveCoordinateStatus(form),
     coordinateSource: deriveCoordinateSource(form) ?? null,
     placeAccuracy: form.placeAccuracy?.trim() || null,
+    geofenceRadiusMeters: form.geofenceRadiusMeters ?? 200,
+    strictGeofence: form.strictGeofence ?? false,
+    siteType: form.siteType ?? "branch",
+    placeId: form.placeId ?? null,
     locationKey: buildLocationIdentity([
       form.clientId || form.clientName,
       form.locationName,
@@ -158,6 +171,10 @@ function fromStoredLocation(id: string, raw: any): ClientLocation & ClientLocati
     coordinateStatus: deriveCoordinateStatus(raw),
     coordinateSource: deriveCoordinateSource(raw),
     placeAccuracy: raw.placeAccuracy ?? "",
+    geofenceRadiusMeters: raw.geofenceRadiusMeters ?? 200,
+    strictGeofence: raw.strictGeofence ?? false,
+    siteType: raw.siteType ?? "branch",
+    placeId: raw.placeId ?? null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
@@ -481,6 +498,9 @@ export default function ClientLocationsPage() {
           coordinateStatus,
           coordinateSource,
           placeAccuracy: placeAccuracy ?? null,
+          geofenceRadiusMeters: 200,
+          strictGeofence: false,
+          siteType: 'branch',
           locationKey: identity,
           ...buildFirestoreCreateAudit(),
         };
@@ -765,6 +785,53 @@ export default function ClientLocationsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Geofence radius (meters)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={createForm.geofenceRadiusMeters ?? 200}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      geofenceRadiusMeters: Math.max(1, Number(event.target.value || 200)),
+                    }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Location type</Label>
+                <Select
+                  value={createForm.siteType || "branch"}
+                  onValueChange={(siteType) =>
+                    setCreateForm((current) => ({ ...current, siteType: siteType as SiteType }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="main">Main office</SelectItem>
+                    <SelectItem value="branch">Branch / center</SelectItem>
+                    <SelectItem value="site">Site</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="create-client-location-strict">Strict geofence</Label>
+                <p className="text-xs text-muted-foreground">Useful if this client location may later be used directly for attendance validation.</p>
+              </div>
+              <Switch
+                id="create-client-location-strict"
+                checked={createForm.strictGeofence ?? false}
+                onCheckedChange={(checked) =>
+                  setCreateForm((current) => ({ ...current, strictGeofence: checked }))
+                }
+              />
+            </div>
             <LocationEditorCard
               entityType="clientLocation"
               value={createForm}
@@ -848,6 +915,61 @@ export default function ClientLocationsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Geofence radius (meters)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={editingLocation.geofenceRadiusMeters ?? 200}
+                      onChange={(event) =>
+                        setEditingLocation((current) =>
+                          current
+                            ? {
+                                ...current,
+                                geofenceRadiusMeters: Math.max(1, Number(event.target.value || 200)),
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Location type</Label>
+                    <Select
+                      value={editingLocation.siteType || "branch"}
+                      onValueChange={(siteType) =>
+                        setEditingLocation((current) =>
+                          current ? { ...current, siteType: siteType as SiteType } : current,
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="main">Main office</SelectItem>
+                        <SelectItem value="branch">Branch / center</SelectItem>
+                        <SelectItem value="site">Site</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-client-location-strict">Strict geofence</Label>
+                    <p className="text-xs text-muted-foreground">Keep this on only if this branch should later hard-block off-radius attendance.</p>
+                  </div>
+                  <Switch
+                    id="edit-client-location-strict"
+                    checked={editingLocation.strictGeofence ?? false}
+                    onCheckedChange={(checked) =>
+                      setEditingLocation((current) =>
+                        current ? { ...current, strictGeofence: checked } : current,
+                      )
+                    }
+                  />
                 </div>
                 <LocationEditorCard
                   entityType="clientLocation"
