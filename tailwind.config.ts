@@ -10,6 +10,12 @@ export default {
   theme: {
   	extend: {
   		colors: {
+        /* CISS Brand direct tokens */
+        'brand-blue': '#014c85',
+        'brand-gold': '#bd9c55',
+        'brand-blue-dark': '#013a6b',
+        'brand-blue-light': '#0261a8',
+        'brand-gold-light': '#cdb06a',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

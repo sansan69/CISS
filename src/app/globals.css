@@ -4,81 +4,110 @@
 
 @layer base {
   :root {
-    --background: 220 25% 97%;
-    --foreground: 222 25% 20%;
+    /* CISS Brand Colors
+       Primary Blue:  #014c85 → hsl(206 98% 26%)
+       Accent Gold:   #bd9c55 → hsl(41 44% 54%)
+       Body Text:     #333333 → hsl(0 0% 20%)
+       Background:    #f1f1f1 → hsl(0 0% 95%)
+       Border:        #e5e5e5 → hsl(0 0% 90%)
+    */
 
-    --muted: 220 20% 90%;
-    --muted-foreground: 220 15% 45%;
+    --background: 0 0% 96%;
+    --foreground: 0 0% 13%;
 
-    --popover: 220 30% 100%;
-    --popover-foreground: var(--foreground);
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 42%;
 
-    --card: 220 30% 100%;
-    --card-foreground: var(--foreground);
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 13%;
 
-    --border: 220 20% 85%;
-    --input: 220 20% 88%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 13%;
 
-    --primary: 231 79% 51%; /* A strong, confident blue */
-    --primary-foreground: 210 20% 98%;
+    --border: 0 0% 88%;
+    --input: 0 0% 90%;
 
-    --secondary: 220 15% 94%;
-    --secondary-foreground: 222 25% 20%;
+    /* CISS Brand Blue as primary */
+    --primary: 206 98% 26%;
+    --primary-foreground: 0 0% 98%;
 
-    --accent: 231 70% 55%; /* Slightly different for accents */
-    --accent-foreground: 210 20% 98%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 13%;
 
-    --destructive: 0 84% 60%;
+    /* CISS Brand Gold as accent */
+    --accent: 41 44% 54%;
+    --accent-foreground: 0 0% 8%;
+
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 231 79% 56%;
+    --ring: 206 98% 26%;
+    --radius: 0.5rem;
 
-    --radius: 0.5rem; /* A slightly sharper, more modern radius */
+    /* Chart Colors — brand palette */
+    --chart-1: 206 98% 26%;   /* CISS blue */
+    --chart-2: 41 44% 54%;    /* CISS gold */
+    --chart-3: 158 64% 42%;   /* green */
+    --chart-4: 24 90% 55%;    /* orange */
+    --chart-5: 345 80% 58%;   /* rose */
 
-     /* Chart Colors */
-    --chart-1: 231 79% 51%;
-    --chart-2: 198 70% 50%;
-    --chart-3: 48 90% 55%;
-    --chart-4: 24 85% 58%;
-    --chart-5: 345 80% 60%;
+    /* Sidebar — deep brand blue background, white text */
+    --sidebar-background: 206 98% 26%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 41 44% 54%;              /* gold for active/highlight */
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 100%;                /* white overlay for hover */
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 100%;                /* subtle white border */
+    --sidebar-ring: 206 98% 26%;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-      
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --background: 210 20% 10%;
+    --foreground: 210 20% 96%;
 
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
+    --muted: 210 18% 16%;
+    --muted-foreground: 210 15% 58%;
 
-    --card: 222 47% 12%;
-    --card-foreground: 210 40% 98%;
+    --popover: 210 20% 9%;
+    --popover-foreground: 210 20% 96%;
 
-    --border: 217 33% 22%;
-    --input: 217 33% 20%;
-      
-    --primary: 221 83% 60%;
-    --primary-foreground: 222 47% 11%;
+    --card: 210 20% 11%;
+    --card-foreground: 210 20% 96%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --border: 210 18% 20%;
+    --input: 210 18% 18%;
 
-    --accent: 221 83% 65%;
-    --accent-foreground: 222 47% 11%;
+    --primary: 206 80% 52%;
+    --primary-foreground: 210 20% 10%;
+
+    --secondary: 210 18% 16%;
+    --secondary-foreground: 210 20% 96%;
+
+    --accent: 41 44% 60%;
+    --accent-foreground: 210 20% 10%;
 
     --destructive: 0 63% 45%;
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 221 83% 60%;
-      
+    --ring: 206 80% 52%;
+
     /* Chart Colors Dark */
-    --chart-1: 221 83% 60%;
-    --chart-2: 198 80% 60%;
-    --chart-3: 48 95% 65%;
-    --chart-4: 24 90% 68%;
-    --chart-5: 345 85% 70%;
+    --chart-1: 206 80% 55%;
+    --chart-2: 41 50% 62%;
+    --chart-3: 158 60% 52%;
+    --chart-4: 24 85% 62%;
+    --chart-5: 345 80% 65%;
+
+    /* Sidebar stays brand blue in dark mode */
+    --sidebar-background: 206 98% 18%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 41 44% 54%;
+    --sidebar-primary-foreground: 0 0% 8%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 100%;
+    --sidebar-ring: 206 80% 52%;
   }
 }
 
@@ -88,12 +117,33 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 16px; /* Prevents iOS auto-zoom on input focus */
   }
-  /* Smooth transitions for interactive elements */
-  button, a, input[type="checkbox"], input[type="radio"], select {
+  /* Minimum font size 12px */
+  .text-xs {
+    font-size: 0.75rem; /* 12px */
+  }
+  /* Smooth transitions */
+  button, a {
     @apply transition-colors duration-150 ease-in-out;
   }
   input, textarea, select {
-     @apply transition-all duration-150 ease-in-out;
+    @apply transition-all duration-150 ease-in-out;
+    font-size: 16px; /* Prevents iOS input zoom */
+  }
+}
+
+@layer utilities {
+  /* Safe area padding for mobile notch/home bar */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  /* Touch target minimum */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
   }
 }
