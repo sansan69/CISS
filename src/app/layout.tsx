@@ -3,6 +3,7 @@ import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
 import PwaLoader from '@/components/pwa-loader';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -65,7 +66,9 @@ export default function RootLayout({
         {/* Meta tags for PWA defined in metadata object now */}
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
         <PwaLoader />
       </body>
     </html>

@@ -95,8 +95,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const mappingRef = await adminDb.collection("clientUsers").add(payload);
-    await adminDb.collection("clientUsersByUid").doc(userRecord.uid).set(payload);
+    const mappingRef = adminDb.collection("clientUsers").doc();
+    const batch = adminDb.batch();
+    batch.set(mappingRef, payload);
+    batch.set(adminDb.collection("clientUsersByUid").doc(userRecord.uid), payload);
+    await batch.commit();
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionSuccess);
 

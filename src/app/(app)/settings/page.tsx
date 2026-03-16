@@ -1,6 +1,12 @@
 
 "use client";
 
+import React, { useEffect, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { resolveAppUser } from "@/lib/auth/roles";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users } from "lucide-react";
@@ -58,6 +64,31 @@ const settingsOptions = [
 ];
 
 export default function SettingsPage() {
+  const [authStatus, setAuthStatus] = useState<"loading" | "admin" | "other">("loading");
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      if (!user) { setAuthStatus("other"); return; }
+      resolveAppUser(user)
+        .then((appUser) => setAuthStatus(appUser.role === "admin" ? "admin" : "other"))
+        .catch(() => setAuthStatus("other"));
+    });
+  }, []);
+
+  if (authStatus === "loading") {
+    return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  if (authStatus !== "admin") {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Permission Denied</AlertTitle>
+        <AlertDescription>You do not have permission to access Settings.</AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>

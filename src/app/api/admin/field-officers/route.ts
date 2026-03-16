@@ -40,12 +40,37 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+      // Check for duplicate email before attempting to create
+      try {
+        const existing = await adminAuth.getUserByEmail(body.email);
+        if (existing) {
+          return NextResponse.json(
+            { error: "An account with this email already exists. Provide the existing UID to link them instead." },
+            { status: 409 }
+          );
+        }
+      } catch (e: any) {
+        // auth/user-not-found is expected — means email is available
+        if (e?.code !== "auth/user-not-found") throw e;
+      }
       const createdUser = await adminAuth.createUser({
         email: body.email,
         password: body.password,
         displayName: name,
       });
       uid = createdUser.uid;
+    }
+
+    // Check for conflicting existing claims before overwriting
+    if (body.uid) {
+      const existingUser = await adminAuth.getUser(uid);
+      const existingClaims = existingUser.customClaims as Record<string, unknown> | undefined;
+      if (existingClaims?.role && existingClaims.role !== "fieldOfficer") {
+        return NextResponse.json(
+          { error: `This user already has the role '${existingClaims.role}'. Remove that role first before assigning as a field officer.` },
+          { status: 409 }
+        );
+      }
     }
 
     await adminAuth.setCustomUserClaims(uid, { role: "fieldOfficer" });

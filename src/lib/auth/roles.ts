@@ -39,23 +39,26 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
   const officersRef = collection(db, "fieldOfficers");
   const officerSnapshot = await getDocs(query(officersRef, where("uid", "==", user.uid)));
   if (!officerSnapshot.empty) {
-    const officerData = officerSnapshot.docs[0].data() as { assignedDistricts?: string[] };
+    const raw = officerSnapshot.docs[0].data();
+    const assignedDistricts = Array.isArray(raw?.assignedDistricts) ? (raw.assignedDistricts as string[]) : [];
     const refreshedRole = claimedRole === "fieldOfficer" ? claimedRole : await refreshClaimedRole(user);
     return {
       role: refreshedRole === "fieldOfficer" ? "fieldOfficer" : "user",
-      assignedDistricts: officerData.assignedDistricts || [],
+      assignedDistricts,
     };
   }
 
   const clientMapping = await getDoc(doc(db, "clientUsersByUid", user.uid));
   if (clientMapping.exists()) {
-    const data = clientMapping.data() as { clientId?: string; clientName?: string };
+    const raw = clientMapping.data();
+    const clientId = typeof raw?.clientId === "string" ? raw.clientId : undefined;
+    const clientName = typeof raw?.clientName === "string" ? raw.clientName : undefined;
     const refreshedRole = claimedRole === "client" ? claimedRole : await refreshClaimedRole(user);
     return {
       role: refreshedRole === "client" ? "client" : "user",
       assignedDistricts: [],
-      clientId: data.clientId,
-      clientName: data.clientName,
+      clientId,
+      clientName,
     };
   }
 

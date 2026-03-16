@@ -8,6 +8,12 @@ import {
   PROOF_TYPES,
 } from "@/lib/constants";
 
+// Firestore Timestamps arrive as objects with seconds/nanoseconds; allow strings too.
+const firestoreDateSchema = z.union([
+  z.string(),
+  z.object({ seconds: z.number(), nanoseconds: z.number() }).passthrough(),
+]);
+
 export const employeeStatusSchema = z.enum(EMPLOYEE_STATUSES);
 export const employeeGenderSchema = z.enum(GENDER_OPTIONS);
 export const employeeMaritalStatusSchema = z.enum(MARITAL_STATUSES);
@@ -23,7 +29,7 @@ export const employeeSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   fullName: z.string(),
-  dateOfBirth: z.any(),
+  dateOfBirth: firestoreDateSchema,
   gender: employeeGenderSchema,
   fatherName: z.string(),
   motherName: z.string(),
@@ -58,7 +64,7 @@ export const employeeSchema = z.object({
   idProofDocumentUrlBack: z.string().optional(),
   bankPassbookStatementUrl: z.string().optional(),
   policeClearanceCertificateUrl: z.string().optional(),
-  joiningDate: z.any(),
+  joiningDate: firestoreDateSchema,
   status: employeeStatusSchema,
   qrCodeUrl: z.string().optional(),
   exitDate: z.any().optional(),

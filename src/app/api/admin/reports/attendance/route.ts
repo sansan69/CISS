@@ -24,6 +24,14 @@ export async function GET(request: NextRequest) {
     const clientName = request.nextUrl.searchParams.get("clientName");
     const format = request.nextUrl.searchParams.get("format") || "json";
 
+    // Validate date strings before passing to Firestore
+    if (from && isNaN(Date.parse(from))) {
+      return NextResponse.json({ error: "Invalid 'from' date." }, { status: 400 });
+    }
+    if (to && isNaN(Date.parse(to))) {
+      return NextResponse.json({ error: "Invalid 'to' date." }, { status: 400 });
+    }
+
     let queryRef: FirebaseFirestore.Query = adminDb.collection("attendanceLogs");
 
     if (from) {
@@ -42,7 +50,9 @@ export async function GET(request: NextRequest) {
       queryRef = queryRef.where("clientName", "==", clientName);
     }
 
-    const snapshot = await queryRef.orderBy("createdAt", "desc").limit(1000).get();
+    const LIMIT = 1000;
+    const snapshot = await queryRef.orderBy("createdAt", "desc").limit(LIMIT).get();
+    const truncated = snapshot.size === LIMIT;
     const rows = snapshot.docs.map((doc) => {
       const data = doc.data() as Record<string, any>;
       return {
@@ -73,15 +83,15 @@ export async function GET(request: NextRequest) {
     });
 
     if (format === "csv") {
-      return new NextResponse(toCsv(rows), {
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": 'attachment; filename="attendance-report.csv"',
-        },
-      });
+      const headers: Record<string, string> = {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="attendance-report.csv"',
+      };
+      if (truncated) headers["X-Truncated"] = "true";
+      return new NextResponse(toCsv(rows), { headers });
     }
 
-    return NextResponse.json({ rows });
+    return NextResponse.json({ rows, truncated });
   } catch (error: any) {
     const status = error?.message === "Admin access required." ? 403 : 401;
     return unauthorizedResponse(error?.message || "Unauthorized", status);

@@ -14,6 +14,14 @@ import {
 
 export const runtime = "nodejs";
 
+/** Business-logic errors that should return HTTP 400 (not 500). */
+class AttendanceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AttendanceError";
+  }
+}
+
 const INDIA_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",
 });
@@ -52,11 +60,11 @@ function validateEmployee(
   employeeData: Record<string, any>,
 ) {
   if (employeeData.employeeId !== payload.employeeId) {
-    throw new Error("Employee ID mismatch.");
+    throw new AttendanceError("Employee ID mismatch.");
   }
 
   if (employeeData.status && employeeData.status !== "Active") {
-    throw new Error("Attendance can only be recorded for active employees.");
+    throw new AttendanceError("Attendance can only be recorded for active employees.");
   }
 
   if (
@@ -64,7 +72,7 @@ function validateEmployee(
     employeeData.clientName &&
     payload.employeeClientName !== employeeData.clientName
   ) {
-    throw new Error("Employee client mismatch.");
+    throw new AttendanceError("Employee client mismatch.");
   }
 }
 
@@ -105,11 +113,11 @@ export async function POST(request: NextRequest) {
       ]);
 
       if (!employeeSnap.exists) {
-        throw new Error("Employee not found.");
+        throw new AttendanceError("Employee not found.");
       }
 
       if (!siteSnap.exists) {
-        throw new Error("Selected site not found.");
+        throw new AttendanceError("Selected site not found.");
       }
 
       const employeeData = employeeSnap.data() as Record<string, any>;
@@ -117,7 +125,7 @@ export async function POST(request: NextRequest) {
       validateEmployee(payload, employeeData);
 
       if (siteData.district !== payload.district) {
-        throw new Error("District mismatch for selected site.");
+        throw new AttendanceError("District mismatch for selected site.");
       }
 
       if (
@@ -125,12 +133,12 @@ export async function POST(request: NextRequest) {
         siteData.clientName &&
         employeeData.clientName !== siteData.clientName
       ) {
-        throw new Error("Selected site does not belong to this employee's client.");
+        throw new AttendanceError("Selected site does not belong to this employee's client.");
       }
 
       const siteCoords = parseSiteCoordinates(siteData);
       if (!siteCoords) {
-        throw new Error("Selected site does not have valid coordinates configured.");
+        throw new AttendanceError("Selected site does not have valid coordinates configured.");
       }
 
       const isTcsSite =
@@ -155,7 +163,7 @@ export async function POST(request: NextRequest) {
           .get();
 
         if (workOrdersSnapshot.empty) {
-          throw new Error("No active work order exists for the selected site today.");
+          throw new AttendanceError("No active work order exists for the selected site today.");
         }
 
         const matchingWorkOrder = workOrdersSnapshot.docs
@@ -171,12 +179,12 @@ export async function POST(request: NextRequest) {
           });
 
         if (!matchingWorkOrder) {
-          throw new Error(
+          throw new AttendanceError(
             "This employee is not assigned to the selected site for today's work order.",
           );
         }
       } else if (!resolvedShift) {
-        throw new Error(
+        throw new AttendanceError(
           "No active fixed shift matches the current time for this site. Please contact admin.",
         );
       }
@@ -190,7 +198,7 @@ export async function POST(request: NextRequest) {
 
       const allowedRadiusMeters = getAllowedRadiusMeters(siteData);
       if (actualDistance > allowedRadiusMeters) {
-        throw new Error(
+        throw new AttendanceError(
           `Attendance can only be recorded within ${allowedRadiusMeters} meters of the site. Current distance: ${Math.round(actualDistance)} meters.`,
         );
       }
@@ -201,7 +209,7 @@ export async function POST(request: NextRequest) {
           lastState.lastAttendanceDate === attendanceDate &&
           lastState.lastStatus === payload.status
         ) {
-          throw new Error(
+          throw new AttendanceError(
             `Duplicate ${payload.status.toLowerCase()} attendance is not allowed on the same day.`,
           );
         }
@@ -211,7 +219,7 @@ export async function POST(request: NextRequest) {
           lastState.lastStatus === "Out" &&
           payload.status === "In"
         ) {
-          throw new Error(
+          throw new AttendanceError(
             "Attendance IN is already closed for today. Please contact admin if this is incorrect.",
           );
         }
@@ -220,7 +228,7 @@ export async function POST(request: NextRequest) {
           lastState.lastAttendanceDate !== attendanceDate &&
           payload.status === "Out"
         ) {
-          throw new Error(
+          throw new AttendanceError(
             "Attendance OUT is only allowed after a valid IN mark on the same day.",
           );
         }
@@ -230,7 +238,7 @@ export async function POST(request: NextRequest) {
           lastState.lastStatus !== "In" &&
           payload.status === "Out"
         ) {
-          throw new Error(
+          throw new AttendanceError(
             "Attendance OUT is only allowed after a valid IN mark on the same day.",
           );
         }
@@ -308,13 +316,7 @@ export async function POST(request: NextRequest) {
     }
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitFailure);
-    const status =
-      typeof error?.message === "string" &&
-      /not found|mismatch|invalid|Duplicate|within .* meters|active employees|assigned|work order|OUT is only allowed|closed for today|shift/i.test(
-        error.message,
-      )
-        ? 400
-        : 500;
+    const status = error instanceof AttendanceError ? 400 : 500;
 
     console.error("Attendance submit failed:", error);
     return NextResponse.json(

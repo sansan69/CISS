@@ -22,6 +22,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.role == 'client';
     }
 
+    // NOTE: employees, clients, sites, and clientLocations intentionally allow
+    // public reads. The attendance marking and employee enrollment flows are
+    // unauthenticated (guards do not have auth accounts). All writes are
+    // protected by admin-only rules. Sensitive data (bank details, ID numbers)
+    // is only written server-side via the Admin SDK after Zod validation.
     match /employees/{employeeId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
@@ -67,13 +72,24 @@ service cloud.firestore {
       allow update: if isAdmin() || isFieldOfficer();
     }
 
+    // Attendance logs are created server-side only (Admin SDK). Reads are
+    // restricted to authenticated users with an explicit role to prevent
+    // cross-client or unauthenticated access to attendance data.
     match /attendanceLogs/{logId} {
       allow create: if false;
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || isFieldOfficer() || isClientUser();
       allow update, delete: if isAdmin();
     }
 
     match /attendanceState/{employeeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /systemMetrics/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /exportJobs/{jobId} {
       allow read, write: if isAdmin();
     }
   }

@@ -231,6 +231,23 @@ export default function AttendancePage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // Cleanup camera stream and QR scanner when the component unmounts to prevent
+  // media track leaks if the user navigates away while the camera is active.
+  useEffect(() => {
+    return () => {
+      try {
+        (scannerRef.current as any)?.reset?.();
+      } catch {}
+      // Capture the ref value at effect cleanup time (React lint rule)
+      const video = videoRef.current;
+      if (video) {
+        const stream = video.srcObject as MediaStream | null;
+        stream?.getTracks().forEach((t) => t.stop());
+        video.srcObject = null;
+      }
+    };
+  }, []);
+
   const findSuggestedSite = useCallback((coords: { lat: number; lon: number }, preferredClient?: string | null) => {
     const candidates = allSites
       .filter((site) => typeof site.lat === 'number' && typeof site.lng === 'number')

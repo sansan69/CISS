@@ -49,7 +49,7 @@ import {
 } from "@/lib/enrollmentFiles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription as ShadDialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Checkbox } from "@/components/ui/checkbox";
 import { EDUCATION_OPTIONS, KERALA_DISTRICTS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
 
@@ -1717,9 +1717,19 @@ const ReviewRow = ({ label, value }: { label: string; value: string }) => (
 );
 
 function EnrollmentFormWrapper() {
-  const searchParams = useSearchParams();
-  const initialPhoneNumberFromQuery = searchParams.get('phone');
-  return <ActualEnrollmentForm initialPhoneNumberFromQuery={initialPhoneNumberFromQuery} />;
+  // Phone number is passed via sessionStorage (not URL params) to keep it out
+  // of browser history and server access logs.
+  const [initialPhone, setInitialPhone] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('enroll_phone');
+      if (stored) {
+        setInitialPhone(stored);
+        sessionStorage.removeItem('enroll_phone');
+      }
+    }
+  }, []);
+  return <ActualEnrollmentForm initialPhoneNumberFromQuery={initialPhone} />;
 }
 
 
