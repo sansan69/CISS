@@ -21,6 +21,7 @@ import type { Employee } from '@/types/employee';
 import Link from 'next/link';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
+import { PageHeader } from '@/components/layout/page-header';
 
 interface ClientOption { id: string; name: string; }
 // Keep this list in sync with the enrollment and edit profile forms.
@@ -594,10 +595,24 @@ export default function DataExportPage() {
     return (
         <>
             <div className="flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" size="icon" asChild><Link href="/settings"><ChevronLeft className="h-4 w-4" /><span className="sr-only">Back to Settings</span></Link></Button>
-                    <h1 className="text-3xl font-bold tracking-tight">Export Employee Data</h1>
-                </div>
+                <PageHeader
+                    eyebrow="Admin"
+                    title="Export Employee Data"
+                    description="Generate workforce spreadsheets or profile kits with strong filtering before download."
+                    breadcrumbs={[
+                        { label: "Dashboard", href: "/dashboard" },
+                        { label: "Settings", href: "/settings" },
+                        { label: "Export Employee Data" },
+                    ]}
+                    actions={
+                        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                            <Link href="/settings">
+                                <ChevronLeft className="mr-2 h-4 w-4" />
+                                <span>Back to Settings</span>
+                            </Link>
+                        </Button>
+                    }
+                />
 
                 <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" /><AlertTitle>Warning: Security and Data Privacy</AlertTitle>

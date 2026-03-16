@@ -26,6 +26,7 @@ import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { PageHeader } from '@/components/layout/page-header';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
@@ -391,15 +392,25 @@ export default function EmployeeDirectoryPage() {
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Employee Directory</h1>
-                    <p className="text-muted-foreground">Manage and view all employee profiles.</p>
-                </div>
-                {userRole === 'admin' && (
-                  <Button asChild className="w-full sm:w-auto"><Link href="/employees/enroll"><UserPlus className="mr-2 h-4 w-4" /> Enroll New</Link></Button>
-                )}
-            </div>
+            <PageHeader
+              eyebrow="Core"
+              title="Employee Directory"
+              description="Search, review, and manage workforce records without losing filter context."
+              breadcrumbs={[
+                { label: "Dashboard", href: "/dashboard" },
+                { label: "Employees" },
+              ]}
+              actions={
+                userRole === 'admin' ? (
+                  <Button asChild className="w-full sm:w-auto">
+                    <Link href="/employees/enroll">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Enroll New
+                    </Link>
+                  </Button>
+                ) : null
+              }
+            />
 
             <Card>
                 <CardHeader><CardTitle>Filters & Search</CardTitle></CardHeader>

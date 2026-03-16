@@ -46,6 +46,7 @@ import { KERALA_DISTRICTS, OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
 import { buildShiftTemplates, SHIFT_PATTERN_LABELS } from '@/lib/shift-utils';
 import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite, SiteShiftPattern } from '@/types/location';
+import { PageHeader } from '@/components/layout/page-header';
 
 
 type Site = ManagedSite;
@@ -1030,18 +1031,24 @@ export default function SiteManagementPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-4">
-                <Button variant="outline" size="icon" asChild>
-                    <Link href="/settings">
-                        <ChevronLeft className="h-4 w-4" />
-                        <span className="sr-only">Back to Settings</span>
-                    </Link>
-                </Button>
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Duty Sites</h1>
-                    <p className="text-muted-foreground">Operational attendance and work-order locations linked to optional client locations.</p>
-                </div>
-            </div>
+            <PageHeader
+                eyebrow="Admin"
+                title="Duty Sites"
+                description="Operational attendance and work-order locations linked to optional client locations."
+                breadcrumbs={[
+                    { label: "Dashboard", href: "/dashboard" },
+                    { label: "Settings", href: "/settings" },
+                    { label: "Duty Sites" },
+                ]}
+                actions={
+                    <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                        <Link href="/settings">
+                            <ChevronLeft className="mr-2 h-4 w-4" />
+                            <span>Back to Settings</span>
+                        </Link>
+                    </Button>
+                }
+            />
 
             <Alert>
                 <AlertTriangle className="h-4 w-4" />

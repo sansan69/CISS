@@ -32,6 +32,7 @@ import type { Employee } from '@/types/employee';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { startOfToday } from 'date-fns';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { PageHeader } from '@/components/layout/page-header';
 
 
 // Safely compute initials for avatar fallbacks
@@ -620,14 +621,28 @@ export default function AssignGuardsPage() {
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
-            <div className="flex items-center gap-4">
-                 <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-                    <Link href={backHref}>
-                        <ArrowLeft className="mr-2 h-4 w-4"/>
-                        Back to All Sites
-                    </Link>
-                </Button>
-            </div>
+            <PageHeader
+                eyebrow="Workforce"
+                title={site ? `Guard Assignment for ${site.siteName}` : "Guard Assignment"}
+                description={
+                    site
+                        ? `Assign guards for upcoming duties at ${site.clientName} - ${site.district}.`
+                        : "Assign guards and review staffing for the selected duty site."
+                }
+                breadcrumbs={[
+                    { label: "Dashboard", href: "/dashboard" },
+                    { label: "Work Orders", href: backHref },
+                    { label: site?.siteName || "Site Detail" },
+                ]}
+                actions={
+                    <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                        <Link href={backHref}>
+                            <ArrowLeft className="mr-2 h-4 w-4"/>
+                            Back to All Sites
+                        </Link>
+                    </Button>
+                }
+            />
             
              <Card>
                 <CardHeader>

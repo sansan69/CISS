@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Loader2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { PageHeader } from '@/components/layout/page-header';
 
 interface SiteDoc {
     id: string;
@@ -178,9 +179,16 @@ export default function AssignedGuardsExportPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold tracking-tight">Assigned Guards Export</h1>
-            </div>
+            <PageHeader
+                eyebrow="Admin"
+                title="Assigned Guards Export"
+                description="Download guard assignment details with officer, district, and date filters."
+                breadcrumbs={[
+                    { label: "Dashboard", href: "/dashboard" },
+                    { label: "Settings", href: "/settings" },
+                    { label: "Assigned Guards Export" },
+                ]}
+            />
             <Card>
                 <CardHeader>
                     <CardTitle>Filters</CardTitle>

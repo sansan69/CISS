@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { generateEmployeeId } from '@/lib/employee-id';
 import { generateQrCodeDataUrl } from '@/lib/qr';
+import { PageHeader } from '@/components/layout/page-header';
 
 interface ProcessedRecord {
     data: any;
@@ -195,15 +196,24 @@ export default function BulkImportPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-4">
-                <Button variant="outline" size="icon" asChild>
-                    <Link href="/settings">
-                        <ChevronLeft className="h-4 w-4" />
-                        <span className="sr-only">Back to Settings</span>
-                    </Link>
-                </Button>
-                <h1 className="text-3xl font-bold tracking-tight">Bulk Employee Import</h1>
-            </div>
+            <PageHeader
+                eyebrow="Admin"
+                title="Bulk Employee Import"
+                description="Import new employees in batches using the approved template and validation flow."
+                breadcrumbs={[
+                    { label: "Dashboard", href: "/dashboard" },
+                    { label: "Settings", href: "/settings" },
+                    { label: "Bulk Employee Import" },
+                ]}
+                actions={
+                    <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                        <Link href="/settings">
+                            <ChevronLeft className="mr-2 h-4 w-4" />
+                            <span>Back to Settings</span>
+                        </Link>
+                    </Button>
+                }
+            />
 
             <Alert>
                 <AlertTriangle className="h-4 w-4" />
