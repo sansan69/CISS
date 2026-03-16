@@ -586,31 +586,39 @@ export default function PublicEmployeeProfilePage() {
 
   if (error) {
     return (
-      <Alert variant="destructive" className="max-w-lg mx-auto my-10">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>
-            {error}
-            <Button onClick={() => router.push('/')} className="mt-4">
-              <Home className="mr-2 h-4 w-4" />Back to Home
-            </Button>
-        </AlertDescription>
-      </Alert>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Alert variant="destructive" className="max-w-lg">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-col items-start gap-4 mt-1">
+              <span>{error}</span>
+              <Button onClick={() => router.push('/')}>
+                <Home className="mr-2 h-4 w-4" />Back to Home
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
   if (!employee) {
     return (
-         <Alert variant="default" className="max-w-lg mx-auto my-10">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Employee Not Found</AlertTitle>
-            <AlertDescription>
-                The requested employee profile could not be found.
-                <Button onClick={() => router.push('/')} className="mt-4">
-                   <Home className="mr-2 h-4 w-4" />Back to Home
-                </Button>
-            </AlertDescription>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Alert variant="default" className="max-w-lg">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Employee Not Found</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-col items-start gap-4 mt-1">
+              <span>The requested employee profile could not be found.</span>
+              <Button onClick={() => router.push('/')}>
+                <Home className="mr-2 h-4 w-4" />Back to Home
+              </Button>
+            </div>
+          </AlertDescription>
         </Alert>
+      </div>
     );
   }
 
