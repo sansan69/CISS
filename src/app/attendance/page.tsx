@@ -234,12 +234,11 @@ export default function AttendancePage() {
   // Cleanup camera stream and QR scanner when the component unmounts to prevent
   // media track leaks if the user navigates away while the camera is active.
   useEffect(() => {
+    const video = videoRef.current;
     return () => {
       try {
         (scannerRef.current as any)?.reset?.();
       } catch {}
-      // Capture the ref value at effect cleanup time (React lint rule)
-      const video = videoRef.current;
       if (video) {
         const stream = video.srcObject as MediaStream | null;
         stream?.getTracks().forEach((t) => t.stop());
