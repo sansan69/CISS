@@ -1,6 +1,11 @@
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  setPersistence,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -36,5 +41,21 @@ if (!getApps().length) {
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+let authPersistencePromise: Promise<void> | null = null;
+
+export function ensureAuthPersistence() {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+
+  if (!authPersistencePromise) {
+    authPersistencePromise = setPersistence(auth, indexedDBLocalPersistence)
+      .catch(() => setPersistence(auth, browserLocalPersistence))
+      .then(() => undefined);
+  }
+
+  return authPersistencePromise;
+}
 
 export { app, auth, db, storage };

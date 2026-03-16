@@ -11,7 +11,7 @@ import { LogIn, HomeIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase';
+import { auth, ensureAuthPersistence } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function AdminLoginPage() {
@@ -36,6 +36,7 @@ export default function AdminLoginPage() {
     }
 
     try {
+      await ensureAuthPersistence();
       await signInWithEmailAndPassword(auth, email, password);
       toast({
         title: 'Login Successful',
@@ -112,6 +113,7 @@ export default function AdminLoginPage() {
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="username"
                   placeholder="admin@example.com"
                   required
                   value={email}
@@ -124,6 +126,7 @@ export default function AdminLoginPage() {
                 <Input
                   id="password"
                   type="password"
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   required
                   value={password}
