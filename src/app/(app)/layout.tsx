@@ -38,7 +38,7 @@ import React, { useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { cn } from '@/lib/utils';
-import { Toaster } from "@/components/ui/toaster"
+
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
 
@@ -260,7 +260,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6 lg:gap-6 lg:p-8 bg-muted/40 overflow-auto">
           {children}
         </main>
-        <Toaster />
       </div>
     </div>
   );
