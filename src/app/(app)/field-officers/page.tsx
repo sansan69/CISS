@@ -35,6 +35,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { authorizedFetch } from '@/lib/api-client';
 import { KERALA_DISTRICTS } from '@/lib/constants';
 import { resolveAppUser } from '@/lib/auth/roles';
+import { PageHeader } from '@/components/layout/page-header';
 
 
 interface FieldOfficer {
@@ -500,10 +501,21 @@ export default function FieldOfficerManagementPage() {
   return (
     <>
       <div className="flex flex-col gap-4 sm:gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Field Officer Management</h1>
-            <Button className="w-full sm:w-auto" onClick={openAddDialog}><UserPlus className="mr-2 h-4 w-4" /> Add New Officer</Button>
-        </div>
+        <PageHeader
+          eyebrow="Workforce"
+          title="Field Officer Management"
+          description="Manage district-scoped field officers and repair any missing Firebase role claims."
+          breadcrumbs={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Field Officers" },
+          ]}
+          actions={
+            <Button className="w-full sm:w-auto" onClick={openAddDialog}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Add New Officer
+            </Button>
+          }
+        />
 
         <Alert>
           <ShieldCheck className="h-4 w-4" />

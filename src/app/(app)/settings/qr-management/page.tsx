@@ -20,6 +20,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import Link from 'next/link';
+import { PageHeader } from '@/components/layout/page-header';
 
 export default function QrManagementPage() {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -60,15 +61,24 @@ export default function QrManagementPage() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-          <Link href="/settings">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            <span>Back to Settings</span>
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">QR Code Management</h1>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="QR Code Management"
+        description="Regenerate and maintain employee QR assets used in attendance and profile lookups."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Settings", href: "/settings" },
+          { label: "QR Code Management" },
+        ]}
+        actions={
+          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+            <Link href="/settings">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              <span>Back to Settings</span>
+            </Link>
+          </Button>
+        }
+      />
       
       <Alert variant="default">
         <QrCode className="h-4 w-4" />

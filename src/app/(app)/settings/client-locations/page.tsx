@@ -70,6 +70,7 @@ import {
   parseGeoString,
 } from "@/lib/location-utils";
 import { KERALA_DISTRICTS } from "@/lib/constants";
+import { PageHeader } from "@/components/layout/page-header";
 import type {
   ClientLocation,
   CoordinateSource,
@@ -513,20 +514,24 @@ export default function ClientLocationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" asChild>
-          <Link href="/settings">
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Back to settings</span>
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Client Locations</h1>
-          <p className="text-muted-foreground">
-            Manage verified branch, office, and center coordinates separately from duty sites.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Client Locations"
+        description="Manage verified branch, office, and center coordinates separately from duty sites."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Settings", href: "/settings" },
+          { label: "Client Locations" },
+        ]}
+        actions={
+          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+            <Link href="/settings">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              <span>Back to Settings</span>
+            </Link>
+          </Button>
+        }
+      />
 
       <Alert>
         <MapPinned className="h-4 w-4" />

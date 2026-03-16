@@ -24,6 +24,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { authorizedFetch } from '@/lib/api-client';
+import { PageHeader } from '@/components/layout/page-header';
 
 interface Client {
   id: string;
@@ -283,15 +284,24 @@ export default function ClientManagementPage() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-          <Link href="/settings">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            <span>Back to Settings</span>
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Client Management</h1>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Client Management"
+        description="Maintain the client master used across enrollment, filtering, linked users, and future payroll configuration."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Settings", href: "/settings" },
+          { label: "Client Management" },
+        ]}
+        actions={
+          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+            <Link href="/settings">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              <span>Back to Settings</span>
+            </Link>
+          </Button>
+        }
+      />
 
 
       <Alert>

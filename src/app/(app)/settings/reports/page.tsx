@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { KERALA_DISTRICTS } from "@/lib/constants";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/layout/page-header";
 
 type AttendanceReportRow = {
   employeeName: string;
@@ -150,18 +151,24 @@ export default function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-          <Link href="/settings">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            <span>Back to Settings</span>
-          </Link>
-        </Button>
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Attendance Reports</h1>
-          <p className="text-muted-foreground">Pick a time period, optionally refine it, and export without digging through too many controls.</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Attendance Reports"
+        description="Pick a time period, optionally refine it, and export without digging through too many controls."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Settings", href: "/settings" },
+          { label: "Attendance Reports" },
+        ]}
+        actions={
+          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+            <Link href="/settings">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              <span>Back to Settings</span>
+            </Link>
+          </Button>
+        }
+      />
 
       <Alert>
         <BarChart3 className="h-4 w-4" />

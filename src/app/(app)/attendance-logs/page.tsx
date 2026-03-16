@@ -15,6 +15,7 @@ import { KERALA_DISTRICTS } from "@/lib/constants";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import type { AttendancePhotoCompliance } from "@/types/attendance";
+import { PageHeader } from "@/components/layout/page-header";
 
 type AttendanceLog = {
   id: string;
@@ -137,16 +138,21 @@ export default function AttendanceLogsPage() {
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Attendance Logs</h1>
-          <p className="text-muted-foreground">Live attendance activity from the latest 200 records.</p>
-        </div>
-        <Button onClick={handleExport} disabled={isExporting} className="w-full lg:w-auto">
+      <PageHeader
+        eyebrow="Workforce"
+        title="Attendance Logs"
+        description="Live attendance activity from the latest 200 records."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Attendance Logs" },
+        ]}
+        actions={
+          <Button onClick={handleExport} disabled={isExporting} className="w-full sm:w-auto">
           {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
           Export CSV
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>

@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
+import { PageHeader } from '@/components/layout/page-header';
 import {
     Select,
     SelectContent,
@@ -458,7 +459,19 @@ export default function WorkOrderPage() {
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{pageTitle}</h1>
+            <PageHeader
+                eyebrow="Workforce"
+                title={pageTitle}
+                description={
+                    userRole === 'admin'
+                        ? 'Upload and manage TCS duty requirements across active duty sites.'
+                        : 'Review the TCS duty requirements that are relevant to your assigned districts.'
+                }
+                breadcrumbs={[
+                    { label: "Dashboard", href: "/dashboard" },
+                    { label: pageTitle },
+                ]}
+            />
 
             {userRole === 'admin' && (
                 <Card>

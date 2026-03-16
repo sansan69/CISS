@@ -69,7 +69,7 @@ export function PageHeader({
       )}
 
       {/* Title row */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <h1 className="font-[var(--font-exo-display)] text-xl font-bold leading-tight text-foreground truncate sm:text-2xl">
             {title}
@@ -79,7 +79,9 @@ export function PageHeader({
           )}
         </div>
         {actions && (
-          <div className="flex items-center gap-2 shrink-0">{actions}</div>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:self-start">
+            {actions}
+          </div>
         )}
       </div>
     </div>
