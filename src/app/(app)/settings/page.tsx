@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users } from "lucide-react";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
 
 const settingsOptions = [
   {
@@ -91,10 +92,11 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Settings</h1>
-        <p className="text-muted-foreground">Manage system-wide configurations and data.</p>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Settings"
+        description="Manage system-wide configurations, exports, client data, and location masters from one place."
+      />
       
       <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
         {settingsOptions.map((option) => (

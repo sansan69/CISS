@@ -1,6 +1,6 @@
 
 import type {Metadata, Viewport} from 'next';
-import {Geist, Geist_Mono} from 'next/font/google';
+import {Geist, Geist_Mono, Exo_2} from 'next/font/google';
 import './globals.css';
 import PwaLoader from '@/components/pwa-loader';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -14,6 +14,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+});
+
+const exoDisplay = Exo_2({
+  variable: '--font-exo-display',
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
 });
 
 export const metadata: Metadata = {
@@ -31,7 +37,7 @@ export const metadata: Metadata = {
   },
   other: {
     'msapplication-config': '/icons/browserconfig.xml',
-    'msapplication-TileColor': '#3F51B5',
+    'msapplication-TileColor': '#014c85',
     'msapplication-tap-highlight': 'no',
   },
   icons: {
@@ -47,7 +53,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#3F51B5',
+  themeColor: '#014c85',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -66,7 +72,7 @@ export default function RootLayout({
       <head>
         {/* Meta tags for PWA defined in metadata object now */}
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${exoDisplay.variable} antialiased`}>
         <ErrorBoundary>
           {children}
         </ErrorBoundary>

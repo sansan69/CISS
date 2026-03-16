@@ -13,6 +13,8 @@ const config = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     ignores: [
+      ".claude/**",
+      "streamvault/**",
       ".next/**",
       "coverage/**",
       "functions/lib/**",

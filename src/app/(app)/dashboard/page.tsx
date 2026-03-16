@@ -17,6 +17,8 @@ import { BarChart, Bar, PieChart, Pie, Cell, Legend, XAxis, YAxis, CartesianGrid
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Badge } from "@/components/ui/badge";
 import { resolveAppUser } from '@/lib/auth/roles';
+import { PageHeader } from "@/components/layout/page-header";
+import { StatCard } from "@/components/layout/stat-card";
 
 
 interface DashboardStats { total: number; active: number; onLeave: number; inactiveOrExited: number; }
@@ -33,31 +35,6 @@ interface ClientDistributionData {
   name: string;
   value: number;
 }
-
-const StatCard: React.FC<{ title: string; value?: number; icon: React.ElementType; isLoading: boolean; error: string | null; helpText?: string }> = 
-({ title, value, icon: Icon, isLoading, error, helpText }) => (
-    <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-            {isLoading ? (
-                <div className="h-8 flex items-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-            ) : error ? (
-                <div className="text-sm text-destructive flex items-center gap-1"><AlertIcon className="h-4 w-4" /> Error</div>
-            ) : (
-                <>
-                    <div className="text-2xl font-bold">{value?.toLocaleString() ?? 'N/A'}</div>
-                    {helpText && <p className="text-xs text-muted-foreground">{helpText}</p>}
-                </>
-            )}
-        </CardContent>
-    </Card>
-);
-
 
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -374,6 +351,11 @@ export default function DashboardPage() {
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
+            <PageHeader
+                eyebrow="Overview"
+                title="Workforce Dashboard"
+                description="Track workforce health, attendance flow, and operational activity without losing the actions that need attention."
+            />
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard title="Total Employees" value={stats?.total} icon={Users} isLoading={isLoading} error={error} />
                 <StatCard title="Active Employees" value={stats?.active} icon={UserCheck} isLoading={isLoading} error={error} helpText={`${activePercentage} of total workforce`} />

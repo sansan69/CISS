@@ -43,6 +43,10 @@
 
     --ring: 206 98% 26%;
     --radius: 0.5rem;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
 
     /* Chart Colors — brand palette */
     --chart-1: 206 98% 26%;   /* CISS blue */
@@ -117,7 +121,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
     font-size: 16px; /* Prevents iOS auto-zoom on input focus */
+    line-height: 1.5;
   }
   /* Minimum font size 12px */
   .text-xs {
@@ -136,10 +142,10 @@
 @layer utilities {
   /* Safe area padding for mobile notch/home bar */
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: calc(0.25rem + var(--safe-bottom));
   }
   .pt-safe {
-    padding-top: env(safe-area-inset-top);
+    padding-top: calc(0.25rem + var(--safe-top));
   }
   /* Touch target minimum */
   .touch-target {
