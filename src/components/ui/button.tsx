@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -6,25 +5,65 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-md text-center text-sm font-medium leading-snug ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  // Base — native-feel: no tap flash, press scale, smooth transitions
+  [
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap",
+    "text-sm font-medium leading-snug",
+    "ring-offset-background",
+    "transition-all duration-150 ease-spring",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "disabled:pointer-events-none disabled:opacity-50",
+    "active:scale-[0.96] active:transition-none",
+    "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "select-none",
+  ].join(" "),
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        /* Primary — brand blue */
+        default:
+          "gradient-brand text-white shadow-brand-sm hover:shadow-brand-md hover:brightness-110 rounded-lg",
+
+        /* Destructive — red */
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 rounded-lg",
+
+        /* Outline */
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "border border-input bg-background text-foreground hover:bg-muted hover:border-primary/40 rounded-lg shadow-brand-xs",
+
+        /* Secondary — muted fill */
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-secondary text-secondary-foreground hover:bg-muted rounded-lg",
+
+        /* Ghost — subtle hover */
+        ghost:
+          "text-foreground hover:bg-muted hover:text-foreground rounded-lg",
+
+        /* Ghost Brand — text-primary, hover brand bg */
+        "ghost-brand":
+          "text-primary hover:bg-brand-blue-pale hover:text-brand-blue rounded-lg",
+
+        /* Brand Gold accent */
+        brand:
+          "gradient-gold text-white shadow-gold hover:brightness-110 rounded-lg",
+
+        /* Glass morphism */
+        glass:
+          "glass text-foreground hover:bg-card/90 rounded-lg shadow-brand-sm",
+
+        /* Link */
+        link:
+          "text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        default: "min-h-10 px-4 py-2",
-        sm: "min-h-9 rounded-md px-3 py-2",
-        lg: "min-h-11 rounded-md px-8 py-3",
-        icon: "h-10 w-10",
+        default: "h-10 min-h-10 px-4 py-2",
+        sm:      "h-9  min-h-9  px-3 py-1.5 text-xs",
+        lg:      "h-11 min-h-11 px-6 py-2.5 text-base",
+        xl:      "h-12 min-h-12 px-8 py-3  text-base",
+        icon:    "h-10 w-10",
+        "icon-sm": "h-8 w-8",
+        "icon-lg": "h-11 w-11",
       },
     },
     defaultVariants: {
@@ -55,5 +94,3 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button"
 
 export { Button, buttonVariants }
-
-    

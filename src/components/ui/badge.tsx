@@ -4,17 +4,36 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors select-none",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
+        /* Core */
+        default:     "bg-primary text-primary-foreground",
+        secondary:   "bg-secondary text-secondary-foreground border border-border",
+        destructive: "bg-destructive/10 text-destructive border border-destructive/20",
+        outline:     "border border-border text-foreground bg-transparent",
+
+        /* Semantic */
+        success:  "bg-green-50  text-green-700  border border-green-200",
+        warning:  "bg-amber-50  text-amber-700  border border-amber-200",
+        info:     "bg-blue-50   text-blue-700   border border-blue-200",
+        error:    "bg-red-50    text-red-700    border border-red-200",
+
+        /* Brand */
+        brand:  "bg-brand-blue text-white",
+        gold:   "bg-brand-gold text-white",
+        "gold-outline": "border border-brand-gold text-brand-gold bg-brand-gold-pale",
+        "brand-outline": "border border-brand-blue text-brand-blue bg-brand-blue-pale",
+
+        /* Status — used for employee status chips */
+        active:   "bg-green-50  text-green-700  border border-green-200",
+        inactive: "bg-gray-100  text-gray-600   border border-gray-200",
+        leave:    "bg-amber-50  text-amber-700  border border-amber-200",
+        exited:   "bg-red-50    text-red-600    border border-red-200",
+
+        /* Muted */
+        muted: "bg-muted text-muted-foreground",
       },
     },
     defaultVariants: {
@@ -24,12 +43,12 @@ const badgeVariants = cva(
 )
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLSpanElement>, // Changed from HTMLDivElement
+  extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <span className={cn(badgeVariants({ variant }), className)} {...props} /> // Changed from div to span
+    <span className={cn(badgeVariants({ variant }), className)} {...props} />
   )
 }
 

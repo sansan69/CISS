@@ -92,5 +92,58 @@ service cloud.firestore {
     match /exportJobs/{jobId} {
       allow read, write: if isAdmin();
     }
+
+    // ── Training & Evaluation (Sprint 2) ──────────────────────────────────
+
+    // Training module library — all signed-in users can read; only admin writes
+    match /trainingModules/{moduleId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Per-employee training assignments — admin + the assigned FO can read
+    match /trainingAssignments/{assignmentId} {
+      allow read: if isAdmin() || isFieldOfficer();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Evaluations — admin + FO (own evals) can read; admin creates/modifies
+    match /evaluations/{evalId} {
+      allow read: if isAdmin() || (
+        isFieldOfficer() &&
+        resource.data.evaluatedBy == request.auth.uid
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Aggregated guard scores — all signed-in users can read; admin writes
+    match /guardScores/{employeeId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Awards — all signed-in users can read; admin writes
+    match /awards/{awardId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Compliance settings (payroll statutory rates) — admin only
+    match /complianceSettings/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Client wage configurations — admin only
+    match /clientWageConfigs/{configId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Payroll runs — admin only
+    match /payrollRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }
