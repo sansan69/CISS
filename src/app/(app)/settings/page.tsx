@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users, ShieldCheck, Wallet, GraduationCap } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -61,6 +61,24 @@ const settingsOptions = [
     description: "Download assigned guard details to Excel with filters.",
     icon: Users,
     href: "/settings/assigned-guards-export",
+  },
+  {
+    title: "Compliance Settings",
+    description: "Manage EPF, ESIC, PT, TDS, Bonus & Gratuity statutory rates.",
+    icon: ShieldCheck,
+    href: "/settings/compliance-settings",
+  },
+  {
+    title: "Wage Configuration",
+    description: "Define salary component structures per client with AI-assisted Excel parsing.",
+    icon: Wallet,
+    href: "/settings/wage-config",
+  },
+  {
+    title: "Salary Grades",
+    description: "Create and manage reusable salary grade templates per client.",
+    icon: GraduationCap,
+    href: "/settings/salary-grades",
   },
 ];
 

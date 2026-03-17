@@ -33,6 +33,7 @@ import {
   Building2,
   ChevronRight,
   PanelLeft,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -140,6 +141,9 @@ const settingsSubItems: NavItem[] = [
   { href: '/settings/qr-management',           label: 'QR Codes',                 icon: QrCode     },
   { href: '/settings/reports',                 label: 'Reports',                  icon: BarChart3  },
   { href: '/settings/assigned-guards-export',  label: 'Assigned Guards Export',   icon: Users      },
+  { href: '/settings/compliance-settings',     label: 'Compliance Settings',       icon: ShieldCheck },
+  { href: '/settings/wage-config',             label: 'Wage Config',               icon: Wallet      },
+  { href: '/settings/salary-grades',           label: 'Salary Grades',             icon: GraduationCap },
 ];
 
 // Bottom nav: 4 primary + More
