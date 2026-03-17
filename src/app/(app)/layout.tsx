@@ -364,9 +364,10 @@ function MobileBottomNav({
     <nav
       className={cn(
         "md:hidden fixed bottom-0 left-0 right-0 z-40",
-        "bg-white/95 backdrop-blur-md border-t border-border/60",
-        "pb-safe shadow-[0_-1px_12px_rgb(1_76_133_/_0.08)]"
+        "bg-white/95 backdrop-blur-md border-t border-border/50",
+        "pb-safe"
       )}
+      style={{ boxShadow: "0 -1px 0 0 hsl(var(--border) / 0.6)" }}
     >
       <div className="flex items-stretch h-[56px]">
         {bottomNavItems.map(item => {
@@ -376,29 +377,28 @@ function MobileBottomNav({
               key={item.href}
               href={item.href}
               className={cn(
-                "bottom-nav-item relative transition-all duration-200",
-                active ? "text-brand-blue" : "text-muted-foreground"
+                "bottom-nav-item relative transition-colors duration-150",
+                active ? "text-brand-blue" : "text-muted-foreground/70"
               )}
             >
-              {/* Active background pill */}
-              {active && (
-                <span
-                  className="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-8 rounded-xl bg-brand-blue-pale animate-scale-in"
-                  aria-hidden
-                />
-              )}
+              {/* Slim top-border indicator — native iOS style, no blob */}
+              <span
+                className={cn(
+                  "absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] rounded-b-full transition-all duration-200",
+                  active ? "w-6 bg-brand-blue" : "w-0 bg-transparent"
+                )}
+                aria-hidden
+              />
               <item.icon
                 className={cn(
-                  "relative z-10 transition-all duration-200",
-                  active
-                    ? "h-5 w-5 text-brand-blue scale-110"
-                    : "h-[19px] w-[19px]"
+                  "transition-all duration-150",
+                  active ? "h-[22px] w-[22px]" : "h-5 w-5"
                 )}
               />
               <span
                 className={cn(
-                  "relative z-10 text-[10px] font-medium leading-none transition-all duration-200",
-                  active ? "font-semibold" : ""
+                  "text-[10px] leading-none transition-all duration-150",
+                  active ? "font-semibold" : "font-medium"
                 )}
               >
                 {item.label}
@@ -411,26 +411,27 @@ function MobileBottomNav({
         <button
           onClick={onMoreClick}
           className={cn(
-            "bottom-nav-item relative transition-all duration-200",
-            moreActive ? "text-brand-blue" : "text-muted-foreground"
+            "bottom-nav-item relative transition-colors duration-150",
+            moreActive ? "text-brand-blue" : "text-muted-foreground/70"
           )}
         >
-          {moreActive && (
-            <span
-              className="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-8 rounded-xl bg-brand-blue-pale animate-scale-in"
-              aria-hidden
-            />
-          )}
+          <span
+            className={cn(
+              "absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] rounded-b-full transition-all duration-200",
+              moreActive ? "w-6 bg-brand-blue" : "w-0 bg-transparent"
+            )}
+            aria-hidden
+          />
           <MoreHorizontal
             className={cn(
-              "relative z-10 transition-all duration-200",
-              moreActive ? "h-5 w-5 text-brand-blue scale-110" : "h-[19px] w-[19px]"
+              "transition-all duration-150",
+              moreActive ? "h-[22px] w-[22px]" : "h-5 w-5"
             )}
           />
           <span
             className={cn(
-              "relative z-10 text-[10px] font-medium leading-none",
-              moreActive ? "font-semibold" : ""
+              "text-[10px] leading-none transition-all duration-150",
+              moreActive ? "font-semibold" : "font-medium"
             )}
           >
             More
