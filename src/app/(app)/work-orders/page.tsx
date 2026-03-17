@@ -75,11 +75,11 @@ export default function WorkOrderPage() {
     const UNDO_MS = 5_000;
 
     // ── Expand / collapse per site ───────────────────────────────────────────
-    // Tracks which siteIds are *collapsed*; all sites start expanded.
-    const [collapsedSites, setCollapsedSites] = useState<Set<string>>(new Set());
+    // Tracks which siteIds are *expanded*; empty set = all collapsed by default.
+    const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
 
     const toggleSite = React.useCallback((siteId: string) => {
-        setCollapsedSites(prev => {
+        setExpandedSites(prev => {
             const next = new Set(prev);
             if (next.has(siteId)) next.delete(siteId);
             else next.add(siteId);
@@ -308,14 +308,14 @@ export default function WorkOrderPage() {
     }, [workOrdersBySite, selectedDistrict, selectedDate, dateSort]);
 
     // Derived from filteredEntries — must come after the useMemo above
-    const allCollapsed = filteredEntries.length > 0 && collapsedSites.size >= filteredEntries.length;
+    const allExpanded = filteredEntries.length > 0 && filteredEntries.every(([id]) => expandedSites.has(id));
     const toggleAll = React.useCallback(() => {
-        if (allCollapsed) {
-            setCollapsedSites(new Set());
+        if (allExpanded) {
+            setExpandedSites(new Set());
         } else {
-            setCollapsedSites(new Set(filteredEntries.map(([id]) => id)));
+            setExpandedSites(new Set(filteredEntries.map(([id]) => id)));
         }
-    }, [allCollapsed, filteredEntries]);
+    }, [allExpanded, filteredEntries]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -700,13 +700,13 @@ export default function WorkOrderPage() {
                                     onClick={toggleAll}
                                 >
                                     <ChevronsUpDown className="h-3.5 w-3.5" />
-                                    {allCollapsed ? 'Expand all' : 'Collapse all'}
+                                    {allExpanded ? 'Collapse all' : 'Expand all'}
                                 </Button>
                             </div>
 
                             {filteredEntries.map(([siteId, orders]) => {
                                 const siteInfo = orders[0];
-                                const isCollapsed = collapsedSites.has(siteId);
+                                const isCollapsed = !expandedSites.has(siteId);
                                 const visibleOrders = orders.filter(o => !pendingDeleteIds.has(o.id));
                                 const totalDates = visibleOrders.length;
                                 const totalGuards = visibleOrders.reduce((s, o) => s + ((o.totalManpower ?? 0) || (o.maleGuardsRequired || 0) + (o.femaleGuardsRequired || 0)), 0);
