@@ -1,0 +1,8 @@
+[  697274ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyD_oZTSoD5P7KukyR90097fnNFvIVcdISs:0
+[  697276ms] [ERROR] Firebase Auth Error: FirebaseError: Firebase: Error (auth/invalid-credential).
+    at g (https://cisskerala.site/_next/static/chunks/36b4fd63-502947808ad223fb.js:1:1087)
+    at d (https://cisskerala.site/_next/static/chunks/36b4fd63-502947808ad223fb.js:1:617)
+    at C (https://cisskerala.site/_next/static/chunks/36b4fd63-502947808ad223fb.js:1:6854)
+    at async O (https://cisskerala.site/_next/static/chunks/36b4fd63-502947808ad223fb.js:1:6987)
+    at async e7 (https://cisskerala.site/_next/static/chunks/36b4fd63-502947808ad223fb.js:1:51823)
+    at async N (https://cisskerala.site/_next/static/chunks/app/admin-login/page-df7f3e90f17ff084.js:1:4732) @ https://cisskerala.site/_next/static/chunks/app/admin-login/page-df7f3e90f17ff084.js:0

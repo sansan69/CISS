@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, PieChart, Pie, Cell, Legend, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Badge } from "@/components/ui/badge";
 import { resolveAppUser } from '@/lib/auth/roles';
@@ -32,7 +32,6 @@ import { cn } from "@/lib/utils";
 // ─────────────────────────────────────────────────────────────────────────────
 interface DashboardStats  { total: number; active: number; onLeave: number; inactiveOrExited: number; }
 interface NewHiresData    { month: string; hires: number; }
-interface ClientDistData  { name: string; value: number; }
 interface RecentActivity  { id: string; text: string; subtext: string; timestamp: Date; }
 interface UpcomingDuty    { id: string; siteName: string; clientName: string; date: Date; totalManpower: number; }
 interface ClientCoverage  {
@@ -353,7 +352,6 @@ function QuickActions() {
 export default function DashboardPage() {
   const [stats, setStats]                   = useState<DashboardStats | null>(null);
   const [newHiresData, setNewHiresData]     = useState<NewHiresData[]>([]);
-  const [clientDistData, setClientDistData] = useState<ClientDistData[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
   const [clientCoverage, setClientCoverage] = useState<ClientCoverage[]>([]);
@@ -367,9 +365,6 @@ export default function DashboardPage() {
   const [userRole, setUserRole]           = useState<string | null>(null);
   const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
   const [clientInfo, setClientInfo]       = useState<{ clientId: string; clientName: string } | null>(null);
-  const [isMounted, setIsMounted]         = useState(false);
-
-  useEffect(() => { setIsMounted(true); }, []);
 
   // Auth resolve
   useEffect(() => {
@@ -457,13 +452,6 @@ export default function DashboardPage() {
           if (date) { const k = format(startOfMonth(date), 'MMM yyyy'); if (k in byMonth) byMonth[k]++; }
         });
         setNewHiresData(monthLabels.map(m => ({ month: m, hires: byMonth[m] })));
-
-        const counts: Record<string, number> = {};
-        (allEmpSnap as any).docs.forEach((d: any) => {
-          const n = d.data().clientName || "Unassigned";
-          counts[n] = (counts[n] || 0) + 1;
-        });
-        setClientDistData(Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value));
 
         setRecentActivity((recentSnap as any).docs.map((d: any) => {
           const data = d.data() as Employee;
@@ -605,10 +593,6 @@ export default function DashboardPage() {
   const chartConfig = {
     hires: { label: "New Hires", color: "hsl(var(--chart-1))" },
   };
-  const chartColors = [
-    "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
-    "hsl(var(--chart-4))", "hsl(var(--chart-5))",
-  ];
 
   // ─── Error state ─────────────────────────────────────────────────────────
   if (error) {
@@ -716,53 +700,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Admin: Client Overview ───────────────────────────────────────── */}
-      {userRole !== 'fieldOfficer' && userRole !== 'client' && clientCoverage.length > 0 && (
-        <div>
-          {/* Header row */}
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <p className="section-label">Client Overview</p>
-              <p className="text-[11px] text-muted-foreground -mt-0.5">Today's guard coverage by client</p>
-            </div>
-            {/* Summary badges */}
-            {!isLoading && (() => {
-              const alerts = clientCoverage.reduce((s, c) => s + c.mockLocationAlerts, 0);
-              const lowCoverage = clientCoverage.filter(c => c.activeGuards > 0 && c.coveragePct < 35).length;
-              return (
-                <div className="flex items-center gap-2 shrink-0">
-                  {alerts > 0 && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 rounded-full px-2 py-0.5">
-                      <AlertTriangle className="h-3 w-3" />
-                      {alerts} alert{alerts > 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {lowCoverage > 0 && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
-                      <AlertCircle className="h-3 w-3" />
-                      {lowCoverage} low
-                    </span>
-                  )}
-                  {alerts === 0 && lowCoverage === 0 && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
-                      <CheckCircle2 className="h-3 w-3" />
-                      All good
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Scrollable coverage cards */}
-          <ClientCoverageCards data={clientCoverage} isLoading={isLoading} />
-
-          {/* Ranked strength table */}
-          <div className="mt-3">
-            <ClientStrengthTable data={clientCoverage} isLoading={isLoading} />
-          </div>
-        </div>
-      )}
 
       {/* ── Admin: Charts (tabbed on mobile) + Recent Activity ───────────── */}
       {userRole !== 'fieldOfficer' && userRole !== 'client' && (
@@ -832,43 +769,39 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
               )}
-              {activeChartTab === 'distribution' && isMounted && (
-                <Card className="animate-scale-in">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Guard Distribution</CardTitle>
-                    <CardDescription className="text-xs">By client</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {isLoading ? (
-                      <SkeletonBlock className="h-[180px]" />
-                    ) : clientDistData.length > 0 ? (
-                      <ChartContainer
-                        config={Object.fromEntries(clientDistData.map(c => [c.name, { label: c.name }]))}
-                        className="w-full h-[180px]"
-                      >
-                        <PieChart>
-                          <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
-                          <Pie
-                            data={clientDistData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%" cy="45%"
-                            outerRadius="70%"
-                            innerRadius="35%"
-                            paddingAngle={3}
-                          >
-                            {clientDistData.map((_, i) => (
-                              <Cell key={i} fill={chartColors[i % chartColors.length]} />
-                            ))}
-                          </Pie>
-                          <Legend wrapperStyle={{ fontSize: "10px", paddingTop: "8px" }} iconType="circle" iconSize={7} />
-                        </PieChart>
-                      </ChartContainer>
-                    ) : (
-                      <EmptyState compact title="No data" description="No employees enrolled yet." />
-                    )}
-                  </CardContent>
-                </Card>
+              {activeChartTab === 'distribution' && (
+                <div className="space-y-3 animate-scale-in">
+                  {/* Summary badges */}
+                  {!isLoading && clientCoverage.length > 0 && (() => {
+                    const alerts = clientCoverage.reduce((s, c) => s + c.mockLocationAlerts, 0);
+                    const lowCoverage = clientCoverage.filter(c => c.activeGuards > 0 && c.coveragePct < 35).length;
+                    return (
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-semibold text-muted-foreground flex-1">Today's coverage</p>
+                        {alerts > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 rounded-full px-2 py-0.5">
+                            <AlertTriangle className="h-3 w-3" />
+                            {alerts} alert{alerts > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {lowCoverage > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
+                            <AlertCircle className="h-3 w-3" />
+                            {lowCoverage} low
+                          </span>
+                        )}
+                        {alerts === 0 && lowCoverage === 0 && clientCoverage.length > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
+                            <CheckCircle2 className="h-3 w-3" />
+                            All good
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <ClientCoverageCards data={clientCoverage} isLoading={isLoading} />
+                  <ClientStrengthTable data={clientCoverage} isLoading={isLoading} />
+                </div>
               )}
             </div>
 
@@ -910,42 +843,43 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle>Guard Distribution</CardTitle>
-                  <CardDescription>Workforce allocation across clients</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <SkeletonBlock className="h-[220px]" />
-                  ) : !isMounted ? null : clientDistData.length > 0 ? (
-                    <ChartContainer
-                      config={Object.fromEntries(clientDistData.map(c => [c.name, { label: c.name }]))}
-                      className="w-full h-[220px]"
-                    >
-                      <PieChart>
-                        <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
-                        <Pie
-                          data={clientDistData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%" cy="45%"
-                          outerRadius="70%"
-                          innerRadius="35%"
-                          paddingAngle={3}
-                        >
-                          {clientDistData.map((_, i) => (
-                            <Cell key={i} fill={chartColors[i % chartColors.length]} />
-                          ))}
-                        </Pie>
-                        <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }} iconType="circle" iconSize={8} />
-                      </PieChart>
-                    </ChartContainer>
-                  ) : (
-                    <EmptyState compact title="No data" description="No employees enrolled yet." />
-                  )}
-                </CardContent>
-              </Card>
+              <div className="space-y-3">
+                {/* Header + badges */}
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Client Coverage</p>
+                    <p className="text-xs text-muted-foreground">Today's guard deployment by client</p>
+                  </div>
+                  {!isLoading && clientCoverage.length > 0 && (() => {
+                    const alerts = clientCoverage.reduce((s, c) => s + c.mockLocationAlerts, 0);
+                    const lowCoverage = clientCoverage.filter(c => c.activeGuards > 0 && c.coveragePct < 35).length;
+                    return (
+                      <div className="flex items-center gap-2 shrink-0">
+                        {alerts > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 rounded-full px-2 py-0.5">
+                            <AlertTriangle className="h-3 w-3" />
+                            {alerts} alert{alerts > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {lowCoverage > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
+                            <AlertCircle className="h-3 w-3" />
+                            {lowCoverage} low
+                          </span>
+                        )}
+                        {alerts === 0 && lowCoverage === 0 && clientCoverage.length > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
+                            <CheckCircle2 className="h-3 w-3" />
+                            All good
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <ClientCoverageCards data={clientCoverage} isLoading={isLoading} />
+                <ClientStrengthTable data={clientCoverage} isLoading={isLoading} />
+              </div>
             </div>
           </div>
 
