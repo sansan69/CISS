@@ -209,30 +209,21 @@ function SidebarNavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium',
-        'transition-all duration-200 ease-spring',
+        // border-l-2 for the gold accent — no overflow/clip issues at rounded corners
+        'group flex items-center gap-3 rounded-xl py-2.5 pr-3 text-sm font-medium',
+        'transition-all duration-200',
         active
-          ? 'bg-white/15 text-white'
-          : 'text-white/65 hover:text-white hover:bg-white/10'
+          ? 'bg-white/15 text-white border-l-2 border-brand-gold pl-[10px]'
+          : 'text-white/65 hover:text-white hover:bg-white/10 border-l-2 border-transparent pl-[10px]'
       )}
     >
-      {/* Active left accent */}
-      {active && (
-        <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-brand-gold animate-nav-active"
-          aria-hidden
-        />
-      )}
       <item.icon
         className={cn(
-          'h-[18px] w-[18px] shrink-0 transition-transform duration-200',
-          active ? 'text-brand-gold-light' : 'group-hover:scale-110'
+          'h-[18px] w-[18px] shrink-0 transition-all duration-200',
+          active ? 'text-brand-gold-light' : 'text-white/50 group-hover:text-white/80'
         )}
       />
       <span className="truncate">{label}</span>
-      {active && (
-        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-gold shrink-0" aria-hidden />
-      )}
     </Link>
   );
 }
@@ -284,7 +275,7 @@ function DesktopSidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+      <nav className="flex-1 overflow-y-auto scrollbar-none py-4 px-3 space-y-1">
         {isSettingsPage ? (
           <>
             <Link
@@ -500,7 +491,7 @@ function MobileMoreSheet({
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto scrollbar-none py-4 px-3 space-y-1">
           {isSettingsPage ? (
             <>
               <Link
