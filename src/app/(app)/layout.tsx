@@ -930,7 +930,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* ── Desktop Sidebar ── */}
       <div
         className={cn(
-          "hidden md:flex shrink-0 flex-col h-screen sticky top-0",
+          "hidden md:flex shrink-0 flex-col h-screen sticky top-0 z-10",
           "transition-[width] duration-300 ease-in-out will-change-[width]",
           sidebarCollapsed ? "w-[64px]" : "w-[240px] lg:w-[256px]"
         )}

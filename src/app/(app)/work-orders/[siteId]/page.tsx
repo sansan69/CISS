@@ -629,7 +629,7 @@ export default function AssignGuardsPage() {
     };
 
     /* ── Loading / Error states ── */
-    if (isLoading || userRole === null) {
+    if (isLoading) {
         return (
             <div className="flex justify-center items-center h-40">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
