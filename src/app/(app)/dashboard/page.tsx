@@ -4,7 +4,7 @@ import {
   Users, UserCheck, UserMinus, Clock,
   ArrowRight, UserPlus, AlertCircle as AlertIcon,
   CalendarClock, QrCode, Briefcase, TrendingUp,
-  ShieldCheck, Star,
+  ShieldCheck, Star, ChevronRight, Activity,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { db, auth } from '@/lib/firebase';
@@ -19,11 +19,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, PieChart, Pie, Cell, Legend, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, PieChart, Pie, Cell, Legend, XAxis, YAxis, CartesianGrid } from "recharts";
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Badge } from "@/components/ui/badge";
 import { resolveAppUser } from '@/lib/auth/roles';
-import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -59,24 +58,112 @@ function getGreeting() {
 // Quick actions
 // ─────────────────────────────────────────────────────────────────────────────
 const quickActions = [
-  { label: "Mark Attendance",  href: "/attendance",          icon: QrCode,      color: "bg-brand-blue-pale text-brand-blue" },
-  { label: "Enroll Guard",     href: "/employees/enroll",    icon: UserPlus,    color: "bg-green-50 text-green-700" },
-  { label: "Work Orders",      href: "/work-orders",         icon: Briefcase,   color: "bg-amber-50 text-amber-700" },
-  { label: "Leaderboard",      href: "/leaderboard",         icon: Star,        color: "bg-purple-50 text-purple-700" },
+  { label: "Attendance",  href: "/attendance",       icon: QrCode,    color: "bg-brand-blue/10 text-brand-blue" },
+  { label: "Enroll",      href: "/employees/enroll", icon: UserPlus,  color: "bg-green-50 text-green-700" },
+  { label: "Work Orders", href: "/work-orders",      icon: Briefcase, color: "bg-amber-50 text-amber-700" },
+  { label: "Leaderboard", href: "/leaderboard",      icon: Star,      color: "bg-purple-50 text-purple-700" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mini skeleton row
+// Skeleton shimmer blocks
 // ─────────────────────────────────────────────────────────────────────────────
+function SkeletonBlock({ className }: { className?: string }) {
+  return <div className={cn("rounded-xl animate-shimmer", className)} />;
+}
+
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 py-2">
-      <div className="h-9 w-9 rounded-full animate-shimmer shrink-0" />
-      <div className="flex-1 space-y-1.5">
-        <div className="h-3.5 w-3/5 rounded animate-shimmer" />
-        <div className="h-3 w-2/5 rounded animate-shimmer" />
+    <div className="flex items-center gap-3 py-1">
+      <SkeletonBlock className="h-11 w-11 rounded-full shrink-0" />
+      <div className="flex-1 space-y-2">
+        <SkeletonBlock className="h-3.5 w-3/5" />
+        <SkeletonBlock className="h-3 w-2/5" />
       </div>
-      <div className="h-7 w-12 rounded-lg animate-shimmer shrink-0" />
+      <SkeletonBlock className="h-6 w-10 rounded-lg shrink-0" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StatCard — mobile-optimised with colour bar
+// ─────────────────────────────────────────────────────────────────────────────
+const statDefs = [
+  { key: "total",           label: "Total Guards",     barColor: "bg-brand-blue",   icon: Users,     iconBg: "bg-brand-blue/10 text-brand-blue" },
+  { key: "active",          label: "Active",           barColor: "bg-emerald-500",  icon: UserCheck, iconBg: "bg-emerald-50 text-emerald-700" },
+  { key: "onLeave",         label: "On Leave",         barColor: "bg-amber-400",    icon: Clock,     iconBg: "bg-amber-50 text-amber-700" },
+  { key: "inactiveOrExited",label: "Inactive / Exited",barColor: "bg-red-400",      icon: UserMinus, iconBg: "bg-red-50 text-red-500" },
+];
+
+function StatGrid({ stats, isLoading }: { stats: DashboardStats | null; isLoading: boolean }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {statDefs.map((def, i) => {
+        const value = stats?.[def.key as keyof DashboardStats];
+        const Icon  = def.icon;
+        return (
+          <div
+            key={def.key}
+            className={cn(
+              "relative overflow-hidden rounded-2xl bg-card border border-border/60 p-4 shadow-card",
+              "animate-slide-up",
+              i === 0 && "stagger-1", i === 1 && "stagger-2",
+              i === 2 && "stagger-3", i === 3 && "stagger-4",
+            )}
+          >
+            {/* Colour top bar */}
+            <div className={cn("absolute top-0 left-0 right-0 h-1 rounded-t-2xl", def.barColor)} />
+
+            <div className="flex items-start justify-between gap-2 mt-1">
+              <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl shrink-0", def.iconBg)}>
+                <Icon className="h-4 w-4" />
+              </div>
+            </div>
+
+            <div className="mt-3">
+              {isLoading ? (
+                <SkeletonBlock className="h-8 w-16 mb-1" />
+              ) : (
+                <p className="text-3xl font-bold text-foreground leading-none tabular-nums animate-count-up">
+                  {value?.toLocaleString() ?? "—"}
+                </p>
+              )}
+              <p className="text-[11px] font-medium text-muted-foreground mt-1.5 uppercase tracking-wide leading-none">
+                {def.label}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick Actions — edge-to-edge horizontal scroll (native feel)
+// ─────────────────────────────────────────────────────────────────────────────
+function QuickActions() {
+  return (
+    <div>
+      <p className="section-label mb-3">Quick Actions</p>
+      {/* -mx-4 + px-4 makes it bleed edge-to-edge on mobile like native apps */}
+      <div className="-mx-4 sm:mx-0">
+        <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 sm:px-0 pb-1">
+          {quickActions.map(action => (
+            <Link
+              key={action.href}
+              href={action.href}
+              className="flex flex-col items-center gap-2.5 rounded-2xl bg-card border border-border/60 shadow-card p-3.5 min-w-[80px] press-scale shrink-0 transition-shadow hover:shadow-brand-sm"
+            >
+              <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl", action.color)}>
+                <action.icon className="h-5 w-5" />
+              </div>
+              <span className="text-[11px] font-semibold text-muted-foreground text-center leading-tight">
+                {action.label}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -92,6 +179,7 @@ export default function DashboardPage() {
   const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
   const [todayLogs, setTodayLogs]           = useState<any[]>([]);
   const [clientAttendance, setClientAttendance] = useState({ inToday: 0, outToday: 0, onDuty: 0 });
+  const [activeChartTab, setActiveChartTab] = useState<'hires' | 'distribution'>('hires');
 
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
@@ -157,7 +245,6 @@ export default function DashboardPage() {
             includeCharts
               ? getDocs(collection(db, "employees"))
               : Promise.resolve({ docs: [] }),
-            // FO upcoming duties
             userRole === 'fieldOfficer' && assignedDistricts.length > 0
               ? getDocs(query(
                   collection(db, "workOrders"),
@@ -170,19 +257,17 @@ export default function DashboardPage() {
           ]);
 
         setStats({
-          total: totalSnap.data().count,
-          active: activeSnap.data().count,
-          onLeave: leaveSnap.data().count,
+          total:            totalSnap.data().count,
+          active:           activeSnap.data().count,
+          onLeave:          leaveSnap.data().count,
           inactiveOrExited: inactiveSnap.data().count,
         });
 
-        // New hires by month
         const monthStarts = Array.from({ length: 6 }, (_, i) => startOfMonth(subMonths(new Date(), 5 - i)));
         const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));
         const byMonth: Record<string, number> = Object.fromEntries(monthLabels.map(l => [l, 0]));
         (hiresSnap as any).docs.forEach((d: any) => {
-          const cd = d.data().createdAt;
-          const jd = d.data().joiningDate;
+          const cd = d.data().createdAt, jd = d.data().joiningDate;
           const coerce = (v: any): Date | null => {
             if (!v) return null;
             if (typeof v.toDate === 'function') return v.toDate();
@@ -193,7 +278,6 @@ export default function DashboardPage() {
         });
         setNewHiresData(monthLabels.map(m => ({ month: m, hires: byMonth[m] })));
 
-        // Client distribution
         const counts: Record<string, number> = {};
         (allEmpSnap as any).docs.forEach((d: any) => {
           const n = d.data().clientName || "Unassigned";
@@ -201,7 +285,6 @@ export default function DashboardPage() {
         });
         setClientDistData(Object.entries(counts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value));
 
-        // Recent activity
         setRecentActivity((recentSnap as any).docs.map((d: any) => {
           const data = d.data() as Employee;
           return {
@@ -212,7 +295,6 @@ export default function DashboardPage() {
           };
         }));
 
-        // Upcoming duties (FO)
         setUpcomingDuties((dutiesSnap as any).docs.map((d: any) => {
           const data = d.data();
           return {
@@ -266,10 +348,6 @@ export default function DashboardPage() {
     return () => unsub();
   }, [userRole, clientInfo]);
 
-  const activePercent  = stats && stats.total > 0
-    ? `${((stats.active / stats.total) * 100).toFixed(0)}% of total`
-    : undefined;
-
   const chartConfig = {
     hires: { label: "New Hires", color: "hsl(var(--chart-1))" },
   };
@@ -296,282 +374,87 @@ export default function DashboardPage() {
     );
   }
 
-  // ─── Admin & Field Officer greeting ──────────────────────────────────────
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'there';
+  const todayLabel = format(new Date(), "EEEE, d MMM");
 
   return (
     <div className="page-content">
 
       {/* ── Greeting ─────────────────────────────────────────────────────── */}
       <div className="animate-slide-down">
-        <p className="text-muted-foreground text-sm">{getGreeting()},</p>
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground capitalize mt-0.5">
-          {userName} 👋
-        </h1>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{todayLabel}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground capitalize mt-0.5 leading-tight">
+              {getGreeting()}, {userName} 👋
+            </h1>
+          </div>
+          {/* Active badge */}
+          {!isLoading && stats && (
+            <div className="flex flex-col items-end shrink-0">
+              <span className="text-2xl font-bold text-emerald-600 tabular-nums leading-none">
+                {stats.active}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
+                on duty
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── Stat Cards ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          title="Total Guards"
-          value={stats?.total}
-          icon={Users}
-          iconColor="bg-brand-blue-pale text-brand-blue"
-          isLoading={isLoading}
-          delayClass="stagger-1"
-        />
-        <StatCard
-          title="Active"
-          value={stats?.active}
-          icon={UserCheck}
-          iconColor="bg-green-50 text-green-700"
-          isLoading={isLoading}
-          subtitle={activePercent}
-          trend={stats && stats.active > 0 ? "up" : undefined}
-          delayClass="stagger-2"
-        />
-        <StatCard
-          title="On Leave"
-          value={stats?.onLeave}
-          icon={Clock}
-          iconColor="bg-amber-50 text-amber-700"
-          isLoading={isLoading}
-          delayClass="stagger-3"
-        />
-        <StatCard
-          title="Inactive / Exited"
-          value={stats?.inactiveOrExited}
-          icon={UserMinus}
-          iconColor="bg-red-50 text-red-500"
-          isLoading={isLoading}
-          delayClass="stagger-4"
-        />
-      </div>
+      {/* ── Stat Cards 2×2 ───────────────────────────────────────────────── */}
+      <StatGrid stats={stats} isLoading={isLoading} />
 
       {/* ── Quick Actions (admin + FO) ────────────────────────────────────── */}
-      {userRole !== 'client' && (
-        <Card className="animate-slide-up stagger-2">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Quick Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-4 gap-2">
-              {quickActions.map(action => (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-muted transition-colors press-scale text-center group"
-                >
-                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", action.color)}>
-                    <action.icon className="h-5 w-5" />
-                  </div>
-                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground group-hover:text-foreground leading-tight">
-                    {action.label}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {userRole !== 'client' && <QuickActions />}
 
       {/* ── Field Officer: Upcoming Duties ───────────────────────────────── */}
       {userRole === 'fieldOfficer' && (
-        <Card className="animate-slide-up stagger-3">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CalendarClock className="h-5 w-5 text-brand-blue shrink-0" />
-              <div>
-                <CardTitle>Upcoming Duties</CardTitle>
-                <CardDescription>Next 7 days in your assigned districts</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => <SkeletonRow key={i} />)}
-              </div>
-            ) : upcomingDuties.length > 0 ? (
-              <div className="space-y-2">
-                {upcomingDuties.map(duty => (
-                  <div
-                    key={duty.id}
-                    className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue-pale shrink-0">
-                      <ShieldCheck className="h-5 w-5 text-brand-blue" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{duty.siteName}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {duty.clientName} · {format(duty.date, "EEE dd MMM")}
-                      </p>
-                    </div>
-                    <Badge variant="brand-outline" className="shrink-0">
-                      {duty.totalManpower} reqd.
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                emoji="📅"
-                title="No upcoming duties"
-                description="No guard requirements in your districts for the next 7 days."
-                compact
-              />
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button asChild size="sm" variant="ghost-brand" className="w-full">
-              <Link href="/work-orders">
-                View all work orders <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
-
-      {/* ── Admin Charts + Activity ───────────────────────────────────────── */}
-      {userRole !== 'fieldOfficer' && userRole !== 'client' && (
-        <div className="grid gap-4 sm:gap-5 lg:grid-cols-3">
-
-          {/* Charts — left 2/3 */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* New Hires Bar Chart */}
-            <Card className="animate-slide-up stagger-1">
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <CardTitle>New Enrollments</CardTitle>
-                    <CardDescription>Last 6 months · monthly breakdown</CardDescription>
-                  </div>
-                  <TrendingUp className="h-5 w-5 text-brand-blue shrink-0" />
-                </div>
-              </CardHeader>
-              <CardContent className="px-2 sm:px-4">
-                {isLoading ? (
-                  <div className="h-[200px] sm:h-[240px] rounded-xl animate-shimmer" />
-                ) : (
-                  <ChartContainer config={chartConfig} className="w-full h-[200px] sm:h-[240px]">
-                    <BarChart data={newHiresData} accessibilityLayer barSize={28}>
-                      <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="4 4" />
-                      <XAxis
-                        dataKey="month"
-                        tickLine={false} tickMargin={10} axisLine={false}
-                        stroke="hsl(var(--muted-foreground))" fontSize={11}
-                        tickFormatter={v => v.split(' ')[0]}
-                      />
-                      <YAxis
-                        stroke="hsl(var(--muted-foreground))" fontSize={11}
-                        tickLine={false} axisLine={false} tickMargin={8}
-                        allowDecimals={false} width={28}
-                      />
-                      <ChartTooltip
-                        cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
-                        content={<ChartTooltipContent hideLabel />}
-                      />
-                      <Bar
-                        dataKey="hires"
-                        fill="hsl(var(--chart-1))"
-                        radius={[6, 6, 0, 0]}
-                      />
-                    </BarChart>
-                  </ChartContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Pie Chart */}
-            <Card className="animate-slide-up stagger-2">
-              <CardHeader>
-                <CardTitle>Guard Distribution by Client</CardTitle>
-                <CardDescription>Current workforce allocation across clients</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="h-[220px] sm:h-[260px] rounded-xl animate-shimmer" />
-                ) : !isMounted ? (
-                  <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
-                    Preparing chart…
-                  </div>
-                ) : clientDistData.length > 0 ? (
-                  <ChartContainer
-                    config={Object.fromEntries(clientDistData.map(c => [c.name, { label: c.name }]))}
-                    className="w-full h-[220px] sm:h-[260px]"
-                  >
-                    <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
-                      <Pie
-                        data={clientDistData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%" cy="50%"
-                        outerRadius="75%"
-                        innerRadius="40%"
-                        paddingAngle={3}
-                      >
-                        {clientDistData.map((_, i) => (
-                          <Cell key={i} fill={chartColors[i % chartColors.length]} />
-                        ))}
-                      </Pie>
-                      <Legend
-                        wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
-                        iconType="circle"
-                        iconSize={8}
-                      />
-                    </PieChart>
-                  </ChartContainer>
-                ) : (
-                  <EmptyState compact title="No data" description="No employees enrolled yet." />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Activity — right 1/3 */}
-          <Card className="animate-slide-up stagger-3 lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Recent Enrollments</CardTitle>
-              <CardDescription>Latest guards added to the system</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <div>
+          <p className="section-label mb-3">Upcoming Duties</p>
+          <Card>
+            <CardContent className="p-0">
               {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}
+                <div className="space-y-0 divide-y divide-border/60 px-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="py-3">
+                      <SkeletonRow />
+                    </div>
+                  ))}
                 </div>
-              ) : recentActivity.length > 0 ? (
-                <div className="space-y-1">
-                  {recentActivity.map(act => (
-                    <Link
-                      key={act.id}
-                      href={`/employees/${act.id}`}
-                      className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-muted transition-colors group"
+              ) : upcomingDuties.length > 0 ? (
+                <div className="divide-y divide-border/60">
+                  {upcomingDuties.map(duty => (
+                    <div
+                      key={duty.id}
+                      className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 transition-colors"
                     >
-                      <Avatar className="h-9 w-9 shrink-0 ring-2 ring-border group-hover:ring-primary/30 transition-all">
-                        <AvatarFallback className="text-xs bg-brand-blue-pale text-brand-blue font-semibold">
-                          {act.text.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{act.text}</p>
-                        <p className="text-xs text-muted-foreground truncate">{act.subtext}</p>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 shrink-0">
+                        <ShieldCheck className="h-5 w-5 text-brand-blue" />
                       </div>
-                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors animate-bounce-x opacity-0 group-hover:opacity-100" />
-                    </Link>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">{duty.siteName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {duty.clientName} · {format(duty.date, "EEE dd MMM")}
+                        </p>
+                      </div>
+                      <Badge variant="brand-outline" className="shrink-0 tabular-nums">
+                        {duty.totalManpower}
+                      </Badge>
+                    </div>
                   ))}
                 </div>
               ) : (
-                <EmptyState icon={UserPlus} compact title="No recent activity" />
+                <div className="px-4 py-6">
+                  <EmptyState emoji="📅" title="No upcoming duties" description="No guard requirements in your districts for the next 7 days." compact />
+                </div>
               )}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="pt-0">
               <Button asChild size="sm" variant="ghost-brand" className="w-full">
-                <Link href="/employees">
-                  View all employees <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                <Link href="/work-orders">
+                  View all work orders <ArrowRight className="ml-1 h-3.5 w-3.5" />
                 </Link>
               </Button>
             </CardFooter>
@@ -579,77 +462,305 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ── Admin: Charts (tabbed on mobile) + Recent Activity ───────────── */}
+      {userRole !== 'fieldOfficer' && userRole !== 'client' && (
+        <>
+          {/* Charts */}
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="section-label">Analytics</p>
+              {/* Tab pills */}
+              <div className="flex gap-1 rounded-xl bg-muted p-0.5">
+                <button
+                  onClick={() => setActiveChartTab('hires')}
+                  className={cn(
+                    "px-3 py-1 rounded-lg text-[11px] font-semibold transition-all",
+                    activeChartTab === 'hires'
+                      ? "bg-white text-foreground shadow-brand-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Hires
+                </button>
+                <button
+                  onClick={() => setActiveChartTab('distribution')}
+                  className={cn(
+                    "px-3 py-1 rounded-lg text-[11px] font-semibold transition-all",
+                    activeChartTab === 'distribution'
+                      ? "bg-white text-foreground shadow-brand-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Clients
+                </button>
+              </div>
+            </div>
+
+            <div className="lg:hidden">
+              {/* Mobile: single chart tab */}
+              {activeChartTab === 'hires' && (
+                <Card className="animate-scale-in">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">New Enrollments</CardTitle>
+                    <CardDescription className="text-xs">Last 6 months</CardDescription>
+                  </CardHeader>
+                  <CardContent className="px-2">
+                    {isLoading ? (
+                      <SkeletonBlock className="h-[180px]" />
+                    ) : (
+                      <ChartContainer config={chartConfig} className="w-full h-[180px]">
+                        <BarChart data={newHiresData} accessibilityLayer barSize={22}>
+                          <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="4 4" />
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false} tickMargin={8} axisLine={false}
+                            stroke="hsl(var(--muted-foreground))" fontSize={10}
+                            tickFormatter={v => v.split(' ')[0]}
+                          />
+                          <YAxis
+                            stroke="hsl(var(--muted-foreground))" fontSize={10}
+                            tickLine={false} axisLine={false} tickMargin={6}
+                            allowDecimals={false} width={24}
+                          />
+                          <ChartTooltip cursor={{ fill: "hsl(var(--muted))", radius: 6 }} content={<ChartTooltipContent hideLabel />} />
+                          <Bar dataKey="hires" fill="hsl(var(--chart-1))" radius={[5, 5, 0, 0]} />
+                        </BarChart>
+                      </ChartContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              {activeChartTab === 'distribution' && isMounted && (
+                <Card className="animate-scale-in">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Guard Distribution</CardTitle>
+                    <CardDescription className="text-xs">By client</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <SkeletonBlock className="h-[180px]" />
+                    ) : clientDistData.length > 0 ? (
+                      <ChartContainer
+                        config={Object.fromEntries(clientDistData.map(c => [c.name, { label: c.name }]))}
+                        className="w-full h-[180px]"
+                      >
+                        <PieChart>
+                          <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
+                          <Pie
+                            data={clientDistData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%" cy="45%"
+                            outerRadius="70%"
+                            innerRadius="35%"
+                            paddingAngle={3}
+                          >
+                            {clientDistData.map((_, i) => (
+                              <Cell key={i} fill={chartColors[i % chartColors.length]} />
+                            ))}
+                          </Pie>
+                          <Legend wrapperStyle={{ fontSize: "10px", paddingTop: "8px" }} iconType="circle" iconSize={7} />
+                        </PieChart>
+                      </ChartContainer>
+                    ) : (
+                      <EmptyState compact title="No data" description="No employees enrolled yet." />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Desktop: side-by-side charts */}
+            <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <CardTitle>New Enrollments</CardTitle>
+                      <CardDescription>Last 6 months · monthly breakdown</CardDescription>
+                    </div>
+                    <TrendingUp className="h-5 w-5 text-brand-blue shrink-0" />
+                  </div>
+                </CardHeader>
+                <CardContent className="px-2">
+                  {isLoading ? (
+                    <SkeletonBlock className="h-[220px]" />
+                  ) : (
+                    <ChartContainer config={chartConfig} className="w-full h-[220px]">
+                      <BarChart data={newHiresData} accessibilityLayer barSize={28}>
+                        <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="4 4" />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false} tickMargin={10} axisLine={false}
+                          stroke="hsl(var(--muted-foreground))" fontSize={11}
+                          tickFormatter={v => v.split(' ')[0]}
+                        />
+                        <YAxis
+                          stroke="hsl(var(--muted-foreground))" fontSize={11}
+                          tickLine={false} axisLine={false} tickMargin={8}
+                          allowDecimals={false} width={28}
+                        />
+                        <ChartTooltip cursor={{ fill: "hsl(var(--muted))", radius: 6 }} content={<ChartTooltipContent hideLabel />} />
+                        <Bar dataKey="hires" fill="hsl(var(--chart-1))" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle>Guard Distribution</CardTitle>
+                  <CardDescription>Workforce allocation across clients</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <SkeletonBlock className="h-[220px]" />
+                  ) : !isMounted ? null : clientDistData.length > 0 ? (
+                    <ChartContainer
+                      config={Object.fromEntries(clientDistData.map(c => [c.name, { label: c.name }]))}
+                      className="w-full h-[220px]"
+                    >
+                      <PieChart>
+                        <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
+                        <Pie
+                          data={clientDistData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%" cy="45%"
+                          outerRadius="70%"
+                          innerRadius="35%"
+                          paddingAngle={3}
+                        >
+                          {clientDistData.map((_, i) => (
+                            <Cell key={i} fill={chartColors[i % chartColors.length]} />
+                          ))}
+                        </Pie>
+                        <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }} iconType="circle" iconSize={8} />
+                      </PieChart>
+                    </ChartContainer>
+                  ) : (
+                    <EmptyState compact title="No data" description="No employees enrolled yet." />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="section-label">Recent Enrollments</p>
+              <Link href="/employees" className="flex items-center gap-0.5 text-[11px] font-semibold text-primary">
+                See all <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <Card>
+              <CardContent className="p-0">
+                {isLoading ? (
+                  <div className="divide-y divide-border/60 px-4">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="py-3"><SkeletonRow /></div>
+                    ))}
+                  </div>
+                ) : recentActivity.length > 0 ? (
+                  <div className="divide-y divide-border/60">
+                    {recentActivity.map(act => (
+                      <Link
+                        key={act.id}
+                        href={`/employees/${act.id}`}
+                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 transition-colors group"
+                      >
+                        <Avatar className="h-10 w-10 shrink-0 ring-2 ring-border group-hover:ring-primary/20 transition-all">
+                          <AvatarFallback className="text-xs bg-brand-blue/10 text-brand-blue font-semibold">
+                            {act.text.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold truncate">{act.text}</p>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{act.subtext}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors" />
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-6">
+                    <EmptyState icon={UserPlus} compact title="No recent activity" />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
       {/* ── Client: Live Attendance ───────────────────────────────────────── */}
       {userRole === 'client' && (
         <>
-          {/* Live summary cards */}
-          <div className="grid grid-cols-3 gap-3 animate-slide-up stagger-2">
-            {[
-              { label: "Checked In",  value: clientAttendance.inToday,  color: "bg-green-50 text-green-700" },
-              { label: "On Duty",     value: clientAttendance.onDuty,   color: "bg-brand-blue-pale text-brand-blue" },
-              { label: "Checked Out", value: clientAttendance.outToday, color: "bg-muted text-muted-foreground" },
-            ].map(s => (
-              <Card key={s.label} className="text-center">
-                <CardContent className="p-3 sm:p-4">
-                  <p className={cn("text-2xl font-bold tabular-nums", s.color.split(' ')[1])}>{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium mt-0.5 uppercase tracking-wide">{s.label}</p>
-                </CardContent>
-              </Card>
-            ))}
+          {/* Hero attendance summary */}
+          <div className="rounded-2xl gradient-brand p-5 shadow-brand-md text-white animate-slide-up stagger-2">
+            <div className="flex items-center gap-2 mb-4">
+              <Activity className="h-4 w-4 text-white/70" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-white/70">Live Attendance</span>
+              <span className="flex items-center gap-1 ml-auto text-xs text-emerald-300 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                Live
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Checked In",  value: clientAttendance.inToday,  dim: false },
+                { label: "On Duty",     value: clientAttendance.onDuty,   dim: false },
+                { label: "Checked Out", value: clientAttendance.outToday, dim: true  },
+              ].map(s => (
+                <div key={s.label} className="text-center">
+                  <p className={cn("text-3xl font-bold tabular-nums leading-none", s.dim ? "text-white/60" : "text-white")}>
+                    {s.value}
+                  </p>
+                  <p className="text-[10px] text-white/55 font-semibold uppercase tracking-wide mt-1.5 leading-tight">
+                    {s.label}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Live log */}
-          <Card className="animate-slide-up stagger-3">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <CardTitle>Live Attendance</CardTitle>
-                  <CardDescription>Today's check-ins/outs for {clientInfo?.clientName}</CardDescription>
-                </div>
-                <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-                  <span className="status-dot status-dot-active animate-pulse" />
-                  Live
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {todayLogs.length === 0 ? (
-                <EmptyState
-                  emoji="🕐"
-                  title="No attendance yet today"
-                  description="Attendance records will appear here as guards check in."
-                  compact
-                />
-              ) : (
-                <div className="space-y-2">
-                  {todayLogs.slice(0, 15).map(l => (
-                    <div
-                      key={l.id}
-                      className="flex items-center gap-3 rounded-xl border border-border/60 p-3"
-                    >
-                      <Avatar className="h-9 w-9 shrink-0">
-                        <AvatarFallback className="text-xs bg-brand-blue-pale text-brand-blue font-semibold">
-                          {(l.employeeName || l.employeeId || '??').slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{l.employeeName || l.employeeId}</p>
-                        <p className="text-xs text-muted-foreground truncate">{l.siteName}</p>
+          <div>
+            <p className="section-label mb-3">Today's Check-ins · {clientInfo?.clientName}</p>
+            <Card>
+              <CardContent className="p-0">
+                {todayLogs.length === 0 ? (
+                  <div className="px-4 py-8">
+                    <EmptyState emoji="🕐" title="No attendance yet today" description="Records appear here as guards check in." compact />
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/60">
+                    {todayLogs.slice(0, 15).map(l => (
+                      <div key={l.id} className="flex items-center gap-3 px-4 py-3.5">
+                        <Avatar className="h-10 w-10 shrink-0">
+                          <AvatarFallback className="text-xs bg-brand-blue/10 text-brand-blue font-semibold">
+                            {(l.employeeName || l.employeeId || '??').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold truncate">{l.employeeName || l.employeeId}</p>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{l.siteName}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge variant={l.status === 'In' ? 'active' : 'secondary'}>{l.status}</Badge>
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {getAttendanceTime(l) ? format(getAttendanceTime(l)!, 'hh:mm a') : ''}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge variant={l.status === 'In' ? 'active' : 'secondary'}>
-                          {l.status}
-                        </Badge>
-                        <span className="text-[10px] text-muted-foreground">
-                          {getAttendanceTime(l) ? format(getAttendanceTime(l)!, 'hh:mm a') : ''}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
     </div>
