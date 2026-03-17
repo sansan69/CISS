@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2 } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase';
 import { GeoPoint, collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
@@ -73,6 +73,20 @@ export default function WorkOrderPage() {
     const pendingDeleteTimers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
     const UNDO_MS = 5_000;
+
+    // ── Expand / collapse per site ───────────────────────────────────────────
+    // Tracks which siteIds are *collapsed*; all sites start expanded.
+    const [collapsedSites, setCollapsedSites] = useState<Set<string>>(new Set());
+
+    const toggleSite = React.useCallback((siteId: string) => {
+        setCollapsedSites(prev => {
+            const next = new Set(prev);
+            if (next.has(siteId)) next.delete(siteId);
+            else next.add(siteId);
+            return next;
+        });
+    }, []);
+
 
     const handleDeleteOrder = React.useCallback((order: WorkOrder) => {
         const id = order.id;
@@ -292,6 +306,16 @@ export default function WorkOrderPage() {
 
         return result;
     }, [workOrdersBySite, selectedDistrict, selectedDate, dateSort]);
+
+    // Derived from filteredEntries — must come after the useMemo above
+    const allCollapsed = filteredEntries.length > 0 && collapsedSites.size >= filteredEntries.length;
+    const toggleAll = React.useCallback(() => {
+        if (allCollapsed) {
+            setCollapsedSites(new Set());
+        } else {
+            setCollapsedSites(new Set(filteredEntries.map(([id]) => id)));
+        }
+    }, [allCollapsed, filteredEntries]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -666,86 +690,153 @@ export default function WorkOrderPage() {
                     ) : filteredEntries.length === 0 ? (
                         <p className="text-center text-muted-foreground py-10">No duties match the current filters.</p>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
+                            {/* Expand / Collapse all */}
+                            <div className="flex justify-end">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                    onClick={toggleAll}
+                                >
+                                    <ChevronsUpDown className="h-3.5 w-3.5" />
+                                    {allCollapsed ? 'Expand all' : 'Collapse all'}
+                                </Button>
+                            </div>
+
                             {filteredEntries.map(([siteId, orders]) => {
                                 const siteInfo = orders[0];
+                                const isCollapsed = collapsedSites.has(siteId);
+                                const visibleOrders = orders.filter(o => !pendingDeleteIds.has(o.id));
+                                const totalDates = visibleOrders.length;
+                                const totalGuards = visibleOrders.reduce((s, o) => s + ((o.totalManpower ?? 0) || (o.maleGuardsRequired || 0) + (o.femaleGuardsRequired || 0)), 0);
+                                const unassigned = visibleOrders.filter(o => (Array.isArray(o.assignedGuards) ? o.assignedGuards.length : 0) === 0).length;
+                                const fullyAssigned = visibleOrders.filter(o => {
+                                    const req = (o.totalManpower ?? 0) || (o.maleGuardsRequired || 0) + (o.femaleGuardsRequired || 0);
+                                    const asgn = Array.isArray(o.assignedGuards) ? o.assignedGuards.length : 0;
+                                    return req > 0 && asgn >= req;
+                                }).length;
+
                                 return (
-                                <div key={siteId} className="rounded-lg border p-4">
-                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                        <div className='flex-1'>
-                                            <h3 className="text-base font-semibold sm:text-lg">{siteInfo.siteName}</h3>
+                                <div key={siteId} className="rounded-lg border overflow-hidden">
+                                    {/* ── Site header (always visible) ── */}
+                                    <div
+                                        className="flex items-start gap-3 p-4 cursor-pointer select-none hover:bg-muted/40 transition-colors"
+                                        onClick={() => toggleSite(siteId)}
+                                    >
+                                        {/* Collapse chevron */}
+                                        <button
+                                            className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                            aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                                            onClick={(e) => { e.stopPropagation(); toggleSite(siteId); }}
+                                        >
+                                            {isCollapsed
+                                                ? <ChevronDown className="h-4 w-4" />
+                                                : <ChevronUp className="h-4 w-4" />
+                                            }
+                                        </button>
+
+                                        {/* Site info */}
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-base font-semibold leading-tight">{siteInfo.siteName}</h3>
                                             <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                                                 <span>{OPERATIONAL_CLIENT_NAME}</span>
-                                                <span className="hidden sm:inline">-</span>
                                                 <Badge variant="secondary">{siteInfo.district}</Badge>
                                             </p>
+                                            {/* Summary strip (shown when collapsed) */}
+                                            {isCollapsed && (
+                                                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                                    <span className="font-medium text-foreground">{totalDates} date{totalDates !== 1 ? 's' : ''}</span>
+                                                    <span>·</span>
+                                                    <span>{totalGuards} guards total</span>
+                                                    {unassigned > 0 && (
+                                                        <span className="font-semibold text-red-500">{unassigned} unassigned</span>
+                                                    )}
+                                                    {unassigned === 0 && fullyAssigned === totalDates && totalDates > 0 && (
+                                                        <span className="font-semibold text-green-600">All assigned</span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                                         {userRole === 'admin' && (
-                                            <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
+
+                                        {/* Action buttons — stop propagation so clicks don't toggle collapse */}
+                                        <div
+                                            className="flex shrink-0 flex-col gap-2 sm:flex-row"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {userRole === 'admin' && (
+                                                <Button size="sm" variant="outline" asChild className="h-8 text-xs">
+                                                    <Link href={siteHref(siteId)}>
+                                                        <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                                                        Edit
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                            <Button size="sm" variant="outline" asChild className="h-8 text-xs">
                                                 <Link href={siteHref(siteId)}>
-                                                    <Edit3 className="mr-2 h-4 w-4" />
-                                                    Edit Duties
+                                                    <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                                                    Assign
                                                 </Link>
                                             </Button>
-                                         )}
-                                         <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-                                            <Link href={siteHref(siteId)}>
-                                                <UserPlus className="mr-2 h-4 w-4" />
-                                                Assign Guards
-                                            </Link>
-                                        </Button>
                                         </div>
                                     </div>
-                                    <div className="mt-4">
-                                        <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
-                                        <div className="grid gap-2 sm:flex sm:flex-wrap">
-                                            {orders.filter(o => !pendingDeleteIds.has(o.id)).map(order => {
-                                                const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
-                                                const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
-                                                const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                                                const status = assignedCount === 0 ? 'Unassigned' : (assignedCount >= totalRequired ? 'Fully Assigned' : 'Partially Assigned');
-                                                const statusClasses = assignedCount === 0
-                                                    ? 'bg-red-100 text-red-700 border-red-200'
-                                                    : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
-                                                return (
-                                                    <div key={order.id} className={`relative w-full rounded-md border p-3 text-center sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40')}`}>
-                                                        <div className="flex flex-col gap-1 text-left sm:flex-row sm:items-center sm:justify-between sm:text-center">
-                                                            <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                            <span className={`w-fit rounded border px-2 py-0.5 text-[10px] sm:ml-auto ${statusClasses}`}>{status}</span>
-                                                        </div>
-                                                        <div className="mt-2 grid grid-cols-3 items-center gap-2 border-t pt-2">
-                                                            <div className="text-center px-1">
-                                                                <p className="text-lg font-bold">{order.maleGuardsRequired}</p>
-                                                                <p className="text-xs text-muted-foreground">Male</p>
+
+                                    {/* ── Collapsible date cards ── */}
+                                    {!isCollapsed && (
+                                        <div className="border-t px-4 pb-4 pt-3">
+                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                                                Required Manpower · {totalDates} date{totalDates !== 1 ? 's' : ''}
+                                            </h4>
+                                            <div className="grid gap-2 sm:flex sm:flex-wrap">
+                                                {visibleOrders.map(order => {
+                                                    const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
+                                                    const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                                                    const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
+                                                    const status = assignedCount === 0 ? 'Unassigned' : (assignedCount >= totalRequired ? 'Fully Assigned' : 'Partial');
+                                                    const statusClasses = assignedCount === 0
+                                                        ? 'bg-red-100 text-red-700 border-red-200'
+                                                        : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
+                                                    return (
+                                                        <div key={order.id} className={`relative w-full rounded-md border p-3 sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40')}`}>
+                                                            <div className="flex items-center justify-between gap-1 mb-2">
+                                                                <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
                                                             </div>
-                                                            <div className="text-center px-1">
-                                                                <p className="text-lg font-bold">{order.femaleGuardsRequired}</p>
-                                                                <p className="text-xs text-muted-foreground">Female</p>
+                                                            <div className="grid grid-cols-3 items-center gap-2 border-t pt-2">
+                                                                <div className="text-center">
+                                                                    <p className="text-lg font-bold leading-none">{order.maleGuardsRequired}</p>
+                                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Male</p>
+                                                                </div>
+                                                                <div className="text-center">
+                                                                    <p className="text-lg font-bold leading-none">{order.femaleGuardsRequired}</p>
+                                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Female</p>
+                                                                </div>
+                                                                <div className="text-center">
+                                                                    <p className="text-lg font-bold leading-none">{totalRequired}</p>
+                                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Total</p>
+                                                                </div>
                                                             </div>
-                                                            <div className="text-center px-1">
-                                                                <p className="text-lg font-bold">{totalRequired}</p>
-                                                                <p className="text-xs text-muted-foreground">Total</p>
+                                                            <div className="mt-2 space-y-1">
+                                                                <Progress value={percent} className="h-1.5" />
+                                                                <p className="text-[10px] text-muted-foreground">
+                                                                    Assigned {assignedCount}/{totalRequired} ({percent}%)
+                                                                </p>
                                                             </div>
+                                                            {userRole === 'admin' && (
+                                                                <button
+                                                                    className="absolute top-1 right-1 rounded p-1 text-destructive/60 hover:text-destructive hover:bg-red-50 transition-colors"
+                                                                    title="Delete duty (5s undo)"
+                                                                    onClick={() => handleDeleteOrder(order)}
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        <div className="mt-2 space-y-1">
-                                                            <Progress value={percent} className="h-1.5" />
-                                                            <p className="text-[11px] text-muted-foreground">Assigned {assignedCount}/{totalRequired} ({percent}%)</p>
-                                                        </div>
-                                                        {userRole === 'admin' && !pendingDeleteIds.has(order.id) && (
-                                                            <button
-                                                                className="absolute top-1 right-1 rounded p-1 text-destructive/60 hover:text-destructive hover:bg-red-50 transition-colors"
-                                                                title="Delete duty (5s undo)"
-                                                                onClick={() => handleDeleteOrder(order)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             )})}
                         </div>
