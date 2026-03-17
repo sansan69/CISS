@@ -57,11 +57,11 @@ export function PageHeader({
         </p>
       )}
 
-      {/* Breadcrumbs */}
+      {/* Breadcrumbs — desktop only; mobile header handles current-page context */}
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav
           aria-label="Breadcrumb"
-          className="flex items-center gap-1 text-[11px] text-muted-foreground mb-2 flex-wrap leading-none"
+          className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground mb-2 flex-wrap leading-none"
         >
           {breadcrumbs.map((crumb, i) => (
             <span key={i} className="flex items-center gap-1">
@@ -90,11 +90,11 @@ export function PageHeader({
       {/* Title row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          {/* Back button */}
+          {/* Back button — desktop only; mobile relies on OS swipe-back gesture */}
           {backHref && (
             <button
               onClick={() => backHref === "__back" ? router.back() : router.push(backHref)}
-              className="flex items-center justify-center h-8 w-8 rounded-lg border border-border hover:bg-muted transition-colors shrink-0 mt-0.5"
+              className="hidden sm:flex items-center justify-center h-8 w-8 rounded-lg border border-border hover:bg-muted transition-colors shrink-0 mt-0.5"
               aria-label="Go back"
             >
               <ChevronLeft className="h-4 w-4 text-muted-foreground" />

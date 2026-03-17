@@ -54,6 +54,7 @@ import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
+import { useHaptics } from '@/hooks/use-haptics';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -444,6 +445,7 @@ function MobileBottomNav({
   moreActive: boolean;
 }) {
   const pathname = usePathname();
+  const { haptic } = useHaptics();
   const isSettingsPage = pathname.startsWith('/settings');
   if (isSettingsPage) return null;
 
@@ -463,6 +465,7 @@ function MobileBottomNav({
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => haptic('light')}
               className={cn(
                 "bottom-nav-item relative transition-colors duration-150",
                 active ? "text-brand-blue" : "text-muted-foreground/70"
@@ -496,7 +499,7 @@ function MobileBottomNav({
 
         {/* More button */}
         <button
-          onClick={onMoreClick}
+          onClick={() => { haptic('light'); onMoreClick(); }}
           className={cn(
             "bottom-nav-item relative transition-colors duration-150",
             moreActive ? "text-brand-blue" : "text-muted-foreground/70"
@@ -549,7 +552,8 @@ function MobileMoreSheet({
   isSettingsPage: boolean;
 }) {
   const visibleGroups = getVisibleGroups(mainNavGroups, userRole);
-  const close = () => onOpenChange(false);
+  const { haptic } = useHaptics();
+  const close = () => { haptic('light'); onOpenChange(false); };
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin';
   const initials = displayName.slice(0, 2).toUpperCase();
   const roleBadge = userRole === 'admin' ? 'Administrator'
@@ -830,6 +834,7 @@ function DesktopTopBar({
 export function AppLayout({ children }: { children: ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
+  const { haptic } = useHaptics();
   const [authUser, setAuthUser]           = useState<User | null>(null);
   const [userRole, setUserRole]           = useState<string | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -927,7 +932,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* Mobile top bar */}
         <MobileHeader
           isSettingsPage={isSettingsPage}
-          onMenuClick={() => setMoreSheetOpen(true)}
+          onMenuClick={() => { haptic('medium'); setMoreSheetOpen(true); }}
           user={authUser}
           onLogout={handleLogout}
           userRole={userRole}
@@ -952,7 +957,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       {/* ── Mobile Bottom Nav ── */}
       <MobileBottomNav
-        onMoreClick={() => setMoreSheetOpen(true)}
+        onMoreClick={() => { haptic('medium'); setMoreSheetOpen(true); }}
         moreActive={isMoreActive}
       />
 

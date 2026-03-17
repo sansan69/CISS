@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
+import { useHaptics } from '@/hooks/use-haptics';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Employee } from '@/types/employee';
@@ -83,6 +84,7 @@ const AssignGuardsDialog: React.FC<{
     isLoadingGuards: boolean;
 }> = ({ workOrder, isOpen, onClose, availableGuards, isLoadingGuards }) => {
     const { toast } = useToast();
+    const { haptic } = useHaptics();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedGuards, setSelectedGuards] = useState(
         Array.isArray(workOrder.assignedGuards) ? workOrder.assignedGuards : []
@@ -104,6 +106,7 @@ const AssignGuardsDialog: React.FC<{
     }, [searchTerm, availableGuards]);
 
     const handleToggleGuard = (guard: Employee) => {
+        haptic('selection');
         const isSelected = selectedGuards.some(g => g.uid === guard.id);
         if (isSelected) {
             setSelectedGuards(prev => prev.filter(g => g.uid !== guard.id));
@@ -130,6 +133,7 @@ const AssignGuardsDialog: React.FC<{
                     }),
                 ),
             });
+            haptic('success');
             toast({ title: "Saved", description: "Guard assignments updated successfully." });
             onClose();
         } catch {
@@ -516,6 +520,7 @@ export default function AssignGuardsPage() {
     const [isDeletingOrder, setIsDeletingOrder] = useState(false);
 
     const { toast } = useToast();
+    const { haptic } = useHaptics();
 
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (user) => {
@@ -617,9 +622,11 @@ export default function AssignGuardsPage() {
                     }),
                 ),
             });
+            haptic('success');
             toast({ title: "Updated", description: "Manpower requirements saved." });
             setEditCountsFor(null);
         } catch {
+            haptic('error');
             toast({ variant: "destructive", title: "Error", description: "Could not save changes." });
         } finally {
             setIsSavingCounts(false);
@@ -631,6 +638,7 @@ export default function AssignGuardsPage() {
         setIsDeletingOrder(true);
         try {
             await deleteDoc(doc(db, 'workOrders', deleteConfirmOrder.id));
+            haptic('error');
             toast({ title: "Deleted", description: "Work order removed." });
             setDeleteConfirmOrder(null);
         } catch {
@@ -676,7 +684,8 @@ export default function AssignGuardsPage() {
                     { label: site?.siteName || "Site Detail" },
                 ]}
                 actions={
-                    <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                    /* Hidden on mobile — users swipe-back or use bottom nav */
+                    <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
                         <Link href={backHref}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             Back to All Sites
@@ -766,7 +775,7 @@ export default function AssignGuardsPage() {
                                 {/* Actions */}
                                 <div className="px-4 pb-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
                                     <Button
-                                        onClick={() => handleOpenAssignDialog(order)}
+                                        onClick={() => { haptic('medium'); handleOpenAssignDialog(order); }}
                                         className="w-full sm:w-auto h-11 sm:h-9 text-sm"
                                         size="sm"
                                     >
@@ -780,6 +789,7 @@ export default function AssignGuardsPage() {
                                                 size="sm"
                                                 className="h-11 sm:h-9 text-sm"
                                                 onClick={() => {
+                                                    haptic('light');
                                                     setEditCountsFor(order.id);
                                                     setEditMale(order.maleGuardsRequired);
                                                     setEditFemale(order.femaleGuardsRequired);
@@ -792,7 +802,7 @@ export default function AssignGuardsPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 className="h-11 sm:h-9 text-sm border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                                                onClick={() => setDeleteConfirmOrder(order)}
+                                                onClick={() => { haptic('warning'); setDeleteConfirmOrder(order); }}
                                             >
                                                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                                                 Delete
