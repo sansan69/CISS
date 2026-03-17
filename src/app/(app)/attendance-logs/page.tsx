@@ -25,6 +25,7 @@ type AttendanceLog = {
   district?: string;
   clientName?: string;
   siteName?: string;
+  sourceCollection?: string;
   locationText?: string;
   gpsAccuracyMeters?: number | null;
   geofenceRadiusAtTime?: number | null;
@@ -61,6 +62,7 @@ export default function AttendanceLogsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [districtFilter, setDistrictFilter] = useState<string>("all");
+  const [clientFilter, setClientFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
@@ -89,12 +91,21 @@ export default function AttendanceLogsPage() {
     return () => unsubscribe();
   }, []);
 
+  const clientOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const log of logs) {
+      if (log.clientName) names.add(log.clientName);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [logs]);
+
   const filteredLogs = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
     return logs.filter((log) => {
       const matchesStatus = statusFilter === "all" || log.status === statusFilter;
       const matchesDistrict = districtFilter === "all" || log.district === districtFilter;
+      const matchesClient = clientFilter === "all" || log.clientName === clientFilter;
       const matchesSearch =
         !term ||
         log.employeeName?.toLowerCase().includes(term) ||
@@ -102,9 +113,9 @@ export default function AttendanceLogsPage() {
         log.siteName?.toLowerCase().includes(term) ||
         log.clientName?.toLowerCase().includes(term);
 
-      return matchesStatus && matchesDistrict && matchesSearch;
+      return matchesStatus && matchesDistrict && matchesClient && matchesSearch;
     });
-  }, [districtFilter, logs, searchTerm, statusFilter]);
+  }, [clientFilter, districtFilter, logs, searchTerm, statusFilter]);
 
   const totals = useMemo(() => {
     const inCount = filteredLogs.filter((log) => log.status === "In").length;
@@ -190,7 +201,7 @@ export default function AttendanceLogsPage() {
           <CardTitle>Filters</CardTitle>
           <CardDescription>Search by employee, site, or client and narrow the live log stream.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -219,6 +230,19 @@ export default function AttendanceLogsPage() {
               {KERALA_DISTRICTS.map((district) => (
                 <SelectItem key={district} value={district}>
                   {district}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={clientFilter} onValueChange={setClientFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All clients</SelectItem>
+              {clientOptions.map((client) => (
+                <SelectItem key={client} value={client}>
+                  {client}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -261,7 +285,12 @@ export default function AttendanceLogsPage() {
                           </div>
                           <div>
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">Site</p>
-                            <p>{log.siteName || "Unknown site"}</p>
+                            <p className="flex items-center gap-1">
+                              {log.siteName || "Unknown site"}
+                              {log.sourceCollection === "clientLocations" && (
+                                <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
+                              )}
+                            </p>
                             <p className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</p>
                           </div>
                           <div>
@@ -333,7 +362,12 @@ export default function AttendanceLogsPage() {
                               <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
                             </TableCell>
                             <TableCell>
-                              <div>{log.siteName || "Unknown site"}</div>
+                              <div className="flex items-center gap-1">
+                                {log.siteName || "Unknown site"}
+                                {log.sourceCollection === "clientLocations" && (
+                                  <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
+                                )}
+                              </div>
                               <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
                             </TableCell>
                             <TableCell>{log.district || "N/A"}</TableCell>

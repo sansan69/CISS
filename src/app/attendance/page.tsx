@@ -36,6 +36,7 @@ type SiteOption = {
   id: string;
   siteName: string;
   clientName: string;
+  clientId?: string;
   district: string;
   geofenceRadiusMeters?: number;
   strictGeofence?: boolean;
@@ -44,6 +45,7 @@ type SiteOption = {
   shiftMode?: 'none' | 'fixed';
   shiftPattern?: '2x12' | '3x8' | null;
   shiftTemplates?: ShiftTemplate[];
+  sourceCollection: 'sites' | 'clientLocations';
 };
 
 type ScannedEmployee = {
@@ -135,26 +137,24 @@ export default function AttendancePage() {
   const districtSiteOptions = useMemo(() => {
     if (!selectedDistrict) return [];
 
+    // When an employee is scanned, show their client's sites FIRST, then others
+    const employeeClient = scannedEmployee?.clientName ?? null;
     const options = allSites.filter((site) => site.district === selectedDistrict);
-    if (!locationCoords) {
-      return options.sort((a, b) => {
-        if (a.clientName === b.clientName) {
-          return a.siteName.localeCompare(b.siteName);
-        }
-        return a.clientName.localeCompare(b.clientName);
-      });
-    }
+
+    const calcDist = (site: SiteOption) =>
+      locationCoords && typeof site.lat === 'number' && typeof site.lng === 'number'
+        ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, site.lat, site.lng)
+        : Number.POSITIVE_INFINITY;
 
     return [...options].sort((a, b) => {
-      const aDistance = typeof a.lat === 'number' && typeof a.lng === 'number'
-        ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, a.lat, a.lng)
-        : Number.POSITIVE_INFINITY;
-      const bDistance = typeof b.lat === 'number' && typeof b.lng === 'number'
-        ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, b.lat, b.lng)
-        : Number.POSITIVE_INFINITY;
-      return aDistance - bDistance;
+      // Employee's client sites first
+      const aIsClient = employeeClient ? a.clientName === employeeClient : false;
+      const bIsClient = employeeClient ? b.clientName === employeeClient : false;
+      if (aIsClient !== bIsClient) return aIsClient ? -1 : 1;
+      // Then by distance
+      return calcDist(a) - calcDist(b);
     });
-  }, [allSites, locationCoords, selectedDistrict]);
+  }, [allSites, locationCoords, selectedDistrict, scannedEmployee?.clientName]);
 
   const appendRecentAttendance = useCallback((item: DeviceAttendanceHistoryItem) => {
     setRecentAttendance((previous) => {
@@ -212,18 +212,34 @@ export default function AttendancePage() {
     const fetchSites = async () => {
       setIsLoadingCenters(true);
       try {
-        const snap = await getDocs(collection(db, 'sites'));
-        const options: SiteOption[] = snap.docs.map((d) => {
-          const data = d.data() as any;
+        const parseGeo = (data: any): { lat?: number; lng?: number } => {
           const geo = data.geolocation;
-          const lat = typeof geo?.latitude === 'number' ? geo.latitude : (geo?.lat || parseFloat(data.latString || '0'));
-          const lng = typeof geo?.longitude === 'number' ? geo.longitude : (geo?.lng || parseFloat(data.lngString || '0'));
+          const lat = typeof geo?.latitude === 'number' ? geo.latitude
+            : typeof geo?.lat === 'number' ? geo.lat
+            : parseFloat(data.latString || '');
+          const lng = typeof geo?.longitude === 'number' ? geo.longitude
+            : typeof geo?.lng === 'number' ? geo.lng
+            : parseFloat(data.lngString || '');
+          return {
+            lat: Number.isFinite(lat) && lat !== 0 ? lat : undefined,
+            lng: Number.isFinite(lng) && lng !== 0 ? lng : undefined,
+          };
+        };
 
+        const [sitesSnap, locationsSnap] = await Promise.all([
+          getDocs(collection(db, 'sites')),
+          getDocs(collection(db, 'clientLocations')),
+        ]);
+
+        const siteOptions: SiteOption[] = sitesSnap.docs.map((d) => {
+          const data = d.data() as any;
+          const { lat, lng } = parseGeo(data);
           return {
             id: d.id,
             siteName: data.siteName,
-            clientName: data.clientName,
-            district: data.district,
+            clientName: data.clientName || '',
+            clientId: data.clientId,
+            district: data.district || '',
             geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : undefined,
             strictGeofence: data.strictGeofence !== false,
             lat,
@@ -231,9 +247,46 @@ export default function AttendancePage() {
             shiftMode: data.shiftMode,
             shiftPattern: data.shiftPattern,
             shiftTemplates: Array.isArray(data.shiftTemplates) ? data.shiftTemplates : [],
+            sourceCollection: 'sites' as const,
           };
         });
-        setAllSites(options);
+
+        const locationOptions: SiteOption[] = locationsSnap.docs
+          .filter((d) => {
+            const data = d.data() as any;
+            return data.locationName && data.district; // skip incomplete records
+          })
+          .map((d) => {
+            const data = d.data() as any;
+            const { lat, lng } = parseGeo(data);
+            return {
+              id: d.id,
+              siteName: data.locationName,           // clientLocations uses locationName
+              clientName: data.clientName || '',
+              clientId: data.clientId,
+              district: data.district || '',
+              geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : 200,
+              strictGeofence: data.strictGeofence !== false,
+              lat,
+              lng,
+              shiftMode: 'none' as const,
+              shiftPattern: null,
+              shiftTemplates: [],
+              sourceCollection: 'clientLocations' as const,
+            };
+          });
+
+        // Merge — deduplicate by (clientName+siteName+district) to avoid double entries
+        const seen = new Set<string>();
+        const merged: SiteOption[] = [];
+        for (const opt of [...siteOptions, ...locationOptions]) {
+          const key = `${opt.clientName}|${opt.siteName}|${opt.district}`.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(opt);
+          }
+        }
+        setAllSites(merged);
       } catch (e: any) {
         console.error('Failed loading sites', e);
         toast({ variant: 'destructive', title: 'Error loading centers', description: e.message || 'Try again.' });
@@ -309,6 +362,28 @@ export default function AttendancePage() {
       });
     }
   }, [toast]);
+
+  // Auto-select the nearest district containing the employee's client sites
+  const autoSelectBestDistrict = useCallback((
+    coords: { lat: number; lon: number },
+    clientName: string | null,
+  ) => {
+    const pool = clientName
+      ? allSites.filter((s) => s.clientName === clientName && typeof s.lat === 'number' && typeof s.lng === 'number')
+      : allSites.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number');
+
+    if (pool.length === 0) return;
+
+    const nearest = [...pool].sort((a, b) => {
+      const da = haversineDistanceMeters(coords.lat, coords.lon, a.lat!, a.lng!);
+      const db_ = haversineDistanceMeters(coords.lat, coords.lon, b.lat!, b.lng!);
+      return da - db_;
+    })[0];
+
+    if (nearest && !hasManualCenterOverride) {
+      setSelectedDistrict(nearest.district);
+    }
+  }, [allSites, hasManualCenterOverride]);
 
   const waitForVideoSurface = () => new Promise<void>((resolve) => {
     window.requestAnimationFrame(() => {
@@ -453,9 +528,10 @@ export default function AttendancePage() {
 
   useEffect(() => {
     if (!locationCoords || allSites.length === 0 || hasManualCenterOverride) return;
+    autoSelectBestDistrict(locationCoords, scannedEmployee?.clientName ?? null);
     const suggestion = findSuggestedSite(locationCoords, scannedEmployee?.clientName ?? null);
     applySuggestedSite(suggestion, { silent: true });
-  }, [allSites, applySuggestedSite, findSuggestedSite, hasManualCenterOverride, locationCoords, scannedEmployee?.clientName]);
+  }, [allSites, applySuggestedSite, autoSelectBestDistrict, findSuggestedSite, hasManualCenterOverride, locationCoords, scannedEmployee?.clientName]);
 
   const handleStartVerification = async () => {
     setWorkflowStep('scanning');
@@ -1102,6 +1178,7 @@ export default function AttendancePage() {
       district: selectedDistrict,
       siteId: selectedSiteId,
       siteName: selectedSite.siteName,
+      sourceCollection: selectedSite.sourceCollection,
       clientName: selectedSite.clientName,
       shiftCode: resolvedShift?.code,
       shiftLabel: resolvedShift?.label,
@@ -1463,6 +1540,7 @@ export default function AttendancePage() {
                   <AccordionTrigger>Change center if this is wrong</AccordionTrigger>
                   <AccordionContent>
                     <div className="grid gap-3 pt-1">
+                      {/* District selector */}
                       <div className="grid gap-2">
                         <Label>District</Label>
                         <Select
@@ -1474,7 +1552,7 @@ export default function AttendancePage() {
                           }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={isLoadingCenters ? 'Loading districts...' : 'Select district'} />
+                            <SelectValue placeholder={isLoadingCenters ? 'Loading…' : 'Select district'} />
                           </SelectTrigger>
                           <SelectContent>
                             {districtOptions.map((district) => (
@@ -1483,28 +1561,78 @@ export default function AttendancePage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid gap-2">
-                        <Label>Center name</Label>
-                        <Select
-                          value={selectedSiteId}
-                          onValueChange={(value) => {
-                            setHasManualCenterOverride(true);
-                            setSelectedSiteId(value);
-                          }}
-                          disabled={!selectedDistrict || districtSiteOptions.length === 0}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={!selectedDistrict ? 'Select district first' : 'Select center'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {districtSiteOptions.map((site) => (
-                              <SelectItem key={site.id} value={site.id}>
-                                {site.siteName} - {site.clientName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+
+                      {/* Site card list — all centers in district, sorted by distance */}
+                      {selectedDistrict && (
+                        <div className="grid gap-2">
+                          <Label>
+                            Centers in {selectedDistrict}
+                            {scannedEmployee?.clientName ? ` · ${scannedEmployee.clientName} first` : ''}
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">({districtSiteOptions.length})</span>
+                          </Label>
+                          {districtSiteOptions.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No centers found in this district.</p>
+                          ) : (
+                            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-0.5">
+                              {districtSiteOptions.map((site) => {
+                                const dist = locationCoords && typeof site.lat === 'number' && typeof site.lng === 'number'
+                                  ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, site.lat, site.lng)
+                                  : null;
+                                const withinFence = dist !== null && dist <= (site.geofenceRadiusMeters || 150);
+                                const nearby = dist !== null && !withinFence && dist <= 500;
+                                const isSelected = site.id === selectedSiteId;
+                                const distLabel = dist === null ? null
+                                  : dist < 1000 ? `${Math.round(dist)}m`
+                                  : `${(dist / 1000).toFixed(1)}km`;
+                                return (
+                                  <button
+                                    key={site.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setHasManualCenterOverride(true);
+                                      setSelectedSiteId(site.id);
+                                    }}
+                                    className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                                      isSelected
+                                        ? 'border-primary bg-primary/8 ring-1 ring-primary'
+                                        : 'border-border bg-background hover:bg-muted/50'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className={`font-semibold leading-tight truncate ${isSelected ? 'text-primary' : ''}`}>
+                                          {site.siteName}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                          {site.clientName}
+                                          {site.sourceCollection === 'clientLocations' && (
+                                            <span className="ml-1 text-[10px] bg-muted rounded px-1 py-0.5">Office</span>
+                                          )}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1 shrink-0">
+                                        {distLabel && (
+                                          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                            withinFence ? 'bg-emerald-100 text-emerald-700'
+                                              : nearby ? 'bg-amber-100 text-amber-700'
+                                              : 'bg-muted text-muted-foreground'
+                                          }`}>
+                                            {distLabel}
+                                          </span>
+                                        )}
+                                        {withinFence && (
+                                          <span className="text-[10px] text-emerald-600 font-medium">In range</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <Button type="button" variant="outline" onClick={refreshSuggestedCenter} disabled={!locationCoords}>
                         <Sparkles className="mr-2 h-4 w-4" />
                         Use nearest center again

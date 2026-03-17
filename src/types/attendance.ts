@@ -52,6 +52,7 @@ export const attendanceSubmissionSchema = z.object({
   geofenceRadiusAtTime: z.number().positive().optional(),
   isMockLocationSuspected: z.boolean().optional(),
   mockLocationReason: z.string().nullable().optional(),
+  sourceCollection: z.enum(['sites', 'clientLocations']).optional(),
   photoUrl: z.string().url(),
   photoCapturedAt: z.string().datetime().optional(),
   photoCompliance: attendancePhotoComplianceSchema.optional(),

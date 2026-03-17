@@ -145,7 +145,8 @@ export async function POST(request: NextRequest) {
     }
     const attendanceDate = INDIA_DATE_FORMATTER.format(reportedAtDate);
     const employeeRef = adminDb.collection("employees").doc(payload.employeeDocId);
-    const siteRef = adminDb.collection("sites").doc(payload.siteId);
+    const sourceCol = (payload as any).sourceCollection === 'clientLocations' ? 'clientLocations' : 'sites';
+    const siteRef = adminDb.collection(sourceCol).doc(payload.siteId);
     const attendanceStateRef = adminDb
       .collection("attendanceState")
       .doc(payload.employeeDocId);
