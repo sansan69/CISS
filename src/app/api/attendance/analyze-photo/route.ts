@@ -44,8 +44,41 @@ if (typeof setInterval !== "undefined") {
   }, RATE_LIMIT_WINDOW_MS * 5);
 }
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+// Model cascade: start with the most generous free-tier model,
+// fall back to the next if quota is exceeded.
+const MODEL_CASCADE = [
+  "gemini-1.5-flash-8b",   // Free: 15 RPM · 1,500 RPD · 1M TPM
+  "gemini-1.5-flash",      // Free: 15 RPM · 1,500 RPD · 1M TPM (backup pool)
+] as const;
 const MAX_RESPONSE_TOKENS = 180;
+
+function isQuotaError(status: number, body: any): boolean {
+  if (status === 429) return true;
+  const msg: string = body?.error?.message ?? "";
+  return msg.includes("Quota exceeded") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED");
+}
+
+/** Extract "Please retry in Xs" seconds from the Gemini error body */
+function parseRetryAfterSeconds(body: any): number | null {
+  const msg: string = body?.error?.message ?? "";
+  const match = msg.match(/retry in ([\d.]+)s/i);
+  return match ? Math.ceil(parseFloat(match[1])) : null;
+}
+
+/** Convert any raw Gemini/API error into a user-friendly message */
+function friendlyError(body: any): string {
+  const msg: string = body?.error?.message ?? "";
+  if (isQuotaError(0, body)) {
+    const secs = parseRetryAfterSeconds(body);
+    return secs
+      ? `AI analysis is temporarily busy. Please try again in ${secs} seconds, or review manually below.`
+      : "AI analysis quota reached. Please review the uniform manually using the buttons below.";
+  }
+  if (msg.includes("API_KEY") || msg.includes("key")) {
+    return "AI service is not configured. Please review the uniform manually.";
+  }
+  return "Uniform review could not be completed automatically.";
+}
 
 function parseDataUrl(dataUrl: string) {
   const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
@@ -126,44 +159,48 @@ export async function POST(request: NextRequest) {
       `Context: ${body.employeeName || "unknown"} (${body.employeeId || "unknown"}), ${body.siteName || "unknown"}, ${body.district || "unknown"}, ${body.clientName || "unknown"}.`,
     ].join("\n");
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                {
-                  inlineData: {
-                    mimeType: image.mimeType,
-                    data: image.data,
-                  },
-                },
-              ],
-            },
+    const requestPayload = {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType: image.mimeType, data: image.data } },
           ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-            maxOutputTokens: MAX_RESPONSE_TOKENS,
-          },
-        }),
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.1,
+        maxOutputTokens: MAX_RESPONSE_TOKENS,
       },
-    );
+    };
 
-    const raw = await response.json().catch(() => null);
-    if (!response.ok) {
+    // Try each model in the cascade until one succeeds
+    let raw: any = null;
+    let response: Response | null = null;
+    let lastError = "AI review failed to complete.";
+
+    for (const model of MODEL_CASCADE) {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestPayload) },
+      );
+      raw = await response.json().catch(() => null);
+
+      if (response.ok) break; // success — stop cascade
+
+      // If quota error, try next model; otherwise bail immediately
+      if (!isQuotaError(response.status, raw)) {
+        lastError = friendlyError(raw);
+        break;
+      }
+      // quota exceeded — try next model in cascade
+      lastError = friendlyError(raw);
+    }
+
+    if (!response?.ok) {
       await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendancePhotoAnalysisFailure);
-      return NextResponse.json({
-        compliance: fallbackCompliance(
-          raw?.error?.message || "AI review failed to complete.",
-        ),
-      });
+      return NextResponse.json({ compliance: fallbackCompliance(lastError) });
     }
 
     const text =
