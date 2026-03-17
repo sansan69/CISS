@@ -14,6 +14,8 @@ export interface BreadcrumbItem {
 interface PageHeaderProps {
   title: string;
   description?: string;
+  /** Small all-caps label rendered above the title (eyebrow text) */
+  eyebrow?: string;
   breadcrumbs?: BreadcrumbItem[];
   actions?: ReactNode;
   className?: string;
@@ -37,6 +39,7 @@ interface PageHeaderProps {
 export function PageHeader({
   title,
   description,
+  eyebrow,
   breadcrumbs,
   actions,
   className,
@@ -47,6 +50,13 @@ export function PageHeader({
 
   return (
     <div className={cn("mb-5 sm:mb-6 animate-slide-down", className)}>
+      {/* Eyebrow */}
+      {eyebrow && (
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+          {eyebrow}
+        </p>
+      )}
+
       {/* Breadcrumbs */}
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav
