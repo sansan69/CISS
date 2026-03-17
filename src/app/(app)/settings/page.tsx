@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users, ShieldCheck, Wallet, GraduationCap } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users, ShieldCheck, Wallet, GraduationCap, Building2 } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -79,6 +79,12 @@ const settingsOptions = [
     description: "Create and manage reusable salary grade templates per client.",
     icon: GraduationCap,
     href: "/settings/salary-grades",
+  },
+  {
+    title: "Branches",
+    description: "Manage field branches, visit reports, training sessions, and expenses.",
+    icon: Building2,
+    href: "/branch-ops",
   },
 ];
 

@@ -5,6 +5,10 @@ import { isLegacyAdminEmail } from "@/lib/auth/admin";
 import type { AppRole, ResolvedAppUser } from "@/types/app";
 
 function claimsToRole(claims: Record<string, unknown> | undefined): AppRole | null {
+  if (claims?.role === "superAdmin") {
+    return "superAdmin";
+  }
+
   if (claims?.admin === true || claims?.role === "admin") {
     return "admin";
   }
@@ -32,8 +36,21 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
   const tokenEmail =
     typeof tokenResult.claims.email === "string" ? tokenResult.claims.email : undefined;
 
+  // Extract stateCode from custom claims
+  const stateCode =
+    typeof tokenResult.claims.stateCode === "string" ? tokenResult.claims.stateCode : null;
+
+  if (claimedRole === "superAdmin") {
+    return {
+      role: "superAdmin",
+      assignedDistricts: [],
+      stateCode,
+      isSuperAdmin: true,
+    };
+  }
+
   if (claimedRole === "admin" || isLegacyAdminEmail(user.email ?? tokenEmail)) {
-    return { role: "admin", assignedDistricts: [] };
+    return { role: "admin", assignedDistricts: [], stateCode, isSuperAdmin: false };
   }
 
   const officersRef = collection(db, "fieldOfficers");
@@ -45,10 +62,13 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
   if (!officerSnapshot.empty) {
     const raw = officerSnapshot.docs[0].data();
     const assignedDistricts = Array.isArray(raw?.assignedDistricts) ? (raw.assignedDistricts as string[]) : [];
+    const foStateCode = typeof raw?.stateCode === "string" ? raw.stateCode : stateCode;
     const refreshedRole = claimedRole === "fieldOfficer" ? claimedRole : await refreshClaimedRole(user);
     return {
       role: refreshedRole === "fieldOfficer" ? "fieldOfficer" : "user",
       assignedDistricts,
+      stateCode: foStateCode,
+      isSuperAdmin: false,
     };
   }
 
@@ -62,11 +82,15 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
       assignedDistricts: [],
       clientId,
       clientName,
+      stateCode,
+      isSuperAdmin: false,
     };
   }
 
   return {
     role: claimedRole ?? "user",
     assignedDistricts: [],
+    stateCode,
+    isSuperAdmin: false,
   };
 }

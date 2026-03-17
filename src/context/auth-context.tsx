@@ -8,6 +8,8 @@ interface AuthContextValue {
   userRole: string | null;
   assignedDistricts: string[];
   clientInfo: { clientId: string; clientName: string } | null;
+  stateCode: string | null;      // e.g. 'KL', 'MH'
+  isSuperAdmin: boolean;          // true if role === 'superAdmin'
 }
 
 export const AuthContext = createContext<AuthContextValue>({
@@ -15,6 +17,8 @@ export const AuthContext = createContext<AuthContextValue>({
   userRole: null,
   assignedDistricts: [],
   clientInfo: null,
+  stateCode: null,
+  isSuperAdmin: false,
 });
 
 export function useAppAuth() {

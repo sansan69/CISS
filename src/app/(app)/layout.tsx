@@ -34,6 +34,8 @@ import {
   ChevronRight,
   PanelLeft,
   ShieldCheck,
+  Receipt,
+  Globe,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -70,6 +72,8 @@ interface NavItem {
   icon: React.ElementType;
   exact?: boolean;
   adminOnly?: boolean;
+  superAdminOnly?: boolean;
+  fieldOfficerVisible?: boolean;
   clientVisible?: boolean;
 }
 
@@ -77,6 +81,8 @@ interface NavGroup {
   label: string;
   items: NavItem[];
   adminOnly?: boolean;
+  superAdminOnly?: boolean;
+  fieldOfficerVisible?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,9 +124,18 @@ const mainNavGroups: NavGroup[] = [
   },
   {
     label: 'Operations',
+    fieldOfficerVisible: true,
     items: [
-      { href: '/visit-reports', label: 'Visit Reports', icon: FileText },
-      { href: '/branch-ops',    label: 'Branch Ops',    icon: Building2, adminOnly: true },
+      { href: '/visit-reports',    label: 'Visit Reports',    icon: FileText,     fieldOfficerVisible: true },
+      { href: '/training-reports', label: 'Training Reports', icon: GraduationCap, fieldOfficerVisible: true },
+    ],
+  },
+  {
+    label: 'Branch Admin',
+    adminOnly: true,
+    items: [
+      { href: '/branch-ops', label: 'Branch Ops', icon: Building2, adminOnly: true },
+      { href: '/expenses',   label: 'Expenses',   icon: Receipt,   adminOnly: true },
     ],
   },
   {
@@ -128,6 +143,13 @@ const mainNavGroups: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
+    ],
+  },
+  {
+    label: 'Company',
+    superAdminOnly: true,
+    items: [
+      { href: '/settings/state-management', label: 'State Management', icon: Globe, superAdminOnly: true },
     ],
   },
 ];
@@ -144,6 +166,7 @@ const settingsSubItems: NavItem[] = [
   { href: '/settings/compliance-settings',     label: 'Compliance Settings',       icon: ShieldCheck },
   { href: '/settings/wage-config',             label: 'Wage Config',               icon: Wallet      },
   { href: '/settings/salary-grades',           label: 'Salary Grades',             icon: GraduationCap },
+  { href: '/branch-ops',                       label: 'Branches',                  icon: Building2  },
 ];
 
 // Bottom nav: 4 primary + More
@@ -162,14 +185,22 @@ function isActiveItem(pathname: string, item: NavItem): boolean {
   return item.exact ? pathname === item.href : pathname.startsWith(item.href);
 }
 
-function getVisibleGroups(groups: NavGroup[], userRole: string | null): NavGroup[] {
+function getVisibleGroups(groups: NavGroup[], userRole: string | null, isSuperAdmin?: boolean): NavGroup[] {
   return groups
-    .filter(g => !g.adminOnly || userRole === 'admin')
+    .filter(g => {
+      if (g.superAdminOnly) return isSuperAdmin === true;
+      if (g.adminOnly) return userRole === 'admin' || isSuperAdmin === true;
+      return true;
+    })
     .map(g => ({
       ...g,
       items: g.items.filter(item => {
-        if (item.adminOnly && userRole !== 'admin') return false;
+        if (item.superAdminOnly) return isSuperAdmin === true;
+        if (item.adminOnly && userRole !== 'admin' && !isSuperAdmin) return false;
         if (!item.clientVisible && userRole === 'client') return false;
+        // Operations group items: visible to admin and fieldOfficer
+        if (item.fieldOfficerVisible && userRole === 'fieldOfficer') return true;
+        if (!item.clientVisible && !item.fieldOfficerVisible && userRole === 'fieldOfficer') return false;
         return true;
       }),
     }))
@@ -282,6 +313,7 @@ function DesktopSidebar({
   onLogout,
   collapsed,
   onToggle,
+  isSuperAdmin,
 }: {
   userRole: string | null;
   isSettingsPage: boolean;
@@ -289,8 +321,9 @@ function DesktopSidebar({
   onLogout: () => void;
   collapsed: boolean;
   onToggle: () => void;
+  isSuperAdmin?: boolean;
 }) {
-  const visibleGroups = getVisibleGroups(mainNavGroups, userRole);
+  const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin);
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin';
   const initials = displayName.slice(0, 2).toUpperCase();
   const roleBadge = userRole === 'admin' ? 'Administrator'
@@ -548,6 +581,7 @@ function MobileMoreSheet({
   user,
   onLogout,
   isSettingsPage,
+  isSuperAdmin,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -555,8 +589,9 @@ function MobileMoreSheet({
   user: User;
   onLogout: () => void;
   isSettingsPage: boolean;
+  isSuperAdmin?: boolean;
 }) {
-  const visibleGroups = getVisibleGroups(mainNavGroups, userRole);
+  const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin);
   const { haptic } = useHaptics();
   const close = () => { haptic('light'); onOpenChange(false); };
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin';
@@ -844,6 +879,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [userRole, setUserRole]           = useState<string | null>(null);
   const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
   const [clientInfo, setClientInfo]       = useState<{ clientId: string; clientName: string } | null>(null);
+  const [stateCode, setStateCode]         = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin]   = useState<boolean>(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -882,6 +919,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           const appUser = await resolveAppUser(user);
           setUserRole(appUser.role);
           setAssignedDistricts(appUser.assignedDistricts);
+          setStateCode(appUser.stateCode ?? null);
+          setIsSuperAdmin(appUser.isSuperAdmin ?? false);
           setClientInfo(appUser.clientId && appUser.clientName
             ? { clientId: appUser.clientId, clientName: appUser.clientName }
             : null
@@ -890,12 +929,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
           setUserRole('user');
           setAssignedDistricts([]);
           setClientInfo(null);
+          setStateCode(null);
+          setIsSuperAdmin(false);
         }
       } else {
         setAuthUser(null);
         setUserRole(null);
         setAssignedDistricts([]);
         setClientInfo(null);
+        setStateCode(null);
+        setIsSuperAdmin(false);
         router.replace('/admin-login');
       }
       setIsLoadingAuth(false);
@@ -913,8 +956,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const authContextValue = useMemo(
-    () => ({ user: authUser, userRole, assignedDistricts, clientInfo }),
-    [authUser, userRole, assignedDistricts, clientInfo]
+    () => ({ user: authUser, userRole, assignedDistricts, clientInfo, stateCode, isSuperAdmin }),
+    [authUser, userRole, assignedDistricts, clientInfo, stateCode, isSuperAdmin]
   );
 
   if (isLoadingAuth || !authUser) {
@@ -946,6 +989,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           onLogout={handleLogout}
           collapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
+          isSuperAdmin={isSuperAdmin}
         />
       </div>
 
@@ -992,6 +1036,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           user={authUser}
           onLogout={handleLogout}
           isSettingsPage={isSettingsPage}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
     </div>
