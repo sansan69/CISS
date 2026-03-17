@@ -2,9 +2,10 @@
 
 import {
   Users, UserCheck, UserMinus, Clock,
-  ArrowRight, UserPlus, AlertCircle as AlertIcon,
+  ArrowRight, UserPlus, AlertCircle as AlertIcon, AlertCircle,
   CalendarClock, QrCode, Briefcase, TrendingUp,
   ShieldCheck, Star, ChevronRight, Activity,
+  AlertTriangle, CheckCircle2, MapPin, Building,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { db, auth } from '@/lib/firebase';
@@ -34,6 +35,16 @@ interface NewHiresData    { month: string; hires: number; }
 interface ClientDistData  { name: string; value: number; }
 interface RecentActivity  { id: string; text: string; subtext: string; timestamp: Date; }
 interface UpcomingDuty    { id: string; siteName: string; clientName: string; date: Date; totalManpower: number; }
+interface ClientCoverage  {
+  clientName: string;
+  totalGuards: number;
+  activeGuards: number;
+  checkedInToday: number;      // unique employees with status=In today
+  coveragePct: number;         // checkedInToday / activeGuards * 100
+  complianceClear: number;     // % photo compliance 'clear' today
+  mockLocationAlerts: number;  // isMockLocationSuspected count today
+  districts: string[];         // unique districts
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -81,6 +92,174 @@ function SkeletonRow() {
       </div>
       <SkeletonBlock className="h-6 w-10 rounded-lg shrink-0" />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Client Overview — scrollable coverage cards + ranked strength list
+// ─────────────────────────────────────────────────────────────────────────────
+
+function coverageColor(pct: number) {
+  if (pct >= 70) return { bar: "bg-emerald-500", text: "text-emerald-600", bg: "bg-emerald-50" };
+  if (pct >= 35) return { bar: "bg-amber-400",   text: "text-amber-600",   bg: "bg-amber-50" };
+  return               { bar: "bg-red-400",       text: "text-red-600",     bg: "bg-red-50" };
+}
+
+function ClientCoverageCards({ data, isLoading }: { data: ClientCoverage[]; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="-mx-4 sm:mx-0">
+        <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 sm:px-0 pb-1">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="rounded-2xl border border-border/60 p-4 min-w-[152px] shrink-0 space-y-3">
+              <SkeletonBlock className="h-3.5 w-24" />
+              <SkeletonBlock className="h-7 w-14" />
+              <SkeletonBlock className="h-2 w-full rounded-full" />
+              <SkeletonBlock className="h-3 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!data.length) return null;
+
+  return (
+    <div className="-mx-4 sm:mx-0">
+      <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 sm:px-0 pb-1">
+        {data.map(client => {
+          const col = coverageColor(client.coveragePct);
+          return (
+            <div
+              key={client.clientName}
+              className="relative overflow-hidden rounded-2xl bg-card border border-border/60 shadow-card p-4 min-w-[152px] shrink-0 flex flex-col gap-2"
+            >
+              {/* Colour top accent */}
+              <div className={cn("absolute top-0 left-0 right-0 h-1 rounded-t-2xl", col.bar)} />
+
+              {/* Client name */}
+              <p className="text-xs font-bold text-foreground truncate leading-tight mt-1 pr-1" title={client.clientName}>
+                {client.clientName}
+              </p>
+
+              {/* Big checked-in number */}
+              <div className="flex items-end gap-1.5">
+                <span className={cn("text-2xl font-bold tabular-nums leading-none", col.text)}>
+                  {client.checkedInToday}
+                </span>
+                <span className="text-xs text-muted-foreground mb-0.5 leading-none">
+                  / {client.activeGuards}
+                </span>
+              </div>
+
+              {/* Coverage bar */}
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-700", col.bar)}
+                  style={{ width: `${Math.min(client.coveragePct, 100)}%` }}
+                />
+              </div>
+
+              {/* Footer row */}
+              <div className="flex items-center justify-between gap-1 mt-0.5">
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  {Math.round(client.coveragePct)}% on duty
+                </span>
+                {client.mockLocationAlerts > 0 && (
+                  <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-semibold">
+                    <AlertTriangle className="h-3 w-3" />
+                    {client.mockLocationAlerts}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Ranked table: top clients by guard strength */
+function ClientStrengthTable({ data, isLoading }: { data: ClientCoverage[]; isLoading: boolean }) {
+  const sorted = [...data].sort((a, b) => b.totalGuards - a.totalGuards);
+  const max = sorted[0]?.totalGuards || 1;
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="divide-y divide-border/60 px-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="py-3 space-y-2">
+                <SkeletonBlock className="h-3.5 w-32" />
+                <SkeletonBlock className="h-2 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="px-4 py-8">
+            <EmptyState icon={Building} compact title="No client data yet" />
+          </div>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {sorted.map((client, idx) => {
+              const col = coverageColor(client.coveragePct);
+              return (
+                <div key={client.clientName} className="flex items-center gap-3 px-4 py-3">
+                  {/* Rank */}
+                  <span className="text-xs font-bold text-muted-foreground/60 w-4 shrink-0 tabular-nums">
+                    {idx + 1}
+                  </span>
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-sm font-semibold truncate">{client.clientName}</p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {client.mockLocationAlerts > 0 && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-red-500">
+                            <AlertTriangle className="h-3 w-3" />
+                            {client.mockLocationAlerts} alert{client.mockLocationAlerts > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        <span className={cn("text-xs font-bold tabular-nums", col.text)}>
+                          {client.checkedInToday}/{client.activeGuards}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Stacked bar: active (green) on top of total */}
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-brand-blue/20 relative overflow-hidden"
+                        style={{ width: `${(client.totalGuards / max) * 100}%` }}
+                      >
+                        <div
+                          className={cn("absolute inset-y-0 left-0 rounded-full", col.bar)}
+                          style={{ width: `${client.coveragePct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-muted-foreground">
+                        {client.totalGuards} total · {client.activeGuards} active
+                      </span>
+                      {client.districts.length > 0 && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <MapPin className="h-2.5 w-2.5" />
+                          {client.districts.slice(0, 2).join(', ')}
+                          {client.districts.length > 2 && ` +${client.districts.length - 2}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -177,6 +356,7 @@ export default function DashboardPage() {
   const [clientDistData, setClientDistData] = useState<ClientDistData[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
+  const [clientCoverage, setClientCoverage] = useState<ClientCoverage[]>([]);
   const [todayLogs, setTodayLogs]           = useState<any[]>([]);
   const [clientAttendance, setClientAttendance] = useState({ inToday: 0, outToday: 0, onDuty: 0 });
   const [activeChartTab, setActiveChartTab] = useState<'hires' | 'distribution'>('hires');
@@ -294,6 +474,80 @@ export default function DashboardPage() {
             timestamp: (data.createdAt as Timestamp).toDate(),
           };
         }));
+
+        // ── Client Coverage Analytics (admin only) ──────────────────────────
+        if (includeCharts) {
+          try {
+            // Fetch today's attendance logs for all clients
+            const todayAdminLogsSnap = await getDocs(query(
+              collection(db, 'attendanceLogs'),
+              where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
+              orderBy('createdAt', 'desc'),
+            ));
+            const todayAdminLogs = todayAdminLogsSnap.docs.map(d => d.data() as any);
+
+            // Build per-client maps from employees
+            const clientGuardMap = new Map<string, { total: number; active: number; districts: Set<string> }>();
+            (allEmpSnap as any).docs.forEach((d: any) => {
+              const emp = d.data();
+              const cn = emp.clientName || 'Unassigned';
+              if (!clientGuardMap.has(cn)) clientGuardMap.set(cn, { total: 0, active: 0, districts: new Set() });
+              const entry = clientGuardMap.get(cn)!;
+              entry.total++;
+              if (emp.status === 'Active') entry.active++;
+              if (emp.district) entry.districts.add(emp.district);
+            });
+
+            // Build per-client attendance maps from today's logs
+            const clientCheckedIn = new Map<string, Set<string>>();   // employeeId set
+            const clientMockAlerts = new Map<string, number>();
+            const clientCompliance = new Map<string, { clear: number; total: number }>();
+
+            todayAdminLogs.forEach(log => {
+              const cn = log.clientName || 'Unassigned';
+              // Latest status tracking (only count In)
+              if (log.status === 'In') {
+                if (!clientCheckedIn.has(cn)) clientCheckedIn.set(cn, new Set());
+                clientCheckedIn.get(cn)!.add(log.employeeId);
+              }
+              // Mock location alerts
+              if (log.isMockLocationSuspected) {
+                clientMockAlerts.set(cn, (clientMockAlerts.get(cn) ?? 0) + 1);
+              }
+              // Photo compliance
+              if (log.photoCompliance?.overallStatus) {
+                if (!clientCompliance.has(cn)) clientCompliance.set(cn, { clear: 0, total: 0 });
+                const comp = clientCompliance.get(cn)!;
+                comp.total++;
+                if (log.photoCompliance.overallStatus === 'clear') comp.clear++;
+              }
+            });
+
+            // Assemble coverage objects (only clients with at least 1 guard)
+            const coverage: ClientCoverage[] = [];
+            clientGuardMap.forEach((guards, clientName) => {
+              if (clientName === 'Unassigned' && guards.total === 0) return;
+              const checkedIn = clientCheckedIn.get(clientName)?.size ?? 0;
+              const active    = guards.active;
+              const comp      = clientCompliance.get(clientName);
+              coverage.push({
+                clientName,
+                totalGuards:        guards.total,
+                activeGuards:       active,
+                checkedInToday:     checkedIn,
+                coveragePct:        active > 0 ? Math.round((checkedIn / active) * 100) : 0,
+                complianceClear:    comp ? Math.round((comp.clear / comp.total) * 100) : 0,
+                mockLocationAlerts: clientMockAlerts.get(clientName) ?? 0,
+                districts:          Array.from(guards.districts).sort(),
+              });
+            });
+            // Sort by most guards
+            coverage.sort((a, b) => b.totalGuards - a.totalGuards);
+            setClientCoverage(coverage);
+          } catch {
+            // Non-fatal: client coverage section just won't show
+          }
+        }
 
         setUpcomingDuties((dutiesSnap as any).docs.map((d: any) => {
           const data = d.data();
@@ -459,6 +713,54 @@ export default function DashboardPage() {
               </Button>
             </CardFooter>
           </Card>
+        </div>
+      )}
+
+      {/* ── Admin: Client Overview ───────────────────────────────────────── */}
+      {userRole !== 'fieldOfficer' && userRole !== 'client' && clientCoverage.length > 0 && (
+        <div>
+          {/* Header row */}
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="section-label">Client Overview</p>
+              <p className="text-[11px] text-muted-foreground -mt-0.5">Today's guard coverage by client</p>
+            </div>
+            {/* Summary badges */}
+            {!isLoading && (() => {
+              const alerts = clientCoverage.reduce((s, c) => s + c.mockLocationAlerts, 0);
+              const lowCoverage = clientCoverage.filter(c => c.activeGuards > 0 && c.coveragePct < 35).length;
+              return (
+                <div className="flex items-center gap-2 shrink-0">
+                  {alerts > 0 && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 rounded-full px-2 py-0.5">
+                      <AlertTriangle className="h-3 w-3" />
+                      {alerts} alert{alerts > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {lowCoverage > 0 && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
+                      <AlertCircle className="h-3 w-3" />
+                      {lowCoverage} low
+                    </span>
+                  )}
+                  {alerts === 0 && lowCoverage === 0 && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
+                      <CheckCircle2 className="h-3 w-3" />
+                      All good
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Scrollable coverage cards */}
+          <ClientCoverageCards data={clientCoverage} isLoading={isLoading} />
+
+          {/* Ranked strength table */}
+          <div className="mt-3">
+            <ClientStrengthTable data={clientCoverage} isLoading={isLoading} />
+          </div>
         </div>
       )}
 
