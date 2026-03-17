@@ -7,11 +7,11 @@ import {
   ShieldCheck, Star, ChevronRight, Activity,
   AlertTriangle, CheckCircle2, MapPin, Building,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { db } from '@/lib/firebase';
 import {
-  collection, getCountFromServer, getDocs, query, where,
-  Timestamp, orderBy, limit, onSnapshot,
+  collection, query, where,
+  Timestamp, orderBy, limit, onSnapshot, type Query,
 } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
 import { format, subMonths, startOfMonth, startOfToday, addDays, endOfDay } from 'date-fns';
@@ -353,183 +353,173 @@ export default function DashboardPage() {
   const [newHiresData, setNewHiresData]     = useState<NewHiresData[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
-  const [clientCoverage, setClientCoverage] = useState<ClientCoverage[]>([]);
   const [todayLogs, setTodayLogs]           = useState<any[]>([]);
   const [clientAttendance, setClientAttendance] = useState({ inToday: 0, outToday: 0, onDuty: 0 });
   const [activeChartTab, setActiveChartTab] = useState<'hires' | 'distribution'>('hires');
+  // Intermediate state for admin coverage — combined via useMemo
+  const [clientGuardMap, setClientGuardMap] = useState<Map<string, { total: number; active: number; districts: Set<string> }> | null>(null);
+  const [todayAttendanceDocs, setTodayAttendanceDocs] = useState<any[]>([]);
 
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
   const { user: currentUser, userRole, assignedDistricts, clientInfo } = useAppAuth();
 
-  // Data fetch
+  // Client coverage: computed reactively from both live data sources
+  const clientCoverage = useMemo<ClientCoverage[]>(() => {
+    if (!clientGuardMap) return [];
+    const clientCheckedIn  = new Map<string, Set<string>>();
+    const clientMockAlerts = new Map<string, number>();
+    const clientCompliance = new Map<string, { clear: number; total: number }>();
+    todayAttendanceDocs.forEach(log => {
+      const cn = log.clientName || 'Unassigned';
+      if (log.status === 'In') {
+        if (!clientCheckedIn.has(cn)) clientCheckedIn.set(cn, new Set());
+        clientCheckedIn.get(cn)!.add(log.employeeId);
+      }
+      if (log.isMockLocationSuspected) clientMockAlerts.set(cn, (clientMockAlerts.get(cn) ?? 0) + 1);
+      if (log.photoCompliance?.overallStatus) {
+        if (!clientCompliance.has(cn)) clientCompliance.set(cn, { clear: 0, total: 0 });
+        const comp = clientCompliance.get(cn)!;
+        comp.total++;
+        if (log.photoCompliance.overallStatus === 'clear') comp.clear++;
+      }
+    });
+    const coverage: ClientCoverage[] = [];
+    clientGuardMap.forEach((guards, clientName) => {
+      if (clientName === 'Unassigned' && guards.total === 0) return;
+      const checkedIn = clientCheckedIn.get(clientName)?.size ?? 0;
+      const comp      = clientCompliance.get(clientName);
+      coverage.push({
+        clientName,
+        totalGuards:        guards.total,
+        activeGuards:       guards.active,
+        checkedInToday:     checkedIn,
+        coveragePct:        guards.active > 0 ? Math.round((checkedIn / guards.active) * 100) : 0,
+        complianceClear:    comp ? Math.round((comp.clear / comp.total) * 100) : 0,
+        mockLocationAlerts: clientMockAlerts.get(clientName) ?? 0,
+        districts:          Array.from(guards.districts).sort(),
+      });
+    });
+    coverage.sort((a, b) => b.totalGuards - a.totalGuards);
+    return coverage;
+  }, [clientGuardMap, todayAttendanceDocs]);
+
+  // Real-time data subscriptions — fire from IndexedDB cache instantly, then sync from server
   useEffect(() => {
     if (userRole === null) return;
+    const cleanups: Array<() => void> = [];
+    const firstFired = { emp: false };
 
-    const fetchData = async () => {
-      setIsLoading(true); setError(null);
-      try {
-        let empQ: any = collection(db, "employees");
-        if (userRole === 'fieldOfficer' && assignedDistricts.length > 0)
-          empQ = query(empQ, where('district', 'in', assignedDistricts));
-        else if (userRole === 'client' && clientInfo?.clientName)
-          empQ = query(empQ, where('clientName', '==', clientInfo.clientName));
-
-        const includeCharts = userRole !== 'fieldOfficer' && userRole !== 'client';
-        const sixMonthsAgo  = startOfMonth(subMonths(new Date(), 5));
-
-        const [totalSnap, activeSnap, leaveSnap, inactiveSnap, hiresSnap, recentSnap, allEmpSnap, dutiesSnap] =
-          await Promise.all([
-            getCountFromServer(empQ),
-            getCountFromServer(query(empQ, where('status', '==', 'Active'))),
-            getCountFromServer(query(empQ, where('status', '==', 'OnLeave'))),
-            getCountFromServer(query(empQ, where('status', 'in', ['Inactive', 'Exited']))),
-            includeCharts
-              ? getDocs(query(empQ, where("createdAt", ">=", Timestamp.fromDate(sixMonthsAgo))))
-              : Promise.resolve({ docs: [] }),
-            getDocs(query(empQ, orderBy("createdAt", "desc"), limit(5))),
-            includeCharts
-              ? getDocs(collection(db, "employees"))
-              : Promise.resolve({ docs: [] }),
-            userRole === 'fieldOfficer' && assignedDistricts.length > 0
-              ? getDocs(query(
-                  collection(db, "workOrders"),
-                  where("district", "in", assignedDistricts),
-                  where("date", ">=", Timestamp.fromDate(startOfToday())),
-                  where("date", "<=", Timestamp.fromDate(endOfDay(addDays(new Date(), 6)))),
-                  orderBy("date", "asc"), limit(10)
-                ))
-              : Promise.resolve({ docs: [] }),
-          ]);
-
-        setStats({
-          total:            totalSnap.data().count,
-          active:           activeSnap.data().count,
-          onLeave:          leaveSnap.data().count,
-          inactiveOrExited: inactiveSnap.data().count,
-        });
-
-        const monthStarts = Array.from({ length: 6 }, (_, i) => startOfMonth(subMonths(new Date(), 5 - i)));
-        const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));
-        const byMonth: Record<string, number> = Object.fromEntries(monthLabels.map(l => [l, 0]));
-        (hiresSnap as any).docs.forEach((d: any) => {
-          const cd = d.data().createdAt, jd = d.data().joiningDate;
-          const coerce = (v: any): Date | null => {
-            if (!v) return null;
-            if (typeof v.toDate === 'function') return v.toDate();
-            const p = new Date(v); return isNaN(p.getTime()) ? null : p;
-          };
-          const date = coerce(cd) || coerce(jd);
-          if (date) { const k = format(startOfMonth(date), 'MMM yyyy'); if (k in byMonth) byMonth[k]++; }
-        });
-        setNewHiresData(monthLabels.map(m => ({ month: m, hires: byMonth[m] })));
-
-        setRecentActivity((recentSnap as any).docs.map((d: any) => {
-          const data = d.data() as Employee;
-          return {
-            id: d.id,
-            text: data.fullName,
-            subtext: `${data.clientName || 'Unassigned'} · ${data.status}`,
-            timestamp: (data.createdAt as Timestamp).toDate(),
-          };
-        }));
-
-        // ── Client Coverage Analytics (admin only) ──────────────────────────
-        if (includeCharts) {
-          try {
-            // Fetch today's attendance logs for all clients
-            const todayAdminLogsSnap = await getDocs(query(
-              collection(db, 'attendanceLogs'),
-              where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
-              orderBy('createdAt', 'desc'),
-            ));
-            const todayAdminLogs = todayAdminLogsSnap.docs.map(d => d.data() as any);
-
-            // Build per-client maps from employees
-            const clientGuardMap = new Map<string, { total: number; active: number; districts: Set<string> }>();
-            (allEmpSnap as any).docs.forEach((d: any) => {
-              const emp = d.data();
-              const cn = emp.clientName || 'Unassigned';
-              if (!clientGuardMap.has(cn)) clientGuardMap.set(cn, { total: 0, active: 0, districts: new Set() });
-              const entry = clientGuardMap.get(cn)!;
-              entry.total++;
-              if (emp.status === 'Active') entry.active++;
-              if (emp.district) entry.districts.add(emp.district);
-            });
-
-            // Build per-client attendance maps from today's logs
-            const clientCheckedIn = new Map<string, Set<string>>();   // employeeId set
-            const clientMockAlerts = new Map<string, number>();
-            const clientCompliance = new Map<string, { clear: number; total: number }>();
-
-            todayAdminLogs.forEach(log => {
-              const cn = log.clientName || 'Unassigned';
-              // Latest status tracking (only count In)
-              if (log.status === 'In') {
-                if (!clientCheckedIn.has(cn)) clientCheckedIn.set(cn, new Set());
-                clientCheckedIn.get(cn)!.add(log.employeeId);
-              }
-              // Mock location alerts
-              if (log.isMockLocationSuspected) {
-                clientMockAlerts.set(cn, (clientMockAlerts.get(cn) ?? 0) + 1);
-              }
-              // Photo compliance
-              if (log.photoCompliance?.overallStatus) {
-                if (!clientCompliance.has(cn)) clientCompliance.set(cn, { clear: 0, total: 0 });
-                const comp = clientCompliance.get(cn)!;
-                comp.total++;
-                if (log.photoCompliance.overallStatus === 'clear') comp.clear++;
-              }
-            });
-
-            // Assemble coverage objects (only clients with at least 1 guard)
-            const coverage: ClientCoverage[] = [];
-            clientGuardMap.forEach((guards, clientName) => {
-              if (clientName === 'Unassigned' && guards.total === 0) return;
-              const checkedIn = clientCheckedIn.get(clientName)?.size ?? 0;
-              const active    = guards.active;
-              const comp      = clientCompliance.get(clientName);
-              coverage.push({
-                clientName,
-                totalGuards:        guards.total,
-                activeGuards:       active,
-                checkedInToday:     checkedIn,
-                coveragePct:        active > 0 ? Math.round((checkedIn / active) * 100) : 0,
-                complianceClear:    comp ? Math.round((comp.clear / comp.total) * 100) : 0,
-                mockLocationAlerts: clientMockAlerts.get(clientName) ?? 0,
-                districts:          Array.from(guards.districts).sort(),
-              });
-            });
-            // Sort by most guards
-            coverage.sort((a, b) => b.totalGuards - a.totalGuards);
-            setClientCoverage(coverage);
-          } catch {
-            // Non-fatal: client coverage section just won't show
-          }
-        }
-
-        setUpcomingDuties((dutiesSnap as any).docs.map((d: any) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            siteName: data.siteName,
-            clientName: data.clientName,
-            date: (data.date as Timestamp).toDate(),
-            totalManpower: data.totalManpower,
-          };
-        }));
-
-      } catch (err: any) {
-        let msg = "Failed to load dashboard data.";
-        if (err.code === 'permission-denied') msg = "Permission denied — check Firestore rules.";
-        if (err.code === 'failed-precondition') msg = "A required database index is missing.";
-        setError(msg);
-      } finally {
-        setIsLoading(false);
-      }
+    const includeCharts = userRole !== 'fieldOfficer' && userRole !== 'client';
+    const sixMonthsAgo  = startOfMonth(subMonths(new Date(), 5));
+    const coerce = (v: any): Date | null => {
+      if (!v) return null;
+      if (typeof v.toDate === 'function') return v.toDate();
+      const p = new Date(v); return isNaN(p.getTime()) ? null : p;
     };
 
-    fetchData();
+    // ── Employee subscription (stats + charts + recent activity) ────────────
+    let empQ: any = collection(db, "employees");
+    if (userRole === 'fieldOfficer' && assignedDistricts.length > 0)
+      empQ = query(empQ, where('district', 'in', assignedDistricts));
+    else if (userRole === 'client' && clientInfo?.clientName)
+      empQ = query(empQ, where('clientName', '==', clientInfo.clientName));
+
+    // Field officer with no districts: nothing to show
+    if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+      setIsLoading(false);
+      return;
+    }
+
+    const monthStarts = Array.from({ length: 6 }, (_, i) => startOfMonth(subMonths(new Date(), 5 - i)));
+    const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));
+
+    const unsub1 = onSnapshot(empQ as Query, (snap) => {
+      let total = 0, active = 0, onLeave = 0, inactiveOrExited = 0;
+      const byMonth: Record<string, number> = Object.fromEntries(monthLabels.map(l => [l, 0]));
+      const newGuardMap = new Map<string, { total: number; active: number; districts: Set<string> }>();
+      const sortable: Array<{ id: string; data: Employee; ts: number }> = [];
+
+      snap.docs.forEach(d => {
+        const emp = d.data() as Employee;
+        total++;
+        if (emp.status === 'Active') active++;
+        else if (emp.status === 'OnLeave') onLeave++;
+        else if (emp.status === 'Inactive' || emp.status === 'Exited') inactiveOrExited++;
+
+        if (includeCharts) {
+          const date = coerce(emp.createdAt as any) || coerce((emp as any).joiningDate);
+          if (date && date >= sixMonthsAgo) {
+            const k = format(startOfMonth(date), 'MMM yyyy');
+            if (k in byMonth) byMonth[k]++;
+          }
+          const cn = emp.clientName || 'Unassigned';
+          if (!newGuardMap.has(cn)) newGuardMap.set(cn, { total: 0, active: 0, districts: new Set() });
+          const entry = newGuardMap.get(cn)!;
+          entry.total++;
+          if (emp.status === 'Active') entry.active++;
+          if ((emp as any).district) entry.districts.add((emp as any).district);
+        }
+
+        sortable.push({ id: d.id, data: emp, ts: (emp.createdAt as any)?.toMillis?.() ?? 0 });
+      });
+
+      setStats({ total, active, onLeave, inactiveOrExited });
+      if (includeCharts) {
+        setNewHiresData(monthLabels.map(m => ({ month: m, hires: byMonth[m] })));
+        setClientGuardMap(newGuardMap);
+      }
+      sortable.sort((a, b) => b.ts - a.ts);
+      setRecentActivity(sortable.slice(0, 5).map(({ id, data }) => ({
+        id,
+        text: data.fullName,
+        subtext: `${data.clientName || 'Unassigned'} · ${data.status}`,
+        timestamp: (data.createdAt as Timestamp).toDate(),
+      })));
+
+      if (!firstFired.emp) { firstFired.emp = true; setIsLoading(false); }
+    }, (err: any) => {
+      let msg = "Failed to load dashboard data.";
+      if (err.code === 'permission-denied') msg = "Permission denied — check Firestore rules.";
+      if (err.code === 'failed-precondition') msg = "A required database index is missing.";
+      setError(msg);
+      setIsLoading(false);
+    });
+    cleanups.push(unsub1);
+
+    // ── Upcoming duties (field officer) ──────────────────────────────────────
+    if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+      const unsub2 = onSnapshot(
+        query(
+          collection(db, "workOrders"),
+          where("district", "in", assignedDistricts),
+          where("date", ">=", Timestamp.fromDate(startOfToday())),
+          where("date", "<=", Timestamp.fromDate(endOfDay(addDays(new Date(), 6)))),
+          orderBy("date", "asc"), limit(10)
+        ),
+        (snap) => setUpcomingDuties(snap.docs.map(d => {
+          const data = d.data();
+          return { id: d.id, siteName: data.siteName, clientName: data.clientName,
+            date: (data.date as Timestamp).toDate(), totalManpower: data.totalManpower };
+        }))
+      );
+      cleanups.push(unsub2);
+    }
+
+    // ── Today's attendance for admin coverage ─────────────────────────────────
+    if (includeCharts) {
+      const unsub3 = onSnapshot(
+        query(
+          collection(db, 'attendanceLogs'),
+          where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
+          orderBy('createdAt', 'desc')
+        ),
+        (snap) => setTodayAttendanceDocs(snap.docs.map(d => d.data() as any))
+      );
+      cleanups.push(unsub3);
+    }
+
+    return () => cleanups.forEach(u => u());
   }, [userRole, assignedDistricts, clientInfo]);
 
   // Live attendance for client users

@@ -6,7 +6,12 @@ import {
   indexedDBLocalPersistence,
   setPersistence,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // This configuration is now the single source of truth for the entire frontend application.
@@ -39,7 +44,21 @@ if (!getApps().length) {
 }
 
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Client: persistent IndexedDB cache → data appears instantly from cache, then syncs.
+// Server (API routes): plain Firestore without browser cache.
+const db = (() => {
+  if (typeof window === "undefined") return getFirestore(app);
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    // Already initialized on hot-reload — getFirestore returns the same instance
+    return getFirestore(app);
+  }
+})();
+
 const storage = getStorage(app);
 
 let authPersistencePromise: Promise<void> | null = null;
