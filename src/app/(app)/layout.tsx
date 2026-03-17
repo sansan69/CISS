@@ -48,7 +48,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { cn } from '@/lib/utils';
@@ -908,6 +908,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   };
 
+  const authContextValue = useMemo(
+    () => ({ user: authUser, userRole, assignedDistricts, clientInfo }),
+    [authUser, userRole, assignedDistricts, clientInfo]
+  );
+
   if (isLoadingAuth || !authUser) {
     return <LoadingScreen />;
   }
@@ -920,6 +925,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   );
 
   return (
+    <AuthContext.Provider value={authContextValue}>
     <div className="flex min-h-screen w-full bg-background">
       {/* ── Desktop Sidebar ── */}
       <div
@@ -963,9 +969,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Page content */}
         <main className="flex-1 p-4 sm:p-5 lg:p-6 pb-[88px] md:pb-6 overflow-x-hidden">
-          <AuthContext.Provider value={{ user: authUser, userRole, assignedDistricts, clientInfo }}>
-            {children}
-          </AuthContext.Provider>
+          {children}
         </main>
       </div>
 
@@ -987,6 +991,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         />
       )}
     </div>
+    </AuthContext.Provider>
   );
 }
 
