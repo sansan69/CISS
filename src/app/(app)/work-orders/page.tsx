@@ -63,6 +63,62 @@ export default function WorkOrderPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+
+    // ── Soft-delete with undo ────────────────────────────────────────────────
+    // Orders hidden optimistically while the undo window is open
+    const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+    // Map of orderId → saved data snapshot (for undo restore)
+    const pendingDeleteData = React.useRef<Map<string, WorkOrder>>(new Map());
+    // Map of orderId → timer handle
+    const pendingDeleteTimers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    const UNDO_MS = 5_000;
+
+    const handleDeleteOrder = React.useCallback((order: WorkOrder) => {
+        const id = order.id;
+
+        // 1. Optimistically hide
+        setPendingDeleteIds(prev => new Set(prev).add(id));
+        pendingDeleteData.current.set(id, order);
+
+        // 2. Schedule actual Firestore delete after UNDO_MS
+        const timer = setTimeout(async () => {
+            try {
+                await deleteDoc(doc(db, 'workOrders', id));
+            } catch (e) {
+                console.error('Delete failed', e);
+                // Restore on error
+                setPendingDeleteIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+                toast({ title: 'Delete failed', description: 'The work order could not be deleted.', variant: 'destructive' });
+            }
+            pendingDeleteData.current.delete(id);
+            pendingDeleteTimers.current.delete(id);
+            setPendingDeleteIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+        }, UNDO_MS);
+        pendingDeleteTimers.current.set(id, timer);
+
+        // 3. Show undo toast
+        toast({
+            title: 'Work order deleted',
+            description: 'The duty entry has been removed.',
+            duration: UNDO_MS,
+            action: (
+                <button
+                    onClick={() => {
+                        // Cancel the delete
+                        clearTimeout(pendingDeleteTimers.current.get(id));
+                        pendingDeleteTimers.current.delete(id);
+                        pendingDeleteData.current.delete(id);
+                        setPendingDeleteIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+                        toast({ title: 'Undo successful', description: 'Work order has been restored.', duration: 2500 });
+                    }}
+                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                    Undo
+                </button>
+            ) as any,
+        });
+    }, [toast]);
     const selectedDistrict = searchParams.get('district') || 'all';
     const dateSort = searchParams.get('dateSort') === 'desc' ? 'desc' : 'asc';
     const selectedDateValue = searchParams.get('date') || '';
@@ -644,7 +700,7 @@ export default function WorkOrderPage() {
                                     <div className="mt-4">
                                         <h4 className="text-sm font-medium mb-2">Required Manpower:</h4>
                                         <div className="grid gap-2 sm:flex sm:flex-wrap">
-                                            {orders.map(order => {
+                                            {orders.filter(o => !pendingDeleteIds.has(o.id)).map(order => {
                                                 const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
                                                 const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
                                                 const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
@@ -676,13 +732,11 @@ export default function WorkOrderPage() {
                                                             <Progress value={percent} className="h-1.5" />
                                                             <p className="text-[11px] text-muted-foreground">Assigned {assignedCount}/{totalRequired} ({percent}%)</p>
                                                         </div>
-                                                        {userRole === 'admin' && (
+                                                        {userRole === 'admin' && !pendingDeleteIds.has(order.id) && (
                                                             <button
-                                                                className="absolute top-1 right-1 rounded p-1 text-destructive hover:bg-red-50"
-                                                                title="Delete duty"
-                                                                onClick={async ()=>{
-                                                                    try { await deleteDoc(doc(db,'workOrders', order.id)); } catch(e){ console.error(e); }
-                                                                }}
+                                                                className="absolute top-1 right-1 rounded p-1 text-destructive/60 hover:text-destructive hover:bg-red-50 transition-colors"
+                                                                title="Delete duty (5s undo)"
+                                                                onClick={() => handleDeleteOrder(order)}
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
                                                             </button>
