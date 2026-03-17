@@ -9,15 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { GeoPoint, collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { onAuthStateChanged, type User } from 'firebase/auth';
 import Link from 'next/link';
-import { resolveAppUser } from '@/lib/auth/roles';
+import { useAppAuth } from '@/context/auth-context';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildLocationIdentity } from '@/lib/location-utils';
@@ -61,8 +60,7 @@ export default function WorkOrderPage() {
     
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
     const [isLoading, setIsLoading] = useState(true);
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    const { userRole, assignedDistricts } = useAppAuth();
 
     // ── Soft-delete with undo ────────────────────────────────────────────────
     // Orders hidden optimistically while the undo window is open
@@ -180,29 +178,8 @@ export default function WorkOrderPage() {
         router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     };
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                try {
-                    const appUser = await resolveAppUser(user);
-                    setUserRole(appUser.role);
-                    setAssignedDistricts(appUser.assignedDistricts);
-                } catch (e) {
-                    console.error("Error getting user role:", e);
-                    setUserRole('user');
-                    setAssignedDistricts([]);
-                }
-            } else {
-                setUserRole(null);
-                setAssignedDistricts([]);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
 
     useEffect(() => {
-        if (userRole === null) return;
-        
         setIsLoading(true);
         // Fetch upcoming work orders starting from today's midnight to include today's duties
         let q = query(collection(db, "workOrders"), where("date", ">=", Timestamp.fromDate(startOfToday())));

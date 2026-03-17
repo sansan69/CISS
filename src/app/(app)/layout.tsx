@@ -55,6 +55,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { useHaptics } from '@/hooks/use-haptics';
+import { AuthContext } from '@/context/auth-context';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -777,7 +778,7 @@ function DesktopTopBar({
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
 
   return (
-    <header className="hidden md:flex h-14 items-center justify-between gap-4 border-b border-border/60 bg-white/95 backdrop-blur-sm px-4 shrink-0 shadow-brand-xs">
+    <header className="hidden md:flex h-14 items-center justify-between gap-4 border-b border-border/60 bg-white/95 backdrop-blur-sm px-4 shrink-0 shadow-brand-xs sticky top-0 z-20">
       <div className="flex items-center gap-2 min-w-0">
         {/* Sidebar toggle */}
         <button
@@ -837,6 +838,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { haptic } = useHaptics();
   const [authUser, setAuthUser]           = useState<User | null>(null);
   const [userRole, setUserRole]           = useState<string | null>(null);
+  const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+  const [clientInfo, setClientInfo]       = useState<{ clientId: string; clientName: string } | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -874,12 +877,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
         try {
           const appUser = await resolveAppUser(user);
           setUserRole(appUser.role);
+          setAssignedDistricts(appUser.assignedDistricts);
+          setClientInfo(appUser.clientId && appUser.clientName
+            ? { clientId: appUser.clientId, clientName: appUser.clientName }
+            : null
+          );
         } catch {
           setUserRole('user');
+          setAssignedDistricts([]);
+          setClientInfo(null);
         }
       } else {
         setAuthUser(null);
         setUserRole(null);
+        setAssignedDistricts([]);
+        setClientInfo(null);
         router.replace('/admin-login');
       }
       setIsLoadingAuth(false);
@@ -951,7 +963,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Page content */}
         <main className="flex-1 p-4 sm:p-5 lg:p-6 pb-[88px] md:pb-6 overflow-x-hidden">
-          {children}
+          <AuthContext.Provider value={{ user: authUser, userRole, assignedDistricts, clientInfo }}>
+            {children}
+          </AuthContext.Provider>
         </main>
       </div>
 

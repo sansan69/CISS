@@ -59,3 +59,8 @@ export function ensureAuthPersistence() {
 }
 
 export { app, auth, db, storage };
+
+// Pre-warm auth persistence on module load so the first auth check is fast
+if (typeof window !== "undefined") {
+  ensureAuthPersistence();
+}

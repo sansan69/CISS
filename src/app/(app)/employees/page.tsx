@@ -14,8 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { MoreHorizontal, Search, UserPlus, Eye, Loader2, AlertCircle, CheckCircle, Trash2, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { db, auth } from '@/lib/firebase';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, getCountFromServer, startAt, endAt, arrayUnion } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -24,7 +23,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
-import { resolveAppUser } from '@/lib/auth/roles';
+import { useAppAuth } from '@/context/auth-context';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { PageHeader } from '@/components/layout/page-header';
 
@@ -69,8 +68,7 @@ export default function EmployeeDirectoryPage() {
     const searchParams = useSearchParams();
 
     // User auth state
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
+    const { userRole, assignedDistricts } = useAppAuth();
     
     // Filters state - source of truth is the URL search params
     const client = searchParams.get('client') || 'all';
@@ -105,24 +103,6 @@ export default function EmployeeDirectoryPage() {
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                try {
-                    const appUser = await resolveAppUser(user);
-                    setUserRole(appUser.role);
-                    setAssignedDistricts(appUser.assignedDistricts);
-                } catch (e) {
-                    setUserRole('user');
-                    setAssignedDistricts([]);
-                }
-            } else {
-                setUserRole(null);
-                setAssignedDistricts([]);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
 
     const updateUrlParams = useCallback((newParams: Record<string, string | number | null>) => {
         const params = new URLSearchParams(searchParams.toString());

@@ -8,7 +8,7 @@ import {
   AlertTriangle, CheckCircle2, MapPin, Building,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import {
   collection, getCountFromServer, getDocs, query, where,
   Timestamp, orderBy, limit, onSnapshot,
@@ -21,9 +21,8 @@ import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Badge } from "@/components/ui/badge";
-import { resolveAppUser } from '@/lib/auth/roles';
+import { useAppAuth } from '@/context/auth-context';
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -361,35 +360,7 @@ export default function DashboardPage() {
 
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
-  const [currentUser, setCurrentUser]     = useState<User | null>(null);
-  const [userRole, setUserRole]           = useState<string | null>(null);
-  const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
-  const [clientInfo, setClientInfo]       = useState<{ clientId: string; clientName: string } | null>(null);
-
-  // Auth resolve
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        try {
-          const appUser = await resolveAppUser(user);
-          setUserRole(appUser.role);
-          setAssignedDistricts(appUser.assignedDistricts);
-          setClientInfo(appUser.clientId && appUser.clientName
-            ? { clientId: appUser.clientId, clientName: appUser.clientName }
-            : null
-          );
-        } catch {
-          setUserRole('user');
-          setAssignedDistricts([]);
-          setClientInfo(null);
-        }
-      } else {
-        setCurrentUser(null); setUserRole(null); setAssignedDistricts([]);
-      }
-    });
-    return () => unsub();
-  }, []);
+  const { user: currentUser, userRole, assignedDistricts, clientInfo } = useAppAuth();
 
   // Data fetch
   useEffect(() => {

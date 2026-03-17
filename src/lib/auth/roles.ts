@@ -37,7 +37,11 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
   }
 
   const officersRef = collection(db, "fieldOfficers");
-  const officerSnapshot = await getDocs(query(officersRef, where("uid", "==", user.uid)));
+  const [officerSnapshot, clientMapping] = await Promise.all([
+    getDocs(query(officersRef, where("uid", "==", user.uid))),
+    getDoc(doc(db, "clientUsersByUid", user.uid)),
+  ]);
+
   if (!officerSnapshot.empty) {
     const raw = officerSnapshot.docs[0].data();
     const assignedDistricts = Array.isArray(raw?.assignedDistricts) ? (raw.assignedDistricts as string[]) : [];
@@ -48,7 +52,6 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
     };
   }
 
-  const clientMapping = await getDoc(doc(db, "clientUsersByUid", user.uid));
   if (clientMapping.exists()) {
     const raw = clientMapping.data();
     const clientId = typeof raw?.clientId === "string" ? raw.clientId : undefined;

@@ -2,10 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { db, auth } from '@/lib/firebase';
+import { useParams, useSearchParams } from 'next/navigation';
+import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, getDocs, deleteDoc, Timestamp, arrayUnion } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
 import Link from 'next/link';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,7 +32,7 @@ import { useHaptics } from '@/hooks/use-haptics';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Employee } from '@/types/employee';
-import { resolveAppUser } from '@/lib/auth/roles';
+import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { PageHeader } from '@/components/layout/page-header';
@@ -491,7 +490,6 @@ const AssignGuardsDialog: React.FC<{
 ────────────────────────────────────────────────────────────────────────── */
 export default function AssignGuardsPage() {
     const params = useParams();
-    const router = useRouter();
     const searchParams = useSearchParams();
     const siteId = params.siteId as string;
     const backHref = searchParams.toString() ? `/work-orders?${searchParams.toString()}` : '/work-orders';
@@ -500,8 +498,7 @@ export default function AssignGuardsPage() {
     const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
-    const [userRole, setUserRole] = useState<string | null>(null);
+    const { userRole, assignedDistricts } = useAppAuth();
 
     // Assign dialog
     const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -522,26 +519,9 @@ export default function AssignGuardsPage() {
     const { toast } = useToast();
     const { haptic } = useHaptics();
 
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                try {
-                    const appUser = await resolveAppUser(user);
-                    setUserRole(appUser.role);
-                    setAssignedDistricts(appUser.assignedDistricts || []);
-                } catch {
-                    setUserRole('user');
-                    setAssignedDistricts([]);
-                }
-            } else {
-                router.push('/admin-login');
-            }
-        });
-        return () => unsub();
-    }, [router]);
 
     useEffect(() => {
-        if (!siteId || userRole === null) return;
+        if (!siteId) return;
 
         const fetchSiteAndWorkOrders = async () => {
             setIsLoading(true);
