@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
 import { isLegacyAdminEmail } from "@/lib/auth/admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 function isAdmin(decoded: { admin?: boolean; role?: string; email?: string }) {
   return (
@@ -19,6 +18,7 @@ export async function GET(
     const decoded = await verifyRequestAuth(request);
     const { id } = await params;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const doc = await adminDb.collection("foVisitReports").doc(id).get();
     if (!doc.exists) {
@@ -46,6 +46,7 @@ export async function PATCH(
     const decoded = await verifyRequestAuth(request);
     const { id } = await params;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const doc = await adminDb.collection("foVisitReports").doc(id).get();
     if (!doc.exists) {

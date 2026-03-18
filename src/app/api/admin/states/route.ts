@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
 import { isLegacyAdminEmail } from "@/lib/auth/admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 function isAdmin(decoded: Record<string, unknown>) {
   return (
@@ -23,6 +22,7 @@ export async function GET(request: Request) {
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     // Try to get from dedicated states collection first
     const statesSnap = await adminDb.collection("states").get();
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
     const body = (await request.json()) as {
       stateCode?: string;
       stateName?: string;

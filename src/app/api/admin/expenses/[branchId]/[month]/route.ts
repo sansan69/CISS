@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
-import { FieldValue } from "firebase-admin/firestore";
 import type { ExpenseEntry } from "@/types/branch";
 
 export async function GET(
@@ -48,6 +47,7 @@ export async function PUT(
     const decoded = await requireAdmin(request);
     const { branchId, month } = await params;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const body = (await request.json()) as {
       entries?: ExpenseEntry[];

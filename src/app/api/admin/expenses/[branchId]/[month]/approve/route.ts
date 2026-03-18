@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
-import { FieldValue } from "firebase-admin/firestore";
 
 export async function POST(
   request: Request,
@@ -10,6 +9,7 @@ export async function POST(
     const decoded = await requireAdmin(request);
     const { branchId, month } = await params;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const snapshot = await adminDb
       .collection("branchExpenses")

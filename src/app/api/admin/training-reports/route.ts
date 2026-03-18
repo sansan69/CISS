@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
 import { isLegacyAdminEmail } from "@/lib/auth/admin";
-import { FieldValue } from "firebase-admin/firestore";
 import type FirebaseFirestore from "@google-cloud/firestore";
 
 function isAdmin(decoded: { admin?: boolean; role?: string; email?: string }) {
@@ -16,6 +15,7 @@ export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
     const fieldOfficerId = url.searchParams.get("fieldOfficerId");
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const body = (await request.json()) as {
       clientId?: string;

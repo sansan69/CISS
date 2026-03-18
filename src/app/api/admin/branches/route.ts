@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
-import { FieldValue } from "firebase-admin/firestore";
 
 export async function GET(request: Request) {
   try {
     await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
     const snapshot = await adminDb.collection("branches").orderBy("createdAt", "desc").get();
     const branches = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     return NextResponse.json({ branches });
@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   try {
     await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
     const body = (await request.json()) as {
       name?: string;
       stateCode?: string;
