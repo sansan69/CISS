@@ -2,16 +2,51 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Auth helper functions ────────────────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    // Guard: authenticated via synthetic email {phone}@guard.cisskerala.app
+    // The Flutter app signs guards in with Firebase Auth (email+PIN).
+    // Guards have role == 'guard' in custom claims (set at PIN setup).
+    function isGuard() {
+      return isSignedIn() && (
+        request.auth.token.role == 'guard' ||
+        request.auth.token.email.matches('.*@guard\\.cisskerala\\.app')
+      );
+    }
+
+    // Returns the employeeDocId claim for the signed-in guard
+    function guardEmployeeDocId() {
+      return request.auth.token.employeeDocId;
     }
 
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.admin == true ||
         request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'superAdmin' ||
         request.auth.token.email == 'admin@cisskerala.app'
       );
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.role == 'superAdmin';
+    }
+
+    function isHR() {
+      return isSignedIn() && request.auth.token.role == 'hr';
+    }
+
+    function isAccounts() {
+      return isSignedIn() && request.auth.token.role == 'accounts';
+    }
+
+    function isCompliance() {
+      return isSignedIn() && request.auth.token.role == 'compliance';
     }
 
     function isFieldOfficer() {
@@ -22,23 +57,40 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.role == 'client';
     }
 
-    // NOTE: employees, clients, sites, and clientLocations intentionally allow
-    // public reads. The attendance marking and employee enrollment flows are
-    // unauthenticated (guards do not have auth accounts). All writes are
-    // protected by admin-only rules. Sensitive data (bank details, ID numbers)
-    // is only written server-side via the Admin SDK after Zod validation.
+    // Any staff role (not guard, not client)
+    function isStaff() {
+      return isAdmin() || isHR() || isAccounts() || isCompliance() || isFieldOfficer();
+    }
+
+    // ── users collection ────────────────────────────────────────────────────
+    // Guards self-register here during PIN setup (Flutter app writes user doc).
+    // Staff read their own doc. Admin reads all.
+
+    match /users/{uid} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+      // Guard can create/update their own user doc (PIN setup flow)
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == uid &&
+        // Guards can only update safe fields — not role or employeeDocId
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'employeeDocId', 'employeeId']));
+      allow delete: if isAdmin();
+    }
+
+    // ── employees ───────────────────────────────────────────────────────────
+    // Public read retained for Next.js webapp compatibility.
+    // Guards can read their own employee doc (by employeeDocId claim).
+    // Admins write all.
+
     match /employees/{employeeId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
+    // ── clients / sites / clientLocations ───────────────────────────────────
+    // Public read retained (Next.js attendance flows use unauthenticated reads).
+
     match /clients/{clientId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /fieldOfficers/{officerId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if isAdmin();
     }
 
@@ -52,6 +104,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // ── fieldOfficers ────────────────────────────────────────────────────────
+
+    match /fieldOfficers/{officerId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── clientUsers / clientUsersByUid ───────────────────────────────────────
+
     match /clientUsers/{mappingId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if isAdmin();
@@ -61,6 +122,8 @@ service cloud.firestore {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
       allow create, update, delete: if isAdmin();
     }
+
+    // ── workOrders ───────────────────────────────────────────────────────────
 
     match /workOrders/{workOrderId} {
       allow read: if isAdmin() || isFieldOfficer() || (
@@ -72,18 +135,126 @@ service cloud.firestore {
       allow update: if isAdmin() || isFieldOfficer();
     }
 
-    // Attendance logs are created server-side only (Admin SDK). Reads are
-    // restricted to authenticated users with an explicit role to prevent
-    // cross-client or unauthenticated access to attendance data.
+    // ── attendanceLogs ───────────────────────────────────────────────────────
+    // Guards (Flutter) create their own logs directly from the device.
+    // Next.js Admin SDK still creates logs server-side — both are supported.
+    // Guards can ONLY read and create their OWN logs (scoped by employeeDocId).
+    // They CANNOT update or delete any log (immutable audit trail).
+
     match /attendanceLogs/{logId} {
-      allow create: if false;
-      allow read: if isAdmin() || isFieldOfficer() || isClientUser();
+      // Guards can create their own attendance records from the Flutter app.
+      // The employeeDocId in the written document must match the guard's claim.
+      allow create: if isGuard() &&
+        request.resource.data.employeeDocId == guardEmployeeDocId() &&
+        request.resource.data.type in ['IN', 'OUT'] &&
+        request.resource.data.keys().hasAll(['employeeDocId', 'type', 'timestamp']);
+
+      // Guards can only read their own logs
+      allow read: if isAdmin() || isFieldOfficer() || isClientUser() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+
+      // Only admins can modify or delete logs (audit integrity)
       allow update, delete: if isAdmin();
     }
 
     match /attendanceState/{employeeId} {
-      allow read, write: if isAdmin();
+      // Guards can read/update their own attendance state
+      allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
+      allow update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
+      allow create, delete: if isAdmin();
     }
+
+    // ── leaveRequests ────────────────────────────────────────────────────────
+    // Guards submit leave requests from the Flutter app.
+    // Admins/HR approve or reject.
+
+    match /leaveRequests/{requestId} {
+      // Guards can create their own leave requests
+      allow create: if (isGuard() &&
+        request.resource.data.employeeDocId == guardEmployeeDocId() &&
+        request.resource.data.status == 'pending') || isStaff();
+
+      // Guards can read their own requests; staff reads all
+      allow read: if isStaff() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+
+      // Admins/HR can approve/reject (update status); guards cannot change status
+      allow update: if isAdmin() || isHR() ||
+        // Guard can only cancel a pending request (their own)
+        (isGuard() &&
+          resource.data.employeeDocId == guardEmployeeDocId() &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status == 'cancelled');
+
+      allow delete: if isAdmin();
+    }
+
+    // ── payrollEntries ───────────────────────────────────────────────────────
+    // Guards can read their own payslips. Accounts/Admin write all.
+
+    match /payrollEntries/{entryId} {
+      allow read: if isAdmin() || isAccounts() || isHR() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+      allow create, update, delete: if isAdmin() || isAccounts();
+    }
+
+    // ── Training & Evaluation ────────────────────────────────────────────────
+
+    match /trainingModules/{moduleId} {
+      // Guards and all signed-in users can read training modules
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /trainingAssignments/{assignmentId} {
+      // Guards can read their own training assignments and update progress
+      allow read: if isAdmin() || isFieldOfficer() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+
+      // Guards can update their own assignment progress (progressPercent, status, completedAt)
+      allow update: if isAdmin() ||
+        (isGuard() &&
+          resource.data.employeeDocId == guardEmployeeDocId() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['progressPercent', 'status', 'startedAt', 'completedAt']));
+
+      allow create, delete: if isAdmin();
+    }
+
+    match /evaluations/{evalId} {
+      allow read: if isAdmin() || isFieldOfficer() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+      allow create, update, delete: if isAdmin() || isFieldOfficer();
+    }
+
+    match /guardScores/{employeeId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /awards/{awardId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Payroll & Compliance (admin/accounts/HR only) ─────────────────────────
+
+    match /complianceSettings/{docId} {
+      allow read: if isAdmin() || isCompliance() || isHR() || isAccounts();
+      allow write: if isAdmin() || isCompliance();
+    }
+
+    match /clientWageConfigs/{configId} {
+      allow read: if isAdmin() || isAccounts();
+      allow write: if isAdmin() || isAccounts();
+    }
+
+    match /payrollRuns/{runId} {
+      allow read: if isAdmin() || isAccounts();
+      allow write: if isAdmin() || isAccounts();
+    }
+
+    // ── System & internal ───────────────────────────────────────────────────
 
     match /systemMetrics/{docId} {
       allow read, write: if isAdmin();
@@ -93,57 +264,39 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // ── Training & Evaluation (Sprint 2) ──────────────────────────────────
+    // ── notifications (Flutter push + web) ─────────────────────────────────
 
-    // Training module library — all signed-in users can read; only admin writes
-    match /trainingModules/{moduleId} {
+    match /notifications/{notifId} {
+      // Each user can read their own notifications
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.recipientUid == request.auth.uid);
+      allow create: if isAdmin() || isFieldOfficer();
+      allow update: if isAdmin() ||
+        (isSignedIn() && resource.data.recipientUid == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']));
+      allow delete: if isAdmin();
+    }
+
+    // ── branches / districts / states (multi-state scaffold) ───────────────
+
+    match /branches/{branchId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow write: if isSuperAdmin() || isAdmin();
     }
 
-    // Per-employee training assignments — admin + the assigned FO can read
-    match /trainingAssignments/{assignmentId} {
-      allow read: if isAdmin() || isFieldOfficer();
-      allow create, update, delete: if isAdmin();
+    match /districts/{districtId} {
+      allow read: if true;
+      allow write: if isSuperAdmin() || isAdmin();
     }
 
-    // Evaluations — admin + FO (own evals) can read; admin creates/modifies
-    match /evaluations/{evalId} {
-      allow read: if isAdmin() || (
-        isFieldOfficer() &&
-        resource.data.evaluatedBy == request.auth.uid
-      );
-      allow create, update, delete: if isAdmin();
+    match /states/{stateId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
     }
 
-    // Aggregated guard scores — all signed-in users can read; admin writes
-    match /guardScores/{employeeId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    // Awards — all signed-in users can read; admin writes
-    match /awards/{awardId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Compliance settings (payroll statutory rates) — admin only
-    match /complianceSettings/{docId} {
+    match /systemConfig/{docId} {
       allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    // Client wage configurations — admin only
-    match /clientWageConfigs/{configId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    // Payroll runs — admin only
-    match /payrollRuns/{runId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();
     }
   }
 }
