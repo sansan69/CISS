@@ -110,6 +110,7 @@ const mainNavGroups: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: '/training',    label: 'Training Modules', icon: GraduationCap, adminOnly: true },
+      { href: '/training/assignments', label: 'Training Assignments', icon: BookOpen, adminOnly: true },
       { href: '/evaluations', label: 'Evaluations',      icon: BookOpen,      adminOnly: true },
       { href: '/leaderboard', label: 'Leaderboard',      icon: Trophy,        adminOnly: true },
     ],
@@ -149,7 +150,7 @@ const mainNavGroups: NavGroup[] = [
     label: 'Company',
     superAdminOnly: true,
     items: [
-      { href: '/settings/state-management', label: 'State Management', icon: Globe, superAdminOnly: true },
+      { href: '/settings/state-management', label: 'Region Onboarding', icon: Globe, superAdminOnly: true },
     ],
   },
 ];
@@ -881,6 +882,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [clientInfo, setClientInfo]       = useState<{ clientId: string; clientName: string } | null>(null);
   const [stateCode, setStateCode]         = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin]   = useState<boolean>(false);
+  const [employeeId, setEmployeeId]       = useState<string | undefined>(undefined);
+  const [employeeDocId, setEmployeeDocId] = useState<string | undefined>(undefined);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -921,16 +924,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
           setAssignedDistricts(appUser.assignedDistricts);
           setStateCode(appUser.stateCode ?? null);
           setIsSuperAdmin(appUser.isSuperAdmin ?? false);
+          setEmployeeId(appUser.employeeId);
+          setEmployeeDocId(appUser.employeeDocId);
           setClientInfo(appUser.clientId && appUser.clientName
             ? { clientId: appUser.clientId, clientName: appUser.clientName }
             : null
           );
+          if (appUser.role === 'guard') {
+            router.replace('/guard/dashboard');
+            return;
+          }
         } catch {
           setUserRole('user');
           setAssignedDistricts([]);
           setClientInfo(null);
           setStateCode(null);
           setIsSuperAdmin(false);
+          setEmployeeId(undefined);
+          setEmployeeDocId(undefined);
         }
       } else {
         setAuthUser(null);
@@ -939,6 +950,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         setClientInfo(null);
         setStateCode(null);
         setIsSuperAdmin(false);
+        setEmployeeId(undefined);
+        setEmployeeDocId(undefined);
         router.replace('/admin-login');
       }
       setIsLoadingAuth(false);
@@ -956,8 +969,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const authContextValue = useMemo(
-    () => ({ user: authUser, userRole, assignedDistricts, clientInfo, stateCode, isSuperAdmin }),
-    [authUser, userRole, assignedDistricts, clientInfo, stateCode, isSuperAdmin]
+    () => ({ user: authUser, userRole, assignedDistricts, clientInfo, stateCode, isSuperAdmin, employeeId, employeeDocId }),
+    [authUser, userRole, assignedDistricts, clientInfo, stateCode, isSuperAdmin, employeeId, employeeDocId]
   );
 
   if (isLoadingAuth || !authUser) {

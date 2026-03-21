@@ -34,7 +34,9 @@ export default function SalaryGradesPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (userRole !== null && userRole !== "admin") router.replace("/dashboard");
+    if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
+      router.replace("/dashboard");
+    }
   }, [userRole, router]);
 
   useEffect(() => {

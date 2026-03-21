@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Phone, CalendarDays, Loader2, ShieldCheck, DownloadCloud } from 'lucide-react';
+import { Phone, CalendarDays, Loader2, ShieldCheck, DownloadCloud, UserCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -217,6 +217,12 @@ export default function LandingPage() {
             <Link href="/attendance">
               <CalendarDays className="mr-2 h-5 w-5" />
               Record Attendance
+            </Link>
+          </Button>
+          <Button variant="outline" className="w-full h-12 text-base" asChild>
+            <Link href="/guard-login">
+              <UserCircle2 className="mr-2 h-5 w-5" />
+              Guard Portal
             </Link>
           </Button>
           <Button variant="outline" className="w-full h-12 text-base" asChild>

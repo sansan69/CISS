@@ -33,7 +33,7 @@ export default function ComplianceSettingsPage() {
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
-    if (userRole !== null && userRole !== "admin") {
+    if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
       router.replace("/dashboard");
     }
   }, [userRole, router]);

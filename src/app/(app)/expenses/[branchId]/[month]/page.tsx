@@ -37,7 +37,7 @@ export default function ExpenseDetailPage() {
   const { branchId, month } = params;
   const { userRole } = useAppAuth();
   const { toast } = useToast();
-  const isAdmin = userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "superAdmin";
 
   const [expense, setExpense] = useState<BranchExpense | null>(null);
   const [branchName, setBranchName] = useState<string>("");

@@ -1,14 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
-import { isLegacyAdminEmail } from "@/lib/auth/admin";
-
-function isAdmin(decoded: { admin?: boolean; role?: string; email?: string }) {
-  return (
-    decoded.admin === true ||
-    decoded.role === "admin" ||
-    (decoded.email && isLegacyAdminEmail(decoded.email))
-  );
-}
+import { hasAdminAccess, verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
 
 export async function GET(
   request: Request,
@@ -27,7 +18,7 @@ export async function GET(
 
     const data = doc.data()!;
     // Field officers can only view their own
-    if (!isAdmin(decoded) && data.fieldOfficerId !== decoded.uid) {
+    if (!hasAdminAccess(decoded) && data.fieldOfficerId !== decoded.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -54,7 +45,7 @@ export async function PATCH(
     }
 
     const data = doc.data()!;
-    const admin = isAdmin(decoded);
+    const admin = hasAdminAccess(decoded);
 
     // FO can only update own draft
     if (!admin && data.fieldOfficerId !== decoded.uid) {

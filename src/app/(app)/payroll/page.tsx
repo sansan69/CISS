@@ -29,7 +29,9 @@ export default function PayrollPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (userRole !== null && userRole !== "admin") router.replace("/dashboard");
+    if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
+      router.replace("/dashboard");
+    }
   }, [userRole, router]);
 
   const loadCycles = useCallback(async () => {

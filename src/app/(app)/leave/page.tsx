@@ -62,7 +62,7 @@ export default function LeavePage() {
     reason: "",
   });
 
-  const isAdmin = userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "superAdmin";
 
   const loadRequests = useCallback(async (tab: Tab) => {
     setIsLoading(true);

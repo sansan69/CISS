@@ -38,7 +38,7 @@ function getCurrentMonth(): string {
 export default function BranchOpsPage() {
   const { userRole } = useAppAuth();
   const { toast } = useToast();
-  const isAdmin = userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "superAdmin";
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);

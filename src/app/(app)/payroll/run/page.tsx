@@ -24,6 +24,8 @@ interface RunResult {
 
 interface Client { id: string; name: string; }
 
+const ALL_CLIENTS_VALUE = "__all_clients__";
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -45,7 +47,9 @@ export default function RunPayrollPage() {
   const [result, setResult] = useState<RunResult | null>(null);
 
   useEffect(() => {
-    if (userRole !== null && userRole !== "admin") router.replace("/dashboard");
+    if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
+      router.replace("/dashboard");
+    }
   }, [userRole, router]);
 
   useEffect(() => {
@@ -154,10 +158,13 @@ export default function RunPayrollPage() {
 
             <div className="space-y-1.5">
               <Label>Client Filter (optional)</Label>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+              <Select
+                value={selectedClientId || ALL_CLIENTS_VALUE}
+                onValueChange={(value) => setSelectedClientId(value === ALL_CLIENTS_VALUE ? "" : value)}
+              >
                 <SelectTrigger><SelectValue placeholder="All clients" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All clients</SelectItem>
+                  <SelectItem value={ALL_CLIENTS_VALUE}>All clients</SelectItem>
                   {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>

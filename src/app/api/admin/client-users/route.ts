@@ -8,6 +8,7 @@ import {
   SYSTEM_METRIC_NAMES,
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
+import { REGION_CODE } from "@/lib/runtime-config";
 
 type ClientUserRequest = {
   mode: "existing" | "create";
@@ -26,6 +27,10 @@ export async function POST(request: Request) {
     const clientId = body.clientId?.trim();
     const clientName = body.clientName?.trim();
     const email = body.email?.trim();
+    const stateCode =
+      typeof adminUser.stateCode === "string" && adminUser.stateCode.trim()
+        ? adminUser.stateCode.trim().toUpperCase()
+        : REGION_CODE;
 
     if (!clientId || !clientName || !email) {
       return NextResponse.json(
@@ -52,7 +57,11 @@ export async function POST(request: Request) {
       userRecord = await adminAuth.getUserByEmail(email);
     }
 
-    await adminAuth.setCustomUserClaims(userRecord.uid, { role: "client" });
+    await adminAuth.setCustomUserClaims(userRecord.uid, {
+      role: "client",
+      clientId,
+      stateCode,
+    });
 
     const payload = {
       uid: userRecord.uid,
@@ -60,6 +69,7 @@ export async function POST(request: Request) {
       name: body.name?.trim() || userRecord.displayName || email.split("@")[0],
       clientId,
       clientName,
+      stateCode,
       ...buildServerCreateAudit({
         uid: adminUser.uid,
         email: adminUser.email,

@@ -8,6 +8,7 @@ import {
   SYSTEM_METRIC_NAMES,
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
+import { REGION_CODE } from "@/lib/runtime-config";
 
 type OfficerRequest = {
   uid?: string;
@@ -24,6 +25,10 @@ export async function POST(request: Request) {
     const body = (await request.json()) as OfficerRequest;
     const assignedDistricts = body.assignedDistricts || [];
     const name = body.name?.trim();
+    const stateCode =
+      typeof adminUser.stateCode === "string" && adminUser.stateCode.trim()
+        ? adminUser.stateCode.trim().toUpperCase()
+        : REGION_CODE;
 
     if (!name || !body.email) {
       return NextResponse.json(
@@ -73,7 +78,11 @@ export async function POST(request: Request) {
       }
     }
 
-    await adminAuth.setCustomUserClaims(uid, { role: "fieldOfficer" });
+    await adminAuth.setCustomUserClaims(uid, {
+      role: "fieldOfficer",
+      stateCode,
+      assignedDistricts,
+    });
 
     const existingOfficer = await adminDb
       .collection("fieldOfficers")
@@ -92,6 +101,7 @@ export async function POST(request: Request) {
       uid,
       email: body.email,
       name,
+      stateCode,
       assignedDistricts,
       ...buildServerCreateAudit({
         uid: adminUser.uid,
@@ -115,7 +125,14 @@ export async function POST(request: Request) {
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionSuccess);
 
-    return NextResponse.json({ id: docRef.id, uid, email: body.email, name, assignedDistricts });
+    return NextResponse.json({
+      id: docRef.id,
+      uid,
+      email: body.email,
+      name,
+      stateCode,
+      assignedDistricts,
+    });
   } catch (error: any) {
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.adminProvisionFailure);
     const status = error?.message === "Admin access required." ? 403 : 401;

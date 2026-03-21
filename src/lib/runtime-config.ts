@@ -9,6 +9,12 @@ export const REGION_CODE =
 export const REGION_NAME =
   process.env.REGION_NAME?.trim() || "Kerala";
 
+export const GUARD_AUTH_EMAIL_DOMAIN =
+  process.env.GUARD_AUTH_EMAIL_DOMAIN?.trim() ||
+  (REGION_CODE === "KL"
+    ? "guard.cisskerala.app"
+    : `guard.${REGION_CODE.toLowerCase()}.ciss-regional.app`);
+
 export function isControlPlaneMode() {
   return APP_MODE === "control-plane";
 }

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
+import {
+  hasAdminAccess,
+  requireAdminOrFieldOfficer,
+  verifyRequestAuth,
+  unauthorizedResponse,
+} from "@/lib/server/auth";
 
 export async function GET(request: Request) {
   try {
@@ -15,8 +20,7 @@ export async function GET(request: Request) {
 
     // FieldOfficers only see their evaluations
     const isAdmin =
-      decoded.admin === true ||
-      decoded.role === "admin" ||
+      hasAdminAccess(decoded) ||
       (decoded.email && ["ciss.kochi@gmail.com"].includes(decoded.email as string));
     if (!isAdmin && decoded.role === "fieldOfficer") {
       q = q.where("evaluatedBy", "==", decoded.uid);
@@ -32,7 +36,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const decoded = await verifyRequestAuth(request);
+    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
     const body = (await request.json()) as {

@@ -44,7 +44,7 @@ export default function WageConfigPage() {
   const [fileRef, setFileRef] = useState<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (userRole !== null && userRole !== "admin") {
+    if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
       router.replace("/dashboard");
     }
   }, [userRole, router]);

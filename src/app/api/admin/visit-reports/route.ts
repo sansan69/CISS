@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
-import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
-import { isLegacyAdminEmail } from "@/lib/auth/admin";
+import {
+  hasAdminAccess,
+  hasFieldOfficerAccess,
+  requireAdminOrFieldOfficer,
+  verifyRequestAuth,
+  unauthorizedResponse,
+} from "@/lib/server/auth";
 import type FirebaseFirestore from "@google-cloud/firestore";
-
-function isAdmin(decoded: { admin?: boolean; role?: string; email?: string }) {
-  return (
-    decoded.admin === true ||
-    decoded.role === "admin" ||
-    (decoded.email && isLegacyAdminEmail(decoded.email))
-  );
-}
 
 export async function GET(request: Request) {
   try {
@@ -24,7 +21,7 @@ export async function GET(request: Request) {
 
     let q = adminDb.collection("foVisitReports").orderBy("createdAt", "desc") as FirebaseFirestore.Query;
 
-    if (!isAdmin(decoded)) {
+    if (!hasAdminAccess(decoded)) {
       // Field officers only see their own
       q = q.where("fieldOfficerId", "==", decoded.uid);
     } else if (fieldOfficerId) {
@@ -46,7 +43,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const decoded = await verifyRequestAuth(request);
+    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
@@ -66,6 +63,10 @@ export async function POST(request: Request) {
 
     if (!body.clientId || !body.visitDate || !body.summary) {
       return NextResponse.json({ error: "clientId, visitDate, and summary are required." }, { status: 400 });
+    }
+
+    if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
+      return NextResponse.json({ error: "Field officer or admin access required." }, { status: 403 });
     }
 
     // Look up field officer doc for name + stateCode

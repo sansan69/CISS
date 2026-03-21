@@ -2,6 +2,32 @@ import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
 
+export async function GET(request: Request) {
+  try {
+    await requireAdmin(request);
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const snapshot = await adminDb.collection("clients").orderBy("createdAt", "desc").limit(500).get();
+    const clients = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        name:
+          typeof data.name === "string" && data.name.trim()
+            ? data.name
+            : typeof data.clientName === "string"
+              ? data.clientName
+              : "",
+      };
+    });
+
+    return NextResponse.json({ clients });
+  } catch (error: any) {
+    const status = error?.message === "Admin access required." ? 403 : 401;
+    return unauthorizedResponse(error?.message || "Unauthorized", status);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const adminUser = await requireAdmin(request);

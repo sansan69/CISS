@@ -43,7 +43,7 @@ interface ClientOption { id: string; name: string; }
 export default function VisitReportsPage() {
   const { userRole } = useAppAuth();
   const { toast } = useToast();
-  const isAdmin = userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "superAdmin";
   const isFo = userRole === "fieldOfficer";
 
   const [activeTab, setActiveTab] = useState<Tab>("all");

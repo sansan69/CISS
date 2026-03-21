@@ -9,6 +9,7 @@ type RepairItem = {
   expectedRole: "admin" | "fieldOfficer" | "client";
   currentRole: string | null;
   source: "legacyAdminEmail" | "fieldOfficers" | "clientUsersByUid";
+  claimPatch?: Record<string, unknown>;
 };
 
 function claimsToRole(claims: Record<string, unknown> | undefined) {
@@ -33,7 +34,12 @@ async function collectRepairItems() {
   const repairItems = new Map<string, RepairItem>();
 
   for (const snapshot of fieldOfficerDocs.docs) {
-    const data = snapshot.data() as { uid?: string; email?: string };
+    const data = snapshot.data() as {
+      uid?: string;
+      email?: string;
+      stateCode?: string;
+      assignedDistricts?: string[];
+    };
     if (!data.uid) continue;
     const authUser = usersByUid.get(data.uid);
     const currentRole = claimsToRole(authUser?.customClaims);
@@ -44,12 +50,24 @@ async function collectRepairItems() {
         expectedRole: "fieldOfficer",
         currentRole,
         source: "fieldOfficers",
+        claimPatch: {
+          stateCode: data.stateCode ?? "KL",
+          assignedDistricts: Array.isArray(data.assignedDistricts)
+            ? data.assignedDistricts
+            : [],
+        },
       });
     }
   }
 
   for (const snapshot of clientUserDocs.docs) {
-    const data = snapshot.data() as { uid?: string; email?: string };
+    const data = snapshot.data() as {
+      uid?: string;
+      email?: string;
+      stateCode?: string;
+      clientId?: string;
+      clientName?: string;
+    };
     if (!data.uid) continue;
     const authUser = usersByUid.get(data.uid);
     const currentRole = claimsToRole(authUser?.customClaims);
@@ -60,6 +78,11 @@ async function collectRepairItems() {
         expectedRole: "client",
         currentRole,
         source: "clientUsersByUid",
+        claimPatch: {
+          stateCode: data.stateCode ?? "KL",
+          clientId: data.clientId ?? null,
+          clientName: data.clientName ?? null,
+        },
       });
     }
   }
@@ -112,7 +135,11 @@ export async function POST(request: Request) {
       const nextClaims =
         item.expectedRole === "admin"
           ? { ...existingClaims, admin: true, role: "admin" }
-          : { ...existingClaims, role: item.expectedRole };
+          : {
+              ...existingClaims,
+              role: item.expectedRole,
+              ...(item.claimPatch ?? {}),
+            };
       await adminAuth.setCustomUserClaims(item.uid, nextClaims);
       repaired += 1;
     }

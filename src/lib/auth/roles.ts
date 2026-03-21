@@ -21,6 +21,10 @@ function claimsToRole(claims: Record<string, unknown> | undefined): AppRole | nu
     return "client";
   }
 
+  if (claims?.role === "guard") {
+    return "guard";
+  }
+
   return null;
 }
 
@@ -46,6 +50,25 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
       assignedDistricts: [],
       stateCode,
       isSuperAdmin: true,
+    };
+  }
+
+  if (claimedRole === "guard") {
+    const employeeId =
+      typeof tokenResult.claims.employeeId === "string"
+        ? tokenResult.claims.employeeId
+        : undefined;
+    const employeeDocId =
+      typeof tokenResult.claims.employeeDocId === "string"
+        ? tokenResult.claims.employeeDocId
+        : undefined;
+    return {
+      role: "guard",
+      assignedDistricts: [],
+      stateCode,
+      employeeId,
+      employeeDocId,
+      isSuperAdmin: false,
     };
   }
 

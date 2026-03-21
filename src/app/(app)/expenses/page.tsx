@@ -36,7 +36,7 @@ interface ExpenseSummary {
 export default function ExpensesPage() {
   const { userRole } = useAppAuth();
   const { toast } = useToast();
-  const isAdmin = userRole === "admin";
+  const isAdmin = userRole === "admin" || userRole === "superAdmin";
 
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
   const [branches, setBranches] = useState<Branch[]>([]);

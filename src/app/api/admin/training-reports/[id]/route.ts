@@ -1,14 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
-import { isLegacyAdminEmail } from "@/lib/auth/admin";
-
-function isAdmin(decoded: { admin?: boolean; role?: string; email?: string }) {
-  return (
-    decoded.admin === true ||
-    decoded.role === "admin" ||
-    (decoded.email && isLegacyAdminEmail(decoded.email))
-  );
-}
+import { hasAdminAccess, verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
 
 export async function PATCH(
   request: Request,
@@ -27,7 +18,7 @@ export async function PATCH(
     }
 
     const data = snap.data()!;
-    const admin = isAdmin(decoded);
+    const admin = hasAdminAccess(decoded);
 
     if (!admin && data.fieldOfficerId !== decoded.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,0 +1,145 @@
+import { NextResponse } from "next/server";
+import { verifyPin } from "@/lib/guard/pin-utils";
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { phoneNumber, pin } = body as {
+      phoneNumber?: string;
+      pin?: string;
+    };
+
+    if (!phoneNumber || !pin) {
+      return NextResponse.json(
+        { error: "phoneNumber and pin are required." },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPhone = normalizePhone(phoneNumber);
+
+    // Rate limiting — 5 attempts per phone per 5 minutes
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
+
+    const rateLimitRef = adminDb.doc(`rateLimits/login_${normalizedPhone}`);
+    const rateLimitSnap = await rateLimitRef.get();
+    const now = Date.now();
+    const windowMs = 5 * 60 * 1000; // 5 minutes
+
+    if (rateLimitSnap.exists) {
+      const data = rateLimitSnap.data()!;
+      const windowStart: number = data.windowStart ?? 0;
+      const attempts: number = data.attempts ?? 0;
+
+      if (now - windowStart < windowMs && attempts >= 5) {
+        return NextResponse.json(
+          { error: "Too many login attempts. Please wait 5 minutes." },
+          { status: 429 }
+        );
+      }
+
+      if (now - windowStart >= windowMs) {
+        await rateLimitRef.set({ windowStart: now, attempts: 1 });
+      } else {
+        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
+      }
+    } else {
+      await rateLimitRef.set({ windowStart: now, attempts: 1 });
+    }
+
+    // Find employee by phone number
+    const employeesRef = adminDb.collection("employees");
+    const empQuery = await employeesRef
+      .where("phoneNumber", "==", normalizedPhone)
+      .limit(1)
+      .get();
+
+    if (empQuery.empty) {
+      return NextResponse.json(
+        { error: "Employee not found." },
+        { status: 404 }
+      );
+    }
+
+    const empDoc = empQuery.docs[0];
+    const empData = empDoc.data();
+
+    // Check lockout
+    if (empData.guardLockoutUntil) {
+      const lockoutUntil =
+        empData.guardLockoutUntil?.toMillis?.() ??
+        Number(empData.guardLockoutUntil);
+      if (now < lockoutUntil) {
+        const secondsRemaining = Math.ceil((lockoutUntil - now) / 1000);
+        return NextResponse.json(
+          {
+            error: `Account locked. Try again in ${secondsRemaining} seconds.`,
+            lockedUntil: lockoutUntil,
+          },
+          { status: 429 }
+        );
+      }
+    }
+
+    // Check PIN is set
+    if (!empData.guardPin || !empData.guardAuthUid) {
+      return NextResponse.json(
+        { error: "PIN not set. Please complete setup first." },
+        { status: 400 }
+      );
+    }
+
+    // Verify PIN
+    const pinValid = await verifyPin(pin, empData.guardPin as string);
+
+    if (!pinValid) {
+      // Increment failed attempts
+      const failedAttempts = ((empData.guardFailedAttempts as number) ?? 0) + 1;
+      const updates: Record<string, unknown> = {
+        guardFailedAttempts: failedAttempts,
+      };
+
+      if (failedAttempts >= 10) {
+        // Lock for 15 minutes
+        const lockUntil = new Date(now + 15 * 60 * 1000);
+        updates.guardLockoutUntil = lockUntil;
+      }
+
+      await empDoc.ref.update(updates);
+
+      return NextResponse.json({ error: "Incorrect PIN." }, { status: 401 });
+    }
+
+    // Success — reset failed attempts
+    await empDoc.ref.update({
+      guardFailedAttempts: 0,
+      guardLastLogin: FieldValue.serverTimestamp(),
+      guardLockoutUntil: FieldValue.delete(),
+    });
+
+    // Create custom token
+    const { auth: adminAuth } = await import("@/lib/firebaseAdmin");
+    const customToken = await adminAuth.createCustomToken(
+      empData.guardAuthUid as string,
+      {
+        role: "guard",
+        employeeId: empData.employeeId,
+        employeeDocId: empDoc.id,
+      }
+    );
+
+    return NextResponse.json({
+      token: customToken,
+      employeeName: empData.name ?? "",
+    });
+  } catch (err: unknown) {
+    console.error("[guard/login]", err);
+    const msg = err instanceof Error ? err.message : "Internal server error.";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
