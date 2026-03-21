@@ -294,6 +294,14 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    match /regions/{regionId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /regionOnboardingAudit/{auditId} {
+      allow read, write: if isSuperAdmin();
+    }
+
     match /systemConfig/{docId} {
       allow read: if isAdmin();
       allow write: if isSuperAdmin();

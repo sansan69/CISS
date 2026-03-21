@@ -17,7 +17,8 @@ service firebase.storage {
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.admin == true ||
-        request.auth.token.role == 'admin'
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'superAdmin'
       );
     }
 

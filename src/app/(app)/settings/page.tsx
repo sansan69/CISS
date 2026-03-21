@@ -5,11 +5,12 @@ import React, { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { resolveAppUser } from "@/lib/auth/roles";
+import { useAppAuth } from "@/context/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users, ShieldCheck, Wallet, GraduationCap, Building2 } from "lucide-react";
+import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users, ShieldCheck, Wallet, GraduationCap, Building2, Globe } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -89,16 +90,29 @@ const settingsOptions = [
 ];
 
 export default function SettingsPage() {
+  const { isSuperAdmin } = useAppAuth();
   const [authStatus, setAuthStatus] = useState<"loading" | "admin" | "other">("loading");
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
       if (!user) { setAuthStatus("other"); return; }
       resolveAppUser(user)
-        .then((appUser) => setAuthStatus(appUser.role === "admin" ? "admin" : "other"))
+        .then((appUser) => setAuthStatus(appUser.role === "admin" || appUser.role === "superAdmin" ? "admin" : "other"))
         .catch(() => setAuthStatus("other"));
     });
   }, []);
+
+  const visibleOptions = isSuperAdmin
+    ? [
+        ...settingsOptions,
+        {
+          title: "Region Onboarding",
+          description: "Connect and prepare separate Firebase backends for new regions without touching Kerala data.",
+          icon: Globe,
+          href: "/settings/state-management",
+        },
+      ]
+    : settingsOptions;
 
   if (authStatus === "loading") {
     return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -123,7 +137,7 @@ export default function SettingsPage() {
       />
       
       <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {settingsOptions.map((option) => (
+        {visibleOptions.map((option) => (
           <Card key={option.title} className="flex flex-col">
             <CardHeader>
               <div className="flex items-start justify-between gap-3">

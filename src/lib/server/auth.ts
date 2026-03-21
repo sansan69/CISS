@@ -19,11 +19,20 @@ export async function requireAdmin(request: Request) {
   if (
     decodedToken.admin !== true &&
     decodedToken.role !== "admin" &&
+    decodedToken.role !== "superAdmin" &&
     !isLegacyAdminEmail(tokenEmail)
   ) {
     throw new Error("Admin access required.");
   }
 
+  return decodedToken;
+}
+
+export async function requireSuperAdmin(request: Request) {
+  const decodedToken = await verifyRequestAuth(request);
+  if (decodedToken.role !== "superAdmin") {
+    throw new Error("Super admin access required.");
+  }
   return decodedToken;
 }
 
