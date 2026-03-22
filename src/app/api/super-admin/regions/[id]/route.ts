@@ -9,7 +9,6 @@ import {
 } from "@/lib/server/region-onboarding";
 import {
   buildRegionVercelProjectName,
-  buildVercelProductionUrl,
   buildVercelProjectDashboardUrl,
   getVercelTeamSlug,
 } from "@/lib/vercel-region";
@@ -110,9 +109,7 @@ export async function PATCH(
           : body.vercelProjectUrl?.trim() || null,
       vercelProductionUrl:
         body.vercelProductionUrl === undefined
-          ? (vercelProjectName
-              ? buildVercelProductionUrl(vercelProjectName, vercelTeamSlug)
-              : current.vercelProductionUrl ?? null)
+          ? current.vercelProductionUrl ?? null
           : body.vercelProductionUrl?.trim() || null,
       vercelTeamSlug:
         body.vercelTeamSlug === undefined

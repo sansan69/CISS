@@ -35,5 +35,6 @@ export function buildVercelProjectDashboardUrl(projectName: string, teamSlug = g
 }
 
 export function buildVercelProductionUrl(projectName: string, teamSlug = getVercelTeamSlug()) {
-  return `https://${projectName}-${teamSlug}.vercel.app`;
+  void teamSlug;
+  return `https://${projectName}.vercel.app`;
 }

@@ -8,7 +8,6 @@ import {
 } from "@/lib/server/region-onboarding";
 import {
   buildRegionVercelProjectName,
-  buildVercelProductionUrl,
   buildVercelProjectDashboardUrl,
   getVercelTeamSlug,
 } from "@/lib/vercel-region";
@@ -126,7 +125,7 @@ export async function POST(request: Request) {
       ...region,
       vercelProjectName,
       vercelProjectUrl: buildVercelProjectDashboardUrl(vercelProjectName, vercelTeamSlug),
-      vercelProductionUrl: buildVercelProductionUrl(vercelProjectName, vercelTeamSlug),
+      vercelProductionUrl: null,
       vercelTeamSlug,
       ...buildServerCreateAudit({ uid: actor.uid, email: actor.email }),
     });

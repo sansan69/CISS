@@ -9,6 +9,7 @@ const REPO_ROOT = process.cwd();
 const TEAM_SLUG = process.env.VERCEL_REGION_TEAM_SLUG || "sansan69s-projects";
 const SOURCE_PROJECT = process.env.VERCEL_SOURCE_PROJECT || "ciss";
 const HQ_BASE_URL = process.env.HQ_BASE_URL || "https://cisskerala.site";
+const HQ_BYPASS_SECRET = process.env.HQ_VERCEL_PROTECTION_BYPASS_SECRET || "";
 const EXCLUDED_REGION_ENV_KEYS = new Set([
   "APP_MODE",
   "NEXT_PUBLIC_APP_MODE",
@@ -80,7 +81,25 @@ function buildProjectUrl(projectName) {
 }
 
 function buildProductionUrl(projectName) {
+  return `https://${projectName}.vercel.app`;
+}
+
+function buildTeamProductionUrl(projectName) {
   return `https://${projectName}-${TEAM_SLUG}.vercel.app`;
+}
+
+function extractDeploymentUrl(output, projectName) {
+  const aliasedMatch = output.match(/Aliased:\s+(https:\/\/[^\s]+)/);
+  if (aliasedMatch?.[1]) {
+    return aliasedMatch[1];
+  }
+
+  const productionMatch = output.match(/Production:\s+(https:\/\/[^\s]+)/);
+  if (productionMatch?.[1]) {
+    return productionMatch[1];
+  }
+
+  return buildProductionUrl(projectName);
 }
 
 function runCommand(command, args, options = {}) {
@@ -157,11 +176,23 @@ async function getIdToken(apiKey, email, password) {
 }
 
 async function apiRequest(token, pathname, init = {}) {
-  const res = await fetch(`${HQ_BASE_URL}${pathname}`, {
+  const baseUrl = new URL(HQ_BASE_URL);
+  const requestUrl = new URL(pathname, `${baseUrl.origin}/`);
+  if (HQ_BYPASS_SECRET) {
+    requestUrl.searchParams.set("x-vercel-protection-bypass", HQ_BYPASS_SECRET);
+  }
+
+  const res = await fetch(requestUrl, {
     ...init,
+    redirect: "manual",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${token}`,
+      ...(HQ_BYPASS_SECRET
+        ? {
+            "x-vercel-protection-bypass": HQ_BYPASS_SECRET,
+          }
+        : {}),
       ...(init.headers || {}),
     },
   });
@@ -224,6 +255,113 @@ function setProjectEnv(stagingDir, name, value, target) {
 
 function removeVercelProject(projectName) {
   runShell(`printf 'y\\n' | npx vercel project remove '${projectName}' --scope '${TEAM_SLUG}'`);
+}
+
+function vercelApi(endpoint, options = {}) {
+  const args = ["vercel", "api", endpoint, "--scope", TEAM_SLUG, "--raw"];
+
+  if (options.method) {
+    args.push("-X", options.method);
+  }
+
+  if (options.inputPath) {
+    args.push("--input", options.inputPath);
+  }
+
+  const output = runCommand("npx", args, { capture: true });
+  return output ? JSON.parse(output) : null;
+}
+
+function updateProjectDefaults(projectName) {
+  const patchFile = path.join(os.tmpdir(), `vercel-project-patch-${projectName}-${Date.now()}.json`);
+  fs.writeFileSync(
+    patchFile,
+    JSON.stringify(
+      {
+        framework: "nextjs",
+        nodeVersion: "22.x",
+        ssoProtection: null,
+      },
+      null,
+      2,
+    ),
+  );
+
+  try {
+    return vercelApi(`/v9/projects/${projectName}`, {
+      method: "PATCH",
+      inputPath: patchFile,
+    });
+  } finally {
+    fs.rmSync(patchFile, { force: true });
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function probeUrl(url) {
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      redirect: "manual",
+    });
+    return res.status >= 200 && res.status < 400;
+  } catch {
+    return false;
+  }
+}
+
+function extractProjectAliasCandidates(projectName, projectData) {
+  const candidates = new Set([
+    buildProductionUrl(projectName),
+    buildTeamProductionUrl(projectName),
+  ]);
+
+  const productionAliases = projectData?.targets?.production?.alias;
+  if (Array.isArray(productionAliases)) {
+    for (const alias of productionAliases) {
+      if (typeof alias === "string" && alias.trim()) {
+        candidates.add(alias.startsWith("http") ? alias : `https://${alias}`);
+      }
+    }
+  }
+
+  const latestAliases = projectData?.latestDeployments?.[0]?.alias;
+  if (Array.isArray(latestAliases)) {
+    for (const alias of latestAliases) {
+      if (typeof alias === "string" && alias.trim()) {
+        candidates.add(alias.startsWith("http") ? alias : `https://${alias}`);
+      }
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+async function resolvePublicProductionUrl(projectName) {
+  let lastCandidates = [];
+
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    const projectData = vercelApi(`/v9/projects/${projectName}`);
+    const candidates = extractProjectAliasCandidates(projectName, projectData);
+    lastCandidates = candidates;
+
+    for (const candidate of candidates) {
+      if (await probeUrl(candidate)) {
+        return candidate;
+      }
+    }
+
+    await sleep(4000);
+  }
+
+  throw new Error(
+    `Could not verify a public regional URL for ${projectName}. Candidates checked: ${lastCandidates.join(", ")}`,
+  );
 }
 
 async function main() {
@@ -316,13 +454,15 @@ async function main() {
 
   log(`Ensuring Vercel project ${projectName} exists...`);
   ensureVercelProject(projectName);
+  log(`Applying regional Vercel defaults for ${projectName}...`);
+  updateProjectDefaults(projectName);
 
   log(`Linking staging directory to ${projectName}...`);
   runCommand("npx", [
     "vercel",
     "link",
     "--yes",
-    "--team",
+    "--scope",
     TEAM_SLUG,
     "--project",
     projectName,
@@ -338,24 +478,25 @@ async function main() {
   Object.assign(targetEnv, deploymentConfig);
 
   log("Syncing regional Vercel environment variables...");
-  for (const envTarget of ["production", "preview", "development"]) {
-    for (const [key, value] of Object.entries(targetEnv)) {
-      setProjectEnv(stagingDir, key, value, envTarget);
-    }
+  for (const [key, value] of Object.entries(targetEnv)) {
+    setProjectEnv(stagingDir, key, value, "production");
   }
 
   log("Deploying the regional runtime...");
-  runCommand("npx", [
+  const deployOutput = runCommand("npx", [
     "vercel",
     "deploy",
     stagingDir,
     "--prod",
+    "--public",
     "--scope",
     TEAM_SLUG,
     "-y",
-  ]);
+  ], { capture: true });
+  process.stdout.write(deployOutput);
 
-  const productionUrl = buildProductionUrl(projectName);
+  const deploymentUrl = extractDeploymentUrl(deployOutput, projectName);
+  const productionUrl = await resolvePublicProductionUrl(projectName);
   const projectUrl = buildProjectUrl(projectName);
 
   await apiRequest(idToken, `/api/super-admin/regions/${regionCode}`, {
@@ -373,6 +514,7 @@ async function main() {
     }),
   });
 
+  log(`Deployment created at ${deploymentUrl}`);
   log(`Regional app ready at ${productionUrl}`);
   log(`Vercel project: ${projectUrl}`);
 }
