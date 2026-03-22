@@ -25,6 +25,7 @@ export interface RegionRecord {
   regionName: string;
   status: RegionStatus;
   firebaseProjectId: string;
+  firebaseApiKey?: string | null;
   firebaseWebAppId?: string | null;
   storageBucket?: string | null;
   authDomain?: string | null;
@@ -50,6 +51,7 @@ export interface RegionCredentialInput {
 
 export interface RegionWebConfigInput {
   firebaseProjectId: string;
+  firebaseApiKey?: string | null;
   firebaseWebAppId?: string | null;
   storageBucket?: string | null;
   authDomain?: string | null;

@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   EDUCATION_OPTIONS,
   GENDER_OPTIONS,
-  KERALA_DISTRICTS,
   MARITAL_STATUSES,
   PROOF_TYPES,
 } from "@/lib/constants";
@@ -23,7 +22,7 @@ export const enrollmentSubmissionSchema = z
     spouseName: z.string().trim().optional(),
     educationalQualification: z.enum(EDUCATION_OPTIONS),
     otherQualification: z.string().trim().optional(),
-    district: z.enum(KERALA_DISTRICTS),
+    district: z.string().trim().min(1),
     panNumber: z.string().trim().optional(),
     identityProofType: z.enum(PROOF_TYPES),
     identityProofNumber: z.string().min(1),

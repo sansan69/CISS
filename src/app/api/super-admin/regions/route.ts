@@ -17,6 +17,7 @@ function buildSyntheticKeralaRegion(): RegionRecord {
     status: "live",
     firebaseProjectId:
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "ciss-workforce",
+    firebaseApiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || null,
     firebaseWebAppId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || null,
     storageBucket:
       process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || null,
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
       regionName?: string;
       regionAdminEmail?: string | null;
       firebaseProjectId?: string;
+      firebaseApiKey?: string | null;
       firebaseWebAppId?: string | null;
       storageBucket?: string | null;
       authDomain?: string | null;
@@ -90,6 +92,7 @@ export async function POST(request: Request) {
       regionName: body.regionName,
       regionAdminEmail: body.regionAdminEmail,
       firebaseProjectId: body.firebaseProjectId,
+      firebaseApiKey: body.firebaseApiKey,
       firebaseWebAppId: body.firebaseWebAppId,
       storageBucket: body.storageBucket,
       authDomain: body.authDomain,

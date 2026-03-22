@@ -69,7 +69,17 @@ export async function POST(
 
     return NextResponse.json(seeded);
   } catch (error: any) {
-    const status = error?.message === "Region not found." ? 404 : error?.message === "Super admin access required." ? 403 : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+    const status =
+      error?.message === "Region not found."
+        ? 404
+        : error?.message === "Super admin access required."
+          ? 403
+          : error instanceof SyntaxError || /service account/i.test(error?.message || "")
+            ? 400
+            : 500;
+    return NextResponse.json(
+      { error: error?.message || "Could not seed the region backend." },
+      { status },
+    );
   }
 }

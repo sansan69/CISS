@@ -79,15 +79,43 @@ const DEFAULT_COMPLIANCE_SETTINGS = {
 };
 
 function parseServiceAccount(input: RegionCredentialInput) {
+  const normalize = (raw: Record<string, unknown>) => {
+    const projectId =
+      typeof raw.projectId === "string"
+        ? raw.projectId
+        : typeof raw.project_id === "string"
+          ? raw.project_id
+          : undefined;
+    const clientEmail =
+      typeof raw.clientEmail === "string"
+        ? raw.clientEmail
+        : typeof raw.client_email === "string"
+          ? raw.client_email
+          : undefined;
+    const privateKey =
+      typeof raw.privateKey === "string"
+        ? raw.privateKey
+        : typeof raw.private_key === "string"
+          ? raw.private_key
+          : undefined;
+
+    return {
+      ...raw,
+      projectId,
+      clientEmail,
+      privateKey,
+    } as admin.ServiceAccount;
+  };
+
   const base64 = input.serviceAccountBase64?.trim();
   if (base64) {
     const decoded = Buffer.from(base64, "base64").toString("utf-8");
-    return JSON.parse(decoded) as admin.ServiceAccount;
+    return normalize(JSON.parse(decoded) as Record<string, unknown>);
   }
 
   const json = input.serviceAccountJson?.trim();
   if (json) {
-    return JSON.parse(json) as admin.ServiceAccount;
+    return normalize(JSON.parse(json) as Record<string, unknown>);
   }
 
   throw new Error("Service account credentials are required for region onboarding.");
@@ -112,6 +140,7 @@ export function makeRegionRecord(
     regionName: input.regionName.trim(),
     regionAdminEmail: input.regionAdminEmail?.trim() || null,
     firebaseProjectId: input.firebaseProjectId.trim(),
+    firebaseApiKey: input.firebaseApiKey?.trim() || null,
     firebaseWebAppId: input.firebaseWebAppId?.trim() || null,
     storageBucket: input.storageBucket?.trim() || null,
     authDomain: input.authDomain?.trim() || null,
@@ -318,9 +347,18 @@ export function nextRegionStatus(checklist: RegionOnboardingChecklist): RegionSt
     checklist.metadataSaved &&
     checklist.firebaseValidated &&
     checklist.defaultsSeeded &&
-    checklist.regionAdminCreated
+    checklist.regionAdminCreated &&
+    checklist.vercelConfigured
   ) {
     return "ready";
+  }
+  if (
+    checklist.metadataSaved &&
+    checklist.firebaseValidated &&
+    checklist.defaultsSeeded &&
+    checklist.regionAdminCreated
+  ) {
+    return "seeded";
   }
   if (checklist.defaultsSeeded) return "seeded";
   if (checklist.firebaseValidated) return "validated";

@@ -90,7 +90,12 @@ export async function POST(
         ? 404
         : error?.message === "Super admin access required."
           ? 403
-          : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+          : error instanceof SyntaxError || /service account/i.test(error?.message || "")
+            ? 400
+            : 500;
+    return NextResponse.json(
+      { error: error?.message || "Could not create the region admin." },
+      { status },
+    );
   }
 }

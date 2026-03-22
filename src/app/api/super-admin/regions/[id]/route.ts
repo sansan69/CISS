@@ -60,6 +60,10 @@ export async function PATCH(
           : body.regionAdminEmail?.trim() || null,
       firebaseProjectId:
         body.firebaseProjectId?.trim() || current.firebaseProjectId || "",
+      firebaseApiKey:
+        body.firebaseApiKey === undefined
+          ? current.firebaseApiKey ?? null
+          : body.firebaseApiKey?.trim() || null,
       firebaseWebAppId:
         body.firebaseWebAppId === undefined
           ? current.firebaseWebAppId ?? null

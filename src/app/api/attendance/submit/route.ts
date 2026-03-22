@@ -7,6 +7,7 @@ import {
   OFFLINE_ATTENDANCE_MAX_AGE_HOURS,
   OPERATIONAL_CLIENT_NAME,
 } from "@/lib/constants";
+import { districtMatches, normalizeDistrictName } from "@/lib/districts";
 import {
   attendanceSubmissionSchema,
   type AttendanceSubmission,
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest) {
       const siteData = siteSnap.data() as Record<string, any>;
       validateEmployee(payload, employeeData);
 
-      if (siteData.district !== payload.district) {
+      if (!districtMatches(siteData.district, payload.district)) {
         throw new AttendanceError("District mismatch for selected site.");
       }
 
@@ -328,7 +329,7 @@ export async function POST(request: NextRequest) {
         reportedAtClient: payload.reportedAtClient ?? null,
         reportedAt,
         status: payload.status,
-        district: payload.district,
+        district: normalizeDistrictName(payload.district),
         siteId: payload.siteId,
         siteName: payload.siteName,
         clientName: siteData.clientName || payload.clientName || null,

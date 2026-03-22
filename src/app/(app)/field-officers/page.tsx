@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db, auth } from '@/lib/firebase'; 
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -33,9 +33,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { authorizedFetch } from '@/lib/api-client';
-import { KERALA_DISTRICTS } from '@/lib/constants';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { PageHeader } from '@/components/layout/page-header';
+import { useAppAuth } from '@/context/auth-context';
+import {
+  districtMatches,
+  getDefaultDistrictSuggestions,
+  mergeDistrictOptions,
+  normalizeDistrictName,
+} from '@/lib/districts';
 
 
 interface FieldOfficer {
@@ -75,7 +81,8 @@ const OfficerForm: React.FC<{
     unavailableDistricts: string[];
     allAuthUsers: AuthUser[];
     assignedOfficerUIDs: string[];
-}> = ({ officer, onSave, isSaving, onClose, unavailableDistricts, allAuthUsers, assignedOfficerUIDs }) => {
+    districtSuggestions: string[];
+}> = ({ officer, onSave, isSaving, onClose, unavailableDistricts, allAuthUsers, assignedOfficerUIDs, districtSuggestions }) => {
     
     const isEditing = !!officer;
     
@@ -88,21 +95,39 @@ const OfficerForm: React.FC<{
     const [nameError, setNameError] = useState<string | null>(null);
     const [emailInput, setEmailInput] = useState<string>("");
     const [passwordInput, setPasswordInput] = useState<string>("");
+    const [customDistrict, setCustomDistrict] = useState("");
     const [isVerifyingUser, setIsVerifyingUser] = useState(false);
     const { toast } = useToast();
     
     const availableDistricts = useMemo(() => {
+        const suggestedDistricts = mergeDistrictOptions(districtSuggestions, unavailableDistricts, assignedDistricts);
         if (isEditing) {
-            return KERALA_DISTRICTS.filter(d => !unavailableDistricts.includes(d) || assignedDistricts.includes(d));
+            return suggestedDistricts.filter(d => !unavailableDistricts.includes(d) || assignedDistricts.includes(d));
         }
-        return KERALA_DISTRICTS.filter(d => !unavailableDistricts.includes(d));
-    }, [unavailableDistricts, isEditing, assignedDistricts]);
+        return suggestedDistricts.filter(d => !unavailableDistricts.includes(d));
+    }, [assignedDistricts, districtSuggestions, isEditing, unavailableDistricts]);
     
     const availableUsers = useMemo(() => {
         if (isEditing) return allAuthUsers; // Show all users when editing
         // When adding, show only users not already assigned as officers
         return allAuthUsers.filter(u => !assignedOfficerUIDs.includes(u.uid));
     }, [allAuthUsers, assignedOfficerUIDs, isEditing]);
+
+    const addCustomDistrict = () => {
+        const normalized = normalizeDistrictName(customDistrict);
+        if (!normalized) return;
+        const alreadyUnavailable = unavailableDistricts.some((district) => districtMatches(district, normalized));
+        if (alreadyUnavailable && !assignedDistricts.some((district) => districtMatches(district, normalized))) {
+            toast({
+                variant: "destructive",
+                title: "District already assigned",
+                description: "That district is already assigned to another field officer.",
+            });
+            return;
+        }
+        setAssignedDistricts((prev) => prev.includes(normalized) ? prev : [...prev, normalized]);
+        setCustomDistrict("");
+    };
 
 
     const validate = () => {
@@ -173,7 +198,15 @@ const OfficerForm: React.FC<{
         }
         setIsVerifyingUser(true);
         try {
-            const matchedUser = allAuthUsers.find((user) => user.email?.toLowerCase() === emailInput.trim().toLowerCase());
+            let matchedUser = allAuthUsers.find((user) => user.email?.toLowerCase() === emailInput.trim().toLowerCase());
+            if (!matchedUser) {
+                const response = await authorizedFetch(`/api/admin/auth-users?email=${encodeURIComponent(emailInput.trim())}`);
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || 'Could not look up that auth user.');
+                }
+                matchedUser = data.users?.[0];
+            }
             if (!matchedUser) {
                 throw new Error('No Firebase Auth user exists for that email yet.');
             }
@@ -244,6 +277,23 @@ const OfficerForm: React.FC<{
             </div>
             <div className="grid gap-2">
                 <Label>Assign Districts</Label>
+                <div className="flex flex-col gap-2 rounded-md border p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                            value={customDistrict}
+                            onChange={(e) => setCustomDistrict(e.target.value)}
+                            placeholder="Add district manually for this region"
+                            list="field-officer-district-suggestions"
+                        />
+                        <Button type="button" variant="outline" onClick={addCustomDistrict}>Add district</Button>
+                    </div>
+                    <datalist id="field-officer-district-suggestions">
+                        {districtSuggestions.map((district) => (
+                            <option key={district} value={district} />
+                        ))}
+                    </datalist>
+                    <p className="text-xs text-muted-foreground">Use the suggestions or add a district manually. This is not limited to Kerala.</p>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-4 border rounded-md max-h-64 overflow-y-auto">
                     {availableDistricts.length > 0 ? availableDistricts.map(district => (
                         <div key={district} className="flex items-center space-x-2">
@@ -272,6 +322,7 @@ const OfficerForm: React.FC<{
 
 
 export default function FieldOfficerManagementPage() {
+  const { stateCode } = useAppAuth();
   const [officers, setOfficers] = useState<FieldOfficer[]>([]);
   const [allAuthUsers, setAllAuthUsers] = useState<AuthUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -285,6 +336,22 @@ export default function FieldOfficerManagementPage() {
   const [isRepairingClaims, setIsRepairingClaims] = useState(false);
 
   const { toast } = useToast();
+
+  const fetchAuthMetadata = useCallback(async () => {
+    const [response, claimsResponse] = await Promise.all([
+      authorizedFetch('/api/admin/auth-users'),
+      authorizedFetch('/api/admin/claims/repair'),
+    ]);
+    const data = await response.json().catch(() => ({}));
+    const claimsData = await claimsResponse.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Could not load auth users.');
+    }
+    setAllAuthUsers(data.users || []);
+    if (claimsResponse.ok) {
+      setClaimRepairHealth(claimsData);
+    }
+  }, []);
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -293,7 +360,7 @@ export default function FieldOfficerManagementPage() {
             return;
         }
         resolveAppUser(user)
-            .then((appUser) => setAuthStatus(appUser.role === 'admin' ? 'admin' : 'other'))
+            .then((appUser) => setAuthStatus(appUser.role === 'admin' || appUser.role === 'superAdmin' ? 'admin' : 'other'))
             .catch(() => setAuthStatus('other'));
     });
     return () => unsubscribe();
@@ -313,19 +380,7 @@ export default function FieldOfficerManagementPage() {
     // Simulating that fetch here.
     const fetchAllData = async () => {
         try {
-            const [response, claimsResponse] = await Promise.all([
-              authorizedFetch('/api/admin/auth-users'),
-              authorizedFetch('/api/admin/claims/repair'),
-            ]);
-            const data = await response.json().catch(() => ({}));
-            const claimsData = await claimsResponse.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(data.error || 'Could not load auth users.');
-            }
-            setAllAuthUsers(data.users || []);
-            if (claimsResponse.ok) {
-              setClaimRepairHealth(claimsData);
-            }
+            await fetchAuthMetadata();
         } catch (error) {
              console.error("Error fetching auth users (simulation): ", error);
              toast({ variant: "destructive", title: "Error", description: "Could not load user list." });
@@ -353,7 +408,7 @@ export default function FieldOfficerManagementPage() {
     });
 
     return () => unsubscribe();
-  }, [toast, authStatus]);
+  }, [toast, authStatus, fetchAuthMetadata]);
   
     const allAssignedDistricts = useMemo(() => {
         const otherOfficers = editingOfficer ? officers.filter(o => o.id !== editingOfficer.id) : officers;
@@ -361,6 +416,10 @@ export default function FieldOfficerManagementPage() {
     }, [officers, editingOfficer]);
 
     const assignedOfficerUIDs = useMemo(() => officers.map(o => o.uid), [officers]);
+    const districtSuggestions = useMemo(
+      () => mergeDistrictOptions(getDefaultDistrictSuggestions(stateCode), officers.flatMap((officer) => officer.assignedDistricts)),
+      [officers, stateCode],
+    );
 
   const handleSaveOfficer = async (officerData: any, isEditing: boolean) => {
     setIsSubmitting(true);
@@ -393,6 +452,7 @@ export default function FieldOfficerManagementPage() {
         if (!response.ok) {
             throw new Error(data.error || 'Could not create the officer.');
         }
+        await fetchAuthMetadata();
         toast({ title: "Officer Role Assigned", description: `"${officerData.name}" is now a Field Officer.` });
       }
       closeFormDialog();
@@ -621,6 +681,7 @@ export default function FieldOfficerManagementPage() {
                 unavailableDistricts={allAssignedDistricts}
                 allAuthUsers={allAuthUsers}
                 assignedOfficerUIDs={assignedOfficerUIDs}
+                districtSuggestions={districtSuggestions}
             />
         </DialogContent>
     </Dialog>

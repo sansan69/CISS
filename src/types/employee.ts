@@ -3,7 +3,6 @@ import {
   EDUCATION_OPTIONS,
   EMPLOYEE_STATUSES,
   GENDER_OPTIONS,
-  KERALA_DISTRICTS,
   MARITAL_STATUSES,
   PROOF_TYPES,
 } from "@/lib/constants";
@@ -19,7 +18,7 @@ export const employeeGenderSchema = z.enum(GENDER_OPTIONS);
 export const employeeMaritalStatusSchema = z.enum(MARITAL_STATUSES);
 export const employeeQualificationSchema = z.enum(EDUCATION_OPTIONS);
 export const employeeProofTypeSchema = z.enum(PROOF_TYPES);
-export const employeeDistrictSchema = z.enum(KERALA_DISTRICTS);
+export const employeeDistrictSchema = z.string().trim().min(1);
 
 export const employeeSchema = z.object({
   id: z.string(),

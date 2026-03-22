@@ -11,11 +11,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Loader2, FileDown, Search } from "lucide-react";
 import { format } from "date-fns";
-import { KERALA_DISTRICTS } from "@/lib/constants";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import type { AttendancePhotoCompliance } from "@/types/attendance";
 import { PageHeader } from "@/components/layout/page-header";
+import { useAppAuth } from "@/context/auth-context";
+import {
+  districtMatches,
+  getDefaultDistrictSuggestions,
+  mergeDistrictOptions,
+} from "@/lib/districts";
 
 type AttendanceLog = {
   id: string;
@@ -58,6 +63,7 @@ function downloadBlob(content: BlobPart, filename: string, type: string) {
 }
 
 export default function AttendanceLogsPage() {
+  const { userRole, assignedDistricts, clientInfo, stateCode } = useAppAuth();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -99,12 +105,29 @@ export default function AttendanceLogsPage() {
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [logs]);
 
+  const districtOptions = useMemo(
+    () =>
+      mergeDistrictOptions(
+        getDefaultDistrictSuggestions(stateCode),
+        logs.map((log) => log.district),
+        assignedDistricts,
+      ),
+    [assignedDistricts, logs, stateCode],
+  );
+
   const filteredLogs = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
     return logs.filter((log) => {
+      const matchesRole =
+        userRole === "fieldOfficer"
+          ? assignedDistricts.some((district) => districtMatches(district, log.district))
+          : userRole === "client"
+            ? !clientInfo?.clientName || log.clientName === clientInfo.clientName
+            : true;
       const matchesStatus = statusFilter === "all" || log.status === statusFilter;
-      const matchesDistrict = districtFilter === "all" || log.district === districtFilter;
+      const matchesDistrict =
+        districtFilter === "all" || districtMatches(log.district, districtFilter);
       const matchesClient = clientFilter === "all" || log.clientName === clientFilter;
       const matchesSearch =
         !term ||
@@ -113,9 +136,9 @@ export default function AttendanceLogsPage() {
         log.siteName?.toLowerCase().includes(term) ||
         log.clientName?.toLowerCase().includes(term);
 
-      return matchesStatus && matchesDistrict && matchesClient && matchesSearch;
+      return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesSearch;
     });
-  }, [clientFilter, districtFilter, logs, searchTerm, statusFilter]);
+  }, [assignedDistricts, clientFilter, clientInfo?.clientName, districtFilter, logs, searchTerm, statusFilter, userRole]);
 
   const totals = useMemo(() => {
     const inCount = filteredLogs.filter((log) => log.status === "In").length;
@@ -227,7 +250,7 @@ export default function AttendanceLogsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All districts</SelectItem>
-              {KERALA_DISTRICTS.map((district) => (
+              {districtOptions.map((district) => (
                 <SelectItem key={district} value={district}>
                   {district}
                 </SelectItem>

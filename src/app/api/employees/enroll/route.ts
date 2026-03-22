@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  canonicalizeDistrictName,
+  getDefaultDistrictSuggestions,
+  isRecognizedDistrictName,
+} from "@/lib/districts";
 import { generateEmployeeId } from "@/lib/employee-id";
 import { generateQrCodeDataUrl } from "@/lib/qr";
+import { REGION_CODE } from "@/lib/runtime-config";
 import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
@@ -48,6 +54,14 @@ async function generateUniqueEmployeeId(
 export async function POST(request: NextRequest) {
   try {
     const payload = enrollmentSubmissionSchema.parse(await request.json());
+    const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
+    const district = canonicalizeDistrictName(payload.district, districtSuggestions);
+    if (!isRecognizedDistrictName(district, districtSuggestions)) {
+      return NextResponse.json(
+        { error: "Please choose a valid district for this region." },
+        { status: 400 },
+      );
+    }
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { Timestamp } = await import("firebase-admin/firestore");
 
@@ -102,10 +116,11 @@ export async function POST(request: NextRequest) {
       gender: payload.gender,
       maritalStatus: payload.maritalStatus,
       educationalQualification: payload.educationalQualification,
-      district: payload.district,
+      district,
       fullAddress: payload.fullAddress.toUpperCase(),
       emailAddress: payload.emailAddress.toLowerCase(),
       phoneNumber: payload.phoneNumber,
+      stateCode: REGION_CODE,
       status: "Active",
       createdAt: now,
       updatedAt: now,

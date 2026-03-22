@@ -52,7 +52,13 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
-import { EDUCATION_OPTIONS, KERALA_DISTRICTS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
+import { EDUCATION_OPTIONS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
+import {
+  canonicalizeDistrictName,
+  getDefaultDistrictSuggestions,
+  isRecognizedDistrictName,
+} from "@/lib/districts";
+import { REGION_CODE } from "@/lib/runtime-config";
 
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
@@ -177,7 +183,7 @@ interface ClientOption {
   name: string;
 }
 
-const keralaDistricts = [...KERALA_DISTRICTS];
+const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
 const idProofOptions = [...PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
@@ -481,6 +487,16 @@ export default function EnrollEmployeePage() {
     setIsLoading(true);
     toast({ title: "Processing Registration...", description: "Please wait." });
 
+    const district = canonicalizeDistrictName(data.district, districtSuggestions);
+    if (!isRecognizedDistrictName(district, districtSuggestions)) {
+      form.setError("district", {
+        type: "manual",
+        message: "Please choose a valid district for this region.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
     const phoneNumber = data.phoneNumber.replace(/\D/g, ""); 
     const uploadedUrls: { [key: string]: string | null } = {
         profilePictureUrl: null,
@@ -541,7 +557,7 @@ export default function EnrollEmployeePage() {
           spouseName: data.spouseName || undefined,
           educationalQualification: data.educationalQualification,
           otherQualification: data.otherQualification || undefined,
-          district: data.district,
+          district,
           fullAddress: data.fullAddress,
           emailAddress: data.emailAddress,
           phoneNumber: data.phoneNumber,
@@ -899,7 +915,7 @@ export default function EnrollEmployeePage() {
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Statutory & Location Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select your district" /></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(dist => <SelectItem key={dist} value={dist}>{dist}</SelectItem>)}</SelectContent></Select><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter district" list="admin-enrollment-districts" /></FormControl><datalist id="admin-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormDescription>Universal Account Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />

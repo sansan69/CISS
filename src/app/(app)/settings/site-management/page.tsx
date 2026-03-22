@@ -43,12 +43,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { LocationEditorCard } from '@/components/location/location-editor-card';
-import { KERALA_DISTRICTS, OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
+import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
 import { buildShiftTemplates, SHIFT_PATTERN_LABELS } from '@/lib/shift-utils';
 import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite, SiteShiftPattern } from '@/types/location';
 import { PageHeader } from '@/components/layout/page-header';
 import { authorizedFetch } from '@/lib/api-client';
+import {
+    canonicalizeDistrictName,
+    getDefaultDistrictSuggestions,
+    isRecognizedDistrictName,
+    mergeDistrictOptions,
+    normalizeDistrictName,
+} from '@/lib/districts';
+import { REGION_CODE } from '@/lib/runtime-config';
 
 
 type Site = ManagedSite;
@@ -80,9 +88,15 @@ const requiredFields = [
     'Site Name', 'Site Address', 'Geolocation', 'District'
 ];
 
-const keralaDistricts = [...KERALA_DISTRICTS];
+const defaultDistrictSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
 const SITES_PER_PAGE = 10;
 const formatCoord = formatCoordinate;
+
+function getDistrictValidationMessage() {
+    return defaultDistrictSuggestions.length > 0
+        ? 'Please use a valid district for this region.'
+        : 'Please enter a district.';
+}
 
 const toRadians = (deg: number) => (deg * Math.PI) / 180;
 const haversineDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -131,14 +145,24 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
     const isTcsSite = (formData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
 
     const handleSave = () => {
+        const normalizedDistrict = canonicalizeDistrictName(formData.district, defaultDistrictSuggestions);
+        if (!isRecognizedDistrictName(normalizedDistrict, defaultDistrictSuggestions)) {
+            toast({ variant: 'destructive', title: 'Invalid district', description: getDistrictValidationMessage() });
+            return;
+        }
+
+        const nextFormData = {
+            ...formData,
+            district: normalizedDistrict,
+        };
         const changes: Partial<Site> = {};
-        (Object.keys(formData) as Array<keyof Site>).forEach(key => {
+        (Object.keys(nextFormData) as Array<keyof Site>).forEach(key => {
             if (key === 'geolocation') {
-                if (formData.geolocation?.latitude !== site.geolocation?.latitude || formData.geolocation?.longitude !== site.geolocation?.longitude) {
-                    (changes as any)[key] = formData[key];
+                if (nextFormData.geolocation?.latitude !== site.geolocation?.latitude || nextFormData.geolocation?.longitude !== site.geolocation?.longitude) {
+                    (changes as any)[key] = nextFormData[key];
                 }
-            } else if (formData[key] !== site[key]) {
-                (changes as any)[key] = formData[key];
+            } else if (nextFormData[key] !== site[key]) {
+                (changes as any)[key] = nextFormData[key];
             }
         });
         
@@ -279,12 +303,15 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
             </div>
             <div className="grid gap-2">
                 <Label htmlFor="district">District</Label>
-                 <Select value={formData.district} onValueChange={(value) => setFormData({...formData, district: value})}>
-                    <SelectTrigger><SelectValue placeholder="Select a district" /></SelectTrigger>
-                    <SelectContent>
-                        {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                    </SelectContent>
-                </Select>
+                <Input
+                    value={formData.district || ""}
+                    onChange={(e) => setFormData({...formData, district: normalizeDistrictName(e.target.value)})}
+                    placeholder="Enter district"
+                    list="site-edit-district-options"
+                />
+                <datalist id="site-edit-district-options">
+                    {defaultDistrictSuggestions.map((district) => <option key={district} value={district} />)}
+                </datalist>
             </div>
             <LocationEditorCard
                 entityType="site"
@@ -665,8 +692,9 @@ export default function SiteManagementPage() {
                         return;
                     }
                     
-                    if (!keralaDistricts.includes(row['District'])) {
-                        localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Invalid District "${row['District']}". Please use a valid Kerala district.` });
+                    const normalizedDistrict = canonicalizeDistrictName(String(row['District'] || ''), defaultDistrictSuggestions);
+                    if (!isRecognizedDistrictName(normalizedDistrict, defaultDistrictSuggestions)) {
+                        localProcessedRecords.push({ data: row, status: 'error', message: `Row ${index + 2}: Invalid District "${row['District']}". ${getDistrictValidationMessage()}` });
                         return;
                     }
 
@@ -695,7 +723,7 @@ export default function SiteManagementPage() {
                       siteName: siteName,
                       siteId: row['Site ID'] || null,
                       siteAddress: row['Site Address'],
-                      district: row['District'],
+                      district: normalizedDistrict,
                       geolocation: new GeoPoint(latitude, longitude),
                       latString: formatCoord(latitude),
                       lngString: formatCoord(longitude),
@@ -1253,12 +1281,16 @@ export default function SiteManagementPage() {
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-district">District</Label>
-                            <Select value={createData.district} onValueChange={(value) => setCreateData({ ...createData, district: value })}>
-                                <SelectTrigger id="new-district"><SelectValue placeholder="Select district" /></SelectTrigger>
-                                <SelectContent>
-                                    {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <Input
+                                id="new-district"
+                                value={createData.district || ""}
+                                onChange={(e) => setCreateData({ ...createData, district: normalizeDistrictName(e.target.value) })}
+                                placeholder="Enter district"
+                                list="new-site-district-options"
+                            />
+                            <datalist id="new-site-district-options">
+                                {defaultDistrictSuggestions.map((district) => <option key={district} value={district} />)}
+                            </datalist>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-geofence-radius">Geofence Radius (meters)</Label>
@@ -1350,8 +1382,13 @@ export default function SiteManagementPage() {
                     <DialogFooter>
                         <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                         <Button onClick={async () => {
-                            if (!createData.clientId || !createData.clientName || !createData.siteName || !createData.siteAddress || !createData.district || !hasValidCoordinates(createData.geolocation)) {
+                            const normalizedDistrict = canonicalizeDistrictName(createData.district, defaultDistrictSuggestions);
+                            if (!createData.clientId || !createData.clientName || !createData.siteName || !createData.siteAddress || !normalizedDistrict || !hasValidCoordinates(createData.geolocation)) {
                                 toast({ variant: 'destructive', title: 'Missing Data', description: 'Please fill all required fields and confirm valid coordinates.' });
+                                return;
+                            }
+                            if (!isRecognizedDistrictName(normalizedDistrict, defaultDistrictSuggestions)) {
+                                toast({ variant: 'destructive', title: 'Invalid district', description: getDistrictValidationMessage() });
                                 return;
                             }
                             const isTcs = createData.clientName.trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
@@ -1363,7 +1400,7 @@ export default function SiteManagementPage() {
                                     siteName: createData.siteName,
                                     siteId: createData.siteId || null,
                                     siteAddress: createData.siteAddress,
-                                    district: createData.district,
+                                    district: normalizedDistrict,
                                     geolocation: new GeoPoint(createData.geolocation!.latitude, createData.geolocation!.longitude),
                                     geofenceRadiusMeters: createData.geofenceRadiusMeters ?? 150,
                                     strictGeofence: createData.strictGeofence !== false,
@@ -1378,7 +1415,7 @@ export default function SiteManagementPage() {
                                     shiftTemplates: isTcs ? [] : (createData.shiftTemplates || buildShiftTemplates((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')),
                                     clientLocationId: createData.clientLocationId ?? null,
                                     clientLocationName: createData.clientLocationName ?? null,
-                                    locationKey: buildLocationIdentity([createData.clientName, createData.siteName, createData.district]),
+                                    locationKey: buildLocationIdentity([createData.clientName, createData.siteName, normalizedDistrict]),
                                     ...buildFirestoreCreateAudit(),
                                     auditTrail: arrayUnion(
                                         buildFirestoreAuditEvent('site_created', undefined, {
@@ -1453,7 +1490,7 @@ export default function SiteManagementPage() {
                                 <SelectTrigger id="district-filter"><SelectValue/></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Districts</SelectItem>
-                                    {keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                    {mergeDistrictOptions(defaultDistrictSuggestions, sites.map((site) => site.district)).map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>

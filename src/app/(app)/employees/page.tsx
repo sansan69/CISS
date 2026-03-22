@@ -381,7 +381,7 @@ export default function EmployeeDirectoryPage() {
                 { label: "Employees" },
               ]}
               actions={
-                userRole === 'admin' ? (
+                userRole === 'admin' || userRole === 'superAdmin' ? (
                   <Button asChild className="w-full sm:w-auto">
                     <Link href="/employees/enroll">
                       <UserPlus className="mr-2 h-4 w-4" />

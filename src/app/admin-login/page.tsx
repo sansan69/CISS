@@ -91,9 +91,10 @@ export default function AdminLoginPage() {
               alt="CISS Workforce Logo"
               width={80}
               height={80}
+              priority
               data-ai-hint="company logo"
               unoptimized={true}
-              className="mx-auto"
+              className="mx-auto h-20 w-auto"
           />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50 mt-4">CISS Workforce</h1>
           <p className="text-lg text-gray-600 dark:text-gray-400">Admin Portal</p>

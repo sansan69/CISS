@@ -40,6 +40,7 @@ type RegionFormState = {
   regionCode: string;
   regionName: string;
   firebaseProjectId: string;
+  firebaseApiKey: string;
   firebaseWebAppId: string;
   storageBucket: string;
   authDomain: string;
@@ -52,6 +53,7 @@ const emptyCreateForm: RegionFormState = {
   regionCode: "",
   regionName: "",
   firebaseProjectId: "",
+  firebaseApiKey: "",
   firebaseWebAppId: "",
   storageBucket: "",
   authDomain: "",
@@ -83,6 +85,7 @@ function regionToForm(region: RegionRecord | null): RegionFormState {
     regionCode: region.regionCode ?? "",
     regionName: region.regionName ?? "",
     firebaseProjectId: region.firebaseProjectId ?? "",
+    firebaseApiKey: region.firebaseApiKey ?? "",
     firebaseWebAppId: region.firebaseWebAppId ?? "",
     storageBucket: region.storageBucket ?? "",
     authDomain: region.authDomain ?? "",
@@ -466,6 +469,7 @@ export default function RegionOnboardingPage() {
                 <div className="space-y-2 text-sm">
                   <p><span className="font-medium">Region:</span> {selectedRegion.regionName} ({selectedRegion.regionCode})</p>
                   <p><span className="font-medium">Firebase Project:</span> {selectedRegion.firebaseProjectId || "Pending"}</p>
+                  <p><span className="font-medium">Web API Key:</span> {selectedRegion.firebaseApiKey ? "Configured" : "Pending"}</p>
                   <p><span className="font-medium">Web App ID:</span> {selectedRegion.firebaseWebAppId || "Pending"}</p>
                   <p><span className="font-medium">Storage Bucket:</span> {selectedRegion.storageBucket || "Pending"}</p>
                   <p><span className="font-medium">Region Admin:</span> {selectedRegion.regionAdminEmail || "Pending"}</p>
@@ -509,6 +513,14 @@ export default function RegionOnboardingPage() {
                   <Input
                     value={form.firebaseProjectId}
                     onChange={(e) => setForm((current) => ({ ...current, firebaseProjectId: e.target.value }))}
+                    disabled={selectedRegion.isSynthetic}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Firebase Web API Key</Label>
+                  <Input
+                    value={form.firebaseApiKey}
+                    onChange={(e) => setForm((current) => ({ ...current, firebaseApiKey: e.target.value }))}
                     disabled={selectedRegion.isSynthetic}
                   />
                 </div>
@@ -669,6 +681,43 @@ export default function RegionOnboardingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
+                {!selectedRegion.isSynthetic && (
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}`, {
+                            method: "PATCH",
+                            body: JSON.stringify({
+                              onboardingChecklist: {
+                                ...selectedRegion.onboardingChecklist,
+                                vercelConfigured: !(selectedRegion.onboardingChecklist?.vercelConfigured ?? false),
+                              },
+                            }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || "Could not update deployment readiness.");
+                          toast({
+                            title: data.region?.onboardingChecklist?.vercelConfigured
+                              ? "Deployment marked ready"
+                              : "Deployment mark removed",
+                            description: "Use this once the dedicated regional Vercel runtime has been configured.",
+                          });
+                          await refreshSelectedRegion();
+                        } catch (error: any) {
+                          toast({
+                            title: "Update failed",
+                            description: error?.message || "Could not update deployment readiness.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
+                      {selectedRegion.onboardingChecklist?.vercelConfigured ? "Mark deployment not ready" : "Mark deployment configured"}
+                    </Button>
+                  </div>
+                )}
                 <p>Recommended next steps after this wizard says the region is ready:</p>
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Set the region&apos;s `NEXT_PUBLIC_FIREBASE_*` and `FIREBASE_ADMIN_*` env vars in its Vercel project.</li>
@@ -714,6 +763,14 @@ export default function RegionOnboardingPage() {
                 value={createForm.firebaseProjectId}
                 onChange={(e) => setCreateForm((current) => ({ ...current, firebaseProjectId: e.target.value }))}
                 placeholder="ciss-tamilnadu"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Firebase Web API Key</Label>
+              <Input
+                value={createForm.firebaseApiKey}
+                onChange={(e) => setCreateForm((current) => ({ ...current, firebaseApiKey: e.target.value }))}
+                placeholder="AIza..."
               />
             </div>
             <div className="space-y-1.5">
