@@ -19,6 +19,19 @@ export interface RegionOnboardingChecklist {
   lastAdminCreatedAt?: unknown;
 }
 
+export interface RegionValidationChecks {
+  projectIdMatches: boolean;
+  firestoreReachable: boolean;
+  authReachable: boolean;
+  storageReachable: boolean;
+}
+
+export interface RegionValidationSummary {
+  checks: RegionValidationChecks;
+  messages: string[];
+  validatedAt?: unknown;
+}
+
 export interface RegionRecord {
   id: string;
   regionCode: string;
@@ -34,6 +47,9 @@ export interface RegionRecord {
   regionAdminEmail?: string | null;
   appMode?: "regional";
   onboardingChecklist: RegionOnboardingChecklist;
+  validationSummary?: RegionValidationSummary;
+  seededDocs?: string[];
+  lastRegionAdminUid?: string | null;
   isCurrentRegion?: boolean;
   isSynthetic?: boolean;
   createdAt?: unknown;

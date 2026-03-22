@@ -306,7 +306,11 @@ const OfficerForm: React.FC<{
                                 {district}
                             </label>
                         </div>
-                    )) : <p className="text-sm text-muted-foreground col-span-full">All districts are currently assigned.</p>}
+                    )) : (
+                        <p className="text-sm text-muted-foreground col-span-full">
+                            No saved district suggestions yet. Add this region&apos;s districts manually to get started.
+                        </p>
+                    )}
                 </div>
             </div>
             <DialogFooter>
@@ -581,7 +585,7 @@ export default function FieldOfficerManagementPage() {
           <ShieldCheck className="h-4 w-4" />
           <AlertTitle>Manage Your Field Team</AlertTitle>
           <AlertDescription>
-            Assign the "Field Officer" role to existing users. You must first create a user in the Firebase Authentication console. Then, assign them here and specify which districts they can manage.
+            Load an existing Firebase Auth user or create a new one directly here, then assign the districts they should manage for this region.
           </AlertDescription>
         </Alert>
 

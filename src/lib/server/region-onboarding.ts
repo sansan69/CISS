@@ -25,6 +25,31 @@ type RegionConnectionCheck = {
   storageReachable: boolean;
 };
 
+function explainValidationFailure(stage: "firestore" | "auth" | "storage", error: unknown) {
+  const rawMessage =
+    error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+  const message = rawMessage.toLowerCase();
+
+  if (stage === "firestore") {
+    if (message.includes("database") || message.includes("not found")) {
+      return "Firestore is not ready yet. Open Firebase Console > Firestore Database and create the default database first.";
+    }
+    return `Firestore check failed: ${rawMessage}`;
+  }
+
+  if (stage === "auth") {
+    if (message.includes("no configuration corresponding") || message.includes("identity toolkit")) {
+      return "Authentication is not ready yet. Open Firebase Console > Authentication, click Get started, and enable Email/Password sign-in.";
+    }
+    return `Firebase Auth check failed: ${rawMessage}`;
+  }
+
+  if (message.includes("bucket") || message.includes("storage")) {
+    return "Storage is not ready yet. Open Firebase Console > Storage and finish the default bucket setup.";
+  }
+  return `Storage check failed: ${rawMessage}`;
+}
+
 export const DEFAULT_REGION_CHECKLIST: RegionOnboardingChecklist = {
   metadataSaved: true,
   firebaseValidated: false,
@@ -158,7 +183,7 @@ async function withRegionAdminApp<T>(
     app: admin.app.App;
     db: FirebaseFirestore.Firestore;
     auth: admin.auth.Auth;
-    bucket: ReturnType<admin.app.App["storage"]>["bucket"] extends (...args: any[]) => infer T ? T : any;
+    bucket: (ReturnType<admin.app.App["storage"]>["bucket"] extends (...args: any[]) => infer T ? T : any) | null;
     serviceAccount: admin.ServiceAccount;
   }) => Promise<T>,
 ) {
@@ -189,9 +214,9 @@ async function withRegionAdminApp<T>(
       app,
       db: app.firestore(),
       auth: app.auth(),
-      bucket: app.storage().bucket(
-        credentials.storageBucket || undefined,
-      ),
+      bucket: credentials.storageBucket
+        ? app.storage().bucket(credentials.storageBucket)
+        : null,
       serviceAccount,
     });
   } finally {
@@ -214,20 +239,34 @@ export async function validateRegionFirebaseConnection(
 
     const messages: string[] = [];
 
-    await db.listCollections();
-    checks.firestoreReachable = true;
-    messages.push("Firestore connection verified.");
+    try {
+      await db.listCollections();
+      checks.firestoreReachable = true;
+      messages.push("Firestore connection verified.");
+    } catch (error) {
+      messages.push(explainValidationFailure("firestore", error));
+    }
 
-    await auth.listUsers(1);
-    checks.authReachable = true;
-    messages.push("Firebase Auth access verified.");
+    try {
+      await auth.listUsers(1);
+      checks.authReachable = true;
+      messages.push("Firebase Auth access verified.");
+    } catch (error) {
+      messages.push(explainValidationFailure("auth", error));
+    }
 
-    if (credentials.storageBucket) {
-      await bucket.getMetadata();
-      checks.storageReachable = true;
-      messages.push("Cloud Storage bucket access verified.");
+    if (credentials.storageBucket && bucket) {
+      try {
+        await bucket.getMetadata();
+        checks.storageReachable = true;
+        messages.push("Cloud Storage bucket access verified.");
+      } catch (error) {
+        messages.push(explainValidationFailure("storage", error));
+      }
     } else {
-      messages.push("Storage bucket was not provided, so storage validation was skipped.");
+      messages.push(
+        "Storage bucket was not provided in the region record. Add it after Storage has been initialized in Firebase Console.",
+      );
     }
 
     return {

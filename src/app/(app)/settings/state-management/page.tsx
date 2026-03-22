@@ -22,10 +22,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import { APP_MODE, REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
-import type { RegionRecord } from "@/types/region";
+import type { RegionRecord, RegionValidationChecks } from "@/types/region";
 import {
   AlertCircle,
   CheckCircle2,
+  ExternalLink,
   Database,
   Globe,
   KeyRound,
@@ -68,6 +69,13 @@ const emptyAdminForm = {
   adminDisplayName: "",
 };
 
+type GuidedSetupStep = {
+  label: string;
+  description: string;
+  href?: string;
+  done: boolean;
+};
+
 function checklistItems(region?: RegionRecord | null) {
   const checklist = region?.onboardingChecklist;
   return [
@@ -95,6 +103,54 @@ function regionToForm(region: RegionRecord | null): RegionFormState {
   };
 }
 
+function getFirebaseConsoleLinks(projectId?: string | null) {
+  if (!projectId) return null;
+
+  const base = `https://console.firebase.google.com/project/${projectId}`;
+  return {
+    overview: `${base}/overview`,
+    firestore: `${base}/firestore`,
+    auth: `${base}/authentication`,
+    storage: `${base}/storage`,
+    projectSettings: `${base}/settings/general`,
+  };
+}
+
+function getValidationChecks(region?: RegionRecord | null): RegionValidationChecks {
+  return {
+    projectIdMatches: region?.validationSummary?.checks?.projectIdMatches ?? false,
+    firestoreReachable: region?.validationSummary?.checks?.firestoreReachable ?? false,
+    authReachable: region?.validationSummary?.checks?.authReachable ?? false,
+    storageReachable: region?.validationSummary?.checks?.storageReachable ?? false,
+  };
+}
+
+function getGuidedSetupSteps(region?: RegionRecord | null): GuidedSetupStep[] {
+  const links = getFirebaseConsoleLinks(region?.firebaseProjectId);
+  const checks = getValidationChecks(region);
+
+  return [
+    {
+      label: "Create Firestore database",
+      description: "Open Firestore Database in Firebase Console and create the default database for this region.",
+      href: links?.firestore,
+      done: checks.firestoreReachable,
+    },
+    {
+      label: "Enable Authentication",
+      description: "Open Authentication, click Get started, then enable Email/Password sign-in.",
+      href: links?.auth,
+      done: checks.authReachable,
+    },
+    {
+      label: "Create Storage bucket",
+      description: "Open Storage and finish the default bucket setup before validating uploads.",
+      href: links?.storage,
+      done: checks.storageReachable,
+    },
+  ];
+}
+
 export default function RegionOnboardingPage() {
   const { isSuperAdmin } = useAppAuth();
   const { toast } = useToast();
@@ -106,6 +162,7 @@ export default function RegionOnboardingPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState<RegionFormState>(emptyCreateForm);
   const [serviceAccountPayload, setServiceAccountPayload] = useState("");
+  const [serviceAccountFileName, setServiceAccountFileName] = useState("");
   const [adminForm, setAdminForm] = useState(emptyAdminForm);
   const [validationMessages, setValidationMessages] = useState<string[]>([]);
 
@@ -151,10 +208,19 @@ export default function RegionOnboardingPage() {
       ...current,
       adminEmail: nextRegion?.regionAdminEmail ?? current.adminEmail,
     }));
-    setValidationMessages([]);
+    setValidationMessages(nextRegion?.validationSummary?.messages ?? []);
+    setServiceAccountFileName("");
   }, [regions, selectedRegionId]);
 
   const selectedChecklist = useMemo(() => checklistItems(selectedRegion), [selectedRegion]);
+  const firebaseConsoleLinks = useMemo(
+    () => getFirebaseConsoleLinks(selectedRegion?.firebaseProjectId),
+    [selectedRegion?.firebaseProjectId],
+  );
+  const guidedSetupSteps = useMemo(
+    () => getGuidedSetupSteps(selectedRegion),
+    [selectedRegion],
+  );
 
   const refreshSelectedRegion = useCallback(async () => {
     if (!selectedRegionId) return;
@@ -251,6 +317,31 @@ export default function RegionOnboardingPage() {
     return looksLikeJson
       ? { serviceAccountJson: trimmed }
       : { serviceAccountBase64: trimmed };
+  };
+
+  const handleServiceAccountFile = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setServiceAccountPayload(text);
+      setServiceAccountFileName(file.name);
+      toast({
+        title: "Service account loaded",
+        description: `${file.name} is ready for validation in this browser session.`,
+      });
+    } catch {
+      toast({
+        title: "Could not read file",
+        description: "Please choose a valid JSON service-account file or paste the credentials manually.",
+        variant: "destructive",
+      });
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const handleValidateRegion = async () => {
@@ -368,7 +459,7 @@ export default function RegionOnboardingPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Region Onboarding"
-        description="Keep Kerala on the current backend, then connect and prepare separate Firebase backends for other regions."
+        description="Kerala stays on the current backend. Use this wizard to connect a separate Firebase backend for each new region without touching Kerala data."
         actions={
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -462,7 +553,7 @@ export default function RegionOnboardingPage() {
                   Region Summary
                 </CardTitle>
                 <CardDescription>
-                  Kerala is shown as the current production runtime. Other regions can be connected and prepared here.
+                  Kerala is shown as the current production runtime. Other regions get their own Firebase backend and are prepared here step by step.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
@@ -475,7 +566,7 @@ export default function RegionOnboardingPage() {
                   <p><span className="font-medium">Region Admin:</span> {selectedRegion.regionAdminEmail || "Pending"}</p>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <p className="text-sm font-semibold">Readiness Checklist</p>
+                  <p className="text-sm font-semibold">Wizard Progress</p>
                   <div className="mt-3 space-y-2">
                     {selectedChecklist.map((item) => (
                       <div key={item.label} className="flex items-center gap-2 text-sm">
@@ -492,7 +583,7 @@ export default function RegionOnboardingPage() {
               <CardHeader>
                 <CardTitle className="text-base">1. Region Metadata</CardTitle>
                 <CardDescription>
-                  Save only non-secret metadata here. Service account credentials stay transient in the wizard and are never stored in Kerala Firestore.
+                  Save only the region details and Firebase web app values here. Secret service-account credentials stay transient in this wizard and are never stored in Kerala Firestore.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
@@ -584,27 +675,113 @@ export default function RegionOnboardingPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <KeyRound className="h-4 w-4 text-brand-gold" />
-                  2. Secure Region Credentials
-                </CardTitle>
+                <CardTitle className="text-base">2. Manual Firebase Console Setup</CardTitle>
                 <CardDescription>
-                  Paste the region&apos;s service account JSON or Base64-encoded service account only for this browser session.
+                  These three Firebase Console actions should be done manually by HQ for every new region before validation.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Textarea
-                  value={serviceAccountPayload}
-                  onChange={(e) => setServiceAccountPayload(e.target.value)}
-                  placeholder="Paste service account JSON or Base64 here"
-                  rows={8}
-                  spellCheck={false}
-                  disabled={selectedRegion.isSynthetic}
-                />
+                <div className="grid gap-3 md:grid-cols-3">
+                  {guidedSetupSteps.map((step) => (
+                    <Card key={step.label} className={step.done ? "border-green-600/40 bg-green-50/50" : "border-dashed"}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-sm">
+                          <CheckCircle2 className={`h-4 w-4 ${step.done ? "text-green-600" : "text-muted-foreground"}`} />
+                          {step.label}
+                        </CardTitle>
+                        <CardDescription className="text-xs leading-5">
+                          {step.description}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {step.href ? (
+                          <Button asChild variant="outline" size="sm" className="w-full">
+                            <a href={step.href} target="_blank" rel="noreferrer">
+                              Open Console
+                              <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        ) : (
+                          <Badge variant="outline">Link available after metadata is saved</Badge>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                {firebaseConsoleLinks && (
+                  <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">Helpful console shortcuts</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild variant="ghost" size="sm">
+                        <a href={firebaseConsoleLinks.overview} target="_blank" rel="noreferrer">
+                          Overview
+                          <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                        </a>
+                      </Button>
+                      <Button asChild variant="ghost" size="sm">
+                        <a href={firebaseConsoleLinks.projectSettings} target="_blank" rel="noreferrer">
+                          Project settings
+                          <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <KeyRound className="h-4 w-4 text-brand-gold" />
+                  3. Validate The Region Backend
+                </CardTitle>
+                <CardDescription>
+                  Upload the region&apos;s service-account JSON file, then recheck Firestore, Authentication, and Storage from this wizard.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                  <div className="space-y-2">
+                    <Label>Service account JSON or Base64 payload</Label>
+                    <Textarea
+                      value={serviceAccountPayload}
+                      onChange={(e) => {
+                        setServiceAccountPayload(e.target.value);
+                        if (!e.target.value.trim()) {
+                          setServiceAccountFileName("");
+                        }
+                      }}
+                      placeholder="Paste service account JSON or Base64 here"
+                      rows={8}
+                      spellCheck={false}
+                      disabled={selectedRegion.isSynthetic}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This stays only in this browser session. Nothing secret is saved in Kerala Firestore.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="service-account-file">Upload JSON file</Label>
+                    <Input
+                      id="service-account-file"
+                      type="file"
+                      accept=".json,application/json,text/plain"
+                      onChange={handleServiceAccountFile}
+                      disabled={selectedRegion.isSynthetic}
+                    />
+                    <div className="rounded-xl border p-3 text-sm">
+                      <p className="font-medium text-foreground">Loaded credential</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {serviceAccountFileName || (serviceAccountPayload.trim() ? "Pasted manually" : "Nothing loaded yet")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <div className="flex flex-wrap gap-3">
                   <Button onClick={handleValidateRegion} disabled={isValidating || selectedRegion.isSynthetic}>
                     {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                    Validate Firebase
+                    Recheck Firebase Readiness
                   </Button>
                   <Button variant="secondary" onClick={handleSeedRegion} disabled={isSeeding || selectedRegion.isSynthetic}>
                     {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
@@ -613,7 +790,7 @@ export default function RegionOnboardingPage() {
                 </div>
                 {validationMessages.length > 0 && (
                   <Alert>
-                    <AlertTitle>Validation Results</AlertTitle>
+                    <AlertTitle>Readiness Results</AlertTitle>
                     <AlertDescription>
                       <ul className="list-disc pl-5 space-y-1">
                         {validationMessages.map((message) => (
@@ -630,7 +807,7 @@ export default function RegionOnboardingPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Rocket className="h-4 w-4 text-brand-blue" />
-                  3. Create First Regional Admin
+                  4. Create First Regional Admin
                 </CardTitle>
                 <CardDescription>
                   This user becomes the first admin inside the region&apos;s own Firebase Auth tenant/project.
@@ -675,7 +852,7 @@ export default function RegionOnboardingPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">4. Ready-to-Go Checklist</CardTitle>
+                <CardTitle className="text-base">5. Ready-To-Go Checklist</CardTitle>
                 <CardDescription>
                   Once the region is ready, connect a dedicated Vercel deployment to this region&apos;s Firebase config and the region can start with clients, field officers, work orders, guard enrollment, and attendance.
                 </CardDescription>
@@ -721,7 +898,7 @@ export default function RegionOnboardingPage() {
                 <p>Recommended next steps after this wizard says the region is ready:</p>
                 <ol className="list-decimal pl-5 space-y-1">
                   <li>Set the region&apos;s `NEXT_PUBLIC_FIREBASE_*` and `FIREBASE_ADMIN_*` env vars in its Vercel project.</li>
-                  <li>Set `APP_MODE=regional`, `REGION_CODE`, and `REGION_NAME` for that deployment.</li>
+                  <li>Set both the server and public runtime identity vars: `APP_MODE` + `NEXT_PUBLIC_APP_MODE`, `REGION_CODE` + `NEXT_PUBLIC_REGION_CODE`, and `REGION_NAME` + `NEXT_PUBLIC_REGION_NAME`.</li>
                   <li>Deploy the same application codebase to that region&apos;s Vercel project.</li>
                   <li>Use the new region admin account to sign in and create clients, field officers, sites, work orders, and guard records.</li>
                 </ol>
