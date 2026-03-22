@@ -27,6 +27,7 @@ export async function GET(request: Request) {
           ({
             id: doc.id,
             ...doc.data(),
+            downloadUrl: `/api/admin/payroll/entries/${doc.id}/payslip`,
           }) as { id: string; createdAt?: { seconds?: number } },
       )
       .sort((a, b) => {

@@ -194,7 +194,10 @@ service cloud.firestore {
 
     match /payrollEntries/{entryId} {
       allow read: if isAdmin() || isAccounts() || isHR() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+        (isGuard() && (
+          resource.data.employeeDocId == guardEmployeeDocId() ||
+          resource.data.employeeId == guardEmployeeDocId()
+        ));
       allow create, update, delete: if isAdmin() || isAccounts();
     }
 
@@ -244,14 +247,27 @@ service cloud.firestore {
       allow write: if isAdmin() || isCompliance();
     }
 
-    match /clientWageConfigs/{configId} {
+    match /clientWageConfig/{configId} {
       allow read: if isAdmin() || isAccounts();
       allow write: if isAdmin() || isAccounts();
     }
 
-    match /payrollRuns/{runId} {
+    match /salaryStructures/{structureId} {
+      allow read, write: if isAdmin() || isAccounts();
+    }
+
+    match /employeeSalaries/{salaryId} {
+      allow read, write: if isAdmin() || isAccounts();
+    }
+
+    match /payrollCycles/{runId} {
       allow read: if isAdmin() || isAccounts();
       allow write: if isAdmin() || isAccounts();
+    }
+
+    match /leaveBalances/{balanceId} {
+      allow read: if isAdmin() || isAccounts();
+      allow write: if isAdmin() || isAccounts() || isHR();
     }
 
     // ── System & internal ───────────────────────────────────────────────────

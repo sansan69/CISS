@@ -29,7 +29,7 @@ export async function PUT(
     const { id: employeeId } = await params;
     const body = await request.json();
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const { FieldValue } = await import("firebase-admin/firestore");
+    const { FieldValue, Timestamp } = await import("firebase-admin/firestore");
 
     const now = new Date().toISOString();
     const existing = await adminDb.collection("employeeSalaries").doc(employeeId).get();
@@ -45,13 +45,17 @@ export async function PUT(
       {
         ...body,
         employeeId,
+        effectiveFrom: body.effectiveFrom
+          ? Timestamp.fromDate(new Date(body.effectiveFrom))
+          : existing.data()?.effectiveFrom ?? FieldValue.serverTimestamp(),
         updatedBy: decoded.uid,
-        history: [...prevHistory, historyEntry],
+        updatedAt: FieldValue.serverTimestamp(),
+        history: [...prevHistory, historyEntry].slice(-25),
         createdAt: existing.exists
           ? existing.data()?.createdAt
           : FieldValue.serverTimestamp(),
       },
-      { merge: false }
+      { merge: true }
     );
 
     return NextResponse.json({ success: true });

@@ -20,7 +20,9 @@ export async function GET(
       .where("cycleId", "==", id)
       .get();
 
-    const entries = entriesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const entries = entriesSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String((a as { employeeName?: string }).employeeName || "").localeCompare(String((b as { employeeName?: string }).employeeName || "")));
 
     return NextResponse.json({
       cycle: { id: cycleDoc.id, ...cycleDoc.data() },

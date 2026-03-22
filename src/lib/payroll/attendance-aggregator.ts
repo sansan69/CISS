@@ -22,19 +22,19 @@ export async function aggregateAttendance(
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59); // last day of month
 
-  const { Timestamp } = await import("firebase-admin/firestore");
   const snapshot = await adminDb
     .collection("attendanceLogs")
     .where("employeeId", "==", employeeId)
-    .where("createdAt", ">=", Timestamp.fromDate(start))
-    .where("createdAt", "<=", Timestamp.fromDate(end))
-    .where("status", "==", "In")
     .get();
 
   const presentSet = new Set<string>();
   snapshot.docs.forEach((d) => {
-    const ts = d.data().createdAt;
+    const data = d.data();
+    if (data.status !== "In") return;
+    const ts = data.createdAt;
+    if (!ts) return;
     const date = ts?.toDate ? ts.toDate() : new Date(ts);
+    if (date < start || date > end) return;
     presentSet.add(`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`);
   });
 

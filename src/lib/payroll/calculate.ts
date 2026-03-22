@@ -116,3 +116,65 @@ export function calculateLOP(grossMonthly: number, workingDays: number, lopDays:
   if (workingDays <= 0 || lopDays <= 0) return 0;
   return round2((grossMonthly / workingDays) * lopDays);
 }
+
+export function prorateAmount(amount: number, workingDays: number, payableDays: number): number {
+  if (workingDays <= 0) return round2(amount);
+  return round2(amount * Math.max(0, Math.min(payableDays, workingDays)) / workingDays);
+}
+
+export function normalizeComponentName(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+}
+
+export function computeEpfApplicableWage(
+  componentAmounts: Record<string, number>,
+  components: WageComponent[],
+): number {
+  const byId = new Map(components.map((component) => [component.id, component]));
+  return round2(
+    Object.entries(componentAmounts).reduce((sum, [componentId, amount]) => {
+      const component = byId.get(componentId);
+      if (component?.epfApplicable) return sum + amount;
+      const normalized = normalizeComponentName(component?.name || componentId);
+      if (normalized.includes("basic") || normalized === "da" || normalized.includes("dearness")) {
+        return sum + amount;
+      }
+      return sum;
+    }, 0),
+  );
+}
+
+export function summarizeNamedEarnings(componentAmounts: Record<string, number>, components: WageComponent[]) {
+  const summary = {
+    basic: 0,
+    hra: 0,
+    da: 0,
+    conveyance: 0,
+    specialAllowance: 0,
+    otherAllowances: 0,
+  };
+
+  const byId = new Map(components.map((component) => [component.id, component]));
+
+  for (const [componentId, amount] of Object.entries(componentAmounts)) {
+    const component = byId.get(componentId);
+    if (component && component.type !== "earning") continue;
+
+    const normalized = normalizeComponentName(component?.name || componentId);
+    if (normalized.includes("basic")) summary.basic += amount;
+    else if (normalized.includes("hra") || normalized.includes("house_rent")) summary.hra += amount;
+    else if (normalized === "da" || normalized.includes("dearness")) summary.da += amount;
+    else if (normalized.includes("conveyance") || normalized.includes("travel")) summary.conveyance += amount;
+    else if (normalized.includes("special")) summary.specialAllowance += amount;
+    else summary.otherAllowances += amount;
+  }
+
+  return {
+    basic: round2(summary.basic),
+    hra: round2(summary.hra),
+    da: round2(summary.da),
+    conveyance: round2(summary.conveyance),
+    specialAllowance: round2(summary.specialAllowance),
+    otherAllowances: round2(summary.otherAllowances),
+  };
+}

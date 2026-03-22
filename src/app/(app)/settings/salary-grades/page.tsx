@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import type { SalaryStructure, WageComponent } from "@/types/payroll";
 import { applyWageComponents } from "@/lib/payroll/calculate";
 
@@ -29,6 +29,7 @@ export default function SalaryGradesPage() {
   const [wageComponents, setWageComponents] = useState<WageComponent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingStructure, setEditingStructure] = useState<SalaryStructure | null>(null);
   const [newGradeName, setNewGradeName] = useState("");
   const [newGrossMonthly, setNewGrossMonthly] = useState<number>(15000);
   const [isSaving, setIsSaving] = useState(false);
@@ -97,6 +98,46 @@ export default function SalaryGradesPage() {
     }
   };
 
+  const handleSaveEdit = async () => {
+    if (!editingStructure) return;
+    setIsSaving(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/salary-structures/${editingStructure.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newGradeName,
+          grossMonthly: newGrossMonthly,
+          componentAmounts: computedBreakdown ?? {},
+        }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      toast({ title: "Updated", description: `Grade "${newGradeName}" saved.` });
+      setSheetOpen(false);
+      setEditingStructure(null);
+      setNewGradeName("");
+      setNewGrossMonthly(15000);
+      loadData(selectedClientId);
+    } catch {
+      toast({ title: "Error", description: "Failed to update grade", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (structure: SalaryStructure) => {
+    try {
+      const res = await authorizedFetch(`/api/admin/salary-structures/${structure.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      toast({ title: "Deleted", description: `Removed ${structure.name}.` });
+      loadData(selectedClientId);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to delete grade";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -105,7 +146,12 @@ export default function SalaryGradesPage() {
         backHref="/settings"
         actions={
           selectedClientId ? (
-            <Button onClick={() => setSheetOpen(true)}>
+            <Button onClick={() => {
+              setEditingStructure(null);
+              setNewGradeName("");
+              setNewGrossMonthly(15000);
+              setSheetOpen(true);
+            }}>
               <Plus className="h-4 w-4 mr-1.5" /> New Grade
             </Button>
           ) : undefined
@@ -147,7 +193,17 @@ export default function SalaryGradesPage() {
                       <CardTitle className="text-base">{s.name}</CardTitle>
                       <CardDescription>₹{s.grossMonthly.toLocaleString()} / month</CardDescription>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setEditingStructure(s);
+                        setNewGradeName(s.name);
+                        setNewGrossMonthly(s.grossMonthly);
+                        setSheetOpen(true);
+                      }}
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -166,6 +222,15 @@ export default function SalaryGradesPage() {
                     {Object.keys(s.componentAmounts).length > 4 && (
                       <p className="text-xs text-muted-foreground">+{Object.keys(s.componentAmounts).length - 4} more</p>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3 px-0 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(s)}
+                    >
+                      <Trash2 className="mr-1.5 h-4 w-4" />
+                      Delete grade
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -175,11 +240,16 @@ export default function SalaryGradesPage() {
       )}
 
       {/* New Grade Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+      <Sheet open={sheetOpen} onOpenChange={(open) => {
+        setSheetOpen(open);
+        if (!open) {
+          setEditingStructure(null);
+        }
+      }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>New Salary Grade</SheetTitle>
-            <SheetDescription>Create a new reusable salary template</SheetDescription>
+            <SheetDescription>{editingStructure ? "Edit reusable salary template" : "Create a new reusable salary template"}</SheetDescription>
           </SheetHeader>
           <div className="space-y-4 mt-6">
             <div className="space-y-1.5">
@@ -220,8 +290,8 @@ export default function SalaryGradesPage() {
               </p>
             )}
 
-            <Button onClick={handleCreate} disabled={isSaving || !newGradeName} className="w-full">
-              {isSaving ? "Creating..." : "Create Grade"}
+            <Button onClick={editingStructure ? handleSaveEdit : handleCreate} disabled={isSaving || !newGradeName} className="w-full">
+              {isSaving ? "Saving..." : editingStructure ? "Save Grade" : "Create Grade"}
             </Button>
           </div>
         </SheetContent>

@@ -89,7 +89,12 @@ export default function WageConfigPage() {
       const data = await res.json();
       if (data.components) {
         setComponents(data.components);
-        toast({ title: "Parsed", description: `${data.components.length} components extracted by AI.` });
+        toast({
+          title: "Parsed",
+          description: data.usedFallbackParser
+            ? `${data.components.length} components extracted using the built-in parser.`
+            : `${data.components.length} components extracted by AI.`,
+        });
         setActiveTab("manual");
       } else {
         throw new Error(data.error ?? "Parse failed");
@@ -137,7 +142,7 @@ export default function WageConfigPage() {
         body: JSON.stringify({
           clientName: selectedClient?.name ?? "",
           components,
-          uploadedFromExcel: false,
+          uploadedFromExcel: activeTab === "upload",
         }),
       });
       toast({ title: "Saved", description: "Wage configuration saved." });

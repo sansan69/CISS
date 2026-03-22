@@ -82,6 +82,12 @@ const settingsOptions = [
     href: "/settings/salary-grades",
   },
   {
+    title: "Salary Assignments",
+    description: "Assign salary grades and gross monthly pay to each active employee.",
+    icon: Wallet,
+    href: "/payroll/salaries",
+  },
+  {
     title: "Branches",
     description: "Manage field branches, visit reports, training sessions, and expenses.",
     icon: Building2,

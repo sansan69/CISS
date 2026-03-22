@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Download, CheckCircle2, Pencil, Users, IndianRupee, Banknote, ShieldCheck } from "lucide-react";
+import { Download, CheckCircle2, Pencil, Users, IndianRupee, Banknote, ShieldCheck, Eye } from "lucide-react";
 import type { PayrollCycle, PayrollEntry, PayrollCycleStatus } from "@/types/payroll";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ export default function PayrollCyclePage({
   const [isLoading, setIsLoading] = useState(true);
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isGeneratingPayslips, setIsGeneratingPayslips] = useState(false);
   const [editEntry, setEditEntry] = useState<PayrollEntry | null>(null);
   const [editNetPay, setEditNetPay] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
@@ -119,6 +120,23 @@ export default function PayrollCyclePage({
     }
   };
 
+  const handleGeneratePayslips = async () => {
+    if (!cycleId) return;
+    setIsGeneratingPayslips(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/payroll/cycles/${cycleId}/payslips`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not prepare payslips.");
+      toast({ title: "Payslips ready", description: `${data.generatedCount} payslip links prepared.` });
+      loadData(cycleId);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not prepare payslips.";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setIsGeneratingPayslips(false);
+    }
+  };
+
   const downloadCSV = () => {
     if (!entries.length) return;
     const headers = ["Employee", "Code", "Client", "District", "Present Days", "Working Days", "LOP", "Gross", "EPF", "ESIC", "PT", "TDS", "LOP Deduction", "Net Pay", "Status"];
@@ -180,6 +198,9 @@ export default function PayrollCyclePage({
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={downloadCSV}>
               <Download className="h-4 w-4 mr-1.5" /> CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleGeneratePayslips} disabled={isGeneratingPayslips || entries.length === 0}>
+              <Download className="h-4 w-4 mr-1.5" /> {isGeneratingPayslips ? "Preparing..." : "Payslips"}
             </Button>
             {cycle && cycle.status !== "finalized" && cycle.status !== "paid" && (
               <Button size="sm" onClick={() => setShowFinalizeDialog(true)}>
@@ -275,20 +296,38 @@ export default function PayrollCyclePage({
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        {cycle?.status !== "finalized" && cycle?.status !== "paid" && (
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setEditEntry(entry);
-                              setEditNetPay(String(entry.netPay));
-                              setEditNotes(entry.adminNotes ?? "");
-                            }}
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => router.push(`/payroll/cycles/${cycleId}/entries/${entry.id}`)}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
+                            <Eye className="h-3.5 w-3.5" />
                           </Button>
-                        )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => window.open(entry.payslipUrl || `/api/admin/payroll/entries/${entry.id}/payslip`, "_blank")}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                          {cycle?.status !== "finalized" && cycle?.status !== "paid" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                setEditEntry(entry);
+                                setEditNetPay(String(entry.netPay));
+                                setEditNotes(entry.adminNotes ?? "");
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -14,6 +14,7 @@ type Payslip = {
   netPay?: number;
   status?: string;
   payslipUrl?: string;
+  downloadUrl?: string;
   createdAt?: { seconds: number };
 };
 
@@ -79,8 +80,8 @@ export default function GuardPayslipsPage() {
                     {payslip.status || "pending"} · Net Pay {typeof payslip.netPay === "number" ? `₹${payslip.netPay.toLocaleString("en-IN")}` : "—"}
                   </p>
                 </div>
-                {payslip.payslipUrl ? (
-                  <Link href={payslip.payslipUrl} target="_blank" className="inline-flex items-center rounded-xl bg-[#014c85] px-3 py-2 text-sm font-medium text-white">
+                {(payslip.payslipUrl || payslip.downloadUrl) ? (
+                  <Link href={payslip.payslipUrl || payslip.downloadUrl || "#"} target="_blank" className="inline-flex items-center rounded-xl bg-[#014c85] px-3 py-2 text-sm font-medium text-white">
                     <Download className="mr-1.5 h-4 w-4" />
                     Open
                   </Link>

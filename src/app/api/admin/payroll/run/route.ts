@@ -1,45 +1,38 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
-import { calculateEPF, calculateESIC, calculatePT, calculateTDS, calculateLOP, round2 } from "@/lib/payroll/calculate";
+import {
+  applyWageComponents,
+  calculateEPF,
+  calculateESIC,
+  calculatePT,
+  calculateTDS,
+  computeEpfApplicableWage,
+  prorateAmount,
+  round2,
+  summarizeNamedEarnings,
+} from "@/lib/payroll/calculate";
 import { aggregateAttendance } from "@/lib/payroll/attendance-aggregator";
+import { aggregateApprovedLeave } from "@/lib/payroll/leave-aggregator";
+import { cloneComplianceSettings } from "@/lib/payroll/defaults";
+import type { ComplianceSettings, EmployeeSalary, SalaryStructure, WageComponent } from "@/types/payroll";
 
-const KERALA_DEFAULTS = {
-  epf: {
-    employeeRate: 0.12,
-    employerEpsRate: 0.0833,
-    employerEpfRate: 0.0367,
-    wageCeiling: 15000,
-    maxEmployerContribution: 1800,
-  },
-  esic: {
-    employeeRate: 0.0075,
-    employerRate: 0.0325,
-    grossWageCeiling: 21000,
-  },
-  professionalTax: {
-    state: "Kerala",
-    slabs: [
-      { upTo: 11999, monthly: 0 },
-      { upTo: 17999, monthly: 120 },
-      { upTo: 29999, monthly: 180 },
-      { upTo: null, monthly: 200 },
-    ],
-  },
-  tds: {
-    regime: "new" as const,
-    standardDeduction: 75000,
-    slabs: [
-      { upTo: 300000, rate: 0 },
-      { upTo: 700000, rate: 0.05 },
-      { upTo: 1000000, rate: 0.10 },
-      { upTo: 1200000, rate: 0.15 },
-      { upTo: 1500000, rate: 0.20 },
-      { upTo: null, rate: 0.30 },
-    ],
-  },
-  bonus: { rate: 0.0833, minimumWageBase: 7000 },
-  gratuity: { rate: 0.0481, minimumYearsForPayout: 5 },
+type ClientDocShape = {
+  name?: string;
+  clientName?: string;
+  uniformAllowanceMonthly?: number;
+  fieldAllowanceMonthly?: number;
 };
+
+function buildGenericBreakdown(grossMonthly: number) {
+  const basic = round2(grossMonthly * 0.5);
+  const hra = round2(basic * 0.2);
+  const specialAllowance = round2(Math.max(0, grossMonthly - basic - hra));
+  return {
+    basic,
+    hra,
+    special_allowance: specialAllowance,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -54,28 +47,37 @@ export async function POST(request: Request) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
-    // Check if cycle already exists
-    const existingCycles = await adminDb
-      .collection("payrollCycles")
-      .where("period", "==", period)
-      .get();
+    const existingCycles = await adminDb.collection("payrollCycles").where("period", "==", period).get();
+    const conflictingCycle = existingCycles.docs.find((doc) => {
+      const data = doc.data() as { clientId?: string | null };
+      return (data.clientId || null) === (clientId || null);
+    });
 
-    if (!existingCycles.empty && !clientId) {
+    if (conflictingCycle) {
       return NextResponse.json(
-        { error: `Payroll cycle for ${period} already exists.`, cycleId: existingCycles.docs[0].id },
-        { status: 409 }
+        { error: `Payroll cycle for ${period} already exists.`, cycleId: conflictingCycle.id },
+        { status: 409 },
       );
     }
 
     const [yearStr, monthStr] = period.split("-");
-    const year = parseInt(yearStr);
-    const month = parseInt(monthStr);
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
 
-    // Create cycle doc
+    const compDoc = await adminDb.collection("complianceSettings").doc("global").get();
+    const compliance = (compDoc.exists ? compDoc.data() : cloneComplianceSettings()) as ComplianceSettings;
+
+    let employeeQuery: FirebaseFirestore.Query = adminDb.collection("employees").where("status", "==", "Active");
+    if (clientId) {
+      employeeQuery = employeeQuery.where("clientId", "==", clientId);
+    }
+    const employeeSnapshot = await employeeQuery.limit(500).get();
+
     const cycleRef = await adminDb.collection("payrollCycles").add({
       period,
       month,
       year,
+      clientId: clientId ?? null,
       status: "processing",
       totalEmployees: 0,
       totalGross: 0,
@@ -88,22 +90,45 @@ export async function POST(request: Request) {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    const cycleId = cycleRef.id;
+    const salaryCache = new Map<string, EmployeeSalary>();
+    const structureCache = new Map<string, SalaryStructure>();
+    const wageConfigCache = new Map<string, WageComponent[]>();
+    const clientCache = new Map<string, ClientDocShape>();
 
-    // Fetch employees
-    let empQuery = adminDb.collection("employees").where("status", "==", "Active");
-    if (clientId) {
-      empQuery = adminDb
-        .collection("employees")
-        .where("status", "==", "Active")
-        .where("clientId", "==", clientId) as typeof empQuery;
+    async function getSalary(employeeId: string) {
+      if (salaryCache.has(employeeId)) return salaryCache.get(employeeId) ?? null;
+      const salaryDoc = await adminDb.collection("employeeSalaries").doc(employeeId).get();
+      const salary = salaryDoc.exists ? ({ id: salaryDoc.id, ...salaryDoc.data() } as EmployeeSalary) : null;
+      if (salary) salaryCache.set(employeeId, salary);
+      return salary;
     }
 
-    const empSnap = await empQuery.limit(500).get();
+    async function getStructure(structureId?: string | null) {
+      if (!structureId) return null;
+      if (structureCache.has(structureId)) return structureCache.get(structureId) ?? null;
+      const structureDoc = await adminDb.collection("salaryStructures").doc(structureId).get();
+      const structure = structureDoc.exists ? ({ id: structureDoc.id, ...structureDoc.data() } as SalaryStructure) : null;
+      if (structure) structureCache.set(structureId, structure);
+      return structure;
+    }
 
-    // Fetch compliance settings
-    const compDoc = await adminDb.collection("complianceSettings").doc("global").get();
-    const compliance = compDoc.exists ? (compDoc.data() as typeof KERALA_DEFAULTS) : KERALA_DEFAULTS;
+    async function getWageConfig(targetClientId?: string | null) {
+      if (!targetClientId) return [] as WageComponent[];
+      if (wageConfigCache.has(targetClientId)) return wageConfigCache.get(targetClientId) ?? [];
+      const configDoc = await adminDb.collection("clientWageConfig").doc(targetClientId).get();
+      const components = configDoc.exists ? ((configDoc.data()?.components ?? []) as WageComponent[]) : [];
+      wageConfigCache.set(targetClientId, components);
+      return components;
+    }
+
+    async function getClientDoc(targetClientId?: string | null) {
+      if (!targetClientId) return null;
+      if (clientCache.has(targetClientId)) return clientCache.get(targetClientId) ?? null;
+      const clientDoc = await adminDb.collection("clients").doc(targetClientId).get();
+      const clientData = clientDoc.exists ? (clientDoc.data() as ClientDocShape) : null;
+      if (clientData) clientCache.set(targetClientId, clientData);
+      return clientData;
+    }
 
     let totalEmployees = 0;
     let totalGross = 0;
@@ -113,41 +138,85 @@ export async function POST(request: Request) {
     let totalPT = 0;
     let totalTDS = 0;
 
-    // Process in batches of 500
-    const BATCH_SIZE = 499;
+    const BATCH_SIZE = 450;
     let batch = adminDb.batch();
     let batchCount = 0;
 
-    for (const empDoc of empSnap.docs) {
-      const emp = empDoc.data();
+    for (const employeeDoc of employeeSnapshot.docs) {
+      const employee = employeeDoc.data() as {
+        name?: string;
+        firstName?: string;
+        lastName?: string;
+        employeeCode?: string;
+        guardId?: string;
+        clientId?: string;
+        clientName?: string;
+        district?: string;
+      };
 
-      // Fetch salary assignment
-      const salaryDoc = await adminDb.collection("employeeSalaries").doc(empDoc.id).get();
-      if (!salaryDoc.exists) continue; // skip employees with no salary
+      const salary = await getSalary(employeeDoc.id);
+      if (!salary) continue;
 
-      const salary = salaryDoc.data()!;
-      const grossMonthly: number = salary.grossMonthly ?? 0;
+      const structure = await getStructure(salary.structureId);
+      const clientDoc = await getClientDoc(employee.clientId || salary.clientId);
+      const wageComponents = await getWageConfig(employee.clientId || salary.clientId);
+      const structureAmounts =
+        structure?.componentAmounts && Object.keys(structure.componentAmounts).length > 0
+          ? structure.componentAmounts
+          : applyWageComponents(salary.grossMonthly, wageComponents);
 
-      // Aggregate attendance
-      const attendance = await aggregateAttendance(empDoc.id, period, adminDb);
+      const baseComponentAmounts =
+        structureAmounts && Object.keys(structureAmounts).length > 0
+          ? structureAmounts
+          : buildGenericBreakdown(salary.grossMonthly);
 
-      // Calculate LOP deduction
-      const lopDeduction = calculateLOP(grossMonthly, attendance.workingDays, attendance.lopDays);
-      const effectiveGross = round2(grossMonthly - lopDeduction);
+      const mergedComponentAmounts: Record<string, number> = {
+        ...baseComponentAmounts,
+        ...(salary.componentOverrides ?? {}),
+      };
 
-      // Calculate EPF (on basic salary — approximate as 50% of gross if no component data)
-      const epfBase = round2(effectiveGross * 0.5);
+      if (clientDoc?.uniformAllowanceMonthly) {
+        mergedComponentAmounts.uniform_allowance =
+          (mergedComponentAmounts.uniform_allowance ?? 0) + clientDoc.uniformAllowanceMonthly;
+      }
+      if (clientDoc?.fieldAllowanceMonthly) {
+        mergedComponentAmounts.field_allowance =
+          (mergedComponentAmounts.field_allowance ?? 0) + clientDoc.fieldAllowanceMonthly;
+      }
+
+      const attendance = await aggregateAttendance(employeeDoc.id, period, adminDb);
+      const leave = await aggregateApprovedLeave(employeeDoc.id, period, adminDb);
+      const payableDays = Math.min(
+        attendance.workingDays,
+        attendance.presentDays + leave.approvedPaidLeaveDays,
+      );
+      const lopDays = Math.max(
+        0,
+        attendance.workingDays - attendance.presentDays - leave.approvedPaidLeaveDays,
+      );
+
+      const proratedComponents = Object.fromEntries(
+        Object.entries(mergedComponentAmounts).map(([componentId, amount]) => [
+          componentId,
+          prorateAmount(amount, attendance.workingDays, attendance.workingDays - lopDays),
+        ]),
+      );
+
+      const earningsSummary = summarizeNamedEarnings(proratedComponents, wageComponents);
+      const grossEarnings = round2(
+        Object.values(proratedComponents).reduce((sum, amount) => sum + amount, 0),
+      );
+      const lopDeduction = round2(
+        Object.values(mergedComponentAmounts).reduce((sum, amount) => sum + amount, 0) - grossEarnings,
+      );
+      const epfBase = computeEpfApplicableWage(proratedComponents, wageComponents);
       const epfResult = calculateEPF(epfBase, compliance.epf);
-
-      // Calculate ESIC
-      const esicResult = calculateESIC(effectiveGross, compliance.esic);
-
-      // Calculate PT
-      const pt = calculatePT(effectiveGross, compliance.professionalTax.slabs);
-
-      // Calculate TDS
-      const tds = calculateTDS(grossMonthly, compliance.tds);
-
+      const esicResult = calculateESIC(grossEarnings, compliance.esic);
+      const pt = calculatePT(grossEarnings, compliance.professionalTax.slabs);
+      const tds = calculateTDS(grossEarnings, {
+        ...compliance.tds,
+        regime: salary.taxRegime ?? compliance.tds.regime,
+      });
       const totalDeductions = round2(
         epfResult.employeeEPF +
         (esicResult?.employeeESIC ?? 0) +
@@ -155,33 +224,36 @@ export async function POST(request: Request) {
         tds +
         lopDeduction
       );
-
-      const netPay = round2(effectiveGross - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds);
+      const netPay = round2(
+        grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds,
+      );
 
       const entryRef = adminDb.collection("payrollEntries").doc();
       batch.set(entryRef, {
-        cycleId,
+        cycleId: cycleRef.id,
         period,
-        employeeId: empDoc.id,
-        employeeName: emp.name ?? "",
-        employeeCode: emp.employeeCode ?? emp.guardId ?? "",
-        clientId: emp.clientId ?? "",
-        clientName: emp.clientName ?? "",
-        district: emp.district ?? "",
+        employeeId: employeeDoc.id,
+        employeeName:
+          employee.name ||
+          [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
+          "Unnamed employee",
+        employeeCode: employee.employeeCode ?? employee.guardId ?? "",
+        clientId: employee.clientId ?? salary.clientId ?? "",
+        clientName: employee.clientName ?? clientDoc?.name ?? clientDoc?.clientName ?? "",
+        district: employee.district ?? "",
         workingDays: attendance.workingDays,
         presentDays: attendance.presentDays,
-        lopDays: attendance.lopDays,
+        payableDays,
+        approvedPaidLeaveDays: leave.approvedPaidLeaveDays,
+        approvedUnpaidLeaveDays: leave.approvedUnpaidLeaveDays,
+        lopDays,
         overtimeHours: attendance.overtimeHours,
         overtimeAmount: 0,
         earnings: {
-          basic: epfBase,
-          hra: round2(effectiveGross * 0.2),
-          da: 0,
-          conveyance: 0,
-          specialAllowance: round2(effectiveGross - epfBase - round2(effectiveGross * 0.2)),
-          otherAllowances: 0,
+          ...earningsSummary,
           overtimeAmount: 0,
-          grossEarnings: effectiveGross,
+          grossEarnings,
+          componentBreakdown: proratedComponents,
         },
         deductions: {
           epfEmployee: epfResult.employeeEPF,
@@ -197,19 +269,22 @@ export async function POST(request: Request) {
           esicEmployer: esicResult?.employerESIC ?? 0,
         },
         netPay,
+        payslipUrl: `/api/admin/payroll/entries/${entryRef.id}/payslip`,
+        salaryStructureId: salary.structureId ?? structure?.id ?? null,
+        salaryStructureName: salary.structureName ?? structure?.name ?? "",
         status: "pending",
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      batchCount++;
+      batchCount += 1;
       if (batchCount >= BATCH_SIZE) {
         await batch.commit();
         batch = adminDb.batch();
         batchCount = 0;
       }
 
-      totalEmployees++;
-      totalGross += effectiveGross;
+      totalEmployees += 1;
+      totalGross += grossEarnings;
       totalNetPay += netPay;
       totalEPF += epfResult.employeeEPF;
       totalESIC += esicResult?.employeeESIC ?? 0;
@@ -221,7 +296,6 @@ export async function POST(request: Request) {
       await batch.commit();
     }
 
-    // Update cycle with totals
     await cycleRef.update({
       status: "review",
       totalEmployees,
@@ -236,14 +310,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      cycleId,
+      cycleId: cycleRef.id,
       totalEmployees,
       totalGross: round2(totalGross),
       totalNetPay: round2(totalNetPay),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Error";
     console.error("Payroll run error:", err);
+    const message = err instanceof Error ? err.message : "Payroll processing failed.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -44,6 +44,8 @@ export interface SalaryStructure {
   name: string; // e.g. "Guard Grade A"
   grossMonthly: number;
   componentAmounts: Record<string, number>;
+  updatedAt?: Timestamp;
+  updatedBy?: string;
   createdAt: Timestamp;
   createdBy: string;
 }
@@ -58,7 +60,9 @@ export interface EmployeeSalary {
   grossMonthly: number;
   componentOverrides: Record<string, number>;
   taxRegime: "new" | "old";
+  stateCode?: string;
   createdAt: Timestamp;
+  updatedAt?: Timestamp;
   updatedBy: string;
   history: Array<{ date: string; by: string; changes: string }>;
 }
@@ -94,6 +98,7 @@ export interface PayrollEntryEarnings {
   otherAllowances: number;
   overtimeAmount: number;
   grossEarnings: number;
+  componentBreakdown?: Record<string, number>;
 }
 
 export interface PayrollEntryDeductions {
@@ -118,6 +123,9 @@ export interface PayrollEntry {
   district: string;
   workingDays: number;
   presentDays: number;
+  payableDays?: number;
+  approvedPaidLeaveDays?: number;
+  approvedUnpaidLeaveDays?: number;
   lopDays: number;
   overtimeHours: number;
   overtimeAmount: number;
@@ -126,6 +134,8 @@ export interface PayrollEntry {
   employerContributions: { epfEmployer: number; esicEmployer: number };
   netPay: number;
   payslipUrl?: string;
+  salaryStructureId?: string;
+  salaryStructureName?: string;
   status: PayrollEntryStatus;
   adminNotes?: string;
   createdAt: Timestamp;
@@ -174,4 +184,9 @@ export interface ComplianceSettings {
   };
   updatedAt?: Timestamp;
   updatedBy?: string;
+  changeHistory?: Array<{
+    at: string;
+    by: string;
+    summary: string;
+  }>;
 }

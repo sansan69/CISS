@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import type { PayrollCycle, PayrollEntry } from "@/types/payroll";
+import { Download } from "lucide-react";
 
 export default function PayrollEntryDetailPage({
   params,
@@ -109,6 +110,12 @@ export default function PayrollEntryDetailPage({
         title={entry.employeeName}
         backHref={cycleId ? `/payroll/cycles/${cycleId}` : "/payroll"}
         description={`${cycle?.period || entry.period} · ${entry.clientName || "No client"}`}
+        actions={
+          <Button variant="outline" onClick={() => window.open(entry.payslipUrl || `/api/admin/payroll/entries/${entry.id}/payslip`, "_blank")}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Payslip PDF
+          </Button>
+        }
       />
 
       <Card>
@@ -119,6 +126,33 @@ export default function PayrollEntryDetailPage({
           <div><p className="text-sm text-muted-foreground">Total Deductions</p><p className="text-base font-semibold">₹{entry.deductions.totalDeductions.toLocaleString("en-IN")}</p></div>
           <div><p className="text-sm text-muted-foreground">Present / Working Days</p><p className="text-base font-semibold">{entry.presentDays}/{entry.workingDays}</p></div>
           <div><p className="text-sm text-muted-foreground">LOP Days</p><p className="text-base font-semibold">{entry.lopDays}</p></div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+          <div>
+            <p className="mb-2 text-sm font-semibold">Earnings</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Basic</span><span>₹{entry.earnings.basic.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">HRA</span><span>₹{entry.earnings.hra.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">DA</span><span>₹{entry.earnings.da.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Conveyance</span><span>₹{entry.earnings.conveyance.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Special Allowance</span><span>₹{entry.earnings.specialAllowance.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Other Allowances</span><span>₹{entry.earnings.otherAllowances.toLocaleString("en-IN")}</span></div>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold">Deductions</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">EPF</span><span>₹{entry.deductions.epfEmployee.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">ESIC</span><span>₹{entry.deductions.esicEmployee.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Professional Tax</span><span>₹{entry.deductions.professionalTax.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">TDS</span><span>₹{entry.deductions.tds.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">LOP Deduction</span><span>₹{entry.deductions.lopDeduction.toLocaleString("en-IN")}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span>₹{entry.deductions.totalDeductions.toLocaleString("en-IN")}</span></div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -41,6 +41,7 @@ export async function POST(
     for (const entryDoc of entriesSnap.docs) {
       batch.update(entryDoc.ref, {
         status: "finalized",
+        payslipUrl: `/api/admin/payroll/entries/${entryDoc.id}/payslip`,
         updatedAt: FieldValue.serverTimestamp(),
       });
       count++;

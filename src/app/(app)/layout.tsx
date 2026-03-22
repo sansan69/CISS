@@ -120,6 +120,7 @@ const mainNavGroups: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: '/payroll', label: 'Payroll Runs', icon: Wallet,      adminOnly: true },
+      { href: '/payroll/salaries', label: 'Salary Assignments', icon: Receipt, adminOnly: true },
       { href: '/leave',   label: 'Leave',        icon: CalendarDays, adminOnly: true },
     ],
   },
