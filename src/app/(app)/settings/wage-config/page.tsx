@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import { Trash2, Plus, Upload, RefreshCw } from "lucide-react";
-import type { WageComponent, WageComponentType, CalculationType } from "@/types/payroll";
+import type { WageComponent, WageComponentType, CalculationType, ClientWageConfig } from "@/types/payroll";
 import { applyWageComponents } from "@/lib/payroll/calculate";
 
 interface Client { id: string; name: string; }
@@ -43,6 +43,7 @@ export default function WageConfigPage() {
   const [activeTab, setActiveTab] = useState<"upload" | "manual">("upload");
   const [fileRef, setFileRef] = useState<HTMLInputElement | null>(null);
   const [parserLabel, setParserLabel] = useState<string | null>(null);
+  const [configMeta, setConfigMeta] = useState<Partial<ClientWageConfig> | null>(null);
 
   useEffect(() => {
     if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
@@ -64,8 +65,16 @@ export default function WageConfigPage() {
       const res = await authorizedFetch(`/api/admin/clients/${clientId}/wage-config`);
       const data = await res.json();
       setComponents(data.components ?? []);
+      setConfigMeta({
+        templateMode: data.templateMode,
+        templateLocked: data.templateLocked,
+        sheetTemplate: data.sheetTemplate,
+        lastImportSummary: data.lastImportSummary,
+      });
+      setParserLabel(data.lastImportSummary?.parserLabel ?? null);
     } catch {
       setComponents([]);
+      setConfigMeta(null);
     } finally {
       setIsLoading(false);
     }
@@ -91,10 +100,16 @@ export default function WageConfigPage() {
       const data = await res.json();
       if (data.components) {
         setComponents(data.components);
-        setParserLabel(data.parserLabel ?? (data.usedFallbackParser ? "built-in parser" : "AI"));
+        setConfigMeta({
+          templateMode: data.templateMode,
+          templateLocked: data.templateLocked,
+          sheetTemplate: data.sheetTemplate,
+          lastImportSummary: data.lastImportSummary,
+        });
+        setParserLabel(data.parserLabel ?? "built-in parser");
         toast({
           title: "Parsed",
-          description: `${data.components.length} components extracted using ${data.parserLabel ?? (data.usedFallbackParser ? "the built-in parser" : "AI")}.`,
+          description: `${data.components.length} components extracted using ${data.parserLabel ?? "the built-in parser"}.`,
         });
         setActiveTab("manual");
       } else {
@@ -144,6 +159,10 @@ export default function WageConfigPage() {
           clientName: selectedClient?.name ?? "",
           components,
           uploadedFromExcel: activeTab === "upload",
+          templateMode: configMeta?.templateMode ?? "client_template",
+          templateLocked: configMeta?.templateLocked ?? false,
+          sheetTemplate: configMeta?.sheetTemplate,
+          lastImportSummary: configMeta?.lastImportSummary,
         }),
       });
       toast({ title: "Saved", description: "Wage configuration saved." });
@@ -229,7 +248,7 @@ export default function WageConfigPage() {
                 {isUploading && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <RefreshCw className="h-4 w-4 animate-spin" />
-                    Understanding the wage sheet...
+                    Understanding the wage sheet using the saved client template...
                   </div>
                 )}
               </CardContent>
@@ -252,8 +271,13 @@ export default function WageConfigPage() {
               <CardContent className="space-y-3">
                 {parserLabel && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>Understanding source:</span>
+                    <span>Parsing source:</span>
                     <Badge variant="outline">{parserLabel}</Badge>
+                    {configMeta?.templateMode === "client_template" && (
+                      <span className="text-xs text-muted-foreground">
+                        Future monthly uploads will reuse this client format.
+                      </span>
+                    )}
                   </div>
                 )}
                 {components.length === 0 ? (

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import type { WageComponent, WageComponentType, CalculationType } from "@/types/payroll";
-import { hasOpenRouter, requestOpenRouterJson } from "@/lib/server/openrouter";
 
 function slugifyComponent(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -140,67 +139,6 @@ function parseSheetDeterministically(matrix: unknown[][]): WageComponent[] {
   return winner;
 }
 
-function buildWageComponentSchema() {
-  return {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      components: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            id: { type: "string" },
-            name: { type: "string" },
-            type: { type: "string", enum: ["earning", "deduction", "employer_contribution"] },
-            calculationType: {
-              type: "string",
-              enum: ["fixed_amount", "pct_of_basic", "pct_of_ctc", "pct_of_gross", "pct_of_epf_base", "balancing", "kerala_slab", "tds_projected"],
-            },
-            value: { type: ["number", "null"] },
-            isStatutory: { type: "boolean" },
-            statutoryType: { type: ["string", "null"], enum: ["epf", "esic", "pt", "tds", null] },
-            isTaxable: { type: "boolean" },
-            epfApplicable: { type: "boolean" },
-            order: { type: "integer" },
-          },
-          required: ["id", "name", "type", "calculationType", "value", "isStatutory", "statutoryType", "isTaxable", "epfApplicable", "order"],
-        },
-      },
-    },
-    required: ["components"],
-  };
-}
-
-async function parseWithOpenRouter(rows: Record<string, unknown>[], deterministic: WageComponent[]) {
-  const prompt = [
-    "You normalize uploaded payroll wage-sheet structures into a reusable client wage configuration.",
-    "Input rows are already extracted from Excel.",
-    "Use the deterministic draft as a hint, but correct it if needed.",
-    "Return JSON only.",
-    "",
-    `Deterministic draft: ${JSON.stringify(deterministic, null, 2)}`,
-    "",
-    `Spreadsheet rows: ${JSON.stringify(rows, null, 2)}`,
-    "",
-    "Rules:",
-    "- Keep ids short and slug-safe.",
-    "- Include all meaningful recurring monthly components.",
-    "- Use balancing only for the final residual earning component.",
-    "- EPF employee should usually be pct_of_epf_base, ESIC employee pct_of_gross, PT kerala_slab, TDS tds_projected.",
-    "- Preserve order in a payroll-friendly sequence: earnings first, deductions next, employer contributions last.",
-  ].join("\n");
-
-  const result = await requestOpenRouterJson<{ components: WageComponent[] }>({
-    prompt,
-    schema: buildWageComponentSchema(),
-    maxTokens: 1800,
-  });
-
-  return result;
-}
-
 function fallbackParseComponents(rows: Record<string, unknown>[]): WageComponent[] {
   const components: WageComponent[] = [];
 
@@ -258,9 +196,8 @@ function sanitizeParsedComponents(components: WageComponent[]) {
   return deduped;
 }
 
-function parserLabel(source: "deterministic" | "openrouter" | "gemini_fallback") {
-  if (source === "openrouter") return "OpenRouter AI";
-  if (source === "gemini_fallback") return "legacy AI fallback";
+function parserLabel(source: "template" | "deterministic") {
+  if (source === "template") return "client template";
   return "built-in parser";
 }
 
@@ -275,25 +212,69 @@ function buildFallbackMatrix(rows: Record<string, unknown>[]) {
   return [headers, ...body];
 }
 
-function legacyGeminiPrompt(rows: Record<string, unknown>[]) {
-  return `You are a payroll configuration expert. Extract a JSON object with a "components" array from the following spreadsheet rows.
+function detectSheetTemplate(matrix: unknown[][]) {
+  const headerRow = (matrix[0] ?? []).map((value) => String(value ?? "").trim()).filter(Boolean);
+  const normalizedHeaders = headerRow.map((value) => value.toLowerCase());
+  const componentHeader = headerRow.find((_, index) =>
+    ["component", "component name", "name", "earnings / deductions", "salary head", "particulars"].includes(normalizedHeaders[index]),
+  );
+  const valueHeader = headerRow.find((_, index) =>
+    ["amount", "value", "monthly rate", "rate", "fixed", "percentage", "%"].includes(normalizedHeaders[index]),
+  );
 
-Excel data:
-${JSON.stringify(rows, null, 2)}
-
-Return ONLY valid JSON matching this structure:
-{"components":[{"id":"basic","name":"Basic","type":"earning","calculationType":"fixed_amount","value":5000,"isStatutory":false,"statutoryType":null,"isTaxable":true,"epfApplicable":true,"order":1}]}`;
+  return {
+    orientation: componentHeader ? "column" as const : "row" as const,
+    componentColumn: componentHeader,
+    valueColumn: valueHeader,
+    detectedHeaders: headerRow,
+  };
 }
 
-function extractLegacyJson(text: string) {
-  const fenced = text.match(/```json\n?([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/);
-  return fenced?.[1] ?? text;
-}
+function mergeWithExistingTemplate(parsedComponents: WageComponent[], existingComponents: WageComponent[]) {
+  const existingById = new Map(existingComponents.map((component) => [component.id, component]));
+  const existingByName = new Map(existingComponents.map((component) => [slugifyComponent(component.name), component]));
+  const merged: WageComponent[] = [];
 
-function inferNeedsAi(components: WageComponent[]) {
-  const hasBase = components.some((component) => slugifyComponent(component.name).includes("basic"));
-  const hasBalancing = components.some((component) => component.calculationType === "balancing");
-  return components.length < 3 || !hasBase || !hasBalancing;
+  for (const parsed of parsedComponents) {
+    const match = existingById.get(parsed.id) ?? existingByName.get(slugifyComponent(parsed.name));
+    if (match) {
+      merged.push({
+        ...parsed,
+        id: match.id,
+        name: match.name,
+        type: match.type,
+        calculationType: match.calculationType,
+        value: match.calculationType === "balancing" ? null : parsed.value ?? match.value ?? 0,
+        isStatutory: match.isStatutory,
+        statutoryType: match.statutoryType,
+        isTaxable: match.isTaxable,
+        epfApplicable: match.epfApplicable,
+        order: match.order,
+      });
+      continue;
+    }
+
+    merged.push({
+      ...parsed,
+      order: merged.length + 1,
+    });
+  }
+
+  for (const existing of existingComponents) {
+    if (!merged.some((component) => component.id === existing.id)) {
+      merged.push({
+        ...existing,
+        order: existing.order || merged.length + 1,
+      });
+    }
+  }
+
+  return merged
+    .sort((a, b) => a.order - b.order)
+    .map((component, index) => ({
+      ...component,
+      order: index + 1,
+    }));
 }
 
 export async function POST(
@@ -302,7 +283,7 @@ export async function POST(
 ) {
   try {
     await requireAdmin(request);
-    await params; // consume params
+    const { id: clientId } = await params;
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -316,54 +297,37 @@ export async function POST(
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const existingConfigSnapshot = await adminDb.collection("clientWageConfig").doc(clientId).get();
+    const existingComponents = Array.isArray(existingConfigSnapshot.data()?.components)
+      ? sanitizeParsedComponents(existingConfigSnapshot.data()!.components as WageComponent[])
+      : [];
 
-    let components: WageComponent[] | null = null;
-    let parserSource: "deterministic" | "openrouter" | "gemini_fallback" = "deterministic";
+    let parserSource: "template" | "deterministic" = existingComponents.length > 0 ? "template" : "deterministic";
     const deterministicComponents = sanitizeParsedComponents(
       parseSheetDeterministically(Array.isArray(matrix) ? matrix : buildFallbackMatrix(rows)),
     );
-
-    components = deterministicComponents;
-
-    if (hasOpenRouter() && inferNeedsAi(deterministicComponents)) {
-      try {
-        const aiResult = await parseWithOpenRouter(rows, deterministicComponents);
-        components = sanitizeParsedComponents(aiResult.data.components);
-        parserSource = "openrouter";
-      } catch (error) {
-        console.warn("OpenRouter wage parsing failed, using deterministic parser.", error);
-      }
-    }
-
-    if ((!components || components.length === 0) && process.env.GEMINI_API_KEY) {
-      const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            generationConfig: { maxOutputTokens: 800, temperature: 0.1, responseMimeType: "application/json" },
-            contents: [{ parts: [{ text: legacyGeminiPrompt(rows) }] }],
-          }),
-        },
-      );
-
-      if (geminiResponse.ok) {
-        const raw = await geminiResponse.json();
-        const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-        const parsed = JSON.parse(extractLegacyJson(text)) as { components?: WageComponent[] };
-        components = sanitizeParsedComponents(parsed.components ?? []);
-        parserSource = "gemini_fallback";
-      }
-    }
-
-    if (!components || components.length === 0) {
-      components = fallbackParseComponents(rows as Record<string, unknown>[]);
-      parserSource = "deterministic";
-    }
+    const baseComponents =
+      deterministicComponents.length > 0
+        ? deterministicComponents
+        : fallbackParseComponents(rows as Record<string, unknown>[]);
+    const components =
+      existingComponents.length > 0
+        ? mergeWithExistingTemplate(baseComponents, existingComponents)
+        : baseComponents;
+    const sheetTemplate = detectSheetTemplate(Array.isArray(matrix) ? matrix : buildFallbackMatrix(rows));
 
     return NextResponse.json({
       components,
+      templateMode: "client_template",
+      templateLocked: existingComponents.length > 0,
+      sheetTemplate,
+      lastImportSummary: {
+        parserSource,
+        parserLabel: parserLabel(parserSource),
+        parsedAt: new Date().toISOString(),
+        parsedComponents: components.length,
+      },
       usedFallbackParser: parserSource === "deterministic",
       parserSource,
       parserLabel: parserLabel(parserSource),

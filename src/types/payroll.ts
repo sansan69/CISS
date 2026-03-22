@@ -33,6 +33,20 @@ export interface ClientWageConfig {
   clientName: string;
   components: WageComponent[];
   uploadedFromExcel: boolean;
+  templateMode?: "client_template";
+  templateLocked?: boolean;
+  sheetTemplate?: {
+    orientation: "row" | "column";
+    componentColumn?: string;
+    valueColumn?: string;
+    detectedHeaders?: string[];
+  };
+  lastImportSummary?: {
+    parserSource: "template" | "deterministic";
+    parserLabel: string;
+    parsedAt: string;
+    parsedComponents: number;
+  };
   lastUpdatedAt: Timestamp;
   lastUpdatedBy: string;
 }

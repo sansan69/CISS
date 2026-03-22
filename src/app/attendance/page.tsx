@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, Sparkles, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck } from 'lucide-react';
+import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -97,7 +97,6 @@ export default function AttendancePage() {
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [isWatermarking, setIsWatermarking] = useState(false);
-  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
   const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
   const [photoCompliance, setPhotoCompliance] = useState<AttendancePhotoCompliance | null>(null);
@@ -473,58 +472,20 @@ export default function AttendancePage() {
     return canvas.toDataURL('image/jpeg', 0.92);
   }, [buildAttendanceStampLines, selectedStatus]);
 
-  const createAnalysisPhoto = useCallback(async (originalDataUrl: string) => {
-    const image = new window.Image();
-    image.crossOrigin = 'anonymous';
-    image.src = originalDataUrl;
-
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('Photo could not be prepared for uniform review.'));
-    });
-
-    const maxEdge = 960;
-    const width = image.width || 1280;
-    const height = image.height || 720;
-    const scale = Math.min(1, maxEdge / Math.max(width, height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(width * scale));
-    canvas.height = Math.max(1, Math.round(height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('Photo canvas is unavailable.');
-    }
-
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.72);
-  }, []);
-
-  const analyzeCapturedPhoto = useCallback(async (
-    originalPhotoDataUrl: string,
-  ): Promise<AttendancePhotoCompliance> => {
-    const analysisPhotoDataUrl = await createAnalysisPhoto(originalPhotoDataUrl);
-    const response = await fetch('/api/attendance/analyze-photo', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        photoDataUrl: analysisPhotoDataUrl,
-        employeeName: scannedEmployee?.fullName,
-        employeeId: scannedEmployee?.employeeCode || scannedEmployee?.id,
-        siteName: selectedSite?.siteName,
-        district: selectedDistrict,
-        clientName: selectedSite?.clientName,
-      }),
-    });
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.error || 'Uniform review could not be completed.');
-    }
-
-    return body.compliance as AttendancePhotoCompliance;
-  }, [createAnalysisPhoto, scannedEmployee, selectedDistrict, selectedSite]);
+  const buildPendingManualPhotoReview = useCallback((): AttendancePhotoCompliance => ({
+    overallStatus: 'warning',
+    adminFlag: true,
+    warnings: [
+      'Uniform review is pending manual verification.',
+      'Retake the photo if shoes, ID card, or full body are not clearly visible.',
+    ],
+    summary: 'Attendance can continue now. Admin will review the photo for shoes, ID card, and uniform compliance.',
+    missingShoes: false,
+    missingIdCard: false,
+    uniformIssue: false,
+    fullBodyVisible: true,
+    onePersonVisible: true,
+  }), []);
 
   useEffect(() => {
     if (!locationCoords || allSites.length === 0 || hasManualCenterOverride) return;
@@ -646,50 +607,27 @@ export default function AttendancePage() {
     setIsTakingPhoto(false);
     setWorkflowStep('review');
     setIsWatermarking(true);
-    setIsAnalyzingPhoto(true);
+    const manualReviewCompliance = buildPendingManualPhotoReview();
 
     try {
-      const [stampedPhoto, compliance] = await Promise.all([
-        createWatermarkedAttendancePhoto(photoDataUrl, capturedAtIso),
-        analyzeCapturedPhoto(photoDataUrl).catch((error: any) => {
-          setPhotoComplianceError(error?.message || 'Uniform review could not be completed.');
-          return {
-            overallStatus: 'analysis_failed',
-            adminFlag: true,
-            warnings: ['Uniform review could not be completed automatically.'],
-            summary: error?.message || 'Uniform review could not be completed automatically.',
-            missingShoes: false,
-            missingIdCard: false,
-            uniformIssue: false,
-            fullBodyVisible: false,
-            onePersonVisible: true,
-          } satisfies AttendancePhotoCompliance;
-        }),
-      ]);
+      const stampedPhoto = await createWatermarkedAttendancePhoto(photoDataUrl, capturedAtIso);
       setWatermarkedPhoto(stampedPhoto);
-      setPhotoCompliance(compliance);
-      if (compliance.overallStatus === 'warning') {
-        toast({
-          variant: 'destructive',
-          title: 'Uniform check found issues',
-          description: compliance.warnings[0] || 'Review the photo and retake it if needed.',
-        });
-      } else if (compliance.overallStatus === 'clear') {
-        toast({ title: 'Photo captured', description: 'Uniform details look clear.' });
-      } else {
-        toast({ title: 'Photo captured', description: 'Attendance can continue, but uniform review needs admin attention.' });
-      }
+      setPhotoCompliance(manualReviewCompliance);
+      toast({
+        title: 'Photo captured',
+        description: 'Attendance can continue. Admin will review the photo, or you can retake it now.',
+      });
     } catch (error: any) {
       setWatermarkedPhoto(photoDataUrl);
+      setPhotoCompliance(manualReviewCompliance);
       setPhotoComplianceError(error?.message || 'Photo overlay could not be prepared.');
       toast({
         variant: 'destructive',
-        title: 'Photo prepared with limited checks',
-        description: error?.message || 'You can still retake the photo or continue.',
+        title: 'Photo captured',
+        description: error?.message || 'You can still retake the photo or continue with manual review.',
       });
     } finally {
       setIsWatermarking(false);
-      setIsAnalyzingPhoto(false);
     }
   };
 
@@ -1287,8 +1225,8 @@ export default function AttendancePage() {
       setIsWatermarking(false);
   };
 
-  const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking || isAnalyzingPhoto;
-  const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning && !isWatermarking && !isAnalyzingPhoto;
+  const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking;
+  const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning && !isWatermarking;
   const verificationStarted = workflowStep !== 'idle';
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
@@ -1634,7 +1572,7 @@ export default function AttendancePage() {
                       )}
 
                       <Button type="button" variant="outline" onClick={refreshSuggestedCenter} disabled={!locationCoords}>
-                        <Sparkles className="mr-2 h-4 w-4" />
+                        <MapPin className="mr-2 h-4 w-4" />
                         Use nearest center again
                       </Button>
                     </div>
@@ -1691,17 +1629,17 @@ export default function AttendancePage() {
                     <div className="relative aspect-[3/4] overflow-hidden rounded-3xl border">
                       <Image src={watermarkedPhoto || capturedPhoto} alt="Guard photo" fill className="object-cover" />
                     </div>
-                    {(isWatermarking || isAnalyzingPhoto) && (
+                    {isWatermarking && (
                       <div className="rounded-2xl border bg-muted/40 p-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2 font-medium text-foreground">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           Preparing attendance photo
                         </div>
-                        <p className="mt-2">Adding attendance details to the image and checking shoes, ID card, and uniform visibility.</p>
+                        <p className="mt-2">Adding attendance details to the image before you submit.</p>
                       </div>
                     )}
-                    {photoCompliance && !isAnalyzingPhoto && (
-                      <Alert variant={photoCompliance.overallStatus === 'warning' ? 'destructive' : 'default'}>
+                    {photoCompliance && (
+                      <Alert variant={photoCompliance.overallStatus === 'clear' ? 'default' : 'default'}>
                         {photoCompliance.overallStatus === 'clear' ? (
                           <BadgeCheck className="h-4 w-4" />
                         ) : (
@@ -1711,7 +1649,7 @@ export default function AttendancePage() {
                           {photoCompliance.overallStatus === 'clear'
                             ? 'Uniform check looks good'
                             : photoCompliance.overallStatus === 'warning'
-                              ? 'Please review the photo'
+                              ? 'Manual review recommended'
                               : 'Uniform check needs admin review'}
                         </AlertTitle>
                         <AlertDescription className="space-y-3">
@@ -1746,10 +1684,10 @@ export default function AttendancePage() {
                         </AlertDescription>
                       </Alert>
                     )}
-                    {photoComplianceError && !isAnalyzingPhoto && (
+                    {photoComplianceError && (
                       <Alert>
                         <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Uniform review could not finish fully</AlertTitle>
+                        <AlertTitle>Photo overlay had a minor issue</AlertTitle>
                         <AlertDescription>{photoComplianceError}</AlertDescription>
                       </Alert>
                     )}
