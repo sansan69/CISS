@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, getDocs, startAfter, where, doc, updateDoc, serverTimestamp, Timestamp, deleteField, deleteDoc, type QueryDocumentSnapshot, type DocumentData, type Query, startAt, endAt, arrayUnion } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { authorizedFetch } from '@/lib/api-client';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Calendar } from "@/components/ui/calendar";
@@ -26,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import { useAppAuth } from '@/context/auth-context';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { PageHeader } from '@/components/layout/page-header';
+import type { RegionRecord } from '@/types/region';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
@@ -74,6 +76,7 @@ export default function EmployeeDirectoryPage() {
     const client = searchParams.get('client') || 'all';
     const status = searchParams.get('status') || 'all';
     const district = searchParams.get('district') || 'all';
+    const region = searchParams.get('region') || 'all';
 
     // State for search input, which is then debounced
     const [searchTerm, setSearchTerm] = useState(searchParams.get('searchTerm') || '');
@@ -82,8 +85,11 @@ export default function EmployeeDirectoryPage() {
     // Component state for data and pagination
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [clients, setClients] = useState<ClientOption[]>([]);
+    const [regions, setRegions] = useState<RegionRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [superAdminWarnings, setSuperAdminWarnings] = useState<string[]>([]);
+    const [superAdminResults, setSuperAdminResults] = useState<Employee[]>([]);
     
     const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
@@ -135,6 +141,13 @@ export default function EmployeeDirectoryPage() {
 
 
     useEffect(() => {
+        if (userRole === 'superAdmin') {
+            authorizedFetch('/api/super-admin/regions')
+                .then((res) => res.json())
+                .then((data) => setRegions(data.regions ?? []))
+                .catch(() => setRegions([]));
+            return;
+        }
         const fetchClients = async () => {
             try {
                 const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
@@ -144,7 +157,30 @@ export default function EmployeeDirectoryPage() {
             }
         };
         fetchClients();
-    }, [toast]);
+    }, [toast, userRole]);
+
+    const clientOptions = useMemo(() => {
+        if (userRole === 'superAdmin') {
+            return Array.from(
+                new Map(
+                    superAdminResults
+                        .filter((employee) => employee.clientName)
+                        .map((employee) => [employee.clientName, { id: employee.clientName, name: employee.clientName }]),
+                ).values(),
+            ).sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return clients;
+    }, [clients, superAdminResults, userRole]);
+
+    const districtOptions = useMemo(() => {
+        if (userRole === 'fieldOfficer') return assignedDistricts;
+        if (userRole === 'superAdmin') {
+            return Array.from(
+                new Set(superAdminResults.map((employee) => employee.district).filter(Boolean)),
+            ).sort((a, b) => a.localeCompare(b));
+        }
+        return keralaDistricts;
+    }, [assignedDistricts, superAdminResults, userRole]);
     
     const buildBaseQuery = useCallback(() => {
         let q: Query = collection(db, "employees");
@@ -183,6 +219,34 @@ export default function EmployeeDirectoryPage() {
         const hasSearch = trimmed.length > 0;
 
         try {
+            if (userRole === 'superAdmin') {
+                const params = new URLSearchParams();
+                params.set('limit', '500');
+                if (region !== 'all') params.set('regionCode', region);
+                if (client !== 'all') params.set('client', client);
+                if (status !== 'all') params.set('status', status);
+                if (district !== 'all') params.set('district', district);
+                if (trimmed) params.set('searchTerm', trimmed);
+
+                const res = await authorizedFetch(`/api/super-admin/employees?${params.toString()}`);
+                const data = await res.json();
+                const fetchedEmployees = (data.employees ?? []) as Employee[];
+                const targetPage = direction === 'next' ? currentPage + 1 : direction === 'prev' ? Math.max(1, currentPage - 1) : 1;
+                const totalPages = Math.max(1, Math.ceil(fetchedEmployees.length / ITEMS_PER_PAGE));
+                const boundedPage = Math.min(targetPage, totalPages);
+                const startIndex = (boundedPage - 1) * ITEMS_PER_PAGE;
+
+                setSuperAdminWarnings(data.warnings ?? []);
+                setSuperAdminResults(fetchedEmployees);
+                setEmployees(fetchedEmployees.slice(startIndex, startIndex + ITEMS_PER_PAGE));
+                setCurrentPage(boundedPage);
+                setHasPreviousPage(boundedPage > 1);
+                setHasNextPage(startIndex + ITEMS_PER_PAGE < fetchedEmployees.length);
+                setFirstVisible(null);
+                setLastVisible(null);
+                return;
+            }
+
             if (hasSearch) {
                 // Multi-field search: name (prefix, case variants) + exact employeeId/phone
                 const term = trimmed;
@@ -283,7 +347,7 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [buildBaseQuery, currentPage, pageCursors, debouncedSearchTerm]);
+    }, [buildBaseQuery, currentPage, pageCursors, debouncedSearchTerm, userRole, region, client, status, district]);
 
     useEffect(() => {
         if (userRole !== null) {
@@ -292,7 +356,7 @@ export default function EmployeeDirectoryPage() {
             fetchData('first');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [debouncedSearchTerm, client, status, district, userRole]);
+    }, [debouncedSearchTerm, client, status, district, region, userRole]);
     
     const handleNextPage = () => {
         if (hasNextPage) {
@@ -401,8 +465,26 @@ export default function EmployeeDirectoryPage() {
                         <Input id="search-input" type="search" placeholder="Search by Name, ID, or Phone..." value={searchTerm} onChange={handleSearchInputChange} className="pl-10" />
                     </div>
                     <div>
+                        {userRole === 'superAdmin' && (
+                            <>
+                                <Label htmlFor="region-filter" className="sr-only">Region</Label>
+                                <Select value={region} onValueChange={(val) => handleFilterChange('region', val)}>
+                                    <SelectTrigger id="region-filter"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Regions</SelectItem>
+                                        {regions.map((regionOption) => (
+                                            <SelectItem key={regionOption.regionCode} value={regionOption.regionCode}>
+                                                {regionOption.regionName} ({regionOption.regionCode})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </>
+                        )}
+                    </div>
+                    <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>
-                        <Select value={client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clients.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
+                        <Select value={client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clientOptions.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
                     </div>
                      <div>
                         <Label htmlFor="district-filter" className="sr-only">District</Label>
@@ -410,7 +492,7 @@ export default function EmployeeDirectoryPage() {
                             <SelectTrigger id="district-filter"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Districts</SelectItem>
-                                { (userRole === 'fieldOfficer' ? assignedDistricts : keralaDistricts).map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                {districtOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                             </SelectContent>
                         </Select>
                         {userRole === 'fieldOfficer' && <p className="text-xs text-muted-foreground mt-1">Filtered by your assigned districts.</p>}
@@ -428,6 +510,11 @@ export default function EmployeeDirectoryPage() {
                     <CardDescription>A directory of all personnel in the system.</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    {userRole === 'superAdmin' && superAdminWarnings.length > 0 && (
+                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                            {superAdminWarnings.join(' ')}
+                        </div>
+                    )}
                     {/* Mobile list (shown on small screens) */}
                     <div className="block md:hidden space-y-3">
                         {isLoading ? (
@@ -459,7 +546,9 @@ export default function EmployeeDirectoryPage() {
                                                     <div className="break-words font-medium">{emp.fullName}</div>
                                                     <Badge variant={getStatusBadgeVariant(emp.status)} className="w-fit shrink-0">{emp.status}</Badge>
                                                 </div>
-                                                <div className="mt-1 break-words text-xs text-muted-foreground">{emp.clientName} • {emp.employeeId}</div>
+                                                <div className="mt-1 break-words text-xs text-muted-foreground">
+                                                    {[emp.regionName, emp.clientName, emp.employeeId].filter(Boolean).join(' • ')}
+                                                </div>
                                                 {pendingItems.length === 0 ? (
                                                     <div className="mt-1 text-xs text-green-600">Complete</div>
                                                 ) : (
@@ -524,7 +613,7 @@ export default function EmployeeDirectoryPage() {
                                                         </Avatar>
                                                         <div>
                                                             <div className="font-medium">{emp.fullName}</div>
-                                                            <div className="text-sm text-muted-foreground">{emp.clientName}</div>
+                                                            <div className="text-sm text-muted-foreground">{[emp.regionName, emp.clientName].filter(Boolean).join(' • ')}</div>
                                                         </div>
                                                     </div>
                                                 </TableCell>

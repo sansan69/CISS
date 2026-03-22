@@ -22,6 +22,8 @@ export const employeeDistrictSchema = z.string().trim().min(1);
 
 export const employeeSchema = z.object({
   id: z.string(),
+  regionCode: z.string().optional(),
+  regionName: z.string().optional(),
   employeeId: z.string(),
   clientName: z.string(),
   resourceIdNumber: z.string().optional(),
@@ -84,6 +86,8 @@ export const employeeSchema = z.object({
 
 export interface Employee {
   id: string;
+  regionCode?: string;
+  regionName?: string;
   employeeId: string;
   clientName: string;
   resourceIdNumber?: string;
