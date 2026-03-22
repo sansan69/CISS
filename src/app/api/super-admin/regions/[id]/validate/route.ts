@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
+import { saveRegionConnection } from "@/lib/server/region-connections";
 import {
   mergeChecklist,
   nextRegionStatus,
@@ -36,6 +37,18 @@ export async function POST(
       serviceAccountBase64: body.serviceAccountBase64,
     });
 
+    const connectionSaved = await saveRegionConnection(
+      adminDb,
+      {
+        regionCode: id.toUpperCase(),
+        firebaseProjectId: region.firebaseProjectId,
+        storageBucket: region.storageBucket,
+        serviceAccountJson: body.serviceAccountJson,
+        serviceAccountBase64: body.serviceAccountBase64,
+      },
+      { uid: actor.uid, email: actor.email },
+    );
+
     const checklist = mergeChecklist(region.onboardingChecklist, {
       metadataSaved: true,
       firebaseValidated: result.success,
@@ -51,6 +64,12 @@ export async function POST(
           messages: result.messages,
           validatedAt: new Date(),
         },
+        ...(connectionSaved
+          ? {
+              persistentConnectionReady: true,
+              lastConnectionSavedAt: new Date(),
+            }
+          : {}),
         ...buildServerUpdateAudit({ uid: actor.uid, email: actor.email }),
       },
       { merge: true },

@@ -4,7 +4,7 @@ import {
   Users, UserCheck, UserMinus, Clock,
   ArrowRight, UserPlus, AlertCircle as AlertIcon, AlertCircle,
   CalendarClock, QrCode, Briefcase, TrendingUp,
-  ShieldCheck, Star, ChevronRight, Activity,
+  ShieldCheck, Star, ChevronRight, Activity, Globe,
   AlertTriangle, CheckCircle2, MapPin, Building,
 } from "lucide-react";
 import React, { useEffect, useState, useMemo, useRef } from "react";
@@ -17,6 +17,7 @@ import type { Employee } from "@/types/employee";
 import { format, subMonths, startOfMonth, startOfToday, addDays, endOfDay } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -25,6 +26,9 @@ import { Badge } from "@/components/ui/badge";
 import { useAppAuth } from '@/context/auth-context';
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { authorizedFetch } from "@/lib/api-client";
+import { PageHeader } from "@/components/layout/page-header";
+import type { RegionOverviewCard, SuperAdminOverviewSummary } from "@/types/region";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -345,6 +349,116 @@ function QuickActions() {
   );
 }
 
+function SuperAdminOverviewPanel({
+  summary,
+  regions,
+  isLoading,
+  error,
+}: {
+  summary: SuperAdminOverviewSummary | null;
+  regions: RegionOverviewCard[];
+  isLoading: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="page-content">
+      <PageHeader
+        title="All Regions Overview"
+        description="Super admin view of all connected regional backends."
+        actions={
+          <Button asChild>
+            <Link href="/settings/state-management">Region Onboarding</Link>
+          </Button>
+        }
+      />
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Could not load consolidated data</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Connected Regions</p><p className="mt-2 text-3xl font-bold text-brand-blue">{isLoading ? "..." : `${summary?.connectedRegions ?? 0}/${summary?.totalRegions ?? 0}`}</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Employees</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.employees ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.activeEmployees ?? 0} active · ${summary?.onLeaveEmployees ?? 0} on leave`}</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Clients & Field Officers</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.clients ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.fieldOfficers ?? 0} field officers`}</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Today&apos;s Attendance</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.attendanceToday ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.upcomingWorkOrders ?? 0} upcoming work orders`}</p></CardContent></Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Region Health</CardTitle>
+          <CardDescription>
+            Each region uses its own Firebase backend. Connected regions contribute live totals here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <SkeletonBlock key={i} className="h-24" />
+              ))}
+            </div>
+          ) : regions.length === 0 ? (
+            <EmptyState icon={Globe} title="No regions yet" description="Start by onboarding the next region." />
+          ) : (
+            regions.map((region) => (
+              <div key={region.regionCode} className="rounded-2xl border border-border/60 p-4 shadow-card">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold text-foreground">{region.regionName}</p>
+                      <Badge variant={region.connectionStatus === "connected" ? "default" : "secondary"}>
+                        {region.regionCode}
+                      </Badge>
+                      <Badge variant="outline">{region.status}</Badge>
+                      <Badge
+                        variant={
+                          region.connectionStatus === "connected"
+                            ? "default"
+                            : region.connectionStatus === "needs_credentials"
+                              ? "secondary"
+                              : "destructive"
+                        }
+                      >
+                        {region.connectionStatus === "connected"
+                          ? "Connected"
+                          : region.connectionStatus === "needs_credentials"
+                            ? "Reconnect needed"
+                            : "Connection error"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{region.firebaseProjectId}</p>
+                    {region.regionAdminEmail ? (
+                      <p className="text-xs text-muted-foreground">Region admin: {region.regionAdminEmail}</p>
+                    ) : null}
+                    {region.connectionNote ? (
+                      <p className="text-xs text-amber-700">{region.connectionNote}</p>
+                    ) : null}
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/settings/state-management">Manage Region</Link>
+                  </Button>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Employees</p><p className="mt-1 text-xl font-bold">{region.totals.employees}</p></div>
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Active</p><p className="mt-1 text-xl font-bold text-emerald-600">{region.totals.activeEmployees}</p></div>
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">On Leave</p><p className="mt-1 text-xl font-bold text-amber-600">{region.totals.onLeaveEmployees}</p></div>
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Clients</p><p className="mt-1 text-xl font-bold">{region.totals.clients}</p></div>
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Field Officers</p><p className="mt-1 text-xl font-bold">{region.totals.fieldOfficers}</p></div>
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attendance Today</p><p className="mt-1 text-xl font-bold">{region.totals.attendanceToday}</p><p className="text-[10px] text-muted-foreground">{region.totals.upcomingWorkOrders} work orders</p></div>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
@@ -359,10 +473,14 @@ export default function DashboardPage() {
   // Intermediate state for admin coverage — combined via useMemo
   const [clientGuardMap, setClientGuardMap] = useState<Map<string, { total: number; active: number; districts: Set<string> }> | null>(null);
   const [todayAttendanceDocs, setTodayAttendanceDocs] = useState<any[]>([]);
+  const [superAdminSummary, setSuperAdminSummary] = useState<SuperAdminOverviewSummary | null>(null);
+  const [superAdminRegions, setSuperAdminRegions] = useState<RegionOverviewCard[]>([]);
+  const [superAdminLoading, setSuperAdminLoading] = useState(false);
+  const [superAdminError, setSuperAdminError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
-  const { user: currentUser, userRole, assignedDistricts, clientInfo } = useAppAuth();
+  const { user: currentUser, userRole, assignedDistricts, clientInfo, isSuperAdmin } = useAppAuth();
 
   // Client coverage: computed reactively from both live data sources
   const clientCoverage = useMemo<ClientCoverage[]>(() => {
@@ -406,6 +524,10 @@ export default function DashboardPage() {
 
   // Real-time data subscriptions — fire from IndexedDB cache instantly, then sync from server
   useEffect(() => {
+    if (isSuperAdmin) {
+      setIsLoading(false);
+      return;
+    }
     if (userRole === null) return;
     const cleanups: Array<() => void> = [];
     const firstFired = { emp: false };
@@ -520,10 +642,11 @@ export default function DashboardPage() {
     }
 
     return () => cleanups.forEach(u => u());
-  }, [userRole, assignedDistricts, clientInfo]);
+  }, [userRole, assignedDistricts, clientInfo, isSuperAdmin]);
 
   // Live attendance for client users
   useEffect(() => {
+    if (isSuperAdmin) return;
     if (userRole !== 'client' || !clientInfo?.clientName) return;
     const qLogs = query(
       collection(db, 'attendanceLogs'),
@@ -549,7 +672,37 @@ export default function DashboardPage() {
       setClientAttendance({ inToday: seenIn.size, outToday: seenOut.size, onDuty });
     });
     return () => unsub();
-  }, [userRole, clientInfo]);
+  }, [userRole, clientInfo, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+
+    let active = true;
+    setSuperAdminLoading(true);
+    setSuperAdminError(null);
+
+    authorizedFetch("/api/super-admin/overview")
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Could not load consolidated overview.");
+        }
+        if (!active) return;
+        setSuperAdminSummary(data.summary ?? null);
+        setSuperAdminRegions(data.regions ?? []);
+      })
+      .catch((err: any) => {
+        if (!active) return;
+        setSuperAdminError(err?.message || "Could not load consolidated overview.");
+      })
+      .finally(() => {
+        if (active) setSuperAdminLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isSuperAdmin]);
 
   const chartConfig = {
     hires: { label: "New Hires", color: "hsl(var(--chart-1))" },
@@ -575,6 +728,17 @@ export default function DashboardPage() {
 
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'there';
   const todayLabel = format(new Date(), "EEEE, d MMM");
+
+  if (isSuperAdmin) {
+    return (
+      <SuperAdminOverviewPanel
+        summary={superAdminSummary}
+        regions={superAdminRegions}
+        isLoading={superAdminLoading}
+        error={superAdminError}
+      />
+    );
+  }
 
   return (
     <div className="page-content">

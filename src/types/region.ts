@@ -50,12 +50,46 @@ export interface RegionRecord {
   validationSummary?: RegionValidationSummary;
   seededDocs?: string[];
   lastRegionAdminUid?: string | null;
+  persistentConnectionReady?: boolean;
+  lastConnectionSavedAt?: unknown;
   isCurrentRegion?: boolean;
   isSynthetic?: boolean;
   createdAt?: unknown;
   createdBy?: string | null;
   updatedAt?: unknown;
   updatedBy?: string | null;
+}
+
+export interface RegionOverviewCard {
+  regionCode: string;
+  regionName: string;
+  status: RegionStatus;
+  firebaseProjectId: string;
+  regionAdminEmail?: string | null;
+  connectionStatus: "connected" | "needs_credentials" | "error";
+  connectionNote?: string;
+  totals: {
+    employees: number;
+    activeEmployees: number;
+    onLeaveEmployees: number;
+    clients: number;
+    fieldOfficers: number;
+    attendanceToday: number;
+    upcomingWorkOrders: number;
+  };
+  lastSyncedAt?: string;
+}
+
+export interface SuperAdminOverviewSummary {
+  connectedRegions: number;
+  totalRegions: number;
+  employees: number;
+  activeEmployees: number;
+  onLeaveEmployees: number;
+  clients: number;
+  fieldOfficers: number;
+  attendanceToday: number;
+  upcomingWorkOrders: number;
 }
 
 export interface RegionCredentialInput {
