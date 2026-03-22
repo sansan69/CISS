@@ -42,6 +42,7 @@ export default function WageConfigPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<"upload" | "manual">("upload");
   const [fileRef, setFileRef] = useState<HTMLInputElement | null>(null);
+  const [parserLabel, setParserLabel] = useState<string | null>(null);
 
   useEffect(() => {
     if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
@@ -58,6 +59,7 @@ export default function WageConfigPage() {
 
   const loadConfig = useCallback(async (clientId: string) => {
     setIsLoading(true);
+    setParserLabel(null);
     try {
       const res = await authorizedFetch(`/api/admin/clients/${clientId}/wage-config`);
       const data = await res.json();
@@ -89,11 +91,10 @@ export default function WageConfigPage() {
       const data = await res.json();
       if (data.components) {
         setComponents(data.components);
+        setParserLabel(data.parserLabel ?? (data.usedFallbackParser ? "built-in parser" : "AI"));
         toast({
           title: "Parsed",
-          description: data.usedFallbackParser
-            ? `${data.components.length} components extracted using the built-in parser.`
-            : `${data.components.length} components extracted by AI.`,
+          description: `${data.components.length} components extracted using ${data.parserLabel ?? (data.usedFallbackParser ? "the built-in parser" : "AI")}.`,
         });
         setActiveTab("manual");
       } else {
@@ -228,7 +229,7 @@ export default function WageConfigPage() {
                 {isUploading && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <RefreshCw className="h-4 w-4 animate-spin" />
-                    Parsing with AI...
+                    Understanding the wage sheet...
                   </div>
                 )}
               </CardContent>
@@ -249,6 +250,12 @@ export default function WageConfigPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
+                {parserLabel && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Understanding source:</span>
+                    <Badge variant="outline">{parserLabel}</Badge>
+                  </div>
+                )}
                 {components.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-6">No components yet. Add one or upload an Excel file.</p>
                 ) : (

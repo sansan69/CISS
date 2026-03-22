@@ -7,6 +7,7 @@ import {
   SYSTEM_METRIC_NAMES,
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
+import { hasOpenRouter, requestOpenRouterJson } from "@/lib/server/openrouter";
 
 export const runtime = "nodejs";
 
@@ -44,8 +45,7 @@ if (typeof setInterval !== "undefined") {
   }, RATE_LIMIT_WINDOW_MS * 5);
 }
 
-// Model cascade: start with the most generous free-tier model,
-// fall back to the next if quota is exceeded.
+// Legacy Gemini fallback cascade.
 const MODEL_CASCADE = [
   "gemini-1.5-flash-8b",   // Free: 15 RPM · 1,500 RPD · 1M TPM
   "gemini-1.5-flash",      // Free: 15 RPM · 1,500 RPD · 1M TPM (backup pool)
@@ -113,6 +113,38 @@ function fallbackCompliance(message: string): AttendancePhotoCompliance {
   };
 }
 
+function buildComplianceSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      overallStatus: {
+        type: "string",
+        enum: ["clear", "warning", "analysis_failed"],
+      },
+      adminFlag: { type: "boolean" },
+      warnings: { type: "array", items: { type: "string" } },
+      summary: { type: "string" },
+      missingShoes: { type: "boolean" },
+      missingIdCard: { type: "boolean" },
+      uniformIssue: { type: "boolean" },
+      fullBodyVisible: { type: "boolean" },
+      onePersonVisible: { type: "boolean" },
+    },
+    required: [
+      "overallStatus",
+      "adminFlag",
+      "warnings",
+      "summary",
+      "missingShoes",
+      "missingIdCard",
+      "uniformIssue",
+      "fullBodyVisible",
+      "onePersonVisible",
+    ],
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
@@ -139,7 +171,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!hasOpenRouter() && !process.env.GEMINI_API_KEY) {
       await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendancePhotoAnalysisFailure);
       return NextResponse.json({
         compliance: fallbackCompliance(
@@ -159,6 +191,22 @@ export async function POST(request: NextRequest) {
       `Context: ${body.employeeName || "unknown"} (${body.employeeId || "unknown"}), ${body.siteName || "unknown"}, ${body.district || "unknown"}, ${body.clientName || "unknown"}.`,
     ].join("\n");
 
+    if (hasOpenRouter()) {
+      try {
+        const result = await requestOpenRouterJson<AttendancePhotoCompliance>({
+          prompt,
+          schema: buildComplianceSchema(),
+          maxTokens: MAX_RESPONSE_TOKENS,
+          imageDataUrl: body.photoDataUrl,
+        });
+        const parsed = attendancePhotoComplianceSchema.parse(result.data);
+        await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendancePhotoAnalysisSuccess);
+        return NextResponse.json({ compliance: parsed, model: result.model, provider: "openrouter" });
+      } catch (error: any) {
+        console.error("OpenRouter attendance photo analysis failed:", error);
+      }
+    }
+
     const requestPayload = {
       contents: [
         {
@@ -175,7 +223,6 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Try each model in the cascade until one succeeds
     let raw: any = null;
     let response: Response | null = null;
     let lastError = "AI review failed to complete.";
@@ -187,14 +234,11 @@ export async function POST(request: NextRequest) {
       );
       raw = await response.json().catch(() => null);
 
-      if (response.ok) break; // success — stop cascade
-
-      // If quota error, try next model; otherwise bail immediately
+      if (response.ok) break;
       if (!isQuotaError(response.status, raw)) {
         lastError = friendlyError(raw);
         break;
       }
-      // quota exceeded — try next model in cascade
       lastError = friendlyError(raw);
     }
 
@@ -214,7 +258,7 @@ export async function POST(request: NextRequest) {
     );
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendancePhotoAnalysisSuccess);
-    return NextResponse.json({ compliance: parsed });
+    return NextResponse.json({ compliance: parsed, model: raw?.model, provider: "gemini" });
   } catch (error: any) {
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendancePhotoAnalysisFailure);
     console.error("Attendance photo analysis failed:", error);

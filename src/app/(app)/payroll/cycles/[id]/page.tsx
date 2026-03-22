@@ -137,6 +137,25 @@ export default function PayrollCyclePage({
     }
   };
 
+  const downloadWorksheet = async () => {
+    if (!cycleId) return;
+    try {
+      const res = await authorizedFetch(`/api/admin/payroll/cycles/${cycleId}/worksheet`);
+      if (!res.ok) throw new Error("Could not export payroll worksheet.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CISS_Payroll_${cycle?.period ?? "worksheet"}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Could not export payroll worksheet.";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    }
+  };
+
   const downloadCSV = () => {
     if (!entries.length) return;
     const headers = ["Employee", "Code", "Client", "District", "Present Days", "Working Days", "LOP", "Gross", "EPF", "ESIC", "PT", "TDS", "LOP Deduction", "Net Pay", "Status"];
@@ -196,6 +215,9 @@ export default function PayrollCyclePage({
         backHref="/payroll"
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={downloadWorksheet}>
+              <Download className="h-4 w-4 mr-1.5" /> Payroll Sheet
+            </Button>
             <Button variant="outline" size="sm" onClick={downloadCSV}>
               <Download className="h-4 w-4 mr-1.5" /> CSV
             </Button>
