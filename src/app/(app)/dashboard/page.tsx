@@ -434,6 +434,32 @@ function SuperAdminOverviewPanel({
                     {region.regionAdminEmail ? (
                       <p className="text-xs text-muted-foreground">Region admin: {region.regionAdminEmail}</p>
                     ) : null}
+                    {region.vercelProductionUrl || region.vercelProjectUrl ? (
+                      <div className="flex flex-wrap gap-3 pt-1 text-xs">
+                        {region.vercelProductionUrl ? (
+                          <Link
+                            href={region.vercelProductionUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-brand-blue hover:underline"
+                          >
+                            Regional App
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        ) : null}
+                        {region.vercelProjectUrl ? (
+                          <Link
+                            href={region.vercelProjectUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
+                          >
+                            Vercel Project
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {region.connectionNote ? (
                       <p className="text-xs text-amber-700">{region.connectionNote}</p>
                     ) : null}

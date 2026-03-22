@@ -513,13 +513,18 @@ export default function RegionOnboardingPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div>
                       <p className="font-semibold text-sm">
                         {region.regionName} ({region.regionCode})
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {region.firebaseProjectId || "Project ID pending"}
                       </p>
+                      {region.vercelProductionUrl ? (
+                        <p className="mt-1 text-xs text-brand-blue truncate">
+                          {region.vercelProductionUrl}
+                        </p>
+                      ) : null}
                     </div>
                     <Badge variant={region.status === "ready" || region.status === "live" ? "default" : "secondary"}>
                       {region.status}
@@ -564,6 +569,9 @@ export default function RegionOnboardingPage() {
                   <p><span className="font-medium">Web App ID:</span> {selectedRegion.firebaseWebAppId || "Pending"}</p>
                   <p><span className="font-medium">Storage Bucket:</span> {selectedRegion.storageBucket || "Pending"}</p>
                   <p><span className="font-medium">Region Admin:</span> {selectedRegion.regionAdminEmail || "Pending"}</p>
+                  <p><span className="font-medium">Encrypted HQ connection:</span> {selectedRegion.persistentConnectionReady ? "Ready" : "Pending"}</p>
+                  <p><span className="font-medium">Vercel Project:</span> {selectedRegion.vercelProjectName || "Pending"}</p>
+                  <p><span className="font-medium">Regional App:</span> {selectedRegion.vercelProductionUrl || "Pending"}</p>
                 </div>
                 <div className="rounded-xl border p-4">
                   <p className="text-sm font-semibold">Wizard Progress</p>
@@ -583,7 +591,7 @@ export default function RegionOnboardingPage() {
               <CardHeader>
                 <CardTitle className="text-base">1. Region Metadata</CardTitle>
                 <CardDescription>
-                  Save only the region details and Firebase web app values here. Secret service-account credentials stay transient in this wizard and are never stored in Kerala Firestore.
+                  Save the region details and Firebase web app values here. Service-account credentials are stored encrypted so HQ can reconnect to each region for consolidated reporting and deployment setup.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
@@ -854,52 +862,44 @@ export default function RegionOnboardingPage() {
               <CardHeader>
                 <CardTitle className="text-base">5. Ready-To-Go Checklist</CardTitle>
                 <CardDescription>
-                  Once the region is ready, connect a dedicated Vercel deployment to this region&apos;s Firebase config and the region can start with clients, field officers, work orders, guard enrollment, and attendance.
+                  Each region gets a dedicated Vercel project and public regional app link. Once that is provisioned, the region can start with clients, field officers, work orders, guard enrollment, and attendance.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
-                {!selectedRegion.isSynthetic && (
-                  <div className="flex flex-wrap gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        try {
-                          const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}`, {
-                            method: "PATCH",
-                            body: JSON.stringify({
-                              onboardingChecklist: {
-                                ...selectedRegion.onboardingChecklist,
-                                vercelConfigured: !(selectedRegion.onboardingChecklist?.vercelConfigured ?? false),
-                              },
-                            }),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) throw new Error(data.error || "Could not update deployment readiness.");
-                          toast({
-                            title: data.region?.onboardingChecklist?.vercelConfigured
-                              ? "Deployment marked ready"
-                              : "Deployment mark removed",
-                            description: "Use this once the dedicated regional Vercel runtime has been configured.",
-                          });
-                          await refreshSelectedRegion();
-                        } catch (error: any) {
-                          toast({
-                            title: "Update failed",
-                            description: error?.message || "Could not update deployment readiness.",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                    >
-                      {selectedRegion.onboardingChecklist?.vercelConfigured ? "Mark deployment not ready" : "Mark deployment configured"}
-                    </Button>
-                  </div>
-                )}
+                <div className="rounded-xl border p-4 bg-muted/20">
+                  <p className="font-medium text-foreground">Regional App Link</p>
+                  {selectedRegion.vercelProductionUrl ? (
+                    <div className="mt-2 space-y-2">
+                      <a
+                        href={selectedRegion.vercelProductionUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-brand-blue hover:underline"
+                      >
+                        {selectedRegion.vercelProductionUrl}
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                      {selectedRegion.vercelProjectUrl ? (
+                        <a
+                          href={selectedRegion.vercelProjectUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-xs text-muted-foreground hover:text-foreground hover:underline"
+                        >
+                          Open Vercel project
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm">
+                      Run the regional Vercel provisioning script once to create the dedicated project, copy shared envs, and publish the regional app link here automatically.
+                    </p>
+                  )}
+                </div>
                 <p>Recommended next steps after this wizard says the region is ready:</p>
                 <ol className="list-decimal pl-5 space-y-1">
-                  <li>Set the region&apos;s `NEXT_PUBLIC_FIREBASE_*` and `FIREBASE_ADMIN_*` env vars in its Vercel project.</li>
-                  <li>Set both the server and public runtime identity vars: `APP_MODE` + `NEXT_PUBLIC_APP_MODE`, `REGION_CODE` + `NEXT_PUBLIC_REGION_CODE`, and `REGION_NAME` + `NEXT_PUBLIC_REGION_NAME`.</li>
-                  <li>Deploy the same application codebase to that region&apos;s Vercel project.</li>
+                  <li>Run `node scripts/provision-region-vercel.mjs {selectedRegion.regionCode}` from the HQ workspace to create the dedicated regional Vercel app.</li>
+                  <li>The script copies shared CISS envs, injects the region Firebase/runtime identity, deploys the same codebase, and writes the link back here.</li>
                   <li>Use the new region admin account to sign in and create clients, field officers, sites, work orders, and guard records.</li>
                 </ol>
               </CardContent>

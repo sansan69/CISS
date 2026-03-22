@@ -52,6 +52,11 @@ export interface RegionRecord {
   lastRegionAdminUid?: string | null;
   persistentConnectionReady?: boolean;
   lastConnectionSavedAt?: unknown;
+  vercelProjectName?: string | null;
+  vercelProjectUrl?: string | null;
+  vercelProductionUrl?: string | null;
+  vercelTeamSlug?: string | null;
+  lastVercelProvisionedAt?: unknown;
   isCurrentRegion?: boolean;
   isSynthetic?: boolean;
   createdAt?: unknown;
@@ -66,6 +71,9 @@ export interface RegionOverviewCard {
   status: RegionStatus;
   firebaseProjectId: string;
   regionAdminEmail?: string | null;
+  vercelProjectName?: string | null;
+  vercelProjectUrl?: string | null;
+  vercelProductionUrl?: string | null;
   connectionStatus: "connected" | "needs_credentials" | "error";
   connectionNote?: string;
   totals: {

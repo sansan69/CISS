@@ -52,7 +52,17 @@ async function countDocs(ref: FirebaseFirestore.Query | FirebaseFirestore.Collec
 
 async function buildRegionMetrics(
   db: FirebaseFirestore.Firestore,
-  region: Pick<RegionRecord, "regionCode" | "regionName" | "status" | "firebaseProjectId" | "regionAdminEmail">,
+  region: Pick<
+    RegionRecord,
+    | "regionCode"
+    | "regionName"
+    | "status"
+    | "firebaseProjectId"
+    | "regionAdminEmail"
+    | "vercelProjectName"
+    | "vercelProjectUrl"
+    | "vercelProductionUrl"
+  >,
   connectionStatus: RegionOverviewCard["connectionStatus"],
   connectionNote?: string,
 ): Promise<RegionOverviewCard> {
@@ -83,6 +93,9 @@ async function buildRegionMetrics(
     status: region.status,
     firebaseProjectId: region.firebaseProjectId,
     regionAdminEmail: region.regionAdminEmail ?? null,
+    vercelProjectName: region.vercelProjectName ?? null,
+    vercelProjectUrl: region.vercelProjectUrl ?? null,
+    vercelProductionUrl: region.vercelProductionUrl ?? null,
     connectionStatus,
     connectionNote,
     totals: {
@@ -151,6 +164,9 @@ export async function GET(request: Request) {
           firebaseProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "ciss-workforce",
           regionAdminEmail:
             process.env.SUPER_ADMIN_EMAIL || process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || null,
+          vercelProjectName: "ciss",
+          vercelProjectUrl: `https://vercel.com/sansan69s-projects/ciss`,
+          vercelProductionUrl: "https://cisskerala.site",
         },
         "connected",
       ),
@@ -169,6 +185,9 @@ export async function GET(request: Request) {
           status: region.status,
           firebaseProjectId: region.firebaseProjectId,
           regionAdminEmail: region.regionAdminEmail ?? null,
+          vercelProjectName: region.vercelProjectName ?? null,
+          vercelProjectUrl: region.vercelProjectUrl ?? null,
+          vercelProductionUrl: region.vercelProductionUrl ?? null,
           connectionStatus: "needs_credentials",
           connectionNote:
             "Reconnect this region once from the onboarding wizard so HQ can read consolidated metrics.",
@@ -197,6 +216,9 @@ export async function GET(request: Request) {
           status: region.status,
           firebaseProjectId: region.firebaseProjectId,
           regionAdminEmail: region.regionAdminEmail ?? null,
+          vercelProjectName: region.vercelProjectName ?? null,
+          vercelProjectUrl: region.vercelProjectUrl ?? null,
+          vercelProductionUrl: region.vercelProductionUrl ?? null,
           connectionStatus: "error",
           connectionNote: error?.message || "Could not read this region backend.",
           totals: {

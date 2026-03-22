@@ -6,10 +6,17 @@ import {
   DEFAULT_REGION_CHECKLIST,
   makeRegionRecord,
 } from "@/lib/server/region-onboarding";
+import {
+  buildRegionVercelProjectName,
+  buildVercelProductionUrl,
+  buildVercelProjectDashboardUrl,
+  getVercelTeamSlug,
+} from "@/lib/vercel-region";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import type { RegionRecord } from "@/types/region";
 
 function buildSyntheticKeralaRegion(): RegionRecord {
+  const vercelTeamSlug = getVercelTeamSlug();
   return {
     id: REGION_CODE,
     regionCode: REGION_CODE,
@@ -37,6 +44,10 @@ function buildSyntheticKeralaRegion(): RegionRecord {
       regionAdminCreated: true,
       vercelConfigured: true,
     },
+    vercelProjectName: "ciss",
+    vercelProjectUrl: buildVercelProjectDashboardUrl("ciss", vercelTeamSlug),
+    vercelProductionUrl: "https://cisskerala.site",
+    vercelTeamSlug,
     isCurrentRegion: true,
     isSynthetic: true,
   };
@@ -99,6 +110,8 @@ export async function POST(request: Request) {
       messagingSenderId: body.messagingSenderId,
       measurementId: body.measurementId,
     });
+    const vercelTeamSlug = getVercelTeamSlug();
+    const vercelProjectName = buildRegionVercelProjectName(region.regionName, region.regionCode);
 
     const docRef = adminDb.collection("regions").doc(region.regionCode);
     const existing = await docRef.get();
@@ -111,6 +124,10 @@ export async function POST(request: Request) {
 
     await docRef.set({
       ...region,
+      vercelProjectName,
+      vercelProjectUrl: buildVercelProjectDashboardUrl(vercelProjectName, vercelTeamSlug),
+      vercelProductionUrl: buildVercelProductionUrl(vercelProjectName, vercelTeamSlug),
+      vercelTeamSlug,
       ...buildServerCreateAudit({ uid: actor.uid, email: actor.email }),
     });
 

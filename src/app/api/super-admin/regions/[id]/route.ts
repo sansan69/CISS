@@ -7,6 +7,12 @@ import {
   mergeChecklist,
   nextRegionStatus,
 } from "@/lib/server/region-onboarding";
+import {
+  buildRegionVercelProjectName,
+  buildVercelProductionUrl,
+  buildVercelProjectDashboardUrl,
+  getVercelTeamSlug,
+} from "@/lib/vercel-region";
 import type { RegionRecord } from "@/types/region";
 
 export async function GET(
@@ -52,8 +58,16 @@ export async function PATCH(
 
     const current = existing.data() as Partial<RegionRecord>;
     const checklist = mergeChecklist(current.onboardingChecklist, body.onboardingChecklist);
+    const regionName = body.regionName?.trim() || current.regionName || id.toUpperCase();
+    const vercelTeamSlug =
+      body.vercelTeamSlug?.trim() || current.vercelTeamSlug || getVercelTeamSlug();
+    const vercelProjectName =
+      body.vercelProjectName?.trim() ||
+      current.vercelProjectName ||
+      buildRegionVercelProjectName(regionName, id.toUpperCase());
+
     const patch = {
-      regionName: body.regionName?.trim() || current.regionName || id.toUpperCase(),
+      regionName,
       regionAdminEmail:
         body.regionAdminEmail === undefined
           ? current.regionAdminEmail ?? null
@@ -84,6 +98,30 @@ export async function PATCH(
         body.measurementId === undefined
           ? current.measurementId ?? null
           : body.measurementId?.trim() || null,
+      vercelProjectName:
+        body.vercelProjectName === undefined
+          ? vercelProjectName
+          : body.vercelProjectName?.trim() || null,
+      vercelProjectUrl:
+        body.vercelProjectUrl === undefined
+          ? (vercelProjectName
+              ? buildVercelProjectDashboardUrl(vercelProjectName, vercelTeamSlug)
+              : current.vercelProjectUrl ?? null)
+          : body.vercelProjectUrl?.trim() || null,
+      vercelProductionUrl:
+        body.vercelProductionUrl === undefined
+          ? (vercelProjectName
+              ? buildVercelProductionUrl(vercelProjectName, vercelTeamSlug)
+              : current.vercelProductionUrl ?? null)
+          : body.vercelProductionUrl?.trim() || null,
+      vercelTeamSlug:
+        body.vercelTeamSlug === undefined
+          ? vercelTeamSlug
+          : body.vercelTeamSlug?.trim() || null,
+      lastVercelProvisionedAt:
+        body.lastVercelProvisionedAt === undefined
+          ? current.lastVercelProvisionedAt ?? null
+          : body.lastVercelProvisionedAt ?? null,
       onboardingChecklist: checklist,
       status: body.status ?? nextRegionStatus(checklist),
       ...buildServerUpdateAudit({ uid: actor.uid, email: actor.email }),
@@ -107,5 +145,48 @@ export async function PATCH(
     });
   } catch (error: any) {
     return unauthorizedResponse(error?.message || "Unauthorized", error?.message === "Super admin access required." ? 403 : 401);
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const actor = await requireSuperAdmin(request);
+    const { id } = await params;
+    const regionCode = id.toUpperCase();
+
+    if (regionCode === "KL") {
+      return NextResponse.json(
+        { error: "The Kerala region cannot be deleted from HQ onboarding." },
+        { status: 400 },
+      );
+    }
+
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const docRef = adminDb.collection("regions").doc(regionCode);
+    const existing = await docRef.get();
+    if (!existing.exists) {
+      return NextResponse.json({ error: "Region not found." }, { status: 404 });
+    }
+
+    await Promise.all([
+      docRef.delete(),
+      adminDb.collection("regionConnections").doc(regionCode).delete().catch(() => undefined),
+    ]);
+
+    await adminDb.collection("regionOnboardingAudit").add({
+      action: "region_deleted",
+      regionCode,
+      ...buildServerUpdateAudit({ uid: actor.uid, email: actor.email }),
+    });
+
+    return NextResponse.json({ ok: true, regionCode });
+  } catch (error: any) {
+    return unauthorizedResponse(
+      error?.message || "Unauthorized",
+      error?.message === "Super admin access required." ? 403 : 401,
+    );
   }
 }
