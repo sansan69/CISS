@@ -246,7 +246,7 @@ function ClientStrengthTable({ data, isLoading }: { data: ClientCoverage[]; isLo
                       <span className="text-[10px] text-muted-foreground">
                         {client.totalGuards} total · {client.activeGuards} active
                       </span>
-                      {client.districts.length > 0 && (
+                      {Array.isArray(client.districts) && client.districts.length > 0 && (
                         <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                           <MapPin className="h-2.5 w-2.5" />
                           {client.districts.slice(0, 2).join(', ')}
@@ -621,12 +621,23 @@ export default function DashboardPage() {
         setClientGuardMap(newGuardMap);
       }
       sortable.sort((a, b) => b.ts - a.ts);
-      setRecentActivity(sortable.slice(0, 5).map(({ id, data }) => ({
-        id,
-        text: data.fullName,
-        subtext: `${data.clientName || 'Unassigned'} · ${data.status}`,
-        timestamp: (data.createdAt as Timestamp).toDate(),
-      })));
+      setRecentActivity(
+        sortable.slice(0, 5).map(({ id, data }) => {
+          const createdAt = coerce((data as any).createdAt) || coerce((data as any).joiningDate) || new Date();
+
+          return {
+            id,
+            text:
+              data.fullName ||
+              (data as any).name ||
+              data.employeeId ||
+              (data as any).employeeCode ||
+              "Unknown employee",
+            subtext: `${data.clientName || 'Unassigned'} · ${data.status || 'Unknown'}`,
+            timestamp: createdAt,
+          };
+        })
+      );
 
       if (!firstFired.emp) { firstFired.emp = true; setIsLoading(false); }
     }, (err: any) => {
@@ -1073,7 +1084,7 @@ export default function DashboardPage() {
                       >
                         <Avatar className="h-10 w-10 shrink-0 ring-2 ring-border group-hover:ring-primary/20 transition-all">
                           <AvatarFallback className="text-xs bg-brand-blue/10 text-brand-blue font-semibold">
-                            {act.text.slice(0, 2).toUpperCase()}
+                            {(act.text || '??').slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
