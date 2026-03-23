@@ -568,10 +568,9 @@ export default function DashboardPage() {
 
     // ── Employee subscription (stats + charts + recent activity) ────────────
     let empQ: any = collection(db, "employees");
-    if (userRole === 'fieldOfficer' && assignedDistricts.length > 0)
-      empQ = query(empQ, where('district', 'in', assignedDistricts));
-    else if (userRole === 'client' && clientInfo?.clientName)
+    if (userRole === 'client' && clientInfo?.clientName) {
       empQ = query(empQ, where('clientName', '==', clientInfo.clientName));
+    }
 
     // Field officer with no districts: nothing to show
     if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
@@ -590,6 +589,10 @@ export default function DashboardPage() {
 
       snap.docs.forEach(d => {
         const emp = d.data() as Employee;
+        if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+          const matchesDistrict = assignedDistricts.some((district) => district === (emp as any).district);
+          if (!matchesDistrict) return;
+        }
         total++;
         if (emp.status === 'Active') active++;
         else if (emp.status === 'OnLeave') onLeave++;
@@ -640,16 +643,25 @@ export default function DashboardPage() {
       const unsub2 = onSnapshot(
         query(
           collection(db, "workOrders"),
-          where("district", "in", assignedDistricts),
           where("date", ">=", Timestamp.fromDate(startOfToday())),
           where("date", "<=", Timestamp.fromDate(endOfDay(addDays(new Date(), 6)))),
           orderBy("date", "asc"), limit(10)
         ),
-        (snap) => setUpcomingDuties(snap.docs.map(d => {
-          const data = d.data();
-          return { id: d.id, siteName: data.siteName, clientName: data.clientName,
-            date: (data.date as Timestamp).toDate(), totalManpower: data.totalManpower };
-        }))
+        (snap) => setUpcomingDuties(
+          snap.docs
+            .map(d => {
+              const data = d.data();
+              return {
+                id: d.id,
+                siteName: data.siteName,
+                clientName: data.clientName,
+                district: data.district,
+                date: (data.date as Timestamp).toDate(),
+                totalManpower: data.totalManpower,
+              };
+            })
+            .filter((duty) => assignedDistricts.includes(duty.district))
+        )
       );
       cleanups.push(unsub2);
     }
@@ -676,12 +688,13 @@ export default function DashboardPage() {
     if (userRole !== 'client' || !clientInfo?.clientName) return;
     const qLogs = query(
       collection(db, 'attendanceLogs'),
-      where('clientName', '==', clientInfo.clientName),
       where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
       orderBy('createdAt', 'desc')
     );
     const unsub = onSnapshot(qLogs, (snap) => {
-      const logs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const logs = snap.docs
+        .map(d => ({ id: d.id, ...(d.data() as any) }))
+        .filter((log) => log.clientName === clientInfo.clientName);
       setTodayLogs(logs);
       const latestByEmp = new Map<string, any>();
       const seenIn = new Set<string>(), seenOut = new Set<string>();
