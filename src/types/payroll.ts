@@ -25,6 +25,10 @@ export interface WageComponent {
   isTaxable: boolean;
   epfApplicable: boolean;
   order: number;
+  /** AI confidence score 0–1. <0.7 = needs admin review. Absent on manually-added components. */
+  confidence?: number;
+  /** True when this component was classified by the AI parser, not added manually. */
+  aiDetected?: boolean;
 }
 
 export interface ClientWageConfig {
