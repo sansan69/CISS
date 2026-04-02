@@ -19,9 +19,14 @@ service cloud.firestore {
       );
     }
 
-    // Returns the employeeDocId claim for the signed-in guard
+    // Returns the employeeDocId claim for the signed-in guard (Firestore doc ID)
     function guardEmployeeDocId() {
       return request.auth.token.employeeDocId;
+    }
+
+    // Returns the employeeId claim (employee code, e.g. "CISS/TCS/2025-26/871")
+    function guardEmployeeId() {
+      return request.auth.token.employeeId;
     }
 
     function isAdmin() {
@@ -129,10 +134,19 @@ service cloud.firestore {
       allow read: if isAdmin() || isFieldOfficer() || (
         isClientUser() &&
         exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientId == resource.data.clientId
+        get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientName == resource.data.clientName
       );
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || isFieldOfficer();
+    }
+
+    // ── fcmTokens (push notification device registration) ────────────────────
+    // Any authenticated user can write their own FCM token.
+    // Admins can read all tokens (for targeted push notifications).
+
+    match /fcmTokens/{tokenId} {
+      allow read: if isAdmin();
+      allow write: if isSignedIn();
     }
 
     // ── attendanceLogs ───────────────────────────────────────────────────────
@@ -143,11 +157,11 @@ service cloud.firestore {
 
     match /attendanceLogs/{logId} {
       // Guards can create their own attendance records from the Flutter app.
-      // The employeeDocId in the written document must match the guard's claim.
+      // Flutter app writes: status ('In'/'Out'), employeeDocId, reportedAt (server ts)
       allow create: if isGuard() &&
         request.resource.data.employeeDocId == guardEmployeeDocId() &&
-        request.resource.data.type in ['IN', 'OUT'] &&
-        request.resource.data.keys().hasAll(['employeeDocId', 'type', 'timestamp']);
+        request.resource.data.status in ['In', 'Out'] &&
+        request.resource.data.keys().hasAll(['employeeDocId', 'status', 'reportedAt']);
 
       // Guards can only read their own logs
       allow read: if isAdmin() || isFieldOfficer() || isClientUser() ||
@@ -157,8 +171,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // attendanceStates — hot doc per guard tracking isCheckedIn, lastCheckIn, streak
+    // Flutter app uses collection name 'attendanceStates' (plural)
+    match /attendanceStates/{employeeId} {
+      allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
+      allow create, update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
+      allow delete: if isAdmin();
+    }
+
+    // Legacy singular collection — keep for backwards-compatibility
     match /attendanceState/{employeeId} {
-      // Guards can read/update their own attendance state
       allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
       allow update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
       allow create, delete: if isAdmin();
@@ -193,10 +215,11 @@ service cloud.firestore {
     // Guards can read their own payslips. Accounts/Admin write all.
 
     match /payrollEntries/{entryId} {
+      // Guards can read their own payslips — matched by either Firestore doc ID or employee code
       allow read: if isAdmin() || isAccounts() || isHR() ||
         (isGuard() && (
           resource.data.employeeDocId == guardEmployeeDocId() ||
-          resource.data.employeeId == guardEmployeeDocId()
+          resource.data.employeeId == guardEmployeeId()
         ));
       allow create, update, delete: if isAdmin() || isAccounts();
     }
@@ -266,7 +289,9 @@ service cloud.firestore {
     }
 
     match /leaveBalances/{balanceId} {
-      allow read: if isAdmin() || isAccounts();
+      // Guards can read their own leave balance (needed by Flutter leave screen)
+      allow read: if isAdmin() || isAccounts() || isHR() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
       allow write: if isAdmin() || isAccounts() || isHR();
     }
 
