@@ -29,6 +29,9 @@ import { cn } from "@/lib/utils";
 import { authorizedFetch } from "@/lib/api-client";
 import { PageHeader } from "@/components/layout/page-header";
 import type { RegionOverviewCard, SuperAdminOverviewSummary } from "@/types/region";
+import { DashboardStats } from "@/components/dashboard/stats";
+import { DashboardCharts } from "@/components/dashboard/charts";
+import { DashboardActions } from "@/components/dashboard/actions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -817,10 +820,20 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Stat Cards 2×2 ───────────────────────────────────────────────── */}
-      <StatGrid stats={stats} isLoading={isLoading} />
+      {stats && (
+        <DashboardStats 
+          role={userRole as any} 
+          stats={stats}
+          roleSpecific={userRole === 'client' ? { 
+            guardsAssigned: stats.total,
+            checkedIn: clientCoverage?.[0]?.checkedInToday,
+            complianceClear: clientCoverage?.[0]?.complianceClear
+          } : undefined}
+        />
+      )}
 
       {/* ── Quick Actions (admin + FO) ────────────────────────────────────── */}
-      {userRole !== 'client' && <QuickActions />}
+      {userRole !== 'client' && <DashboardActions role={userRole as any} />}
 
       {/* ── Field Officer: Upcoming Duties ───────────────────────────────── */}
       {userRole === 'fieldOfficer' && (
@@ -876,234 +889,13 @@ export default function DashboardPage() {
       )}
 
 
-      {/* ── Admin: Charts (tabbed on mobile) + Recent Activity ───────────── */}
+      {/* ── Admin: Charts + Recent Activity ───────────────────────────────── */}
       {userRole !== 'fieldOfficer' && userRole !== 'client' && (
-        <>
-          {/* Charts */}
-          <div>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <p className="section-label">Analytics</p>
-              {/* Tab pills */}
-              <div className="flex gap-1 rounded-xl bg-muted p-0.5">
-                <button
-                  onClick={() => setActiveChartTab('hires')}
-                  className={cn(
-                    "px-3 py-1 rounded-lg text-[11px] font-semibold transition-all",
-                    activeChartTab === 'hires'
-                      ? "bg-white text-foreground shadow-brand-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Hires
-                </button>
-                <button
-                  onClick={() => setActiveChartTab('distribution')}
-                  className={cn(
-                    "px-3 py-1 rounded-lg text-[11px] font-semibold transition-all",
-                    activeChartTab === 'distribution'
-                      ? "bg-white text-foreground shadow-brand-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Clients
-                </button>
-              </div>
-            </div>
-
-            <div className="lg:hidden">
-              {/* Mobile: single chart tab */}
-              {activeChartTab === 'hires' && (
-                <Card className="animate-scale-in">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">New Enrollments</CardTitle>
-                    <CardDescription className="text-xs">Last 6 months</CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-2">
-                    {isLoading ? (
-                      <SkeletonBlock className="h-[180px]" />
-                    ) : (
-                      <ChartContainer config={chartConfig} className="w-full h-[180px]">
-                        <BarChart data={newHiresData} accessibilityLayer barSize={22}>
-                          <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="4 4" />
-                          <XAxis
-                            dataKey="month"
-                            tickLine={false} tickMargin={8} axisLine={false}
-                            stroke="hsl(var(--muted-foreground))" fontSize={10}
-                            tickFormatter={v => v.split(' ')[0]}
-                          />
-                          <YAxis
-                            stroke="hsl(var(--muted-foreground))" fontSize={10}
-                            tickLine={false} axisLine={false} tickMargin={6}
-                            allowDecimals={false} width={24}
-                          />
-                          <ChartTooltip cursor={{ fill: "hsl(var(--muted))", radius: 6 }} content={<ChartTooltipContent hideLabel />} />
-                          <Bar dataKey="hires" fill="hsl(var(--chart-1))" radius={[5, 5, 0, 0]} />
-                        </BarChart>
-                      </ChartContainer>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-              {activeChartTab === 'distribution' && (
-                <div className="space-y-3 animate-scale-in">
-                  {/* Summary badges */}
-                  {!isLoading && clientCoverage.length > 0 && (() => {
-                    const alerts = clientCoverage.reduce((s, c) => s + c.mockLocationAlerts, 0);
-                    const lowCoverage = clientCoverage.filter(c => c.activeGuards > 0 && c.coveragePct < 35).length;
-                    return (
-                      <div className="flex items-center gap-2">
-                        <p className="text-[11px] font-semibold text-muted-foreground flex-1">Today's coverage</p>
-                        {alerts > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 rounded-full px-2 py-0.5">
-                            <AlertTriangle className="h-3 w-3" />
-                            {alerts} alert{alerts > 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {lowCoverage > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
-                            <AlertCircle className="h-3 w-3" />
-                            {lowCoverage} low
-                          </span>
-                        )}
-                        {alerts === 0 && lowCoverage === 0 && clientCoverage.length > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
-                            <CheckCircle2 className="h-3 w-3" />
-                            All good
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  <ClientCoverageCards data={clientCoverage} isLoading={isLoading} />
-                  <ClientStrengthTable data={clientCoverage} isLoading={isLoading} />
-                </div>
-              )}
-            </div>
-
-            {/* Desktop: side-by-side charts */}
-            <div className="hidden lg:grid lg:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <CardTitle>New Enrollments</CardTitle>
-                      <CardDescription>Last 6 months · monthly breakdown</CardDescription>
-                    </div>
-                    <TrendingUp className="h-5 w-5 text-brand-blue shrink-0" />
-                  </div>
-                </CardHeader>
-                <CardContent className="px-2">
-                  {isLoading ? (
-                    <SkeletonBlock className="h-[220px]" />
-                  ) : (
-                    <ChartContainer config={chartConfig} className="w-full h-[220px]">
-                      <BarChart data={newHiresData} accessibilityLayer barSize={28}>
-                        <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="4 4" />
-                        <XAxis
-                          dataKey="month"
-                          tickLine={false} tickMargin={10} axisLine={false}
-                          stroke="hsl(var(--muted-foreground))" fontSize={11}
-                          tickFormatter={v => v.split(' ')[0]}
-                        />
-                        <YAxis
-                          stroke="hsl(var(--muted-foreground))" fontSize={11}
-                          tickLine={false} axisLine={false} tickMargin={8}
-                          allowDecimals={false} width={28}
-                        />
-                        <ChartTooltip cursor={{ fill: "hsl(var(--muted))", radius: 6 }} content={<ChartTooltipContent hideLabel />} />
-                        <Bar dataKey="hires" fill="hsl(var(--chart-1))" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ChartContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              <div className="space-y-3">
-                {/* Header + badges */}
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold">Client Coverage</p>
-                    <p className="text-xs text-muted-foreground">Today's guard deployment by client</p>
-                  </div>
-                  {!isLoading && clientCoverage.length > 0 && (() => {
-                    const alerts = clientCoverage.reduce((s, c) => s + c.mockLocationAlerts, 0);
-                    const lowCoverage = clientCoverage.filter(c => c.activeGuards > 0 && c.coveragePct < 35).length;
-                    return (
-                      <div className="flex items-center gap-2 shrink-0">
-                        {alerts > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 rounded-full px-2 py-0.5">
-                            <AlertTriangle className="h-3 w-3" />
-                            {alerts} alert{alerts > 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {lowCoverage > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
-                            <AlertCircle className="h-3 w-3" />
-                            {lowCoverage} low
-                          </span>
-                        )}
-                        {alerts === 0 && lowCoverage === 0 && clientCoverage.length > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
-                            <CheckCircle2 className="h-3 w-3" />
-                            All good
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-                <ClientCoverageCards data={clientCoverage} isLoading={isLoading} />
-                <ClientStrengthTable data={clientCoverage} isLoading={isLoading} />
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <p className="section-label">Recent Enrollments</p>
-              <Link href="/employees" className="flex items-center gap-0.5 text-[11px] font-semibold text-primary">
-                See all <ChevronRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-            <Card>
-              <CardContent className="p-0">
-                {isLoading ? (
-                  <div className="divide-y divide-border/60 px-4">
-                    {[1, 2, 3, 4].map(i => (
-                      <div key={i} className="py-3"><SkeletonRow /></div>
-                    ))}
-                  </div>
-                ) : recentActivity.length > 0 ? (
-                  <div className="divide-y divide-border/60">
-                    {recentActivity.map(act => (
-                      <Link
-                        key={act.id}
-                        href={`/employees/${act.id}`}
-                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 transition-colors group"
-                      >
-                        <Avatar className="h-10 w-10 shrink-0 ring-2 ring-border group-hover:ring-primary/20 transition-all">
-                          <AvatarFallback className="text-xs bg-brand-blue/10 text-brand-blue font-semibold">
-                            {(act.text || '??').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold truncate">{act.text}</p>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">{act.subtext}</p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors" />
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="px-4 py-6">
-                    <EmptyState icon={UserPlus} compact title="No recent activity" />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </>
+        <DashboardCharts 
+          role={userRole as any}
+          newHiresData={newHiresData}
+          clientCoverage={clientCoverage}
+        />
       )}
 
       {/* ── Client: Live Attendance ───────────────────────────────────────── */}
