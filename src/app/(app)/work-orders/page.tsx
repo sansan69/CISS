@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
 import { GeoPoint, collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
@@ -18,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 import { useAppAuth } from '@/context/auth-context';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { useSites } from '@/lib/hooks/use-sites';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildLocationIdentity } from '@/lib/location-utils';
 import { PageHeader } from '@/components/layout/page-header';
@@ -142,9 +144,8 @@ export default function WorkOrderPage() {
 
     const geocodeDutySite = async (siteAddress: string, district: string) => {
         if (!siteAddress.trim()) return null;
-        const response = await fetch('/api/locations/geocode', {
+        const response = await authorizedFetch('/api/locations/geocode', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 address: siteAddress,
                 district,
@@ -421,6 +422,10 @@ export default function WorkOrderPage() {
                     return [(`${(d.siteName||'').toLowerCase().trim()}|${(d.district||'').toLowerCase().trim()}`), { id: doc.id, ...d }];
                 }));
 
+                const tcsClientSnapshot = await getDocs(query(collection(db, 'clients'), where('name', '==', 'TCS')));
+                const tcsClientDoc = tcsClientSnapshot.docs[0];
+                const tcsClientId = tcsClientDoc?.id || null;
+
                 let operationsCount = 0;
                 let createdSites = 0;
 
@@ -437,11 +442,10 @@ export default function WorkOrderPage() {
                     let site = (siteCode && sitesByCode.get(siteCode)) || sitesByNameDistrict.get(`${siteName.toLowerCase()}|${district.toLowerCase()}`);
 
                     if (!site) {
-                        // Create site if missing
                         const geocode = await geocodeDutySite(siteAddress || '', district || '');
                         const newSiteData = {
                             clientName: OPERATIONAL_CLIENT_NAME,
-                            clientId: null,
+                            clientId: tcsClientId,
                             siteName,
                             siteId: siteCode || null,
                             siteAddress: siteAddress || '',
