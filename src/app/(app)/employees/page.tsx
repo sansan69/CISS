@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import { useAppAuth } from '@/context/auth-context';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { PageHeader } from '@/components/layout/page-header';
+import { useClients } from '@/lib/hooks/use-clients';
 import type { RegionRecord } from '@/types/region';
 
 const ITEMS_PER_PAGE = 10;
@@ -84,7 +85,7 @@ export default function EmployeeDirectoryPage() {
 
     // Component state for data and pagination
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [clients, setClients] = useState<ClientOption[]>([]);
+    const { clients } = useClients();
     const [regions, setRegions] = useState<RegionRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -146,18 +147,8 @@ export default function EmployeeDirectoryPage() {
                 .then((res) => res.json())
                 .then((data) => setRegions(data.regions ?? []))
                 .catch(() => setRegions([]));
-            return;
         }
-        const fetchClients = async () => {
-            try {
-                const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
-                setClients(clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string })));
-            } catch (err) {
-                toast({ variant: "destructive", title: "Error", description: "Could not fetch client list." });
-            }
-        };
-        fetchClients();
-    }, [toast, userRole]);
+    }, [userRole]);
 
     const clientOptions = useMemo(() => {
         if (userRole === 'superAdmin') {
