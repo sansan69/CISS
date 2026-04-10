@@ -1,0 +1,9 @@
+# Exclude large folders from Vercel deployment
+node_modules/
+.next/
+.git/
+functions/node_modules/
+*.md
+docs/
+.idea/
+.vscode/
