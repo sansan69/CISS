@@ -160,6 +160,11 @@ export default function GuardLoginPage() {
                   "Sign In"
                 )}
               </Button>
+              <div className="text-center mt-4">
+                <Link href="/guard-forgot-pin" className="text-sm text-muted-foreground hover:text-primary">
+                  Forgot your PIN?
+                </Link>
+              </div>
             </TabsContent>
 
             <TabsContent value="qr" className="py-8 text-center space-y-4">
