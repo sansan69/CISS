@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
+import { useClients } from "@/lib/hooks/use-clients";
 import { Trash2, Plus, Upload, Loader2, Sparkles, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import type { WageComponent, WageComponentType, CalculationType, ClientWageConfig } from "@/types/payroll";
 import { applyWageComponents } from "@/lib/payroll/calculate";
@@ -73,7 +74,6 @@ export default function WageConfigPage() {
   const { userRole } = useAppAuth();
   const { toast }   = useToast();
 
-  const [clients, setClients]             = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [components, setComponents]       = useState<WageComponent[]>([]);
   const [isLoading, setIsLoading]         = useState(false);
@@ -92,12 +92,7 @@ export default function WageConfigPage() {
     }
   }, [userRole, router]);
 
-  useEffect(() => {
-    authorizedFetch("/api/admin/clients")
-      .then((r) => r.json())
-      .then((d) => setClients(d.clients ?? []))
-      .catch(() => {});
-  }, []);
+  const { clients } = useClients();
 
   const loadConfig = useCallback(async (clientId: string) => {
     setIsLoading(true);
