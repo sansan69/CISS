@@ -19,7 +19,7 @@ import { storage } from '@/lib/firebase';
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
-import { haversineDistanceMeters } from '@/lib/geo';
+import { haversineDistanceMeters, validateLocation } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getNextShift, resolveSiteShift } from '@/lib/shift-utils';
 import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
@@ -536,13 +536,32 @@ export default function AttendancePage() {
       return reject(new Error("Geolocation is not supported by this browser."));
     }
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         const capturedAt = new Date().toISOString();
         setLocationCoords({ lat: latitude, lon: longitude, accuracyMeters: accuracy });
         setLocationCapturedAt(capturedAt);
         setLocation(`Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}${accuracy ? ` (±${Math.round(accuracy)}m)` : ''}`);
         setLocationError(null);
+
+        // Validate location for spoofing detection
+        const validation = await validateLocation(
+          { latitude, longitude, accuracy } as GeolocationCoordinates,
+          selectedSite?.geofenceRadiusMeters,
+          selectedSite?.strictGeofence
+        );
+
+        if (!validation.isValid) {
+          setLocationError(validation.warnings.join('; '));
+          if (validation.isMockLocationSuspected) {
+            toast({
+              variant: 'destructive',
+              title: 'Location Suspicious',
+              description: 'Mock location detected. Please use real GPS.',
+            });
+          }
+        }
+
         setIsFetchingLocation(false);
         resolve({ lat: latitude, lon: longitude, accuracyMeters: accuracy });
       },
