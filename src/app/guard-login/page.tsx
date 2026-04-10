@@ -12,6 +12,7 @@ import { Loader2, QrCode, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
 import { signInWithCustomToken } from "firebase/auth";
+import { requestNotificationPermission, registerFCMToken } from "@/lib/fcm";
 
 export default function GuardLoginPage() {
   const router = useRouter();
@@ -43,6 +44,19 @@ export default function GuardLoginPage() {
       }
 
       await signInWithCustomToken(auth, data.token as string);
+      
+      if (auth.currentUser) {
+        try {
+          const token = await requestNotificationPermission();
+          if (token) {
+            await registerFCMToken(auth.currentUser.uid, token);
+            console.log('FCM token registered');
+          }
+        } catch (error) {
+          console.warn('Failed to register FCM token:', error);
+        }
+      }
+      
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
       router.push("/guard/dashboard");
     } catch (err: unknown) {

@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { auth, ensureAuthPersistence } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -38,6 +39,19 @@ export default function AdminLoginPage() {
     try {
       await ensureAuthPersistence();
       await signInWithEmailAndPassword(auth, email, password);
+
+      if (auth.currentUser) {
+        try {
+          const token = await requestNotificationPermission();
+          if (token) {
+            await registerFCMToken(auth.currentUser.uid, token);
+            console.log('FCM token registered');
+          }
+        } catch (error) {
+          console.warn('Failed to register FCM token:', error);
+        }
+      }
+
       toast({
         title: 'Login Successful',
         description: 'Redirecting to your dashboard...',

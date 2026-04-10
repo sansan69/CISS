@@ -54,6 +54,7 @@ import {
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
@@ -931,9 +932,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ? { clientId: appUser.clientId, clientName: appUser.clientName }
             : null
           );
+
           if (appUser.role === 'guard') {
             router.replace('/guard/dashboard');
             return;
+          }
+
+          try {
+            const token = await requestNotificationPermission();
+            if (token) {
+              await registerFCMToken(user.uid, token);
+              console.log('FCM token registered');
+            }
+          } catch (error) {
+            console.warn('Failed to register FCM token:', error);
           }
         } catch {
           setUserRole('user');
