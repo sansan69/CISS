@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { PlusCircle, Trash2, Loader2, AlertCircle, ChevronLeft, Edit, UserPlus, Link as LinkIcon, Unlink } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, AlertCircle, ChevronLeft, Edit, UserPlus, Link as LinkIcon, Unlink, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -385,6 +385,11 @@ export default function ClientManagementPage() {
                     </div>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    <Link href={`/settings/client-management/${client.id}`}>
+                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                        <Eye className="h-4 w-4 mr-1" /> Dashboard
+                      </Button>
+                    </Link>
                     <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => handleOpenEdit(client)}>
                       <Edit className="h-4 w-4 mr-1" /> Rename
                     </Button>
