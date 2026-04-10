@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminOrFieldOfficer, verifyRequestAuth } from "@/lib/server/auth";
+import { sendNotification } from "@/lib/notifications";
 
 export async function PATCH(
   request: Request,
@@ -40,6 +41,29 @@ export async function PATCH(
       respondedAt: FieldValue.serverTimestamp(),
       ...(notes ? { notes } : {}),
     });
+
+    // Send notification to employee
+    try {
+      if (leaveData.employeeId) {
+        if (status === "approved") {
+          await sendNotification({
+            recipientUid: leaveData.employeeId,
+            type: "leave_approved",
+            title: "Leave Approved",
+            body: `Your leave request for ${leaveData.fromDate?.toDate?.().toLocaleDateString() || 'the requested dates'} has been approved`,
+          });
+        } else if (status === "rejected") {
+          await sendNotification({
+            recipientUid: leaveData.employeeId,
+            type: "leave_rejected",
+            title: "Leave Rejected",
+            body: `Your leave request has been rejected. Reason: ${notes || 'Not specified'}`,
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error("Failed to send notification:", notifError);
+    }
 
     if (
       leaveData.employeeId &&
