@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck } from 'lucide-react';
+import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck, Clock } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -105,6 +105,8 @@ export default function AttendancePage() {
   const [recentAttendance, setRecentAttendance] = useState<DeviceAttendanceHistoryItem[]>([]);
   const [queuedAttendance, setQueuedAttendance] = useState<QueuedAttendanceSubmission[]>([]);
   const [isSyncingQueue, setIsSyncingQueue] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+  const [pendingCount, setPendingCount] = useState(0);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<BrowserMultiFormatReader | null>(null);
@@ -932,6 +934,7 @@ export default function AttendancePage() {
     if (isSyncingQueue || queuedAttendance.length === 0) return;
 
     setIsSyncingQueue(true);
+    setSyncStatus('syncing');
     try {
       for (const queuedItem of queuedAttendance) {
         if (Date.now() - Date.parse(queuedItem.createdAt) > OFFLINE_ATTENDANCE_MAX_AGE_MS) {
@@ -967,6 +970,7 @@ export default function AttendancePage() {
       }
     } finally {
       setIsSyncingQueue(false);
+      setSyncStatus(queuedAttendance.length > 0 ? 'error' : 'idle');
     }
   }, [isSyncingQueue, queuedAttendance, removeQueuedAttendance, submitAttendanceOnline, toast, updateRecentAttendance]);
 
@@ -1722,6 +1726,34 @@ export default function AttendancePage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {queuedAttendance.length > 0 && (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          {syncStatus === 'syncing' ? (
+            <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+          ) : syncStatus === 'error' ? (
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+          ) : (
+            <Clock className="h-4 w-4 text-amber-600" />
+          )}
+          <span className="text-sm text-amber-800">
+            {syncStatus === 'syncing' 
+              ? 'Syncing...' 
+              : `${queuedAttendance.length} attendance(s) pending sync`
+            }
+          </span>
+          {syncStatus !== 'syncing' && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={flushQueuedAttendance}
+              className="ml-auto"
+            >
+              Retry Now
+            </Button>
+          )}
+        </div>
       )}
 
       <Accordion type="single" collapsible>
