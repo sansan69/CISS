@@ -62,6 +62,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.role == 'client';
     }
 
+    // Returns the clientName claim for the signed-in client user (set at login via custom claims)
+    function clientUserClientName() {
+      return request.auth.token.clientName;
+    }
+
     // Any staff role (not guard, not client)
     function isStaff() {
       return isAdmin() || isHR() || isAccounts() || isCompliance() || isFieldOfficer();
@@ -82,30 +87,39 @@ service cloud.firestore {
     }
 
     // ── employees ───────────────────────────────────────────────────────────
-    // Public read retained for Next.js webapp compatibility.
-    // Guards can read their own employee doc (by employeeDocId claim).
-    // Admins write all.
+    // Public profile access now goes through a server route backed by Admin SDK.
+    // Raw employee docs are no longer anonymously readable.
+    // Staff can read employee docs; guards can read only their own record;
+    // client users can read employees for their mapped client.
 
     match /employees/{employeeId} {
-      allow read: if true;
+      allow read: if isStaff() ||
+        (isGuard() && (
+          employeeId == guardEmployeeDocId() ||
+          resource.data.employeeId == guardEmployeeId()
+        )) ||
+        // Use clientName claim from token to avoid expensive get() per document
+        (isClientUser() && clientUserClientName() != null &&
+          resource.data.clientName == clientUserClientName());
       allow create, update, delete: if isAdmin();
     }
 
     // ── clients / sites / clientLocations ───────────────────────────────────
-    // Public read retained (Next.js attendance flows use unauthenticated reads).
+    // Anonymous reads are disabled. Authenticated app users can continue
+    // reading these operational collections.
 
     match /clients/{clientId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
     match /sites/{siteId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
     match /clientLocations/{locationId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
@@ -131,11 +145,9 @@ service cloud.firestore {
     // ── workOrders ───────────────────────────────────────────────────────────
 
     match /workOrders/{workOrderId} {
-      allow read: if isAdmin() || isFieldOfficer() || (
-        isClientUser() &&
-        exists(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/clientUsersByUid/$(request.auth.uid)).data.clientName == resource.data.clientName
-      );
+      allow read: if isAdmin() || isFieldOfficer() ||
+        (isClientUser() && clientUserClientName() != null &&
+          resource.data.clientName == clientUserClientName());
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || isFieldOfficer();
     }
@@ -163,8 +175,10 @@ service cloud.firestore {
         request.resource.data.status in ['In', 'Out'] &&
         request.resource.data.keys().hasAll(['employeeDocId', 'status', 'reportedAt']);
 
-      // Guards can only read their own logs
-      allow read: if isAdmin() || isFieldOfficer() || isClientUser() ||
+      // Guards can only read their own logs; client users scoped to their clientName
+      allow read: if isAdmin() || isFieldOfficer() ||
+        (isClientUser() && clientUserClientName() != null &&
+          resource.data.clientName == clientUserClientName()) ||
         (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
 
       // Only admins can modify or delete logs (audit integrity)
@@ -318,6 +332,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── resetOtps (PIN recovery) ───────────────────────────────────────────
+    // Store OTP codes for guard PIN reset - admin only writes, user reads own
+
+    match /resetOtps/{otpId} {
+      allow read: if isSignedIn() && resource.data.phone == request.auth.token.phone;
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     // ── branches / districts / states (multi-state scaffold) ───────────────
 
     match /branches/{branchId} {
@@ -346,6 +369,38 @@ service cloud.firestore {
     match /systemConfig/{docId} {
       allow read: if isAdmin();
       allow write: if isSuperAdmin();
+    }
+
+    // ── Server-only collections (Admin SDK only — explicit client deny) ─────
+    // These collections are only accessed via server-side Admin SDK routes.
+    // Explicit deny ensures no client can ever read or write them directly.
+
+    match /foVisitReports/{docId} {
+      allow read, write: if false;
+    }
+
+    match /branchExpenses/{docId} {
+      allow read, write: if false;
+    }
+
+    match /rateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /regionConnections/{docId} {
+      allow read, write: if false;
+    }
+
+    match /roleClaimRepairAudit/{docId} {
+      allow read, write: if false;
+    }
+
+    match /clientUserAudit/{docId} {
+      allow read, write: if false;
+    }
+
+    match /fieldOfficerAudit/{docId} {
+      allow read, write: if false;
     }
   }
 }

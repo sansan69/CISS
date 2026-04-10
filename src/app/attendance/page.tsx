@@ -13,8 +13,6 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { storage } from '@/lib/firebase';
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -60,6 +58,17 @@ type SuggestedSite = SiteOption & {
   distanceMeters: number;
   withinGeofence: boolean;
   matchedBy: 'client' | 'nearest';
+};
+
+type PublicAttendanceSitesResponse = {
+  options?: SiteOption[];
+  error?: string;
+};
+
+type PublicAttendanceEmployeeLookupResponse = {
+  found: boolean;
+  employee?: ScannedEmployee;
+  error?: string;
 };
 
 const ATTENDANCE_QUEUE_STORAGE_KEY = 'ciss_attendance_queue_v1';
@@ -210,92 +219,42 @@ export default function AttendancePage() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchSites = async () => {
       setIsLoadingCenters(true);
+
       try {
-        const parseGeo = (data: any): { lat?: number; lng?: number } => {
-          const geo = data.geolocation;
-          const lat = typeof geo?.latitude === 'number' ? geo.latitude
-            : typeof geo?.lat === 'number' ? geo.lat
-            : parseFloat(data.latString || '');
-          const lng = typeof geo?.longitude === 'number' ? geo.longitude
-            : typeof geo?.lng === 'number' ? geo.lng
-            : parseFloat(data.lngString || '');
-          return {
-            lat: Number.isFinite(lat) && lat !== 0 ? lat : undefined,
-            lng: Number.isFinite(lng) && lng !== 0 ? lng : undefined,
-          };
-        };
-
-        const [sitesSnap, locationsSnap] = await Promise.all([
-          getDocs(collection(db, 'sites')),
-          getDocs(collection(db, 'clientLocations')),
-        ]);
-
-        const siteOptions: SiteOption[] = sitesSnap.docs.map((d) => {
-          const data = d.data() as any;
-          const { lat, lng } = parseGeo(data);
-          return {
-            id: d.id,
-            siteName: data.siteName,
-            clientName: data.clientName || '',
-            clientId: data.clientId,
-            district: data.district || '',
-            geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : undefined,
-            strictGeofence: data.strictGeofence !== false,
-            lat,
-            lng,
-            shiftMode: data.shiftMode,
-            shiftPattern: data.shiftPattern,
-            shiftTemplates: Array.isArray(data.shiftTemplates) ? data.shiftTemplates : [],
-            sourceCollection: 'sites' as const,
-          };
+        const response = await fetch('/api/public/attendance', {
+          signal: controller.signal,
+          cache: 'no-store',
         });
+        const responseBody = (await response.json().catch(() => ({}))) as PublicAttendanceSitesResponse;
 
-        const locationOptions: SiteOption[] = locationsSnap.docs
-          .filter((d) => {
-            const data = d.data() as any;
-            return data.locationName && data.district; // skip incomplete records
-          })
-          .map((d) => {
-            const data = d.data() as any;
-            const { lat, lng } = parseGeo(data);
-            return {
-              id: d.id,
-              siteName: data.locationName,           // clientLocations uses locationName
-              clientName: data.clientName || '',
-              clientId: data.clientId,
-              district: data.district || '',
-              geofenceRadiusMeters: typeof data.geofenceRadiusMeters === 'number' ? data.geofenceRadiusMeters : 200,
-              strictGeofence: data.strictGeofence !== false,
-              lat,
-              lng,
-              shiftMode: 'none' as const,
-              shiftPattern: null,
-              shiftTemplates: [],
-              sourceCollection: 'clientLocations' as const,
-            };
-          });
-
-        // Merge — deduplicate by (clientName+siteName+district) to avoid double entries
-        const seen = new Set<string>();
-        const merged: SiteOption[] = [];
-        for (const opt of [...siteOptions, ...locationOptions]) {
-          const key = `${opt.clientName}|${opt.siteName}|${opt.district}`.toLowerCase();
-          if (!seen.has(key)) {
-            seen.add(key);
-            merged.push(opt);
-          }
+        if (!response.ok) {
+          throw new Error(responseBody.error || 'Could not load duty centers.');
         }
-        setAllSites(merged);
+
+        setAllSites(Array.isArray(responseBody.options) ? responseBody.options : []);
       } catch (e: any) {
+        if (e?.name === 'AbortError') {
+          return;
+        }
+
         console.error('Failed loading sites', e);
-        toast({ variant: 'destructive', title: 'Error loading centers', description: e.message || 'Try again.' });
+        toast({ variant: 'destructive', title: 'Error loading centers', description: e?.message || 'Try again.' });
       } finally {
-        setIsLoadingCenters(false);
+        if (!controller.signal.aborted) {
+          setIsLoadingCenters(false);
+        }
       }
     };
-    fetchSites();
+
+    void fetchSites();
+
+    return () => {
+      controller.abort();
+    };
   }, [toast]);
 
   useEffect(() => {
@@ -688,19 +647,21 @@ export default function AttendancePage() {
     return null;
   };
 
-  const fetchEmployeeByEmployeeId = async (empId: string) => {
-    const snap = await getDocs(query(collection(db, 'employees'), where('employeeId', '==', empId), limit(1)));
-    if (snap.empty) return null;
-    const d = snap.docs[0];
-    const data = d.data() as any;
-  return {
-    id: d.id,
-    employeeCode: data.employeeId,
-    fullName: data.fullName,
-    phoneNumber: data.phoneNumber,
-    clientName: data.clientName,
-  } as ScannedEmployee;
-  };
+  const fetchEmployeeByEmployeeId = useCallback(async (empId: string) => {
+    const response = await fetch(
+      `/api/public/attendance/employee?${new URLSearchParams({ employeeId: empId }).toString()}`,
+      {
+        cache: 'no-store',
+      },
+    );
+    const responseBody = (await response.json().catch(() => ({}))) as PublicAttendanceEmployeeLookupResponse;
+
+    if (!response.ok) {
+      throw new Error(responseBody.error || 'Could not verify employee ID.');
+    }
+
+    return responseBody.found ? responseBody.employee ?? null : null;
+  }, []);
 
   const handleScanAndCapture = async () => {
     setIsScanning(true);
