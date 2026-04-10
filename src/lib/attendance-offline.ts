@@ -71,6 +71,38 @@ export async function loadQueuedAttendance(): Promise<QueuedAttendanceSubmission
   return readSingleton<QueuedAttendanceSubmission[]>(db, QUEUE_STORE);
 }
 
+export interface QueuedAttendanceItem extends QueuedAttendanceSubmission {
+  retryCount: number;
+  lastAttempt: string | null;
+  nextRetryAt: string | null;
+}
+
+export const MAX_RETRIES = 3;
+export const BASE_DELAY_MS = 2000;
+export const MAX_DELAY_MS = 60000;
+
+export function getRetryDelay(retryCount: number): number {
+  const delay = BASE_DELAY_MS * Math.pow(2, retryCount);
+  return Math.min(delay, MAX_DELAY_MS);
+}
+
+export function shouldRetry(item: QueuedAttendanceItem): boolean {
+  if (item.retryCount >= MAX_RETRIES) return false;
+  if (item.nextRetryAt && new Date(item.nextRetryAt) > new Date()) return false;
+  return true;
+}
+
+export function markRetryAttempt(item: QueuedAttendanceItem): QueuedAttendanceItem {
+  const now = new Date();
+  const retryCount = item.retryCount + 1;
+  return {
+    ...item,
+    retryCount,
+    lastAttempt: now.toISOString(),
+    nextRetryAt: new Date(now.getTime() + getRetryDelay(retryCount)).toISOString(),
+  };
+}
+
 export async function saveQueuedAttendance(
   queue: QueuedAttendanceSubmission[],
 ): Promise<void> {
