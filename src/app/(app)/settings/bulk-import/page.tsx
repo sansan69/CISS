@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
@@ -19,7 +19,7 @@ import { PageHeader } from '@/components/layout/page-header';
 
 interface ProcessedRecord {
     data: any;
-    status: 'success' | 'error';
+    status: 'success' | 'error' | 'duplicate';
     message: string;
 }
 
@@ -33,6 +33,7 @@ export default function BulkImportPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processedRecords, setProcessedRecords] = useState<ProcessedRecord[]>([]);
+    const [importType, setImportType] = useState<'employees' | 'clients_sites'>('employees');
     const { toast } = useToast();
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,6 +64,20 @@ export default function BulkImportPage() {
         });
     };
 
+    const handleDownloadClientsSitesTemplate = () => {
+        const templateHeaders = ['Client Name', 'Site Name', 'Site Address', 'District', 'Geolocation', 'Shift Pattern'];
+        const templateExampleRow = ['TCS', 'TCS Kochi Main', '123 Tech Park, Kochi, Kerala', 'Ernakulam', '10.0234,76.3123', '2x12'];
+        const templateData = [templateHeaders, templateExampleRow];
+        const ws = XLSX.utils.aoa_to_sheet(templateData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Clients & Sites Import");
+        XLSX.writeFile(wb, "CISS_Clients_Sites_Import_Template.xlsx");
+        toast({
+            title: "Template Downloading",
+            description: "The Clients & Sites template file has started downloading."
+        });
+    };
+
     const excelSerialToDate = (serial: number) => {
         const utc_days = Math.floor(serial - 25569);
         const utc_value = utc_days * 86400;
@@ -81,6 +96,74 @@ export default function BulkImportPage() {
         return new Date(date_info.getFullYear(), date_info.getMonth(), date_info.getDate(), hours, minutes, seconds);
     }
 
+    const processClientsSitesImport = async (rows: any[], file: File) => {
+        const batch = writeBatch(db);
+        const results: ProcessedRecord[] = [];
+        const headers = Object.keys(rows[0] || {});
+    
+        const processedRows = rows.map((rowArray: any) => {
+            const row: any = {};
+            headers.forEach((header: string, i: number) => {
+                row[header] = rowArray[header];
+            });
+            return row;
+        });
+    
+        for (const row of processedRows) {
+            const clientName = row['Client Name'];
+            const siteName = row['Site Name'];
+            
+            if (!clientName || !siteName) {
+                results.push({ data: row, status: 'error', message: 'Missing client name or site name' });
+                continue;
+            }
+    
+            const clientQuery = query(collection(db, 'clients'), where('name', '==', clientName));
+            const clientDocs = await getDocs(clientQuery);
+            let clientId: string;
+            
+            if (clientDocs.empty) {
+                const newClientRef = doc(collection(db, 'clients'));
+                batch.set(newClientRef, { name: clientName, createdAt: serverTimestamp() });
+                clientId = newClientRef.id;
+            } else {
+                clientId = clientDocs.docs[0].id;
+            }
+    
+            const siteQuery = query(collection(db, 'sites'), where('clientId', '==', clientId), where('siteName', '==', siteName));
+            const siteDocs = await getDocs(siteQuery);
+            
+            if (!siteDocs.empty) {
+                results.push({ data: row, status: 'error', message: 'Site already exists' });
+                continue;
+            }
+    
+            const siteData: any = {
+                clientId,
+                clientName,
+                siteName,
+                siteAddress: row['Site Address'] || '',
+                district: row['District'] || '',
+                coordinateStatus: 'missing',
+                createdAt: serverTimestamp(),
+            };
+            
+            if (row['Geolocation']) {
+                const coords = String(row['Geolocation']).split(',').map(Number);
+                if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                    siteData.geolocation = { latitude: coords[0], longitude: coords[1] };
+                    siteData.coordinateStatus = 'geocoded';
+                }
+            }
+
+            batch.set(doc(collection(db, 'sites')), siteData);
+            results.push({ data: row, status: 'success', message: 'Created successfully' });
+        }
+    
+        await batch.commit();
+        return results;
+    };
+
     const processAndUpload = async () => {
         if (!file) {
             toast({ variant: 'destructive', title: 'No File Selected', description: 'Please select a file to upload.' });
@@ -89,6 +172,40 @@ export default function BulkImportPage() {
 
         setIsProcessing(true);
         setProcessedRecords([]);
+
+        if (importType === 'clients_sites') {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (jsonData.length < 1) {
+                        throw new Error("The file is empty or contains only a header row.");
+                    }
+
+                    toast({ title: "Uploading...", description: `Importing ${jsonData.length} client/site records.` });
+                    const results = await processClientsSitesImport(jsonData, file);
+                    setProcessedRecords(results);
+                    
+                    toast({
+                        title: 'Import Successful',
+                        description: `Successfully processed ${results.filter(r => r.status === 'success').length} records.`,
+                        duration: 5000
+                    });
+                } catch (error: any) {
+                    console.error("Error processing file:", error);
+                    toast({ variant: 'destructive', title: 'Import Failed', description: error.message || 'An unexpected error occurred during import.' });
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -152,13 +269,23 @@ export default function BulkImportPage() {
                 const batch = writeBatch(db);
                 const employeesRef = collection(db, "employees");
 
+                // Use a timestamp-based seed so repeated imports get different ID ranges
+                // and IDs within a single batch are all distinct.
+                const batchSeed = Math.floor(Date.now() / 1000) % 9000 + 1000;
+
                 for (let i = 0; i < validRecords.length; i++) {
                     const record = validRecords[i];
                     const employeeDocRef = doc(employeesRef);
 
-                    const employeeId = generateEmployeeId(record.clientName, 100 + i);
-                    const qrCodeUrl = await generateQrCodeDataUrl(employeeId, record.fullName, record.phoneNumber);
-                    
+                    const employeeId = generateEmployeeId(record.clientName, batchSeed + i);
+
+                    let qrCodeUrl = "";
+                    try {
+                        qrCodeUrl = await generateQrCodeDataUrl(employeeId, record.fullName, record.phoneNumber);
+                    } catch (qrErr) {
+                        console.warn(`QR generation failed for ${record.fullName} — continuing without QR.`, qrErr);
+                    }
+
                     const finalRecord = {
                         ...record,
                         employeeId,
@@ -198,12 +325,12 @@ export default function BulkImportPage() {
         <div className="flex flex-col gap-6">
             <PageHeader
                 eyebrow="Admin"
-                title="Bulk Employee Import"
-                description="Import new employees in batches using the approved template and validation flow."
+                title={importType === 'employees' ? "Bulk Employee Import" : "Bulk Clients & Sites Import"}
+                description={importType === 'employees' ? "Import new employees in batches using the approved template and validation flow." : "Import multiple clients and their sites together."}
                 breadcrumbs={[
                     { label: "Dashboard", href: "/dashboard" },
                     { label: "Settings", href: "/settings" },
-                    { label: "Bulk Employee Import" },
+                    { label: importType === 'employees' ? "Bulk Employee Import" : "Bulk Clients & Sites Import" },
                 ]}
                 actions={
                     <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
@@ -213,44 +340,84 @@ export default function BulkImportPage() {
                         </Link>
                     </Button>
                 }
-            />
+/>
+ 
+            <div className="flex gap-2 mb-4">
+                <Button 
+                    variant={importType === 'employees' ? 'default' : 'outline'}
+                    onClick={() => { setImportType('employees'); setFile(null); setProcessedRecords([]); }}
+                >
+                    Employees
+                </Button>
+                <Button 
+                    variant={importType === 'clients_sites' ? 'default' : 'outline'}
+                    onClick={() => { setImportType('clients_sites'); setFile(null); setProcessedRecords([]); }}
+                >
+                    Clients & Sites
+                </Button>
+            </div>
+ 
+            {importType === 'employees' && (
+                <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Instructions & Important Notes</AlertTitle>
+                    <AlertDescription>
+                        <ul className="list-disc list-inside space-y-1">
+                            <li>Download the template CSV file to ensure your data is correctly formatted.</li>
+                            <li>Do not change the column headers in the template file.</li>
+                            <li>All required fields must be filled. Required fields are: {requiredFields.slice(0, 5).join(', ')}, etc.</li>
+                            <li>Dates (joiningDate, dateOfBirth) should be in YYYY-MM-DD format.</li>
+                            <li>This tool is for adding **new** employees only. It does not update existing records.</li>
+                            <li>All documents (profile picture, ID proofs, etc.) must be uploaded manually via the employee's profile page after import.</li>
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+            )}
 
-            <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Instructions & Important Notes</AlertTitle>
-                <AlertDescription>
-                    <ul className="list-disc list-inside space-y-1">
-                        <li>Download the template CSV file to ensure your data is correctly formatted.</li>
-                        <li>Do not change the column headers in the template file.</li>
-                        <li>All required fields must be filled. Required fields are: {requiredFields.slice(0, 5).join(', ')}, etc.</li>
-                        <li>Dates (joiningDate, dateOfBirth) should be in YYYY-MM-DD format.</li>
-                        <li>This tool is for adding **new** employees only. It does not update existing records.</li>
-                        <li>All documents (profile picture, ID proofs, etc.) must be uploaded manually via the employee's profile page after import.</li>
-                    </ul>
-                </AlertDescription>
-            </Alert>
+            {importType === 'clients_sites' && (
+                <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Instructions & Important Notes</AlertTitle>
+                    <AlertDescription>
+                        <ul className="list-disc list-inside space-y-1">
+                            <li>Download the template file to ensure your data is correctly formatted.</li>
+                            <li>Do not change the column headers in the template file.</li>
+                            <li>If a client already exists, it will be reused. If not, a new client will be created.</li>
+                            <li>New sites will be created under existing clients or newly created ones.</li>
+                            <li>If a site with the same name already exists under a client, it will be skipped.</li>
+                            <li>Geolocation should be in format "latitude,longitude" (e.g., "10.0234,76.3123").</li>
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <Card>
                 <CardHeader>
                     <CardTitle>Step 1: Download Template</CardTitle>
-                    <CardDescription>Get the CSV template file to fill in your employee data.</CardDescription>
+                    <CardDescription>{importType === 'employees' ? 'Get the CSV template file to fill in your employee data.' : 'Get the template file to fill in your client and site data.'}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Button onClick={handleDownloadTemplate} variant="outline">
-                        <Download className="mr-2 h-4 w-4" /> Download Template (.csv)
-                    </Button>
+                    {importType === 'employees' ? (
+                        <Button onClick={handleDownloadTemplate} variant="outline">
+                            <Download className="mr-2 h-4 w-4" /> Download Template (.csv)
+                        </Button>
+                    ) : (
+                        <Button onClick={handleDownloadClientsSitesTemplate} variant="outline">
+                            <Download className="mr-2 h-4 w-4" /> Download Template (.xlsx)
+                        </Button>
+                    )}
                 </CardContent>
             </Card>
             
             <Card>
                 <CardHeader>
                     <CardTitle>Step 2: Upload File</CardTitle>
-                    <CardDescription>Upload the completed CSV or XLSX file to begin the import process.</CardDescription>
+                    <CardDescription>Upload the completed {importType === 'employees' ? 'CSV or XLSX' : 'XLSX'} file to begin the import process.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col sm:flex-row gap-4 items-center">
                     <div className="grid w-full max-w-sm items-center gap-1.5">
-                        <Label htmlFor="employee-file">Employee Data File</Label>
-                        <Input id="employee-file" type="file" accept=".csv, .xlsx" onChange={handleFileChange} />
+                        <Label htmlFor="employee-file">{importType === 'employees' ? 'Employee Data File' : 'Clients & Sites Data File'}</Label>
+                        <Input id="employee-file" type="file" accept={importType === 'employees' ? ".csv, .xlsx" : ".xlsx"} onChange={handleFileChange} />
                     </div>
                     {file && (
                         <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
