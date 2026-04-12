@@ -2,13 +2,14 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { db, auth } from '@/lib/firebase'; 
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon, Wrench } from 'lucide-react';
+import { Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon, Wrench, FileText, GraduationCap, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -31,11 +32,14 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { authorizedFetch } from '@/lib/api-client';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { PageHeader } from '@/components/layout/page-header';
 import { useAppAuth } from '@/context/auth-context';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VisitReportsPanel } from '@/components/field-officers/visit-reports-panel';
+import { TrainingReportsPanel } from '@/components/field-officers/training-reports-panel';
 import {
   districtMatches,
   getDefaultDistrictSuggestions,
@@ -72,10 +76,35 @@ interface ClaimRepairHealth {
   }[];
 }
 
+type AuthStatus = 'loading' | 'admin' | 'fieldOfficer' | 'other';
+type WorkspaceTab = 'officers' | 'visit-reports' | 'training-reports';
+type SaveOfficerPayload = { officerData: any; isEditing: boolean };
+
+const ADMIN_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
+  { value: 'officers', label: 'Officers', icon: Users },
+  { value: 'visit-reports', label: 'Visit Reports', icon: FileText },
+  { value: 'training-reports', label: 'Training Reports', icon: GraduationCap },
+];
+
+const FIELD_OFFICER_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
+  { value: 'visit-reports', label: 'Visit Reports', icon: FileText },
+  { value: 'training-reports', label: 'Training Reports', icon: GraduationCap },
+];
+
+function resolveWorkspaceTab(rawTab: string | null, authStatus: AuthStatus): WorkspaceTab {
+  if (authStatus === 'fieldOfficer') {
+    return rawTab === 'training-reports' ? 'training-reports' : 'visit-reports';
+  }
+  if (rawTab === 'visit-reports' || rawTab === 'training-reports') {
+    return rawTab;
+  }
+  return 'officers';
+}
+
 
 const OfficerForm: React.FC<{ 
     officer?: FieldOfficer; 
-    onSave: (officerData: any, isEditing: boolean) => Promise<void>; 
+    onSave(payload: SaveOfficerPayload): Promise<void>;
     isSaving: boolean; 
     onClose: () => void;
     unavailableDistricts: string[];
@@ -188,7 +217,7 @@ const OfficerForm: React.FC<{
           ...(isEditing && { id: officer?.id })
         };
         
-        onSave(officerData, isEditing);
+        onSave({ officerData, isEditing });
     };
 
     const handleVerifyCredentials = async () => {
@@ -325,8 +354,11 @@ const OfficerForm: React.FC<{
 };
 
 
-export default function FieldOfficerManagementPage() {
+export default function FieldOfficersPage() {
   const { stateCode } = useAppAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [officers, setOfficers] = useState<FieldOfficer[]>([]);
   const [allAuthUsers, setAllAuthUsers] = useState<AuthUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -335,7 +367,7 @@ export default function FieldOfficerManagementPage() {
   const [editingOfficer, setEditingOfficer] = useState<FieldOfficer | undefined>(undefined);
   const [deletingOfficer, setDeletingOfficer] = useState<FieldOfficer | null>(null);
   
-  const [authStatus, setAuthStatus] = useState<'loading' | 'admin' | 'other'>('loading');
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('loading');
   const [claimRepairHealth, setClaimRepairHealth] = useState<ClaimRepairHealth | null>(null);
   const [isRepairingClaims, setIsRepairingClaims] = useState(false);
 
@@ -364,7 +396,17 @@ export default function FieldOfficerManagementPage() {
             return;
         }
         resolveAppUser(user)
-            .then((appUser) => setAuthStatus(appUser.role === 'admin' || appUser.role === 'superAdmin' ? 'admin' : 'other'))
+            .then((appUser) => {
+              if (appUser.role === 'admin' || appUser.role === 'superAdmin') {
+                setAuthStatus('admin');
+                return;
+              }
+              if (appUser.role === 'fieldOfficer') {
+                setAuthStatus('fieldOfficer');
+                return;
+              }
+              setAuthStatus('other');
+            })
             .catch(() => setAuthStatus('other'));
     });
     return () => unsubscribe();
@@ -413,6 +455,28 @@ export default function FieldOfficerManagementPage() {
 
     return () => unsubscribe();
   }, [toast, authStatus, fetchAuthMetadata]);
+
+  const activeTab = useMemo(
+    () => resolveWorkspaceTab(searchParams.get('tab'), authStatus),
+    [authStatus, searchParams],
+  );
+  const visibleTabs = authStatus === 'admin' ? ADMIN_TABS : FIELD_OFFICER_TABS;
+
+  useEffect(() => {
+    if (authStatus === 'loading') return;
+    const requestedTab = searchParams.get('tab');
+    const nextTab = resolveWorkspaceTab(requestedTab, authStatus);
+    if (requestedTab === nextTab) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', nextTab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [authStatus, pathname, router, searchParams]);
+
+  const handleTabChange = useCallback((nextTab: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', nextTab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [pathname, router, searchParams]);
   
     const allAssignedDistricts = useMemo(() => {
         const otherOfficers = editingOfficer ? officers.filter(o => o.id !== editingOfficer.id) : officers;
@@ -425,7 +489,7 @@ export default function FieldOfficerManagementPage() {
       [officers, stateCode],
     );
 
-  const handleSaveOfficer = async (officerData: any, isEditing: boolean) => {
+  const handleSaveOfficer = async ({ officerData, isEditing }: SaveOfficerPayload) => {
     setIsSubmitting(true);
     
     try {
@@ -544,7 +608,10 @@ export default function FieldOfficerManagementPage() {
     }
   }
 
-  if (authStatus === 'loading' || isLoading) {
+  const canManageOfficers = authStatus === 'admin';
+  const canViewWorkspace = canManageOfficers || authStatus === 'fieldOfficer';
+
+  if (authStatus === 'loading' || (canManageOfficers && isLoading)) {
        return (
         <div className="flex justify-center items-center h-40">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -552,12 +619,12 @@ export default function FieldOfficerManagementPage() {
        )
   }
 
-  if (authStatus !== 'admin') {
+  if (!canViewWorkspace) {
     return (
         <Alert variant="destructive">
             <AlertIcon className="h-4 w-4" />
             <AlertTitle>Permission Denied</AlertTitle>
-            <AlertDescription>You do not have permission to manage field officers.</AlertDescription>
+            <AlertDescription>You do not have permission to access field officer operations.</AlertDescription>
         </Alert>
     );
   }
@@ -566,109 +633,136 @@ export default function FieldOfficerManagementPage() {
     <>
       <div className="flex flex-col gap-4 sm:gap-6">
         <PageHeader
-          eyebrow="Workforce"
-          title="Field Officer Management"
-          description="Manage district-scoped field officers and repair any missing Firebase role claims."
+          eyebrow="Operations"
+          title="Field Officers"
+          description="Manage field officers, visit reports, and training reports from one workspace."
           breadcrumbs={[
             { label: "Dashboard", href: "/dashboard" },
             { label: "Field Officers" },
           ]}
-          actions={
+          actions={canManageOfficers && activeTab === 'officers' ? (
             <Button className="w-full sm:w-auto" onClick={openAddDialog}>
               <UserPlus className="mr-2 h-4 w-4" />
               Add New Officer
             </Button>
-          }
+          ) : undefined}
         />
 
-        <Alert>
-          <ShieldCheck className="h-4 w-4" />
-          <AlertTitle>Manage Your Field Team</AlertTitle>
-          <AlertDescription>
-            Load an existing Firebase Auth user or create a new one directly here, then assign the districts they should manage for this region.
-          </AlertDescription>
-        </Alert>
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
+          <TabsList className={`grid h-auto w-full gap-2 ${canManageOfficers ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {visibleTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <TabsTrigger key={tab.value} value={tab.value} className="py-2">
+                  <Icon className="mr-2 h-4 w-4" />
+                  {tab.label}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
 
-        {claimRepairHealth && (
-          <Alert>
-            <ShieldCheck className="h-4 w-4" />
-            <AlertTitle>Role Claim Health</AlertTitle>
-            <AlertDescription className="flex flex-col gap-3">
-              <div>
-                {claimRepairHealth.totalMismatches === 0
-                  ? 'All mapped admins, field officers, and client users currently have the expected Firebase custom claims.'
-                  : `${claimRepairHealth.totalMismatches} mapped accounts are missing their expected Firebase role claims.`}
-              </div>
-              {claimRepairHealth.totalMismatches > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {claimRepairHealth.items.slice(0, 5).map((item) => (
-                    <Badge key={item.uid} variant="secondary">
-                      {(item.email || item.uid)} {'->'} {item.expectedRole}
-                    </Badge>
-                  ))}
-                  {claimRepairHealth.items.length > 5 && (
-                    <Badge variant="outline">+{claimRepairHealth.items.length - 5} more</Badge>
-                  )}
-                </div>
-              )}
-              <div>
-                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRepairClaims} disabled={isRepairingClaims}>
-                  {isRepairingClaims ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
-                  Repair Missing Claims
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
+          {canManageOfficers && (
+            <TabsContent value="officers" className="mt-0 flex flex-col gap-4 sm:gap-6">
+              <Alert>
+                <ShieldCheck className="h-4 w-4" />
+                <AlertTitle>Manage Your Field Team</AlertTitle>
+                <AlertDescription>
+                  Load an existing Firebase Auth user or create a new one directly here, then assign the districts they should manage for this region.
+                </AlertDescription>
+              </Alert>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Field Officer List</CardTitle>
-            <CardDescription>A list of all registered field officers and their assigned districts.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {officers.length === 0 ? (
-              <div className="text-center py-10">
-                <p className="text-muted-foreground">No field officers found.</p>
-                <Button onClick={openAddDialog} variant="secondary" className="mt-4">Add your first officer</Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {officers.map((officer) => (
-                  <div key={officer.id} className="flex flex-col gap-3 rounded-lg border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex-1 mb-3 sm:mb-0">
-                      <h3 className="font-semibold text-lg">{officer.name}</h3>
-                      <p className="text-sm text-muted-foreground">{officer.email}</p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {officer.assignedDistricts.length > 0 ? (
-                            officer.assignedDistricts.map(d => <Badge key={d} variant="secondary">{d}</Badge>)
-                        ) : (
-                            <Badge variant="outline">No districts assigned</Badge>
+              {claimRepairHealth && (
+                <Alert>
+                  <ShieldCheck className="h-4 w-4" />
+                  <AlertTitle>Role Claim Health</AlertTitle>
+                  <AlertDescription className="flex flex-col gap-3">
+                    <div>
+                      {claimRepairHealth.totalMismatches === 0
+                        ? 'All mapped admins, field officers, and client users currently have the expected Firebase custom claims.'
+                        : `${claimRepairHealth.totalMismatches} mapped accounts are missing their expected Firebase role claims.`}
+                    </div>
+                    {claimRepairHealth.totalMismatches > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {claimRepairHealth.items.slice(0, 5).map((item) => (
+                          <Badge key={item.uid} variant="secondary">
+                            {(item.email || item.uid)} {'->'} {item.expectedRole}
+                          </Badge>
+                        ))}
+                        {claimRepairHealth.items.length > 5 && (
+                          <Badge variant="outline">+{claimRepairHealth.items.length - 5} more</Badge>
                         )}
                       </div>
+                    )}
+                    <div>
+                      <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRepairClaims} disabled={isRepairingClaims}>
+                        {isRepairingClaims ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
+                        Repair Missing Claims
+                      </Button>
                     </div>
-                    <div className="flex w-full flex-col gap-2 self-start sm:w-auto sm:flex-row sm:self-center">
-                        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => openEditDialog(officer)}>
-                            <Edit className="mr-1 h-4 w-4" /> Edit
-                        </Button>
-                        <Button variant="destructive" size="sm" className="w-full sm:w-auto" onClick={() => setDeletingOfficer(officer)}>
-                            <Trash2 className="mr-1 h-4 w-4" /> Delete
-                        </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Field Officer List</CardTitle>
+                  <CardDescription>A list of all registered field officers and their assigned districts.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {officers.length === 0 ? (
+                    <div className="text-center py-10">
+                      <p className="text-muted-foreground">No field officers found.</p>
+                      <Button onClick={openAddDialog} variant="secondary" className="mt-4">Add your first officer</Button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-          {officers.length > 0 && (
-            <CardFooter>
-              <p className="text-sm text-muted-foreground">Total field officers: {officers.length}</p>
-            </CardFooter>
+                  ) : (
+                    <div className="space-y-4">
+                      {officers.map((officer) => (
+                        <div key={officer.id} className="flex flex-col gap-3 rounded-lg border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex-1 mb-3 sm:mb-0">
+                            <h3 className="text-lg font-semibold">{officer.name}</h3>
+                            <p className="text-sm text-muted-foreground">{officer.email}</p>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {officer.assignedDistricts.length > 0 ? (
+                                officer.assignedDistricts.map(d => <Badge key={d} variant="secondary">{d}</Badge>)
+                              ) : (
+                                <Badge variant="outline">No districts assigned</Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex w-full flex-col gap-2 self-start sm:w-auto sm:flex-row sm:self-center">
+                              <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => openEditDialog(officer)}>
+                                  <Edit className="mr-1 h-4 w-4" /> Edit
+                              </Button>
+                              <Button variant="destructive" size="sm" className="w-full sm:w-auto" onClick={() => setDeletingOfficer(officer)}>
+                                  <Trash2 className="mr-1 h-4 w-4" /> Delete
+                              </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+                {officers.length > 0 && (
+                  <CardFooter>
+                    <p className="text-sm text-muted-foreground">Total field officers: {officers.length}</p>
+                  </CardFooter>
+                )}
+              </Card>
+            </TabsContent>
           )}
-        </Card>
+
+          <TabsContent value="visit-reports" className="mt-0">
+            <VisitReportsPanel />
+          </TabsContent>
+
+          <TabsContent value="training-reports" className="mt-0">
+            <TrainingReportsPanel />
+          </TabsContent>
+        </Tabs>
       </div>
 
     {/* Add/Edit Dialog */}
+    {canManageOfficers && (
     <Dialog open={isFormOpen} onOpenChange={closeFormDialog}>
         <DialogContent className="sm:max-w-[425px]" onInteractOutside={(e) => { if(isSubmitting) e.preventDefault(); }} onEscapeKeyDown={(e) => { if(isSubmitting) e.preventDefault(); }}>
             <DialogHeader>
@@ -689,9 +783,11 @@ export default function FieldOfficerManagementPage() {
             />
         </DialogContent>
     </Dialog>
+    )}
 
 
     {/* Delete Confirmation Dialog */}
+    {canManageOfficers && (
     <AlertDialog open={!!deletingOfficer} onOpenChange={(isOpen) => !isOpen && setDeletingOfficer(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -711,6 +807,7 @@ export default function FieldOfficerManagementPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+    )}
     </>
   );
 }

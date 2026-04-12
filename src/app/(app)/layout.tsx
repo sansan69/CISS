@@ -13,29 +13,21 @@ import {
   Settings,
   LogOut,
   Briefcase,
-  FileUp,
   BarChart3,
-  QrCode,
-  Landmark,
-  MapPinned,
-  DownloadCloud,
   ChevronLeft,
   ShieldAlert,
   ClipboardList,
   MoreHorizontal,
   X,
-  GraduationCap,
   Trophy,
   Wallet,
   CalendarDays,
-  FileText,
   BookOpen,
-  Building2,
   ChevronRight,
   PanelLeft,
-  ShieldCheck,
-  Receipt,
   Globe,
+  Wrench,
+  GraduationCap,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -103,7 +95,8 @@ const mainNavGroups: NavGroup[] = [
     label: 'Workforce',
     items: [
       { href: '/work-orders',   label: 'Work Orders',  fieldOfficerLabel: 'Upcoming Duties', shortLabel: 'Orders', icon: ClipboardList },
-      { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, adminOnly: true },
+      { href: '/work-orders/assigned-guards-export', label: 'Assigned Guards Export', icon: Users, adminOnly: true },
+      { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, fieldOfficerVisible: true },
     ],
   },
   {
@@ -121,24 +114,7 @@ const mainNavGroups: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: '/payroll', label: 'Payroll Runs', icon: Wallet,      adminOnly: true },
-      { href: '/payroll/salaries', label: 'Salary Assignments', icon: Receipt, adminOnly: true },
       { href: '/leave',   label: 'Leave',        icon: CalendarDays, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Operations',
-    fieldOfficerVisible: true,
-    items: [
-      { href: '/visit-reports',    label: 'Visit Reports',    icon: FileText,     fieldOfficerVisible: true },
-      { href: '/training-reports', label: 'Training Reports', icon: GraduationCap, fieldOfficerVisible: true },
-    ],
-  },
-  {
-    label: 'Branch Admin',
-    adminOnly: true,
-    items: [
-      { href: '/branch-ops', label: 'Branch Ops', icon: Building2, adminOnly: true },
-      { href: '/expenses',   label: 'Expenses',   icon: Receipt,   adminOnly: true },
     ],
   },
   {
@@ -158,18 +134,10 @@ const mainNavGroups: NavGroup[] = [
 ];
 
 const settingsSubItems: NavItem[] = [
-  { href: '/settings/client-management',       label: 'Clients',                  icon: Briefcase  },
-  { href: '/settings/client-locations',        label: 'Client Locations',         icon: MapPinned  },
-  { href: '/settings/site-management',         label: 'Duty Sites',               icon: Landmark   },
-  { href: '/settings/bulk-import',             label: 'Bulk Import',              icon: FileUp     },
-  { href: '/settings/data-export',             label: 'Data Export',              icon: DownloadCloud },
-  { href: '/settings/qr-management',           label: 'QR Codes',                 icon: QrCode     },
+  { href: '/settings/clients',                  label: 'Clients & Sites',          icon: Briefcase  },
+  { href: '/settings/admin-tools',             label: 'Admin Tools',              icon: Wrench     },
   { href: '/settings/reports',                 label: 'Reports',                  icon: BarChart3  },
-  { href: '/settings/assigned-guards-export',  label: 'Assigned Guards Export',   icon: Users      },
-  { href: '/settings/compliance-settings',     label: 'Compliance Settings',       icon: ShieldCheck },
   { href: '/settings/wage-config',             label: 'Wage Config',               icon: Wallet      },
-  { href: '/settings/salary-grades',           label: 'Salary Grades',             icon: GraduationCap },
-  { href: '/branch-ops',                       label: 'Branches',                  icon: Building2  },
 ];
 
 // Bottom nav: 4 primary + More
@@ -315,7 +283,6 @@ function DesktopSidebar({
   user,
   onLogout,
   collapsed,
-  onToggle,
   isSuperAdmin,
 }: {
   userRole: string | null;
@@ -323,7 +290,6 @@ function DesktopSidebar({
   user: User;
   onLogout: () => void;
   collapsed: boolean;
-  onToggle: () => void;
   isSuperAdmin?: boolean;
 }) {
   const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin);
@@ -344,7 +310,14 @@ function DesktopSidebar({
           collapsed ? "justify-center px-0" : "gap-3 px-5"
         )}>
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 shrink-0">
-            <Image src="/ciss-logo.png" alt="CISS" width={26} height={26} unoptimized />
+            <Image
+              src="/ciss-logo.png"
+              alt="CISS"
+              width={26}
+              height={26}
+              className="h-auto w-auto"
+              unoptimized
+            />
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1 animate-fade-in">
@@ -587,7 +560,7 @@ function MobileMoreSheet({
   isSuperAdmin,
 }: {
   open: boolean;
-  onOpenChange: (v: boolean) => void;
+  onOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
   userRole: string | null;
   user: User;
   onLogout: () => void;
@@ -613,7 +586,14 @@ function MobileMoreSheet({
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 shrink-0">
           <Link href="/dashboard" onClick={close} className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
-              <Image src="/ciss-logo.png" alt="CISS" width={22} height={22} unoptimized />
+              <Image
+                src="/ciss-logo.png"
+                alt="CISS"
+                width={22}
+                height={22}
+                className="h-auto w-auto"
+                unoptimized
+              />
             </div>
             <span className="text-white font-bold text-sm tracking-wide">CISS Workforce</span>
           </Link>
@@ -717,7 +697,14 @@ function MobileHeader({
         </Link>
       ) : (
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue-pale shrink-0">
-          <Image src="/ciss-logo.png" alt="CISS" width={18} height={18} unoptimized />
+          <Image
+            src="/ciss-logo.png"
+            alt="CISS"
+            width={18}
+            height={18}
+            className="h-auto w-auto"
+            unoptimized
+          />
         </div>
       )}
 
@@ -775,7 +762,14 @@ function LoadingScreen() {
     <div className="flex h-screen w-full flex-col items-center justify-center bg-brand-blue gap-4">
       <div className="flex flex-col items-center gap-3 animate-scale-in">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 shadow-brand-md">
-          <Image src="/ciss-logo.png" alt="CISS" width={40} height={40} unoptimized />
+          <Image
+            src="/ciss-logo.png"
+            alt="CISS"
+            width={40}
+            height={40}
+            className="h-auto w-auto"
+            unoptimized
+          />
         </div>
         <div>
           <p className="text-white font-bold text-lg text-center tracking-wide">CISS Workforce</p>
@@ -1014,7 +1008,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           user={authUser}
           onLogout={handleLogout}
           collapsed={sidebarCollapsed}
-          onToggle={toggleSidebar}
           isSuperAdmin={isSuperAdmin}
         />
       </div>

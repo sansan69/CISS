@@ -47,12 +47,29 @@ export default function GuardForgotPinPage() {
     }
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     if (otp.length !== 6) {
       toast({ variant: "destructive", title: "Invalid OTP", description: "Enter 6-digit code" });
       return;
     }
-    setStep('new-pin');
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/guard/auth/verify-reset-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber, otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Invalid OTP", description: data.error || "OTP verification failed" });
+        return;
+      }
+      setStep('new-pin');
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Something went wrong" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleResetPin = async () => {
@@ -131,7 +148,8 @@ export default function GuardForgotPinPage() {
                   className="text-center tracking-widest text-lg"
                 />
               </div>
-              <Button onClick={handleVerifyOtp} disabled={otp.length !== 6} className="w-full">
+              <Button onClick={handleVerifyOtp} disabled={isLoading || otp.length !== 6} className="w-full">
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Verify OTP
               </Button>
               <Button variant="link" onClick={() => setStep('phone')} className="w-full">

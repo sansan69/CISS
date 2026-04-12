@@ -3,8 +3,13 @@ import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { lookupLocationGeocode } from "@/lib/server/location-geocode";
 import { buildServerAuditEvent, buildServerUpdateAudit } from "@/lib/server/audit";
+import {
+  classifySiteGpsState,
+  extractSiteCoordinates,
+  normalizeIndianStateName,
+} from "@/lib/site-gps-repair";
 
-type BatchGeocodeResult = {
+export type BatchGeocodeResult = {
   siteId: string;
   siteName: string;
   clientName?: string;
@@ -18,48 +23,42 @@ type BatchGeocodeResult = {
   newLng?: number;
 };
 
-function extractCoordinates(siteData: Record<string, any>) {
-  const latitude =
-    typeof siteData?.geolocation?.latitude === "number"
-      ? siteData.geolocation.latitude
-      : typeof siteData?.geolocation?.lat === "number"
-        ? siteData.geolocation.lat
-        : Number(siteData?.latString);
-  const longitude =
-    typeof siteData?.geolocation?.longitude === "number"
-      ? siteData.geolocation.longitude
-      : typeof siteData?.geolocation?.lng === "number"
-        ? siteData.geolocation.lng
-        : Number(siteData?.lngString);
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  return { latitude, longitude };
-}
-
 export async function POST(request: Request) {
   try {
     const adminUser = await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue, GeoPoint } = await import("firebase-admin/firestore");
+
     const body = (await request.json().catch(() => ({}))) as {
+      /** Restrict to a specific client. */
+      clientId?: string;
+      /** Explicit list of site document IDs to process. */
       siteIds?: string[];
+      /** Also re-geocode sites with coordinates that fall outside India's bounding box. */
+      includeInvalid?: boolean;
+      /** Also re-geocode sites with coordinateStatus === "geocoded". */
       includeGeocoded?: boolean;
     };
 
-    const snapshot = await adminDb.collection("sites").get();
+    // Build query — if clientId given, filter by it.
+    let snapshotQuery: FirebaseFirestore.Query = adminDb.collection("sites");
+    if (body.clientId) {
+      snapshotQuery = snapshotQuery.where("clientId", "==", body.clientId);
+    }
+    const snapshot = await snapshotQuery.get();
+
     const requestedIds = new Set((body.siteIds ?? []).filter(Boolean));
 
     const sites = snapshot.docs.filter((siteDoc) => {
       const siteData = siteDoc.data() as Record<string, any>;
-      const coordinateStatus = String(siteData.coordinateStatus || "");
-      const hasExplicitCoordinates = Boolean(extractCoordinates(siteData));
-      const shouldInclude =
-        requestedIds.size > 0
-          ? requestedIds.has(siteDoc.id)
-          : !hasExplicitCoordinates ||
-            coordinateStatus === "missing" ||
-            (body.includeGeocoded && coordinateStatus === "geocoded");
-      return shouldInclude;
+      const gpsState = classifySiteGpsState(siteData);
+
+      if (requestedIds.size > 0) return requestedIds.has(siteDoc.id);
+
+      if (gpsState === "missing_coords" || gpsState === "missing_status") return true;
+      if (body.includeInvalid && gpsState === "invalid_coords") return true;
+      if (body.includeGeocoded && siteData.coordinateStatus === "geocoded") return true;
+      return false;
     });
 
     if (sites.length === 0) {
@@ -79,12 +78,13 @@ export async function POST(request: Request) {
 
     for (const siteDoc of sites) {
       const siteData = siteDoc.data() as Record<string, any>;
-      const coords = extractCoordinates(siteData);
+      const coords = extractSiteCoordinates(siteData);
+      const gpsState = classifySiteGpsState(siteData);
       const isLockedCoordinate =
         siteData.coordinateStatus === "verified" ||
         siteData.coordinateStatus === "overridden";
 
-      if (coords && isLockedCoordinate) {
+      if (gpsState === "ok" && coords && isLockedCoordinate) {
         results.push({
           siteId: siteDoc.id,
           siteName: siteData.siteName || siteDoc.id,
@@ -92,17 +92,64 @@ export async function POST(request: Request) {
           district: siteData.district,
           siteAddress: siteData.siteAddress,
           status: "kept",
-          message: "Skipped because coordinates are already verified.",
-          oldLat: coords.latitude,
-          oldLng: coords.longitude,
+          message: "Skipped — coordinates are already verified or manually overridden.",
+          oldLat: coords.lat,
+          oldLng: coords.lng,
         });
         continue;
       }
 
+      if (gpsState === "missing_status" && coords && !siteData.siteAddress?.trim()) {
+        batch.update(siteDoc.ref, {
+          geolocation: new GeoPoint(coords.lat, coords.lng),
+          latString: siteData.latString || coords.lat.toFixed(6),
+          lngString: siteData.lngString || coords.lng.toFixed(6),
+          coordinateStatus: "verified",
+          coordinateSource: siteData.coordinateSource || "manual",
+          ...(normalizeIndianStateName(siteData.state) && normalizeIndianStateName(siteData.state) !== siteData.state
+            ? { state: normalizeIndianStateName(siteData.state) }
+            : {}),
+          ...buildServerUpdateAudit({
+            uid: adminUser.uid,
+            email: adminUser.email,
+          }),
+          auditTrail: FieldValue.arrayUnion(
+            buildServerAuditEvent("site_coordinate_status_repaired", adminUser, {
+              siteId: siteDoc.id,
+              siteName: siteData.siteName ?? null,
+              previousCoordinateStatus: siteData.coordinateStatus ?? null,
+            }),
+          ),
+        });
+        writes += 1;
+
+        results.push({
+          siteId: siteDoc.id,
+          siteName: siteData.siteName || siteDoc.id,
+          clientName: siteData.clientName,
+          district: siteData.district,
+          siteAddress: siteData.siteAddress,
+          status: "updated",
+          message: "Existing coordinates kept because no address was available for re-geocoding.",
+          oldLat: coords.lat,
+          oldLng: coords.lng,
+          newLat: coords.lat,
+          newLng: coords.lng,
+        });
+
+        if (writes >= 400) {
+          await flushBatch();
+        }
+        continue;
+      }
+
       try {
+        const normalizedState = normalizeIndianStateName(siteData.state);
         const geocode = await lookupLocationGeocode({
+          name: siteData.siteName,
           address: siteData.siteAddress,
           district: siteData.district,
+          state: normalizedState,
           entityType: "site",
         });
 
@@ -110,10 +157,13 @@ export async function POST(request: Request) {
           geolocation: new GeoPoint(geocode.lat, geocode.lng),
           latString: geocode.lat.toFixed(6),
           lngString: geocode.lng.toFixed(6),
-          coordinateStatus: coords ? "overridden" : "geocoded",
+          coordinateStatus: "geocoded",
           coordinateSource: "geocode",
           placeAccuracy: geocode.placeAccuracy ?? null,
           geocodedAt: new Date(),
+          ...(normalizedState && normalizedState !== siteData.state
+            ? { state: normalizedState }
+            : {}),
           ...buildServerUpdateAudit({
             uid: adminUser.uid,
             email: adminUser.email,
@@ -135,9 +185,9 @@ export async function POST(request: Request) {
           district: siteData.district,
           siteAddress: siteData.siteAddress,
           status: "updated",
-          message: "Coordinates updated from geocoding.",
-          oldLat: coords?.latitude,
-          oldLng: coords?.longitude,
+          message: "Coordinates updated via geocoding.",
+          oldLat: coords?.lat,
+          oldLng: coords?.lng,
           newLat: geocode.lat,
           newLng: geocode.lng,
         });
@@ -154,8 +204,8 @@ export async function POST(request: Request) {
           siteAddress: siteData.siteAddress,
           status: /no coordinates/i.test(error?.message || "") ? "no_result" : "failed",
           message: error?.message || "Unexpected geocoding error.",
-          oldLat: coords?.latitude,
-          oldLng: coords?.longitude,
+          oldLat: coords?.lat,
+          oldLng: coords?.lng,
         });
       }
     }

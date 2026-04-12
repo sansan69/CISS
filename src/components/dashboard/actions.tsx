@@ -30,16 +30,13 @@ const roleActions: Record<UserRole, QuickAction[]> = {
   ],
   accounts: [
     { label: "Run Payroll", href: "/payroll/run", icon: DollarSign, color: "bg-green-50 text-green-700" },
-    { label: "View Salaries", href: "/payroll/salaries", icon: FileText, color: "bg-blue-50 text-blue-600" },
   ],
   hr: [
     { label: "Enroll Employee", href: "/employees/enroll", icon: UserPlus, color: "bg-green-50 text-green-700" },
     { label: "Leave Requests", href: "/leave", icon: CalendarClock, color: "bg-amber-50 text-amber-700" },
     { label: "Training", href: "/training", icon: FileText, color: "bg-purple-50 text-purple-700" },
   ],
-  compliance: [
-    { label: "Compliance Settings", href: "/settings/compliance-settings", icon: FileText, color: "bg-blue-50 text-blue-600" },
-  ],
+  compliance: [],
   superAdmin: [
     { label: "Dashboard", href: "/dashboard", icon: QrCode, color: "bg-blue-50 text-blue-600" },
     { label: "Regions", href: "/settings/state-management", icon: Briefcase, color: "bg-amber-50 text-amber-700" },

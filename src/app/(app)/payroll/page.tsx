@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Play, Eye, Users, IndianRupee, Banknote, ShieldCheck, Settings2 } from "lucide-react";
+import { Play, Eye, Users, IndianRupee, Banknote, ShieldCheck } from "lucide-react";
 import type { PayrollCycle, PayrollCycleStatus } from "@/types/payroll";
 
 const STATUS_CONFIG: Record<PayrollCycleStatus, { label: string; className: string }> = {
@@ -64,9 +64,6 @@ export default function PayrollPage() {
         description="Manage monthly payroll cycles"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => router.push("/payroll/salaries")}>
-              <Settings2 className="h-4 w-4 mr-1.5" /> Salary Assignments
-            </Button>
             <Button onClick={() => router.push("/payroll/run")}>
               <Play className="h-4 w-4 mr-1.5" /> Run Payroll
             </Button>

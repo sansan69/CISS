@@ -1,5 +1,7 @@
 # CISS HRM Upgrade Todo
 
+> Historical tracking note (2026-04-11): several items listed below have since shipped in partial or full form, especially `superAdmin`/region tooling, training surfaces, payroll surfaces, leave flows, and branch operations. Treat [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md) as the current-state reference before using this roadmap.
+
 Last updated: 2026-03-16
 
 ## Current Baseline
@@ -72,8 +74,6 @@ Last updated: 2026-03-16
 - [ ] Add `decimal.js`
 - [ ] Add `complianceSettings/{stateCode}` model
 - [ ] Add `clientWageConfig`
-- [ ] Add `salaryStructures`
-- [ ] Add `employeeSalaries`
 - [ ] Add `payrollCycles`
 - [ ] Add `payrollEntries`
 - [ ] Add payroll calculation library
@@ -97,12 +97,10 @@ Last updated: 2026-03-16
 - [ ] Site verification / unverified queue UI
 - [ ] Client holiday and allowance settings
 
-### Phase 6 — Branch Operations
-- [ ] Add `branches`
+### Phase 6 — Field Officer Reporting
 - [ ] Add `foVisitReports`
 - [ ] Add `foTrainingReports`
-- [ ] Add `branchExpenses`
-- [ ] Build branch ops dashboards and FO mobile reporting
+- [ ] Build field officer mobile reporting
 
 ### Phase 7 — Multi-State Scaling
 - [ ] Extend role model with `superAdmin`

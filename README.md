@@ -1,5 +1,13 @@
 # CISS Workforce - AI-Powered Employee Management System
 
+> Current status note (2026-04-11): the app has grown far beyond the original MVP described below. Start with [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md) for the current architecture, route map, role model, and repo-memory snapshot. This `README.md` now serves mainly as the historical product brief and setup reference.
+
+## Current Snapshot
+
+- Main app: Next.js 15 workforce operations platform with Firebase-backed admin, guard, client, field-officer, and super-admin flows.
+- Active modules now include work orders, attendance review, training, evaluations, payroll, leave, branch ops, client/site management, and multi-region onboarding.
+- Current source of truth for repo context: [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md)
+
 ## 1. Project Overview
 
 This document outlines the requirements for building a comprehensive employee management and attendance tracking system called "CISS Workforce". The application will be a Progressive Web App (PWA) built with Next.js, React, ShadCN UI, and Tailwind CSS. The backend will be powered exclusively by Firebase (Firestore, Firebase Auth, and Firebase Storage).

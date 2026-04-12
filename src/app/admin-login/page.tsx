@@ -103,8 +103,8 @@ export default function AdminLoginPage() {
           <Image
               src="/ciss-logo.png"
               alt="CISS Workforce Logo"
-              width={80}
-              height={80}
+              width={200}
+              height={202}
               priority
               data-ai-hint="company logo"
               unoptimized={true}

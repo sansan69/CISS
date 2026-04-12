@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import {
-  applyWageComponents,
   calculateEPF,
   calculateESIC,
   calculatePT,
   calculateTDS,
   computeEpfApplicableWage,
+  derivePayrollTemplateFromWageConfig,
   prorateAmount,
   round2,
   summarizeNamedEarnings,
@@ -14,7 +14,7 @@ import {
 import { aggregateAttendance } from "@/lib/payroll/attendance-aggregator";
 import { aggregateApprovedLeave } from "@/lib/payroll/leave-aggregator";
 import { cloneComplianceSettings } from "@/lib/payroll/defaults";
-import type { ComplianceSettings, EmployeeSalary, SalaryStructure, WageComponent } from "@/types/payroll";
+import type { ComplianceSettings, WageComponent } from "@/types/payroll";
 
 type ClientDocShape = {
   name?: string;
@@ -22,17 +22,6 @@ type ClientDocShape = {
   uniformAllowanceMonthly?: number;
   fieldAllowanceMonthly?: number;
 };
-
-function buildGenericBreakdown(grossMonthly: number) {
-  const basic = round2(grossMonthly * 0.5);
-  const hra = round2(basic * 0.2);
-  const specialAllowance = round2(Math.max(0, grossMonthly - basic - hra));
-  return {
-    basic,
-    hra,
-    special_allowance: specialAllowance,
-  };
-}
 
 export async function POST(request: Request) {
   try {
@@ -90,27 +79,12 @@ export async function POST(request: Request) {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    const salaryCache = new Map<string, EmployeeSalary>();
-    const structureCache = new Map<string, SalaryStructure>();
     const wageConfigCache = new Map<string, WageComponent[]>();
+    const payrollTemplateCache = new Map<
+      string,
+      { grossMonthly: number; componentAmounts: Record<string, number> } | null
+    >();
     const clientCache = new Map<string, ClientDocShape>();
-
-    async function getSalary(employeeId: string) {
-      if (salaryCache.has(employeeId)) return salaryCache.get(employeeId) ?? null;
-      const salaryDoc = await adminDb.collection("employeeSalaries").doc(employeeId).get();
-      const salary = salaryDoc.exists ? ({ id: salaryDoc.id, ...salaryDoc.data() } as EmployeeSalary) : null;
-      if (salary) salaryCache.set(employeeId, salary);
-      return salary;
-    }
-
-    async function getStructure(structureId?: string | null) {
-      if (!structureId) return null;
-      if (structureCache.has(structureId)) return structureCache.get(structureId) ?? null;
-      const structureDoc = await adminDb.collection("salaryStructures").doc(structureId).get();
-      const structure = structureDoc.exists ? ({ id: structureDoc.id, ...structureDoc.data() } as SalaryStructure) : null;
-      if (structure) structureCache.set(structureId, structure);
-      return structure;
-    }
 
     async function getWageConfig(targetClientId?: string | null) {
       if (!targetClientId) return [] as WageComponent[];
@@ -119,6 +93,17 @@ export async function POST(request: Request) {
       const components = configDoc.exists ? ((configDoc.data()?.components ?? []) as WageComponent[]) : [];
       wageConfigCache.set(targetClientId, components);
       return components;
+    }
+
+    async function getPayrollTemplate(targetClientId?: string | null) {
+      if (!targetClientId) return null;
+      if (payrollTemplateCache.has(targetClientId)) {
+        return payrollTemplateCache.get(targetClientId) ?? null;
+      }
+      const wageComponents = await getWageConfig(targetClientId);
+      const template = derivePayrollTemplateFromWageConfig(wageComponents);
+      payrollTemplateCache.set(targetClientId, template);
+      return template;
     }
 
     async function getClientDoc(targetClientId?: string | null) {
@@ -154,25 +139,15 @@ export async function POST(request: Request) {
         district?: string;
       };
 
-      const salary = await getSalary(employeeDoc.id);
-      if (!salary) continue;
+      const resolvedClientId = employee.clientId ?? null;
+      const clientDoc = await getClientDoc(resolvedClientId);
+      const wageComponents = await getWageConfig(resolvedClientId);
+      const payrollTemplate = await getPayrollTemplate(resolvedClientId);
 
-      const structure = await getStructure(salary.structureId);
-      const clientDoc = await getClientDoc(employee.clientId || salary.clientId);
-      const wageComponents = await getWageConfig(employee.clientId || salary.clientId);
-      const structureAmounts =
-        structure?.componentAmounts && Object.keys(structure.componentAmounts).length > 0
-          ? structure.componentAmounts
-          : applyWageComponents(salary.grossMonthly, wageComponents);
-
-      const baseComponentAmounts =
-        structureAmounts && Object.keys(structureAmounts).length > 0
-          ? structureAmounts
-          : buildGenericBreakdown(salary.grossMonthly);
+      if (!payrollTemplate) continue;
 
       const mergedComponentAmounts: Record<string, number> = {
-        ...baseComponentAmounts,
-        ...(salary.componentOverrides ?? {}),
+        ...payrollTemplate.componentAmounts,
       };
 
       if (clientDoc?.uniformAllowanceMonthly) {
@@ -213,10 +188,7 @@ export async function POST(request: Request) {
       const epfResult = calculateEPF(epfBase, compliance.epf);
       const esicResult = calculateESIC(grossEarnings, compliance.esic);
       const pt = calculatePT(grossEarnings, compliance.professionalTax.slabs);
-      const tds = calculateTDS(grossEarnings, {
-        ...compliance.tds,
-        regime: salary.taxRegime ?? compliance.tds.regime,
-      });
+      const tds = calculateTDS(grossEarnings, compliance.tds);
       const totalDeductions = round2(
         epfResult.employeeEPF +
         (esicResult?.employeeESIC ?? 0) +
@@ -238,7 +210,7 @@ export async function POST(request: Request) {
           [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
           "Unnamed employee",
         employeeCode: employee.employeeCode ?? employee.guardId ?? "",
-        clientId: employee.clientId ?? salary.clientId ?? "",
+        clientId: resolvedClientId ?? "",
         clientName: employee.clientName ?? clientDoc?.name ?? clientDoc?.clientName ?? "",
         district: employee.district ?? "",
         workingDays: attendance.workingDays,
@@ -270,8 +242,6 @@ export async function POST(request: Request) {
         },
         netPay,
         payslipUrl: `/api/admin/payroll/entries/${entryRef.id}/payslip`,
-        salaryStructureId: salary.structureId ?? structure?.id ?? null,
-        salaryStructureName: salary.structureName ?? structure?.name ?? "",
         status: "pending",
         createdAt: FieldValue.serverTimestamp(),
       });

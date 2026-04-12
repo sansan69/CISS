@@ -540,6 +540,16 @@ export default function EmployeeDirectoryPage() {
                                                 <div className="mt-1 break-words text-xs text-muted-foreground">
                                                     {[emp.regionName, emp.clientName, emp.employeeId].filter(Boolean).join(' • ')}
                                                 </div>
+                                                {emp.createdAt && (() => {
+                                                    const d = emp.createdAt?.toDate ? emp.createdAt.toDate() : new Date(emp.createdAt);
+                                                    const isNew = (Date.now() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
+                                                    return (
+                                                        <div className="mt-1 flex items-center gap-1.5">
+                                                            <span className="text-xs text-muted-foreground">Enrolled {format(d, 'dd MMM yyyy')}</span>
+                                                            {isNew && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-200">New</Badge>}
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {pendingItems.length === 0 ? (
                                                     <div className="mt-1 text-xs text-green-600">Complete</div>
                                                 ) : (
@@ -564,6 +574,7 @@ export default function EmployeeDirectoryPage() {
                                     <TableHead>Employee</TableHead>
                                     <TableHead className="hidden md:table-cell">Employee ID</TableHead>
                                     <TableHead>Status</TableHead>
+                                    <TableHead className="hidden lg:table-cell">Enrolled</TableHead>
                                     <TableHead>Profile</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
@@ -572,7 +583,7 @@ export default function EmployeeDirectoryPage() {
                                 {isLoading ? (
                                     Array.from({ length: 5 }).map((_, i) => (
                                         <TableRow key={i}>
-                                            <TableCell colSpan={5} className="p-0">
+                                            <TableCell colSpan={6} className="p-0">
                                                 <div className="flex items-center gap-4 p-4">
                                                     <Avatar><AvatarFallback className="animate-pulse bg-muted" /></Avatar>
                                                     <div className="w-full space-y-2">
@@ -584,9 +595,9 @@ export default function EmployeeDirectoryPage() {
                                         </TableRow>
                                     ))
                                 ) : error ? (
-                                    <TableRow><TableCell colSpan={5} className="text-center h-24 text-destructive">{error}</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="text-center h-24 text-destructive">{error}</TableCell></TableRow>
                                 ) : employees.length === 0 ? (
-                                    <TableRow><TableCell colSpan={5} className="text-center h-24">No employees found for the current filters.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="text-center h-24">No employees found for the current filters.</TableCell></TableRow>
                                 ) : (
                                     employees.map((emp) => {
                                         const pendingItems = getPendingDetails(emp);
@@ -610,6 +621,18 @@ export default function EmployeeDirectoryPage() {
                                                 </TableCell>
                                                 <TableCell className="hidden md:table-cell font-mono text-xs">{emp.employeeId}</TableCell>
                                                 <TableCell><Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge></TableCell>
+                                                <TableCell className="hidden lg:table-cell">
+                                                    {emp.createdAt ? (() => {
+                                                        const d = emp.createdAt?.toDate ? emp.createdAt.toDate() : new Date(emp.createdAt);
+                                                        const isNew = (Date.now() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
+                                                        return (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-xs text-muted-foreground whitespace-nowrap">{format(d, 'dd MMM yyyy')}</span>
+                                                                {isNew && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-200">New</Badge>}
+                                                            </div>
+                                                        );
+                                                    })() : <span className="text-xs text-muted-foreground">—</span>}
+                                                </TableCell>
                                                 <TableCell>
                                                     {pendingItems.length === 0 ? (
                                                         <div className="flex items-center gap-1.5 text-green-600"><CheckCircle className="h-4 w-4" /> <span className="text-xs">Complete</span></div>

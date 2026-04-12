@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { buildGeocodeReportLine, type GeocodeStatus } from '@/lib/geocode-report';
 import { LocationEditorCard } from '@/components/location/location-editor-card';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
@@ -112,8 +113,6 @@ const haversineDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2:
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 };
-
-type GeocodeStatus = 'created' | 'updated' | 'kept' | 'failed' | 'noResult' | 'no_result';
 
 interface GeocodeResult {
     clientName?: string;
@@ -899,14 +898,7 @@ export default function SiteManagementPage() {
                 });
                 return;
             }
-            const reportLines = structuredResults.map((result) => {
-                const marker =
-                    result.status === 'updated' ? '✅' :
-                    result.status === 'kept' ? 'ℹ️' :
-                    result.status === 'noResult' ? '⚠️' :
-                    '❌';
-                return `${marker} ${result.siteName} (${result.clientName || 'Unknown client'}) – ${result.message}`;
-            });
+            const reportLines = structuredResults.map((result) => buildGeocodeReportLine(result));
 
             setGeocodeReport(reportLines.join('\n'));
             setGeocodeResults(structuredResults);

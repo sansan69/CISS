@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db as adminDb } from '@/lib/firebaseAdmin';
+import { hashPin } from '@/lib/guard/pin-utils';
 
 export async function POST(request: NextRequest) {
   try {
     const { phoneNumber, otp, newPin } = await request.json();
 
-    // Validate inputs
     if (!phoneNumber || phoneNumber.length !== 10) {
       return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
     }
@@ -17,21 +17,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the employee by phone
-    const employeesRef = adminDb.collection('employees');
-    const empQuery = employeesRef.where('phoneNumber', '==', phoneNumber);
-    const empSnap = await empQuery.get();
+    const empSnap = await adminDb
+      .collection('employees')
+      .where('phoneNumber', '==', phoneNumber)
+      .limit(1)
+      .get();
 
     if (empSnap.empty) {
       return NextResponse.json({ error: 'Phone number not found' }, { status: 404 });
     }
 
     const employeeDoc = empSnap.docs[0];
-    const employeeId = employeeDoc.id;
 
-    // Verify OTP
-    const otpRef = adminDb.collection('resetOtps');
-    const otpQuery = otpRef.where('phone', '==', phoneNumber).where('otp', '==', otp);
-    const otpSnap = await otpQuery.get();
+    // Verify OTP — must match phone + otp and not be expired
+    const otpSnap = await adminDb
+      .collection('resetOtps')
+      .where('phone', '==', phoneNumber)
+      .where('otp', '==', otp)
+      .limit(1)
+      .get();
 
     if (otpSnap.empty) {
       return NextResponse.json({ error: 'Invalid OTP' }, { status: 400 });
@@ -40,25 +44,21 @@ export async function POST(request: NextRequest) {
     const otpDoc = otpSnap.docs[0];
     const otpData = otpDoc.data();
 
-    // Check expiry
     if (new Date(otpData.expiresAt) < new Date()) {
-      return NextResponse.json({ error: 'OTP expired' }, { status: 400 });
+      return NextResponse.json({ error: 'OTP expired. Please request a new one.' }, { status: 400 });
     }
 
-    // Update the PIN in users collection (find by employeeDocId)
-    const usersRef = adminDb.collection('users');
-    const userQuery = usersRef.where('employeeDocId', '==', employeeId);
-    const userSnap = await userQuery.get();
+    // Hash the new PIN the same way setup-pin does (SHA-256 via Web Crypto)
+    const pinHash = await hashPin(newPin);
 
-    if (!userSnap.empty) {
-      const userDoc = userSnap.docs[0];
-      await userDoc.ref.update({
-        pinHash: newPin,
-        updatedAt: new Date().toISOString(),
-      });
-    }
+    // Update the PIN on the employees document (matches how setup-pin stores it)
+    await employeeDoc.ref.update({
+      guardPin: pinHash,
+      guardFailedAttempts: 0,
+      guardLockoutUntil: null,
+    });
 
-    // Delete the used OTP
+    // Consume the OTP so it cannot be reused
     await otpDoc.ref.delete();
 
     return NextResponse.json({ success: true });

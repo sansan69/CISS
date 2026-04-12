@@ -10,64 +10,22 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, QrCode, BarChart3, ChevronRight, Briefcase, DownloadCloud, Landmark, MapPinned, Users, ShieldCheck, Wallet, GraduationCap, Building2, Globe } from "lucide-react";
+import { BarChart3, ChevronRight, Briefcase, Wallet, Globe, Wrench } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 
 const settingsOptions = [
   {
-    title: "Client Management",
-    description: "Add, remove, or update client company names for enrollment.",
+    title: "Clients & Sites",
+    description: "Manage clients, office locations, and duty sites from one workspace.",
     icon: Briefcase,
-    href: "/settings/client-management",
+    href: "/settings/clients",
   },
   {
-    title: "Client Locations",
-    description: "Manage branch, office, and center coordinates for each client.",
-    icon: MapPinned,
-    href: "/settings/client-locations",
-  },
-   {
-    title: "Duty Sites",
-    description: "Bulk upload and manage operational attendance/work-order sites.",
-    icon: Landmark,
-    href: "/settings/site-management",
-  },
-  {
-    title: "Bulk Employee Import",
-    description: "Upload a CSV file to add multiple new employees at once.",
-    icon: FileUp,
-    href: "/settings/bulk-import",
-  },
-  {
-    title: "QR Code Management",
-    description: "Manage and regenerate QR codes for employees in bulk.",
-    icon: QrCode,
-    href: "/settings/qr-management",
-  },
-  {
-    title: "Attendance Reports",
-    description: "Generate and download detailed attendance reports for analysis.",
-    icon: BarChart3,
-    href: "/settings/reports",
-  },
-  {
-    title: "Export All Data",
-    description: "Download all employee data and documents from the database.",
-    icon: DownloadCloud,
-    href: "/settings/data-export",
-  },
-  {
-    title: "Assigned Guards Export",
-    description: "Download assigned guard details to Excel with filters.",
-    icon: Users,
-    href: "/settings/assigned-guards-export",
-  },
-  {
-    title: "Compliance Settings",
-    description: "Manage EPF, ESIC, PT, TDS, Bonus & Gratuity statutory rates.",
-    icon: ShieldCheck,
-    href: "/settings/compliance-settings",
+    title: "Admin Tools",
+    description: "Access bulk imports, QR maintenance, and full data exports from one utility hub.",
+    icon: Wrench,
+    href: "/settings/admin-tools",
   },
   {
     title: "Wage Configuration",
@@ -76,22 +34,10 @@ const settingsOptions = [
     href: "/settings/wage-config",
   },
   {
-    title: "Salary Grades",
-    description: "Create and manage reusable salary grade templates per client.",
-    icon: GraduationCap,
-    href: "/settings/salary-grades",
-  },
-  {
-    title: "Salary Assignments",
-    description: "Assign salary grades and gross monthly pay to each active employee.",
-    icon: Wallet,
-    href: "/payroll/salaries",
-  },
-  {
-    title: "Branches",
-    description: "Manage field branches, visit reports, training sessions, and expenses.",
-    icon: Building2,
-    href: "/branch-ops",
+    title: "Attendance Reports",
+    description: "Generate and download detailed attendance reports for analysis.",
+    icon: BarChart3,
+    href: "/settings/reports",
   },
 ];
 

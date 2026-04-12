@@ -1,6 +1,7 @@
 
 import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono, Exo_2} from 'next/font/google';
+import "leaflet/dist/leaflet.css";
 import './globals.css';
 import PwaLoader from '@/components/pwa-loader';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -68,7 +69,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <head>
         {/* Meta tags for PWA defined in metadata object now */}
       </head>

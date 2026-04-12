@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+.location-picker-map {
+  height: 18rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+}
+
+.location-picker-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.location-picker-pin__dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #dc2626;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 25px rgba(220, 38, 38, 0.35);
+}
+
 @layer base {
   :root {
     /* ─────────────────────────────────────────────────────

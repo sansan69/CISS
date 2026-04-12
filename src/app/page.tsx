@@ -168,8 +168,9 @@ export default function LandingPage() {
             alt="CISS Workforce Logo"
             width={80}
             height={80}
+            priority
             data-ai-hint="company logo"
-            className="mx-auto"
+            className="mx-auto h-auto w-auto"
           />
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-50 mt-4">CISS Workforce</h1>
           <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400">Employee Management System</p>

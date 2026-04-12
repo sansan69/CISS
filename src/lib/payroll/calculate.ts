@@ -111,6 +111,90 @@ export function applyWageComponents(
   return result;
 }
 
+export function derivePayrollTemplateFromWageConfig(
+  components: WageComponent[],
+): { grossMonthly: number; componentAmounts: Record<string, number> } | null {
+  const earnings = [...components]
+    .filter((component) => component.type === "earning")
+    .sort((a, b) => a.order - b.order);
+
+  if (earnings.length === 0) return null;
+
+  const componentAmounts: Record<string, number> = {};
+  const deferredBasic: WageComponent[] = [];
+  const deferredEpfBase: WageComponent[] = [];
+  const deferredGross: WageComponent[] = [];
+
+  let basic = 0;
+  let epfBase = 0;
+  let knownTotal = 0;
+
+  for (const component of earnings) {
+    const value = component.value ?? 0;
+
+    if (component.calculationType === "fixed_amount") {
+      componentAmounts[component.id] = round2(value);
+      knownTotal += round2(value);
+      if (component.name.toLowerCase().includes("basic")) basic = round2(value);
+      if (component.epfApplicable) epfBase = round2(epfBase + value);
+      continue;
+    }
+
+    if (component.calculationType === "pct_of_basic") {
+      deferredBasic.push(component);
+      continue;
+    }
+
+    if (component.calculationType === "pct_of_epf_base") {
+      deferredEpfBase.push(component);
+      continue;
+    }
+
+    if (component.calculationType === "pct_of_ctc" || component.calculationType === "pct_of_gross") {
+      deferredGross.push(component);
+      continue;
+    }
+  }
+
+  for (const component of deferredBasic) {
+    const amount = round2(basic * ((component.value ?? 0) / 100));
+    componentAmounts[component.id] = amount;
+    knownTotal += amount;
+    if (component.epfApplicable) epfBase = round2(epfBase + amount);
+  }
+
+  for (const component of deferredEpfBase) {
+    const amount = round2(epfBase * ((component.value ?? 0) / 100));
+    componentAmounts[component.id] = amount;
+    knownTotal += amount;
+  }
+
+  const grossRate = deferredGross.reduce(
+    (sum, component) => sum + ((component.value ?? 0) / 100),
+    0,
+  );
+
+  const grossMonthly =
+    knownTotal > 0 && grossRate > 0 && grossRate < 1
+      ? round2(knownTotal / (1 - grossRate))
+      : round2(knownTotal);
+
+  for (const component of deferredGross) {
+    componentAmounts[component.id] = round2(grossMonthly * ((component.value ?? 0) / 100));
+  }
+
+  const finalGross = round2(
+    Object.values(componentAmounts).reduce((sum, amount) => sum + amount, 0),
+  );
+
+  if (finalGross <= 0) return null;
+
+  return {
+    grossMonthly: finalGross,
+    componentAmounts,
+  };
+}
+
 /** LOP deduction: (gross / workingDays) * lopDays */
 export function calculateLOP(grossMonthly: number, workingDays: number, lopDays: number): number {
   if (workingDays <= 0 || lopDays <= 0) return 0;

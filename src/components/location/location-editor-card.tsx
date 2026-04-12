@@ -27,6 +27,7 @@ import type {
   CoordinateStatus,
   GeoPointLike,
 } from "@/types/location";
+import { LocationPickerMap } from "@/components/location/location-picker-map";
 
 type LocationEditorValue = {
   address: string;
@@ -226,6 +227,10 @@ export function LocationEditorCard({
     }
   };
 
+  const handleMapSelect = (nextLat: number, nextLng: number) => {
+    applyCoordinates(nextLat, nextLng, "map_pin", hasCoords ? "overridden" : "verified");
+  };
+
   return (
     <Card className="border-dashed">
       <CardHeader className="pb-4">
@@ -394,32 +399,30 @@ export function LocationEditorCard({
           />
         </div>
 
-        {hasCoords ? (
-          <div className="space-y-3 rounded-xl border p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Map preview</p>
-                <p className="text-xs text-muted-foreground">
-                  Use this to visually verify the saved pin before you save.
-                </p>
-              </div>
-              <Badge variant="outline">
-                <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                {coordinateStatusLabels[status]}
-              </Badge>
+        <div className="space-y-3 rounded-xl border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">Interactive map</p>
+              <p className="text-xs text-muted-foreground">
+                Click to place a pin, then drag it if you need to correct the exact position.
+              </p>
             </div>
-            {osmEmbedUrl ? (
-              <div className="overflow-hidden rounded-lg border">
-                <iframe
-                  title={`${entityType} map preview`}
-                  src={osmEmbedUrl}
-                  className="h-56 w-full bg-muted"
-                  loading="lazy"
-                />
-              </div>
-            ) : null}
+            <Badge variant="outline">
+              <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+              {coordinateStatusLabels[status]}
+            </Badge>
           </div>
-        ) : null}
+          <LocationPickerMap latitude={latitude} longitude={longitude} onSelect={handleMapSelect} />
+          {hasCoords && osmEmbedUrl ? (
+            <div className="flex justify-end">
+              <Button type="button" variant="ghost" size="sm" asChild>
+                <a href={osmEmbedUrl.replace("/export/embed.html?", "/?")} target="_blank" rel="noreferrer">
+                  Open full map
+                </a>
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );

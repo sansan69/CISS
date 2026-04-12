@@ -55,36 +55,6 @@ export interface ClientWageConfig {
   lastUpdatedBy: string;
 }
 
-export interface SalaryStructure {
-  id: string;
-  clientId: string;
-  clientName: string;
-  name: string; // e.g. "Guard Grade A"
-  grossMonthly: number;
-  componentAmounts: Record<string, number>;
-  updatedAt?: Timestamp;
-  updatedBy?: string;
-  createdAt: Timestamp;
-  createdBy: string;
-}
-
-export interface EmployeeSalary {
-  id: string; // = employeeId
-  employeeId: string;
-  clientId: string;
-  structureId: string;
-  structureName: string;
-  effectiveFrom: Timestamp;
-  grossMonthly: number;
-  componentOverrides: Record<string, number>;
-  taxRegime: "new" | "old";
-  stateCode?: string;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
-  updatedBy: string;
-  history: Array<{ date: string; by: string; changes: string }>;
-}
-
 export interface PayrollCycle {
   id: string;
   period: string; // YYYY-MM
@@ -152,8 +122,6 @@ export interface PayrollEntry {
   employerContributions: { epfEmployer: number; esicEmployer: number };
   netPay: number;
   payslipUrl?: string;
-  salaryStructureId?: string;
-  salaryStructureName?: string;
   status: PayrollEntryStatus;
   adminNotes?: string;
   createdAt: Timestamp;

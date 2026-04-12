@@ -1,5 +1,7 @@
 # **App Name**: CISS Workforce
 
+> Historical note (2026-04-11): this file reflects the earlier product blueprint. For the current application surface and architectural memory, read [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md) first.
+
 ## Core Features:
 
 - Detailed Enrollment: Employee enrollment with detailed personal, contact, and identification information, mirroring the provided Excel structure.
