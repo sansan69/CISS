@@ -123,6 +123,8 @@ export async function POST(request: Request) {
     let totalPT = 0;
     let totalTDS = 0;
 
+    const skippedEmployees: Array<{ name: string; clientId: string | null; reason: string }> = [];
+
     const BATCH_SIZE = 450;
     let batch = adminDb.batch();
     let batchCount = 0;
@@ -144,7 +146,20 @@ export async function POST(request: Request) {
       const wageComponents = await getWageConfig(resolvedClientId);
       const payrollTemplate = await getPayrollTemplate(resolvedClientId);
 
-      if (!payrollTemplate) continue;
+      if (!payrollTemplate) {
+        const empName =
+          employee.name ||
+          [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
+          "Unnamed employee";
+        skippedEmployees.push({
+          name: empName,
+          clientId: resolvedClientId,
+          reason: resolvedClientId
+            ? "No wage configuration found for client"
+            : "Employee has no client assigned",
+        });
+        continue;
+      }
 
       const mergedComponentAmounts: Record<string, number> = {
         ...payrollTemplate.componentAmounts,
@@ -284,6 +299,8 @@ export async function POST(request: Request) {
       totalEmployees,
       totalGross: round2(totalGross),
       totalNetPay: round2(totalNetPay),
+      skippedEmployees,
+      skippedCount: skippedEmployees.length,
     });
   } catch (err: unknown) {
     console.error("Payroll run error:", err);

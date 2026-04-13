@@ -324,6 +324,14 @@
       "collectionGroup": "attendanceLogs",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "employeeDocId", "order": "ASCENDING" },
+        { "fieldPath": "attendanceDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "employeeId", "order": "ASCENDING" },
         { "fieldPath": "attendanceDate", "order": "DESCENDING" },
         { "fieldPath": "reportedAt", "order": "DESCENDING" }

@@ -95,7 +95,6 @@ const mainNavGroups: NavGroup[] = [
     label: 'Workforce',
     items: [
       { href: '/work-orders',   label: 'Work Orders',  fieldOfficerLabel: 'Upcoming Duties', shortLabel: 'Orders', icon: ClipboardList },
-      { href: '/work-orders/assigned-guards-export', label: 'Assigned Guards Export', icon: Users, adminOnly: true },
       { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, fieldOfficerVisible: true },
     ],
   },
@@ -868,7 +867,7 @@ function DesktopTopBar({
 // AppLayout
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function AppLayout({ children }: { children: ReactNode }) {
+export default function AppLayout({ children }: { children: ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
   const { haptic } = useHaptics();
@@ -1062,5 +1061,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export default AppLayout;

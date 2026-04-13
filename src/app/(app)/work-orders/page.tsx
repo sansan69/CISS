@@ -23,6 +23,8 @@ import { useSites } from '@/lib/hooks/use-sites';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildLocationIdentity } from '@/lib/location-utils';
 import { PageHeader } from '@/components/layout/page-header';
+import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Select,
     SelectContent,
@@ -30,6 +32,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Download, FileSpreadsheet } from 'lucide-react';
 
 interface WorkOrder {
     id: string;
@@ -42,6 +45,28 @@ interface WorkOrder {
     femaleGuardsRequired: number;
     totalManpower: number;
     assignedGuards: any[];
+}
+
+type WorkspaceTab = 'assignments' | 'assigned-guards-export';
+
+const ADMIN_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
+    { value: 'assignments', label: 'Assignments', icon: FileSpreadsheet },
+    { value: 'assigned-guards-export', label: 'Assigned Guards Export', icon: Download },
+];
+
+const FIELD_OFFICER_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
+    { value: 'assignments', label: 'Assignments', icon: FileSpreadsheet },
+];
+
+const WORK_ORDER_NAV_META = {
+    fieldOfficerLabel: 'Upcoming Duties',
+};
+
+function resolveWorkspaceTab(rawTab: string | null, userRole: string | null): WorkspaceTab {
+    if (userRole !== 'admin') {
+        return 'assignments';
+    }
+    return rawTab === 'assigned-guards-export' ? 'assigned-guards-export' : 'assignments';
 }
 
 const isSameDay = (a: Date, b: Date) => {
@@ -63,6 +88,11 @@ export default function WorkOrderPage() {
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
     const [isLoading, setIsLoading] = useState(true);
     const { userRole, assignedDistricts } = useAppAuth();
+    const activeTab = useMemo(
+        () => resolveWorkspaceTab(searchParams.get('tab'), userRole),
+        [searchParams, userRole],
+    );
+    const visibleTabs = userRole === 'admin' ? ADMIN_TABS : FIELD_OFFICER_TABS;
 
     // ── Soft-delete with undo ────────────────────────────────────────────────
     // Orders hidden optimistically while the undo window is open
@@ -177,6 +207,10 @@ export default function WorkOrderPage() {
 
         const next = params.toString();
         router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    };
+
+    const handleTabChange = (nextTab: string) => {
+        updateUrlParams({ tab: nextTab === 'assignments' ? null : nextTab });
     };
 
 
@@ -553,7 +587,9 @@ export default function WorkOrderPage() {
         reader.readAsArrayBuffer(file);
     };
     
-    const pageTitle = userRole === 'fieldOfficer' ? "Upcoming Duty Schedules" : "Work Order Management";
+    const pageTitle = userRole === 'fieldOfficer'
+        ? `${WORK_ORDER_NAV_META.fieldOfficerLabel} Schedules`
+        : "Work Order Management";
     const listQueryString = searchParams.toString();
     const siteHref = (siteId: string) => (listQueryString ? `/work-orders/${siteId}?${listQueryString}` : `/work-orders/${siteId}`);
 
@@ -573,257 +609,274 @@ export default function WorkOrderPage() {
                 ]}
             />
 
-            {userRole === 'admin' && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Upload Work Order</CardTitle>
-                        <CardDescription>Upload the TCS duty requirement Excel file. The system will process multiple dates from one file.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid w-full items-center gap-1.5 sm:max-w-sm">
-                            <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
-                            <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
-                        </div>
-                         {file && (
-                            <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
-                                <FileCheck2 className="h-5 w-5 text-green-500" />
-                                <span>{file.name}</span>
-                            </div>
-                        )}
-                    </CardContent>
-                    <CardFooter>
-                         <Button onClick={handleUploadAndProcess} disabled={isProcessing || !file} className="w-full sm:w-auto">
-                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                            {isProcessing ? 'Processing...' : 'Upload & Process File'}
-                        </Button>
-                    </CardFooter>
-                </Card>
-            )}
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
+                <TabsList className={`grid h-auto w-full gap-2 ${visibleTabs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {visibleTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                            <TabsTrigger key={tab.value} value={tab.value} className="py-2">
+                                <Icon className="mr-2 h-4 w-4" />
+                                {tab.label}
+                            </TabsTrigger>
+                        );
+                    })}
+                </TabsList>
 
-            <Card>
-                <CardHeader>
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                            <CardTitle>Active Duty Sites</CardTitle>
-                            <CardDescription>
-                                {userRole === 'admin'
-                                    ? 'List of all TCS duty sites with upcoming work orders.'
-                                    : 'List of TCS duty sites in your assigned districts with upcoming duties.'}
-                            </CardDescription>
-                        </div>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                            <div className="flex flex-col gap-1 min-w-[160px]">
-                                <Label className="text-xs font-medium text-muted-foreground">Filter by date</Label>
-                                <Input
-                                    type="date"
-                                    value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        updateUrlParams({ date: value || null });
-                                    }}
-                                    className="h-9"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-[160px]">
-                                <Label className="text-xs font-medium text-muted-foreground">Filter by district</Label>
-                                <Select
-                                    value={selectedDistrict}
-                                    onValueChange={(val) => updateUrlParams({ district: val })}
-                                >
-                                    <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="All districts" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All districts</SelectItem>
-                                        {availableDistricts.map((d) => (
-                                            <SelectItem key={d} value={d}>
-                                                {d}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-[160px]">
-                                <Label className="text-xs font-medium text-muted-foreground">Sort by date</Label>
-                                <Select
-                                    value={dateSort}
-                                    onValueChange={(val) => updateUrlParams({ dateSort: val })}
-                                >
-                                    <SelectTrigger className="h-9">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="asc">Earliest first</SelectItem>
-                                        <SelectItem value="desc">Latest first</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? (
-                         <div className="flex justify-center items-center h-20">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        </div>
-                    ) : Object.keys(workOrdersBySite).length === 0 ? (
-                        <p className="text-center text-muted-foreground py-10">No upcoming duties found.</p>
-                    ) : filteredEntries.length === 0 ? (
-                        <p className="text-center text-muted-foreground py-10">No duties match the current filters.</p>
-                    ) : (
-                        <div className="space-y-3">
-                            {/* Expand / Collapse all */}
-                            <div className="flex justify-end">
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                    onClick={toggleAll}
-                                >
-                                    <ChevronsUpDown className="h-3.5 w-3.5" />
-                                    {allExpanded ? 'Collapse all' : 'Expand all'}
+                <TabsContent value="assignments" className="mt-0 flex flex-col gap-4 sm:gap-6">
+                    {userRole === 'admin' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Upload Work Order</CardTitle>
+                                <CardDescription>Upload the TCS duty requirement Excel file. The system will process multiple dates from one file.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid w-full items-center gap-1.5 sm:max-w-sm">
+                                    <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
+                                    <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
+                                </div>
+                                {file && (
+                                    <div className="flex items-center gap-2 rounded-md border bg-muted p-2 text-sm">
+                                        <FileCheck2 className="h-5 w-5 text-green-500" />
+                                        <span>{file.name}</span>
+                                    </div>
+                                )}
+                            </CardContent>
+                            <CardFooter>
+                                <Button onClick={handleUploadAndProcess} disabled={isProcessing || !file} className="w-full sm:w-auto">
+                                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                    {isProcessing ? 'Processing...' : 'Upload & Process File'}
                                 </Button>
+                            </CardFooter>
+                        </Card>
+                    )}
+
+                    <Card>
+                        <CardHeader>
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                                <div>
+                                    <CardTitle>Active Duty Sites</CardTitle>
+                                    <CardDescription>
+                                        {userRole === 'admin'
+                                            ? 'List of all TCS duty sites with upcoming work orders.'
+                                            : 'List of TCS duty sites in your assigned districts with upcoming duties.'}
+                                    </CardDescription>
+                                </div>
+                                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                                    <div className="flex min-w-[160px] flex-col gap-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">Filter by date</Label>
+                                        <Input
+                                            type="date"
+                                            value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                updateUrlParams({ date: value || null });
+                                            }}
+                                            className="h-9"
+                                        />
+                                    </div>
+                                    <div className="flex min-w-[160px] flex-col gap-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">Filter by district</Label>
+                                        <Select
+                                            value={selectedDistrict}
+                                            onValueChange={(val) => updateUrlParams({ district: val })}
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue placeholder="All districts" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All districts</SelectItem>
+                                                {availableDistricts.map((d) => (
+                                                    <SelectItem key={d} value={d}>
+                                                        {d}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex min-w-[160px] flex-col gap-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">Sort by date</Label>
+                                        <Select
+                                            value={dateSort}
+                                            onValueChange={(val) => updateUrlParams({ dateSort: val })}
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="asc">Earliest first</SelectItem>
+                                                <SelectItem value="desc">Latest first</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
                             </div>
-
-                            {filteredEntries.map(([siteId, orders]) => {
-                                const siteInfo = orders[0];
-                                const isCollapsed = !expandedSites.has(siteId);
-                                const visibleOrders = orders.filter(o => !pendingDeleteIds.has(o.id));
-                                const totalDates = visibleOrders.length;
-                                const totalGuards = visibleOrders.reduce((s, o) => s + ((o.totalManpower ?? 0) || (o.maleGuardsRequired || 0) + (o.femaleGuardsRequired || 0)), 0);
-                                const unassigned = visibleOrders.filter(o => (Array.isArray(o.assignedGuards) ? o.assignedGuards.length : 0) === 0).length;
-                                const fullyAssigned = visibleOrders.filter(o => {
-                                    const req = (o.totalManpower ?? 0) || (o.maleGuardsRequired || 0) + (o.femaleGuardsRequired || 0);
-                                    const asgn = Array.isArray(o.assignedGuards) ? o.assignedGuards.length : 0;
-                                    return req > 0 && asgn >= req;
-                                }).length;
-
-                                return (
-                                <div key={siteId} className="rounded-lg border overflow-hidden">
-                                    {/* ── Site header (always visible) ── */}
-                                    <div
-                                        className="flex items-start gap-3 p-4 cursor-pointer select-none hover:bg-muted/40 transition-colors"
-                                        onClick={() => toggleSite(siteId)}
-                                    >
-                                        {/* Collapse chevron */}
-                                        <button
-                                            className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                                            aria-label={isCollapsed ? 'Expand' : 'Collapse'}
-                                            onClick={(e) => { e.stopPropagation(); toggleSite(siteId); }}
+                        </CardHeader>
+                        <CardContent>
+                            {isLoading ? (
+                                <div className="flex h-20 items-center justify-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : Object.keys(workOrdersBySite).length === 0 ? (
+                                <p className="py-10 text-center text-muted-foreground">No upcoming duties found.</p>
+                            ) : filteredEntries.length === 0 ? (
+                                <p className="py-10 text-center text-muted-foreground">No duties match the current filters.</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="flex justify-end">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                            onClick={toggleAll}
                                         >
-                                            {isCollapsed
-                                                ? <ChevronDown className="h-4 w-4" />
-                                                : <ChevronUp className="h-4 w-4" />
-                                            }
-                                        </button>
-
-                                        {/* Site info */}
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-base font-semibold leading-tight">{siteInfo.siteName}</h3>
-                                            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                                <span>{OPERATIONAL_CLIENT_NAME}</span>
-                                                <Badge variant="secondary">{siteInfo.district}</Badge>
-                                            </p>
-                                            {/* Summary strip (shown when collapsed) */}
-                                            {isCollapsed && (
-                                                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                                    <span className="font-medium text-foreground">{totalDates} date{totalDates !== 1 ? 's' : ''}</span>
-                                                    <span>·</span>
-                                                    <span>{totalGuards} guards total</span>
-                                                    {unassigned > 0 && (
-                                                        <span className="font-semibold text-red-500">{unassigned} unassigned</span>
-                                                    )}
-                                                    {unassigned === 0 && fullyAssigned === totalDates && totalDates > 0 && (
-                                                        <span className="font-semibold text-green-600">All assigned</span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Action buttons — stop propagation so clicks don't toggle collapse */}
-                                        <div
-                                            className="flex shrink-0 flex-col gap-2 sm:flex-row"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {userRole === 'admin' && (
-                                                <Button size="sm" variant="outline" asChild className="h-8 text-xs">
-                                                    <Link href={siteHref(siteId)}>
-                                                        <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-                                                        Edit
-                                                    </Link>
-                                                </Button>
-                                            )}
-                                            <Button size="sm" variant="outline" asChild className="h-8 text-xs">
-                                                <Link href={siteHref(siteId)}>
-                                                    <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                                                    Assign
-                                                </Link>
-                                            </Button>
-                                        </div>
+                                            <ChevronsUpDown className="h-3.5 w-3.5" />
+                                            {allExpanded ? 'Collapse all' : 'Expand all'}
+                                        </Button>
                                     </div>
 
-                                    {/* ── Collapsible date cards ── */}
-                                    {!isCollapsed && (
-                                        <div className="border-t px-4 pb-4 pt-3">
-                                            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-                                                Required Manpower · {totalDates} date{totalDates !== 1 ? 's' : ''}
-                                            </h4>
-                                            <div className="grid gap-2 sm:flex sm:flex-wrap">
-                                                {visibleOrders.map(order => {
-                                                    const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
-                                                    const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
-                                                    const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                                                    const status = assignedCount === 0 ? 'Unassigned' : (assignedCount >= totalRequired ? 'Fully Assigned' : 'Partial');
-                                                    const statusClasses = assignedCount === 0
-                                                        ? 'bg-red-100 text-red-700 border-red-200'
-                                                        : (assignedCount >= totalRequired ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200');
-                                                    return (
-                                                        <div key={order.id} className={`relative w-full rounded-md border p-3 sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : (assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40')}`}>
-                                                            <div className="flex items-center justify-between gap-1 mb-2">
-                                                                <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
+                                    {filteredEntries.map(([siteId, orders]) => {
+                                        const siteInfo = orders[0];
+                                        const isCollapsed = !expandedSites.has(siteId);
+                                        const visibleOrders = orders.filter((o) => !pendingDeleteIds.has(o.id));
+                                        const totalDates = visibleOrders.length;
+                                        const totalGuards = visibleOrders.reduce((sum, order) => sum + ((order.totalManpower ?? 0) || (order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0)), 0);
+                                        const unassigned = visibleOrders.filter((order) => (Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0) === 0).length;
+                                        const fullyAssigned = visibleOrders.filter((order) => {
+                                            const required = (order.totalManpower ?? 0) || (order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0);
+                                            const assigned = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                                            return required > 0 && assigned >= required;
+                                        }).length;
+
+                                        return (
+                                            <div key={siteId} className="overflow-hidden rounded-lg border">
+                                                <div
+                                                    className="flex cursor-pointer select-none items-start gap-3 p-4 transition-colors hover:bg-muted/40"
+                                                    onClick={() => toggleSite(siteId)}
+                                                >
+                                                    <button
+                                                        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                                                        aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleSite(siteId);
+                                                        }}
+                                                    >
+                                                        {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                                    </button>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <h3 className="text-base font-semibold leading-tight">{siteInfo.siteName}</h3>
+                                                        <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                                            <span>{OPERATIONAL_CLIENT_NAME}</span>
+                                                            <Badge variant="secondary">{siteInfo.district}</Badge>
+                                                        </p>
+                                                        {isCollapsed && (
+                                                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                                                <span className="font-medium text-foreground">{totalDates} date{totalDates !== 1 ? 's' : ''}</span>
+                                                                <span>·</span>
+                                                                <span>{totalGuards} guards total</span>
+                                                                {unassigned > 0 && <span className="font-semibold text-red-500">{unassigned} unassigned</span>}
+                                                                {unassigned === 0 && fullyAssigned === totalDates && totalDates > 0 && (
+                                                                    <span className="font-semibold text-green-600">All assigned</span>
+                                                                )}
                                                             </div>
-                                                            <div className="grid grid-cols-3 items-center gap-2 border-t pt-2">
-                                                                <div className="text-center">
-                                                                    <p className="text-lg font-bold leading-none">{order.maleGuardsRequired}</p>
-                                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Male</p>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    <p className="text-lg font-bold leading-none">{order.femaleGuardsRequired}</p>
-                                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Female</p>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    <p className="text-lg font-bold leading-none">{totalRequired}</p>
-                                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Total</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="mt-2 space-y-1">
-                                                                <Progress value={percent} className="h-1.5" />
-                                                                <p className="text-[10px] text-muted-foreground">
-                                                                    Assigned {assignedCount}/{totalRequired} ({percent}%)
-                                                                </p>
-                                                            </div>
-                                                            {userRole === 'admin' && (
-                                                                <button
-                                                                    className="absolute top-1 right-1 rounded p-1 text-destructive/60 hover:text-destructive hover:bg-red-50 transition-colors"
-                                                                    title="Delete duty (5s undo)"
-                                                                    onClick={() => handleDeleteOrder(order)}
-                                                                >
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                </button>
-                                                            )}
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row" onClick={(e) => e.stopPropagation()}>
+                                                        {userRole === 'admin' && (
+                                                            <Button size="sm" variant="outline" asChild className="h-8 text-xs">
+                                                                <Link href={siteHref(siteId)}>
+                                                                    <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                                                                    Edit
+                                                                </Link>
+                                                            </Button>
+                                                        )}
+                                                        <Button size="sm" variant="outline" asChild className="h-8 text-xs">
+                                                            <Link href={siteHref(siteId)}>
+                                                                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                                                                Assign
+                                                            </Link>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                {!isCollapsed && (
+                                                    <div className="border-t px-4 pb-4 pt-3">
+                                                        <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                            Required Manpower · {totalDates} date{totalDates !== 1 ? 's' : ''}
+                                                        </h4>
+                                                        <div className="grid gap-2 sm:flex sm:flex-wrap">
+                                                            {visibleOrders.map((order) => {
+                                                                const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
+                                                                const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                                                                const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
+                                                                const status = assignedCount === 0 ? 'Unassigned' : assignedCount >= totalRequired ? 'Fully Assigned' : 'Partial';
+                                                                const statusClasses = assignedCount === 0
+                                                                    ? 'bg-red-100 text-red-700 border-red-200'
+                                                                    : assignedCount >= totalRequired
+                                                                        ? 'bg-green-100 text-green-700 border-green-200'
+                                                                        : 'bg-amber-100 text-amber-800 border-amber-200';
+
+                                                                return (
+                                                                    <div
+                                                                        key={order.id}
+                                                                        className={`relative w-full rounded-md border p-3 sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40'}`}
+                                                                    >
+                                                                        <div className="mb-2 flex items-center justify-between gap-1">
+                                                                            <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                                            <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-3 items-center gap-2 border-t pt-2">
+                                                                            <div className="text-center">
+                                                                                <p className="text-lg font-bold leading-none">{order.maleGuardsRequired}</p>
+                                                                                <p className="mt-0.5 text-[10px] text-muted-foreground">Male</p>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <p className="text-lg font-bold leading-none">{order.femaleGuardsRequired}</p>
+                                                                                <p className="mt-0.5 text-[10px] text-muted-foreground">Female</p>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <p className="text-lg font-bold leading-none">{totalRequired}</p>
+                                                                                <p className="mt-0.5 text-[10px] text-muted-foreground">Total</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="mt-2 space-y-1">
+                                                                            <Progress value={percent} className="h-1.5" />
+                                                                            <p className="text-[10px] text-muted-foreground">
+                                                                                Assigned {assignedCount}/{totalRequired} ({percent}%)
+                                                                            </p>
+                                                                        </div>
+                                                                        {userRole === 'admin' && (
+                                                                            <button
+                                                                                className="absolute right-1 top-1 rounded p-1 text-destructive/60 transition-colors hover:bg-red-50 hover:text-destructive"
+                                                                                title="Delete duty (5s undo)"
+                                                                                onClick={() => handleDeleteOrder(order)}
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
-                                                    );
-                                                })}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })}
                                 </div>
-                            )})}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {userRole === 'admin' && (
+                    <TabsContent value="assigned-guards-export" className="mt-0">
+                        <AssignedGuardsExportPanel />
+                    </TabsContent>
+                )}
+            </Tabs>
         </div>
     );
 }

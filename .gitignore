@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+/output/
 
 # production
 /build
@@ -48,3 +49,11 @@ firestore-debug.log
 # git worktrees
 .worktrees
 worktrees
+
+# local scratch and adjacent projects
+.tmp/
+tmp_ops_review/
+opencode.jsonc
+autoresearch/
+streamvault/
+.next.stale.*/

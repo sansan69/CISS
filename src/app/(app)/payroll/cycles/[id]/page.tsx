@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Download, CheckCircle2, Pencil, Users, IndianRupee, Banknote, ShieldCheck, Eye } from "lucide-react";
+import { Download, CheckCircle2, Pencil, Users, IndianRupee, Banknote, ShieldCheck, Eye, Trash2 } from "lucide-react";
 import type { PayrollCycle, PayrollEntry, PayrollCycleStatus } from "@/types/payroll";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,9 @@ export default function PayrollCyclePage({
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingPayslips, setIsGeneratingPayslips] = useState(false);
   const [editEntry, setEditEntry] = useState<PayrollEntry | null>(null);
   const [editNetPay, setEditNetPay] = useState<string>("");
@@ -80,6 +82,26 @@ export default function PayrollCyclePage({
   useEffect(() => {
     if (cycleId) loadData(cycleId);
   }, [cycleId, loadData]);
+
+  const handleDelete = async () => {
+    if (!cycleId) return;
+    setIsDeleting(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/payroll/cycles/${cycleId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Delete failed");
+      }
+      toast({ title: "Deleted", description: "Payroll cycle and all entries have been deleted." });
+      router.push("/payroll");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Delete failed";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
 
   const handleFinalize = async () => {
     if (!cycleId) return;
@@ -225,9 +247,14 @@ export default function PayrollCyclePage({
               <Download className="h-4 w-4 mr-1.5" /> {isGeneratingPayslips ? "Preparing..." : "Payslips"}
             </Button>
             {cycle && cycle.status !== "finalized" && cycle.status !== "paid" && (
-              <Button size="sm" onClick={() => setShowFinalizeDialog(true)}>
-                <CheckCircle2 className="h-4 w-4 mr-1.5" /> Finalize
-              </Button>
+              <>
+                <Button size="sm" onClick={() => setShowFinalizeDialog(true)}>
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" /> Finalize
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10" onClick={() => setShowDeleteDialog(true)}>
+                  <Trash2 className="h-4 w-4 mr-1.5" /> Delete &amp; Re-run
+                </Button>
+              </>
             )}
           </div>
         }
@@ -390,6 +417,30 @@ export default function PayrollCyclePage({
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Payroll Cycle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this cycle and all {entries.length} payroll entries.
+              Use this to re-run payroll if wage configs were missing or incorrect.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete Cycle"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Finalize Dialog */}
       <AlertDialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, limit, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -512,7 +513,14 @@ export default function AttendanceLogsPage() {
               {/* Photo */}
               {selectedLog.photoUrl && (
                 <div className="mb-4 rounded-lg overflow-hidden border">
-                  <img src={selectedLog.photoUrl} alt="Attendance photo" className="w-full object-cover max-h-64" />
+                  <Image
+                    src={selectedLog.photoUrl}
+                    alt="Attendance photo"
+                    width={1200}
+                    height={720}
+                    sizes="(max-width: 640px) 100vw, 32rem"
+                    className="max-h-64 w-full object-cover"
+                  />
                   {selectedLog.photoCapturedAt && (
                     <p className="text-xs text-muted-foreground px-3 py-1.5 bg-muted">
                       Photo taken: {format(new Date(selectedLog.photoCapturedAt), "dd MMM yyyy, hh:mm:ss a")}

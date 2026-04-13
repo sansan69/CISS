@@ -10,7 +10,6 @@ This file is the current architecture and product-memory snapshot for the repo. 
 - Frontend stack: React 18, TypeScript, Tailwind CSS, Radix/ShadCN-style UI primitives.
 - Backend/runtime: Firebase client SDK on the frontend plus Firebase Admin in Next.js API routes.
 - Deployment assumption: standard Next.js runtime on Node `22.x`.
-- Cloud Functions are not part of the active app runtime. The top-level `functions/` folder is a legacy placeholder only.
 
 ## Runtime modes
 
@@ -228,27 +227,8 @@ The app now works across a broader set of Firestore entities than the original d
 - `regionConnections`
 - `fcmTokens`
 
-## Top-level folders that are not the main app
-
-- `functions/`
-  - Legacy Firebase Functions workspace.
-  - Not part of the active CISS Workforce runtime path.
-
-- `autoresearch/`
-  - Separate nested repo for autonomous LLM training experiments.
-  - Not part of the workforce application.
-
-- `streamvault/`
-  - Separate Flutter workspace with generated/build output checked in.
-  - Not referenced by the Next.js app.
-
-- `.tmp/`
-  - Scratch scripts, deployment experiments, and temporary environment snapshots.
-  - Treat as non-source-of-truth unless a task explicitly points there.
-
 ## Practical guidance for future work
 
 - Start app-context reading here first, then inspect the relevant route or API namespace.
 - Prefer the `settings/clients` area over the deprecated client-management and client-locations pages.
 - Treat the super-admin and regional runtime work as active architecture, not future design.
-- Treat `autoresearch/`, `streamvault/`, and `functions/` as adjacent projects unless the task explicitly targets them.
