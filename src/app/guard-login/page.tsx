@@ -11,6 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, QrCode, Phone, ScanLine, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
+import { normalizeScannerError } from "@/lib/qr/scanner-support";
+import { startSafeHybridQrScanner } from "@/lib/qr/scanner-engine";
+import type { QrScannerErrorCode, QrScannerSession } from "@/lib/qr/scanner-types";
 import { signInWithCustomToken } from "firebase/auth";
 import { requestNotificationPermission, registerFCMToken } from "@/lib/fcm";
 
@@ -33,9 +36,9 @@ export default function GuardLoginPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [activeTab, setActiveTab] = useState("phone");
   const videoRef = useRef<HTMLVideoElement>(null);
-  // BrowserMultiFormatReader has no exported type in @zxing/browser
-  const scannerRef = useRef<any>(null);
-  const scanLockedRef = useRef(false);
+  const scannerSessionRef = useRef<QrScannerSession | null>(null);
+  const scannerGenerationRef = useRef(0);
+  const scannerErrorHandledRef = useRef(false);
 
   // ─── Phone + PIN login ───────────────────────────────────────────────────────
 
@@ -80,47 +83,84 @@ export default function GuardLoginPage() {
   // ─── QR scanner ──────────────────────────────────────────────────────────────
 
   const stopScanner = useCallback(() => {
-    try { scannerRef.current?._controls?.stop(); } catch { /* ignore */ }
-    try { scannerRef.current?.reset?.(); } catch { /* ignore */ }
-    scannerRef.current = null;
-    if (videoRef.current?.srcObject) {
-      (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
-    }
+    scannerGenerationRef.current += 1;
+    scannerSessionRef.current?.stop();
+    scannerSessionRef.current = null;
+    scannerErrorHandledRef.current = false;
     setIsScanning(false);
   }, []);
 
+  const handleScannerError = useCallback((errorCode: QrScannerErrorCode) => {
+    scannerErrorHandledRef.current = true;
+
+    const descriptions: Record<string, string> = {
+      "permission-denied": "Could not access camera. Please allow camera permission.",
+      "no-camera": "No camera was found on this device.",
+      "camera-unavailable": "The camera is currently unavailable. Please try again.",
+      "unsupported": "Your browser does not support QR scanning.",
+      "invalid-payload": "The scanned QR code is not valid.",
+      unknown: "Could not start the QR scanner.",
+    };
+
+    toast({
+      variant: "destructive",
+      title: "Camera error",
+      description: descriptions[errorCode] ?? descriptions.unknown,
+    });
+  }, [toast]);
+
   const startScanner = useCallback(async () => {
-    if (isScanning) return;
-    scanLockedRef.current = false;
+    if (isScanning || scannerSessionRef.current) return;
+    const generation = scannerGenerationRef.current;
+    scannerErrorHandledRef.current = false;
     setIsScanning(true);
+
+    const video = videoRef.current;
+    if (!video) {
+      handleScannerError("unsupported");
+      setIsScanning(false);
+      return;
+    }
+
+    let session: QrScannerSession | null = null;
     try {
-      const { BrowserMultiFormatReader } = await import("@zxing/browser");
-      const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-      const reader = new BrowserMultiFormatReader(hints);
-      scannerRef.current = reader;
-      const controls = await reader.decodeFromConstraints(
-        { video: { facingMode: "environment" } },
-        videoRef.current!,
-        (result, err) => {
-          if (!result || scanLockedRef.current) return;
-          if (err) return;
-          scanLockedRef.current = true;
-          const text = result.getText().trim();
-          stopScanner();
+      session = await startSafeHybridQrScanner({
+        video,
+        onResult: async ({ text }) => {
+          if (!session) return;
+
+          scannerGenerationRef.current += 1;
+          session.stop();
+          if (scannerSessionRef.current === session) {
+            scannerSessionRef.current = null;
+          }
+          setIsScanning(false);
           setScannedEmployeeId(text);
           setQrStep("pin");
+        },
+        onError: handleScannerError,
+      });
+
+      if (generation !== scannerGenerationRef.current) {
+        session.stop();
+        setIsScanning(false);
+        return;
+      }
+
+      scannerSessionRef.current = session;
+    } catch (error) {
+      if (!scannerErrorHandledRef.current) {
+        handleScannerError(normalizeScannerError(error));
+      }
+      if (session) {
+        session.stop();
+        if (scannerSessionRef.current === session) {
+          scannerSessionRef.current = null;
         }
-      );
-      scannerRef.current._controls = controls;
-    } catch {
+      }
       setIsScanning(false);
-      toast({ variant: "destructive", title: "Camera error", description: "Could not access camera. Please allow camera permission." });
     }
-  }, [isScanning, stopScanner, toast]);
+  }, [handleScannerError, isScanning]);
 
   // Stop scanner when switching away from QR tab
   useEffect(() => {
@@ -131,12 +171,12 @@ export default function GuardLoginPage() {
   useEffect(() => () => stopScanner(), [stopScanner]);
 
   const resetQrFlow = useCallback(() => {
+    stopScanner();
     setQrStep("scan");
     setScannedEmployeeId("");
     setScannedEmployeeName("");
     setQrPin("");
-    scanLockedRef.current = false;
-  }, []);
+  }, [stopScanner]);
 
   const handleQrLogin = async () => {
     if (!scannedEmployeeId || qrPin.length < 4) return;

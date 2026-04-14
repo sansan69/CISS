@@ -9,8 +9,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { storage } from '@/lib/firebase';
@@ -21,6 +19,8 @@ import { haversineDistanceMeters, validateLocation } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getNextShift, resolveSiteShift } from '@/lib/shift-utils';
 import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
+import { startHybridQrScanner } from '@/lib/qr/scanner-engine';
+import { normalizeScannerError } from '@/lib/qr/scanner-support';
 import { DEFAULT_GPS_ACCURACY_LIMIT_METERS, OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from '@/lib/constants';
 import type {
   AttendancePhotoCompliance,
@@ -29,6 +29,7 @@ import type {
   QueuedAttendanceSubmission,
 } from '@/types/attendance';
 import type { ShiftTemplate } from '@/types/location';
+import type { QrScannerErrorCode, QrScannerSession } from '@/lib/qr/scanner-types';
 
 type SiteOption = {
   id: string;
@@ -118,7 +119,7 @@ export default function AttendancePage() {
   const [pendingCount, setPendingCount] = useState(0);
   
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scannerSessionRef = useRef<QrScannerSession | null>(null);
   const photoContainerRef = useRef<HTMLDivElement>(null);
   const scanLockedRef = useRef(false);
 
@@ -218,6 +219,46 @@ export default function AttendancePage() {
     });
   }, []);
 
+  const stopActiveVideoStream = useCallback(() => {
+    const video = videoRef.current;
+    const stream = video?.srcObject as MediaStream | null;
+
+    stream?.getTracks().forEach((track) => track.stop());
+    if (video) {
+      video.srcObject = null;
+    }
+  }, []);
+
+  const stopScannerSession = useCallback(() => {
+    scannerSessionRef.current?.stop();
+    scannerSessionRef.current = null;
+    scanLockedRef.current = false;
+  }, []);
+
+  const stopScanner = useCallback(() => {
+    stopScannerSession();
+    stopActiveVideoStream();
+    setIsTakingPhoto(false);
+    setIsScanning(false);
+  }, [stopActiveVideoStream, stopScannerSession]);
+
+  const handleScannerError = useCallback((errorCode: QrScannerErrorCode) => {
+    const descriptions: Record<QrScannerErrorCode, string> = {
+      'permission-denied': 'Camera access was denied. Please allow camera permission and try again.',
+      'no-camera': 'No camera was found on this device.',
+      'camera-unavailable': 'The camera is busy or unavailable right now. Close other camera apps and try again.',
+      'unsupported': 'This browser does not support QR scanning on this device.',
+      'invalid-payload': 'The scanned QR code is not valid for attendance.',
+      'unknown': 'Failed to start scanner.',
+    };
+
+    toast({
+      variant: 'destructive',
+      title: 'Scanner Error',
+      description: descriptions[errorCode] ?? descriptions.unknown,
+    });
+  }, [toast]);
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -255,7 +296,7 @@ export default function AttendancePage() {
     return () => {
       controller.abort();
     };
-  }, [toast]);
+  }, [stopScanner, toast]);
 
   useEffect(() => {
     setCurrentTime(new Date());
@@ -266,18 +307,11 @@ export default function AttendancePage() {
   // Cleanup camera stream and QR scanner when the component unmounts to prevent
   // media track leaks if the user navigates away while the camera is active.
   useEffect(() => {
-    const video = videoRef.current;
     return () => {
-      try {
-        (scannerRef.current as any)?.reset?.();
-      } catch {}
-      if (video) {
-        const stream = video.srcObject as MediaStream | null;
-        stream?.getTracks().forEach((t) => t.stop());
-        video.srcObject = null;
-      }
+      stopScannerSession();
+      stopActiveVideoStream();
     };
-  }, []);
+  }, [stopActiveVideoStream, stopScannerSession]);
 
   const findSuggestedSite = useCallback((coords: { lat: number; lon: number }, preferredClient?: string | null) => {
     const candidates = allSites
@@ -456,6 +490,7 @@ export default function AttendancePage() {
   }, [allSites, applySuggestedSite, autoSelectBestDistrict, findSuggestedSite, hasManualCenterOverride, locationCoords, scannedEmployee?.clientName]);
 
   const handleStartVerification = async () => {
+    stopScanner();
     setWorkflowStep('scanning');
     scanLockedRef.current = false;
     setHasScanned(false);
@@ -556,19 +591,6 @@ export default function AttendancePage() {
       });
   });
 
-  const stopScanner = () => {
-    try {
-      (scannerRef.current as any)?.reset?.();
-    } catch {}
-    if (videoRef.current) {
-      const stream = videoRef.current.srcObject as MediaStream | null;
-      stream?.getTracks().forEach(t => t.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsTakingPhoto(false);
-    setIsScanning(false);
-  };
-
   const capturePhoto = async () => {
     if (!videoRef.current) return;
     const canvas = document.createElement('canvas');
@@ -619,7 +641,7 @@ export default function AttendancePage() {
     stopScanner();
     setWorkflowStep('review');
     toast({ title: 'Guard identified', description: employee.fullName, duration: 1600 });
-  }, [toast]);
+  }, [stopScanner, toast]);
 
   const beginPhotoCapture = async () => {
     setWorkflowStep('photo');
@@ -663,92 +685,61 @@ export default function AttendancePage() {
     return responseBody.found ? responseBody.employee ?? null : null;
   }, []);
 
-  const handleScanAndCapture = async () => {
+  const handleScanAndCapture = useCallback(async () => {
+    const video = videoRef.current;
+
+    if (!video) {
+      toast({ variant: 'destructive', title: 'Scanner Error', description: 'Camera preview is not ready yet.' });
+      return;
+    }
+
+    stopScannerSession();
     setIsScanning(true);
+    setIsTakingPhoto(false);
     try {
-      // Initialize scanner with QR-only hints and try-harder
-      if (!scannerRef.current) {
-        const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        scannerRef.current = new BrowserMultiFormatReader(hints);
-      }
+      scannerSessionRef.current = await startHybridQrScanner({
+        video,
+        onResult: async ({ text }) => {
+          if (scanLockedRef.current) return;
 
-      // Use explicit constraints for better reliability (rear camera, HD)
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: 'environment' } as any,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          scanLockedRef.current = true;
+          const parsedId = parseEmployeeIdFromText(text);
+
+          if (!parsedId) {
+            scanLockedRef.current = false;
+            toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
+            return;
+          }
+
+          try {
+            const employee = await fetchEmployeeByEmployeeId(parsedId);
+            if (employee) {
+              resolveScannedEmployee(employee, text);
+              return;
+            }
+
+            scanLockedRef.current = false;
+            toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
+          } catch (error: any) {
+            scanLockedRef.current = false;
+            toast({
+              variant: 'destructive',
+              title: 'Employee Lookup Failed',
+              description: error?.message || 'Could not verify employee ID.',
+            });
+          }
         },
-        audio: false,
-      };
-
-      let controls: any;
-      try {
-        controls = await scannerRef.current.decodeFromConstraints(
-          constraints,
-          videoRef.current!,
-          (result, err, ctrl) => {
-            if (result && !scanLockedRef.current) {
-              scanLockedRef.current = true;
-              const text = result.getText();
-              const parsedId = parseEmployeeIdFromText(text);
-              if (parsedId) {
-                fetchEmployeeByEmployeeId(parsedId).then((emp) => {
-                  if (emp) {
-                    resolveScannedEmployee(emp, text);
-                  } else {
-                    scanLockedRef.current = false;
-                    toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
-                  }
-                });
-              } else {
-                scanLockedRef.current = false;
-                toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
-              }
-              setIsScanning(false);
-            }
-          }
-        );
-      } catch (err) {
-        // Fallback with minimal constraints for broader mobile support
-        const minimal: MediaStreamConstraints = { video: { facingMode: 'environment' } as any, audio: false };
-        controls = await scannerRef.current.decodeFromConstraints(
-          minimal,
-          videoRef.current!,
-          (result, e2, ctrl) => {
-            if (result && !scanLockedRef.current) {
-              scanLockedRef.current = true;
-              const text = result.getText();
-              const parsedId = parseEmployeeIdFromText(text);
-              if (parsedId) {
-                fetchEmployeeByEmployeeId(parsedId).then((emp) => {
-                  if (emp) {
-                    resolveScannedEmployee(emp, text);
-                  } else {
-                    scanLockedRef.current = false;
-                    toast({ variant: 'destructive', title: 'Employee Not Found', description: `ID ${parsedId} not found` });
-                  }
-                });
-              } else {
-                scanLockedRef.current = false;
-                toast({ variant: 'destructive', title: 'Invalid QR', description: 'Could not parse Employee ID' });
-              }
-              setIsScanning(false);
-            }
-          }
-        );
-      }
-      (scannerRef.current as any)._controls = controls;
+        onError: handleScannerError,
+      });
     } catch (e: any) {
       console.error('Scanner error', e);
-      toast({ variant: 'destructive', title: 'Scanner Error', description: e?.message || 'Failed to start scanner' });
+      handleScannerError(normalizeScannerError(e));
       setIsScanning(false);
     }
-  };
+  }, [fetchEmployeeByEmployeeId, handleScannerError, resolveScannedEmployee, stopScannerSession, toast]);
 
-  const handleRescan = () => {
+  const handleRescan = async () => {
+    stopScanner();
     scanLockedRef.current = false;
     setHasScanned(false);
     setScanResult(null);
@@ -759,9 +750,9 @@ export default function AttendancePage() {
     setPhotoCompliance(null);
     setPhotoComplianceError(null);
     toast({ title: 'Ready to rescan', description: 'Show the QR code to the camera.' });
-    // restart scanner
-    setIsTakingPhoto(true);
-    handleScanAndCapture();
+    setWorkflowStep('scanning');
+    await waitForVideoSurface();
+    await handleScanAndCapture();
   };
 
   const refreshSuggestedCenter = useCallback(() => {
@@ -1012,14 +1003,6 @@ export default function AttendancePage() {
     };
   }, [flushQueuedAttendance]);
   
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      try { (scannerRef.current as any)?._controls?.stop(); } catch {}
-      stopScanner();
-    };
-  }, []);
-
   const handleSubmitAttendance = async () => {
     if (!isSelectionComplete) {
       toast({ variant: 'destructive', title: 'Select District & Site', description: 'Please choose district and site before submitting.' });
@@ -1179,6 +1162,7 @@ export default function AttendancePage() {
   };
 
   const resetVerificationState = (options?: { keepCenter?: boolean; keepLocation?: boolean }) => {
+      stopScanner();
       scanLockedRef.current = false;
       setWorkflowStep('idle');
       setScanResult(null);
