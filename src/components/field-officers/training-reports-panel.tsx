@@ -12,9 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, GraduationCap, CheckCircle2 } from "lucide-react";
+import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
+import { PhotoCapture } from "@/components/field-officers/photo-capture";
 
 type Tab = "all" | "submitted" | "acknowledged";
 
@@ -54,8 +55,11 @@ export function TrainingReportsPanel() {
     clientId: "", clientName: "", siteId: "", trainingDate: "",
     durationMinutes: "60", topic: "", description: "", attendeeCount: "",
   });
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
 
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [detailReport, setDetailReport] = useState<FoTrainingReport | null>(null);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
   const loadReports = useCallback(async (tab: Tab) => {
     setIsLoading(true);
@@ -107,12 +111,14 @@ export function TrainingReportsPanel() {
           attendeeCount: parseInt(form.attendeeCount) || 0,
           attendeeIds: [],
           status: "submitted",
+          photoUrls,
         }),
       });
       if (!res.ok) throw new Error("Submit failed");
       toast({ title: "Report created", description: "Training report submitted." });
       setNewSheetOpen(false);
       setForm({ clientId: "", clientName: "", siteId: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "" });
+      setPhotoUrls([]);
       loadReports(activeTab);
     } catch {
       toast({ title: "Error", description: "Failed to save report", variant: "destructive" });
@@ -206,7 +212,14 @@ export function TrainingReportsPanel() {
                         <span className="ml-3">Attendees: {report.attendeeCount}</span>
                       </p>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex flex-col gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setDetailReport(report); setDetailSheetOpen(true); }}
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1" /> View
+                      </Button>
                       {isAdmin && report.status === "submitted" && (
                         <Button
                           size="sm"
@@ -226,6 +239,75 @@ export function TrainingReportsPanel() {
           })}
         </div>
       )}
+
+      {/* Detail Sheet */}
+      <Sheet open={detailSheetOpen} onOpenChange={setDetailSheetOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Training Report</SheetTitle>
+            <SheetDescription>
+              {detailReport?.fieldOfficerName} · {formatDate(detailReport?.trainingDate as unknown as { seconds: number })}
+            </SheetDescription>
+          </SheetHeader>
+          {detailReport && (
+            <div className="space-y-4 mt-6">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Client</p>
+                <p className="text-sm">{detailReport.clientName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Topic</p>
+                <p className="text-sm font-semibold">{detailReport.topic}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Duration</p>
+                  <p className="text-sm">{detailReport.durationMinutes} min</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Attendees</p>
+                  <p className="text-sm">{detailReport.attendeeCount}</p>
+                </div>
+              </div>
+              {detailReport.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Description</p>
+                  <p className="text-sm">{detailReport.description}</p>
+                </div>
+              )}
+              {detailReport.photoUrls?.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Photos ({detailReport.photoUrls.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {detailReport.photoUrls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 block hover:opacity-80 transition-opacity">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {isAdmin && detailReport.status === "submitted" && (
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  disabled={acknowledgingId === detailReport.id}
+                  onClick={async () => {
+                    await handleAcknowledge(detailReport.id);
+                    setDetailSheetOpen(false);
+                  }}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  {acknowledgingId === detailReport.id ? "Saving..." : "Acknowledge"}
+                </Button>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* New Training Report Sheet */}
       <Sheet open={newSheetOpen} onOpenChange={setNewSheetOpen}>
@@ -299,6 +381,16 @@ export function TrainingReportsPanel() {
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Training details..."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Photos</Label>
+              <PhotoCapture
+                urls={photoUrls}
+                onChange={setPhotoUrls}
+                folder="trainingReports"
+                disabled={isSubmitting}
               />
             </div>
 

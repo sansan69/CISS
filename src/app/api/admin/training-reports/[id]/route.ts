@@ -31,6 +31,7 @@ export async function PATCH(
       durationMinutes?: number;
       attendeeCount?: number;
       attendeeIds?: string[];
+      photoUrls?: string[];
     };
 
     const updates: Record<string, unknown> = {};
@@ -40,6 +41,7 @@ export async function PATCH(
     if (body.durationMinutes !== undefined) updates.durationMinutes = body.durationMinutes;
     if (body.attendeeCount !== undefined) updates.attendeeCount = body.attendeeCount;
     if (body.attendeeIds !== undefined) updates.attendeeIds = body.attendeeIds;
+    if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
 
     if (body.status === "acknowledged" && admin) {
       updates.status = "acknowledged";

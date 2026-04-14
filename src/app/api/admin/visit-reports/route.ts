@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       guardsPresentCount?: number;
       guardsAbsentCount?: number;
       status?: string;
+      photoUrls?: string[];
     };
 
     if (!body.clientId || !body.visitDate || !body.summary) {
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
       actionsRequired: body.actionsRequired ?? "",
       guardsPresentCount: body.guardsPresentCount ?? 0,
       guardsAbsentCount: body.guardsAbsentCount ?? 0,
-      photoUrls: [],
+      photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
       status: body.status ?? "draft",
       createdAt: FieldValue.serverTimestamp(),
     });

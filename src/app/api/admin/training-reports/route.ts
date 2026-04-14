@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       attendeeIds?: string[];
       attendeeCount?: number;
       status?: string;
+      photoUrls?: string[];
     };
 
     if (!body.clientId || !body.trainingDate || !body.topic) {
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
       description: body.description ?? "",
       attendeeIds: body.attendeeIds ?? [],
       attendeeCount: body.attendeeCount ?? 0,
-      photoUrls: [],
+      photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
       attachmentUrls: [],
       status: body.status ?? "submitted",
       createdAt: FieldValue.serverTimestamp(),

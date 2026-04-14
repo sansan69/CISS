@@ -63,6 +63,7 @@ export async function PATCH(
       actionsRequired?: string;
       guardsPresentCount?: number;
       guardsAbsentCount?: number;
+      photoUrls?: string[];
     };
 
     const updates: Record<string, unknown> = {};
@@ -72,6 +73,7 @@ export async function PATCH(
     if (body.actionsRequired !== undefined) updates.actionsRequired = body.actionsRequired;
     if (body.guardsPresentCount !== undefined) updates.guardsPresentCount = body.guardsPresentCount;
     if (body.guardsAbsentCount !== undefined) updates.guardsAbsentCount = body.guardsAbsentCount;
+    if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
 
     if (body.status !== undefined) {
       if (!admin && body.status === "reviewed") {

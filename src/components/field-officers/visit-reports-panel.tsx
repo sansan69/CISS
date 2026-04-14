@@ -12,9 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, FileText, CheckCircle2, Clock, Eye } from "lucide-react";
+import { Plus, FileText, CheckCircle2, Clock, Eye, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
+import { PhotoCapture } from "@/components/field-officers/photo-capture";
 
 type Tab = "all" | "draft" | "submitted" | "reviewed";
 
@@ -59,6 +60,7 @@ export function VisitReportsPanel() {
     guardsPresentCount: "", guardsAbsentCount: "", summary: "",
     issuesFound: "", actionsRequired: "", status: "draft" as VisitReportStatus,
   });
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
 
   // Review sheet
   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
@@ -117,12 +119,14 @@ export function VisitReportsPanel() {
           issuesFound: form.issuesFound,
           actionsRequired: form.actionsRequired,
           status: form.status,
+          photoUrls,
         }),
       });
       if (!res.ok) throw new Error("Submit failed");
       toast({ title: "Report created", description: "Visit report saved." });
       setNewSheetOpen(false);
       setForm({ clientId: "", clientName: "", siteName: "", visitDate: "", guardsPresentCount: "", guardsAbsentCount: "", summary: "", issuesFound: "", actionsRequired: "", status: "draft" });
+      setPhotoUrls([]);
       loadReports(activeTab);
     } catch {
       toast({ title: "Error", description: "Failed to save report", variant: "destructive" });
@@ -361,6 +365,16 @@ export function VisitReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
+              <Label>Photos</Label>
+              <PhotoCapture
+                urls={photoUrls}
+                onChange={setPhotoUrls}
+                folder="visitReports"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <Label>Status</Label>
               <Select
                 value={form.status}
@@ -420,6 +434,22 @@ export function VisitReportsPanel() {
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Actions Required</p>
                   <p className="text-sm">{selectedReport.actionsRequired}</p>
+                </div>
+              )}
+              {selectedReport.photoUrls?.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Photos ({selectedReport.photoUrls.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedReport.photoUrls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 block hover:opacity-80 transition-opacity">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
               <div className="space-y-1.5">
