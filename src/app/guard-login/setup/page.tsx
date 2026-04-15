@@ -124,19 +124,6 @@ export default function GuardSetupPage() {
             {step === 1 ? (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="setup-emp-id">
-                    Employee ID
-                  </label>
-                  <Input
-                    id="setup-emp-id"
-                    type="text"
-                    placeholder=" "
-                    value={employeeId}
-                    onChange={(e) => setEmployeeId(e.target.value.trim())}
-                    className="h-12"
-                  />
-                </div>
-                <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="setup-phone">
                     Phone Number
                   </label>
