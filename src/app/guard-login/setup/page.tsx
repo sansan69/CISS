@@ -130,7 +130,7 @@ export default function GuardSetupPage() {
                   <Input
                     id="setup-emp-id"
                     type="text"
-                    placeholder="e.g. EMP001"
+                    placeholder=" "
                     value={employeeId}
                     onChange={(e) => setEmployeeId(e.target.value.trim())}
                     className="h-12"
@@ -143,7 +143,7 @@ export default function GuardSetupPage() {
                   <Input
                     id="setup-phone"
                     type="tel"
-                    placeholder="10-digit mobile number"
+                    placeholder=" "
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     maxLength={15}
@@ -180,7 +180,7 @@ export default function GuardSetupPage() {
                     id="setup-pin"
                     type="password"
                     inputMode="numeric"
-                    placeholder="Enter PIN"
+                    placeholder=" "
                     value={pin}
                     onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     maxLength={6}
@@ -195,7 +195,7 @@ export default function GuardSetupPage() {
                     id="setup-pin-confirm"
                     type="password"
                     inputMode="numeric"
-                    placeholder="Re-enter PIN"
+                    placeholder=" "
                     value={confirmPin}
                     onChange={(e) =>
                       setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 6))

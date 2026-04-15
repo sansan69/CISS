@@ -121,7 +121,7 @@ export default function GuardForgotPinPage() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="10-digit mobile number"
+                  placeholder=" "
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   maxLength={10}
@@ -141,7 +141,7 @@ export default function GuardForgotPinPage() {
                 <Input
                   id="otp"
                   type="text"
-                  placeholder="6-digit code"
+                  placeholder=" "
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   maxLength={6}

@@ -5,6 +5,26 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-15] — Session: Guard login flow — PIN-first redirect + placeholder cleanup
+
+### Guard login now redirects to setup if PIN not set
+**Files modified:** `src/app/guard-login/page.tsx`
+**Files created:** `src/app/api/guard/auth/pin-status/route.ts`
+- Phone+PIN tab is now a two-step flow:
+  1. Enter phone number → calls `POST /api/guard/auth/pin-status`
+  2. If `hasPin: false`, auto-redirects to `/guard-login/setup`
+  3. If `hasPin: true`, shows PIN input with dots indicator
+- QR login flow also checks `pin-status` after scan — redirects to setup if no PIN
+- Removed the "First time? Set up PIN" / "Forgot PIN?" static links from login card; replaced with single "First time? Set up PIN" link with KeyRound icon
+- "Forgot your PIN?" link shown only in the PIN step
+
+### All guard auth placeholder text removed
+**Files modified:** `src/app/guard-login/setup/page.tsx`, `src/app/guard-login/reset/page.tsx`, `src/app/guard-forgot-pin/page.tsx`, `src/app/guard-login/page.tsx`
+- Removed all placeholder text from phone, PIN, employee ID, OTP, and confirm-PIN inputs across all guard auth pages
+- Inputs now show empty, waiting for user input
+
+---
+
 ## [2026-04-15] — Session: Comprehensive audit — UI/UX fixes (U-02, U-03, U-06, U-07, U-11)
 
 ### U-02: GuardBottomNav missing aria-label

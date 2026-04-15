@@ -130,7 +130,7 @@ export default function GuardResetPinPage() {
                   <Input
                     id="reset-emp-id"
                     type="text"
-                    placeholder="e.g. EMP001"
+                    placeholder=" "
                     value={employeeId}
                     onChange={(e) => setEmployeeId(e.target.value.trim())}
                     className="h-12"
@@ -143,7 +143,7 @@ export default function GuardResetPinPage() {
                   <Input
                     id="reset-phone"
                     type="tel"
-                    placeholder="10-digit mobile number"
+                    placeholder=" "
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     maxLength={15}
@@ -189,7 +189,7 @@ export default function GuardResetPinPage() {
                     id="reset-pin"
                     type="password"
                     inputMode="numeric"
-                    placeholder="Enter new PIN"
+                    placeholder=" "
                     value={pin}
                     onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     maxLength={6}
@@ -204,7 +204,7 @@ export default function GuardResetPinPage() {
                     id="reset-pin-confirm"
                     type="password"
                     inputMode="numeric"
-                    placeholder="Re-enter new PIN"
+                    placeholder=" "
                     value={confirmPin}
                     onChange={(e) =>
                       setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 6))
