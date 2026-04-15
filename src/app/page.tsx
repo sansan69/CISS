@@ -182,8 +182,11 @@ export default function LandingPage() {
       const data = (await response.json()) as { found: boolean; id?: string };
 
       if (data.found && data.id) {
-        toast({ title: "Welcome Back!", description: "Redirecting to your profile." });
-        router.push(`/profile/${data.id}`);
+        toast({ title: "Welcome Back!", description: "Redirecting to Guard Portal." });
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("enroll_phone", normalizedPhone);
+        }
+        router.push("/guard-login");
       } else {
         toast({ title: "New User", description: "Redirecting to enrollment form." });
         if (typeof window !== "undefined") {
