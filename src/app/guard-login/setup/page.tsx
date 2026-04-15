@@ -25,11 +25,11 @@ export default function GuardSetupPage() {
   const [confirmPin, setConfirmPin] = useState("");
 
   const handleStep1Next = () => {
-    if (!employeeId || !phoneNumber || !dateOfBirth) {
+    if (!phoneNumber || !dateOfBirth) {
       toast({
         variant: "destructive",
-        title: "All fields are required",
-        description: "Please fill in Employee ID, Phone Number, and Date of Birth.",
+        title: "Phone and Date of Birth required",
+        description: "Please fill in Phone Number and Date of Birth.",
       });
       return;
     }

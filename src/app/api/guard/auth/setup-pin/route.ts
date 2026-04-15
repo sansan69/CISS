@@ -16,9 +16,16 @@ export async function POST(request: Request) {
       pin?: string;
     };
 
-    if (!employeeId || !phoneNumber || !dateOfBirth || !pin) {
+    if (!phoneNumber || !dateOfBirth || !pin) {
       return NextResponse.json(
-        { error: "employeeId, phoneNumber, dateOfBirth, and pin are required." },
+        { error: "phoneNumber, dateOfBirth, and pin are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!employeeId && !phoneNumber) {
+      return NextResponse.json(
+        { error: "Either employeeId or phoneNumber is required." },
         { status: 400 }
       );
     }
@@ -64,12 +71,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find employee by employeeId
+    // Find employee by employeeId OR phoneNumber
     const employeesRef = adminDb.collection("employees");
-    const empQuery = await employeesRef
-      .where("employeeId", "==", employeeId)
-      .limit(1)
-      .get();
+    let empQuery;
+
+    if (employeeId) {
+      empQuery = await employeesRef
+        .where("employeeId", "==", employeeId)
+        .limit(1)
+        .get();
+    } else {
+      empQuery = await employeesRef
+        .where("phoneNumber", "==", normalizePhone(phoneNumber))
+        .limit(1)
+        .get();
+    }
 
     if (empQuery.empty) {
       return NextResponse.json({ error: "Employee not found." }, { status: 404 });
@@ -77,30 +93,25 @@ export async function POST(request: Request) {
 
     const empDoc = empQuery.docs[0];
     const empData = empDoc.data();
-
-    // Verify phone number (normalized)
-    const storedPhone = normalizePhone(
-      typeof empData.phoneNumber === "string" ? empData.phoneNumber : ""
-    );
     const inputPhone = normalizePhone(phoneNumber);
 
-    if (storedPhone !== inputPhone) {
-      return NextResponse.json(
-        { error: "Identity verification failed." },
-        { status: 401 }
+    // Verify phone number if employeeId was provided
+    if (employeeId && phoneNumber) {
+      const storedPhone = normalizePhone(
+        typeof empData.phoneNumber === "string" ? empData.phoneNumber : ""
       );
+
+      if (storedPhone !== inputPhone) {
+        return NextResponse.json(
+          { error: "Identity verification failed." },
+          { status: 401 }
+        );
+      }
     }
 
     // Verify date of birth (YYYY-MM-DD)
-    let storedDob: string;
-    if (typeof empData.dateOfBirth === "string") {
-      storedDob = empData.dateOfBirth.trim();
-    } else if (empData.dateOfBirth && typeof empData.dateOfBirth.toDate === "function") {
-      const d = empData.dateOfBirth.toDate();
-      storedDob = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    } else {
-      storedDob = "";
-    }
+    const storedDob =
+      typeof empData.dateOfBirth === "string" ? empData.dateOfBirth.trim() : "";
     const inputDob = dateOfBirth.trim();
 
     if (storedDob !== inputDob) {
