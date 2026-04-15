@@ -14,9 +14,11 @@ interface PhotoCaptureProps {
   folder: string;
   maxPhotos?: number;
   disabled?: boolean;
+  /** Accepted formats: images and PDFs */
+  accept?: string;
 }
 
-export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled }: PhotoCaptureProps) {
+export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled, accept = "image/*,.pdf" }: PhotoCaptureProps) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
 
@@ -37,7 +39,7 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled 
 
     const slotsLeft = maxPhotos - urls.length;
     if (slotsLeft <= 0) {
-      toast({ title: "Limit reached", description: `Max ${maxPhotos} photos allowed.`, variant: "destructive" });
+      toast({ title: "Limit reached", description: `Max ${maxPhotos} files allowed.`, variant: "destructive" });
       return;
     }
 
@@ -45,13 +47,17 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled 
     const added: string[] = [];
     try {
       for (const file of Array.from(files).slice(0, slotsLeft)) {
-        const path = `foReports/${folder}/${user.uid}/${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+        // Embed timestamp in filename: {timestamp}_{originalname}
+        const timestamp = Date.now();
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `foReports/${folder}/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, "_")}`;
         const snap = await uploadBytes(ref(storage, path), file);
         added.push(await getDownloadURL(snap.ref));
       }
       onChange([...urls, ...added]);
-    } catch {
-      toast({ title: "Upload failed", description: "Could not upload photo.", variant: "destructive" });
+    } catch (err) {
+      console.error('Upload failed:', err);
+      toast({ title: "Upload failed", description: "Could not upload file.", variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -64,20 +70,20 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled 
   return (
     <div className="space-y-3">
       {/* Hidden file inputs */}
-      <input ref={cameraRef}  type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleFiles} />
-      <input ref={selfieRef}  type="file" accept="image/*" capture="user"        multiple className="hidden" onChange={handleFiles} />
-      <input ref={galleryRef} type="file" accept="image/*"                        multiple className="hidden" onChange={handleFiles} />
+      <input ref={cameraRef}  type="file" accept={accept} capture="environment" multiple className="hidden" onChange={handleFiles} />
+      <input ref={selfieRef}  type="file" accept={accept} capture="user"        multiple className="hidden" onChange={handleFiles} />
+      <input ref={galleryRef} type="file" accept={accept}                         multiple className="hidden" onChange={handleFiles} />
 
-      {canAdd && (
+{canAdd && (
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => cameraRef.current?.click()}>
-            <Camera className="h-4 w-4 mr-1.5" /> Site Photo
+            <Camera className="h-4 w-4 mr-1.5" /> Camera
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => selfieRef.current?.click()}>
             <User className="h-4 w-4 mr-1.5" /> Selfie
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => galleryRef.current?.click()}>
-            <ImageIcon className="h-4 w-4 mr-1.5" /> Gallery
+            <ImageIcon className="h-4 w-4 mr-1.5" /> Upload
           </Button>
         </div>
       )}
@@ -93,7 +99,7 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled 
           {urls.map((url, i) => (
             <div key={i} className="relative h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+              <img src={url} alt={`File ${i + 1}`} className="h-full w-full object-cover" />
               {!disabled && (
                 <button
                   type="button"
@@ -109,7 +115,7 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled 
       )}
 
       <p className="text-xs text-muted-foreground">
-        {urls.length}/{maxPhotos} photos. Use &quot;Site Photo&quot; for back camera, &quot;Selfie&quot; for front camera.
+        {urls.length}/{maxPhotos} files. JPG, PNG, PDF allowed. Timestamp embedded automatically.
       </p>
     </div>
   );
