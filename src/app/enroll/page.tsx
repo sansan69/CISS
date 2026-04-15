@@ -1375,7 +1375,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       control={form.control}
                       name="joiningDate"
                       label="Joining Date"
-                      max={format(new Date(), "yyyy-MM-dd")}
                       description="A native date picker is used here so it is easier on phones."
                     />
                     <FormField control={form.control} name="clientName" render={({ field }) => (
@@ -1425,8 +1424,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       control={form.control}
                       name="dateOfBirth"
                       label="Date of Birth"
-                      min={format(new Date(new Date().getFullYear() - 65, 0, 1), "yyyy-MM-dd")}
-                      max={format(new Date(new Date().getFullYear() - 18, 11, 31), "yyyy-MM-dd")}
                       description="Using a direct date field reduces taps on mobile devices."
                     />
                     <FormField control={form.control} name="gender" render={({ field }) => (

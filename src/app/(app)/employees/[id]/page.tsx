@@ -1467,11 +1467,10 @@ export default function AdminEmployeeProfilePage() {
                                         fromYear={fromYear}
                                         toYear={toYear}
                                         defaultMonth={defaultCalendarMonth}
-                                        disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
                                     />
                                 </PopoverContent>
                             </Popover>
-                            <FormDescription>Age must be between 18 and 65.</FormDescription>
+                            <FormDescription>Your date of birth</FormDescription>
                             <FormMessage />
                         </FormItem>
                       )} />

@@ -666,7 +666,7 @@ export default function EnrollEmployeePage() {
                                 field.onChange(date);
                                 setIsJoiningDatePopoverOpen(false);
                               }} 
-                              initialFocus disabled={(date) => date > new Date()} />
+                              initialFocus />
                           </PopoverContent>
                         </Popover>
                         <FormDescription>Your first day of employment</FormDescription>
@@ -785,11 +785,10 @@ export default function EnrollEmployeePage() {
                               fromYear={fromYear}
                               toYear={toYear}
                               defaultMonth={defaultCalendarMonth}
-                              disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
                             />
                           </PopoverContent>
                         </Popover>
-                        <FormDescription>Your date of birth (Age must be between 18 and 65).</FormDescription>
+                        <FormDescription>Your date of birth</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

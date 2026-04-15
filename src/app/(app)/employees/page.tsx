@@ -725,7 +725,7 @@ export default function EmployeeDirectoryPage() {
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={exitDate} onSelect={setExitDate} disabled={(date) => date > new Date()} initialFocus />
+                                        <Calendar mode="single" selected={exitDate} onSelect={setExitDate} initialFocus />
                                     </PopoverContent>
                                 </Popover>
                             </div>
