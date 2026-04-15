@@ -1424,7 +1424,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       control={form.control}
                       name="dateOfBirth"
                       label="Date of Birth"
-                      description="Using a direct date field reduces taps on mobile devices."
+                      min={format(new Date(new Date().getFullYear() - 65, 0, 1), "yyyy-MM-dd")}
+                      max={format(new Date(new Date().getFullYear() - 18, 11, 31), "yyyy-MM-dd")}
+                      description="Age must be between 18 and 65."
                     />
                     <FormField control={form.control} name="gender" render={({ field }) => (
                         <FormItem><FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
