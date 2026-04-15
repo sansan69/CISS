@@ -231,10 +231,48 @@ export async function POST(request: NextRequest) {
             "This employee is not assigned to the selected site for today's work order.",
           );
         }
-      } else if (!resolvedShift) {
-        throw new AttendanceError(
-          "No active fixed shift matches the current time for this site. Please contact admin.",
-        );
+      } else {
+        const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
+        const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
+        const workOrdersSnapshot = await adminDb
+          .collection("workOrders")
+          .where("siteId", "==", payload.siteId)
+          .where("date", ">=", startOfDay)
+          .where("date", "<=", endOfDay)
+          .limit(5)
+          .get();
+
+        if (workOrdersSnapshot.empty) {
+          if (!resolvedShift) {
+            throw new AttendanceError(
+              "No active work order or fixed shift found for this site today.",
+            );
+          }
+        } else {
+          const matchingWorkOrder = workOrdersSnapshot.docs
+            .map((doc) => doc.data() as Record<string, any>)
+            .find((workOrder) => {
+              const assignedGuards = Array.isArray(workOrder.assignedGuards)
+                ? workOrder.assignedGuards
+                : [];
+              return (
+                assignedGuards.length === 0 ||
+                assignedGuards.some((guard) => guard?.uid === payload.employeeDocId)
+              );
+            });
+
+          if (!matchingWorkOrder) {
+            throw new AttendanceError(
+              "This employee is not assigned to the selected site for today's work order.",
+            );
+          }
+        }
+
+        if (!resolvedShift && workOrdersSnapshot.empty) {
+          throw new AttendanceError(
+            "No active fixed shift matches the current time for this site. Please contact admin.",
+          );
+        }
       }
 
       const actualDistance = haversineDistanceMeters(

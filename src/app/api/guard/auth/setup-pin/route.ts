@@ -92,8 +92,15 @@ export async function POST(request: Request) {
     }
 
     // Verify date of birth (YYYY-MM-DD)
-    const storedDob =
-      typeof empData.dateOfBirth === "string" ? empData.dateOfBirth.trim() : "";
+    let storedDob: string;
+    if (typeof empData.dateOfBirth === "string") {
+      storedDob = empData.dateOfBirth.trim();
+    } else if (empData.dateOfBirth && typeof empData.dateOfBirth.toDate === "function") {
+      const d = empData.dateOfBirth.toDate();
+      storedDob = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    } else {
+      storedDob = "";
+    }
     const inputDob = dateOfBirth.trim();
 
     if (storedDob !== inputDob) {

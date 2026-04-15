@@ -8,28 +8,29 @@ function normalizePhone(phone: string): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { phoneNumber, pin } = body as {
+    const { phoneNumber, employeeId, pin } = body as {
       phoneNumber?: string;
+      employeeId?: string;
       pin?: string;
     };
 
-    if (!phoneNumber || !pin) {
+    if ((!phoneNumber && !employeeId) || !pin) {
       return NextResponse.json(
-        { error: "phoneNumber and pin are required." },
+        { error: "phoneNumber or employeeId, and pin are required." },
         { status: 400 }
       );
     }
 
-    const normalizedPhone = normalizePhone(phoneNumber);
-
-    // Rate limiting — 5 attempts per phone per 5 minutes
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
-    const rateLimitRef = adminDb.doc(`rateLimits/login_${normalizedPhone}`);
-    const rateLimitSnap = await rateLimitRef.get();
     const now = Date.now();
-    const windowMs = 5 * 60 * 1000; // 5 minutes
+    const windowMs = 5 * 60 * 1000;
+
+    // Rate limiting keyed by phoneNumber or employeeId
+    const rateLimitKey = phoneNumber ? normalizePhone(phoneNumber) : `eid_${employeeId}`;
+    const rateLimitRef = adminDb.doc(`rateLimits/login_${rateLimitKey}`);
+    const rateLimitSnap = await rateLimitRef.get();
 
     if (rateLimitSnap.exists) {
       const data = rateLimitSnap.data()!;
@@ -52,12 +53,22 @@ export async function POST(request: Request) {
       await rateLimitRef.set({ windowStart: now, attempts: 1 });
     }
 
-    // Find employee by phone number
+    // Find employee by phone number or employeeId
     const employeesRef = adminDb.collection("employees");
-    const empQuery = await employeesRef
-      .where("phoneNumber", "==", normalizedPhone)
-      .limit(1)
-      .get();
+    let empQuery;
+
+    if (employeeId) {
+      empQuery = await employeesRef
+        .where("employeeId", "==", employeeId)
+        .limit(1)
+        .get();
+    } else {
+      const normalizedPhone = normalizePhone(phoneNumber!);
+      empQuery = await employeesRef
+        .where("phoneNumber", "==", normalizedPhone)
+        .limit(1)
+        .get();
+    }
 
     if (empQuery.empty) {
       return NextResponse.json(

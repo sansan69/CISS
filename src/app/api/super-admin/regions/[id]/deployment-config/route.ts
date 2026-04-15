@@ -51,14 +51,12 @@ export async function GET(
       } as RegionRecord;
     }
 
-    const connection =
+    const hasPersistentConnection =
       regionCode === REGION_CODE
-        ? {
-            serviceAccountJson: process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64
-              ? Buffer.from(process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64, "base64").toString("utf8")
-              : process.env.FIREBASE_ADMIN_SDK_CONFIG || null,
-          }
-        : await getRegionConnection(adminDb, regionCode);
+        ? Boolean(
+            process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64 || process.env.FIREBASE_ADMIN_SDK_CONFIG,
+          )
+        : Boolean((await getRegionConnection(adminDb, regionCode))?.serviceAccountJson);
 
     return NextResponse.json({
       region,
@@ -76,11 +74,8 @@ export async function GET(
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: region.messagingSenderId || "",
         NEXT_PUBLIC_FIREBASE_APP_ID: region.firebaseWebAppId || "",
         NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: region.measurementId || "",
-        FIREBASE_ADMIN_SDK_CONFIG_BASE64: connection?.serviceAccountJson
-          ? Buffer.from(connection.serviceAccountJson, "utf8").toString("base64")
-          : "",
       },
-      hasPersistentConnection: Boolean(connection?.serviceAccountJson),
+      hasPersistentConnection,
     });
   } catch (error: any) {
     return unauthorizedResponse(

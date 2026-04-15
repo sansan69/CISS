@@ -6,6 +6,35 @@ export async function POST(request: Request) {
   try {
     const { employeeDocId } = await requireGuard(request);
 
+    // Rate limiting — max 5 attempts per employee per 5 minutes
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
+
+    const rateLimitRef = adminDb.doc(`rateLimits/changePin_${employeeDocId}`);    const rateLimitSnap = await rateLimitRef.get();
+    const now = Date.now();
+    const windowMs = 5 * 60 * 1000;
+
+    if (rateLimitSnap.exists) {
+      const rlData = rateLimitSnap.data()!;
+      const windowStart: number = rlData.windowStart ?? 0;
+      const attempts: number = rlData.attempts ?? 0;
+
+      if (now - windowStart < windowMs && attempts >= 5) {
+        return NextResponse.json(
+          { error: "Too many attempts. Please wait 5 minutes." },
+          { status: 429 }
+        );
+      }
+
+      if (now - windowStart >= windowMs) {
+        await rateLimitRef.set({ windowStart: now, attempts: 1 });
+      } else {
+        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
+      }
+    } else {
+      await rateLimitRef.set({ windowStart: now, attempts: 1 });
+    }
+
     const body = await request.json();
     const { currentPin, newPin } = body as {
       currentPin?: string;
@@ -26,7 +55,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const empRef = adminDb.doc(`employees/${employeeDocId}`);
     const empSnap = await empRef.get();
 
@@ -49,7 +77,6 @@ export async function POST(request: Request) {
     }
 
     const newHash = await hashPin(newPin);
-    const { FieldValue } = await import("firebase-admin/firestore");
 
     await empRef.update({
       guardPin: newHash,

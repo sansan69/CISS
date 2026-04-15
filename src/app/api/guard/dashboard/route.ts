@@ -48,17 +48,23 @@ export async function GET(request: Request) {
     const month = now.getMonth(); // 0-indexed
     const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
 
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const startDateStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const endDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
     let attendanceSnap = await adminDb
       .collection("attendanceLogs")
       .where("employeeDocId", "==", guard.employeeDocId)
-      .limit(200)
+      .where("attendanceDate", ">=", startDateStr)
+      .where("attendanceDate", "<=", endDateStr)
       .get();
 
     if (attendanceSnap.empty) {
       attendanceSnap = await adminDb
         .collection("attendanceLogs")
         .where("employeeId", "==", guard.employeeId)
-        .limit(200)
+        .where("attendanceDate", ">=", startDateStr)
+        .where("attendanceDate", "<=", endDateStr)
         .get();
     }
 
@@ -73,7 +79,6 @@ export async function GET(request: Request) {
     }>;
 
     const filteredLogs = logs
-      .filter((log) => typeof log.attendanceDate === "string" && log.attendanceDate >= `${monthStr}-01`)
       .sort((a, b) => (b.attendanceDate || "").localeCompare(a.attendanceDate || ""));
 
     // Count unique present days (days with at least one "In" log)
@@ -156,7 +161,8 @@ export async function GET(request: Request) {
     }
 
     // ─── Next shift ────────────────────────────────────────────────────────
-    let nextShift = null;
+    let nextShift: { date: string; siteName: string; clientName: string; shiftLabel?: string } | null = null;
+    let nextShiftUnavailable = false;
     try {
       const todayStr = now.toISOString().slice(0, 10);
       const sevenDaysLater = new Date(now);
@@ -181,8 +187,9 @@ export async function GET(request: Request) {
           shiftLabel: wo.shiftLabel ?? undefined,
         };
       }
-    } catch {
-      // workOrders may not exist or index missing
+    } catch (err) {
+      console.error("[guard/dashboard] nextShift query failed:", err);
+      nextShiftUnavailable = true;
     }
 
     return NextResponse.json({
@@ -196,6 +203,7 @@ export async function GET(request: Request) {
       latestEvalScore,
       latestEvalPeriod,
       nextShift,
+      nextShiftUnavailable,
       recentAttendance,
     });
   } catch (err: unknown) {

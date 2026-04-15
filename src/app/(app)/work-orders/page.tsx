@@ -11,15 +11,14 @@ import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown,
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
-import { GeoPoint, collection, query, where, onSnapshot, orderBy, getDocs, serverTimestamp, doc, Timestamp, deleteDoc, addDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
+import { GeoPoint, collection, query, where, onSnapshot, getDocs, Timestamp, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 import { useAppAuth } from '@/context/auth-context';
-import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
-import { useSites } from '@/lib/hooks/use-sites';
+import { buildFirestoreAuditEvent, buildFirestoreCreateAudit } from '@/lib/firestore-audit';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildLocationIdentity } from '@/lib/location-utils';
 import { PageHeader } from '@/components/layout/page-header';
@@ -128,7 +127,8 @@ export default function WorkOrderPage() {
         // 2. Schedule actual Firestore delete after UNDO_MS
         const timer = setTimeout(async () => {
             try {
-                await deleteDoc(doc(db, 'workOrders', id));
+                const res = await authorizedFetch(`/api/admin/work-orders/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Delete failed');
             } catch (e) {
                 console.error('Delete failed', e);
                 // Restore on error
@@ -541,30 +541,30 @@ export default function WorkOrderPage() {
 
                         const totalManpower = finalMale + finalFemale;
 
-                        await setDoc(workOrderRef, {
-                            siteId: site.id,
-                            siteName: site.siteName,
-                            clientName: OPERATIONAL_CLIENT_NAME,
-                            district: site.district,
-                            date: existingDate,
-                            maleGuardsRequired: finalMale,
-                            femaleGuardsRequired: finalFemale,
-                            totalManpower,
-                            // Preserve any existing guard assignments when re-importing
-                            assignedGuards: existingAssigned,
-                            createdAt: existingCreatedAt ?? serverTimestamp(),
-                            ...buildFirestoreUpdateAudit(),
-                            importHistory: arrayUnion(
-                                buildFirestoreAuditEvent('work_order_imported', undefined, {
+                        await authorizedFetch('/api/admin/work-orders', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                workOrderId,
+                                data: {
                                     siteId: site.id,
                                     siteName: site.siteName,
-                                    date: dateString,
+                                    clientName: OPERATIONAL_CLIENT_NAME,
+                                    district: site.district,
                                     maleGuardsRequired: finalMale,
                                     femaleGuardsRequired: finalFemale,
                                     totalManpower,
-                                }),
-                            ),
-                        }, { merge: true });
+                                    assignedGuards: existingAssigned,
+                                    importHistory: [buildFirestoreAuditEvent('work_order_imported', undefined, {
+                                        siteId: site.id,
+                                        siteName: site.siteName,
+                                        date: dateString,
+                                        maleGuardsRequired: finalMale,
+                                        femaleGuardsRequired: finalFemale,
+                                        totalManpower,
+                                    })],
+                                },
+                            }),
+                        });
 
                         operationsCount++;
                     }

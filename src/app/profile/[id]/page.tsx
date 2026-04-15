@@ -12,8 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
 import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, ArrowLeft, Home } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db, storage } from '@/lib/firebase';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { storage } from '@/lib/firebase';
+import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -184,21 +184,19 @@ export default function PublicEmployeeProfilePage() {
       setIsLoading(true);
       setError(null);
       try {
-        const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
-        const employeeDocSnap = await getDoc(employeeDocRef);
-
-        if (employeeDocSnap.exists()) {
-          const data = employeeDocSnap.data();
-          
-          const formattedData: Employee = {
-            ...data,
-            id: employeeDocSnap.id,
-          } as Employee;
-          setEmployee(formattedData);
-        } else {
-          setError("Employee not found with the provided ID.");
-          toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
+        const res = await fetch(`/api/employees/public-profile/${employeeIdFromUrl}`);
+        if (!res.ok) {
+          const data = await res.json();
+          setError(data.error || "Employee not found.");
+          toast({ variant: "destructive", title: "Not Found", description: data.error || "No employee record found for this ID."});
+          return;
         }
+        const data = await res.json();
+        const formattedData: Employee = {
+          ...data,
+          id: employeeIdFromUrl,
+        } as Employee;
+        setEmployee(formattedData);
       } catch (err: any) {
         console.error("Error fetching employee:", err);
         let message = "Failed to fetch employee data.";

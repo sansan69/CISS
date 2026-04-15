@@ -9,8 +9,6 @@ interface SiteOption {
   district: string;
   geofenceRadiusMeters: number;
   strictGeofence: boolean;
-  lat?: number;
-  lng?: number;
   shiftMode: string;
   shiftPattern: string | null;
   shiftTemplates: unknown[];
@@ -32,8 +30,6 @@ export async function GET() {
         district: data.district || '',
         geofenceRadiusMeters: data.geofenceRadiusMeters || 150,
         strictGeofence: data.strictGeofence || false,
-        lat: data.lat || data.latitude,
-        lng: data.lng || data.longitude,
         shiftMode: data.shiftMode || 'none',
         shiftPattern: data.shiftPattern || null,
         shiftTemplates: data.shiftTemplates || [],
@@ -54,8 +50,6 @@ export async function GET() {
         district: data.district || '',
         geofenceRadiusMeters: data.geofenceRadiusMeters || 150,
         strictGeofence: data.strictGeofence || false,
-        lat: data.lat || data.latitude,
-        lng: data.lng || data.longitude,
         shiftMode: 'none',
         shiftPattern: null,
         shiftTemplates: [],

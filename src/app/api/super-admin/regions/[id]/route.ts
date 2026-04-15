@@ -65,7 +65,7 @@ export async function PATCH(
       current.vercelProjectName ||
       buildRegionVercelProjectName(regionName, id.toUpperCase());
 
-    const patch = {
+    const patch: Record<string, unknown> = {
       regionName,
       regionAdminEmail:
         body.regionAdminEmail === undefined
@@ -120,7 +120,7 @@ export async function PATCH(
           ? current.lastVercelProvisionedAt ?? null
           : body.lastVercelProvisionedAt ?? null,
       onboardingChecklist: checklist,
-      status: body.status ?? nextRegionStatus(checklist),
+      status: nextRegionStatus(checklist),
       ...buildServerUpdateAudit({ uid: actor.uid, email: actor.email }),
     };
 

@@ -385,6 +385,13 @@ export default function EmployeeDirectoryPage() {
           const employeeDocRef = doc(db, "employees", selectedEmployeeForStatusChange.id);
           const updateData: any = {
             status: newStatus,
+            publicProfile: {
+              fullName: selectedEmployeeForStatusChange.fullName,
+              employeeId: selectedEmployeeForStatusChange.employeeId,
+              clientName: selectedEmployeeForStatusChange.clientName,
+              profilePictureUrl: selectedEmployeeForStatusChange.profilePictureUrl ?? "",
+              status: newStatus,
+            },
             ...buildFirestoreUpdateAudit(),
             statusHistory: arrayUnion(
               buildFirestoreAuditEvent('employee_status_updated', undefined, {

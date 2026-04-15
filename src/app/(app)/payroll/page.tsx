@@ -19,6 +19,7 @@ const STATUS_CONFIG: Record<PayrollCycleStatus, { label: string; className: stri
   review: { label: "Review", className: "bg-amber-100 text-amber-700" },
   finalized: { label: "Finalized", className: "bg-green-100 text-green-700" },
   paid: { label: "Paid", className: "bg-emerald-100 text-emerald-700" },
+  failed: { label: "Failed", className: "bg-red-100 text-red-700" },
 };
 
 export default function PayrollPage() {

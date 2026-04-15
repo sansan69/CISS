@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       query = query.where("status", "==", status);
     }
     if (clientId) {
-      query = query.where("clientId", "==", clientId);
+      query = query.where("clientName", "==", clientId);
     }
 
     const snapshot = await query.get();

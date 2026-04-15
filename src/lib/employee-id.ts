@@ -1,3 +1,5 @@
+import { randomInt } from "crypto";
+
 export function abbreviateClientName(clientName: string): string {
   if (!clientName) return "CLIENT";
 
@@ -31,7 +33,7 @@ export function getCurrentFinancialYear(referenceDate = new Date()): string {
 export function generateEmployeeId(clientName: string, sequenceNumber?: number): string {
   const shortClientName = abbreviateClientName(clientName);
   const financialYear = getCurrentFinancialYear();
-  const baseNumber = sequenceNumber ?? Math.floor(Math.random() * 999) + 1;
+  const baseNumber = sequenceNumber ?? randomInt(1, 1000);
 
   return `CISS/${shortClientName}/${financialYear}/${baseNumber
     .toString()

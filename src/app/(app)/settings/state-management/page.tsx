@@ -209,6 +209,7 @@ export default function RegionOnboardingPage() {
       adminEmail: nextRegion?.regionAdminEmail ?? current.adminEmail,
     }));
     setValidationMessages(nextRegion?.validationSummary?.messages ?? []);
+    setServiceAccountPayload("");
     setServiceAccountFileName("");
   }, [regions, selectedRegionId]);
 

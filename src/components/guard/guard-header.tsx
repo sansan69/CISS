@@ -2,8 +2,8 @@
 
 import React from "react";
 
-const BRAND_BLUE = "#014c85";
-const BRAND_GOLD = "#bd9c55";
+const BRAND_BLUE = "hsl(206 98% 26%)";
+const BRAND_GOLD = "hsl(41 44% 54%)";
 
 interface GuardHeaderProps {
   employeeName: string;

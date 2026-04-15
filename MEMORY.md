@@ -5,6 +5,439 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-15] — Session: Comprehensive audit — UI/UX fixes (U-02, U-03, U-06, U-07, U-11)
+
+### U-02: GuardBottomNav missing aria-label
+**File modified:** `src/components/guard/guard-bottom-nav.tsx`
+- Added `aria-label="Guard navigation"` to `<nav>` element
+
+### U-03: userScalable changed from false to true
+**File modified:** `src/app/layout.tsx`
+- Changed `userScalable: false` to `userScalable: true` — allows pinch-to-zoom for accessibility
+
+### U-06: Checkbox touch target increased
+**File modified:** `src/components/ui/checkbox.tsx`
+- Added invisible 44x44px hit area via `after:` pseudo-element while preserving visual 16x16px size
+
+### U-07: Hardcoded brand colors replaced with CSS custom property values
+**Files modified:** `guard-bottom-nav.tsx`, `attendance-calendar.tsx`, `guard-header.tsx`
+- Replaced hardcoded `#014c85` with `hsl(206 98% 26%)` and `#bd9c55` with `hsl(41 44% 54%)`
+- Fixed opacity patterns (`${BRAND_BLUE}15` → `hsl(206 98% 26% / 0.08)`)
+
+### U-11: useToast dependency array fixed
+**File modified:** `src/hooks/use-toast.ts`
+- Changed `[state]` to `[]` — `setState` is stable and doesn't need `state` as dependency; previous code re-subscribed listener every render
+
+### Verified FALSE / Skipped:
+- U-01: FALSE — Radix Dialog/Sheet handles focus management automatically
+- U-04: Skipped (minor styling)
+- U-05: FALSE — table.tsx already wraps with overflow-auto div
+- U-08 to U-10: Skipped (stylistic consistency, not bugs)
+- U-12 to U-16: Skipped (missing features)
+
+---
+
+## [2026-04-15] — Session: Comprehensive audit — Super-admin fixes (S-01 to S-05, S-08)
+
+### S-01: Deployment config API no longer exposes service account JSON (CRITICAL)
+**File modified:** `src/app/api/super-admin/regions/[id]/deployment-config/route.ts`
+- Removed `FIREBASE_ADMIN_SDK_CONFIG_BASE64` from API response
+- Replaced with boolean `hasPersistentConnection` check
+
+### S-02: Credentials only persisted on successful validation (CRITICAL)
+**File modified:** `src/app/api/super-admin/regions/[id]/validate/route.ts`
+- Wrapped `saveRegionConnection` inside `if (result.success)` block
+
+### S-03: Region overview uses UUID for Firebase app name (HIGH)
+**File modified:** `src/app/api/super-admin/overview/route.ts`
+- Replaced `Date.now()` with `crypto.randomUUID()` for guaranteed uniqueness
+
+### S-04: Super-admin PATCH no longer accepts arbitrary fields (HIGH)
+**File modified:** `src/app/api/super-admin/regions/[id]/route.ts`
+- Status now always derived from checklist via `nextRegionStatus()`, never from request body
+
+### S-05: Service account payload cleared on region switch (HIGH)
+**File modified:** `src/app/(app)/settings/state-management/page.tsx`
+- Added `setServiceAccountPayload("")` alongside `setServiceAccountFileName("")`
+
+### S-08: Encryption key dependency documented (MEDIUM)
+**File modified:** `src/lib/server/region-connections.ts`
+- Added warning comment documenting `REGION_CONNECTIONS_SECRET` dependency
+
+---
+
+## [2026-04-15] — Session: Comprehensive audit — Guard portal fixes (G-01, G-03, G-05)
+
+### G-01: Guard payslips download now uses guard-specific API route (CRITICAL)
+**Files created:** `src/app/api/guard/payslips/[id]/payslip/route.ts`
+**Files modified:** `src/app/api/guard/payslips/route.ts`
+- Created guard-accessible payslip route with `requireGuard` + ownership check
+- Updated downloadUrl from `/api/admin/...` to `/api/guard/payslips/${doc.id}/payslip`
+
+### G-03: Guard attendance now counts both "In" and "Out" statuses (HIGH)
+**File modified:** `src/app/api/guard/attendance/route.ts`
+- Changed filter from `l.status === "In"` to `l.status === "In" || l.status === "Out"`
+
+### G-05: Guard payslips fallback query risk removed (HIGH)
+**File modified:** `src/app/api/guard/payslips/route.ts`
+- Removed risky fallback query by `employeeId`
+- Changed primary query to use `employeeDocId` (authoritative per project conventions)
+
+### Verified FALSE / Skipped:
+- G-02: FALSE — guard profile API already picks only 13 specific fields, not spread
+- G-04: TRUE but skipped (missing feature — pagination)
+
+---
+
+## [2026-04-15] — Session: Audit bug fixes (T-01 through T-05)
+
+### T-01: QR Management replaced simulated logic with real Firestore queries (CRITICAL)
+- **File**: `src/app/(app)/settings/qr-management/page.tsx`
+- **Bug**: Used hardcoded `totalEmployees = 1234`, simulated progress via `setInterval`, and `Math.random()` for success/failure
+- **Fix**: Now queries active employees from Firestore, generates real QR codes via `generateQrCodeDataUrl`, writes updates back via batched writes (chunked at 500). Employee count is fetched live on mount. Progress reflects actual processing.
+
+### T-02: Bulk import now chunks Firestore batches at 500 (HIGH)
+- **File**: `src/app/(app)/settings/bulk-import/page.tsx`
+- **Bug**: Single `writeBatch` used for all records; 500+ employees would exceed Firestore's 500-ops-per-batch limit
+- **Fix**: Both employee import and clients/sites import now collect batch operations, then commit in chunks of 500. `processClientsSitesImport` also fixed.
+
+### T-03: XLSX export now excludes sensitive fields (HIGH)
+- **File**: `src/app/(app)/settings/data-export/page.tsx`
+- **Bug**: XLSX export included all Firestore document fields (bank account numbers, IFSC, PAN, EPF/UAN, ESIC, ID proof numbers, all document URLs, signatures)
+- **Fix**: Added `XLSX_EXCLUDED_FIELDS` set filtering out 22 sensitive/internal fields from the spreadsheet export. PDF profile kits are unaffected (they are per-employee documents meant for the employee).
+
+### T-04: Removed 500ms sleep per employee in PDF export (HIGH - performance)
+- **File**: `src/app/(app)/settings/data-export/page.tsx`
+- **Bug**: `await sleep(500)` after each individual PDF download added 50+ seconds for 100 employees
+- **Fix**: Removed entirely (no longer needed since T-05 merges into single PDF)
+
+### T-05: PDF export now generates single merged PDF instead of multiple downloads (HIGH)
+- **File**: `src/app/(app)/settings/data-export/page.tsx`
+- **Bug**: Each employee triggered a separate browser download (`a.click()`); browsers block multiple downloads
+- **Fix**: Individual PDFs are generated in-memory, then merged via `PDFDocument.copyPages` into a single file. One download: `ProfileKits_{ClientName}_{date}.pdf`. Updated UI alert text.
+
+---
+
+## [2026-04-15] — Session: Work order & client audit fixes (W-01, W-02, W-05, W-07, W-08)
+
+### W-01: Work order writes now go through server-side API (CRITICAL)
+- **Files created**: `src/app/api/admin/work-orders/route.ts` (POST), `src/app/api/admin/work-orders/[id]/route.ts` (PATCH, DELETE)
+- **Files changed**: `src/app/(app)/work-orders/page.tsx`, `src/app/(app)/work-orders/[siteId]/page.tsx`
+- **Bug**: All work order CRUD (create/import, update assignments, update manpower, delete) was done directly via client-side Firestore SDK with no server-side auth validation
+- **Fix**: Created server-side API routes with `requireAdmin` checks; updated client pages to use `authorizedFetch` for all work order writes (import, update, delete). Site creation during import still uses client SDK (no server API exists yet).
+
+### W-02: onSnapshot listener memory leak fixed (CRITICAL)
+- **File**: `src/app/(app)/work-orders/[siteId]/page.tsx` lines 523-564
+- **Bug**: `useEffect` called `fetchSiteAndWorkOrders()` async function which returned `unsubscribe` from inner scope, but the `useEffect` never captured it — no cleanup function existed
+- **Fix**: Stored `unsubscribe` in a local variable accessible to the `useEffect` cleanup; added `return () => { if (unsubscribe) unsubscribe(); }` cleanup
+
+### W-05: Replaced fragile `__name__` with `documentId()` (HIGH)
+- **File**: `src/components/work-orders/assigned-guards-export-panel.tsx` line 142
+- **Bug**: Used `where('__name__', 'in', chunk)` — `__name__` is Firestore internal field, not part of public API
+- **Fix**: Replaced with `where(documentId(), 'in', chunk)` and imported `documentId` from `firebase/firestore`
+
+### W-07: Client deletion now blocked when associated data exists (MEDIUM)
+- **Files**: `src/app/api/admin/clients/[id]/route.ts`, `src/app/(app)/settings/clients/[clientId]/page.tsx`
+- **Bug**: DELETE endpoint deleted client doc regardless of associated sites/locations/users, leaving orphans
+- **Fix**: API route now checks for existing sites, locations, and users; returns 409 with descriptive error if any exist. Client-side dialog updated with clearer warning text and better error display.
+
+### W-08: Site deletion now checks for assigned guards (MEDIUM)
+- **File**: `src/app/(app)/settings/clients/[clientId]/page.tsx` `handleDeleteSite`
+- **Bug**: Site could be deleted even when work orders with assigned guards existed, breaking assignment references
+- **Fix**: Before deleting, queries `workOrders` collection for the site; if any work orders have assigned guards, blocks deletion with descriptive toast. Updated dialog description.
+
+### Verified FALSE / Skipped:
+- W-03: Field officer photo upload — already fixed by prior F-01
+- W-04: Guard assignments concurrency control — skipped (missing feature, not a bug)
+- W-06: Bulk site import — skipped (missing feature, not a bug)
+
+---
+
+## [2026-04-15] — Session: Payroll audit fixes (P-01, P-04, P-06)
+
+### P-01: netPay now subtracts lopDeduction (CRITICAL bug)
+- **File**: `src/app/api/admin/payroll/run/route.ts` line 215-216
+- **Bug**: `netPay = gross - epf - esic - pt - tds` omitted `lopDeduction`, though `totalDeductions` included it
+- **Fix**: Added `- lopDeduction` to netPay formula
+
+### P-04: Failed payroll cycles now marked as "failed" (CRITICAL bug)
+- **Files**: `src/app/api/admin/payroll/run/route.ts`, `src/types/payroll.ts`, `src/app/(app)/payroll/page.tsx`, `src/app/(app)/payroll/cycles/[id]/page.tsx`
+- **Bug**: Cycle created with status "processing" but never updated to "failed" on error; left stuck in "processing"
+- **Fix**: Hoisted `cycleRef` outside try block; catch block now updates cycle status to "failed" with error message; added "failed" to `PayrollCycleStatus` type and UI status configs
+
+### P-06: Skipped employees now persisted on cycle document (HIGH)
+- **File**: `src/app/api/admin/payroll/run/route.ts` line 294
+- **Bug**: Skipped employees only returned in API response, never written to Firestore
+- **Fix**: Added `skippedEmployees` array to cycle update, so skip records persist in Firestore
+
+### Verified FALSE (no fix needed):
+- P-02: EPF ceiling logic is correct (`min(wage, 15000)` then apply rate)
+- P-03: `grossRate < 1` guard prevents division by zero; fallback to `knownTotal`
+- P-05: Client allowances merged into `mergedComponentAmounts` BEFORE prorating
+- P-08: "Basic Salary" matches `includes("basic")`; "Danger Allowance" does NOT match `=== "da"`
+
+---
+
+## [2026-04-15] — Session: Attendance audit fixes (AT-01 through AT-12)
+
+### AT-01: Public site GPS coordinates redacted
+**File modified:** `src/app/api/public/attendance/route.ts`
+- Removed `lat` and `lng` from public API response for both `sites` and `clientLocations`
+- Exact GPS coordinates of security sites no longer exposed to unauthenticated requests
+- Client-side auto-detection still works via manual district/site selection; server-side geofence enforcement in submit route unaffected
+
+### AT-03: Photo analysis integrated into attendance capture
+**File modified:** `src/app/attendance/page.tsx`
+- After photo capture and watermarking, the `analyze-photo` API endpoint is now called in the background
+- Manual review compliance is set immediately (non-blocking); AI result replaces it when ready
+- If AI analysis fails, manual review compliance remains as fallback
+
+### AT-04: Work order validation extended to fixed-shift sites
+**File modified:** `src/app/api/attendance/submit/route.ts`
+- Fixed-shift sites (`siteShiftMode === "fixed"`) now also check for work orders
+- If work orders exist, employee assignment is validated against them
+- If no work orders exist AND no resolved shift, attendance is rejected
+- If no work orders exist but a resolved shift matches, attendance proceeds (fixed-shift-only sites)
+
+### AT-05: Guard dashboard attendance query now uses date range
+**File modified:** `src/app/api/guard/dashboard/route.ts`
+- Added `attendanceDate >= startDateStr` and `attendanceDate <= endDateStr` filters to the Firestore query
+- Removed arbitrary `limit(200)` and client-side date filtering
+- Uses existing composite index `(employeeDocId, attendanceDate)` in `firestore.indexes.json`
+
+### AT-07: Overtime calculation implemented
+**File modified:** `src/lib/payroll/attendance-aggregator.ts`
+- Pairs In/Out logs per day using `reportedAt` timestamps
+- Calculates hours worked as difference between earliest In and latest Out
+- Any hours beyond 8-hour standard counted as overtime
+- Returns `overtimeHours` rounded to 2 decimal places (previously hardcoded to 0)
+
+### AT-08: Next shift query error handling improved
+**File modified:** `src/app/api/guard/dashboard/route.ts`
+- Added `console.error` logging in the catch block (was previously silent)
+- Added `nextShiftUnavailable` boolean in API response so frontend can inform user when next shift data is unavailable
+
+### Not fixed (by design):
+- AT-02: FALSE — `validateEmployee()` at line 69 already verifies `employeeData.employeeId !== payload.employeeId`
+- AT-06: Missing feature (holiday calendar), skip per instructions
+- AT-09: Architecture issue requiring significant refactoring, skip per instructions
+- AT-10: FALSE — transaction-based `attendanceState` check prevents duplicates atomically
+- AT-11: Architecture issue requiring significant refactoring, skip per instructions
+- AT-12: TRUE but not simple to fix without breaking offline queuing — client time used for `reportedAtClient` which feeds `attendanceDate`; server enforces max-age check but cannot fully replace client time for offline scenarios
+
+---
+
+## [2026-04-15] — Session: Employee audit bug fixes (E-01, E-02, E-03, E-05, E-10)
+
+### E-01: Admin employees API filtered by clientId instead of clientName
+**File modified:** `src/app/api/admin/employees/route.ts`
+- Changed `.where("clientId", "==", clientId)` to `.where("clientName", "==", clientId)` since employees only store `clientName`, never `clientId`
+
+### E-02: Phone number normalization on storage
+**File modified:** `src/app/api/employees/enroll/route.ts`
+- Added `normalizedPhone = payload.phoneNumber.replace(/\D/g, "")` before storing to ensure digits-only storage
+- Guard login normalizes to digits on query; now storage matches
+
+### E-03: employeeId generation uses crypto.randomInt instead of Math.random
+**Files modified:** `src/lib/employee-id.ts`, `src/app/(app)/employees/[id]/page.tsx`
+- Server-side `generateEmployeeId` now uses Node.js `crypto.randomInt(1, 1000)` instead of `Math.random()`
+- Client-side `generateEmployeeId` now uses `crypto.getRandomValues()` instead of `Math.random()`
+
+### E-05: Status update now also updates publicProfile.status
+**File modified:** `src/app/(app)/employees/page.tsx`
+- `handleConfirmStatusUpdate` now writes `publicProfile` object with updated `status` alongside the top-level `status` field
+- Prevents stale status showing on public profile after status change from directory page
+
+### E-10: Enrollment schema enforces identity and address proof types differ
+**Files modified:** `src/types/enrollment.ts`, `src/app/(app)/employees/[id]/page.tsx`
+- Added `superRefine` validation to `enrollmentSubmissionSchema` rejecting same type for both proofs
+- Added matching validation to client-side `employeeUpdateSchema`
+
+### Not fixed (by design):
+- E-04: FALSE — `clientName` was never in `searchableFields`; condition is consistent
+- E-06: Missing feature (Auth cleanup on delete), skip per instructions
+- E-07, E-08, E-09: Missing features, skip per instructions
+
+---
+
+## [2026-04-15] — Session: Auth & security audit fixes (A-01 through A-14)
+
+### A-01: QR login accepts employeeId
+**File modified:** `src/app/api/guard/auth/login/route.ts`
+- Login API now accepts both `phoneNumber` and `employeeId` for authentication
+- QR flow sends `employeeId`, phone flow sends `phoneNumber`; both work correctly
+- Rate limiting keyed by whichever identifier is used
+
+### A-02: SMS OTP TODO clarified
+**File modified:** `src/app/api/guard/auth/send-reset-otp/route.ts`
+- Expanded TODO comment to clearly state the forgot-PIN flow is non-functional without SMS integration
+
+### A-03: Rate limiting added to verify-reset-otp
+**File modified:** `src/app/api/guard/auth/verify-reset-otp/route.ts`
+- Added Firestore-based rate limiting: max 5 attempts per phone per 10 minutes
+- Also updated to use hashed OTP verification instead of plaintext query
+
+### A-04: Enrollment API now requires admin auth
+**File modified:** `src/app/api/employees/enroll/route.ts`
+- Added `requireAdmin(request)` call before processing enrollment
+
+### A-05: DOB verification handles Timestamp format
+**File modified:** `src/app/api/guard/auth/setup-pin/route.ts`
+- `dateOfBirth` comparison now handles both string (`YYYY-MM-DD`) and Firestore Timestamp formats
+- Converts Timestamp to `YYYY-MM-DD` string before comparing
+
+### A-06: PIN hashing now uses per-user salt
+**File modified:** `src/lib/guard/pin-utils.ts`
+- `hashPin()` generates a random 16-char salt, stored as `salt:hash` format
+- `verifyPin()` supports both new salted format and legacy unsalted format for backward compatibility
+- Existing unsalted hashes will auto-upgrade on next successful login/PIN change
+
+### A-07: OTP stored as hash in Firestore
+**Files modified:** `src/app/api/guard/auth/send-reset-otp/route.ts`, `src/app/api/guard/auth/verify-reset-otp/route.ts`, `src/app/api/guard/auth/reset-pin/route.ts`
+- New file: `src/lib/guard/otp-utils.ts` — provides `hashOtp()` and `verifyOtp()` functions
+- OTPs now stored as `otpHash` instead of plaintext `otp`
+- `verifyOtp()` supports both hashed and legacy plaintext for backward compatibility
+- Verify and reset routes updated to use hashed verification
+
+### A-08: Employee lookup rate limiting tightened
+**File modified:** `src/app/api/employees/lookup/route.ts`
+- Reduced unauthenticated rate limit from 10 to 5 per minute
+- Authenticated requests get higher limit (20 per minute)
+- Added optional auth check
+
+### A-09: Public profile page uses server-side API
+**Files modified:** `src/app/profile/[id]/page.tsx`, new file `src/app/api/employees/public-profile/[id]/route.ts`
+- Profile page no longer reads full employee document via client SDK
+- New server API route returns only safe fields (name, employeeId, clientName, profilePictureUrl, status, qrCodeUrl, joiningDate)
+- Removed unused `db`, `doc`, `getDoc` imports from profile page
+
+### A-10: Rate limiting added to change-pin
+**File modified:** `src/app/api/guard/auth/change-pin/route.ts`
+- Added Firestore-based rate limiting: max 5 attempts per employee per 5 minutes
+
+### A-13: Admin login verifies custom claims before redirect
+**File modified:** `src/app/admin-login/page.tsx`
+- After sign-in, checks `getIdTokenResult()` for admin/superAdmin role or `admin` claim or legacy admin email
+- Non-admin users are signed out and shown "Access Denied" message
+
+### A-14: Admin login requires email verification
+**File modified:** `src/app/admin-login/page.tsx`
+- Added `emailVerified` check after sign-in
+- Unverified users are signed out and shown error message
+
+### A-16 (TRUE, no fix applied): Two PIN reset flows exist
+- `/guard-forgot-pin` (OTP-based) and `/guard-login/reset` (DOB-based) serve different user scenarios
+- Both are intentionally linked from the guard login page; not a bug, but a design decision
+
+---
+
+## [2026-04-15] — Session: Security audit fixes (F-01 through F-10)
+
+### 1. storage.rules — F-01/F-02/F-03 fixes
+**File modified:** `storage.rules`
+- Added `isSignedIn()` and `isFieldOfficer()` helper functions
+- Added `match /foReports/{folder}/{uid}/{fileName}` with field officer auth (F-01)
+- Added `isSignedIn()` to all `create` rules (F-02)
+- Changed all `allow read: if true` to `allow read: if isSignedIn()` (F-03)
+
+### 2. firestore.rules — F-05/F-06 fixes
+**File modified:** `firestore.rules`
+- Restricted `fcmTokens/{tokenId}` write to `isSignedIn() && request.auth.uid == tokenId` (F-05)
+- Added `isHR()` to `payrollCycles` read rules (F-06)
+
+### 3. firestore.indexes.json — F-07/F-10 fixes
+**File modified:** `firestore.indexes.json`
+- Removed 8 duplicate index definitions (F-07)
+- Added `payrollEntries` index on `employeeDocId + period` (F-10)
+- Added `payrollEntries` index on `cycleId + employeeName` (F-10)
+- Added `notifications` index on `recipientUid + read + createdAt` (F-10)
+- Added `foVisitReports` index on `createdAt` (F-10)
+
+### 4. .env.example — F-04/F-08/F-09 documentation
+**File modified:** `.env.example`
+- Added `NEXT_PUBLIC_FIREBASE_VAPID_KEY` placeholder (F-04)
+- Added `FIREBASE_ADMIN_STORAGE_BUCKET` placeholder (F-08)
+- Both `NEXT_PUBLIC_SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_EMAIL` present (F-09)
+
+### 5. .env.local — F-09 fix
+**File modified:** `.env.local`
+- Added `SUPER_ADMIN_EMAIL` matching `NEXT_PUBLIC_SUPER_ADMIN_EMAIL` (F-09)
+
+### 6. firebaseAdmin.ts — F-08 fix
+**File modified:** `src/lib/firebaseAdmin.ts`
+- `storageBucket` now prefers `FIREBASE_ADMIN_STORAGE_BUCKET`, falls back to `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` (F-08)
+
+### Outstanding — requires manual action
+- **F-04**: `NEXT_PUBLIC_FIREBASE_VAPID_KEY` must be added to `.env.local` with the actual VAPID key from Firebase Console > Project Settings > Cloud Messaging
+
+---
+
+## [2026-04-14] — Session: Hybrid QR scanner implementation
+
+### 1. Shared QR scanner module added
+**Files created:**
+- `src/lib/qr/scanner-types.ts` — shared types: `QrScannerBackend`, `QrScannerErrorCode`, `QrScannerStatus`, `QrScanResult`
+- `src/lib/qr/scanner-support.ts` — helpers: `shouldUseNativeBarcodeDetector`, `choosePreferredVideoInput`, `isTorchSupported`, `normalizeScannerError`
+- `src/lib/qr/scanner-engine.ts` — runtime: `createDuplicateScanGuard`, `shouldFallbackToZxing`, `startHybridQrScanner`, `startSafeHybridQrScanner`
+- `src/lib/qr/scanner-support.test.ts` — unit tests for support helpers (all passing)
+- `src/lib/qr/scanner-engine.test.ts` — unit tests for duplicate suppression and fallback logic (all passing)
+
+**Architecture:**
+- Native `BarcodeDetector` preferred for speed; falls back to ZXing automatically if unsupported or runtime-fails
+- `createDuplicateScanGuard(cooldownMs)` suppresses repeated scans within cooldown window
+- `choosePreferredVideoInput` prefers rear/back/environment-facing camera
+- `normalizeScannerError` maps `DOMException` names to typed error codes
+
+### 2. Attendance page integrated with shared scanner
+**File modified:** `src/app/attendance/page.tsx`
+- Replaced in-page ZXing lifecycle with `startHybridQrScanner` from shared engine
+- Uses `scannerSessionRef` for lifecycle management; `stop()` on cleanup
+
+### 3. Guard login page integrated with shared scanner
+**File modified:** `src/app/guard-login/page.tsx`
+- Replaced in-page ZXing lifecycle with `startSafeHybridQrScanner` from shared engine
+- Uses `scannerSessionRef`; stops on successful scan or error
+
+### 4. Plan and spec docs committed
+- `docs/superpowers/plans/2026-04-13-hybrid-qr-scanner.md`
+- `docs/superpowers/specs/2026-04-13-hybrid-qr-scanner-design.md`
+
+**Commit:** `812b4294` — pushed to `origin/main`
+
+---
+
+## [2026-04-14] — Session: Photo capture + report forms for field officers
+
+### 1. PhotoCapture component added
+**File created:** `src/components/field-officers/photo-capture.tsx`
+- Three capture modes: Site Photo (`capture="environment"`), Selfie (`capture="user"`), Gallery (no capture)
+- Uploads directly to Firebase Storage: `foReports/{folder}/{uid}/{timestamp}_{filename}`
+- Shows thumbnails with remove button; enforces `maxPhotos` limit (default 10)
+- Props: `urls`, `onChange`, `folder` ("visitReports" | "trainingReports"), `maxPhotos`, `disabled`
+
+### 2. Visit reports panel updated
+**File:** `src/components/field-officers/visit-reports-panel.tsx`
+- PhotoCapture added to new-report form (FO flow)
+- `photoUrls` state reset on form close
+- Photos sent in POST body
+- Admin review sheet now shows photo thumbnails (clickable, open in new tab)
+
+### 3. Training reports panel updated
+**File:** `src/components/field-officers/training-reports-panel.tsx`
+- PhotoCapture added to new-report form (FO flow)
+- Added detail Sheet (View button on each card) showing full report + photos
+- Admin can acknowledge directly from detail sheet
+
+### 4. API routes extended
+- `POST /api/admin/visit-reports` — accepts and stores `photoUrls[]`
+- `PATCH /api/admin/visit-reports/[id]` — accepts `photoUrls[]` update
+- `POST /api/admin/training-reports` — accepts and stores `photoUrls[]`
+- `PATCH /api/admin/training-reports/[id]` — accepts `photoUrls[]` update
+
+**Commit:** `d74d54be`
+
+---
+
 ## [2026-04-13] — Session: Product cleanup, navigation consolidation, landing polish, GitHub/Vercel sync repair
 
 ### 1. Client + site location management upgraded into operational workspace

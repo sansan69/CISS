@@ -24,6 +24,7 @@ type ClientDocShape = {
 };
 
 export async function POST(request: Request) {
+  let cycleRef: FirebaseFirestore.DocumentReference | null = null;
   try {
     const decoded = await requireAdmin(request);
     const body = await request.json();
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
     }
     const employeeSnapshot = await employeeQuery.limit(500).get();
 
-    const cycleRef = await adminDb.collection("payrollCycles").add({
+    cycleRef = await adminDb.collection("payrollCycles").add({
       period,
       month,
       year,
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
         lopDeduction
       );
       const netPay = round2(
-        grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds,
+        grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds - lopDeduction,
       );
 
       const entryRef = adminDb.collection("payrollEntries").doc();
@@ -290,6 +291,7 @@ export async function POST(request: Request) {
       totalESIC: round2(totalESIC),
       totalPT: round2(totalPT),
       totalTDS: round2(totalTDS),
+      skippedEmployees,
       processedAt: FieldValue.serverTimestamp(),
     });
 
@@ -304,6 +306,18 @@ export async function POST(request: Request) {
     });
   } catch (err: unknown) {
     console.error("Payroll run error:", err);
+    if (cycleRef) {
+      try {
+        const { FieldValue: FV } = await import("firebase-admin/firestore");
+        await cycleRef.update({
+          status: "failed",
+          error: err instanceof Error ? err.message : "Payroll processing failed.",
+          failedAt: FV.serverTimestamp(),
+        });
+      } catch {
+        // best-effort status update
+      }
+    }
     const message = err instanceof Error ? err.message : "Payroll processing failed.";
     return NextResponse.json({ error: message }, { status: 400 });
   }

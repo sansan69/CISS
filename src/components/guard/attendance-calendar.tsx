@@ -4,8 +4,8 @@ import React, { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BRAND_BLUE = "#014c85";
-const BRAND_GOLD = "#bd9c55";
+const BRAND_BLUE = "hsl(206 98% 26%)";
+const BRAND_GOLD = "hsl(41 44% 54%)";
 
 export interface AttendanceLog {
   id: string;

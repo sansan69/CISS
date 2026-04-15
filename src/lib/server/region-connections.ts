@@ -7,6 +7,10 @@ import type { RegionCredentialInput } from "@/types/region";
 
 const REGION_CONNECTIONS_COLLECTION = "regionConnections";
 
+// WARNING: The encryption key is derived from REGION_CONNECTIONS_SECRET if set,
+// otherwise falls back to FIREBASE_ADMIN_SDK_CONFIG_BASE64 or FIREBASE_ADMIN_PRIVATE_KEY.
+// Rotating the fallback env var will make previously encrypted region connections undecryptable.
+// Set REGION_CONNECTIONS_SECRET explicitly to decouple encryption from Firebase credential rotation.
 function getRegionConnectionsSecret() {
   const secret =
     process.env.REGION_CONNECTIONS_SECRET ||

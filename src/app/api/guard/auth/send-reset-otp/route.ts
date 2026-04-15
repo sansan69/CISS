@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db as adminDb } from '@/lib/firebaseAdmin';
+import { hashOtp } from '@/lib/guard/otp-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,14 +68,19 @@ export async function POST(request: NextRequest) {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+    const otpHash = await hashOtp(otp);
+
     await adminDb.collection('resetOtps').add({
       phone: phoneNumber,
-      otp,
+      otpHash,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       createdAt: new Date().toISOString(),
     });
 
-    // TODO: Send OTP via SMS provider (e.g. Twilio, MSG91)
+    // TODO: Integrate SMS provider (e.g., Twilio, MSG91, or Gupshup) to deliver OTP to the user's phone.
+    // The current implementation only logs the OTP in development mode, making the forgot-PIN flow
+    // non-functional for real users. Without SMS delivery, users cannot receive their OTP and
+    // cannot reset their PIN. This must be resolved before the forgot-PIN feature is usable in production.
     if (process.env.NODE_ENV === 'development') {
       console.log(`[DEV] OTP for ${phoneNumber}: ${otp}`);
     }

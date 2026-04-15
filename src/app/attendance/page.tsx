@@ -619,6 +619,30 @@ export default function AttendancePage() {
         title: 'Photo captured',
         description: 'Attendance can continue. Admin will review the photo, or you can retake it now.',
       });
+
+      const analyzePhotoCompliance = async () => {
+        try {
+          const response = await fetch('/api/attendance/analyze-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              photoDataUrl,
+              employeeName: scannedEmployee?.fullName,
+              employeeId: scannedEmployee?.employeeCode || scannedEmployee?.id,
+              siteName: selectedSite?.siteName,
+              district: selectedDistrict,
+              clientName: selectedSite?.clientName || scannedEmployee?.clientName,
+            }),
+          });
+          const result = await response.json();
+          if (result.compliance) {
+            setPhotoCompliance(result.compliance);
+          }
+        } catch {
+          // AI analysis failed, manual review compliance already set
+        }
+      };
+      void analyzePhotoCompliance();
     } catch (error: any) {
       setWatermarkedPhoto(photoDataUrl);
       setPhotoCompliance(manualReviewCompliance);

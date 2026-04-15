@@ -189,6 +189,9 @@ const employeeUpdateSchema = z.object({
   if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
   }
+  if (data.identityProofType === data.addressProofType) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Identity proof and address proof must be different types.", path: ["addressProofType"] });
+  }
 });
 type EmployeeUpdateValues = z.infer<typeof employeeUpdateSchema>;
 
@@ -287,8 +290,15 @@ const getCurrentFinancialYear = (): string => {
 const generateEmployeeId = (clientName: string): string => {
   const shortClientName = abbreviateClientName(clientName);
   const financialYear = getCurrentFinancialYear();
-  const randomNumber = Math.floor(Math.random() * 999) + 1; // 1-999
-  return `CISS/${shortClientName}/${financialYear}/${randomNumber.toString().padStart(3, "0")}`;
+  let randomNum: number;
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const buf = new Uint16Array(1);
+    crypto.getRandomValues(buf);
+    randomNum = (buf[0] % 999) + 1;
+  } else {
+    randomNum = Math.floor(Math.random() * 999) + 1;
+  }
+  return `CISS/${shortClientName}/${financialYear}/${randomNum.toString().padStart(3, "0")}`;
 };
 
 const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {

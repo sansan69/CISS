@@ -7,18 +7,8 @@ export interface AttendanceSummary {
   overtimeHours: number;
 }
 
-/**
- * Aggregate attendance for an employee in a given period (YYYY-MM).
- * @param employeeDocId - Firestore document ID of the employee (employees/{id})
- * @param period - YYYY-MM
- * @param adminDb - Firestore admin instance
- *
- * Queries attendanceLogs using `employeeDocId` (Firestore doc ID) + `attendanceDate`
- * range for the period. Uses the composite index (employeeDocId, attendanceDate).
- * workingDays = calendar days in month minus Sundays.
- * presentDays = distinct dates employee checked In.
- * lopDays = workingDays - presentDays (capped at 0).
- */
+const STANDARD_WORKING_HOURS = 8;
+
 export async function aggregateAttendance(
   employeeDocId: string,
   period: string,
@@ -38,30 +28,72 @@ export async function aggregateAttendance(
     .where("attendanceDate", "<=", endDateStr)
     .get();
 
-  const presentSet = new Set<string>();
-  snapshot.docs.forEach((d) => {
-    const data = d.data();
-    if (data.status !== "In") return;
+  type LogEntry = {
+    attendanceDate: string;
+    status: string;
+    reportedAt?: { seconds?: number; nanoseconds?: number; toDate?: () => Date };
+    createdAt?: { seconds?: number; nanoseconds?: number; toDate?: () => Date };
+  };
 
-    const dateStr = data.attendanceDate as string | undefined;
-    if (dateStr) {
-      presentSet.add(dateStr);
-    } else {
-      // Fallback for older logs without attendanceDate: parse createdAt
+  const logsByDate = new Map<string, { inTime: Date | null; outTime: Date | null }>();
+
+  snapshot.docs.forEach((d) => {
+    const data = d.data() as LogEntry;
+
+    let dateStr = data.attendanceDate as string | undefined;
+    if (!dateStr) {
       const ts = data.createdAt;
       if (!ts) return;
-      const date = ts?.toDate ? ts.toDate() : new Date(ts);
+      const date = ts?.toDate ? ts.toDate() : new Date(ts as unknown as Date);
       const y = date.getFullYear();
       const mo = String(date.getMonth() + 1).padStart(2, "0");
-      const d2 = String(date.getDate()).padStart(2, "0");
-      // Only count if within the target month
+      const dd = String(date.getDate()).padStart(2, "0");
       if (`${y}-${mo}` === `${year}-${monthPadded}`) {
-        presentSet.add(`${y}-${mo}-${d2}`);
+        dateStr = `${y}-${mo}-${dd}`;
+      }
+    }
+    if (!dateStr) return;
+
+    const existing = logsByDate.get(dateStr) ?? { inTime: null, outTime: null };
+
+    const timestampToDate = (ts: LogEntry["reportedAt"]): Date | null => {
+      if (!ts) return null;
+      if (typeof ts.toDate === "function") return ts.toDate();
+      if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
+      return null;
+    };
+
+    if (data.status === "In") {
+      const inTime = timestampToDate(data.reportedAt);
+      if (!existing.inTime || (inTime && inTime < existing.inTime)) {
+        existing.inTime = inTime;
+      }
+    } else if (data.status === "Out") {
+      const outTime = timestampToDate(data.reportedAt);
+      if (!existing.outTime || (outTime && outTime > existing.outTime)) {
+        existing.outTime = outTime;
+      }
+    }
+
+    logsByDate.set(dateStr, existing);
+  });
+
+  const presentSet = new Set<string>();
+  let totalOvertimeHours = 0;
+
+  logsByDate.forEach((entry, dateStr) => {
+    if (entry.inTime) {
+      presentSet.add(dateStr);
+    }
+
+    if (entry.inTime && entry.outTime) {
+      const hoursWorked = (entry.outTime.getTime() - entry.inTime.getTime()) / (1000 * 60 * 60);
+      if (hoursWorked > STANDARD_WORKING_HOURS) {
+        totalOvertimeHours += hoursWorked - STANDARD_WORKING_HOURS;
       }
     }
   });
 
-  // Working days = total days in month minus Sundays
   const daysInMonth = lastDay;
   let sundays = 0;
   for (let day = 1; day <= daysInMonth; day++) {
@@ -71,5 +103,5 @@ export async function aggregateAttendance(
   const presentDays = Math.min(presentSet.size, workingDays);
   const lopDays = Math.max(0, workingDays - presentDays);
 
-  return { presentDays, workingDays, lopDays, overtimeHours: 0 };
+  return { presentDays, workingDays, lopDays, overtimeHours: Math.round(totalOvertimeHours * 100) / 100 };
 }

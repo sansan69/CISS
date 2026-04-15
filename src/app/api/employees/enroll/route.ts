@@ -11,6 +11,7 @@ import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
 } from "@/types/enrollment";
+import { requireAdmin } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 
@@ -53,6 +54,8 @@ async function generateUniqueEmployeeId(
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAdmin(request);
+
     const payload = enrollmentSubmissionSchema.parse(await request.json());
     const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
     const district = canonicalizeDistrictName(payload.district, districtSuggestions);
@@ -101,6 +104,8 @@ export async function POST(request: NextRequest) {
     );
     const now = Timestamp.now();
 
+    const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
+
     const employeeData = {
       employeeId,
       qrCodeUrl,
@@ -119,7 +124,7 @@ export async function POST(request: NextRequest) {
       district,
       fullAddress: payload.fullAddress.toUpperCase(),
       emailAddress: payload.emailAddress.toLowerCase(),
-      phoneNumber: payload.phoneNumber,
+      phoneNumber: normalizedPhone,
       stateCode: REGION_CODE,
       status: "Active",
       createdAt: now,

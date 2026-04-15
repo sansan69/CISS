@@ -97,7 +97,7 @@ export default function BulkImportPage() {
     }
 
     const processClientsSitesImport = async (rows: any[], file: File) => {
-        const batch = writeBatch(db);
+        const BATCH_SIZE = 500;
         const results: ProcessedRecord[] = [];
         const headers = Object.keys(rows[0] || {});
     
@@ -108,6 +108,8 @@ export default function BulkImportPage() {
             });
             return row;
         });
+
+        const batchOps: { ref: any; data: any }[] = [];
     
         for (const row of processedRows) {
             const clientName = row['Client Name'];
@@ -124,7 +126,7 @@ export default function BulkImportPage() {
             
             if (clientDocs.empty) {
                 const newClientRef = doc(collection(db, 'clients'));
-                batch.set(newClientRef, { name: clientName, createdAt: serverTimestamp() });
+                batchOps.push({ ref: newClientRef, data: { name: clientName, createdAt: serverTimestamp() } });
                 clientId = newClientRef.id;
             } else {
                 clientId = clientDocs.docs[0].id;
@@ -156,11 +158,19 @@ export default function BulkImportPage() {
                 }
             }
 
-            batch.set(doc(collection(db, 'sites')), siteData);
+            batchOps.push({ ref: doc(collection(db, 'sites')), data: siteData });
             results.push({ data: row, status: 'success', message: 'Created successfully' });
         }
+
+        for (let i = 0; i < batchOps.length; i += BATCH_SIZE) {
+            const chunk = batchOps.slice(i, i + BATCH_SIZE);
+            const batch = writeBatch(db);
+            for (const op of chunk) {
+                batch.set(op.ref, op.data);
+            }
+            await batch.commit();
+        }
     
-        await batch.commit();
         return results;
     };
 
@@ -266,12 +276,12 @@ export default function BulkImportPage() {
 
                 toast({ title: "Uploading...", description: `Importing ${validRecords.length} valid employee records.` });
 
-                const batch = writeBatch(db);
+                const BATCH_SIZE = 500;
                 const employeesRef = collection(db, "employees");
 
-                // Use a timestamp-based seed so repeated imports get different ID ranges
-                // and IDs within a single batch are all distinct.
                 const batchSeed = Math.floor(Date.now() / 1000) % 9000 + 1000;
+
+                const batchOps: { ref: any; data: any }[] = [];
 
                 for (let i = 0; i < validRecords.length; i++) {
                     const record = validRecords[i];
@@ -294,10 +304,17 @@ export default function BulkImportPage() {
                         dateOfBirth: Timestamp.fromDate(record.dateOfBirth),
                     };
 
-                    batch.set(employeeDocRef, finalRecord);
+                    batchOps.push({ ref: employeeDocRef, data: finalRecord });
                 }
 
-                await batch.commit();
+                for (let i = 0; i < batchOps.length; i += BATCH_SIZE) {
+                    const chunk = batchOps.slice(i, i + BATCH_SIZE);
+                    const batch = writeBatch(db);
+                    for (const op of chunk) {
+                        batch.set(op.ref, op.data);
+                    }
+                    await batch.commit();
+                }
 
                 toast({
                     title: 'Import Successful',

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, documentId, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,7 +139,7 @@ export function AssignedGuardsExportPanel() {
       for (let index = 0; index < guardIds.length; index += 10) {
         const chunk = guardIds.slice(index, index + 10);
         if (!chunk.length) continue;
-        const employeeSnapshot = await getDocs(query(collection(db, 'employees'), where('__name__', 'in', chunk)) as any);
+        const employeeSnapshot = await getDocs(query(collection(db, 'employees'), where(documentId(), 'in', chunk)));
         employeeSnapshot.docs.forEach((d) => {
           employees[d.id] = d.data() as any;
         });

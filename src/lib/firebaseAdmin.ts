@@ -54,7 +54,7 @@ function initializeAdmin() {
 
   return admin.initializeApp({
     credential,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    storageBucket: process.env.FIREBASE_ADMIN_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   });
 }
 

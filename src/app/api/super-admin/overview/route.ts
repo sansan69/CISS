@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
@@ -25,7 +26,7 @@ async function withTransientRegionApp<T>(
   callback: (db: FirebaseFirestore.Firestore) => Promise<T>,
 ) {
   const serviceAccount = JSON.parse(credentials.serviceAccountJson) as admin.ServiceAccount;
-  const appName = `super-admin-overview-${credentials.firebaseProjectId}-${Date.now()}`;
+  const appName = `super-admin-overview-${credentials.firebaseProjectId}-${crypto.randomUUID()}`;
   const regionApp = admin.initializeApp(
     {
       credential: admin.credential.cert({

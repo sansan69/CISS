@@ -4,7 +4,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, getDocs, deleteDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
+import { authorizedFetch } from '@/lib/api-client';
 import Link from 'next/link';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -120,18 +121,18 @@ const AssignGuardsDialog: React.FC<{
     const handleSaveAssignments = async () => {
         setIsSaving(true);
         try {
-            const workOrderRef = doc(db, "workOrders", workOrder.id);
-            await updateDoc(workOrderRef, {
-                assignedGuards: selectedGuards,
-                ...buildFirestoreUpdateAudit(),
-                assignmentHistory: arrayUnion(
-                    buildFirestoreAuditEvent('work_order_assignments_updated', undefined, {
+            const res = await authorizedFetch(`/api/admin/work-orders/${workOrder.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    assignedGuards: selectedGuards,
+                    assignmentHistory: buildFirestoreAuditEvent('work_order_assignments_updated', undefined, {
                         siteId: workOrder.siteId,
                         assignedGuardIds: selectedGuards.map(g => g.uid),
                         assignedCount: selectedGuards.length,
                     }),
-                ),
+                }),
             });
+            if (!res.ok) throw new Error('Failed to save');
             haptic('success');
             toast({ title: "Saved", description: "Guard assignments updated successfully." });
             onClose();
@@ -523,6 +524,8 @@ export default function AssignGuardsPage() {
     useEffect(() => {
         if (!siteId) return;
 
+        let unsubscribe: (() => void) | null = null;
+
         const fetchSiteAndWorkOrders = async () => {
             setIsLoading(true);
             setError(null);
@@ -538,7 +541,7 @@ export default function AssignGuardsPage() {
                 setSite(siteData);
 
                 const q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
-                const unsubscribe = onSnapshot(q, (snapshot) => {
+                unsubscribe = onSnapshot(q, (snapshot) => {
                     const todayMs = startOfToday().getTime();
                     const orders = snapshot.docs
                         .map(d => ({ id: d.id, ...d.data() } as WorkOrder))
@@ -552,8 +555,6 @@ export default function AssignGuardsPage() {
                     setError("Could not load work orders for this site.");
                     setIsLoading(false);
                 });
-
-                return unsubscribe;
             } catch (err: any) {
                 setError(err.message);
                 setIsLoading(false);
@@ -561,6 +562,10 @@ export default function AssignGuardsPage() {
         };
 
         fetchSiteAndWorkOrders();
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
     }, [siteId, userRole, assignedDistricts]);
 
     const handleOpenAssignDialog = async (workOrder: WorkOrder) => {
@@ -589,19 +594,19 @@ export default function AssignGuardsPage() {
         try {
             const male = Number.isFinite(editMale) ? editMale : 0;
             const female = Number.isFinite(editFemale) ? editFemale : 0;
-            await updateDoc(doc(db, 'workOrders', editCountsFor), {
-                maleGuardsRequired: male,
-                femaleGuardsRequired: female,
-                totalManpower: male + female,
-                ...buildFirestoreUpdateAudit(),
-                assignmentHistory: arrayUnion(
-                    buildFirestoreAuditEvent('work_order_manpower_updated', undefined, {
+            const res = await authorizedFetch(`/api/admin/work-orders/${editCountsFor}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    maleGuardsRequired: male,
+                    femaleGuardsRequired: female,
+                    assignmentHistory: buildFirestoreAuditEvent('work_order_manpower_updated', undefined, {
                         maleGuardsRequired: male,
                         femaleGuardsRequired: female,
                         totalManpower: male + female,
                     }),
-                ),
+                }),
             });
+            if (!res.ok) throw new Error('Failed to save');
             haptic('success');
             toast({ title: "Updated", description: "Manpower requirements saved." });
             setEditCountsFor(null);
@@ -617,7 +622,10 @@ export default function AssignGuardsPage() {
         if (!deleteConfirmOrder) return;
         setIsDeletingOrder(true);
         try {
-            await deleteDoc(doc(db, 'workOrders', deleteConfirmOrder.id));
+            const res = await authorizedFetch(`/api/admin/work-orders/${deleteConfirmOrder.id}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) throw new Error('Failed to delete');
             haptic('error');
             toast({ title: "Deleted", description: "Work order removed." });
             setDeleteConfirmOrder(null);

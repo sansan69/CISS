@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 
 // Simple in-memory rate limiter: max 10 lookups per IP per minute.
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function getClientIp(request: NextRequest): string {
@@ -15,7 +15,7 @@ function getClientIp(request: NextRequest): string {
   );
 }
 
-function checkRateLimit(ip: string): boolean {
+function checkRateLimit(ip: string, max = RATE_LIMIT_MAX): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
@@ -42,7 +42,16 @@ if (typeof setInterval !== "undefined") {
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
-    if (!checkRateLimit(ip)) {
+
+    let isAuthenticated = false;
+    try {
+      const { verifyRequestAuth } = await import("@/lib/server/auth");
+      await verifyRequestAuth(request);
+      isAuthenticated = true;
+    } catch {}
+
+    const maxAttempts = isAuthenticated ? 20 : RATE_LIMIT_MAX;
+    if (!checkRateLimit(ip, maxAttempts)) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment and try again." },
         { status: 429 },

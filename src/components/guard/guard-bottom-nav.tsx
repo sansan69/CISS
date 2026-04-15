@@ -20,8 +20,8 @@ import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
-const BRAND_BLUE = "#014c85";
-const BRAND_GOLD = "#bd9c55";
+const BRAND_BLUE = "hsl(206 98% 26%)";
+const BRAND_GOLD = "hsl(41 44% 54%)";
 
 interface NavTab {
   href: string;
@@ -65,6 +65,7 @@ export function GuardBottomNav() {
     <>
       {/* Bottom Nav Bar */}
       <nav
+        aria-label="Guard navigation"
         className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
         style={{
           height: 64,
@@ -156,7 +157,7 @@ export function GuardBottomNav() {
                 >
                   <span
                     className="flex items-center justify-center h-9 w-9 rounded-xl"
-                    style={{ backgroundColor: `${BRAND_BLUE}15` }}
+                    style={{ backgroundColor: "hsl(206 98% 26% / 0.08)" }}
                   >
                     <item.icon size={18} style={{ color: BRAND_BLUE }} />
                   </span>

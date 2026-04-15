@@ -23,6 +23,32 @@ import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
 import { PageHeader } from '@/components/layout/page-header';
 
+const XLSX_EXCLUDED_FIELDS = new Set([
+    'bankAccountNumber',
+    'ifscCode',
+    'bankName',
+    'panNumber',
+    'epfUanNumber',
+    'esicNumber',
+    'idProofNumber',
+    'identityProofNumber',
+    'addressProofNumber',
+    'bankPassbookStatementUrl',
+    'signatureUrl',
+    'profilePictureUrl',
+    'qrCodeUrl',
+    'identityProofUrlFront',
+    'identityProofUrlBack',
+    'addressProofUrlFront',
+    'addressProofUrlBack',
+    'idProofDocumentUrl',
+    'idProofDocumentUrlFront',
+    'idProofDocumentUrlBack',
+    'policeClearanceCertificateUrl',
+    'publicProfile',
+    'searchableFields',
+]);
+
 interface ClientOption { id: string; name: string; }
 // Keep this list in sync with the enrollment and edit profile forms.
 const keralaDistricts = [
@@ -137,9 +163,10 @@ export default function DataExportPage() {
                 const docData = doc.data();
                 const processedRecord: {[key: string]: any} = {};
                 Object.keys(docData).forEach(key => {
+                    if (XLSX_EXCLUDED_FIELDS.has(key)) return;
                     if (docData[key] instanceof Timestamp) {
                         processedRecord[key] = docData[key].toDate().toISOString().split("T")[0];
-                    } else if (key !== 'searchableFields' && key !== 'publicProfile') {
+                    } else {
                         processedRecord[key] = docData[key];
                     }
                 });
@@ -162,8 +189,6 @@ export default function DataExportPage() {
         }
     };
     
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
     const handlePdfExport = async () => {
         if (selectedClient === 'all') {
             toast({ variant: 'destructive', title: "Client Not Selected", description: "Please select a specific client to export Profile Kits." });
@@ -186,9 +211,8 @@ export default function DataExportPage() {
         }
 
         const employeesToExport = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
-        toast({ title: `Starting PDF Generation for ${employeesToExport.length} Employees`, description: "This may take some time. Please keep this tab open and approve the multiple file downloads." });
-        
-        // --- Helpers copied from profile kit generators ---
+        toast({ title: `Starting PDF Generation for ${employeesToExport.length} Employees`, description: "This may take some time. Please keep this tab open." });
+
         function normalizePdfText(input: unknown) {
             let s = (input ?? '').toString();
             s = s.replace(/\r\n/g, '\n');
@@ -236,12 +260,11 @@ export default function DataExportPage() {
             if (ext.endsWith('.png')) return 'png';
             if (ext.endsWith('.jpg') || ext.endsWith('.jpeg')) return 'jpg';
             if (ext.endsWith('.pdf')) return 'pdf';
-            // magic numbers
             if (bytes.length >= 4) {
                 if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
                 if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpg';
                 if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'pdf';
-                if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return 'webp'; // RIFF (likely WEBP)
+                if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return 'webp';
             }
             return 'unknown';
         }
@@ -251,6 +274,8 @@ export default function DataExportPage() {
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
             return bytes;
         };
+
+        const individualPdfBytes: Uint8Array[] = [];
 
         for (let i = 0; i < employeesToExport.length; i++) {
             const employee = employeesToExport[i];
@@ -266,7 +291,6 @@ export default function DataExportPage() {
                 const logoBytes = await fetch(cissLogoUrl).then(res => res.arrayBuffer());
                 const logoImage = await pdfDoc.embedPng(logoBytes);
 
-                // --- Page 1: Biodata ---
                 const page = pdfDoc.addPage();
                 const { width, height } = page.getSize();
                 const margin = 40;
@@ -275,7 +299,6 @@ export default function DataExportPage() {
                     page.drawText(text || 'N/A', { x, y, font, size, color });
                 };
                 
-                // Header
                 logoImage.scaleToFit(50, 50);
                 page.drawImage(logoImage, { x: margin, y: height - margin - 50, width: 50, height: 50 });
                 
@@ -306,7 +329,6 @@ export default function DataExportPage() {
                 page.drawLine({ start: { x: margin, y: y }, end: { x: width - margin, y: y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
                 y -= 25;
 
-                // Helper to draw a section with a title and grid items
                 const drawSection = (title: string, items: {label: string, value: any}[], startY: number): number => {
                     page.drawText(title, { x: margin, y: startY, font: helveticaBoldFont, size: 14, color: rgb(0.05, 0.2, 0.45) });
                     startY -= 25;
@@ -379,7 +401,6 @@ export default function DataExportPage() {
                 y = drawSection("Bank & Statutory Details", statutoryItems, y);
 
 
-                // --- Page 2: QR Code ---
                 if (employee.qrCodeUrl) {
                     try {
                         const qrPage = pdfDoc.addPage();
@@ -456,7 +477,6 @@ export default function DataExportPage() {
                     }
                 }
 
-                // --- Documents ---
                  const documents = [
                     { url: employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl, title: "Identity Proof (Front)"},
                     { url: employee.identityProofUrlBack || legacy.idProofDocumentUrlBack, title: "Identity Proof (Back)"},
@@ -474,7 +494,6 @@ export default function DataExportPage() {
                     const fmt = detectFormat(imageBytes, docItem.url);
                     const docPage = pdfDoc.addPage();
                     if (fmt === 'pdf' || fmt === 'webp' || fmt === 'unknown') {
-                        // Unsupported for embedding; add a placeholder note instead of throwing
                         docPage.drawText(docItem.title, { x: margin, y: docPage.getHeight() - margin, font: helveticaBoldFont, size: 14});
                         const notice = fmt === 'pdf' ? 'Attached document is a PDF (preview not supported in kit).' : 'Attached document format not supported for inline preview.';
                         drawMultilineText({ page: docPage, text: notice, font: helveticaFont, fontSize: 11, x: margin, y: docPage.getHeight() - margin - 30, maxWidth: docPage.getWidth() - margin * 2 });
@@ -499,7 +518,6 @@ export default function DataExportPage() {
                     }
                 }
                 
-                // --- Last Page: Terms and Conditions ---
                 const tcPage = pdfDoc.addPage();
                 const tcWidth = tcPage.getWidth();
                 let tcY = tcPage.getHeight() - margin;
@@ -536,7 +554,6 @@ export default function DataExportPage() {
                 drawTcText("I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my\nenrollment. I confirm that all information and documents provided by me are true and correct to the best of my\nknowledge.");
                 tcY -= 70;
 
-                // Add Signature anchored bottom-right
                 const signatureBytes = await fetchImageBytes(employee.signatureUrl);
                 if (signatureBytes) {
                     let signatureImage;
@@ -563,28 +580,39 @@ export default function DataExportPage() {
                 }
 
                 const pdfBytes = await pdfDoc.save();
-                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-                const blobUrl = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = blobUrl;
-                
-                const formattedJoiningDate = format(employee.joiningDate.toDate(), 'yyyy-MM-dd');
-                const cleanFullName = employee.fullName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
-                const cleanClientName = employee.clientName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
-                const fileName = `ProfileKit_${cleanFullName}_${cleanClientName}_${formattedJoiningDate}.pdf`;
-                a.download = fileName;
-        
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(blobUrl);
-
-                toast({ title: `Generated Kit for ${employee.fullName} (${i+1}/${employeesToExport.length})` });
-                await sleep(500); // Small delay between downloads
+                individualPdfBytes.push(pdfBytes);
+                toast({ title: `Processed ${employee.fullName} (${i+1}/${employeesToExport.length})` });
 
             } catch (err: any) {
                 console.error(`Failed to generate PDF for ${employee.fullName}:`, err);
                 toast({ variant: 'destructive', title: 'PDF Generation Failed', description: `Could not generate kit for ${employee.fullName}. ${err.message}` });
+            }
+        }
+
+        if (individualPdfBytes.length > 0) {
+            try {
+                const mergedPdf = await PDFDocument.create();
+                for (const pdfBytes of individualPdfBytes) {
+                    const srcDoc = await PDFDocument.load(pdfBytes);
+                    const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+                    for (const page of copiedPages) {
+                        mergedPdf.addPage(page);
+                    }
+                }
+                const mergedBytes = await mergedPdf.save();
+                const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                const cleanClientName = selectedClient.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+                a.download = `ProfileKits_${cleanClientName}_${new Date().toISOString().split('T')[0]}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(blobUrl);
+            } catch (mergeErr) {
+                console.error("Failed to merge PDFs:", mergeErr);
+                toast({ variant: 'destructive', title: 'PDF Merge Failed', description: 'Individual PDFs were generated but could not be merged into a single file.' });
             }
         }
         
@@ -641,7 +669,7 @@ export default function DataExportPage() {
                         {exportType === 'pdf' &&
                             <Alert>
                                 <AlertTriangle className="h-4 w-4" /><AlertTitle>PDF Export Requirement</AlertTitle>
-                                <AlertDescription>For bulk PDF generation, you must select a specific client. This prevents browser overload. Your browser will also ask for permission to download multiple files.</AlertDescription>
+                                <AlertDescription>For bulk PDF generation, you must select a specific client. All profile kits will be merged into a single PDF file for download.</AlertDescription>
                             </Alert>
                         }
 

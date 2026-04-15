@@ -9,6 +9,7 @@ import {
   deleteDoc,
   doc,
   GeoPoint,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -332,11 +333,14 @@ export default function ClientDashboardPage() {
   const handleDeleteClient = async () => {
     try {
       const res = await authorizedFetch(`/api/admin/clients/${clientId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || "Failed to delete");
+      }
       toast({ title: "Client deleted" });
       router.replace("/settings/clients");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      toast({ variant: "destructive", title: "Cannot delete client", description: err.message });
     }
   };
 
@@ -440,6 +444,22 @@ export default function ClientDashboardPage() {
   const handleDeleteSite = async () => {
     if (!deleteSiteTarget) return;
     try {
+      const workOrdersSnap = await getDocs(
+        query(collection(db, "workOrders"), where("siteId", "==", deleteSiteTarget.id))
+      );
+      const hasAssigned = workOrdersSnap.docs.some((d) => {
+        const assigned = (d.data() as any).assignedGuards;
+        return Array.isArray(assigned) && assigned.length > 0;
+      });
+      if (hasAssigned) {
+        toast({
+          variant: "destructive",
+          title: "Cannot delete site",
+          description: "This site has work orders with assigned guards. Remove the assignments or delete the work orders first.",
+        });
+        setDeleteSiteTarget(null);
+        return;
+      }
       await deleteDoc(doc(db, "sites", deleteSiteTarget.id));
       toast({ title: "Site deleted" });
     } catch {
@@ -1086,7 +1106,7 @@ export default function ClientDashboardPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete site?</AlertDialogTitle>
             <AlertDialogDescription>
-              "<strong>{deleteSiteTarget?.siteName}</strong>" will be permanently removed. This does not delete historical attendance records.
+              "<strong>{deleteSiteTarget?.siteName}</strong>" will be permanently removed. Sites with assigned guards cannot be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1122,7 +1142,7 @@ export default function ClientDashboardPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete client?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{client.name}</strong> and its configuration will be permanently deleted. Sites and attendance records are NOT automatically deleted.
+              <strong>{client.name}</strong> and its configuration will be permanently deleted. The client must have no sites, locations, or users before it can be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

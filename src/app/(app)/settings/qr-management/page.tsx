@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { QrCode, AlertTriangle, CheckCircle, Users, RefreshCw, Loader2, ChevronLeft } from 'lucide-react';
@@ -21,42 +21,95 @@ import {
 } from "@/components/ui/alert-dialog";
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, writeBatch, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { generateQrCodeDataUrl } from '@/lib/qr';
 
 export default function QrManagementPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+  const [totalEmployees, setTotalEmployees] = useState(0);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const countActive = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'employees'), where('status', '==', 'Active')));
+        setTotalEmployees(snap.size);
+      } catch {
+        setTotalEmployees(0);
+      }
+    };
+    countActive();
+  }, []);
 
   const handleBulkRegenerate = async () => {
     setIsGenerating(true);
     setGenerationStatus('generating');
     setGenerationProgress(0);
 
-    // Simulate bulk QR code regeneration
-    const totalEmployees = 1234; // Example total employees
-    let processedCount = 0;
-    const interval = setInterval(() => {
-      processedCount += Math.floor(totalEmployees / 20); // Process in chunks
-      const progress = Math.min(100, Math.floor((processedCount / totalEmployees) * 100));
-      setGenerationProgress(progress);
+    try {
+      const snap = await getDocs(query(collection(db, 'employees'), where('status', '==', 'Active')));
+      const total = snap.size;
+      setTotalEmployees(total);
 
-      if (progress >= 100) {
-        clearInterval(interval);
-        // Simulate success/failure
-        setTimeout(() => {
-          setIsGenerating(false);
-          const success = Math.random() > 0.1; // 90% success rate
-          if (success) {
-            setGenerationStatus('success');
-            toast({ title: "Bulk QR Regeneration Successful", description: `QR codes for ${totalEmployees} employees have been updated.` });
-          } else {
-            setGenerationStatus('error');
-            toast({ variant: "destructive", title: "Bulk QR Regeneration Failed", description: "An error occurred during bulk QR code regeneration. Please try again." });
-          }
-        }, 500);
+      if (total === 0) {
+        setIsGenerating(false);
+        setGenerationStatus('success');
+        toast({ title: "No Active Employees", description: "There are no active employees to regenerate QR codes for." });
+        return;
       }
-    }, 100);
+
+      let processedCount = 0;
+      let successCount = 0;
+      let failCount = 0;
+      const BATCH_SIZE = 500;
+      let batch = writeBatch(db);
+      let opsInBatch = 0;
+
+      for (const docSnap of snap.docs) {
+        try {
+          const data = docSnap.data();
+          const employeeId = data.employeeId || '';
+          const fullName = data.fullName || '';
+          const phoneNumber = data.phoneNumber || '';
+          const qrCodeUrl = await generateQrCodeDataUrl(employeeId, fullName, phoneNumber);
+          batch.update(doc(db, 'employees', docSnap.id), { qrCodeUrl, updatedAt: serverTimestamp() });
+          opsInBatch++;
+          successCount++;
+
+          if (opsInBatch >= BATCH_SIZE) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opsInBatch = 0;
+          }
+        } catch {
+          failCount++;
+        }
+
+        processedCount++;
+        setGenerationProgress(Math.round((processedCount / total) * 100));
+      }
+
+      if (opsInBatch > 0) {
+        await batch.commit();
+      }
+
+      setIsGenerating(false);
+      if (failCount === 0) {
+        setGenerationStatus('success');
+        toast({ title: "Bulk QR Regeneration Successful", description: `QR codes for ${successCount} employees have been updated.` });
+      } else {
+        setGenerationStatus('success');
+        toast({ title: "Bulk QR Regeneration Completed", description: `${successCount} succeeded, ${failCount} failed out of ${total} employees.` });
+      }
+    } catch (err) {
+      console.error("Bulk QR regeneration failed:", err);
+      setIsGenerating(false);
+      setGenerationStatus('error');
+      toast({ variant: "destructive", title: "Bulk QR Regeneration Failed", description: "An error occurred during bulk QR code regeneration. Please try again." });
+    }
   };
 
   return (
@@ -101,7 +154,7 @@ export default function QrManagementPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Users className="h-5 w-5" />
-            <span>Total Active Employees: 1,234 (example)</span>
+            <span>Total Active Employees: {totalEmployees}</span>
           </div>
           
           {isGenerating && (

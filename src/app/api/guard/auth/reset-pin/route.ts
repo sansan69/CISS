@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db as adminDb } from '@/lib/firebaseAdmin';
 import { hashPin } from '@/lib/guard/pin-utils';
+import { verifyOtp } from '@/lib/guard/otp-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,11 +30,10 @@ export async function POST(request: NextRequest) {
 
     const employeeDoc = empSnap.docs[0];
 
-    // Verify OTP — must match phone + otp and not be expired
+    // Verify OTP — must match phone and not be expired
     const otpSnap = await adminDb
       .collection('resetOtps')
       .where('phone', '==', phoneNumber)
-      .where('otp', '==', otp)
       .limit(1)
       .get();
 
@@ -45,7 +45,13 @@ export async function POST(request: NextRequest) {
     const otpData = otpDoc.data();
 
     if (new Date(otpData.expiresAt) < new Date()) {
+      await otpDoc.ref.delete();
       return NextResponse.json({ error: 'OTP expired. Please request a new one.' }, { status: 400 });
+    }
+
+    const isValid = await verifyOtp(otp, otpData.otpHash as string | undefined, otpData.otp as string | undefined);
+    if (!isValid) {
+      return NextResponse.json({ error: 'Invalid OTP' }, { status: 400 });
     }
 
     // Hash the new PIN the same way setup-pin does (SHA-256 via Web Crypto)

@@ -11,7 +11,7 @@ export type CalculationType =
   | "kerala_slab"
   | "tds_projected";
 export type StatutoryType = "epf" | "esic" | "pt" | "tds" | null;
-export type PayrollCycleStatus = "draft" | "processing" | "review" | "finalized" | "paid";
+export type PayrollCycleStatus = "draft" | "processing" | "review" | "finalized" | "paid" | "failed";
 export type PayrollEntryStatus = "pending" | "adjusted" | "finalized";
 
 export interface WageComponent {

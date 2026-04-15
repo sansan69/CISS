@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, ensureAuthPersistence } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
+import { isLegacyAdminEmail } from '@/lib/auth/admin';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -38,7 +39,31 @@ export default function AdminLoginPage() {
 
     try {
       await ensureAuthPersistence();
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+      if (!userCredential.user.emailVerified) {
+        toast({
+          variant: 'destructive',
+          title: 'Email Not Verified',
+          description: 'Please verify your email address before logging in.',
+        });
+        await auth.signOut();
+        return;
+      }
+
+      const idTokenResult = await userCredential.user.getIdTokenResult();
+      const role = idTokenResult.claims.role;
+      const isAdmin = idTokenResult.claims.admin === true || role === 'admin' || role === 'superAdmin' || isLegacyAdminEmail(userCredential.user.email);
+
+      if (!isAdmin) {
+        toast({
+          variant: 'destructive',
+          title: 'Access Denied',
+          description: 'You do not have admin access to this portal.',
+        });
+        await auth.signOut();
+        return;
+      }
 
       if (auth.currentUser) {
         try {

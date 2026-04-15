@@ -71,6 +71,14 @@ export const enrollmentSubmissionSchema = z
         path: ["otherQualification"],
       });
     }
+
+    if (data.identityProofType === data.addressProofType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Identity proof and address proof must be different types.",
+        path: ["addressProofType"],
+      });
+    }
   });
 
 export type EnrollmentSubmission = z.infer<typeof enrollmentSubmissionSchema>;

@@ -37,17 +37,20 @@ export async function POST(
       serviceAccountBase64: body.serviceAccountBase64,
     });
 
-    const connectionSaved = await saveRegionConnection(
-      adminDb,
-      {
-        regionCode: id.toUpperCase(),
-        firebaseProjectId: region.firebaseProjectId,
-        storageBucket: region.storageBucket,
-        serviceAccountJson: body.serviceAccountJson,
-        serviceAccountBase64: body.serviceAccountBase64,
-      },
-      { uid: actor.uid, email: actor.email },
-    );
+    let connectionSaved: boolean | null = null;
+    if (result.success) {
+      connectionSaved = await saveRegionConnection(
+        adminDb,
+        {
+          regionCode: id.toUpperCase(),
+          firebaseProjectId: region.firebaseProjectId,
+          storageBucket: region.storageBucket,
+          serviceAccountJson: body.serviceAccountJson,
+          serviceAccountBase64: body.serviceAccountBase64,
+        },
+        { uid: actor.uid, email: actor.email },
+      );
+    }
 
     const checklist = mergeChecklist(region.onboardingChecklist, {
       metadataSaved: true,

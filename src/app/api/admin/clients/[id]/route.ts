@@ -56,6 +56,38 @@ export async function DELETE(
     await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
+
+    const sitesSnap = await adminDb
+      .collection("sites")
+      .where("clientId", "==", id)
+      .limit(1)
+      .get();
+
+    const locationsSnap = await adminDb
+      .collection("clientLocations")
+      .where("clientId", "==", id)
+      .limit(1)
+      .get();
+
+    const usersSnap = await adminDb
+      .collection("clientUsers")
+      .where("clientId", "==", id)
+      .limit(1)
+      .get();
+
+    if (!sitesSnap.empty || !locationsSnap.empty || !usersSnap.empty) {
+      const parts: string[] = [];
+      if (!sitesSnap.empty) parts.push("sites");
+      if (!locationsSnap.empty) parts.push("locations");
+      if (!usersSnap.empty) parts.push("users");
+      return NextResponse.json(
+        {
+          error: `Cannot delete client with existing ${parts.join(", ")}. Please remove them first.`,
+        },
+        { status: 409 }
+      );
+    }
+
     await adminDb.collection("clients").doc(id).delete();
     return NextResponse.json({ ok: true });
   } catch (error: any) {
