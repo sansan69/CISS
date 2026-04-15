@@ -57,3 +57,4 @@ opencode.jsonc
 autoresearch/
 streamvault/
 .next.stale.*/
+.env*.local
