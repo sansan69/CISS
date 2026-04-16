@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { verifyRequestAuth, requireAdminOrFieldOfficer, hasAdminAccess, unauthorizedResponse } from "@/lib/server/auth";
 
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
@@ -15,7 +15,9 @@ function toCsv(rows: Record<string, unknown>[]) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin(request);
+    const decodedToken = await verifyRequestAuth(request);
+    requireAdminOrFieldOfficer(decodedToken);
+    const isAdmin = hasAdminAccess(decodedToken);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const from = request.nextUrl.searchParams.get("from");
     const to = request.nextUrl.searchParams.get("to");
@@ -48,6 +50,27 @@ export async function GET(request: NextRequest) {
     }
     if (clientName && clientName !== "all") {
       queryRef = queryRef.where("clientName", "==", clientName);
+    }
+
+    // Field officers can only export their assigned districts
+    if (!isAdmin) {
+      const foDistricts: string[] = Array.isArray(decodedToken.assignedDistricts)
+        ? (decodedToken.assignedDistricts as string[])
+        : [];
+      if (foDistricts.length === 0) {
+        return NextResponse.json({ rows: [], truncated: false });
+      }
+      // If a district filter was already applied, verify it's in the FO's scope
+      if (district && district !== "all") {
+        const allowed = foDistricts.some(
+          (d) => d.trim().toLowerCase() === district.trim().toLowerCase(),
+        );
+        if (!allowed) {
+          return NextResponse.json({ error: "Access denied for that district." }, { status: 403 });
+        }
+      } else {
+        queryRef = queryRef.where("district", "in", foDistricts);
+      }
     }
 
     const LIMIT = 1000;
@@ -97,7 +120,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ rows, truncated });
   } catch (error: any) {
-    const status = error?.message === "Admin access required." ? 403 : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+    const msg = error?.message || "Unauthorized";
+    if (msg.includes("Missing bearer token") || msg.includes("access required")) {
+      return unauthorizedResponse(msg, 401);
+    }
+    console.error("[reports/attendance]", error);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

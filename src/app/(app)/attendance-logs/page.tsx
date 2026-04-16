@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, limit, onSnapshot, orderBy, query, Timestamp } from "firebase/firestore";
+import { collection, limit, onSnapshot, orderBy, query, where, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,11 +92,39 @@ export default function AttendanceLogsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const logsQuery = query(
-      collection(db, "attendanceLogs"),
-      orderBy("createdAt", "desc"),
-      limit(200)
-    );
+    // Wait for auth to resolve before subscribing
+    if (userRole === null) return;
+
+    let logsQuery;
+    if (userRole === "client") {
+      if (!clientInfo?.clientName) {
+        setIsLoading(false);
+        return;
+      }
+      logsQuery = query(
+        collection(db, "attendanceLogs"),
+        where("clientName", "==", clientInfo.clientName),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+    } else if (userRole === "fieldOfficer") {
+      if (!assignedDistricts.length) {
+        setIsLoading(false);
+        return;
+      }
+      logsQuery = query(
+        collection(db, "attendanceLogs"),
+        where("district", "in", assignedDistricts),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+    } else {
+      logsQuery = query(
+        collection(db, "attendanceLogs"),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+    }
 
     const unsubscribe = onSnapshot(
       logsQuery,
@@ -113,7 +141,7 @@ export default function AttendanceLogsPage() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [userRole, clientInfo, assignedDistricts]);
 
   const clientOptions = useMemo(() => {
     const names = new Set<string>();

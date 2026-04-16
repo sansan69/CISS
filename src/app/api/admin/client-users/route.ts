@@ -52,6 +52,7 @@ export async function POST(request: Request) {
         email,
         password: body.password,
         displayName: body.name?.trim() || undefined,
+        emailVerified: true,
       });
     } else {
       userRecord = await adminAuth.getUserByEmail(email);
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
     await adminAuth.setCustomUserClaims(userRecord.uid, {
       role: "client",
       clientId,
+      clientName,
       stateCode,
     });
 

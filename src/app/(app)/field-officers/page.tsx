@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon, Wrench, FileText, GraduationCap, Users } from 'lucide-react';
+import { Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon, Wrench, FileText, GraduationCap, Users, ClipboardList } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -40,6 +40,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VisitReportsPanel } from '@/components/field-officers/visit-reports-panel';
 import { TrainingReportsPanel } from '@/components/field-officers/training-reports-panel';
+import { WorkOrdersPanel } from '@/components/field-officers/work-orders-panel';
 import {
   districtMatches,
   getDefaultDistrictSuggestions,
@@ -77,25 +78,28 @@ interface ClaimRepairHealth {
 }
 
 type AuthStatus = 'loading' | 'admin' | 'fieldOfficer' | 'other';
-type WorkspaceTab = 'officers' | 'visit-reports' | 'training-reports';
+type WorkspaceTab = 'officers' | 'work-orders' | 'visit-reports' | 'training-reports';
 type SaveOfficerPayload = { officerData: any; isEditing: boolean };
 
 const ADMIN_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
   { value: 'officers', label: 'Officers', icon: Users },
+  { value: 'work-orders', label: 'Work Orders', icon: ClipboardList },
   { value: 'visit-reports', label: 'Visit Reports', icon: FileText },
   { value: 'training-reports', label: 'Training Reports', icon: GraduationCap },
 ];
 
 const FIELD_OFFICER_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
+  { value: 'work-orders', label: 'Work Orders', icon: ClipboardList },
   { value: 'visit-reports', label: 'Visit Reports', icon: FileText },
   { value: 'training-reports', label: 'Training Reports', icon: GraduationCap },
 ];
 
 function resolveWorkspaceTab(rawTab: string | null, authStatus: AuthStatus): WorkspaceTab {
   if (authStatus === 'fieldOfficer') {
-    return rawTab === 'training-reports' ? 'training-reports' : 'visit-reports';
+    if (rawTab === 'visit-reports' || rawTab === 'training-reports') return rawTab;
+    return 'work-orders';
   }
-  if (rawTab === 'visit-reports' || rawTab === 'training-reports') {
+  if (rawTab === 'work-orders' || rawTab === 'visit-reports' || rawTab === 'training-reports') {
     return rawTab;
   }
   return 'officers';
@@ -649,7 +653,7 @@ export default function FieldOfficersPage() {
         />
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
-          <TabsList className={`grid h-auto w-full gap-2 ${canManageOfficers ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <TabsList className={`grid h-auto w-full gap-2 ${canManageOfficers ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -750,6 +754,10 @@ export default function FieldOfficersPage() {
               </Card>
             </TabsContent>
           )}
+
+          <TabsContent value="work-orders" className="mt-0">
+            <WorkOrdersPanel />
+          </TabsContent>
 
           <TabsContent value="visit-reports" className="mt-0">
             <VisitReportsPanel />

@@ -5,6 +5,62 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-16] — Session: Work Orders tab on Field Officers page
+
+### Work Orders tab added to field-officers page
+**Files created:** `src/components/field-officers/work-orders-panel.tsx`
+**Files modified:** `src/app/(app)/field-officers/page.tsx`
+
+- New `WorkOrdersPanel` component queries `workOrders` from Firestore scoped by role:
+  - admin: `where("date", ">=", today)` — all districts
+  - fieldOfficer: `where("district", "in", assignedDistricts)` + `where("date", ">=", today)`
+  - Uses existing `workOrders: district + date` composite index
+- Groups work orders by site; shows manpower stats (male/female/required/assigned) + progress bar
+- Inline "Assign Guards" dialog (full AssignGuardsDialog component, mobile tabs + desktop side-by-side layout) — no page navigation needed
+- Assign dialog loads active employees scoped to work order's district
+- Guard assignment saves via `PATCH /api/admin/work-orders/:id` (already allows FOs)
+- No export/download button (excluded per spec)
+- Tab added to both admin (4 tabs: Officers / Work Orders / Visit Reports / Training Reports) and fieldOfficer (3 tabs: Work Orders / Visit Reports / Training Reports)
+- FO default tab changed from `visit-reports` to `work-orders`
+- Added `ClipboardList` to imports
+
+---
+
+## [2026-04-16] — Session: Attendance record flow fixes
+
+### Fix 1: clientName added to client user JWT claims
+**File modified:** `src/app/api/admin/client-users/route.ts`
+- `setCustomUserClaims` now includes `clientName` alongside `clientId` and `stateCode`
+- Root cause: Firestore security rules for `attendanceLogs`, `employees`, `workOrders` all use `clientUserClientName()` which reads `request.auth.token.clientName`; without this claim, all collection reads failed for client users
+- Existing clients with broken claims can be repaired via `POST /api/admin/claims/repair` (already handles `clientName` in claimPatch)
+
+### Fix 2: employeePhoneNumber now saved in attendanceLogs
+**File modified:** `src/app/api/attendance/submit/route.ts`
+- Added `employeePhoneNumber: payload.employeePhoneNumber ?? null` to `transaction.set` in the attendance log write
+- Was present in `attendanceSubmissionSchema` and sent by the client but never persisted to Firestore
+
+### Fix 3: Attendance-logs page Firestore query scoped by role
+**File modified:** `src/app/(app)/attendance-logs/page.tsx`
+- Added `where` import from `firebase/firestore`
+- `useEffect` dependency changed from `[]` to `[userRole, clientInfo, assignedDistricts]`
+- `client` role: query uses `where("clientName", "==", clientInfo.clientName)` — fixes Firestore permission denied (list query can't prove all docs match without the filter)
+- `fieldOfficer` role: query uses `where("district", "in", assignedDistricts)` — scopes data to assigned districts at DB level instead of 200-record client-side filter
+- `admin`/other roles: unchanged `orderBy("createdAt", "desc") limit(200)`
+- Auth waits for `userRole !== null` before subscribing
+
+### Fix 4: Attendance export API allows field officers
+**File modified:** `src/app/api/admin/reports/attendance/route.ts`
+- Changed `requireAdmin` → `verifyRequestAuth` + `requireAdminOrFieldOfficer`
+- FOs get district-scoped results: if no district filter in request, adds `where("district", "in", foDistricts)`; if district filter present, validates it's within the FO's assigned districts
+- Improved error handling (auth errors → 401, others → 500)
+
+### Fix 5: Firestore composite indexes for scoped queries
+**File modified:** `firestore.indexes.json`
+- Added `attendanceLogs: clientName ASC + createdAt DESC` (for client role query)
+- Added `attendanceLogs: district ASC + createdAt DESC` (for FO role query)
+
+---
+
 ## [2026-04-15] — Session: Guard login flow — PIN-first redirect + placeholder cleanup
 
 ### Guard login now redirects to setup if PIN not set

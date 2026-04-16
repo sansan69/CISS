@@ -364,6 +364,7 @@ export async function POST(request: NextRequest) {
         employeeId: payload.employeeId,
         employeeDocId: payload.employeeDocId,
         employeeName: payload.employeeName,
+        employeePhoneNumber: payload.employeePhoneNumber ?? null,
         reportedAtClient: payload.reportedAtClient ?? null,
         reportedAt,
         status: payload.status,
