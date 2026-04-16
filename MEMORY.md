@@ -879,6 +879,16 @@ Draft-specific fields are stripped before saving to Firestore.
 
 ---
 
+## [2026-04-16] — Session: Fix enrollment form — missing auth token
+
+### Both enroll pages used plain fetch → 401 on submit
+**Files modified:** `src/app/(app)/employees/enroll/page.tsx`, `src/app/enroll/page.tsx`
+- Both called `fetch("/api/employees/enroll", ...)` with no Authorization header
+- API requires `requireAdmin` (added in A-04 security audit) → every submit returned 401
+- Added `authorizedFetch` import, replaced `fetch` → `authorizedFetch` in both submit handlers
+
+---
+
 ## [2026-04-16] — Session: Fix work-order PATCH blocking field officers + bad error handlers
 
 ### PATCH /api/admin/work-orders/[id] now allows field officers

@@ -1,6 +1,7 @@
 
 "use client";
 
+import { authorizedFetch } from "@/lib/api-client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
@@ -537,7 +538,7 @@ export default function EnrollEmployeePage() {
         }
       
       toast({ title: "Saving Employee Data...", description: "Almost done."});
-      const response = await fetch("/api/employees/enroll", {
+      const response = await authorizedFetch("/api/employees/enroll", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
