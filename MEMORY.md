@@ -879,6 +879,20 @@ Draft-specific fields are stripped before saving to Firestore.
 
 ---
 
+## [2026-04-16] — Session: Fix work-order PATCH blocking field officers + bad error handlers
+
+### PATCH /api/admin/work-orders/[id] now allows field officers
+**File modified:** `src/app/api/admin/work-orders/[id]/route.ts`
+- PATCH used `requireAdmin` → field officers got 403 trying to save guard assignments
+- Changed to `requireAdminOrFieldOfficer(await verifyRequestAuth(request))`
+- Fixed catch blocks in PATCH and DELETE: all errors previously mapped to 401; now auth errors → 401/403, everything else → 500
+
+### POST /api/admin/work-orders catch block fixed
+**File modified:** `src/app/api/admin/work-orders/route.ts`
+- Same bad catch pattern fixed: auth errors → 401/403, other errors → 500
+
+---
+
 ## [2026-04-16] — Session: Removed email verification gate from admin/field-officer/client login
 
 ### emailVerified check removed from admin login

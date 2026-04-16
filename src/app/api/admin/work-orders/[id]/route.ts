@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { verifyRequestAuth, requireAdminOrFieldOfficer, requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit, buildServerAuditEvent } from "@/lib/server/audit";
 
 export async function PATCH(
@@ -7,7 +7,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const adminUser = await requireAdmin(request);
+    const adminUser = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
     const body = await request.json();
@@ -60,8 +60,13 @@ export async function PATCH(
 
     return NextResponse.json({ id });
   } catch (error: any) {
-    const status = error?.message === "Admin access required." ? 403 : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+    if (error?.message?.includes("access required")) {
+      return unauthorizedResponse(error.message, 403);
+    }
+    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
+      return unauthorizedResponse(error.message, 401);
+    }
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }
 
@@ -76,7 +81,12 @@ export async function DELETE(
     await adminDb.collection("workOrders").doc(id).delete();
     return NextResponse.json({ ok: true });
   } catch (error: any) {
-    const status = error?.message === "Admin access required." ? 403 : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+    if (error?.message?.includes("access required")) {
+      return unauthorizedResponse(error.message, 403);
+    }
+    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
+      return unauthorizedResponse(error.message, 401);
+    }
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }

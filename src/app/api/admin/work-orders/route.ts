@@ -82,7 +82,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ id: workOrderId });
   } catch (error: any) {
-    const status = error?.message === "Admin access required." ? 403 : 401;
-    return unauthorizedResponse(error?.message || "Unauthorized", status);
+    if (error?.message?.includes("access required")) {
+      return unauthorizedResponse(error.message, 403);
+    }
+    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
+      return unauthorizedResponse(error.message, 401);
+    }
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }
