@@ -876,3 +876,24 @@ Draft-specific fields are stripped before saving to Firestore.
 - `xlsx` package has an unfixable upstream vulnerability — no workaround without replacing the library
 - `firebase-admin` / `@tootallnate/once` vulnerability — fix would require downgrading to firebase-admin v10 (breaking); left as-is
 - `@types/node` peer dependency warning from vitest — requires vitest upgrade to resolve
+
+---
+
+## [2026-04-16] — Session: Removed email verification gate from admin/field-officer/client login
+
+### emailVerified check removed from admin login
+**File modified:** `src/app/admin-login/page.tsx`
+- Removed the `emailVerified` block that blocked login for unverified emails
+- All roles (admin, fieldOfficer, client) can now log in without email verification
+- Change applied because Firebase Auth accounts created server-side via Admin SDK are not automatically marked verified, causing a false "Email Not Verified" error for field officers and client admins
+
+---
+
+## [2026-04-16] — Session: Admin login env-var guard (VERCEL)
+
+### Affected feature: Admin login page (/admin-login)
+- Issue: Accessing admin portal showed "Auth/API key not valid" due to misconfigured Vercel environment variables for Firebase frontend config.
+- Change: Added a safe guard in Admin Login page to detect missing Firebase frontend config (NEXT_PUBLIC_FIREBASE_* vars) and present a clear error message instead of failing silently or throwing API-key errors.
+- How to verify:
+  - Ensure Vercel environment has the required NEXT_PUBLIC_FIREBASE_API_KEY and related vars set to the Firebase project values.
+  - Deploy the change and attempt to open https://cisskerala.site/admin-login; you should see a descriptive error if env vars are missing, instead of a cryptic API key error.

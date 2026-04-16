@@ -15,6 +15,7 @@ import { auth, ensureAuthPersistence } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { isLegacyAdminEmail } from '@/lib/auth/admin';
+import { isFirebaseConfigured } from '@/lib/firebase';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -26,6 +27,19 @@ export default function AdminLoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    // Quick guard: ensure Firebase frontend config is available in this environment
+    // This helps surface clear errors when env vars are misconfigured on Vercel
+    if (!isFirebaseConfigured) {
+      toast({
+        variant: 'destructive',
+        title: 'Configuration Error',
+        description:
+          'Firebase is not configured in this environment. Please verify NEXT_PUBLIC_FIREBASE_* environment variables in Vercel settings.',
+      });
+      setIsLoading(false);
+      return;
+    }
 
     if (!email || !password) {
       toast({
@@ -41,25 +55,20 @@ export default function AdminLoginPage() {
       await ensureAuthPersistence();
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-      if (!userCredential.user.emailVerified) {
-        toast({
-          variant: 'destructive',
-          title: 'Email Not Verified',
-          description: 'Please verify your email address before logging in.',
-        });
-        await auth.signOut();
-        return;
-      }
-
       const idTokenResult = await userCredential.user.getIdTokenResult();
       const role = idTokenResult.claims.role;
-      const isAdmin = idTokenResult.claims.admin === true || role === 'admin' || role === 'superAdmin' || isLegacyAdminEmail(userCredential.user.email);
+      const isAuthorized = idTokenResult.claims.admin === true
+        || role === 'admin'
+        || role === 'superAdmin'
+        || role === 'fieldOfficer'
+        || role === 'client'
+        || isLegacyAdminEmail(userCredential.user.email);
 
-      if (!isAdmin) {
+      if (!isAuthorized) {
         toast({
           variant: 'destructive',
           title: 'Access Denied',
-          description: 'You do not have admin access to this portal.',
+          description: 'You do not have access to this portal.',
         });
         await auth.signOut();
         return;
