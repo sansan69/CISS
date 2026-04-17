@@ -253,20 +253,14 @@ function SidebarNavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-3 rounded-xl py-2.5 px-3 text-sm font-medium',
+        // border-l-2 for the gold accent — no overflow/clip issues at rounded corners
+        'group flex items-center gap-3 rounded-xl py-2.5 pr-3 text-sm font-medium',
         'transition-all duration-200',
         active
-          ? 'bg-white/15 text-white'
-          : 'text-white/65 hover:text-white hover:bg-white/10'
+          ? 'bg-white/15 text-white border-l-2 border-brand-gold pl-[10px]'
+          : 'text-white/65 hover:text-white hover:bg-white/10 border-l-2 border-transparent pl-[10px]'
       )}
     >
-      {/* Active indicator: small pill, not a border */}
-      {active && (
-        <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand-gold"
-          aria-hidden
-        />
-      )}
       <item.icon
         className={cn(
           'h-[18px] w-[18px] shrink-0 transition-all duration-200',
@@ -507,7 +501,7 @@ function MobileBottomNav({
                   />
                 )}
               </div>
-              <span className={cn("text-[10px] leading-none tracking-wide transition-all duration-150", active ? "font-bold" : "font-medium")}>
+              <span className={cn("text-[9px] leading-none tracking-wide transition-all duration-150", active ? "font-bold" : "font-medium")}>
                 {item.label}
               </span>
             </Link>
@@ -943,9 +937,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             const token = await requestNotificationPermission();
             if (token) {
               await registerFCMToken(user.uid, token);
+              console.log('FCM token registered');
             }
-          } catch {
-            // FCM registration optional — non-fatal
+          } catch (error) {
+            console.warn('Failed to register FCM token:', error);
           }
         } catch {
           setUserRole('user');
@@ -976,8 +971,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     try {
       await signOut(auth);
       router.push('/admin-login');
-    } catch {
-      router.push('/admin-login');
+    } catch (err) {
+      console.error('Sign out error:', err);
     }
   };
 

@@ -97,14 +97,15 @@ export default function GuardLoginPage() {
           if (token) {
             await registerFCMToken(auth.currentUser.uid, token);
           }
-        } catch {
-          // FCM registration optional — non-fatal
+        } catch (error) {
+          console.warn("Failed to register FCM token:", error);
         }
       }
 
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
       router.push("/guard/dashboard");
-    } catch {
+    } catch (err: unknown) {
+      console.error("[guard-login]", err);
       toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
     } finally {
       setIsLoading(false);

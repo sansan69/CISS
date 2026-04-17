@@ -94,7 +94,7 @@ export function GuardBottomNav() {
                   )}
                 </div>
                 <span
-                  className="text-[10px] leading-none tracking-wide"
+                  className="text-[9px] leading-none tracking-wide"
                   style={{ fontWeight: active ? 700 : 500 }}
                 >
                   {tab.label}
@@ -158,8 +158,8 @@ export function GuardBottomNav() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 active:scale-[0.98] hover:bg-muted/60 animate-slide-up"
-                  style={{ animationDelay: `${i * 50}ms` }}
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 active:scale-[0.98] hover:bg-muted/60"
+                  style={{ animationDelay: `${i * 40}ms` }}
                 >
                   <span
                     className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0"
