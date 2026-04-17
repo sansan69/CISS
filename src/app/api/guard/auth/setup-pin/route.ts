@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
+import {
+  normalizeGuardDob,
+  normalizeGuardPhone,
+} from "@/lib/guard/identity-utils";
 import { hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
 import { GUARD_AUTH_EMAIL_DOMAIN } from "@/lib/runtime-config";
-
-function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, "");
-}
 
 export async function POST(request: Request) {
   try {
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
         .get();
     } else {
       empQuery = await employeesRef
-        .where("phoneNumber", "==", normalizePhone(phoneNumber))
+        .where("phoneNumber", "==", normalizeGuardPhone(phoneNumber))
         .limit(1)
         .get();
     }
@@ -93,11 +93,11 @@ export async function POST(request: Request) {
 
     const empDoc = empQuery.docs[0];
     const empData = empDoc.data();
-    const inputPhone = normalizePhone(phoneNumber);
+    const inputPhone = normalizeGuardPhone(phoneNumber);
 
     // Verify phone number if employeeId was provided
     if (employeeId && phoneNumber) {
-      const storedPhone = normalizePhone(
+      const storedPhone = normalizeGuardPhone(
         typeof empData.phoneNumber === "string" ? empData.phoneNumber : ""
       );
 
@@ -109,10 +109,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Verify date of birth (YYYY-MM-DD)
-    const storedDob =
-      typeof empData.dateOfBirth === "string" ? empData.dateOfBirth.trim() : "";
-    const inputDob = dateOfBirth.trim();
+    // Verify date of birth against enrollment records, which may be stored
+    // as Firestore Timestamps, JS Dates, or legacy strings.
+    const storedDob = normalizeGuardDob(empData.dateOfBirth);
+    const inputDob = normalizeGuardDob(dateOfBirth);
 
     if (storedDob !== inputDob) {
       return NextResponse.json(
