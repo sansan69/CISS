@@ -1164,9 +1164,9 @@ export default function AdminEmployeeProfilePage() {
   
   if (isLoading || isAuthLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg text-muted-foreground">Loading employee profile...</p>
+      <div className="flex flex-col justify-center items-center min-h-[calc(100vh-200px)] gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading profile…</p>
       </div>
     );
   }

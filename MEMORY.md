@@ -969,6 +969,99 @@ Draft-specific fields are stripped before saving to Firestore.
 
 ---
 
+## [2026-04-17] — Session: UI/UX overhaul — batch 2 (complete implementation)
+
+### Files modified
+- `src/components/ui/dialog.tsx`
+- `src/components/ui/sheet.tsx`
+- `src/components/ui/popover.tsx`
+- `src/components/ui/tooltip.tsx`
+- `src/components/ui/tabs.tsx`
+- `src/components/dashboard/stats.tsx`
+- `src/app/(app)/dashboard/page.tsx`
+- `src/app/(app)/employees/[id]/page.tsx`
+- `src/app/(app)/work-orders/[siteId]/page.tsx`
+- `src/app/profile/[id]/page.tsx`
+- `src/app/globals.css`
+
+### Changes
+
+**dialog.tsx**
+- Open duration → 220ms with `cubic-bezier(0.23,1,0.32,1)` (--ease-out); close → 160ms
+- `DialogTitle` now uses `font-exo2`
+
+**sheet.tsx**
+- Open duration 500ms → 250ms with `--ease-drawer` curve; close 300ms → 200ms with `--ease-out`
+- `SheetTitle` now uses `font-exo2 tracking-tight`
+
+**popover.tsx**
+- `style={{ transformOrigin: "var(--radix-popover-content-transform-origin)" }}` — scales from trigger not center
+- Open 180ms / close 130ms with `--ease-out`
+
+**tooltip.tsx**
+- `style={{ transformOrigin: "var(--radix-tooltip-content-transform-origin)" }}` — origin-aware
+- Duration 125ms with `--ease-out`
+
+**tabs.tsx**
+- Active tab trigger: `data-[state=active]:text-primary data-[state=active]:font-semibold` — brand blue active state
+
+**stats.tsx (DashboardStats)**
+- `animate-slide-up stagger-{1-4}` on each stat card — cascading entry
+- First card (index 0) gets `border-l-4 border-l-primary` depth accent
+- Stat number `<p>` now uses `font-exo2`
+
+**dashboard/page.tsx**
+- Quick-action card padding `p-3.5` → `p-4`
+
+**employees/[id]/page.tsx + profile/[id]/page.tsx + work-orders/[siteId]/page.tsx**
+- Full-page loading: `h-12 w-12` + inline text → `flex-col h-8 w-8` spinner + small muted text
+
+**globals.css**
+- `.press-scale` easing fixed: `cubic-bezier(0.4,0,0.6,1)` (ease-in) → `var(--ease-out)`, scale `0.96` → `0.97`
+- `.card-interactive` transition easing → `var(--ease-out)`
+
+---
+
+## [2026-04-17] — Session: UI/UX overhaul (Emil Kowalski principles)
+
+### Files modified
+- `src/app/globals.css`
+- `tailwind.config.ts`
+- `src/app/admin-login/page.tsx`
+- `src/components/layout/page-header.tsx`
+- `src/components/ui/card.tsx`
+- `src/components/ui/badge.tsx`
+
+### Changes
+
+**globals.css**
+- Added `--ease-out: cubic-bezier(0.23,1,0.32,1)`, `--ease-in-out: cubic-bezier(0.77,0,0.175,1)`, `--ease-drawer: cubic-bezier(0.32,0.72,0,1)` CSS vars to `:root`
+- Fixed input `transition: all` → specific properties (`border-color`, `box-shadow`, `background-color`) using `var(--ease-out)`
+- Added explicit brand-blue `focus-visible` ring on `input` and `textarea`
+- Fixed `button:active` easing from `cubic-bezier(0.4,0,0.6,1)` (ease-in, wrong) → `var(--ease-out)` at 100ms
+- Added `@media (prefers-reduced-motion: reduce)` gate — kills all animations/transitions for accessibility
+- Added touch hover guard `@media not all and (hover: hover) and (pointer: fine)` on `.card-interactive` — prevents false hover on tap
+- Added `tbody tr` hover: `background-color: hsl(var(--muted) / 0.5)` with 100ms `var(--ease-out)` transition
+
+**tailwind.config.ts**
+- Added `transitionTimingFunction`: `ease-out-strong`, `ease-in-out-strong`, `ease-drawer` (Emil curves)
+- Added `fontFamily.exo2` → `var(--font-exo-display)` (Exo 2 now available as `font-exo2` Tailwind class)
+
+**admin-login/page.tsx**
+- Full rebrand: brand-blue gradient background (`#014c85` → `#012f52`), white card with gold `border-t-4 border-[#bd9c55]`, Exo 2 wordmark + card title, brand-blue focus rings on inputs, shadow-heavy card, `animate-slide-up` entry
+- Removed unused `Card*` imports
+
+**page-header.tsx**
+- Added `font-exo2 tracking-tight` to `<h1>` — Exo 2 now on all page titles
+
+**card.tsx**
+- Added `font-exo2` to `CardTitle` — card section headers use Exo 2
+
+**badge.tsx**
+- Added dark mode variants to all semantic/status badges (`success`, `warning`, `info`, `error`, `active`, `inactive`, `leave`, `exited`)
+
+---
+
 ## [2026-04-16] — Session: Admin login env-var guard (VERCEL)
 
 ### Affected feature: Admin login page (/admin-login)

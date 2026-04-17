@@ -336,7 +336,7 @@ function QuickActions() {
             <Link
               key={action.href}
               href={action.href}
-              className="flex flex-col items-center gap-2.5 rounded-2xl bg-card border border-border/60 shadow-card p-3.5 min-w-[80px] press-scale shrink-0 transition-shadow hover:shadow-brand-sm"
+              className="flex flex-col items-center gap-2.5 rounded-2xl bg-card border border-border/60 shadow-card p-4 min-w-[80px] press-scale shrink-0 transition-shadow hover:shadow-brand-sm"
             >
               <div className={cn("flex h-11 w-11 items-center justify-center rounded-xl", action.color)}>
                 <action.icon className="h-5 w-5" />

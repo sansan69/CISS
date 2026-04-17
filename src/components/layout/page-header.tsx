@@ -112,7 +112,7 @@ export function PageHeader({
               )}
               <h1
                 className={cn(
-                  "text-xl sm:text-2xl font-bold leading-tight truncate",
+                  "text-xl sm:text-2xl font-bold leading-tight truncate font-exo2 tracking-tight",
                   accent ? "text-foreground pl-0" : "text-foreground"
                 )}
               >

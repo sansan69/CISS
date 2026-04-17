@@ -639,9 +639,9 @@ export default function AssignGuardsPage() {
     /* ── Loading / Error states ── */
     if (isLoading) {
         return (
-            <div className="flex justify-center items-center h-40">
+            <div className="flex flex-col justify-center items-center h-40 gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2">Loading site duty schedules…</p>
+                <p className="text-sm text-muted-foreground">Loading schedules…</p>
             </div>
         );
     }

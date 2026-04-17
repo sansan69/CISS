@@ -575,9 +575,9 @@ export default function PublicEmployeeProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg text-muted-foreground">Loading Profile...</p>
+      <div className="flex flex-col justify-center items-center min-h-screen gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading profile…</p>
       </div>
     );
   }

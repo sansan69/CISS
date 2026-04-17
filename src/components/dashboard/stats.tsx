@@ -72,10 +72,15 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
     return values[index] || 0;
   };
 
+  const staggerClass = ["stagger-1","stagger-2","stagger-3","stagger-4"] as const;
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {config.map((item, index) => (
-        <Card key={item.label} className="overflow-hidden">
+        <Card
+          key={item.label}
+          className={`overflow-hidden animate-slide-up ${staggerClass[index] ?? "stagger-4"} ${index === 0 ? "border-l-4 border-l-primary" : ""}`}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${item.color}`}>
@@ -83,7 +88,7 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{item.label}</p>
-                <p className="text-2xl font-bold">{getValue(index)}</p>
+                <p className="text-2xl font-bold font-exo2">{getValue(index)}</p>
               </div>
             </div>
           </CardContent>

@@ -92,6 +92,11 @@
     --sidebar-border:             206 98% 30%;
     --sidebar-ring:               206 98% 40%;
 
+    /* ── Emil Kowalski easing curves ── */
+    --ease-out:      cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out:   cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer:   cubic-bezier(0.32, 0.72, 0, 1);
+
     /* Shadow tokens */
     --shadow-xs:   0 1px 2px 0 rgb(1 76 133 / 0.06);
     --shadow-sm:   0 2px 6px -1px rgb(1 76 133 / 0.10), 0 1px 3px -1px rgb(1 76 133 / 0.06);
@@ -176,7 +181,17 @@
   /* Inputs — prevent iOS auto-zoom */
   input, textarea, select {
     font-size: 16px !important;
-    @apply transition-all duration-150 ease-in-out;
+    transition: border-color 150ms var(--ease-out),
+                box-shadow 150ms var(--ease-out),
+                background-color 150ms var(--ease-out);
+  }
+
+  /* Brand-blue focus ring on all form inputs */
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
   }
 
   /* Smooth transitions on interactive elements */
@@ -190,7 +205,7 @@
   /* Better tap states on mobile */
   button:active {
     transform: scale(0.97);
-    transition: transform 80ms cubic-bezier(0.4, 0, 0.6, 1);
+    transition: transform 100ms var(--ease-out);
   }
 
   /* Active press state for link elements (bottom nav, drawer items, card rows) */
@@ -402,8 +417,8 @@
 
   /* Interactive card hover lift */
   .card-interactive {
-    transition: transform 200ms cubic-bezier(0.16,1,0.3,1),
-                box-shadow 200ms cubic-bezier(0.16,1,0.3,1);
+    transition: transform 200ms var(--ease-out),
+                box-shadow 200ms var(--ease-out);
   }
   .card-interactive:hover {
     transform: translateY(-2px);
@@ -416,10 +431,10 @@
 
   /* Press scale (for buttons / tappable items) */
   .press-scale {
-    transition: transform 80ms cubic-bezier(0.4,0,0.6,1);
+    transition: transform 100ms var(--ease-out);
   }
   .press-scale:active {
-    transform: scale(0.96);
+    transform: scale(0.97);
   }
 
   /* Accent left-border indicator */
@@ -480,6 +495,34 @@
     height: 1px;
     background: hsl(var(--border));
   }
+}
+
+/* ────────────────────────────────────────────────────────────
+   Motion & accessibility overrides
+──────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Gate hover transforms — touch devices trigger hover on tap (false positive) */
+@media not all and (hover: hover) and (pointer: fine) {
+  .card-interactive:hover {
+    transform: none !important;
+    box-shadow: var(--shadow-card) !important;
+  }
+}
+
+/* Table row hover */
+tbody tr {
+  transition: background-color 100ms var(--ease-out);
+}
+tbody tr:hover {
+  background-color: hsl(var(--muted) / 0.5);
 }
 
 /* ────────────────────────────────────────────────────────────

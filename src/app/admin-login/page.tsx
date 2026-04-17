@@ -4,7 +4,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LogIn, HomeIcon, Loader2 } from 'lucide-react';
@@ -124,41 +123,68 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
-       <div className="absolute top-4 right-4">
-        <Button variant="ghost" asChild size="sm" title="Go to Home">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4"
+      style={{ background: "linear-gradient(160deg, #014c85 0%, #012f52 100%)" }}>
+
+      {/* Home link — subtle on dark bg */}
+      <div className="absolute top-4 right-4">
+        <Button
+          variant="ghost"
+          asChild
+          size="sm"
+          className="text-white/70 hover:text-white hover:bg-white/10"
+        >
           <Link href="/">
             <HomeIcon className="mr-2 h-4 w-4" /> Home
           </Link>
         </Button>
       </div>
-      <div className="w-full max-w-md space-y-8">
-        <header className="text-center">
+
+      <div className="w-full max-w-sm animate-slide-up">
+        {/* Logo + wordmark above card */}
+        <header className="text-center mb-8">
           <Image
-              src="/ciss-logo.png"
-              alt="CISS Workforce Logo"
-              width={200}
-              height={202}
-              priority
-              data-ai-hint="company logo"
-              unoptimized={true}
-              className="mx-auto h-20 w-auto"
+            src="/ciss-logo.png"
+            alt="CISS Workforce Logo"
+            width={200}
+            height={202}
+            priority
+            data-ai-hint="company logo"
+            unoptimized={true}
+            className="mx-auto h-16 w-auto mb-4 drop-shadow-lg"
           />
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50 mt-4">CISS Workforce</h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">Admin Portal</p>
+          <h1
+            className="text-2xl font-bold text-white tracking-tight"
+            style={{ fontFamily: "var(--font-exo-display)" }}
+          >
+            CISS Workforce
+          </h1>
+          <p className="text-sm text-white/60 mt-1 tracking-wide">Admin Portal</p>
         </header>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl">Admin Login</CardTitle>
-            <CardDescription>
-              Enter your credentials to access the dashboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+        {/* Login card — white with gold top accent */}
+        <div
+          className="bg-white rounded-2xl shadow-[0_20px_60px_rgb(0,0,0/0.35)] overflow-hidden"
+          style={{ borderTop: "4px solid #bd9c55" }}
+        >
+          <div className="px-6 pt-6 pb-2">
+            <h2
+              className="text-lg font-semibold text-foreground"
+              style={{ fontFamily: "var(--font-exo-display)" }}
+            >
+              Sign In
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Enter your credentials to continue.
+            </p>
+          </div>
+
+          <div className="px-6 pb-6 pt-4">
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Email
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -168,10 +194,13 @@ export default function AdminLoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
+                  className="h-11 focus-visible:ring-[#014c85] focus-visible:border-[#014c85]"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Password
+                </Label>
                 <Input
                   id="password"
                   type="password"
@@ -181,9 +210,14 @@ export default function AdminLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
+                  className="h-11 focus-visible:ring-[#014c85] focus-visible:border-[#014c85]"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="w-full h-11 bg-[#014c85] hover:bg-[#013a6b] text-white font-semibold mt-2"
+                disabled={isLoading}
+              >
                 {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -192,9 +226,10 @@ export default function AdminLoginPage() {
                 Sign In
               </Button>
             </form>
-          </CardContent>
-        </Card>
-        <footer className="text-center text-sm text-gray-500">
+          </div>
+        </div>
+
+        <footer className="text-center text-xs text-white/40 mt-6">
           &copy; {new Date().getFullYear()} CISS Workforce. All rights reserved.
         </footer>
       </div>

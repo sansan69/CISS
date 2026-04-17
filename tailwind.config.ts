@@ -201,7 +201,14 @@ export default {
       },
 
       transitionTimingFunction: {
-        spring: "cubic-bezier(0.16,1,0.3,1)",
+        spring:   "cubic-bezier(0.16,1,0.3,1)",
+        "ease-out-strong":  "cubic-bezier(0.23,1,0.32,1)",
+        "ease-in-out-strong": "cubic-bezier(0.77,0,0.175,1)",
+        "ease-drawer": "cubic-bezier(0.32,0.72,0,1)",
+      },
+
+      fontFamily: {
+        exo2: ["var(--font-exo-display)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },
