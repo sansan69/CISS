@@ -253,14 +253,20 @@ function SidebarNavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        // border-l-2 for the gold accent — no overflow/clip issues at rounded corners
-        'group flex items-center gap-3 rounded-xl py-2.5 pr-3 text-sm font-medium',
+        'group relative flex items-center gap-3 rounded-xl py-2.5 px-3 text-sm font-medium',
         'transition-all duration-200',
         active
-          ? 'bg-white/15 text-white border-l-2 border-brand-gold pl-[10px]'
-          : 'text-white/65 hover:text-white hover:bg-white/10 border-l-2 border-transparent pl-[10px]'
+          ? 'bg-white/15 text-white'
+          : 'text-white/65 hover:text-white hover:bg-white/10'
       )}
     >
+      {/* Active indicator: small pill, not a border */}
+      {active && (
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand-gold"
+          aria-hidden
+        />
+      )}
       <item.icon
         className={cn(
           'h-[18px] w-[18px] shrink-0 transition-all duration-200',
@@ -463,15 +469,18 @@ function MobileBottomNav({
   if (isSettingsPage) return null;
 
   return (
-    <nav
-      className={cn(
-        "md:hidden fixed bottom-0 left-0 right-0 z-40",
-        "bg-white/95 backdrop-blur-md border-t border-border/50",
-        "pb-safe"
-      )}
-      style={{ boxShadow: "0 -1px 0 0 hsl(var(--border) / 0.6)" }}
+    <div
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-3"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 12px)" }}
     >
-      <div className="flex items-stretch h-[56px]">
+      <nav
+        className={cn(
+          "flex items-stretch h-[58px]",
+          "bg-white/96 backdrop-blur-xl rounded-2xl",
+          "border border-border/40",
+          "shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_2px_8px_hsl(0_0%_0%/0.08)]"
+        )}
+      >
         {bottomNavItems.map(item => {
           const active = isActiveItem(pathname, item);
           return (
@@ -480,68 +489,62 @@ function MobileBottomNav({
               href={item.href}
               onClick={() => haptic('light')}
               className={cn(
-                "bottom-nav-item relative transition-colors duration-150",
-                active ? "text-brand-blue" : "text-muted-foreground/70"
+                "bottom-nav-item relative",
+                "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                "active:scale-[0.92] select-none rounded-2xl",
+                active ? "text-brand-blue" : "text-muted-foreground/60"
               )}
             >
-              {/* Slim top-border indicator — native iOS style, no blob */}
-              <span
-                className={cn(
-                  "absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] rounded-b-full transition-all duration-200",
-                  active ? "w-6 bg-brand-blue" : "w-0 bg-transparent"
+              <div className="relative">
+                <item.icon
+                  className={cn("transition-all duration-150", active ? "h-[22px] w-[22px]" : "h-5 w-5")}
+                  strokeWidth={active ? 2.2 : 1.8}
+                />
+                {active && (
+                  <span
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-brand-gold"
+                    aria-hidden
+                  />
                 )}
-                aria-hidden
-              />
-              <item.icon
-                className={cn(
-                  "transition-all duration-150",
-                  active ? "h-[22px] w-[22px]" : "h-5 w-5"
-                )}
-              />
-              <span
-                className={cn(
-                  "text-[10px] leading-none transition-all duration-150",
-                  active ? "font-semibold" : "font-medium"
-                )}
-              >
+              </div>
+              <span className={cn("text-[10px] leading-none tracking-wide transition-all duration-150", active ? "font-bold" : "font-medium")}>
                 {item.label}
               </span>
             </Link>
           );
         })}
 
+        {/* Divider */}
+        <div className="my-3 w-px bg-border/60 shrink-0" aria-hidden />
+
         {/* More button */}
         <button
           onClick={() => { haptic('light'); onMoreClick(); }}
           className={cn(
-            "bottom-nav-item relative transition-colors duration-150",
-            moreActive ? "text-brand-blue" : "text-muted-foreground/70"
+            "bottom-nav-item relative",
+            "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+            "active:scale-[0.92] select-none rounded-2xl",
+            moreActive ? "text-brand-blue" : "text-muted-foreground/60"
           )}
         >
-          <span
-            className={cn(
-              "absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] rounded-b-full transition-all duration-200",
-              moreActive ? "w-6 bg-brand-blue" : "w-0 bg-transparent"
+          <div className="relative">
+            <MoreHorizontal
+              className={cn("transition-all duration-150", moreActive ? "h-[22px] w-[22px]" : "h-5 w-5")}
+              strokeWidth={moreActive ? 2.2 : 1.8}
+            />
+            {moreActive && (
+              <span
+                className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-brand-gold"
+                aria-hidden
+              />
             )}
-            aria-hidden
-          />
-          <MoreHorizontal
-            className={cn(
-              "transition-all duration-150",
-              moreActive ? "h-[22px] w-[22px]" : "h-5 w-5"
-            )}
-          />
-          <span
-            className={cn(
-              "text-[10px] leading-none transition-all duration-150",
-              moreActive ? "font-semibold" : "font-medium"
-            )}
-          >
+          </div>
+          <span className={cn("text-[9px] leading-none tracking-wide transition-all duration-150", moreActive ? "font-bold" : "font-medium")}>
             More
           </span>
         </button>
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 }
 
@@ -686,7 +689,12 @@ function MobileHeader({
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
 
   return (
-    <header className="md:hidden sticky top-0 z-30 flex h-14 items-center gap-3 bg-white/95 backdrop-blur-md border-b border-border/60 px-4 shrink-0 shadow-brand-xs">
+    <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 bg-white/96 backdrop-blur-xl border-b border-border/50 px-4 shrink-0"
+      style={{
+        minHeight: 56,
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        boxShadow: "0 1px 0 hsl(var(--border) / 0.5), 0 2px 8px hsl(0 0% 0% / 0.04)"
+      }}>
       {isSettingsPage ? (
         <Link
           href="/dashboard"
@@ -708,7 +716,7 @@ function MobileHeader({
       )}
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground truncate">{pageLabel}</p>
+        <p className="text-sm font-semibold text-foreground truncate font-exo2 tracking-tight">{pageLabel}</p>
       </div>
 
       <div className="flex items-center gap-1.5">
@@ -935,10 +943,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             const token = await requestNotificationPermission();
             if (token) {
               await registerFCMToken(user.uid, token);
-              console.log('FCM token registered');
             }
-          } catch (error) {
-            console.warn('Failed to register FCM token:', error);
+          } catch {
+            // FCM registration optional — non-fatal
           }
         } catch {
           setUserRole('user');
@@ -969,8 +976,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     try {
       await signOut(auth);
       router.push('/admin-login');
-    } catch (err) {
-      console.error('Sign out error:', err);
+    } catch {
+      router.push('/admin-login');
     }
   };
 
@@ -992,7 +999,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-[100dvh] w-full bg-background">
       {/* ── Desktop Sidebar ── */}
       <div
         className={cn(
@@ -1034,7 +1041,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         />
 
         {/* Page content */}
-        <main className="flex-1 p-4 sm:p-5 lg:p-6 pb-[88px] md:pb-6 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-5 lg:p-6 pb-[104px] md:pb-6 overflow-x-hidden">
           {children}
         </main>
       </div>

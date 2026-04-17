@@ -97,15 +97,14 @@ export default function GuardLoginPage() {
           if (token) {
             await registerFCMToken(auth.currentUser.uid, token);
           }
-        } catch (error) {
-          console.warn("Failed to register FCM token:", error);
+        } catch {
+          // FCM registration optional — non-fatal
         }
       }
 
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
       router.push("/guard/dashboard");
-    } catch (err: unknown) {
-      console.error("[guard-login]", err);
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
     } finally {
       setIsLoading(false);
@@ -276,30 +275,42 @@ export default function GuardLoginPage() {
   }, [qrStep, scannedEmployeeId]);
 
   return (
-    <div className="w-full max-w-sm mx-auto px-4 py-8">
-      <header className="text-center mb-8">
-        <Image
-          src="/ciss-logo.png"
-          alt="CISS Logo"
-          width={72}
-          height={72}
-          className="mx-auto"
-          data-ai-hint="company logo"
-        />
-        <h1
-          className="text-2xl font-bold mt-4"
-          style={{ color: "#014c85" }}
+    <div
+      className="min-h-[100dvh] flex flex-col"
+      style={{ background: "linear-gradient(160deg, #014c85 0%, #012f52 60%, #011f3a 100%)" }}
+    >
+      {/* Brand header */}
+      <div className="flex flex-col items-center justify-center pt-16 pb-8 px-6 animate-slide-up">
+        <div
+          className="flex h-20 w-20 items-center justify-center rounded-[22px] mb-5"
+          style={{ backgroundColor: "rgba(255,255,255,0.12)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2), 0 8px 24px rgba(0,0,0,0.3)" }}
         >
+          <Image
+            src="/ciss-logo.png"
+            alt="CISS Logo"
+            width={50}
+            height={50}
+            data-ai-hint="company logo"
+          />
+        </div>
+        <h1 className="text-2xl font-bold text-white font-exo2 tracking-tight">
           Guard Portal
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">CISS Workforce</p>
-      </header>
+        <p className="text-sm mt-1 font-medium" style={{ color: "#bd9c55" }}>
+          CISS Workforce
+        </p>
+      </div>
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-center text-lg">Sign In</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Card floats on bottom half */}
+      <div className="flex-1 flex flex-col animate-slide-up stagger-2">
+        <Card
+          className="flex-1 rounded-t-3xl rounded-b-none border-0 shadow-none"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          <CardHeader className="pt-7 pb-0">
+            <CardTitle className="text-center text-base font-semibold text-muted-foreground">Sign in to continue</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full mb-6">
               <TabsTrigger value="phone" className="flex-1 gap-2">
@@ -525,7 +536,8 @@ export default function GuardLoginPage() {
             </Link>
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

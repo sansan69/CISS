@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import React, { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -16,16 +17,15 @@ import { GuardBottomNav } from "@/components/guard/guard-bottom-nav";
 function GuardLoadingScreen() {
   return (
     <div
-      className="flex h-screen w-full flex-col items-center justify-center"
-      style={{ backgroundColor: "#014c85" }}
+      className="flex min-h-[100dvh] w-full flex-col items-center justify-center"
+      style={{ background: "linear-gradient(160deg, #014c85 0%, #012f52 100%)" }}
     >
       <div className="flex flex-col items-center gap-3">
         <div
           className="flex h-16 w-16 items-center justify-center rounded-2xl"
           style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/ciss-logo.png" alt="CISS" width={40} height={40} />
+          <Image src="/ciss-logo.png" alt="CISS" width={40} height={40} unoptimized />
         </div>
         <p className="text-white font-bold text-lg tracking-wide">
           CISS Workforce
@@ -129,12 +129,12 @@ export default function GuardLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-      <div className="flex flex-col h-screen bg-gray-50">
+      <div className="flex flex-col min-h-[100dvh] bg-muted/30">
         {/* Sticky header */}
         <GuardHeader employeeName={displayName} />
 
-        {/* Main content — padded for bottom nav */}
-        <main className="flex-1 overflow-y-auto pb-20">{children}</main>
+        {/* Main content — padded for floating pill nav */}
+        <main className="flex-1 overflow-y-auto pb-[88px]">{children}</main>
 
         {/* Fixed bottom navigation */}
         <GuardBottomNav />

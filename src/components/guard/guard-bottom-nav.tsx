@@ -20,9 +20,6 @@ import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
-const BRAND_BLUE = "hsl(206 98% 26%)";
-const BRAND_GOLD = "hsl(41 44% 54%)";
-
 interface NavTab {
   href: string;
   label: string;
@@ -33,7 +30,7 @@ const navTabs: NavTab[] = [
   { href: "/guard/dashboard",  label: "Home",       icon: LayoutDashboard },
   { href: "/guard/attendance", label: "Attendance", icon: CalendarCheck   },
   { href: "/guard/leave",      label: "Leave",      icon: CalendarDays    },
-  { href: "/guard/payslips",   label: "Payslips",   icon: Wallet          },
+  { href: "/guard/payslips",   label: "Pay",        icon: Wallet          },
 ];
 
 const moreItems = [
@@ -55,24 +52,23 @@ export function GuardBottomNav() {
     try {
       await signOut(auth);
       router.push("/guard-login");
-    } catch (err) {
-      console.error("Sign out error:", err);
+    } catch {
       router.push("/guard-login");
     }
   };
 
   return (
     <>
-      {/* Bottom Nav Bar */}
-      <nav
-        aria-label="Guard navigation"
-        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
-        style={{
-          height: 64,
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        }}
+      {/* Floating pill bottom nav */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 px-3"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 12px)" }}
       >
-        <div className="flex h-full items-stretch">
+        <nav
+          aria-label="Guard navigation"
+          className="flex items-stretch bg-white/96 backdrop-blur-xl rounded-2xl border border-border/40 shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_2px_8px_hsl(0_0%_0%/0.08)]"
+          style={{ height: 60 }}
+        >
           {navTabs.map((tab) => {
             const active = isActive(tab.href);
             return (
@@ -80,23 +76,26 @@ export function GuardBottomNav() {
                 key={tab.href}
                 href={tab.href}
                 className={cn(
-                  "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative transition-colors duration-150"
+                  "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
+                  "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                  "active:scale-[0.92] select-none rounded-2xl",
+                  active ? "text-[#014c85]" : "text-muted-foreground/60"
                 )}
-                style={{ color: active ? BRAND_BLUE : "#9ca3af" }}
               >
-                {/* Top indicator */}
+                {/* Active dot beneath icon */}
+                <div className="relative">
+                  <tab.icon size={active ? 22 : 20} strokeWidth={active ? 2.2 : 1.8} />
+                  {active && (
+                    <span
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full"
+                      style={{ backgroundColor: "#bd9c55" }}
+                      aria-hidden
+                    />
+                  )}
+                </div>
                 <span
-                  className="absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] rounded-b-full transition-all duration-200"
-                  style={{
-                    width: active ? 24 : 0,
-                    backgroundColor: active ? BRAND_GOLD : "transparent",
-                  }}
-                  aria-hidden
-                />
-                <tab.icon size={22} />
-                <span
-                  className="text-[10px] leading-none"
-                  style={{ fontWeight: active ? 600 : 500 }}
+                  className="text-[10px] leading-none tracking-wide"
+                  style={{ fontWeight: active ? 700 : 500 }}
                 >
                   {tab.label}
                 </span>
@@ -104,64 +103,71 @@ export function GuardBottomNav() {
             );
           })}
 
+          {/* Divider */}
+          <div className="my-3 w-px bg-border/60 shrink-0" aria-hidden />
+
           {/* More button */}
           <button
             onClick={() => setMoreOpen(true)}
-            className="flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative transition-colors duration-150"
-            style={{ color: isMoreActive ? BRAND_BLUE : "#9ca3af" }}
+            className={cn(
+              "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
+              "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+              "active:scale-[0.92] select-none rounded-2xl",
+              isMoreActive ? "text-[#014c85]" : "text-muted-foreground/60"
+            )}
           >
+            <div className="relative">
+              <MoreHorizontal size={isMoreActive ? 22 : 20} strokeWidth={isMoreActive ? 2.2 : 1.8} />
+              {isMoreActive && (
+                <span
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full"
+                  style={{ backgroundColor: "#bd9c55" }}
+                  aria-hidden
+                />
+              )}
+            </div>
             <span
-              className="absolute top-0 left-1/2 -translate-x-1/2 h-[2.5px] rounded-b-full transition-all duration-200"
-              style={{
-                width: isMoreActive ? 24 : 0,
-                backgroundColor: isMoreActive ? BRAND_GOLD : "transparent",
-              }}
-              aria-hidden
-            />
-            <MoreHorizontal size={22} />
-            <span
-              className="text-[10px] leading-none"
-              style={{ fontWeight: isMoreActive ? 600 : 500 }}
+              className="text-[9px] leading-none tracking-wide"
+              style={{ fontWeight: isMoreActive ? 700 : 500 }}
             >
               More
             </span>
           </button>
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       {/* More Sheet */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl p-0 max-h-[70vh]">
+        <SheetContent side="bottom" className="rounded-t-3xl p-0 max-h-[75vh] border-0 shadow-[0_-8px_40px_hsl(0_0%_0%/0.15)]">
           <SheetTitle className="sr-only">More Options</SheetTitle>
 
           {/* Handle */}
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-gray-300" />
+          <div className="flex justify-center pt-3 pb-2">
+            <div className="w-8 h-1 rounded-full bg-muted-foreground/25" />
           </div>
 
-          <div className="px-4 pb-4">
-            <p
-              className="text-xs font-semibold uppercase tracking-wider mb-3 mt-2"
-              style={{ color: BRAND_GOLD }}
-            >
+          <div className="px-4 pb-6">
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3 mt-1 px-1"
+               style={{ color: "#bd9c55" }}>
               More Options
             </p>
 
-            <div className="space-y-1">
-              {moreItems.map((item) => (
+            <div className="space-y-0.5">
+              {moreItems.map((item, i) => (
                 <Link
-                  key={`${item.href}-${item.label}`}
+                  key={item.href}
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 active:scale-[0.98] hover:bg-muted/60 animate-slide-up"
+                  style={{ animationDelay: `${i * 50}ms` }}
                 >
                   <span
-                    className="flex items-center justify-center h-9 w-9 rounded-xl"
-                    style={{ backgroundColor: "hsl(206 98% 26% / 0.08)" }}
+                    className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0"
+                    style={{ backgroundColor: "hsl(206 98% 26% / 0.09)" }}
                   >
-                    <item.icon size={18} style={{ color: BRAND_BLUE }} />
+                    <item.icon size={18} style={{ color: "#014c85" }} />
                   </span>
-                  <span className="text-sm font-medium text-gray-800">
+                  <span className="text-sm font-semibold text-foreground">
                     {item.label}
                   </span>
                 </Link>
@@ -169,12 +175,12 @@ export function GuardBottomNav() {
 
               <button
                 onClick={() => { setMoreOpen(false); handleSignOut(); }}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 active:scale-[0.98] hover:bg-red-50/80"
               >
-                <span className="flex items-center justify-center h-9 w-9 rounded-xl bg-red-50">
+                <span className="flex items-center justify-center h-10 w-10 rounded-xl bg-red-50 shrink-0">
                   <LogOut size={18} className="text-red-500" />
                 </span>
-                <span className="text-sm font-medium text-red-600">
+                <span className="text-sm font-semibold text-red-600">
                   Sign Out
                 </span>
               </button>

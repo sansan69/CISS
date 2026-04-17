@@ -582,14 +582,13 @@ tbody tr:hover {
     @apply text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-1 mb-1;
   }
 
-  /* Bottom nav tab item */
+  /* Bottom nav tab item — works inside floating pill */
   .bottom-nav-item {
-    /* No text selection on long-press; treat as a button, not a text node */
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
     @apply flex flex-col items-center justify-center gap-0.5 flex-1 h-full
-           min-h-[52px] transition-colors no-select;
+           min-h-[58px] transition-colors no-select;
   }
 
   /* Page content inner padding */
