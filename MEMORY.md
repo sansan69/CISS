@@ -969,6 +969,39 @@ Draft-specific fields are stripped before saving to Firestore.
 
 ---
 
+## [2026-04-17] — Session: UI/UX overhaul — batch 3 (redesign + high-end-visual-design skills)
+
+### Files modified
+- `src/app/globals.css`
+- `src/components/dashboard/stats.tsx`
+- `src/components/ui/card.tsx`
+- `src/components/ui/button.tsx`
+
+### Changes
+
+**globals.css**
+- Grain/noise overlay via `body::after` — SVG feTurbulence, `opacity: 0.022`, fixed, `pointer-events: none`, `z-index: 9998`; breaks digital flatness with physical paper texture
+- `h1, h2, h3 { text-wrap: balance }` globally — prevents orphaned words
+- `.tabular-nums` / `[data-tabular-nums]` utility — `font-variant-numeric: tabular-nums` for data tables and stat numbers
+- `.bezel` class — double-bezel (Doppelrand) outer shell: `bg-muted/0.5`, `border`, `3px padding`, `border-radius: radius+4px`
+- `.inset-highlight` class — inner top edge highlight `inset 0 1px 0 hsl(0 0% 100% / 0.12)` for surface depth
+
+**stats.tsx (DashboardStats)**
+- Stat cards now use double-bezel: outer `.bezel` div wrapping inner `.bg-card.inset-highlight` div
+- `getValue(index).toLocaleString()` — locale-formatted numbers
+- `tabular-nums` class on stat number `<p>`
+
+**card.tsx**
+- `CardTitle` now has `[text-wrap:balance]` — balanced heading text
+
+**button.tsx**
+- `transition-all` → `transition-[transform,box-shadow,background-color,opacity,filter]` — specific props only, no layout triggers
+- `active:scale-[0.96]` → `active:scale-[0.97]` — consistent with Emil scale
+- `active:transition-none` removed — transitions should apply during press too
+- Default variant: inner top highlight `[box-shadow:inset_0_1px_0_hsl(0_0%_100%/0.12),var(--shadow-brand-sm)]` — machined glass feel
+
+---
+
 ## [2026-04-17] — Session: UI/UX overhaul — batch 2 (complete implementation)
 
 ### Files modified

@@ -77,22 +77,28 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {config.map((item, index) => (
-        <Card
+        /* Double-bezel outer shell */
+        <div
           key={item.label}
-          className={`overflow-hidden animate-slide-up ${staggerClass[index] ?? "stagger-4"} ${index === 0 ? "border-l-4 border-l-primary" : ""}`}
+          className={`bezel animate-slide-up ${staggerClass[index] ?? "stagger-4"}`}
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${item.color}`}>
-                <item.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{item.label}</p>
-                <p className="text-2xl font-bold font-exo2">{getValue(index)}</p>
+          {/* Inner core */}
+          <div className={`bg-card rounded-[calc(var(--radius)-1px)] inset-highlight overflow-hidden ${index === 0 ? "border-l-4 border-l-primary" : ""}`}>
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg shrink-0 ${item.color}`}>
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground leading-tight">{item.label}</p>
+                  <p className="text-2xl font-bold font-exo2 tabular-nums leading-none mt-0.5">
+                    {getValue(index).toLocaleString()}
+                  </p>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ))}
     </div>
   );

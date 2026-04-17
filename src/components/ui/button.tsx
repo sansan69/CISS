@@ -10,10 +10,10 @@ const buttonVariants = cva(
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
     "text-sm font-medium leading-snug",
     "ring-offset-background",
-    "transition-all duration-150 ease-spring",
+    "transition-[transform,box-shadow,background-color,opacity,filter] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
-    "active:scale-[0.96] active:transition-none",
+    "active:scale-[0.97]",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     "select-none",
   ].join(" "),
@@ -22,7 +22,7 @@ const buttonVariants = cva(
       variant: {
         /* Primary — brand blue */
         default:
-          "gradient-brand text-white shadow-brand-sm hover:shadow-brand-md hover:brightness-110 rounded-lg",
+          "gradient-brand text-white shadow-brand-sm hover:shadow-brand-md hover:brightness-110 rounded-lg [box-shadow:inset_0_1px_0_hsl(0_0%_100%/0.12),var(--shadow-brand-sm)]",
 
         /* Destructive — red */
         destructive:
