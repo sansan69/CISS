@@ -5,6 +5,57 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-17] — Session: Public enrollment storage-permission fix verified
+
+### Bug reported
+- Submitting `/enroll` on cisskerala.site produced: `Firebase Storage: User have permission to access 'employees/8281849663/profilePictures/...' (storage/unauthorized)`
+- Deployed client bundle was building upload paths as `employees/{phoneNumber}/profilePictures/...`; storage.rules require `isSignedIn()` on `employees/**`, but public enrollees are not signed in → denied
+
+### State of the fix in source
+**Files verified:** `src/app/enroll/page.tsx`, `storage.rules`
+- `src/app/enroll/page.tsx` line 537 already builds path as `enrollments/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}` — correct public path
+- `storage.rules` already contains `match /enrollments/{allPaths=**}` allowing `create` without auth (subject to `isAllowedSize()` + `isDocument()`)
+- `src/app/api/employees/enroll/route.ts` is a public endpoint (no `requireAdmin`) — accepts submissions from unauthenticated /enroll flow
+- Public page uses plain `fetch("/api/employees/enroll", ...)`, not `authorizedFetch` — correct for unauthenticated flow
+
+### Deployment required
+- Local `.next` build artifact still contained the old `employees/...` path string (confirmed via grep) → the currently deployed Vercel bundle also has the old path
+- No further source changes needed; next `main` push / Vercel rebuild will pick up the corrected path
+- Firebase Storage rules must also be deployed: `firebase deploy --only storage:rules` (if not already pushed since the `enrollments/` rule was added in the F-01/F-02/F-03 security pass on 2026-04-15)
+- After redeploy, users on the PWA may need to force-refresh (service worker cache) to pick up the new bundle
+
+---
+
+## [2026-04-17] — Session: Mobile UI redesign + impeccable polish
+
+### PWA icon / favicon fix
+**Files modified:** `src/app/favicon.ico`, `public/manifest.json`, `public/icons/*`
+- `src/app/favicon.ico` regenerated with multi-size ICO (16/32/48px) using CISS brand icon — Next.js App Router auto-serves this file over `public/favicon.ico`
+- `manifest.json`: `theme_color` + `background_color` corrected to `#014c85`
+- All PWA icons regenerated with brand blue bg + CISS gold logo via Pillow
+
+### Mobile UI redesign
+**Files modified:** `src/components/guard/guard-bottom-nav.tsx`, `src/components/guard/guard-header.tsx`, `src/app/(guard)/layout.tsx`, `src/app/(guard)/guard/dashboard/page.tsx`, `src/app/(app)/layout.tsx`, `src/app/guard-login/page.tsx`, `src/app/globals.css`
+- Floating pill bottom nav (both guard + admin): `rounded-2xl`, `backdrop-blur-xl`, layered shadow, `active:scale-[0.92]`, gold dot active indicator, safe-area padding
+- Guard header: brand gradient, Exo 2 font, inset-highlight logo container
+- Guard login: full-bleed brand gradient, card-floats-from-bottom pattern, `min-h-[100dvh]`
+- Guard dashboard: double-bezel `StatCard`, `font-exo2 tabular-nums`, stagger animations, Emil Kowalski easing
+- Guard layout: `min-h-[100dvh]`, loading screen gradient
+- globals.css: `bottom-nav-item` min-h bumped to 58px, slide-up animation + stagger classes added
+
+### Impeccable polish pass (commit 75318ac7)
+**Files modified:** same 6 mobile files
+- Removed banned `border-l-2 border-brand-gold` side-stripe → absolute-positioned 3px pill indicator
+- Removed all `console.log/warn/error` from layout.tsx and guard-login
+- Replaced `text-gray-*` hardcodes with semantic tokens (`text-foreground`, `text-muted-foreground`)
+- Fixed `text-[8px]` month label → `text-[10px]` (readability)
+- Nav labels 9px → 10px (guard + admin bottom bar)
+- Guard header subtitle 9px → 10px
+- Wired `animationDelay` on More sheet items to `animate-slide-up`
+- `<img>` in guard loading screen → `<Image>` from next/image
+
+---
+
 ## [2026-04-16] — Session: Work Orders tab on Field Officers page
 
 ### Work Orders tab added to field-officers page

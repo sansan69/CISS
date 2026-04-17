@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import React, { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -24,8 +25,7 @@ function GuardLoadingScreen() {
           className="flex h-16 w-16 items-center justify-center rounded-2xl"
           style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/ciss-logo.png" alt="CISS" width={40} height={40} />
+          <Image src="/ciss-logo.png" alt="CISS" width={40} height={40} unoptimized />
         </div>
         <p className="text-white font-bold text-lg tracking-wide">
           CISS Workforce
@@ -129,7 +129,7 @@ export default function GuardLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-      <div className="flex flex-col min-h-[100dvh] bg-muted/30">
+      <div className="flex flex-col min-h-[100dvh] bg-background">
         {/* Sticky header */}
         <GuardHeader employeeName={displayName} />
 

@@ -248,17 +248,17 @@ export default function GuardDashboardPage() {
       <Card className="rounded-xl shadow-sm border-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-800">
+            <h2 className="text-sm font-semibold text-foreground">
               Next Shift
             </h2>
           </div>
           {data.nextShift ? (
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <MapPin size={14} style={{ color: BRAND_BLUE }} />
                 {data.nextShift.siteName || data.nextShift.clientName}
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Clock size={12} />
                 {formatDate(data.nextShift.date)}
                 {data.nextShift.shiftLabel
@@ -267,7 +267,7 @@ export default function GuardDashboardPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-400">No upcoming shift found</p>
+            <p className="text-sm text-muted-foreground/60">No upcoming shift found</p>
           )}
         </CardContent>
       </Card>
@@ -312,7 +312,7 @@ export default function GuardDashboardPage() {
       <Card className="rounded-xl shadow-sm border-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-800">
+            <h2 className="text-sm font-semibold text-foreground">
               Recent Attendance
             </h2>
             <Link
@@ -326,7 +326,7 @@ export default function GuardDashboardPage() {
           </div>
 
           {data.recentAttendance.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-3">
+            <p className="text-sm text-muted-foreground/60 text-center py-3">
               No attendance records this month
             </p>
           ) : (
@@ -334,7 +334,7 @@ export default function GuardDashboardPage() {
               {data.recentAttendance.map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0"
+                  className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0"
                 >
                   {/* Date badge */}
                   <div
@@ -347,7 +347,7 @@ export default function GuardDashboardPage() {
                     >
                       {log.date.slice(8, 10)}
                     </span>
-                    <span className="text-[8px] text-gray-500 leading-none mt-0.5">
+                    <span className="text-[10px] text-muted-foreground leading-none mt-0.5">
                       {new Date(`${log.date}T00:00:00`).toLocaleDateString(
                         "en-IN",
                         { month: "short" }
@@ -356,10 +356,10 @@ export default function GuardDashboardPage() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-800 truncate">
+                    <p className="text-xs font-medium text-foreground truncate">
                       {log.siteName || "—"}
                     </p>
-                    <p className="text-[10px] text-gray-500">{log.time}</p>
+                    <p className="text-[10px] text-muted-foreground">{log.time}</p>
                   </div>
 
                   <Badge

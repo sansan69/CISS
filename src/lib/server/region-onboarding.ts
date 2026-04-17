@@ -348,6 +348,7 @@ export async function createRegionAdminAccount(
         email: target.email,
         password: target.password,
         displayName: target.displayName || undefined,
+        emailVerified: true,
       });
       created = true;
     } else if (target.displayName && !userRecord.displayName) {

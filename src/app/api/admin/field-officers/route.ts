@@ -62,6 +62,7 @@ export async function POST(request: Request) {
         email: body.email,
         password: body.password,
         displayName: name,
+        emailVerified: true,
       });
       uid = createdUser.uid;
     }

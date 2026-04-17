@@ -141,6 +141,9 @@ export async function POST(request: Request) {
               ...(item.claimPatch ?? {}),
             };
       await adminAuth.setCustomUserClaims(item.uid, nextClaims);
+      if (!userRecord.emailVerified && userRecord.email) {
+        await adminAuth.updateUser(item.uid, { emailVerified: true });
+      }
       repaired += 1;
     }
 
