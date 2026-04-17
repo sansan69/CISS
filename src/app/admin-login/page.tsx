@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -6,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LogIn, HomeIcon, Loader2 } from 'lucide-react';
+import { LogIn, HomeIcon, Loader2, BarChart3, Users, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -27,8 +26,6 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Quick guard: ensure Firebase frontend config is available in this environment
-    // This helps surface clear errors when env vars are misconfigured on Vercel
     if (!isFirebaseConfigured) {
       toast({
         variant: 'destructive',
@@ -78,7 +75,6 @@ export default function AdminLoginPage() {
           const token = await requestNotificationPermission();
           if (token) {
             await registerFCMToken(auth.currentUser.uid, token);
-            console.log('FCM token registered');
           }
         } catch (error) {
           console.warn('Failed to register FCM token:', error);
@@ -123,16 +119,17 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4"
-      style={{ background: "linear-gradient(160deg, #014c85 0%, #012f52 100%)" }}>
-
-      {/* Home link — subtle on dark bg */}
-      <div className="absolute top-4 right-4">
+    <div
+      className="min-h-[100dvh] w-full flex flex-col md:flex-row text-foreground"
+      style={{ background: "linear-gradient(160deg, hsl(206 98% 26%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 10%) 100%)" }}
+    >
+      {/* Home link */}
+      <div className="absolute top-4 right-4 z-10">
         <Button
           variant="ghost"
           asChild
           size="sm"
-          className="text-white/70 hover:text-white hover:bg-white/10"
+          className="h-10 px-3 text-white/80 hover:text-white hover:bg-white/10"
         >
           <Link href="/">
             <HomeIcon className="mr-2 h-4 w-4" /> Home
@@ -140,99 +137,155 @@ export default function AdminLoginPage() {
         </Button>
       </div>
 
-      <div className="w-full max-w-sm animate-slide-up">
-        {/* Logo + wordmark above card */}
-        <header className="text-center mb-8">
-          <Image
-            src="/ciss-logo.png"
-            alt="CISS Workforce Logo"
-            width={200}
-            height={202}
-            priority
-            data-ai-hint="company logo"
-            unoptimized={true}
-            className="mx-auto h-16 w-auto mb-4 drop-shadow-lg"
-          />
-          <h1
-            className="text-2xl font-bold text-white tracking-tight"
-            style={{ fontFamily: "var(--font-exo-display)" }}
-          >
-            CISS Workforce
-          </h1>
-          <p className="text-sm text-white/60 mt-1 tracking-wide">Admin Portal</p>
-        </header>
+      {/* Desktop brand panel */}
+      <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-24 top-10 h-96 w-96 rounded-full bg-accent/15 blur-3xl" />
+          <div className="absolute -right-20 bottom-10 h-96 w-96 rounded-full bg-white/8 blur-3xl" />
+        </div>
 
-        {/* Login card — white with gold top accent */}
-        <div
-          className="bg-white rounded-2xl shadow-[0_20px_60px_rgb(0,0,0/0.35)] overflow-hidden"
-          style={{ borderTop: "4px solid #bd9c55" }}
-        >
-          <div className="px-6 pt-6 pb-2">
-            <h2
-              className="text-lg font-semibold text-foreground"
-              style={{ fontFamily: "var(--font-exo-display)" }}
-            >
-              Sign In
-            </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Enter your credentials to continue.
-            </p>
+        <div className="relative flex items-center gap-3 animate-slide-up">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
+            <Image src="/ciss-logo.png" alt="CISS Logo" width={40} height={40} data-ai-hint="company logo" unoptimized />
           </div>
-
-          <div className="px-6 pb-6 pt-4">
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="username"
-                  placeholder="admin@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                  className="h-11 focus-visible:ring-[#014c85] focus-visible:border-[#014c85]"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  className="h-11 focus-visible:ring-[#014c85] focus-visible:border-[#014c85]"
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full h-11 bg-[#014c85] hover:bg-[#013a6b] text-white font-semibold mt-2"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <LogIn className="mr-2 h-4 w-4" />
-                )}
-                Sign In
-              </Button>
-            </form>
+          <div>
+            <p className="text-base font-bold font-exo2 tracking-tight">CISS Workforce</p>
+            <p className="text-xs text-white/60">Kerala security operations</p>
           </div>
         </div>
 
-        <footer className="text-center text-xs text-white/40 mt-6">
+        <div className="relative max-w-md animate-slide-up stagger-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent mb-3">Admin Portal</p>
+          <h1 className="text-4xl lg:text-5xl font-bold font-exo2 tracking-tight leading-[1.1]">
+            Manage the entire workforce at a glance.
+          </h1>
+          <p className="mt-4 text-base text-white/70 leading-relaxed">
+            Attendance, payroll, work orders, and field operations — all in one portal.
+          </p>
+
+          <div className="mt-8 space-y-3">
+            <div className="flex items-center gap-3 text-sm text-white/80">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">
+                <Users className="h-4 w-4 text-accent" />
+              </div>
+              <span>Real-time guard rosters across every site</span>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-white/80">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">
+                <BarChart3 className="h-4 w-4 text-accent" />
+              </div>
+              <span>Automated payroll with Kerala slab compliance</span>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-white/80">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">
+                <ShieldCheck className="h-4 w-4 text-accent" />
+              </div>
+              <span>Role-based access for admins, FOs & clients</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="relative text-xs text-white/50 animate-slide-up stagger-2">
           &copy; {new Date().getFullYear()} CISS Workforce. All rights reserved.
-        </footer>
-      </div>
+        </p>
+      </aside>
+
+      {/* Login panel */}
+      <main className="flex-1 flex flex-col md:items-center md:justify-center md:p-10">
+        <div className="flex-1 flex flex-col w-full md:flex-none md:max-w-md">
+
+          {/* Brand header — mobile only */}
+          <div className="flex flex-col items-center justify-center pt-16 pb-7 px-6 md:hidden animate-slide-up">
+            <div className="flex h-20 w-20 items-center justify-center rounded-[22px] mb-5 bg-white/10 ring-1 ring-white/15 inset-highlight">
+              <Image
+                src="/ciss-logo.png"
+                alt="CISS Workforce Logo"
+                width={50}
+                height={50}
+                priority
+                data-ai-hint="company logo"
+                unoptimized
+              />
+            </div>
+            <h1 className="text-2xl font-bold text-white font-exo2 tracking-tight">
+              Admin Portal
+            </h1>
+            <p className="text-sm mt-1.5 font-medium text-accent">
+              CISS Workforce
+            </p>
+          </div>
+
+          {/* Card */}
+          <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
+            <div
+              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl bg-card text-card-foreground md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] md:ring-1 md:ring-white/10 px-6 pt-8 pb-8 sm:px-8 md:p-10"
+              style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 2rem)" }}
+            >
+              <div className="text-center md:text-left mb-7">
+                <h2 className="text-2xl font-bold font-exo2 tracking-tight">Sign in</h2>
+                <p className="text-base text-muted-foreground mt-1">
+                  Enter your admin credentials to continue.
+                </p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-semibold text-foreground">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="username"
+                    placeholder="admin@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoading}
+                    className="h-12 text-base"
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-semibold text-foreground">
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                    className="h-12 text-base"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-semibold rounded-xl"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="mr-2 h-4 w-4" /> Sign In
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <p className="mt-6 text-center text-xs text-muted-foreground md:hidden">
+                &copy; {new Date().getFullYear()} CISS Workforce
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
