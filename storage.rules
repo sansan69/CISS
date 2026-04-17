@@ -79,6 +79,14 @@ service firebase.storage {
       allow update, delete: if isAdmin();
     }
 
+    // Public self-enrollment uploads — unauthenticated writes allowed.
+    // Admins can read and manage; anonymous users can only create (no overwrite/delete).
+    match /enrollments/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create: if isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

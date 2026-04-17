@@ -11,8 +11,6 @@ import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
 } from "@/types/enrollment";
-import { requireAdmin } from "@/lib/server/auth";
-
 export const runtime = "nodejs";
 
 function buildSearchableFields(data: EnrollmentSubmission, employeeId: string) {
@@ -54,8 +52,7 @@ async function generateUniqueEmployeeId(
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin(request);
-
+    // Public endpoint — self-enrollment does not require authentication.
     const payload = enrollmentSubmissionSchema.parse(await request.json());
     const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
     const district = canonicalizeDistrictName(payload.district, districtSuggestions);

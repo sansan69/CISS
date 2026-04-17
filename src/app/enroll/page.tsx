@@ -1,7 +1,6 @@
 
 "use client";
 
-import { authorizedFetch } from "@/lib/api-client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
@@ -534,7 +533,8 @@ function buildEnrollmentStoragePath(
   file: File,
 ): string {
   const extension = getUploadFileExtension(file, "bin");
-  return `employees/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}`;
+  // Use public enrollments/ path so unauthenticated users can upload
+  return `enrollments/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}`;
 }
 
 const IdNumberInput = ({
@@ -1037,7 +1037,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             }
         }
         
-        const response = await authorizedFetch("/api/employees/enroll", {
+        const response = await fetch("/api/employees/enroll", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
