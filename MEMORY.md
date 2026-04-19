@@ -8,7 +8,7 @@ This file is the authoritative log of all changes made to the codebase.
 ## [2026-04-19] — Session: Training + quiz spec drafted
 
 **Files added:** `docs/training-quiz-spec.md`
-- Spec covers admin / FO / guard flows, Firestore model (`trainingModules`, `questionBanks/{id}/questions`, `moduleAssignments`, `quizAttempts`), storage layout, accepted uploads (pdf/pptx/jpg/png/webp, 25 MB), rendering (native pdf/image + Office 365 embed for pptx), 5-phase plan
+- Spec covers admin / FO / guard flows, Firestore model (`trainingModules`, `questionBanks/{id}/questions`, `moduleAssignments`, `quizAttempts`), storage layout, accepted uploads (pdf/pptx/jpg/png/webp, 100 MB), rendering (native pdf/image + Office 365 embed for pptx), 5-phase plan
 - No code changes yet — spec is source of truth for upcoming implementation
 
 ---

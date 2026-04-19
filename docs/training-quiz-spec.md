@@ -73,7 +73,7 @@ trainingModules/{moduleId}/content.{pdf|pptx|jpg|png|webp}
 - `.pdf` (`application/pdf`)
 - `.pptx` (`application/vnd.openxmlformats-officedocument.presentationml.presentation`)
 - images: `.jpg`, `.jpeg`, `.png`, `.webp`
-- max size: 25 MB (tunable)
+- max size: 100 MB (tunable)
 
 ## Rendering strategy
 
