@@ -5,6 +5,25 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-19] — Session: Training Phase 1 — file upload for modules
+
+**Files modified:**
+- `storage.rules` — added `trainingModules/{fileName=**}` path (admin write, signed-in read, 100 MB cap, pdf/pptx/image content types via new `isAllowedTrainingSize()` + `isTrainingContent()` helpers)
+- `src/types/training.ts` — added `TrainingContentType` = `"pdf" | "pptx" | "image"`; added `contentType`, `contentPath`, `contentFileName` on `TrainingModule`
+- `src/lib/firebaseAdmin.ts` — export `storage` (admin bucket) for server-side deletion
+- `src/app/api/admin/training/modules/route.ts` — POST now persists `contentType`, `contentPath`, `contentFileName`
+- `src/app/api/admin/training/modules/[id]/route.ts` — DELETE now removes Storage object via `contentPath` before deleting Firestore doc (`ignoreNotFound: true`)
+- `src/app/(app)/training/page.tsx` — swapped "Content URL" text input for file picker (100 MB, pdf/pptx/jpg/png/webp), uploads via `uploadBytesResumable` with progress bar
+- `src/app/api/guard/training/route.ts` — enriches each assignment with parent module's `contentType`, `contentFileName`, `contentUrl` via batched `getAll`
+- `src/app/(guard)/guard/training/page.tsx` — inline viewer modal: native `<img>` for image, direct iframe for pdf, Office 365 embed iframe (`view.officeapps.live.com/op/embed.aspx`) for pptx; always shows Download fallback link
+
+**Deployment required:**
+- `firebase deploy --only storage:rules` — new rules for `trainingModules/**`
+
+**Not yet done (Phase 2+):** question banks, quiz runner, quiz attempts, `trainingPerformance` aggregate, FO training tab
+
+---
+
 ## [2026-04-19] — Session: Training + quiz spec drafted
 
 **Files added:** `docs/training-quiz-spec.md`

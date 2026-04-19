@@ -6,12 +6,22 @@ service firebase.storage {
       return request.resource.size < 5 * 1024 * 1024;
     }
 
+    function isAllowedTrainingSize() {
+      return request.resource.size < 100 * 1024 * 1024;
+    }
+
     function isImage() {
       return request.resource.contentType.matches('image/.*');
     }
 
     function isDocument() {
       return isImage() || request.resource.contentType == 'application/pdf';
+    }
+
+    function isTrainingContent() {
+      return isImage()
+        || request.resource.contentType == 'application/pdf'
+        || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
     }
 
     function isSignedIn() {
@@ -77,6 +87,13 @@ service firebase.storage {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
+    }
+
+    // Training module content — admin upload, signed-in read
+    match /trainingModules/{fileName=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() && isAllowedTrainingSize() && isTrainingContent();
+      allow delete: if isAdmin();
     }
 
     // Public self-enrollment uploads — unauthenticated writes allowed.

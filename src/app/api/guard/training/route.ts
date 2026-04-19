@@ -21,14 +21,36 @@ export async function GET(request: Request) {
         .get();
     }
 
-    const assignments = snapshot.docs
-      .map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          }) as { id: string; assignedAt?: { seconds?: number } },
-      )
+    const rawAssignments = snapshot.docs.map(
+      (doc) =>
+        ({
+          id: doc.id,
+          ...doc.data(),
+        }) as { id: string; moduleId?: string; assignedAt?: { seconds?: number } },
+    );
+
+    const moduleIds = Array.from(
+      new Set(rawAssignments.map((a) => a.moduleId).filter((x): x is string => Boolean(x))),
+    );
+    const moduleMap = new Map<string, Record<string, unknown>>();
+    if (moduleIds.length) {
+      const refs = moduleIds.map((id) => adminDb.collection("trainingModules").doc(id));
+      const modDocs = await adminDb.getAll(...refs);
+      modDocs.forEach((d) => {
+        if (d.exists) moduleMap.set(d.id, d.data() ?? {});
+      });
+    }
+
+    const assignments = rawAssignments
+      .map((a) => {
+        const mod = a.moduleId ? moduleMap.get(a.moduleId) : undefined;
+        return {
+          ...a,
+          contentUrl: (a as any).contentUrl ?? mod?.contentUrl ?? null,
+          contentType: mod?.contentType ?? null,
+          contentFileName: mod?.contentFileName ?? null,
+        };
+      })
       .sort((a, b) => {
         const aSeconds = (a.assignedAt as { seconds?: number } | undefined)?.seconds ?? 0;
         const bSeconds = (b.assignedAt as { seconds?: number } | undefined)?.seconds ?? 0;

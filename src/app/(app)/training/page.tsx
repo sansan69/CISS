@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { auth } from "@/lib/firebase";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { auth, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,11 +12,39 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, BookOpen, Clock, Target, Pencil, Trash2, GraduationCap, Shield, Scale, Users, Zap } from "lucide-react";
+import { Loader2, Plus, BookOpen, Clock, Target, Pencil, Trash2, GraduationCap, Shield, Scale, Users, Zap, UploadCloud, FileText, FileImage, Presentation } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import type { TrainingModule, TrainingCategory } from "@/types/training";
+import type { TrainingModule, TrainingCategory, TrainingContentType } from "@/types/training";
+
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const ACCEPTED_MIME: Record<string, TrainingContentType> = {
+  "application/pdf": "pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "image/jpeg": "image",
+  "image/png": "image",
+  "image/webp": "image",
+  "image/jpg": "image",
+};
+const ACCEPT_ATTR = ".pdf,.pptx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/*";
+
+function resolveContentType(file: File): TrainingContentType | null {
+  if (ACCEPTED_MIME[file.type]) return ACCEPTED_MIME[file.type];
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".pdf")) return "pdf";
+  if (name.endsWith(".pptx")) return "pptx";
+  if (/\.(jpe?g|png|webp)$/.test(name)) return "image";
+  return null;
+}
+
+function contentIcon(type?: TrainingContentType) {
+  if (type === "pdf") return FileText;
+  if (type === "pptx") return Presentation;
+  if (type === "image") return FileImage;
+  return BookOpen;
+}
 
 const CATEGORY_CONFIG: Record<TrainingCategory, { label: string; icon: React.ElementType; color: string }> = {
   safety: { label: "Safety", icon: Shield, color: "bg-red-100 text-red-700" },
@@ -34,6 +63,9 @@ export default function TrainingPage() {
   const [editingModule, setEditingModule] = useState<TrainingModule | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TrainingModule | null>(null);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -41,6 +73,9 @@ export default function TrainingPage() {
     durationMinutes: 60,
     passingScore: 70,
     contentUrl: "",
+    contentType: null as TrainingContentType | null,
+    contentPath: "",
+    contentFileName: "",
   });
 
   useEffect(() => {
@@ -68,9 +103,16 @@ export default function TrainingPage() {
 
   useEffect(() => { fetchModules(); }, [fetchModules]);
 
+  const resetFilePicker = () => {
+    setPendingFile(null);
+    setUploadProgress(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const openCreate = () => {
     setEditingModule(null);
-    setForm({ title: "", description: "", category: "safety", durationMinutes: 60, passingScore: 70, contentUrl: "" });
+    setForm({ title: "", description: "", category: "safety", durationMinutes: 60, passingScore: 70, contentUrl: "", contentType: null, contentPath: "", contentFileName: "" });
+    resetFilePicker();
     setDialogOpen(true);
   };
 
@@ -83,14 +125,81 @@ export default function TrainingPage() {
       durationMinutes: mod.durationMinutes,
       passingScore: mod.passingScore,
       contentUrl: mod.contentUrl ?? "",
+      contentType: mod.contentType ?? null,
+      contentPath: mod.contentPath ?? "",
+      contentFileName: mod.contentFileName ?? "",
     });
+    resetFilePicker();
     setDialogOpen(true);
+  };
+
+  const handleFilePick = (file: File | null) => {
+    if (!file) {
+      resetFilePicker();
+      return;
+    }
+    const type = resolveContentType(file);
+    if (!type) {
+      toast({ title: "Unsupported file type", description: "Upload .pdf, .pptx, .jpg, .png, or .webp.", variant: "destructive" });
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({ title: "File too large", description: "Maximum upload size is 100 MB.", variant: "destructive" });
+      return;
+    }
+    setPendingFile(file);
+    setUploadProgress(null);
+  };
+
+  const uploadPendingFile = async (): Promise<{ url: string; path: string; type: TrainingContentType; name: string } | null> => {
+    if (!pendingFile) return null;
+    const type = resolveContentType(pendingFile)!;
+    const safeName = pendingFile.name.replace(/[^a-zA-Z0-9_.\-]/g, "_");
+    const path = `trainingModules/${Date.now()}_${safeName}`;
+    const objectRef = storageRef(storage, path);
+    const task = uploadBytesResumable(objectRef, pendingFile, { contentType: pendingFile.type });
+    setUploadProgress(0);
+    await new Promise<void>((resolve, reject) => {
+      task.on(
+        "state_changed",
+        (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+        (err) => reject(err),
+        () => resolve(),
+      );
+    });
+    const url = await getDownloadURL(task.snapshot.ref);
+    return { url, path, type, name: pendingFile.name };
   };
 
   const handleSave = async () => {
     if (!form.title.trim() || !token) return;
     setSaving(true);
     try {
+      let payload: Record<string, unknown> = {
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        durationMinutes: form.durationMinutes,
+        passingScore: form.passingScore,
+        contentUrl: form.contentUrl || null,
+        contentType: form.contentType,
+        contentPath: form.contentPath || null,
+        contentFileName: form.contentFileName || null,
+      };
+
+      if (pendingFile) {
+        const uploaded = await uploadPendingFile();
+        if (uploaded) {
+          payload = {
+            ...payload,
+            contentUrl: uploaded.url,
+            contentType: uploaded.type,
+            contentPath: uploaded.path,
+            contentFileName: uploaded.name,
+          };
+        }
+      }
+
       const url = editingModule
         ? `/api/admin/training/modules/${editingModule.id}`
         : "/api/admin/training/modules";
@@ -98,16 +207,19 @@ export default function TrainingPage() {
       const res = await fetch(url, {
         method,
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       toast({ title: editingModule ? "Module updated" : "Module created" });
       setDialogOpen(false);
+      resetFilePicker();
       fetchModules();
-    } catch {
-      toast({ title: "Failed to save module", variant: "destructive" });
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Failed to save module", description: err?.message, variant: "destructive" });
     } finally {
       setSaving(false);
+      setUploadProgress(null);
     }
   };
 
@@ -251,13 +363,39 @@ export default function TrainingPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="contentUrl">Content URL (optional)</Label>
-              <Input
-                id="contentUrl"
-                value={form.contentUrl}
-                onChange={(e) => setForm((f) => ({ ...f, contentUrl: e.target.value }))}
-                placeholder="https://... PDF or video link"
+              <Label>Module File</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPT_ATTR}
+                className="hidden"
+                onChange={(e) => handleFilePick(e.target.files?.[0] ?? null)}
               />
+              <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
+                {pendingFile ? (
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate">{pendingFile.name}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => handleFilePick(null)}>Remove</Button>
+                  </div>
+                ) : form.contentFileName ? (
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate">Current: {form.contentFileName}</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No file attached yet.</p>
+                )}
+                <Button type="button" variant="outline" size="sm" className="w-full gap-2" onClick={() => fileInputRef.current?.click()}>
+                  <UploadCloud className="h-4 w-4" />
+                  {form.contentFileName || pendingFile ? "Replace file" : "Upload file"}
+                </Button>
+                <p className="text-[11px] text-muted-foreground">PDF, PPTX, or image (JPG/PNG/WEBP). Max 100 MB.</p>
+                {uploadProgress !== null && (
+                  <div className="space-y-1">
+                    <Progress value={uploadProgress} />
+                    <p className="text-[11px] text-muted-foreground">Uploading… {uploadProgress}%</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>

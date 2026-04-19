@@ -27,6 +27,9 @@ export async function POST(request: Request) {
       durationMinutes?: number;
       passingScore?: number;
       contentUrl?: string;
+      contentType?: "pdf" | "pptx" | "image";
+      contentPath?: string;
+      contentFileName?: string;
     };
 
     if (!body.title?.trim()) {
@@ -41,6 +44,9 @@ export async function POST(request: Request) {
       durationMinutes: body.durationMinutes ?? 60,
       passingScore: body.passingScore ?? 70,
       contentUrl: body.contentUrl ?? null,
+      contentType: body.contentType ?? null,
+      contentPath: body.contentPath ?? null,
+      contentFileName: body.contentFileName ?? null,
       isActive: true,
       createdAt: now,
       createdBy: adminUser.uid,

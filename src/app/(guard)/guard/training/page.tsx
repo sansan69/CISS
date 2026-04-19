@@ -2,11 +2,14 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { BookOpen, ExternalLink, GraduationCap } from "lucide-react";
+import { BookOpen, ExternalLink, GraduationCap, FileText, Presentation, ImageIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAppAuth } from "@/context/auth-context";
+
+type ContentType = "pdf" | "pptx" | "image";
 
 type Assignment = {
   id: string;
@@ -15,9 +18,15 @@ type Assignment = {
   status?: string;
   score?: number;
   contentUrl?: string;
+  contentType?: ContentType | null;
+  contentFileName?: string | null;
   dueDate?: { seconds: number };
   assignedAt?: { seconds: number };
 };
+
+function officeEmbedUrl(publicUrl: string) {
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(publicUrl)}`;
+}
 
 function formatTs(ts?: { seconds: number }) {
   if (!ts?.seconds) return "—";
@@ -33,6 +42,7 @@ export default function GuardTrainingPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [viewer, setViewer] = useState<Assignment | null>(null);
 
   const loadAssignments = useCallback(async () => {
     if (!user) return;
@@ -100,17 +110,83 @@ export default function GuardTrainingPage() {
                   <span>Score: {typeof assignment.score === "number" ? `${assignment.score}%` : "—"}</span>
                 </div>
                 {assignment.contentUrl ? (
-                  <Link href={assignment.contentUrl} target="_blank" className="inline-flex items-center text-sm font-medium text-[#014c85]">
-                    <BookOpen className="mr-1.5 h-4 w-4" />
-                    Open training material
-                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 gap-1.5 bg-[#014c85] text-white hover:bg-[#013963]"
+                      onClick={() => setViewer(assignment)}
+                    >
+                      {assignment.contentType === "pptx" ? (
+                        <Presentation className="h-3.5 w-3.5" />
+                      ) : assignment.contentType === "image" ? (
+                        <ImageIcon className="h-3.5 w-3.5" />
+                      ) : assignment.contentType === "pdf" ? (
+                        <FileText className="h-3.5 w-3.5" />
+                      ) : (
+                        <BookOpen className="h-3.5 w-3.5" />
+                      )}
+                      Open material
+                    </Button>
+                    <Link
+                      href={assignment.contentUrl}
+                      target="_blank"
+                      className="inline-flex items-center text-xs font-medium text-gray-500"
+                    >
+                      Download
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Link>
+                  </div>
                 ) : null}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {viewer?.contentUrl ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80 backdrop-blur">
+          <div className="flex items-center justify-between gap-2 p-3 text-white">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{viewer.moduleName}</p>
+              {viewer.contentFileName && (
+                <p className="truncate text-xs text-white/70">{viewer.contentFileName}</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Link
+                href={viewer.contentUrl}
+                target="_blank"
+                className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+              >
+                Download
+              </Link>
+              <Button type="button" size="sm" variant="ghost" className="text-white hover:bg-white/10" onClick={() => setViewer(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+          <div className="relative flex-1 bg-white">
+            {viewer.contentType === "image" ? (
+              <img src={viewer.contentUrl} alt={viewer.moduleName || "Training material"} className="h-full w-full object-contain" />
+            ) : viewer.contentType === "pptx" ? (
+              <iframe
+                title={viewer.moduleName || "Training material"}
+                src={officeEmbedUrl(viewer.contentUrl)}
+                className="h-full w-full"
+                allow="fullscreen"
+              />
+            ) : (
+              <iframe
+                title={viewer.moduleName || "Training material"}
+                src={viewer.contentUrl}
+                className="h-full w-full"
+                allow="fullscreen"
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

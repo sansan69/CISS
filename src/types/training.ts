@@ -2,15 +2,19 @@ import type { Timestamp } from "firebase/firestore";
 
 export type TrainingCategory = "safety" | "legal" | "conduct" | "skills" | "emergency";
 export type TrainingStatus = "assigned" | "inProgress" | "completed" | "failed";
+export type TrainingContentType = "pdf" | "pptx" | "image";
 
 export interface TrainingModule {
   id: string;
   title: string;
   description: string;
   category: TrainingCategory;
-  contentUrl?: string;           // Storage URL for PDF/video
+  contentUrl?: string;
+  contentType?: TrainingContentType;
+  contentPath?: string;
+  contentFileName?: string;
   durationMinutes: number;
-  passingScore: number;          // 0–100
+  passingScore: number;
   isActive: boolean;
   createdAt: Timestamp;
   createdBy: string;
