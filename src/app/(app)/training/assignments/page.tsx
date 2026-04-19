@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, getDocs, limit, query } from "firebase/firestore";
+import { collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -39,8 +39,10 @@ type EmployeeOption = {
   id: string;
   fullName?: string;
   employeeId?: string;
+  clientId?: string;
   clientName?: string;
   district?: string;
+  status?: string;
 };
 
 function formatTs(ts?: { seconds: number }) {
@@ -63,6 +65,8 @@ export default function TrainingAssignmentsPage() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedModuleId, setSelectedModuleId] = useState("");
+  const [filterClient, setFilterClient] = useState<string>("all");
+  const [filterDistrict, setFilterDistrict] = useState<string>("all");
   const [dueDate, setDueDate] = useState("");
   const isPrivileged = userRole === "admin" || userRole === "superAdmin";
 
@@ -72,7 +76,7 @@ export default function TrainingAssignmentsPage() {
       const [assignmentsRes, modulesRes, employeesSnap] = await Promise.all([
         authorizedFetch("/api/admin/training/assignments"),
         authorizedFetch("/api/admin/training/modules"),
-        getDocs(query(collection(db, "employees"), limit(200))),
+        getDocs(query(collection(db, "employees"))),
       ]);
 
       const [assignmentsData, modulesData] = await Promise.all([
@@ -109,6 +113,46 @@ export default function TrainingAssignmentsPage() {
     }
   }, [isPrivileged, loadAssignments]);
 
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    employees.forEach((e) => {
+      if (e.clientName) map.set(e.clientId || e.clientName, e.clientName);
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [employees]);
+
+  const districtOptions = useMemo(() => {
+    const set = new Set<string>();
+    employees.forEach((e) => {
+      if (!e.district) return;
+      if (filterClient !== "all") {
+        const matchesId = e.clientId === filterClient;
+        const matchesName = e.clientName === filterClient;
+        if (!matchesId && !matchesName) return;
+      }
+      set.add(e.district);
+    });
+    return Array.from(set).sort();
+  }, [employees, filterClient]);
+
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((e) => {
+      if (filterClient !== "all") {
+        const matchesId = e.clientId === filterClient;
+        const matchesName = e.clientName === filterClient;
+        if (!matchesId && !matchesName) return false;
+      }
+      if (filterDistrict !== "all" && e.district !== filterDistrict) return false;
+      return true;
+    });
+  }, [employees, filterClient, filterDistrict]);
+
+  useEffect(() => {
+    if (selectedEmployeeId && !filteredEmployees.find((e) => e.id === selectedEmployeeId)) {
+      setSelectedEmployeeId("");
+    }
+  }, [filteredEmployees, selectedEmployeeId]);
+
   const selectedEmployee = useMemo(
     () => employees.find((employee) => employee.id === selectedEmployeeId),
     [employees, selectedEmployeeId],
@@ -135,6 +179,7 @@ export default function TrainingAssignmentsPage() {
         body: JSON.stringify({
           employeeId: selectedEmployee.id,
           employeeName: selectedEmployee.fullName ?? selectedEmployee.employeeId ?? "Guard",
+          clientId: selectedEmployee.clientId ?? "",
           clientName: selectedEmployee.clientName ?? "",
           district: selectedEmployee.district ?? "",
           moduleId: selectedModule.id,
@@ -227,14 +272,41 @@ export default function TrainingAssignmentsPage() {
             <DialogDescription>Choose a guard and a training module for them.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>Client</Label>
+                <Select value={filterClient} onValueChange={(v) => { setFilterClient(v); setFilterDistrict("all"); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All clients</SelectItem>
+                    {clientOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>District</Label>
+                <Select value={filterDistrict} onValueChange={setFilterDistrict}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All districts</SelectItem>
+                    {districtOptions.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1.5">
-              <Label>Employee</Label>
+              <Label>Employee ({filteredEmployees.length})</Label>
               <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={filteredEmployees.length ? "Select employee" : "No employees match filters"} /></SelectTrigger>
                 <SelectContent>
-                  {employees.map((employee) => (
+                  {filteredEmployees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id}>
-                      {employee.fullName || employee.employeeId || employee.id}
+                      {(employee.fullName || employee.employeeId || employee.id)}
+                      {employee.district ? ` · ${employee.district}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

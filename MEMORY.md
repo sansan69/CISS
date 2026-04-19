@@ -5,6 +5,18 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-19] — Session: Training assignments — client + district filters
+
+**Files modified:** `src/app/(app)/training/assignments/page.tsx`
+- Employee picker now filtered by Client + District dropdowns (derived from loaded employees)
+- Removed `limit(200)` on employees query so full list is searchable; client/district derived from full set
+- District options scoped to selected client
+- Changing client resets district to "all"; selected employee clears if it falls out of filter
+- Employee label now includes district suffix
+- Assignment POST now also sends `clientId`
+
+---
+
 ## [2026-04-19] — Session: Training Phases 2, 4, 5 — banks, quiz runner, performance
 
 **Collections added:** `questionBanks/{bankId}` + `questionBanks/{id}/questions/{qid}`, `quizAttempts/{attemptId}`; `employees/{id}.trainingPerformance` merged on submit.
