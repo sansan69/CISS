@@ -246,6 +246,25 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /questionBanks/{bankId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+
+      match /questions/{questionId} {
+        // Signed-in read is fine; clients get scrubbed versions via server anyway.
+        // Admin manages content.
+        allow read: if isAdmin() || isFieldOfficer();
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    match /quizAttempts/{attemptId} {
+      allow read: if isAdmin() || isFieldOfficer() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+      // Guards submit via server route (admin SDK bypasses rules). Lock down client writes.
+      allow create, update, delete: if isAdmin();
+    }
+
     match /trainingAssignments/{assignmentId} {
       // Guards can read their own training assignments and update progress
       allow read: if isAdmin() || isFieldOfficer() ||

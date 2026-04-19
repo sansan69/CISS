@@ -249,10 +249,15 @@ export default function TrainingPage() {
         description="Manage training content assigned to security guards"
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Training" }]}
         actions={
-          <Button onClick={openCreate} className="bg-brand-blue hover:bg-brand-blue-dark text-white gap-2">
-            <Plus className="h-4 w-4" />
-            New Module
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <a href="/training/banks">Question Banks</a>
+            </Button>
+            <Button onClick={openCreate} className="bg-brand-blue hover:bg-brand-blue-dark text-white gap-2">
+              <Plus className="h-4 w-4" />
+              New Module
+            </Button>
+          </div>
         }
       />
 

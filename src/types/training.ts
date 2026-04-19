@@ -21,6 +21,43 @@ export interface TrainingModule {
   updatedAt?: Timestamp;
 }
 
+export interface QuestionBank {
+  id: string;
+  title: string;
+  moduleId: string;
+  questionsPerAttempt: number;
+  timeLimitMinutes: number;
+  shuffle: boolean;
+  maxAttempts: number;
+  questionCount: number;
+  createdAt: Timestamp;
+  createdBy: string;
+  updatedAt?: Timestamp;
+}
+
+export interface Question {
+  id: string;
+  prompt: string;
+  options: string[];
+  correctIndex: number;
+  explanation?: string;
+  createdAt?: Timestamp;
+}
+
+export interface QuizAttempt {
+  id: string;
+  moduleId: string;
+  bankId: string;
+  employeeDocId: string;
+  answers: { questionId: string; selectedIndex: number; correct: boolean }[];
+  score: number;
+  total: number;
+  passed: boolean;
+  startedAt: Timestamp;
+  submittedAt: Timestamp;
+  durationSeconds: number;
+}
+
 export interface TrainingAssignment {
   id: string;
   employeeId: string;

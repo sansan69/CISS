@@ -5,6 +5,35 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-19] — Session: Training Phases 2, 4, 5 — banks, quiz runner, performance
+
+**Collections added:** `questionBanks/{bankId}` + `questionBanks/{id}/questions/{qid}`, `quizAttempts/{attemptId}`; `employees/{id}.trainingPerformance` merged on submit.
+
+**APIs added:**
+- `src/app/api/admin/training/banks/route.ts` — GET (list, optional `?moduleId`) + POST
+- `src/app/api/admin/training/banks/[id]/route.ts` — GET/PATCH/DELETE (delete cascades questions)
+- `src/app/api/admin/training/banks/[id]/questions/route.ts` — GET + POST (single or `questions[]` bulk), maintains `questionCount`
+- `src/app/api/admin/training/banks/[id]/questions/[qid]/route.ts` — PATCH/DELETE, re-syncs count
+- `src/app/api/guard/training/quiz/[assignmentId]/route.ts` — validates guard owns assignment, picks `questionsPerAttempt` shuffled questions, strips `correctIndex`
+- `src/app/api/guard/training/quiz/[assignmentId]/submit/route.ts` — grades against stored correctIndex, writes `quizAttempts`, updates assignment status/score, bumps `trainingPerformance.attemptCount/completedCount/lastScore`
+
+**UI added:**
+- `src/app/(app)/training/banks/page.tsx` — list + create dialog (module link, questionsPerAttempt, timeLimit, shuffle, maxAttempts)
+- `src/app/(app)/training/banks/[id]/page.tsx` — question editor (prompt, options, correctIndex radio, explanation)
+- `src/app/(guard)/guard/training/quiz/[assignmentId]/page.tsx` — paginated quiz runner with optional countdown timer, auto-submit at T=0, result card
+- Admin training page: added "Question Banks" button next to "New Module"
+- Guard training page: added "Start Quiz / Retake Quiz" button on each assignment card
+
+**Rules:**
+- `firestore.rules` — added matches for `questionBanks/{id}`, `questionBanks/{id}/questions/{qid}` (admin/FO read for questions, admin write), `quizAttempts/{id}` (admin/FO read, guard reads own by `employeeDocId`, client writes locked — server admin SDK writes on submit)
+- Deployed `firestore:rules` + `storage:rules` to `ciss-workforce` via `firebase deploy`
+
+**Types:** `QuestionBank`, `Question`, `QuizAttempt` added to `src/types/training.ts`.
+
+**Not done (deferred):** FO-scoped assignment (admin can already assign; FO creates are still blocked — needs `/api/field-officers/training/assignments` with district check), FO completion dashboard, evaluation tie-in UI surface, question CSV import.
+
+---
+
 ## [2026-04-19] — Session: Training Phase 1 — file upload for modules
 
 **Files modified:**

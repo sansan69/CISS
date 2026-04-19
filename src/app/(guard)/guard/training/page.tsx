@@ -109,35 +109,43 @@ export default function GuardTrainingPage() {
                   <span>Due: {formatTs(assignment.dueDate)}</span>
                   <span>Score: {typeof assignment.score === "number" ? `${assignment.score}%` : "—"}</span>
                 </div>
-                {assignment.contentUrl ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8 gap-1.5 bg-[#014c85] text-white hover:bg-[#013963]"
-                      onClick={() => setViewer(assignment)}
-                    >
-                      {assignment.contentType === "pptx" ? (
-                        <Presentation className="h-3.5 w-3.5" />
-                      ) : assignment.contentType === "image" ? (
-                        <ImageIcon className="h-3.5 w-3.5" />
-                      ) : assignment.contentType === "pdf" ? (
-                        <FileText className="h-3.5 w-3.5" />
-                      ) : (
-                        <BookOpen className="h-3.5 w-3.5" />
-                      )}
-                      Open material
-                    </Button>
-                    <Link
-                      href={assignment.contentUrl}
-                      target="_blank"
-                      className="inline-flex items-center text-xs font-medium text-gray-500"
-                    >
-                      Download
-                      <ExternalLink className="ml-1 h-3 w-3" />
-                    </Link>
-                  </div>
-                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/guard/training/quiz/${assignment.id}`}
+                    className="inline-flex h-8 items-center rounded-md bg-[#bd9c55] px-3 text-xs font-medium text-white hover:bg-[#a8884a]"
+                  >
+                    {assignment.status === "completed" || assignment.status === "failed" ? "Retake Quiz" : "Start Quiz"}
+                  </Link>
+                  {assignment.contentUrl ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 gap-1.5 bg-[#014c85] text-white hover:bg-[#013963]"
+                        onClick={() => setViewer(assignment)}
+                      >
+                        {assignment.contentType === "pptx" ? (
+                          <Presentation className="h-3.5 w-3.5" />
+                        ) : assignment.contentType === "image" ? (
+                          <ImageIcon className="h-3.5 w-3.5" />
+                        ) : assignment.contentType === "pdf" ? (
+                          <FileText className="h-3.5 w-3.5" />
+                        ) : (
+                          <BookOpen className="h-3.5 w-3.5" />
+                        )}
+                        Open material
+                      </Button>
+                      <Link
+                        href={assignment.contentUrl}
+                        target="_blank"
+                        className="inline-flex items-center text-xs font-medium text-gray-500"
+                      >
+                        Download
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      </Link>
+                    </>
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           ))}
