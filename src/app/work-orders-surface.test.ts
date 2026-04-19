@@ -10,6 +10,10 @@ const workOrdersPageSource = readFileSync(
   resolve(process.cwd(), "src/app/(app)/work-orders/page.tsx"),
   "utf8",
 );
+const workOrdersRouteSource = readFileSync(
+  resolve(process.cwd(), "src/app/api/admin/work-orders/route.ts"),
+  "utf8",
+);
 const assignedGuardsExportPageSource = readFileSync(
   resolve(process.cwd(), "src/app/(app)/work-orders/assigned-guards-export/page.tsx"),
   "utf8",
@@ -37,5 +41,11 @@ describe("work orders operations surface", () => {
 
   it("redirects the legacy export route into the work orders workspace", () => {
     expect(assignedGuardsExportPageSource).toContain("redirect('/work-orders?tab=assigned-guards-export')");
+  });
+
+  it("includes the duty date when importing work orders and normalizes it on the server", () => {
+    expect(workOrdersPageSource).toContain("date: safeDate.toISOString()");
+    expect(workOrdersRouteSource).toContain("function normalizeWorkOrderDate");
+    expect(workOrdersRouteSource).toContain('if ("date" in filtered)');
   });
 });

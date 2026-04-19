@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit, buildServerUpdateAudit, buildServerAuditEvent } from "@/lib/server/audit";
 
+function normalizeWorkOrderDate(value: unknown) {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return value;
+}
+
 export async function POST(request: Request) {
   try {
     const adminUser = await requireAdmin(request);
@@ -37,6 +52,10 @@ export async function POST(request: Request) {
       if (key in data) {
         filtered[key] = data[key];
       }
+    }
+
+    if ("date" in filtered) {
+      filtered.date = normalizeWorkOrderDate(filtered.date);
     }
 
     if (Object.keys(filtered).length === 0) {

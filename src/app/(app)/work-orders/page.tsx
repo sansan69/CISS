@@ -550,6 +550,7 @@ export default function WorkOrderPage() {
                                     siteName: site.siteName,
                                     clientName: OPERATIONAL_CLIENT_NAME,
                                     district: site.district,
+                                    date: safeDate.toISOString(),
                                     maleGuardsRequired: finalMale,
                                     femaleGuardsRequired: finalFemale,
                                     totalManpower,
