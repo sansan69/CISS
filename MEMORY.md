@@ -5,6 +5,16 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-19] — Session: Remove Work Orders tab from admin Field Officers page
+
+**Files modified:** `src/app/(app)/field-officers/page.tsx`
+- Removed `work-orders` entry from `ADMIN_TABS`; admin now sees Officers / Visit Reports / Training Reports
+- `resolveWorkspaceTab` no longer honors `?tab=work-orders` for admins (falls back to `officers`); FO path unchanged — FOs still see Work Orders
+- `TabsList` grid fixed at `grid-cols-3` for both roles
+- `WorkOrdersPanel` TabsContent retained for field-officer role
+
+---
+
 ## [2026-04-17] — Session: Public enrollment storage-permission fix verified
 
 ### Bug reported

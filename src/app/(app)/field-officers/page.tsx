@@ -83,7 +83,6 @@ type SaveOfficerPayload = { officerData: any; isEditing: boolean };
 
 const ADMIN_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
   { value: 'officers', label: 'Officers', icon: Users },
-  { value: 'work-orders', label: 'Work Orders', icon: ClipboardList },
   { value: 'visit-reports', label: 'Visit Reports', icon: FileText },
   { value: 'training-reports', label: 'Training Reports', icon: GraduationCap },
 ];
@@ -99,7 +98,7 @@ function resolveWorkspaceTab(rawTab: string | null, authStatus: AuthStatus): Wor
     if (rawTab === 'visit-reports' || rawTab === 'training-reports') return rawTab;
     return 'work-orders';
   }
-  if (rawTab === 'work-orders' || rawTab === 'visit-reports' || rawTab === 'training-reports') {
+  if (rawTab === 'visit-reports' || rawTab === 'training-reports') {
     return rawTab;
   }
   return 'officers';
@@ -653,7 +652,7 @@ export default function FieldOfficersPage() {
         />
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col gap-4">
-          <TabsList className={`grid h-auto w-full gap-2 ${canManageOfficers ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-2">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               return (
