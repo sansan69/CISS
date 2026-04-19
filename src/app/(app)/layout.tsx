@@ -100,10 +100,9 @@ const mainNavGroups: NavGroup[] = [
   },
   {
     label: 'Training',
-    adminOnly: true,
     items: [
       { href: '/training',    label: 'Training Modules', icon: GraduationCap, adminOnly: true },
-      { href: '/training/assignments', label: 'Training Assignments', icon: BookOpen, adminOnly: true },
+      { href: '/training/assignments', label: 'Training Assignments', icon: BookOpen, fieldOfficerVisible: true },
       { href: '/evaluations', label: 'Evaluations',      icon: BookOpen,      adminOnly: true },
       { href: '/leaderboard', label: 'Leaderboard',      icon: Trophy,        adminOnly: true },
     ],

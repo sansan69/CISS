@@ -5,6 +5,17 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-19] — Session: Field officers can assign training
+
+**Files modified:**
+- `src/app/api/admin/training/assignments/route.ts` — swapped `requireAdmin` → `requireAdminOrFieldOfficer`; GET filters results by `token.assignedDistricts` for FO; POST rejects 403 when `body.district` not in FO's `assignedDistricts`; persists `assignedByRole: "admin" | "fieldOfficer"`; raised GET `.limit(200)` → `.limit(500)`
+- `src/app/(app)/training/assignments/page.tsx` — `isPrivileged` now admin+FO; `districtOptions` + `filteredEmployees` scoped to `assignedDistricts` when FO
+- `src/app/(app)/layout.tsx` — removed `adminOnly` from Training nav group; `/training/assignments` item now `fieldOfficerVisible: true` so FO sees the link (Training Modules + Evaluations + Leaderboard remain admin-only)
+
+**Effect:** Field officers can now create training assignments, but only for guards in their `assignedDistricts`. All other Training nav entries stay admin-only.
+
+---
+
 ## [2026-04-19] — Session: Training assignments — client + district filters
 
 **Files modified:** `src/app/(app)/training/assignments/page.tsx`

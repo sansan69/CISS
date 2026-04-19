@@ -55,7 +55,7 @@ function formatTs(ts?: { seconds: number }) {
 }
 
 export default function TrainingAssignmentsPage() {
-  const { userRole } = useAppAuth();
+  const { userRole, assignedDistricts } = useAppAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,7 +68,10 @@ export default function TrainingAssignmentsPage() {
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterDistrict, setFilterDistrict] = useState<string>("all");
   const [dueDate, setDueDate] = useState("");
-  const isPrivileged = userRole === "admin" || userRole === "superAdmin";
+  const isAdmin = userRole === "admin" || userRole === "superAdmin";
+  const isFieldOfficer = userRole === "fieldOfficer";
+  const isPrivileged = isAdmin || isFieldOfficer;
+  const foDistricts = useMemo(() => (isFieldOfficer ? assignedDistricts || [] : []), [assignedDistricts, isFieldOfficer]);
 
   const loadAssignments = useCallback(async () => {
     setLoading(true);
@@ -125,6 +128,7 @@ export default function TrainingAssignmentsPage() {
     const set = new Set<string>();
     employees.forEach((e) => {
       if (!e.district) return;
+      if (isFieldOfficer && !foDistricts.includes(e.district)) return;
       if (filterClient !== "all") {
         const matchesId = e.clientId === filterClient;
         const matchesName = e.clientName === filterClient;
@@ -133,10 +137,13 @@ export default function TrainingAssignmentsPage() {
       set.add(e.district);
     });
     return Array.from(set).sort();
-  }, [employees, filterClient]);
+  }, [employees, filterClient, isFieldOfficer, foDistricts]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((e) => {
+      if (isFieldOfficer) {
+        if (!e.district || !foDistricts.includes(e.district)) return false;
+      }
       if (filterClient !== "all") {
         const matchesId = e.clientId === filterClient;
         const matchesName = e.clientName === filterClient;
@@ -145,7 +152,7 @@ export default function TrainingAssignmentsPage() {
       if (filterDistrict !== "all" && e.district !== filterDistrict) return false;
       return true;
     });
-  }, [employees, filterClient, filterDistrict]);
+  }, [employees, filterClient, filterDistrict, isFieldOfficer, foDistricts]);
 
   useEffect(() => {
     if (selectedEmployeeId && !filteredEmployees.find((e) => e.id === selectedEmployeeId)) {
