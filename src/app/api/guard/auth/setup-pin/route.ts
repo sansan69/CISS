@@ -6,6 +6,24 @@ import {
 import { hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
 import { GUARD_AUTH_EMAIL_DOMAIN } from "@/lib/runtime-config";
 
+function buildSetupRateLimitKey(
+  phoneNumber: string,
+  employeeId: string | undefined,
+  ip: string,
+) {
+  const phoneKey = normalizeGuardPhone(phoneNumber);
+  if (phoneKey) {
+    return `setup_${phoneKey}`;
+  }
+
+  const employeeKey = String(employeeId ?? "").trim();
+  if (employeeKey) {
+    return `setup_employee_${employeeKey}`;
+  }
+
+  return `setup_${ip}`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -30,14 +48,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Rate limiting — max 5 attempts per hour per IP
+    // Rate limiting — max 5 attempts per hour per phone number, with IP fallback.
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       "unknown";
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
-    const rateLimitRef = adminDb.doc(`rateLimits/setup_${ip}`);
+    const rateLimitRef = adminDb.doc(
+      `rateLimits/${buildSetupRateLimitKey(phoneNumber, employeeId, ip)}`,
+    );
     const rateLimitSnap = await rateLimitRef.get();
     const now = Date.now();
 
@@ -205,6 +225,8 @@ export async function POST(request: Request) {
       guardAuthUid: guardUid,
       guardPinSetAt: FieldValue.serverTimestamp(),
     });
+
+    await rateLimitRef.delete().catch(() => undefined);
 
     return NextResponse.json({
       success: true,
