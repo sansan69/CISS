@@ -1,128 +1,219 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAppAuth } from "@/context/auth-context";
+import { ArrowLeft, ArrowRight, CheckCircle2, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import { useClients } from "@/lib/hooks/use-clients";
-import {
-  Trash2, Plus, Upload, Loader2, ArrowRight, ArrowLeft,
-  FileSpreadsheet, CheckCircle2, Eye, EyeOff, Pencil, RotateCcw,
-} from "lucide-react";
-import type { WageComponent, WageComponentType, CalculationType } from "@/types/payroll";
-import type { ColumnAnalysis } from "@/app/api/admin/clients/[id]/wage-config/upload/route";
-import { applyWageComponents } from "@/lib/payroll/calculate";
+import { useAppAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
+import type {
+  ClientWageConfig,
+  ClientWageTemplateSchema,
+  WageComponent,
+  WageTemplateConstant,
+  WageTemplateFieldCategory,
+  WageTemplateRule,
+  WageTemplateRuleType,
+} from "@/types/payroll";
+import type { TemplateFieldAnalysis } from "@/lib/payroll/wage-template-parser";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const CALC_OPTIONS: { value: CalculationType; label: string; hint: string }[] = [
-  { value: "fixed_amount",    label: "Fixed ₹",          hint: "Fixed monthly rupee amount" },
-  { value: "pct_of_basic",    label: "% of Basic",        hint: "Percentage of basic salary" },
-  { value: "pct_of_ctc",      label: "% of CTC",          hint: "Percentage of total CTC" },
-  { value: "pct_of_gross",    label: "% of Gross",        hint: "Percentage of gross earnings" },
-  { value: "pct_of_epf_base", label: "% of EPF Base",     hint: "Percentage of EPF-applicable wage" },
-  { value: "balancing",       label: "Balancing (auto)",  hint: "Auto-fills to make gross = CTC" },
-  { value: "kerala_slab",     label: "Kerala PT Slab",    hint: "Professional tax per Kerala slabs" },
-  { value: "tds_projected",   label: "TDS Projected",     hint: "Annual projected tax ÷ 12 months" },
-];
-
-const TYPE_OPTIONS: { value: WageComponentType; label: string; color: string }[] = [
-  { value: "earning",               label: "Earning",   color: "text-blue-700 bg-blue-50 border-blue-200" },
-  { value: "deduction",             label: "Deduction", color: "text-red-700 bg-red-50 border-red-200" },
-  { value: "employer_contribution", label: "Employer",  color: "text-amber-700 bg-amber-50 border-amber-200" },
-];
-
-function slugify(v: string) {
-  return v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-}
-
-function isAutoCalc(ct: CalculationType) {
-  return ct === "balancing" || ct === "kerala_slab" || ct === "tds_projected";
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+type Stage = "upload" | "review" | "configure";
 
 interface UploadResult {
   sheetNames: string[];
   selectedSheet: string;
   sheetIndex: number;
+  headerRowIndex: number;
   headers: string[];
   rows: string[][];
   totalRows: number;
-  columnAnalysis: ColumnAnalysis[];
+  detectedSheetFamily: ClientWageTemplateSchema["sheetFamily"];
+  parserSummary: {
+    detectedFields: number;
+    attendanceFields: number;
+    earningFields: number;
+    deductionFields: number;
+  };
+  templateFields: TemplateFieldAnalysis[];
 }
 
-// Per-component editor state (used in Stage 3)
-interface ComponentDraft extends WageComponent {
-  useSheetValue: boolean;   // true = use detectedValue as-is (no custom formula)
-  detectedValue: number | null;
-  detectedRate: number | null;
-  detectedCalcType: CalculationType;
-  detectedHint: string;
-  isEditing: boolean;       // is the formula editor open
+interface TemplateRuleDraft extends WageTemplateRule {
+  keep: boolean;
+  ruleHint: string;
+  sampleValues: string[];
+  availableFormulaSources: Array<"header" | "cell">;
 }
 
-type Stage = "upload" | "select" | "configure";
+const CATEGORY_OPTIONS: WageTemplateFieldCategory[] = [
+  "meta",
+  "attendance",
+  "earning",
+  "deduction",
+  "employer_contribution",
+  "summary",
+];
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+const RULE_TYPE_OPTIONS: { value: WageTemplateRuleType; label: string }[] = [
+  { value: "attendance_bound", label: "Attendance Bound" },
+  { value: "fixed_amount", label: "Fixed Amount" },
+  { value: "per_duty_rate", label: "Per Duty Rate" },
+  { value: "percentage_of_component", label: "Percentage of Component" },
+  { value: "sum_of_components", label: "Sum of Components" },
+  { value: "formula_expression", label: "Formula Expression" },
+  { value: "summary_only", label: "Summary Only" },
+  { value: "deduction_rule", label: "Deduction Rule" },
+  { value: "employer_contribution_rule", label: "Employer Contribution Rule" },
+];
+
+const ATTENDANCE_BINDINGS = [
+  "payable_duties",
+  "duties",
+  "weekly_off",
+  "extra_duty_days",
+  "half_day",
+  "total",
+  "additional_duties",
+];
+
+function humanizeCategory(category: WageTemplateFieldCategory) {
+  return category.replace(/_/g, " ");
+}
+
+function buildAttendanceKey(field: TemplateFieldAnalysis) {
+  if (!field.attendanceBound) return null;
+  if (field.standardName.includes("payable_duties")) return "payable_duties";
+  if (field.standardName.includes("weekly_off")) return "weekly_off";
+  if (field.standardName.includes("extra_duty")) return "extra_duty_days";
+  if (field.standardName.includes("half_day")) return "half_day";
+  if (field.standardName.includes("additional")) return "additional_duties";
+  if (field.standardName === "total") return "total";
+  return "duties";
+}
+
+function buildRuleType(field: TemplateFieldAnalysis): WageTemplateRuleType {
+  if (field.category === "attendance") return "attendance_bound";
+  if (field.category === "summary") return "summary_only";
+  if (field.category === "deduction") return "deduction_rule";
+  if (field.category === "employer_contribution") return "employer_contribution_rule";
+  if (field.formulaSources.length > 0) return "formula_expression";
+  return "fixed_amount";
+}
+
+function buildExpression(field: TemplateFieldAnalysis, formulaSource: "header" | "cell" | "manual") {
+  if (formulaSource === "header") return field.headerFormulaHint;
+  if (formulaSource === "cell") return field.sampleCellFormulas[0] ?? null;
+  return null;
+}
+
+function buildDraft(field: TemplateFieldAnalysis, order: number): TemplateRuleDraft {
+  const formulaSource =
+    field.formulaSources.includes("header")
+      ? "header"
+      : field.formulaSources.includes("cell")
+        ? "cell"
+        : "manual";
+
+  return {
+    id: `${field.standardName}_${order}`,
+    originalLabel: field.originalLabel,
+    displayLabel: field.originalLabel,
+    standardName: field.standardName,
+    category: field.category,
+    ruleType: buildRuleType(field),
+    formulaSource,
+    expression: buildExpression(field, formulaSource),
+    dependsOn: [],
+    constantKeys: field.detectedConstants.map((constant) => constant.key),
+    attendanceKey: buildAttendanceKey(field),
+    summaryOnly: field.category === "summary",
+    order,
+    keep: !field.likelyIgnored,
+    ruleHint: field.ruleHint,
+    sampleValues: field.sampleValues,
+    availableFormulaSources: field.formulaSources,
+  };
+}
+
+function dedupeConstants(fields: TemplateFieldAnalysis[]) {
+  const byKey = new Map<string, WageTemplateConstant>();
+  fields.forEach((field) => {
+    field.detectedConstants.forEach((constant) => {
+      if (!byKey.has(constant.key)) {
+        byKey.set(constant.key, {
+          key: constant.key,
+          label: constant.key.replace(/_/g, " "),
+          value: constant.value,
+          source: constant.source,
+        });
+      }
+    });
+  });
+  return Array.from(byKey.values());
+}
 
 export default function WageConfigPage() {
   const router = useRouter();
   const { userRole } = useAppAuth();
   const { toast } = useToast();
-
-  const [selectedClientId, setSelectedClientId] = useState("");
   const { clients } = useClients();
 
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [stage, setStage] = useState<Stage>("upload");
-  const [fileInputRef, setFileInputRef] = useState<HTMLInputElement | null>(null);
-  const [isUploading, setIsUploading]   = useState(false);
+  const [fileInputEl, setFileInputEl] = useState<HTMLInputElement | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-
-  // Stage 2: which columns are checked
-  const [checkedCols, setCheckedCols] = useState<Set<number>>(new Set());
-
-  // Stage 3: component drafts
-  const [drafts, setDrafts]     = useState<ComponentDraft[]>([]);
-  const [showPreview, setShowPreview] = useState(true);
-
-  // Existing saved config
+  const [checkedFields, setCheckedFields] = useState<Set<number>>(new Set());
+  const [templateRules, setTemplateRules] = useState<TemplateRuleDraft[]>([]);
+  const [templateConstants, setTemplateConstants] = useState<WageTemplateConstant[]>([]);
+  const [savedConfig, setSavedConfig] = useState<ClientWageConfig | null>(null);
   const [savedComponents, setSavedComponents] = useState<WageComponent[]>([]);
-  const [isLoading, setIsLoading]   = useState(false);
-  const [isSaving, setIsSaving]     = useState(false);
 
   useEffect(() => {
     if (userRole !== null && userRole !== "admin" && userRole !== "superAdmin") {
       router.replace("/dashboard");
     }
-  }, [userRole, router]);
+  }, [router, userRole]);
 
   const loadSaved = useCallback(async (clientId: string) => {
     setIsLoading(true);
     try {
-      const res  = await authorizedFetch(`/api/admin/clients/${clientId}/wage-config`);
-      const data = await res.json();
-      const loaded: WageComponent[] = data.components ?? [];
-      setSavedComponents(loaded);
-      if (loaded.length > 0) {
-        // Go straight to configure with saved data
-        setDrafts(loaded.map(toDraft));
+      const response = await authorizedFetch(`/api/admin/clients/${clientId}/wage-config`);
+      const data = (await response.json()) as ClientWageConfig;
+      setSavedConfig(data);
+      setSavedComponents(data.components ?? []);
+      if (data.templateRules?.length) {
+        setTemplateRules(
+          data.templateRules.map((rule) => ({
+            ...rule,
+            keep: true,
+            ruleHint: "Previously saved template rule",
+            sampleValues: [],
+            availableFormulaSources:
+              rule.formulaSource === "manual" ? [] : [rule.formulaSource],
+          })),
+        );
+        setTemplateConstants(data.templateConstants ?? []);
         setStage("configure");
       } else {
         setStage("upload");
       }
     } catch {
+      setSavedConfig(null);
       setSavedComponents([]);
+      setTemplateRules([]);
+      setTemplateConstants([]);
       setStage("upload");
     } finally {
       setIsLoading(false);
@@ -130,218 +221,159 @@ export default function WageConfigPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedClientId) {
-      setUploadResult(null);
-      setCheckedCols(new Set());
-      setDrafts([]);
-      loadSaved(selectedClientId);
-    }
-  }, [selectedClientId, loadSaved]);
-
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-
-  function toDraft(comp: WageComponent): ComponentDraft {
-    return {
-      ...comp,
-      useSheetValue: false,
-      detectedValue: comp.value,
-      detectedRate: null,
-      detectedCalcType: comp.calculationType,
-      detectedHint: "Previously saved",
-      isEditing: false,
-    };
-  }
-
-  function colAnalysisToDraft(col: ColumnAnalysis, order: number): ComponentDraft {
-    const auto = isAutoCalc(col.detectedCalcType);
-    return {
-      id: slugify(col.header) || `col_${col.colIndex}`,
-      name: col.header,
-      type: col.detectedType,
-      calculationType: col.detectedCalcType,
-      value: auto ? null : col.detectedValue,
-      isStatutory: col.detectedCalcType === "pct_of_epf_base" ||
-                   col.detectedCalcType === "kerala_slab" ||
-                   col.detectedCalcType === "tds_projected" ||
-                   col.detectedCalcType === "pct_of_gross",
-      statutoryType: null,
-      isTaxable: col.detectedType !== "deduction",
-      epfApplicable: /basic|da|dearness/.test(slugify(col.header)),
-      order,
-      // draft-specific
-      useSheetValue: !auto && col.detectedValue !== null,
-      detectedValue: col.detectedValue,
-      detectedRate: col.detectedRate,
-      detectedCalcType: col.detectedCalcType,
-      detectedHint: col.hint,
-      isEditing: false,
-    };
-  }
-
-  // ── Upload ────────────────────────────────────────────────────────────────────
+    if (!selectedClientId) return;
+    setUploadResult(null);
+    setCheckedFields(new Set());
+    setTemplateRules([]);
+    setTemplateConstants([]);
+    loadSaved(selectedClientId);
+  }, [loadSaved, selectedClientId]);
 
   const handleFile = async (file: File) => {
     if (!selectedClientId) {
       toast({ title: "Select a client first", variant: "destructive" });
       return;
     }
+
     setIsUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
+      const formData = new FormData();
+      formData.append("file", file);
+
       const { getAuth } = await import("firebase/auth");
       const token = await getAuth().currentUser?.getIdToken();
-      const res  = await fetch(
-        `/api/admin/clients/${selectedClientId}/wage-config/upload`,
-        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd },
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not read file");
+      const response = await fetch(`/api/admin/clients/${selectedClientId}/wage-config/upload`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      const data = (await response.json()) as UploadResult & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Could not read file");
+
       setUploadResult(data);
-      // Auto-check non-summary columns
-      const auto = new Set(
-        (data.columnAnalysis as ColumnAnalysis[])
-          .filter((c) => !c.isLikelySummary)
-          .map((c) => c.colIndex),
+      setCheckedFields(
+        new Set(
+          data.templateFields
+            .filter((field) => !field.likelyIgnored)
+            .map((field) => field.columnIndex),
+        ),
       );
-      setCheckedCols(auto);
-      setStage("select");
-      toast({ title: `${data.columnAnalysis.length} columns found`, description: `Sheet: ${data.selectedSheet}` });
-    } catch (err: unknown) {
-      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Error", variant: "destructive" });
+      setStage("review");
+      toast({
+        title: "Wage sheet analyzed",
+        description: `${data.parserSummary.detectedFields} fields detected from ${data.selectedSheet}.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Could not analyze file.",
+        variant: "destructive",
+      });
     } finally {
       setIsUploading(false);
     }
   };
 
-  // ── Stage 2 → 3 transition ────────────────────────────────────────────────────
-
   const proceedToConfigure = () => {
-    if (!uploadResult || checkedCols.size === 0) {
-      toast({ title: "Select at least one column", variant: "destructive" });
+    if (!uploadResult) return;
+    const selectedFields = uploadResult.templateFields
+      .filter((field) => checkedFields.has(field.columnIndex))
+      .sort((a, b) => a.columnIndex - b.columnIndex);
+
+    if (!selectedFields.length) {
+      toast({ title: "Select at least one field", variant: "destructive" });
       return;
     }
-    const selected = uploadResult.columnAnalysis
-      .filter((c) => checkedCols.has(c.colIndex))
-      .sort((a, b) => a.colIndex - b.colIndex);
 
-    const newDrafts = selected.map((col, i) => colAnalysisToDraft(col, i + 1));
-
-    // Add a balancing component if none detected
-    if (!newDrafts.some((d) => d.calculationType === "balancing")) {
-      newDrafts.push({
-        id: "special_allowance",
-        name: "Special Allowance",
-        type: "earning",
-        calculationType: "balancing",
-        value: null,
-        isStatutory: false,
-        statutoryType: null,
-        isTaxable: true,
-        epfApplicable: false,
-        order: newDrafts.length + 1,
-        useSheetValue: false,
-        detectedValue: null,
-        detectedRate: null,
-        detectedCalcType: "balancing",
-        detectedHint: "Auto-balancing — fills remaining CTC",
-        isEditing: false,
-      });
-    }
-
-    setDrafts(newDrafts);
+    setTemplateRules(selectedFields.map((field, index) => buildDraft(field, index + 1)));
+    setTemplateConstants(dedupeConstants(selectedFields));
     setStage("configure");
   };
 
-  // ── Draft CRUD ────────────────────────────────────────────────────────────────
-
-  const updateDraft = (idx: number, patch: Partial<ComponentDraft>) => {
-    setDrafts((prev) => prev.map((d, i) => i === idx ? { ...d, ...patch } : d));
-  };
-
-  const removeDraft = (idx: number) => {
-    setDrafts((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const addDraft = () => {
-    setDrafts((prev) => [
-      ...prev,
-      {
-        id: `comp_${Date.now()}`,
-        name: "",
-        type: "earning" as WageComponentType,
-        calculationType: "fixed_amount" as CalculationType,
-        value: 0,
-        isStatutory: false,
-        statutoryType: null,
-        isTaxable: true,
-        epfApplicable: false,
-        order: prev.length + 1,
-        useSheetValue: false,
-        detectedValue: null,
-        detectedRate: null,
-        detectedCalcType: "fixed_amount",
-        detectedHint: "",
-        isEditing: true,
-      },
-    ]);
-  };
-
-  // ── Save ──────────────────────────────────────────────────────────────────────
+  const usedConstantKeys = useMemo(
+    () =>
+      new Set(
+        templateRules
+          .filter((rule) => rule.keep)
+          .flatMap((rule) => rule.constantKeys),
+      ),
+    [templateRules],
+  );
 
   const save = async () => {
     if (!selectedClientId) return;
-    const invalid = drafts.filter((d) => !d.name.trim());
-    if (invalid.length) {
-      toast({ title: "Some components have no name", variant: "destructive" });
+    const activeRules = templateRules.filter((rule) => rule.keep);
+    if (!activeRules.length) {
+      toast({ title: "No rules selected", variant: "destructive" });
       return;
     }
+
+    const client = clients.find((item) => item.id === selectedClientId);
+    const templateSchema: ClientWageTemplateSchema | undefined = uploadResult
+      ? {
+          sheetName: uploadResult.selectedSheet,
+          headerRowIndex: uploadResult.headerRowIndex,
+          sheetFamily: uploadResult.detectedSheetFamily,
+          detectedHeaders: uploadResult.headers,
+        }
+      : savedConfig?.templateSchema;
+
     setIsSaving(true);
-    const client = clients.find((c) => c.id === selectedClientId);
-    const components: WageComponent[] = drafts.map(({ useSheetValue: _u, detectedValue: _dv, detectedRate: _dr, detectedCalcType: _dc, detectedHint: _dh, isEditing: _ie, ...comp }) => comp);
     try {
       await authorizedFetch(`/api/admin/clients/${selectedClientId}/wage-config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientName: client?.name ?? "", components, uploadedFromExcel: !!uploadResult, templateMode: "client_template" }),
+        body: JSON.stringify({
+          clientName: client?.name ?? "",
+          components: savedComponents,
+          uploadedFromExcel: true,
+          templateMode: "client_template",
+          templateSchema,
+          templateConstants: templateConstants.filter((constant) => usedConstantKeys.has(constant.key)),
+          templateRules: activeRules.map(({ keep: _keep, ruleHint: _hint, sampleValues: _samples, availableFormulaSources: _sources, ...rule }) => rule),
+          templateVersion: 1,
+          lastImportSummary: {
+            parserSource: "deterministic",
+            parserLabel: "template parser",
+            parsedAt: new Date().toISOString(),
+            parsedComponents: activeRules.length,
+          },
+        }),
       });
-      setSavedComponents(components);
-      toast({ title: "Saved", description: "Wage configuration saved for payroll." });
-    } catch {
-      toast({ title: "Save failed", variant: "destructive" });
+      toast({ title: "Template saved", description: "Client wage template is ready for payroll setup." });
+    } catch (error: unknown) {
+      toast({
+        title: "Save failed",
+        description: error instanceof Error ? error.message : "Could not save client wage template.",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ── Preview ───────────────────────────────────────────────────────────────────
-
-  const previewComponents: WageComponent[] = drafts.map(({ useSheetValue: _u, detectedValue: _dv, detectedRate: _dr, detectedCalcType: _dc, detectedHint: _dh, isEditing: _ie, ...comp }) => comp);
-  const preview = selectedClientId && previewComponents.length > 0
-    ? applyWageComponents(15000, previewComponents)
-    : null;
-
-  // ─────────────────────────────────────────────────────────────────────────────
-
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Client Wage Configuration"
-        description="Upload a wage sheet, select components, and configure each salary formula"
+        title="Wage Configuration"
+        description="Upload a sample wage sheet, review detected fields and formulas, then save a reusable client payroll template."
         backHref="/settings"
       />
 
-      {/* Client selector */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Select Client</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Select Client</CardTitle>
+        </CardHeader>
         <CardContent>
           <Select value={selectedClientId} onValueChange={setSelectedClientId}>
             <SelectTrigger className="max-w-sm">
               <SelectValue placeholder="Choose a client…" />
             </SelectTrigger>
             <SelectContent>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              {clients.map((client) => (
+                <SelectItem key={client.id} value={client.id}>
+                  {client.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -349,434 +381,441 @@ export default function WageConfigPage() {
       </Card>
 
       {!selectedClientId && (
-        <p className="text-sm text-muted-foreground text-center py-8">Select a client to begin.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">Select a client to begin.</p>
       )}
 
       {selectedClientId && isLoading && (
-        <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((item) => (
+            <Skeleton key={item} className="h-14 w-full" />
+          ))}
+        </div>
       )}
 
       {selectedClientId && !isLoading && (
         <>
-          {/* Stage indicator */}
           <div className="flex items-center gap-2 text-sm">
-            {(["upload", "select", "configure"] as Stage[]).map((s, i) => {
-              const labels: Record<Stage, string> = { upload: "1. Upload", select: "2. Select Columns", configure: "3. Configure" };
-              const active = stage === s;
-              const done = (stage === "select" && s === "upload") || (stage === "configure" && s !== "configure");
+            {(["upload", "review", "configure"] as Stage[]).map((item, index) => {
+              const active = stage === item;
+              const done =
+                (stage === "review" && item === "upload") ||
+                (stage === "configure" && item !== "configure");
+
               return (
-                <React.Fragment key={s}>
-                  <button
-                    onClick={() => (done || active) && setStage(s)}
+                <React.Fragment key={item}>
+                  <div
                     className={cn(
-                      "px-3 py-1 rounded-full text-xs font-medium transition-colors",
-                      active ? "bg-brand-blue text-white" :
-                      done   ? "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer" :
-                               "bg-muted text-muted-foreground cursor-default",
+                      "rounded-full px-3 py-1 text-xs font-medium",
+                      active
+                        ? "bg-brand-blue text-white"
+                        : done
+                          ? "bg-green-100 text-green-700"
+                          : "bg-muted text-muted-foreground",
                     )}
                   >
-                    {done ? <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />{labels[s]}</span> : labels[s]}
-                  </button>
-                  {i < 2 && <div className="h-px w-4 bg-border" />}
+                    {done ? (
+                      <span className="inline-flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {item}
+                      </span>
+                    ) : (
+                      item
+                    )}
+                  </div>
+                  {index < 2 && <div className="h-px w-4 bg-border" />}
                 </React.Fragment>
               );
             })}
           </div>
 
-          {/* ═══ STAGE 1: UPLOAD ════════════════════════════════════════════════ */}
           {stage === "upload" && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Upload Wage Sheet</CardTitle>
+                <CardTitle className="text-base">Upload Sample Wage Sheet</CardTitle>
                 <CardDescription>
-                  Upload any Excel (.xlsx, .xls) or CSV wage sheet.
-                  The system reads the column headings and analyses the values under each one.
+                  Upload one standard client wagesheet. The parser will detect header rows, field families, formulas, and reusable constants.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div
                   className={cn(
-                    "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors",
+                    "cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-colors",
                     isUploading ? "border-brand-blue/40 bg-brand-blue/5" : "border-border hover:border-brand-blue/50",
                   )}
-                  onClick={() => !isUploading && fileInputRef?.click()}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f && !isUploading) handleFile(f); }}
+                  onClick={() => !isUploading && fileInputEl?.click()}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const file = event.dataTransfer.files[0];
+                    if (file && !isUploading) handleFile(file);
+                  }}
                 >
                   {isUploading ? (
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-                      <p className="text-sm font-medium">Reading columns and analysing values…</p>
+                      <p className="text-sm font-medium">Analyzing template fields and formulas…</p>
                     </div>
                   ) : (
                     <>
-                      <FileSpreadsheet className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                      <p className="text-sm font-medium">Drop Excel / CSV here or click to browse</p>
-                      <p className="text-xs text-muted-foreground mt-1">Supports .xlsx · .xls · .csv</p>
+                      <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+                      <p className="text-sm font-medium">Drop Excel file here or click to browse</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Supports .xlsx and .xls wage sheets</p>
                     </>
                   )}
-                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                    ref={(el) => setFileInputRef(el)}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    ref={(element) => setFileInputEl(element)}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) handleFile(file);
+                      event.target.value = "";
+                    }}
                   />
                 </div>
 
-                {savedComponents.length > 0 && (
-                  <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <span>{savedComponents.length} components already saved for this client.</span>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => { setDrafts(savedComponents.map(toDraft)); setStage("configure"); }}>
-                      Edit existing <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                {savedConfig?.templateRules?.length ? (
+                  <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+                    Existing template found with {savedConfig.templateRules.length} saved rules.
+                    <Button
+                      variant="link"
+                      className="ml-2 h-auto p-0 text-sm"
+                      onClick={() => setStage("configure")}
+                    >
+                      Edit saved template
                     </Button>
                   </div>
-                )}
+                ) : null}
               </CardContent>
             </Card>
           )}
 
-          {/* ═══ STAGE 2: SELECT COLUMNS ════════════════════════════════════════ */}
-          {stage === "select" && uploadResult && (
+          {stage === "review" && uploadResult && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Select Wage Components</CardTitle>
+                <CardTitle className="text-base">Review Detected Fields</CardTitle>
                 <CardDescription>
-                  Sheet <strong>{uploadResult.selectedSheet}</strong> has {uploadResult.columnAnalysis.length} columns.
-                  Tick the ones that are salary components. Summary columns (Gross, Net, Total) are unchecked by default.
+                  Sheet <strong>{uploadResult.selectedSheet}</strong> uses the{" "}
+                  <strong>{uploadResult.detectedSheetFamily.replace(/_/g, " ")}</strong> family.
+                  Header row detected at line {uploadResult.headerRowIndex + 1}.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Select all / none */}
-                <div className="flex items-center gap-3 pb-1">
-                  <button className="text-xs text-brand-blue hover:underline"
-                    onClick={() => setCheckedCols(new Set(uploadResult.columnAnalysis.map((c) => c.colIndex)))}>
-                    Select all
-                  </button>
-                  <span className="text-muted-foreground text-xs">·</span>
-                  <button className="text-xs text-muted-foreground hover:underline" onClick={() => setCheckedCols(new Set())}>
-                    Clear
-                  </button>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {checkedCols.size} selected
-                  </span>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+                  <div className="rounded-lg border p-3">Fields: {uploadResult.parserSummary.detectedFields}</div>
+                  <div className="rounded-lg border p-3">Attendance: {uploadResult.parserSummary.attendanceFields}</div>
+                  <div className="rounded-lg border p-3">Earnings: {uploadResult.parserSummary.earningFields}</div>
+                  <div className="rounded-lg border p-3">Deductions: {uploadResult.parserSummary.deductionFields}</div>
                 </div>
 
-                {/* Column list */}
-                <div className="divide-y divide-border rounded-lg border overflow-hidden">
-                  {uploadResult.columnAnalysis.map((col) => {
-                    const checked = checkedCols.has(col.colIndex);
-                    const typeOpt = TYPE_OPTIONS.find((t) => t.value === col.detectedType);
+                <div className="rounded-lg border">
+                  {uploadResult.templateFields.map((field) => {
+                    const checked = checkedFields.has(field.columnIndex);
                     return (
                       <label
-                        key={col.colIndex}
+                        key={field.columnIndex}
                         className={cn(
-                          "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors",
-                          checked ? "bg-brand-blue/5" : col.isLikelySummary ? "bg-muted/30 opacity-60" : "hover:bg-muted/20",
+                          "flex cursor-pointer gap-3 border-b px-4 py-3 last:border-b-0",
+                          checked ? "bg-brand-blue/5" : "hover:bg-muted/20",
                         )}
                       >
                         <Checkbox
                           checked={checked}
-                          onCheckedChange={(v) => {
-                            setCheckedCols((prev) => {
-                              const next = new Set(prev);
-                              v ? next.add(col.colIndex) : next.delete(col.colIndex);
+                          onCheckedChange={(value) =>
+                            setCheckedFields((previous) => {
+                              const next = new Set(previous);
+                              if (value) next.add(field.columnIndex);
+                              else next.delete(field.columnIndex);
                               return next;
-                            });
-                          }}
-                          className="mt-0.5"
+                            })
+                          }
+                          className="mt-1"
                         />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm">{col.header}</span>
-                            {typeOpt && (
-                              <span className={cn("inline-flex text-[10px] font-medium rounded-full px-2 py-0.5 border", typeOpt.color)}>
-                                {typeOpt.label}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{field.originalLabel}</span>
+                            <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                              {humanizeCategory(field.category)}
+                            </span>
+                            {field.formulaSources.length ? (
+                              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-blue-700">
+                                {field.formulaSources.join(" + ")}
                               </span>
-                            )}
-                            {col.isLikelySummary && (
-                              <span className="text-[10px] text-muted-foreground border rounded-full px-2 py-0.5">Summary</span>
-                            )}
+                            ) : null}
                           </div>
-                          {/* Detected hint */}
-                          <p className="text-xs text-muted-foreground mt-0.5">{col.hint}</p>
-                          {/* Sample values */}
-                          {col.sampleValues.length > 0 && (
-                            <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                              Sheet values: {col.sampleValues.slice(0, 3).join(", ")}
-                              {col.sampleValues.length > 3 ? "…" : ""}
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Standard mapping: <strong>{field.standardName}</strong>
+                          </p>
+                          <p className="text-xs text-muted-foreground">{field.ruleHint}</p>
+                          {field.sampleValues.length ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground/80">
+                              Sample values: {field.sampleValues.slice(0, 3).join(", ")}
                             </p>
-                          )}
+                          ) : null}
                         </div>
                       </label>
                     );
                   })}
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setStage("upload")}>
-                    <ArrowLeft className="h-4 w-4 mr-1.5" /> Back
+                    <ArrowLeft className="mr-1.5 h-4 w-4" />
+                    Back
                   </Button>
-                  <Button onClick={proceedToConfigure} disabled={checkedCols.size === 0} className="flex-1 sm:flex-none">
-                    Configure {checkedCols.size} component{checkedCols.size !== 1 ? "s" : ""} <ArrowRight className="h-4 w-4 ml-1.5" />
+                  <Button onClick={proceedToConfigure}>
+                    Build Template
+                    <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* ═══ STAGE 3: CONFIGURE COMPONENTS ═════════════════════════════════ */}
           {stage === "configure" && (
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div>
-                      <CardTitle className="text-base">
-                        Configure Components
-                        <span className="ml-2 text-sm font-normal text-muted-foreground">({drafts.length})</span>
-                      </CardTitle>
-                      <CardDescription className="mt-0.5">
-                        Review what was detected. Use the sheet value as-is, or open the formula editor to customise.
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      {uploadResult && (
-                        <Button variant="outline" size="sm" onClick={() => setStage("select")}>
-                          <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Back
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" onClick={() => setStage("upload")}>
-                        <Upload className="h-3.5 w-3.5 mr-1.5" /> Re-upload
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={addDraft}>
-                        <Plus className="h-4 w-4 mr-1.5" /> Add Row
-                      </Button>
-                    </div>
-                  </div>
+                  <CardTitle className="text-base">Client Constants</CardTitle>
+                  <CardDescription>Edit shared numeric values extracted from the uploaded sheet. These will be reused when payroll runs later.</CardDescription>
                 </CardHeader>
-                <CardContent className="p-3 pt-0 md:p-6 md:pt-0 space-y-3">
-                  {drafts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No components yet. Upload a sheet or click Add Row.
-                    </p>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  {templateConstants.length ? (
+                    templateConstants.map((constant, index) => (
+                      <div key={constant.key} className="rounded-lg border p-3">
+                        <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">
+                          {constant.label}
+                        </Label>
+                        <Input
+                          value={constant.value}
+                          type="number"
+                          onChange={(event) =>
+                            setTemplateConstants((previous) =>
+                              previous.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? { ...item, value: Number(event.target.value || 0), source: "manual" }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Key: {constant.key} · source: {constant.source}
+                        </p>
+                      </div>
+                    ))
                   ) : (
-                    drafts.map((draft, i) => {
-                      const typeOpt = TYPE_OPTIONS.find((t) => t.value === draft.type);
-                      const hasDetection = draft.detectedHint && draft.detectedHint !== "Previously saved";
-                      const auto = isAutoCalc(draft.calculationType);
-
-                      return (
-                        <div key={draft.id} className="rounded-xl border border-border p-4 space-y-3 bg-card">
-                          {/* Row 1: name + type + delete */}
-                          <div className="flex items-start gap-2">
-                            <div className="flex-1 min-w-0">
-                              <Label className="text-[11px] uppercase text-muted-foreground mb-1 block">Component Name</Label>
-                              <Input
-                                value={draft.name}
-                                placeholder="e.g. Basic Salary"
-                                onChange={(e) => updateDraft(i, { name: e.target.value })}
-                              />
-                            </div>
-                            <div className="w-32 shrink-0">
-                              <Label className="text-[11px] uppercase text-muted-foreground mb-1 block">Type</Label>
-                              <Select value={draft.type} onValueChange={(v) => updateDraft(i, { type: v as WageComponentType })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {TYPE_OPTIONS.map(({ value, label, color }) => (
-                                    <SelectItem key={value} value={value}>
-                                      <span className={cn("inline-flex text-xs font-medium rounded-full px-2 py-0.5 border", color)}>{label}</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Button variant="ghost" size="icon" className="mt-5 h-8 w-8 text-destructive shrink-0" onClick={() => removeDraft(i)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-
-                          {/* Row 2: detection card */}
-                          {hasDetection && !draft.isEditing && (
-                            <div className="rounded-lg border bg-muted/40 px-4 py-3 space-y-2">
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <p className="text-[11px] uppercase font-medium text-muted-foreground mb-0.5">Detected calculation</p>
-                                  <p className="text-sm font-medium">{draft.detectedHint}</p>
-                                </div>
-                                {typeOpt && (
-                                  <span className={cn("text-[10px] font-medium rounded-full px-2 py-0.5 border shrink-0 mt-0.5", typeOpt.color)}>
-                                    {typeOpt.label}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {/* Use sheet value button */}
-                                {draft.detectedValue !== null && !isAutoCalc(draft.detectedCalcType) && (
-                                  <Button
-                                    size="sm"
-                                    variant={draft.useSheetValue ? "default" : "outline"}
-                                    className="h-7 text-xs gap-1.5"
-                                    onClick={() => updateDraft(i, {
-                                      useSheetValue: true,
-                                      calculationType: "fixed_amount",
-                                      value: draft.detectedValue,
-                                      isEditing: false,
-                                    })}
-                                  >
-                                    {draft.useSheetValue && <CheckCircle2 className="h-3 w-3" />}
-                                    Use sheet value — ₹{draft.detectedValue?.toLocaleString("en-IN")}
-                                  </Button>
-                                )}
-                                {/* Use detected formula button (if it's a formula, not just a value) */}
-                                {(draft.detectedRate !== null || isAutoCalc(draft.detectedCalcType)) && (
-                                  <Button
-                                    size="sm"
-                                    variant={!draft.useSheetValue && !draft.isEditing ? "default" : "outline"}
-                                    className="h-7 text-xs gap-1.5"
-                                    onClick={() => updateDraft(i, {
-                                      useSheetValue: false,
-                                      calculationType: draft.detectedCalcType,
-                                      value: isAutoCalc(draft.detectedCalcType)
-                                        ? null
-                                        : (draft.detectedRate ?? draft.detectedValue ?? 0),
-                                      isEditing: false,
-                                    })}
-                                  >
-                                    {!draft.useSheetValue && !draft.isEditing && <CheckCircle2 className="h-3 w-3" />}
-                                    Use formula
-                                  </Button>
-                                )}
-                                {/* Edit / Customise */}
-                                <Button
-                                  size="sm"
-                                  variant={draft.isEditing ? "default" : "ghost"}
-                                  className="h-7 text-xs gap-1.5 ml-auto"
-                                  onClick={() => updateDraft(i, { isEditing: !draft.isEditing, useSheetValue: false })}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                  {draft.isEditing ? "Done editing" : "Edit / Customise"}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Row 3: formula editor (open when isEditing OR no detection) */}
-                          {(draft.isEditing || !hasDetection || auto) && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <Label className="text-[11px] uppercase text-muted-foreground mb-1 block">Formula / Calculation</Label>
-                                <Select
-                                  value={draft.calculationType}
-                                  onValueChange={(v) => {
-                                    const ct = v as CalculationType;
-                                    updateDraft(i, { calculationType: ct, value: isAutoCalc(ct) ? null : (draft.value ?? 0), useSheetValue: false });
-                                  }}
-                                >
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {CALC_OPTIONS.map(({ value, label, hint }) => (
-                                      <SelectItem key={value} value={value}>
-                                        <div>
-                                          <p className="font-medium text-sm">{label}</p>
-                                          <p className="text-xs text-muted-foreground">{hint}</p>
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Label className="text-[11px] uppercase text-muted-foreground mb-1 block">
-                                  {auto ? "Value" : draft.calculationType.startsWith("pct_") ? "Rate (%)" : "Amount (₹)"}
-                                </Label>
-                                <div className="relative">
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    disabled={auto}
-                                    placeholder={auto ? "Auto-calculated" : draft.calculationType.startsWith("pct_") ? "e.g. 40" : "e.g. 8000"}
-                                    value={draft.value ?? ""}
-                                    onChange={(e) => updateDraft(i, { value: parseFloat(e.target.value) || 0, useSheetValue: false })}
-                                  />
-                                  {/* Reset to sheet value */}
-                                  {draft.detectedValue !== null && !auto && (
-                                    <button
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground hover:text-foreground"
-                                      title={`Reset to sheet value ₹${draft.detectedValue}`}
-                                      onClick={() => updateDraft(i, { value: draft.detectedValue, useSheetValue: true })}
-                                    >
-                                      <RotateCcw className="h-3 w-3" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Row 4: checkboxes */}
-                          <div className="flex items-center gap-5 text-xs pt-1">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <Checkbox
-                                checked={draft.epfApplicable}
-                                onCheckedChange={(v) => updateDraft(i, { epfApplicable: !!v })}
-                              />
-                              EPF applicable
-                            </label>
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <Checkbox
-                                checked={draft.isStatutory}
-                                onCheckedChange={(v) => updateDraft(i, { isStatutory: !!v })}
-                              />
-                              Statutory
-                            </label>
-                          </div>
-                        </div>
-                      );
-                    })
+                    <p className="text-sm text-muted-foreground">No constants detected. You can still save manual rules below.</p>
                   )}
+                </CardContent>
+              </Card>
 
-                  {/* Live preview */}
-                  {preview && drafts.length > 0 && (
-                    <div className="mt-2">
-                      <button
-                        onClick={() => setShowPreview((v) => !v)}
-                        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground mb-2"
-                      >
-                        {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        {showPreview ? "Hide" : "Show"} live preview (₹15,000 CTC)
-                      </button>
-                      {showPreview && (
-                        <div className="rounded-xl bg-muted/40 border p-4">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                            Live Preview — ₹15,000 Gross CTC
-                          </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1.5">
-                            {Object.entries(preview).map(([id, amount]) => {
-                              const c = drafts.find((x) => x.id === id);
-                              const isDeduct = c?.type === "deduction";
-                              return (
-                                <div key={id} className="flex items-center justify-between text-xs gap-2">
-                                  <span className="text-muted-foreground truncate">{c?.name ?? id}</span>
-                                  <span className={cn("font-medium tabular-nums shrink-0", isDeduct ? "text-red-600" : "")}>
-                                    {isDeduct ? "−" : ""}₹{Math.abs(amount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                                  </span>
-                                </div>
-                              );
-                            })}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Template Builder</CardTitle>
+                  <CardDescription>
+                    Confirm which fields stay, how they map internally, and whether they depend on attendance, constants, or formulas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {templateRules.map((rule, index) => (
+                    <div key={rule.id} className="rounded-xl border p-4">
+                      <div className="mb-3 flex items-start gap-3">
+                        <Checkbox
+                          checked={rule.keep}
+                          onCheckedChange={(value) =>
+                            setTemplateRules((previous) =>
+                              previous.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, keep: !!value } : item,
+                              ),
+                            )
+                          }
+                          className="mt-1"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{rule.originalLabel}</span>
+                            <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                              {humanizeCategory(rule.category)}
+                            </span>
                           </div>
+                          <p className="mt-1 text-xs text-muted-foreground">{rule.ruleHint}</p>
+                          {rule.sampleValues.length ? (
+                            <p className="text-[11px] text-muted-foreground/80">
+                              Sample values: {rule.sampleValues.slice(0, 3).join(", ")}
+                            </p>
+                          ) : null}
                         </div>
-                      )}
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Display Label</Label>
+                          <Input
+                            value={rule.displayLabel}
+                            onChange={(event) =>
+                              setTemplateRules((previous) =>
+                                previous.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, displayLabel: event.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Standard Name</Label>
+                          <Input
+                            value={rule.standardName}
+                            onChange={(event) =>
+                              setTemplateRules((previous) =>
+                                previous.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, standardName: event.target.value } : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Category</Label>
+                          <Select
+                            value={rule.category}
+                            onValueChange={(value) =>
+                              setTemplateRules((previous) =>
+                                previous.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        category: value as WageTemplateFieldCategory,
+                                        summaryOnly: value === "summary",
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORY_OPTIONS.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {humanizeCategory(option)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Rule Type</Label>
+                          <Select
+                            value={rule.ruleType}
+                            onValueChange={(value) =>
+                              setTemplateRules((previous) =>
+                                previous.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, ruleType: value as WageTemplateRuleType } : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {RULE_TYPE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Formula Source</Label>
+                          <Select
+                            value={rule.formulaSource}
+                            onValueChange={(value) =>
+                              setTemplateRules((previous) =>
+                                previous.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        formulaSource: value as "header" | "cell" | "manual",
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(["manual", ...rule.availableFormulaSources] as Array<"header" | "cell" | "manual">).map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Attendance Binding</Label>
+                          <Select
+                            value={rule.attendanceKey ?? "__none__"}
+                            onValueChange={(value) =>
+                              setTemplateRules((previous) =>
+                                previous.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        attendanceKey: value === "__none__" ? null : value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">None</SelectItem>
+                              {ATTENDANCE_BINDINGS.map((binding) => (
+                                <SelectItem key={binding} value={binding}>
+                                  {binding.replace(/_/g, " ")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <Label className="mb-1 block text-[11px] uppercase text-muted-foreground">Expression</Label>
+                        <Input
+                          value={rule.expression ?? ""}
+                          placeholder="Formula text or normalized expression"
+                          onChange={(event) =>
+                            setTemplateRules((previous) =>
+                              previous.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, expression: event.target.value || null } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
                     </div>
-                  )}
+                  ))}
 
-                  {/* Save */}
-                  <div className="flex items-center justify-between pt-4 border-t border-border mt-2">
-                    <p className="text-xs text-muted-foreground">
-                      {drafts.length > 0 ? `${drafts.length} components ready` : "Add components to save"}
-                    </p>
-                    <Button onClick={save} disabled={isSaving || drafts.length === 0} className="min-w-32">
-                      {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Configuration"}
+                  <div className="flex justify-between border-t pt-4">
+                    <Button variant="outline" onClick={() => setStage(uploadResult ? "review" : "upload")}>
+                      <ArrowLeft className="mr-1.5 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button onClick={save} disabled={isSaving || templateRules.length === 0}>
+                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Save Template
                     </Button>
                   </div>
                 </CardContent>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, requireAdminOrFieldOfficer, requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
-import { buildServerUpdateAudit, buildServerAuditEvent } from "@/lib/server/audit";
+import { buildServerUpdateAudit } from "@/lib/server/audit";
 
 export async function PATCH(
   request: Request,
@@ -12,11 +12,19 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    if ("assignmentHistory" in body) {
+      return NextResponse.json(
+        { error: "assignmentHistory cannot be updated via this route." },
+        { status: 400 }
+      );
+    }
+
     const validTopLevel = [
       "maleGuardsRequired",
       "femaleGuardsRequired",
       "totalManpower",
       "assignedGuards",
+      "examName",
     ];
 
     const filtered: Record<string, unknown> = {};
@@ -48,13 +56,6 @@ export async function PATCH(
         email: adminUser.email,
       }),
     };
-
-    if (Array.isArray(body.assignmentHistory)) {
-      updateData.assignmentHistory =
-        adminDb.collection("workOrders").doc(id).constructor.prototype.addField
-          ? body.assignmentHistory
-          : body.assignmentHistory;
-    }
 
     await adminDb.collection("workOrders").doc(id).update(updateData);
 

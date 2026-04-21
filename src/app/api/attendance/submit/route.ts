@@ -18,6 +18,7 @@ import {
   SYSTEM_METRIC_NAMES,
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
+import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 
 export const runtime = "nodejs";
 
@@ -127,6 +128,10 @@ function mergePhotoCompliance(
   };
 }
 
+function isActiveWorkOrderRecord(workOrder: Record<string, any>) {
+  return String(workOrder.recordStatus ?? "active").trim().toLowerCase() === "active";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const payload = attendanceSubmissionSchema.parse(await request.json());
@@ -207,22 +212,28 @@ export async function POST(request: NextRequest) {
           .where("siteId", "==", payload.siteId)
           .where("date", ">=", startOfDay)
           .where("date", "<=", endOfDay)
-          .limit(5)
           .get();
 
-        if (workOrdersSnapshot.empty) {
+        const activeWorkOrders = workOrdersSnapshot.docs
+          .map((doc) => doc.data() as Record<string, any>)
+          .filter(isActiveWorkOrderRecord);
+
+        if (activeWorkOrders.length === 0) {
           throw new AttendanceError("No active work order exists for the selected site today.");
         }
 
-        const matchingWorkOrder = workOrdersSnapshot.docs
-          .map((doc) => doc.data() as Record<string, any>)
+        const matchingWorkOrder = activeWorkOrders
           .find((workOrder) => {
             const assignedGuards = Array.isArray(workOrder.assignedGuards)
               ? workOrder.assignedGuards
               : [];
             return (
               assignedGuards.length === 0 ||
-              assignedGuards.some((guard) => guard?.uid === payload.employeeDocId)
+              isAssignedGuardMatch(
+                assignedGuards,
+                payload.employeeDocId,
+                payload.employeeId,
+              )
             );
           });
 
@@ -239,25 +250,31 @@ export async function POST(request: NextRequest) {
           .where("siteId", "==", payload.siteId)
           .where("date", ">=", startOfDay)
           .where("date", "<=", endOfDay)
-          .limit(5)
           .get();
 
-        if (workOrdersSnapshot.empty) {
+        const activeWorkOrders = workOrdersSnapshot.docs
+          .map((doc) => doc.data() as Record<string, any>)
+          .filter(isActiveWorkOrderRecord);
+
+        if (activeWorkOrders.length === 0) {
           if (!resolvedShift) {
             throw new AttendanceError(
               "No active work order or fixed shift found for this site today.",
             );
           }
         } else {
-          const matchingWorkOrder = workOrdersSnapshot.docs
-            .map((doc) => doc.data() as Record<string, any>)
+          const matchingWorkOrder = activeWorkOrders
             .find((workOrder) => {
               const assignedGuards = Array.isArray(workOrder.assignedGuards)
                 ? workOrder.assignedGuards
                 : [];
               return (
                 assignedGuards.length === 0 ||
-                assignedGuards.some((guard) => guard?.uid === payload.employeeDocId)
+                isAssignedGuardMatch(
+                  assignedGuards,
+                  payload.employeeDocId,
+                  payload.employeeId,
+                )
               );
             });
 
@@ -268,7 +285,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        if (!resolvedShift && workOrdersSnapshot.empty) {
+        if (!resolvedShift && activeWorkOrders.length === 0) {
           throw new AttendanceError(
             "No active fixed shift matches the current time for this site. Please contact admin.",
           );

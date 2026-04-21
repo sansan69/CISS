@@ -1,6 +1,23 @@
 import type { Timestamp } from "firebase/firestore";
 
 export type WageComponentType = "earning" | "deduction" | "employer_contribution";
+export type WageTemplateFieldCategory =
+  | "meta"
+  | "attendance"
+  | "earning"
+  | "deduction"
+  | "employer_contribution"
+  | "summary";
+export type WageTemplateRuleType =
+  | "attendance_bound"
+  | "fixed_amount"
+  | "per_duty_rate"
+  | "percentage_of_component"
+  | "sum_of_components"
+  | "formula_expression"
+  | "summary_only"
+  | "deduction_rule"
+  | "employer_contribution_rule";
 export type CalculationType =
   | "fixed_amount"
   | "pct_of_basic"
@@ -25,10 +42,36 @@ export interface WageComponent {
   isTaxable: boolean;
   epfApplicable: boolean;
   order: number;
-  /** AI confidence score 0–1. <0.7 = needs admin review. Absent on manually-added components. */
-  confidence?: number;
-  /** True when this component was classified by the AI parser, not added manually. */
-  aiDetected?: boolean;
+}
+
+export interface WageTemplateConstant {
+  key: string;
+  label: string;
+  value: number;
+  source: "header" | "cell" | "manual";
+}
+
+export interface WageTemplateRule {
+  id: string;
+  originalLabel: string;
+  displayLabel: string;
+  standardName: string;
+  category: WageTemplateFieldCategory;
+  ruleType: WageTemplateRuleType;
+  formulaSource: "header" | "cell" | "manual";
+  expression: string | null;
+  dependsOn: string[];
+  constantKeys: string[];
+  attendanceKey: string | null;
+  summaryOnly: boolean;
+  order: number;
+}
+
+export interface ClientWageTemplateSchema {
+  sheetName: string;
+  headerRowIndex: number;
+  sheetFamily: "flat_register" | "title_row_register" | "formula_heavy_register";
+  detectedHeaders: string[];
 }
 
 export interface ClientWageConfig {
@@ -45,6 +88,10 @@ export interface ClientWageConfig {
     valueColumn?: string;
     detectedHeaders?: string[];
   };
+  templateSchema?: ClientWageTemplateSchema;
+  templateConstants?: WageTemplateConstant[];
+  templateRules?: WageTemplateRule[];
+  templateVersion?: number;
   lastImportSummary?: {
     parserSource: "template" | "deterministic";
     parserLabel: string;

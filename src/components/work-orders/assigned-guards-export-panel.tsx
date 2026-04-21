@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Download, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import type { WorkOrder as WorkOrderDoc } from '@/types/work-orders';
 
 interface SiteDoc {
   id: string;
@@ -18,16 +19,6 @@ interface SiteDoc {
   clientName: string;
   district: string;
   state?: string;
-}
-
-interface WorkOrderDoc {
-  id: string;
-  siteId: string;
-  siteName: string;
-  clientName: string;
-  district: string;
-  date: Timestamp;
-  assignedGuards?: { uid: string; name: string; employeeId: string; gender: string }[];
 }
 
 interface EmployeeDoc {
@@ -119,6 +110,9 @@ export function AssignedGuardsExportPanel() {
 
       const workOrdersSnapshot = await getDocs(workOrdersQuery);
       let workOrders = workOrdersSnapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as WorkOrderDoc[];
+      workOrders = workOrders.filter(
+        (workOrder) => `${workOrder.recordStatus ?? 'active'}`.trim().toLowerCase() === 'active',
+      );
 
       if (selectedOfficer !== 'all') {
         const officer = officers.find((entry) => entry.uid === selectedOfficer);
@@ -158,6 +152,7 @@ export function AssignedGuardsExportPanel() {
             workOrder.district || '',
             site?.siteName || workOrder.siteName || '',
             `${site?.siteId || ''}`,
+            workOrder.examName || workOrder.examCode || "General Duty",
             `${employee.firstName || guard.name?.split(' ')[0] || ''}`,
             `${employee.lastName || guard.name?.split(' ').slice(1).join(' ') || ''}`,
             guard.gender || employee.gender || '',
@@ -180,6 +175,7 @@ export function AssignedGuardsExportPanel() {
         'City',
         'Center Name',
         'Center code',
+        'Exam Name',
         'First Name of the employee',
         'Last Name of the employee',
         'male/female',

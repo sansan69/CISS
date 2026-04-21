@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import {
+  applySavedWageTemplate,
   calculateEPF,
   calculateESIC,
   calculatePT,
@@ -14,7 +15,7 @@ import {
 import { aggregateAttendance } from "@/lib/payroll/attendance-aggregator";
 import { aggregateApprovedLeave } from "@/lib/payroll/leave-aggregator";
 import { cloneComplianceSettings } from "@/lib/payroll/defaults";
-import type { ComplianceSettings, WageComponent } from "@/types/payroll";
+import type { ClientWageConfig, ComplianceSettings, WageComponent, WageTemplateRule } from "@/types/payroll";
 
 type ClientDocShape = {
   name?: string;
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    const wageConfigCache = new Map<string, WageComponent[]>();
+    const wageConfigCache = new Map<string, ClientWageConfig | null>();
     const payrollTemplateCache = new Map<
       string,
       { grossMonthly: number; componentAmounts: Record<string, number> } | null
@@ -88,12 +89,12 @@ export async function POST(request: Request) {
     const clientCache = new Map<string, ClientDocShape>();
 
     async function getWageConfig(targetClientId?: string | null) {
-      if (!targetClientId) return [] as WageComponent[];
-      if (wageConfigCache.has(targetClientId)) return wageConfigCache.get(targetClientId) ?? [];
+      if (!targetClientId) return null;
+      if (wageConfigCache.has(targetClientId)) return wageConfigCache.get(targetClientId) ?? null;
       const configDoc = await adminDb.collection("clientWageConfig").doc(targetClientId).get();
-      const components = configDoc.exists ? ((configDoc.data()?.components ?? []) as WageComponent[]) : [];
-      wageConfigCache.set(targetClientId, components);
-      return components;
+      const config = configDoc.exists ? ({ id: configDoc.id, ...configDoc.data() } as ClientWageConfig) : null;
+      wageConfigCache.set(targetClientId, config);
+      return config;
     }
 
     async function getPayrollTemplate(targetClientId?: string | null) {
@@ -101,7 +102,8 @@ export async function POST(request: Request) {
       if (payrollTemplateCache.has(targetClientId)) {
         return payrollTemplateCache.get(targetClientId) ?? null;
       }
-      const wageComponents = await getWageConfig(targetClientId);
+      const wageConfig = await getWageConfig(targetClientId);
+      const wageComponents = (wageConfig?.components ?? []) as WageComponent[];
       const template = derivePayrollTemplateFromWageConfig(wageComponents);
       payrollTemplateCache.set(targetClientId, template);
       return template;
@@ -144,10 +146,13 @@ export async function POST(request: Request) {
 
       const resolvedClientId = employee.clientId ?? null;
       const clientDoc = await getClientDoc(resolvedClientId);
-      const wageComponents = await getWageConfig(resolvedClientId);
+      const wageConfig = await getWageConfig(resolvedClientId);
+      const wageComponents = (wageConfig?.components ?? []) as WageComponent[];
       const payrollTemplate = await getPayrollTemplate(resolvedClientId);
+      const templateRules = wageConfig?.templateRules ?? [];
+      const templateConstants = wageConfig?.templateConstants ?? [];
 
-      if (!payrollTemplate) {
+      if (!payrollTemplate && !templateRules.length) {
         const empName =
           employee.name ||
           [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
@@ -163,7 +168,7 @@ export async function POST(request: Request) {
       }
 
       const mergedComponentAmounts: Record<string, number> = {
-        ...payrollTemplate.componentAmounts,
+        ...(payrollTemplate?.componentAmounts ?? {}),
       };
 
       if (clientDoc?.uniformAllowanceMonthly) {
@@ -186,21 +191,72 @@ export async function POST(request: Request) {
         attendance.workingDays - attendance.presentDays - leave.approvedPaidLeaveDays,
       );
 
-      const proratedComponents = Object.fromEntries(
-        Object.entries(mergedComponentAmounts).map(([componentId, amount]) => [
-          componentId,
-          prorateAmount(amount, attendance.workingDays, attendance.workingDays - lopDays),
-        ]),
-      );
+      const attendanceInputs = {
+        payable_duties: payableDays,
+        duties: attendance.presentDays,
+        weekly_off: leave.approvedPaidLeaveDays,
+        extra_duty_days: leave.approvedUnpaidLeaveDays,
+        half_day: 0,
+        total: payableDays,
+        additional_duties: attendance.overtimeHours,
+      };
 
-      const earningsSummary = summarizeNamedEarnings(proratedComponents, wageComponents);
-      const grossEarnings = round2(
-        Object.values(proratedComponents).reduce((sum, amount) => sum + amount, 0),
-      );
-      const lopDeduction = round2(
-        Object.values(mergedComponentAmounts).reduce((sum, amount) => sum + amount, 0) - grossEarnings,
-      );
-      const epfBase = computeEpfApplicableWage(proratedComponents, wageComponents);
+      const templateSyntheticComponents: WageComponent[] = templateRules.map((rule, index) => ({
+        id: rule.standardName,
+        name: rule.displayLabel,
+        type:
+          rule.category === "deduction"
+            ? "deduction"
+            : rule.category === "employer_contribution"
+              ? "employer_contribution"
+              : "earning",
+        calculationType: "fixed_amount",
+        value: null,
+        isStatutory: false,
+        statutoryType: null,
+        isTaxable: rule.category !== "deduction",
+        epfApplicable: /basic|da|dearness/i.test(rule.standardName),
+        order: index + 1,
+      }));
+
+      const proratedComponents = templateRules.length
+        ? applySavedWageTemplate({
+            rules: templateRules,
+            constants: templateConstants,
+            attendance: attendanceInputs,
+          }).components
+        : Object.fromEntries(
+            Object.entries(mergedComponentAmounts).map(([componentId, amount]) => [
+              componentId,
+              prorateAmount(amount, attendance.workingDays, attendance.workingDays - lopDays),
+            ]),
+          );
+
+      const componentMeta = templateRules.length ? templateSyntheticComponents : wageComponents;
+      const earningsSummary = summarizeNamedEarnings(proratedComponents, componentMeta);
+      const grossFromSummaryRule =
+        proratedComponents.gross ??
+        proratedComponents.gross_earnings ??
+        proratedComponents.salary_payable;
+      const grossEarnings =
+        grossFromSummaryRule !== undefined
+          ? round2(grossFromSummaryRule)
+          : round2(
+              Object.entries(proratedComponents).reduce((sum, [componentId, amount]) => {
+                const matchingRule = templateRules.find((rule) => rule.standardName === componentId);
+                if (matchingRule && matchingRule.category !== "earning" && matchingRule.category !== "summary") {
+                  return sum;
+                }
+                const component = componentMeta.find((entry) => entry.id === componentId);
+                if (component?.type === "deduction" || component?.type === "employer_contribution") return sum;
+                return sum + amount;
+              }, 0),
+            );
+      const baseTotal = templateRules.length
+        ? grossEarnings
+        : round2(Object.values(mergedComponentAmounts).reduce((sum, amount) => sum + amount, 0));
+      const lopDeduction = round2(baseTotal - grossEarnings);
+      const epfBase = computeEpfApplicableWage(proratedComponents, componentMeta);
       const epfResult = calculateEPF(epfBase, compliance.epf);
       const esicResult = calculateESIC(grossEarnings, compliance.esic);
       const pt = calculatePT(grossEarnings, compliance.professionalTax.slabs);

@@ -1,4 +1,12 @@
-import type { ComplianceSettings, WageComponent, PTSlab, TDSSlab } from "@/types/payroll";
+import type {
+  ComplianceSettings,
+  PTSlab,
+  TDSSlab,
+  WageComponent,
+  WageTemplateConstant,
+  WageTemplateRule,
+} from "@/types/payroll";
+import { evaluateWageTemplate } from "./wage-template-evaluator";
 
 /** Round to 2 decimal places */
 export function round2(n: number): number {
@@ -261,4 +269,18 @@ export function summarizeNamedEarnings(componentAmounts: Record<string, number>,
     specialAllowance: round2(summary.specialAllowance),
     otherAllowances: round2(summary.otherAllowances),
   };
+}
+
+export function applySavedWageTemplate(input: {
+  rules: WageTemplateRule[];
+  constants: WageTemplateConstant[];
+  attendance: Record<string, number>;
+  seededComponents?: Record<string, number>;
+}) {
+  return evaluateWageTemplate({
+    rules: input.rules,
+    constants: input.constants,
+    attendance: input.attendance,
+    seededComponents: input.seededComponents,
+  });
 }

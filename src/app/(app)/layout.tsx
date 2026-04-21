@@ -7,27 +7,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  LayoutDashboard,
-  Users,
-  CalendarCheck,
-  Settings,
   LogOut,
-  Briefcase,
-  BarChart3,
   ChevronLeft,
-  ShieldAlert,
   ClipboardList,
   MoreHorizontal,
   X,
-  Trophy,
-  Wallet,
-  CalendarDays,
-  BookOpen,
   ChevronRight,
   PanelLeft,
-  Globe,
-  Wrench,
-  GraduationCap,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -52,128 +38,17 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { useHaptics } from '@/hooks/use-haptics';
 import { AuthContext } from '@/context/auth-context';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface NavItem {
-  href: string;
-  label: string;
-  shortLabel?: string;        // used in mobile bottom bar
-  fieldOfficerLabel?: string;
-  icon: React.ElementType;
-  exact?: boolean;
-  adminOnly?: boolean;
-  superAdminOnly?: boolean;
-  fieldOfficerVisible?: boolean;
-  clientVisible?: boolean;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-  adminOnly?: boolean;
-  superAdminOnly?: boolean;
-  fieldOfficerVisible?: boolean;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Navigation Config
-// ─────────────────────────────────────────────────────────────────────────────
-
-const mainNavGroups: NavGroup[] = [
-  {
-    label: 'Core',
-    items: [
-      { href: '/dashboard',       label: 'Dashboard',   shortLabel: 'Home',       icon: LayoutDashboard, exact: true,   clientVisible: true },
-      { href: '/employees',       label: 'Employees',   shortLabel: 'Guards',     icon: Users,                          clientVisible: true },
-      { href: '/attendance-logs', label: 'Attendance',  shortLabel: 'Attendance', icon: CalendarCheck,                  clientVisible: true },
-    ],
-  },
-  {
-    label: 'Workforce',
-    items: [
-      { href: '/work-orders',   label: 'Work Orders',  fieldOfficerLabel: 'Upcoming Duties', shortLabel: 'Orders', icon: ClipboardList },
-      { href: '/field-officers', label: 'Field Officers', icon: ShieldAlert, fieldOfficerVisible: true },
-    ],
-  },
-  {
-    label: 'Training',
-    items: [
-      { href: '/training',    label: 'Training Modules', icon: GraduationCap, adminOnly: true },
-      { href: '/training/assignments', label: 'Training Assignments', icon: BookOpen, fieldOfficerVisible: true },
-      { href: '/evaluations', label: 'Evaluations',      icon: BookOpen,      adminOnly: true },
-      { href: '/leaderboard', label: 'Leaderboard',      icon: Trophy,        adminOnly: true },
-    ],
-  },
-  {
-    label: 'Payroll',
-    adminOnly: true,
-    items: [
-      { href: '/payroll', label: 'Payroll Runs', icon: Wallet,      adminOnly: true },
-      { href: '/leave',   label: 'Leave',        icon: CalendarDays, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Admin',
-    adminOnly: true,
-    items: [
-      { href: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
-    ],
-  },
-  {
-    label: 'Company',
-    superAdminOnly: true,
-    items: [
-      { href: '/settings/state-management', label: 'Region Onboarding', icon: Globe, superAdminOnly: true },
-    ],
-  },
-];
-
-const settingsSubItems: NavItem[] = [
-  { href: '/settings/clients',                  label: 'Clients & Sites',          icon: Briefcase  },
-  { href: '/settings/admin-tools',             label: 'Admin Tools',              icon: Wrench     },
-  { href: '/settings/reports',                 label: 'Reports',                  icon: BarChart3  },
-  { href: '/settings/wage-config',             label: 'Wage Config',               icon: Wallet      },
-];
-
-// Bottom nav: 4 primary + More
-const bottomNavItems: NavItem[] = [
-  { href: '/dashboard',       label: 'Home',       icon: LayoutDashboard, exact: true },
-  { href: '/employees',       label: 'Guards',     icon: Users },
-  { href: '/attendance-logs', label: 'Attendance', icon: CalendarCheck },
-  { href: '/work-orders',     label: 'Orders',     icon: ClipboardList },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+import {
+  bottomNavItems,
+  getVisibleGroups,
+  getVisibleNavItems,
+  mainNavGroups,
+  settingsSubItems,
+  type NavItem,
+} from './navigation';
 
 function isActiveItem(pathname: string, item: NavItem): boolean {
   return item.exact ? pathname === item.href : pathname.startsWith(item.href);
-}
-
-function getVisibleGroups(groups: NavGroup[], userRole: string | null, isSuperAdmin?: boolean): NavGroup[] {
-  return groups
-    .filter(g => {
-      if (g.superAdminOnly) return isSuperAdmin === true;
-      if (g.adminOnly) return userRole === 'admin' || isSuperAdmin === true;
-      return true;
-    })
-    .map(g => ({
-      ...g,
-      items: g.items.filter(item => {
-        if (item.superAdminOnly) return isSuperAdmin === true;
-        if (item.adminOnly && userRole !== 'admin' && !isSuperAdmin) return false;
-        if (!item.clientVisible && userRole === 'client') return false;
-        // Operations group items: visible to admin and fieldOfficer
-        if (item.fieldOfficerVisible && userRole === 'fieldOfficer') return true;
-        if (!item.clientVisible && !item.fieldOfficerVisible && userRole === 'fieldOfficer') return false;
-        return true;
-      }),
-    }))
-    .filter(g => g.items.length > 0);
 }
 
 // Get current page label for mobile header
@@ -456,9 +331,11 @@ function DesktopSidebar({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MobileBottomNav({
+  items,
   onMoreClick,
   moreActive,
 }: {
+  items: NavItem[];
   onMoreClick: () => void;
   moreActive: boolean;
 }) {
@@ -480,7 +357,7 @@ function MobileBottomNav({
           "shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_2px_8px_hsl(0_0%_0%/0.08)]"
         )}
       >
-        {bottomNavItems.map(item => {
+        {items.map(item => {
           const active = isActiveItem(pathname, item);
           return (
             <Link
@@ -990,10 +867,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const isSettingsPage = pathname.startsWith('/settings');
+  const visibleBottomNavItems = getVisibleNavItems(bottomNavItems, userRole, isSuperAdmin);
 
   // Is the "More" sheet active state — active when showing non-bottom-nav routes
   const isMoreActive = moreSheetOpen || (
-    !bottomNavItems.some(i => isActiveItem(pathname, i)) && !isSettingsPage
+    !visibleBottomNavItems.some(i => isActiveItem(pathname, i)) && !isSettingsPage
   );
 
   return (
@@ -1047,6 +925,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* ── Mobile Bottom Nav ── */}
       <MobileBottomNav
+        items={visibleBottomNavItems}
         onMoreClick={() => { haptic('medium'); setMoreSheetOpen(true); }}
         moreActive={isMoreActive}
       />

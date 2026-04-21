@@ -7,23 +7,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
-import { GeoPoint, collection, query, where, onSnapshot, getDocs, Timestamp, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, Timestamp } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
-import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 import { useAppAuth } from '@/context/auth-context';
-import { buildFirestoreAuditEvent, buildFirestoreCreateAudit } from '@/lib/firestore-audit';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
-import { buildLocationIdentity } from '@/lib/location-utils';
+import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type {
+    TcsExamImportPreviewPayload,
+    WorkOrder,
+    WorkOrderImportMode,
+} from '@/types/work-orders';
 import {
     Select,
     SelectContent,
@@ -31,20 +34,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Download, FileSpreadsheet } from 'lucide-react';
-
-interface WorkOrder {
-    id: string;
-    siteId: string;
-    siteName: string;
-    clientName: string;
-    district: string;
-    date: any; 
-    maleGuardsRequired: number;
-    femaleGuardsRequired: number;
-    totalManpower: number;
-    assignedGuards: any[];
-}
 
 type WorkspaceTab = 'assignments' | 'assigned-guards-export';
 
@@ -62,7 +51,7 @@ const WORK_ORDER_NAV_META = {
 };
 
 function resolveWorkspaceTab(rawTab: string | null, userRole: string | null): WorkspaceTab {
-    if (userRole !== 'admin') {
+    if (!isWorkOrderAdminRole(userRole)) {
         return 'assignments';
     }
     return rawTab === 'assigned-guards-export' ? 'assigned-guards-export' : 'assignments';
@@ -76,9 +65,23 @@ const isSameDay = (a: Date, b: Date) => {
     );
 };
 
+type ResolvedImportPreview = TcsExamImportPreviewPayload & {
+    matchedSites: number;
+    pendingSiteCreations: number;
+};
+
+const normalizeSegment = (value: string | null | undefined) =>
+    String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+const buildFallbackSiteKey = (siteName: string, district: string) =>
+    `${normalizeSegment(siteName)}|${normalizeSegment(district)}`;
+
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [importMode, setImportMode] = useState<WorkOrderImportMode>('new');
+    const [isPreviewing, setIsPreviewing] = useState(false);
+    const [isConfirmingImport, setIsConfirmingImport] = useState(false);
+    const [importPreview, setImportPreview] = useState<ResolvedImportPreview | null>(null);
     const { toast } = useToast();
     const router = useRouter();
     const pathname = usePathname();
@@ -87,11 +90,12 @@ export default function WorkOrderPage() {
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
     const [isLoading, setIsLoading] = useState(true);
     const { userRole, assignedDistricts } = useAppAuth();
+    const canAdminWorkOrders = isWorkOrderAdminRole(userRole);
     const activeTab = useMemo(
         () => resolveWorkspaceTab(searchParams.get('tab'), userRole),
         [searchParams, userRole],
     );
-    const visibleTabs = userRole === 'admin' ? ADMIN_TABS : FIELD_OFFICER_TABS;
+    const visibleTabs = canAdminWorkOrders ? ADMIN_TABS : FIELD_OFFICER_TABS;
 
     // ── Soft-delete with undo ────────────────────────────────────────────────
     // Orders hidden optimistically while the undo window is open
@@ -172,28 +176,6 @@ export default function WorkOrderPage() {
         return Number.isNaN(parsed.getTime()) ? null : parsed;
     }, [selectedDateValue]);
 
-    const geocodeDutySite = async (siteAddress: string, district: string) => {
-        if (!siteAddress.trim()) return null;
-        const response = await authorizedFetch('/api/locations/geocode', {
-            method: 'POST',
-            body: JSON.stringify({
-                address: siteAddress,
-                district,
-                entityType: 'site',
-            }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || typeof data.lat !== 'number' || typeof data.lng !== 'number') {
-            return null;
-        }
-        return data as {
-            lat: number;
-            lng: number;
-            formattedAddress?: string;
-            placeAccuracy?: string;
-        };
-    };
-
     const updateUrlParams = (updates: Record<string, string | null>) => {
         const params = new URLSearchParams(searchParams.toString());
 
@@ -233,6 +215,9 @@ export default function WorkOrderPage() {
             const orders = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder))
                 .filter(o => {
+                    if ((o.recordStatus ?? 'active').trim().toLowerCase() !== 'active') {
+                        return false;
+                    }
                     try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
                 });
             // Sort by date ascending client-side
@@ -329,12 +314,17 @@ export default function WorkOrderPage() {
         }
     }, [allExpanded, filteredEntries]);
 
+    const clearImportPreview = React.useCallback(() => {
+        setImportPreview(null);
+    }, []);
+
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
             const selectedFile = event.target.files[0];
             const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv', 'application/vnd.ms-excel'];
             if (validTypes.some(type => selectedFile.type.includes(type))) {
                 setFile(selectedFile);
+                setImportPreview(null);
             } else {
                 toast({
                     variant: 'destructive',
@@ -345,247 +335,133 @@ export default function WorkOrderPage() {
         }
     };
 
-    const handleUploadAndProcess = async () => {
+    const resolveExistingSitesForRows = React.useCallback(async (
+        rows: TcsExamImportPreviewPayload['rows'],
+    ) => {
+        const sitesSnapshot = await getDocs(collection(db, 'sites'));
+        const sitesByCode = new Map<string, { id: string; siteId?: string | null; siteName: string; district: string }>();
+        const sitesByNameDistrict = new Map<string, { id: string; siteId?: string | null; siteName: string; district: string }>();
+
+        for (const siteDoc of sitesSnapshot.docs) {
+            const site = { id: siteDoc.id, ...(siteDoc.data() as any) };
+            const codeKey = normalizeSegment(site.siteId);
+            if (codeKey && !sitesByCode.has(codeKey)) {
+                sitesByCode.set(codeKey, site);
+            }
+            const fallbackKey = buildFallbackSiteKey(site.siteName, site.district);
+            if (!sitesByNameDistrict.has(fallbackKey)) {
+                sitesByNameDistrict.set(fallbackKey, site);
+            }
+        }
+        let matchedSites = 0;
+        let pendingSiteCreations = 0;
+
+        for (const row of rows) {
+            const fileSiteCode = normalizeSegment(row.siteId);
+            const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
+            const site = (fileSiteCode && sitesByCode.get(fileSiteCode)) || sitesByNameDistrict.get(fallbackKey);
+            if (site) {
+                matchedSites += 1;
+            } else {
+                pendingSiteCreations += 1;
+            }
+        }
+
+        return { matchedSites, pendingSiteCreations };
+    }, []);
+
+    const handlePreviewImport = async () => {
         if (!file) {
             toast({ variant: 'destructive', title: 'No File Selected' });
             return;
         }
-        setIsProcessing(true);
-        toast({ title: 'Processing File...', description: 'Reading work order data. This may take a moment.' });
-        
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+        setIsPreviewing(true);
+        toast({ title: 'Previewing Import...', description: 'Parsing the workbook and matching duty rows.' });
 
-                if (jsonData.length < 3) throw new Error("File must have at least 3 rows (2 header rows and 1 data row).");
+        try {
+            const formData = new FormData();
+            formData.set('file', file);
+            formData.set('mode', importMode);
 
-                const headerRow1 = jsonData[0]; // top header row: labels and date columns
-                const headerRow2 = jsonData[1]; // second header row: gender under each date
-                const dataRows = jsonData.slice(2);
-
-                // Map static columns by name
-                const mapping: Record<string, string> = {
-                    'S.No': 'sNo',
-                    'ZONE': 'zone',
-                    'STATE': 'state',
-                    'CITY': 'district',
-                    'TC CODE': 'siteCode',
-                    'CENTER': 'siteName',
-                    'TC Address': 'siteAddress',
-                };
-
-                // Helper to parse dates flexibly (Date object or strings like 04-Oct-25)
-                const parseHeaderDate = (val: any): Date | null => {
-                    if (val instanceof Date) {
-                        // Normalize to local date (strip time/timezone drift from Excel)
-                        return new Date(val.getFullYear(), val.getMonth(), val.getDate());
-                    }
-                    if (typeof val === 'number') {
-                        // Excel serial number
-                        // Excel serial number handling using workbook date system not available here reliably,
-                        // attempt generic conversion: Excel serial (assuming 1900 system)
-                        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-                        const ms = Math.round((val - Math.floor(val)) * 24 * 60 * 60 * 1000);
-                        const date = new Date(excelEpoch.getTime() + Math.floor(val) * 86400000 + ms);
-                        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                    }
-                    if (typeof val === 'string') {
-                        const s = val.trim();
-                        const parsed = new Date(s);
-                        if (!isNaN(parsed.getTime())) return parsed;
-                        const m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
-                        if (m) {
-                            const day = parseInt(m[1]);
-                            const monStr = m[2].toLowerCase();
-                            const yr = parseInt(m[3]);
-                            const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-                            const month = months.indexOf(monStr);
-                            const year = yr < 100 ? 2000 + yr : yr;
-                            if (month >= 0) return new Date(year, month, day);
-                        }
-                    }
-                    return null;
-                };
-
-                // Determine where date columns start by finding first Date/string-date in row1
-                const staticIndices: Record<string, number> = {};
-                let firstDateCol = -1;
-                for (let i = 0; i < headerRow1.length; i++) {
-                    const label = (headerRow1[i] ?? '').toString().trim();
-                    if (parseHeaderDate(headerRow1[i])) {
-                        firstDateCol = i;
-                        break;
-                    }
-                    if (mapping[label] !== undefined) {
-                        staticIndices[mapping[label]] = i;
-                    }
-                }
-                if (firstDateCol === -1) throw new Error('Could not locate date columns in the header.');
-
-                // Build date columns list by pairing MALE/FEMALE using the formatted header text
-                const dateColumns: { date: Date; maleIndex: number; femaleIndex: number }[] = [];
-                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-                for (let c = firstDateCol; c <= range.e.c; c++) {
-                    const addr = XLSX.utils.encode_cell({ r: 0, c });
-                    const cell = (worksheet as any)[addr];
-                    const raw = cell?.w ?? cell?.v;
-                    const parsedDate = parseHeaderDate(raw);
-                    if (!parsedDate) continue;
-                    // genders in next row under date columns
-                    const maleIdx = c + headerRow2.slice(c, c + 2).findIndex((x:any) => String(x).toUpperCase().includes('MALE'));
-                    const femaleIdx = c + headerRow2.slice(c, c + 2).findIndex((x:any) => String(x).toUpperCase().includes('FEMALE'));
-                    if (maleIdx >= c && femaleIdx >= c) {
-                        dateColumns.push({ date: parsedDate, maleIndex: maleIdx, femaleIndex: femaleIdx });
-                    }
-                    c++; // skip paired column
-                }
-                
-                if (dateColumns.length === 0) throw new Error("No valid date columns found in the file's header.");
-
-                toast({ title: 'Matching Sites...', description: 'Comparing with database...' });
-                const sitesSnapshot = await getDocs(collection(db, "sites"));
-                const sitesByCode = new Map<string, any>(sitesSnapshot.docs.map(doc => [String(doc.data().siteId || '').trim(), { id: doc.id, ...doc.data() }]));
-                // Fallback map by name+district
-                const sitesByNameDistrict = new Map<string, any>(sitesSnapshot.docs.map(doc => {
-                    const d = doc.data();
-                    return [(`${(d.siteName||'').toLowerCase().trim()}|${(d.district||'').toLowerCase().trim()}`), { id: doc.id, ...d }];
-                }));
-
-                const tcsClientSnapshot = await getDocs(query(collection(db, 'clients'), where('name', '==', 'TCS')));
-                const tcsClientDoc = tcsClientSnapshot.docs[0];
-                const tcsClientId = tcsClientDoc?.id || null;
-
-                let operationsCount = 0;
-                let createdSites = 0;
-
-                for (const row of dataRows) {
-                    const getVal = (key:string) => row[staticIndices[key]];
-                    const siteCode = String(getVal('siteCode') ?? '').trim();
-                    const siteName = String(getVal('siteName') ?? '').trim();
-                    const siteAddress = String(getVal('siteAddress') ?? '').trim();
-                    const state = String(getVal('state') ?? '').trim();
-                    const district = String(getVal('district') ?? '').trim();
-
-                    if (!siteName) continue;
-
-                    let site = (siteCode && sitesByCode.get(siteCode)) || sitesByNameDistrict.get(`${siteName.toLowerCase()}|${district.toLowerCase()}`);
-
-                    if (!site) {
-                        const geocode = await geocodeDutySite(siteAddress || '', district || '');
-                        const newSiteData = {
-                            clientName: OPERATIONAL_CLIENT_NAME,
-                            clientId: tcsClientId,
-                            siteName,
-                            siteId: siteCode || null,
-                            siteAddress: siteAddress || '',
-                            district: district || '',
-                            state: state || 'Kerala',
-                            geolocation: geocode ? new GeoPoint(geocode.lat, geocode.lng) : null,
-                            latString: geocode ? geocode.lat.toFixed(6) : null,
-                            lngString: geocode ? geocode.lng.toFixed(6) : null,
-                            coordinateStatus: geocode ? 'geocoded' : 'missing',
-                            coordinateSource: geocode ? 'geocode' : null,
-                            placeAccuracy: geocode?.placeAccuracy ?? null,
-                            geocodedAt: geocode ? serverTimestamp() : null,
-                            geofenceRadiusMeters: 150,
-                            strictGeofence: true,
-                            shiftMode: 'none',
-                            shiftPattern: null,
-                            shiftTemplates: [],
-                            locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, siteName, district]),
-                            ...buildFirestoreCreateAudit(),
-                        } as any;
-                        const newRef = await addDoc(collection(db, 'sites'), newSiteData);
-                        site = { id: newRef.id, ...newSiteData };
-                        if (siteCode) sitesByCode.set(siteCode, site);
-                        sitesByNameDistrict.set(`${siteName.toLowerCase()}|${district.toLowerCase()}`, site);
-                        createdSites++;
-                    }
-
-                    for (const { date, maleIndex, femaleIndex } of dateColumns) {
-                        const maleFromFile = Number(row[maleIndex]) || 0;
-                        const femaleFromFile = Number(row[femaleIndex]) || 0;
-                        const additionalTotal = maleFromFile + femaleFromFile;
-                        // Skip if this file has no requirement for that date
-                        if (additionalTotal <= 0) continue;
-
-                        // Normalize to local noon to avoid timezone off-by-one when stored/retrieved
-                        const safeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
-                        const dateString = `${safeDate.getFullYear()}-${String(safeDate.getMonth()+1).padStart(2,'0')}-${String(safeDate.getDate()).padStart(2,'0')}`;
-                        const workOrderId = `${site.id}_${dateString}`;
-                        const workOrderRef = doc(db, 'workOrders', workOrderId);
-
-                        // If a work order already exists for this site+date, ADD to existing counts instead of replacing.
-                        const existingSnap = await getDoc(workOrderRef);
-                        let finalMale = maleFromFile;
-                        let finalFemale = femaleFromFile;
-                        let existingAssigned: any[] = [];
-                        let existingCreatedAt: any = null;
-                        let existingDate: any = Timestamp.fromDate(safeDate);
-
-                        if (existingSnap.exists()) {
-                            const existing = existingSnap.data() as any;
-                            const existingMale = Number(existing.maleGuardsRequired || 0);
-                            const existingFemale = Number(existing.femaleGuardsRequired || 0);
-                            finalMale += existingMale;
-                            finalFemale += existingFemale;
-                            existingAssigned = Array.isArray(existing.assignedGuards) ? existing.assignedGuards : [];
-                            existingCreatedAt = existing.createdAt || null;
-                            existingDate = existing.date || existingDate;
-                        }
-
-                        const totalManpower = finalMale + finalFemale;
-
-                        await authorizedFetch('/api/admin/work-orders', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                workOrderId,
-                                data: {
-                                    siteId: site.id,
-                                    siteName: site.siteName,
-                                    clientName: OPERATIONAL_CLIENT_NAME,
-                                    district: site.district,
-                                    date: safeDate.toISOString(),
-                                    maleGuardsRequired: finalMale,
-                                    femaleGuardsRequired: finalFemale,
-                                    totalManpower,
-                                    assignedGuards: existingAssigned,
-                                    importHistory: [buildFirestoreAuditEvent('work_order_imported', undefined, {
-                                        siteId: site.id,
-                                        siteName: site.siteName,
-                                        date: dateString,
-                                        maleGuardsRequired: finalMale,
-                                        femaleGuardsRequired: finalFemale,
-                                        totalManpower,
-                                    })],
-                                },
-                            }),
-                        });
-
-                        operationsCount++;
-                    }
-                }
-
-                if (operationsCount > 0) {
-                    toast({ title: 'Success', description: `Processed ${operationsCount} daily work orders. New sites created: ${createdSites}.` });
-                } else {
-                    toast({ variant: 'default', title: 'No New Data', description: 'No new work order entries were found to import.' });
-                }
-
-            } catch (error: any) {
-                console.error("Error processing file:", error);
-                toast({ variant: 'destructive', title: 'Processing Failed', description: error.message || 'Could not process the file.', duration: 8000 });
-            } finally {
-                setIsProcessing(false);
-                setFile(null);
+            const response = await authorizedFetch('/api/admin/work-orders/import/preview', {
+                method: 'POST',
+                body: formData,
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not preview the import.');
             }
-        };
-        reader.readAsArrayBuffer(file);
+
+            const previewPayload = payload as TcsExamImportPreviewPayload;
+            const resolution = await resolveExistingSitesForRows(previewPayload.rows);
+
+            setImportPreview({
+                ...previewPayload,
+                matchedSites: resolution.matchedSites,
+                pendingSiteCreations: resolution.pendingSiteCreations,
+            });
+
+            toast({
+                title: 'Preview Ready',
+                description: `Reviewed ${previewPayload.rowCount} rows across ${previewPayload.siteCount} sites.`,
+            });
+        } catch (error: any) {
+            console.error('Error previewing import:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Preview Failed',
+                description: error.message || 'Could not preview the import.',
+                duration: 8000,
+            });
+        } finally {
+            setIsPreviewing(false);
+        }
+    };
+
+    const handleConfirmImport = async () => {
+        if (!file || !importPreview) {
+            toast({ variant: 'destructive', title: 'Preview Required', description: 'Preview the file before confirming the import.' });
+            return;
+        }
+
+        setIsConfirmingImport(true);
+        try {
+            const response = await authorizedFetch('/api/admin/work-orders/import/commit', {
+                method: 'POST',
+                body: JSON.stringify({
+                    mode: importPreview.mode,
+                    fileName: file.name,
+                    parserMode: importPreview.parserMode,
+                    examName: importPreview.suggestedExamName,
+                    examCode: importPreview.suggestedExamCode,
+                    binaryFileHash: importPreview.binaryFileHash,
+                    contentHash: importPreview.contentHash,
+                    rows: importPreview.rows,
+                    warnings: importPreview.warnings,
+                }),
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not confirm the import.');
+            }
+
+            toast({
+                title: 'Import Confirmed',
+                description: `Committed ${payload.committedRows ?? importPreview.rowCount} rows${payload.createdSites > 0 ? ` and created ${payload.createdSites} site${payload.createdSites === 1 ? '' : 's'}` : ''}.`,
+            });
+            setFile(null);
+            setImportPreview(null);
+        } catch (error: any) {
+            console.error('Error confirming import:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Import Failed',
+                description: error.message || 'Could not confirm the import.',
+                duration: 8000,
+            });
+        } finally {
+            setIsConfirmingImport(false);
+        }
     };
     
     const pageTitle = userRole === 'fieldOfficer'
@@ -600,7 +476,7 @@ export default function WorkOrderPage() {
                 eyebrow="Workforce"
                 title={pageTitle}
                 description={
-                    userRole === 'admin'
+                    canAdminWorkOrders
                         ? 'Upload and manage TCS duty requirements across active duty sites.'
                         : 'Review the TCS duty requirements that are relevant to your assigned districts.'
                 }
@@ -624,16 +500,36 @@ export default function WorkOrderPage() {
                 </TabsList>
 
                 <TabsContent value="assignments" className="mt-0 flex flex-col gap-4 sm:gap-6">
-                    {userRole === 'admin' && (
+                    {canAdminWorkOrders && (
                         <Card>
                             <CardHeader>
                                 <CardTitle>Upload Work Order</CardTitle>
-                                <CardDescription>Upload the TCS duty requirement Excel file. The system will process multiple dates from one file.</CardDescription>
+                                <CardDescription>Upload the TCS duty requirement workbook, preview the active-row changes, then confirm the import.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid w-full items-center gap-1.5 sm:max-w-sm">
-                                    <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
-                                    <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                                    <div className="grid w-full items-center gap-1.5">
+                                        <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
+                                        <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
+                                    </div>
+                                    <div className="grid w-full items-center gap-1.5">
+                                        <Label htmlFor="work-order-mode">Import Mode</Label>
+                                        <Select
+                                            value={importMode}
+                                            onValueChange={(value) => {
+                                                setImportMode(value as WorkOrderImportMode);
+                                                clearImportPreview();
+                                            }}
+                                        >
+                                            <SelectTrigger id="work-order-mode">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="new">New Import</SelectItem>
+                                                <SelectItem value="revision">Revision Import</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                                 {file && (
                                     <div className="flex items-center gap-2 rounded-md border bg-muted p-2 text-sm">
@@ -641,12 +537,85 @@ export default function WorkOrderPage() {
                                         <span>{file.name}</span>
                                     </div>
                                 )}
+                                {importPreview && (
+                                    <div className="space-y-4 rounded-lg border p-4">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Badge variant="outline">{importPreview.suggestedExamName}</Badge>
+                                            <Badge variant="secondary">{importPreview.mode === 'revision' ? 'Revision' : 'New'}</Badge>
+                                            <Badge variant="outline">
+                                                {importPreview.dateRange.from} to {importPreview.dateRange.to}
+                                            </Badge>
+                                            {importPreview.pendingSiteCreations > 0 && (
+                                                <Badge>{importPreview.pendingSiteCreations} site{importPreview.pendingSiteCreations === 1 ? '' : 's'} to create on confirm</Badge>
+                                            )}
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-4">
+                                            <div className="rounded-md bg-muted px-3 py-2">
+                                                <p className="text-xs text-muted-foreground">Rows</p>
+                                                <p className="text-lg font-semibold">{importPreview.rowCount}</p>
+                                            </div>
+                                            <div className="rounded-md bg-muted px-3 py-2">
+                                                <p className="text-xs text-muted-foreground">Sites</p>
+                                                <p className="text-lg font-semibold">{importPreview.siteCount}</p>
+                                            </div>
+                                            <div className="rounded-md bg-muted px-3 py-2">
+                                                <p className="text-xs text-muted-foreground">Added</p>
+                                                <p className="text-lg font-semibold">
+                                                    {importPreview.diffRows.filter((row) => row.status === 'added').length}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-md bg-muted px-3 py-2">
+                                                <p className="text-xs text-muted-foreground">Updated/Cancelled</p>
+                                                <p className="text-lg font-semibold">
+                                                    {importPreview.diffRows.filter((row) => row.status === 'updated' || row.status === 'cancelled').length}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {importPreview.duplicateMessage && (
+                                            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                                                {importPreview.duplicateMessage}
+                                            </div>
+                                        )}
+                                        {importPreview.warnings.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-medium">Warnings</p>
+                                                <div className="space-y-1">
+                                                    {importPreview.warnings.map((warning) => (
+                                                        <p key={`${warning.code}-${warning.rowNumber ?? 'na'}-${warning.sheetName ?? 'sheet'}`} className="text-xs text-muted-foreground">
+                                                            {warning.message}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </CardContent>
-                            <CardFooter>
-                                <Button onClick={handleUploadAndProcess} disabled={isProcessing || !file} className="w-full sm:w-auto">
-                                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                                    {isProcessing ? 'Processing...' : 'Upload & Process File'}
-                                </Button>
+                            <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                                <div className="text-xs text-muted-foreground">
+                                    {importPreview
+                                        ? `${importPreview.matchedSites} existing site match${importPreview.matchedSites === 1 ? '' : 'es'} applied before commit.`
+                                        : 'Preview the workbook first to validate site matching and active-row changes.'}
+                                </div>
+                                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                                    {importPreview && (
+                                        <Button variant="outline" onClick={clearImportPreview} className="w-full sm:w-auto">
+                                            Clear Preview
+                                        </Button>
+                                    )}
+                                    <Button onClick={handlePreviewImport} disabled={isPreviewing || isConfirmingImport || !file} className="w-full sm:w-auto">
+                                        {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                        {isPreviewing ? 'Previewing...' : 'Preview Import'}
+                                    </Button>
+                                    <Button
+                                        onClick={handleConfirmImport}
+                                        disabled={isPreviewing || isConfirmingImport || !file || !importPreview || importPreview.duplicateState !== 'none'}
+                                        className="w-full sm:w-auto"
+                                    >
+                                        {isConfirmingImport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
+                                        {isConfirmingImport ? 'Confirming...' : 'Confirm Import'}
+                                    </Button>
+                                </div>
                             </CardFooter>
                         </Card>
                     )}
@@ -657,7 +626,7 @@ export default function WorkOrderPage() {
                                 <div>
                                     <CardTitle>Active Duty Sites</CardTitle>
                                     <CardDescription>
-                                        {userRole === 'admin'
+                                        {canAdminWorkOrders
                                             ? 'List of all TCS duty sites with upcoming work orders.'
                                             : 'List of TCS duty sites in your assigned districts with upcoming duties.'}
                                     </CardDescription>
@@ -785,7 +754,7 @@ export default function WorkOrderPage() {
                                                     </div>
 
                                                     <div className="flex shrink-0 flex-col gap-2 sm:flex-row" onClick={(e) => e.stopPropagation()}>
-                                                        {userRole === 'admin' && (
+                                                        {canAdminWorkOrders && (
                                                             <Button size="sm" variant="outline" asChild className="h-8 text-xs">
                                                                 <Link href={siteHref(siteId)}>
                                                                     <Edit3 className="mr-1.5 h-3.5 w-3.5" />
@@ -825,7 +794,10 @@ export default function WorkOrderPage() {
                                                                         className={`relative w-full rounded-md border p-3 sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40'}`}
                                                                     >
                                                                         <div className="mb-2 flex items-center justify-between gap-1">
-                                                                            <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                                            <div className="min-w-0">
+                                                                                <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                                                <p className="truncate text-[10px] text-muted-foreground">{order.examName || order.examCode || "General Duty"}</p>
+                                                                            </div>
                                                                             <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
                                                                         </div>
                                                                         <div className="grid grid-cols-3 items-center gap-2 border-t pt-2">
@@ -848,7 +820,7 @@ export default function WorkOrderPage() {
                                                                                 Assigned {assignedCount}/{totalRequired} ({percent}%)
                                                                             </p>
                                                                         </div>
-                                                                        {userRole === 'admin' && (
+                                                                        {canAdminWorkOrders && (
                                                                             <button
                                                                                 className="absolute right-1 top-1 rounded p-1 text-destructive/60 transition-colors hover:bg-red-50 hover:text-destructive"
                                                                                 title="Delete duty (5s undo)"
@@ -872,7 +844,7 @@ export default function WorkOrderPage() {
                     </Card>
                 </TabsContent>
 
-                {userRole === 'admin' && (
+                {canAdminWorkOrders && (
                     <TabsContent value="assigned-guards-export" className="mt-0">
                         <AssignedGuardsExportPanel />
                     </TabsContent>

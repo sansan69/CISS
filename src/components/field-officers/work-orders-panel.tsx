@@ -44,21 +44,15 @@ import {
   ClipboardList,
   Users,
 } from "lucide-react";
+import type { WorkOrder } from "@/types/work-orders";
+import { isWorkOrderAdminRole } from "@/lib/work-orders";
+
+type WorkOrderExamFields = Pick<
+  WorkOrder,
+  "examName" | "examCode" | "recordStatus" | "importId" | "sourceFileName"
+>;
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-interface WorkOrder {
-  id: string;
-  siteId: string;
-  siteName: string;
-  clientName: string;
-  district: string;
-  date: any;
-  maleGuardsRequired: number;
-  femaleGuardsRequired: number;
-  totalManpower: number;
-  assignedGuards: { uid: string; name: string; employeeId: string; gender: string }[];
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -444,7 +438,7 @@ const AssignGuardsDialog: React.FC<{
 export function WorkOrdersPanel() {
   const { userRole, assignedDistricts } = useAppAuth();
   const { toast } = useToast();
-  const isAdmin = userRole === "admin" || userRole === "superAdmin";
+  const isAdmin = isWorkOrderAdminRole(userRole);
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -452,6 +446,14 @@ export function WorkOrdersPanel() {
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
   const [availableGuards, setAvailableGuards] = useState<Employee[]>([]);
   const [isLoadingGuards, setIsLoadingGuards] = useState(false);
+
+  const activeWorkOrders = useMemo(
+    () =>
+      workOrders.filter(
+        (order) => (order.recordStatus ?? "active").trim().toLowerCase() === "active",
+      ),
+    [workOrders],
+  );
 
   // ── Fetch work orders ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -496,7 +498,7 @@ export function WorkOrdersPanel() {
   // ── Group by site ──────────────────────────────────────────────────────────
   const ordersBySite = useMemo(() => {
     const map = new Map<string, { siteName: string; clientName: string; district: string; orders: WorkOrder[] }>();
-    for (const order of workOrders) {
+    for (const order of activeWorkOrders) {
       const existing = map.get(order.siteId);
       if (existing) {
         existing.orders.push(order);
@@ -510,7 +512,7 @@ export function WorkOrdersPanel() {
       }
     }
     return Array.from(map.entries()).map(([siteId, val]) => ({ siteId, ...val }));
-  }, [workOrders]);
+  }, [activeWorkOrders]);
 
   // ── Open assign dialog ─────────────────────────────────────────────────────
   const handleOpenAssign = useCallback(async (order: WorkOrder) => {
@@ -587,7 +589,8 @@ export function WorkOrdersPanel() {
               <div className="divide-y">
                 {orders.map((order) => {
                   const totalRequired = order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired);
-                  const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                  const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+                  const assignedCount = assignedGuards.length;
                   const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
                   const isFullyAssigned = assignedCount >= totalRequired && totalRequired > 0;
                   const isUnassigned = assignedCount === 0;
@@ -609,7 +612,12 @@ export function WorkOrdersPanel() {
                     <div key={order.id} className="p-4">
                       {/* Date + status */}
                       <div className="flex items-center justify-between gap-2 mb-3">
-                        <p className="font-medium text-sm">{formatDate(order.date)}</p>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm">{formatDate(order.date)}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {order.examName || order.examCode || "General Duty"}
+                          </p>
+                        </div>
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
                           {statusLabel}
                         </span>
@@ -642,7 +650,7 @@ export function WorkOrdersPanel() {
                       {assignedCount > 0 && (
                         <div className="flex items-center gap-1.5 mb-3 flex-wrap">
                           <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {order.assignedGuards.slice(0, 4).map((g) => (
+                          {assignedGuards.slice(0, 4).map((g) => (
                             <span key={g.uid} className="text-xs bg-muted rounded-full px-2 py-0.5 truncate max-w-[100px]">
                               {g.name}
                             </span>

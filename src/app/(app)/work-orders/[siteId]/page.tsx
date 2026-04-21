@@ -33,10 +33,17 @@ import { useHaptics } from '@/hooks/use-haptics';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Employee } from '@/types/employee';
+import type { WorkOrder } from '@/types/work-orders';
 import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
+import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
+
+type WorkOrderExamFields = Pick<
+    WorkOrder,
+    'examName' | 'examCode' | 'recordStatus' | 'importId' | 'sourceFileName'
+>;
 
 
 // Safely compute initials for avatar fallbacks
@@ -49,19 +56,6 @@ const getInitials = (name?: string, employeeId?: string) => {
     const id = (employeeId || '').trim();
     return id ? id.slice(-2).toUpperCase() : 'NA';
 };
-
-interface WorkOrder {
-    id: string;
-    siteId: string;
-    siteName: string;
-    clientName: string;
-    district: string;
-    date: any;
-    maleGuardsRequired: number;
-    femaleGuardsRequired: number;
-    totalManpower: number;
-    assignedGuards: { uid: string; name: string; employeeId: string; gender: string; }[];
-}
 
 interface Site {
     id: string;
@@ -519,6 +513,11 @@ export default function AssignGuardsPage() {
 
     const { toast } = useToast();
     const { haptic } = useHaptics();
+    const canAdminWorkOrders = isWorkOrderAdminRole(userRole);
+    const activeOrders = useMemo(
+        () => workOrders.filter((order) => (order.recordStatus ?? 'active').trim().toLowerCase() === 'active'),
+        [workOrders],
+    );
 
 
     useEffect(() => {
@@ -573,7 +572,7 @@ export default function AssignGuardsPage() {
         setIsAssignDialogOpen(true);
         setIsLoadingGuards(true);
         try {
-            const districtsToQuery = userRole === 'admin' ? [workOrder.district] : assignedDistricts;
+            const districtsToQuery = canAdminWorkOrders ? [workOrder.district] : assignedDistricts;
             if (districtsToQuery.length === 0) { setAvailableGuards([]); setIsLoadingGuards(false); return; }
             const snap = await getDocs(query(
                 collection(db, "employees"),
@@ -682,13 +681,13 @@ export default function AssignGuardsPage() {
                 }
             />
 
-            {workOrders.length === 0 ? (
+            {activeOrders.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-12 text-center">
                     <p className="text-muted-foreground text-sm">No upcoming duties found for this site.</p>
                 </div>
             ) : (
                 <div className="space-y-3 sm:space-y-4">
-                    {workOrders.map(order => {
+                    {activeOrders.map(order => {
                         const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
                         const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
                         const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
@@ -720,6 +719,9 @@ export default function AssignGuardsPage() {
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
                                             {order.date.toDate().getFullYear()}
+                                        </p>
+                                        <p className="mt-1 text-xs font-medium text-muted-foreground">
+                                            {order.examName || order.examCode || "General Duty"}
                                         </p>
                                     </div>
                                     <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold flex-shrink-0 ml-2 ${statusBadge}`}>
@@ -770,7 +772,7 @@ export default function AssignGuardsPage() {
                                         <UserPlus className="mr-2 h-4 w-4" />
                                         Assign Guards
                                     </Button>
-                                    {userRole === 'admin' && (
+                                    {canAdminWorkOrders && (
                                         <div className="grid grid-cols-2 gap-2 sm:contents">
                                             <Button
                                                 variant="outline"

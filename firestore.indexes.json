@@ -94,6 +94,14 @@
       ]
     },
     {
+      "collectionGroup": "workOrderImports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "clientLocations",
       "queryScope": "COLLECTION",
       "fields": [

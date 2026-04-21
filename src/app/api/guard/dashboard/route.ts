@@ -24,6 +24,55 @@ function toISTTimeString(ts: FirebaseFirestore.Timestamp | null | undefined): st
   });
 }
 
+function getWorkOrderTimestampValue(value: unknown): number {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.getTime();
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { toDate?: () => Date }).toDate === "function"
+  ) {
+    const converted = (value as { toDate?: () => Date }).toDate?.();
+    if (converted instanceof Date && !Number.isNaN(converted.getTime())) {
+      return converted.getTime();
+    }
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.getTime();
+    }
+  }
+
+  return Number.NaN;
+}
+
+function isAssignedToGuard(
+  assignedGuards: unknown,
+  employeeDocId: string,
+  employeeId: string,
+) {
+  if (!Array.isArray(assignedGuards)) {
+    return false;
+  }
+
+  return assignedGuards.some((guard) => {
+    if (typeof guard === "string") {
+      return guard === employeeDocId || guard === employeeId;
+    }
+
+    if (!guard || typeof guard !== "object") {
+      return false;
+    }
+
+    const maybeGuard = guard as { uid?: string; employeeId?: string };
+    return maybeGuard.uid === employeeDocId || maybeGuard.employeeId === employeeId;
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const guard = await requireGuard(request);
@@ -164,27 +213,35 @@ export async function GET(request: Request) {
     let nextShift: { date: string; siteName: string; clientName: string; shiftLabel?: string } | null = null;
     let nextShiftUnavailable = false;
     try {
-      const todayStr = now.toISOString().slice(0, 10);
       const sevenDaysLater = new Date(now);
       sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-      const sevenDaysStr = sevenDaysLater.toISOString().slice(0, 10);
 
       const workOrderSnap = await adminDb
         .collection("workOrders")
-        .where("assignedGuards", "array-contains", guard.employeeDocId)
-        .where("date", ">=", todayStr)
-        .where("date", "<=", sevenDaysStr)
-        .orderBy("date")
-        .limit(1)
+        .where("date", ">=", now)
+        .where("date", "<=", sevenDaysLater)
         .get();
 
-      if (!workOrderSnap.empty) {
-        const wo = workOrderSnap.docs[0].data();
+      const nextActiveWorkOrder = workOrderSnap.docs
+        .map((doc) => doc.data())
+        .filter((workOrder) => String(workOrder.recordStatus ?? "active").trim().toLowerCase() === "active")
+        .filter((workOrder) =>
+          isAssignedToGuard(workOrder.assignedGuards, guard.employeeDocId, guard.employeeId),
+        )
+        .sort(
+          (left, right) =>
+            getWorkOrderTimestampValue(left.date) - getWorkOrderTimestampValue(right.date),
+        )[0];
+
+      if (nextActiveWorkOrder) {
+        const workOrderDate = getWorkOrderTimestampValue(nextActiveWorkOrder.date);
         nextShift = {
-          date: wo.date ?? "",
-          siteName: wo.siteName ?? "",
-          clientName: wo.clientName ?? clientName,
-          shiftLabel: wo.shiftLabel ?? undefined,
+          date: Number.isFinite(workOrderDate)
+            ? new Date(workOrderDate).toISOString()
+            : "",
+          siteName: nextActiveWorkOrder.siteName ?? "",
+          clientName: nextActiveWorkOrder.clientName ?? clientName,
+          shiftLabel: nextActiveWorkOrder.shiftLabel ?? undefined,
         };
       }
     } catch (err) {
