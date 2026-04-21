@@ -33,9 +33,16 @@ export function isEnrollmentFileSelectionValid(file: File): boolean {
 }
 
 export function assertEnrollmentUploadSize(file: File): void {
-  if (file.size > MAX_ENROLLMENT_DOCUMENT_SIZE_BYTES) {
+  const limit = file.type.startsWith("image/")
+    ? MAX_ENROLLMENT_IMAGE_INPUT_SIZE_BYTES
+    : MAX_ENROLLMENT_DOCUMENT_SIZE_BYTES;
+
+  if (file.size > limit) {
+    const limitMb = file.type.startsWith("image/")
+      ? MAX_ENROLLMENT_IMAGE_INPUT_SIZE_MB
+      : MAX_ENROLLMENT_DOCUMENT_SIZE_MB;
     throw new Error(
-      `Prepared file is too large to upload. Please use a smaller file or retake the photo. Max ${MAX_ENROLLMENT_DOCUMENT_SIZE_MB}MB.`,
+      `Prepared file is too large to upload. Please use a smaller file or retake the photo. Max ${limitMb}MB.`,
     );
   }
 }

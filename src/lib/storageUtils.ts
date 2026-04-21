@@ -182,6 +182,40 @@ export async function uploadFileToStorage(
   return downloadURL;
 }
 
+export async function uploadEnrollmentFileViaApi(
+  file: File,
+  storagePath: string,
+): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("path", storagePath);
+
+  const response = await fetch("/api/public/enroll/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = "Enrollment upload failed.";
+    try {
+      const payload = await response.json();
+      if (payload?.error) {
+        message = payload.error;
+      }
+    } catch {
+      message = `Enrollment upload failed with status ${response.status}.`;
+    }
+    throw new Error(message);
+  }
+
+  const payload = await response.json();
+  if (!payload?.url) {
+    throw new Error("Enrollment upload failed. Missing file URL.");
+  }
+
+  return payload.url as string;
+}
+
 // New Function to delete a file from Firebase Storage using its download URL
 export async function deleteFileFromStorage(fileUrl: string): Promise<void> {
     if (!fileUrl || (!fileUrl.startsWith("https://") && !fileUrl.startsWith("gs://"))) {

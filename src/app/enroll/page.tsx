@@ -38,7 +38,7 @@ import {
   ENROLLMENT_IMAGE_ACCEPT,
   getUploadFileExtension,
   prepareFileForUpload,
-  uploadFileToStorage,
+  uploadEnrollmentFileViaApi,
 } from "@/lib/storageUtils";
 import {
   assertEnrollmentUploadSize,
@@ -1035,7 +1035,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 const fileToUpload = await prepareFileForUpload(file);
                 assertEnrollmentUploadSize(fileToUpload);
                 const path = buildEnrollmentStoragePath(phoneNumber, folder, fileStem, fileToUpload);
-                const url = await uploadFileToStorage(fileToUpload, path);
+                const url = await uploadEnrollmentFileViaApi(fileToUpload, path);
                 uploadedUrls[key] = url;
             } catch (err: any) {
                  throw new Error(`Upload failed for ${name}: ${err.message}`);
