@@ -31,8 +31,6 @@ import { useToast } from "@/hooks/use-toast";
 import React, { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import {
   dataURLtoFile,
   deleteFileFromStorage,
@@ -204,6 +202,11 @@ interface ClientOption {
   id: string;
   name: string;
 }
+
+type PublicClientsResponse = {
+  clients?: ClientOption[];
+  error?: string;
+};
 
 const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
 const idProofOptions = [...PROOF_TYPES];
@@ -853,10 +856,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     const fetchClients = async () => {
         setIsLoadingClients(true);
         try {
-            const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
-            const snapshot = await getDocs(clientsQuery);
-            const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
-            setAvailableClients(fetchedClients);
+            const response = await fetch('/api/public/clients', { cache: 'no-store' });
+            const payload = (await response.json().catch(() => ({}))) as PublicClientsResponse;
+            if (!response.ok) {
+              throw new Error(payload.error || 'Could not load client list.');
+            }
+            setAvailableClients(Array.isArray(payload.clients) ? payload.clients : []);
         } catch (error) {
             console.error("Error fetching clients for enrollment form: ", error);
             toast({ 

@@ -8,8 +8,7 @@ import {
   onSnapshot,
   orderBy,
   query,
-  getCountFromServer,
-  where,
+  getDocs,
 } from "firebase/firestore";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Building2, MapPin, ChevronRight, Loader2 } from "lucide-react";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
+import { siteBelongsToClient } from "@/lib/sites/site-directory";
 
 interface ClientRow {
   id: string;
@@ -55,23 +55,24 @@ export default function ClientsPage() {
       }));
 
       // Fetch site + location counts in parallel for all clients
+      const [allSitesSnap, allLocationsSnap] = await Promise.all([
+        getDocs(collection(db, "sites")),
+        getDocs(collection(db, "clientLocations")),
+      ]);
       const withCounts = await Promise.all(
         rows.map(async (client) => {
-          const [sitesSnap, locsSnap] = await Promise.all([
-            getCountFromServer(
-              query(collection(db, "sites"), where("clientId", "==", client.id))
-            ),
-            getCountFromServer(
-              query(
-                collection(db, "clientLocations"),
-                where("clientId", "==", client.id)
-              )
-            ),
-          ]);
+          const siteCount = allSitesSnap.docs.filter((doc) => {
+            const data = doc.data() as { clientId?: string; clientName?: string };
+            return siteBelongsToClient(data, client.id, client.name);
+          }).length;
+          const locationCount = allLocationsSnap.docs.filter((doc) => {
+            const data = doc.data() as { clientId?: string; clientName?: string };
+            return siteBelongsToClient(data as any, client.id, client.name);
+          }).length;
           return {
             ...client,
-            siteCount: sitesSnap.data().count,
-            locationCount: locsSnap.data().count,
+            siteCount,
+            locationCount,
           };
         })
       );

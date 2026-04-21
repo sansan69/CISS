@@ -15,15 +15,27 @@ export function useClients() {
 
   useEffect(() => {
     const q = query(collection(db, "clients"), orderBy("name", "asc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setClients(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-        }))
-      );
-      setIsLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setClients(
+          snapshot.docs
+            .map((doc) => {
+              const data = doc.data() as { name?: string; clientName?: string };
+              return {
+                id: doc.id,
+                name: (data.name || data.clientName || "").trim(),
+              };
+            })
+            .filter((client) => client.name.length > 0),
+        );
+        setIsLoading(false);
+      },
+      () => {
+        setClients([]);
+        setIsLoading(false);
+      },
+    );
 
     return () => unsubscribe();
   }, []);

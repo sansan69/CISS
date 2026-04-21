@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { generateEmployeeId } from '@/lib/employee-id';
 import { generateQrCodeDataUrl } from '@/lib/qr';
 import { PageHeader } from '@/components/layout/page-header';
+import { siteBelongsToClient } from '@/lib/sites/site-directory';
 
 interface ProcessedRecord {
     data: any;
@@ -132,10 +133,14 @@ export default function BulkImportPage() {
                 clientId = clientDocs.docs[0].id;
             }
     
-            const siteQuery = query(collection(db, 'sites'), where('clientId', '==', clientId), where('siteName', '==', siteName));
-            const siteDocs = await getDocs(siteQuery);
-            
-            if (!siteDocs.empty) {
+            const existingSitesSnapshot = await getDocs(collection(db, 'sites'));
+            const matchingSite = existingSitesSnapshot.docs.find((docSnap) => {
+                const data = docSnap.data() as { clientId?: string; clientName?: string; siteName?: string };
+                return siteBelongsToClient(data as any, clientId, clientName)
+                    && String(data.siteName || '').trim().toLowerCase() === String(siteName).trim().toLowerCase();
+            });
+
+            if (matchingSite) {
                 results.push({ data: row, status: 'error', message: 'Site already exists' });
                 continue;
             }

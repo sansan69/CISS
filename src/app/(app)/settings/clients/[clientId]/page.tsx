@@ -79,6 +79,7 @@ import { KERALA_DISTRICTS, DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constant
 import { buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/firestore-audit";
 import { coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
 import { extractSiteCoordinates, hasUsableSiteGps } from "@/lib/site-gps-repair";
+import { siteBelongsToClient, sortSitesByName } from "@/lib/sites/site-directory";
 import type { CoordinateSource, CoordinateStatus, GeoPointLike, SiteType } from "@/types/location";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -265,30 +266,44 @@ export default function ClientDashboardPage() {
   }, [clientId, router]);
 
   useEffect(() => {
-    const q = query(
+    if (!client?.name) return;
+
+    const unsub = onSnapshot(
       collection(db, "sites"),
-      where("clientId", "==", clientId),
-      orderBy("siteName", "asc")
+      (snap) => {
+        const nextSites = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as SiteDoc))
+          .filter((site) => siteBelongsToClient(site as any, clientId, client.name));
+        setSites(sortSitesByName(nextSites as any));
+        setSitesLoading(false);
+      },
+      () => {
+        setSites([]);
+        setSitesLoading(false);
+      },
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setSites(snap.docs.map((d) => ({ id: d.id, ...d.data() } as SiteDoc)));
-      setSitesLoading(false);
-    });
     return () => unsub();
-  }, [clientId]);
+  }, [client?.name, clientId]);
 
   useEffect(() => {
-    const q = query(
+    if (!client?.name) return;
+
+    const unsub = onSnapshot(
       collection(db, "clientLocations"),
-      where("clientId", "==", clientId),
-      orderBy("locationName", "asc")
+      (snap) => {
+        const nextLocations = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as LocationDoc))
+          .filter((location) => siteBelongsToClient(location as any, clientId, client.name));
+        setLocations(nextLocations.sort((a, b) => a.locationName.localeCompare(b.locationName)));
+        setLocationsLoading(false);
+      },
+      () => {
+        setLocations([]);
+        setLocationsLoading(false);
+      },
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setLocations(snap.docs.map((d) => ({ id: d.id, ...d.data() } as LocationDoc)));
-      setLocationsLoading(false);
-    });
     return () => unsub();
-  }, [clientId]);
+  }, [client?.name, clientId]);
 
   useEffect(() => {
     const q = query(
