@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, QrCode, Phone, ScanLine, RotateCcw, ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
+import { parseEmployeeIdFromQrText } from "@/lib/qr/employee-qr";
 import { normalizeScannerError } from "@/lib/qr/scanner-support";
 import { startSafeHybridQrScanner } from "@/lib/qr/scanner-engine";
 import type { QrScannerErrorCode, QrScannerSession } from "@/lib/qr/scanner-types";
@@ -159,13 +160,13 @@ export default function GuardLoginPage() {
 
           scannerGenerationRef.current += 1;
           session.stop();
-          if (scannerSessionRef.current === session) {
-            scannerSessionRef.current = null;
-          }
-          setIsScanning(false);
-          setScannedEmployeeId(text);
-          setQrStep("pin");
-        },
+        if (scannerSessionRef.current === session) {
+          scannerSessionRef.current = null;
+        }
+        setIsScanning(false);
+        setScannedEmployeeId(parseEmployeeIdFromQrText(text) ?? text.trim());
+        setQrStep("pin");
+      },
         onError: handleScannerError,
       });
 
@@ -208,10 +209,11 @@ export default function GuardLoginPage() {
     if (!scannedEmployeeId) return;
     setIsQrLoading(true);
     try {
+      const employeeId = parseEmployeeIdFromQrText(scannedEmployeeId) ?? scannedEmployeeId;
       const res = await fetch("/api/guard/auth/pin-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId: scannedEmployeeId }),
+        body: JSON.stringify({ employeeId }),
       });
       const data = await res.json();
 
@@ -247,10 +249,11 @@ export default function GuardLoginPage() {
     if (!scannedEmployeeId || qrPin.length < 4) return;
     setIsQrLoading(true);
     try {
+      const employeeId = parseEmployeeIdFromQrText(scannedEmployeeId) ?? scannedEmployeeId;
       const res = await fetch("/api/guard/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId: scannedEmployeeId, pin: qrPin }),
+        body: JSON.stringify({ employeeId, pin: qrPin }),
       });
       const data = await res.json();
       if (!res.ok) {

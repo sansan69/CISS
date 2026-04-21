@@ -19,6 +19,7 @@ import { haversineDistanceMeters, validateLocation } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getNextShift, resolveSiteShift } from '@/lib/shift-utils';
 import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
+import { parseEmployeeIdFromQrText } from '@/lib/qr/employee-qr';
 import { startHybridQrScanner } from '@/lib/qr/scanner-engine';
 import { normalizeScannerError } from '@/lib/qr/scanner-support';
 import { DEFAULT_GPS_ACCURACY_LIMIT_METERS, OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from '@/lib/constants';
@@ -684,15 +685,6 @@ export default function AttendancePage() {
     }
   };
 
-  const parseEmployeeIdFromText = (text: string): string | null => {
-    const m = text.match(/Employee\s*ID\s*:\s*([^\n]+)/i);
-    if (m && m[1]) return m[1].trim();
-    // fallback: first line if contains CISS pattern
-    const firstLine = text.split(/\n|\r/)[0]?.trim();
-    if (/CISS\//i.test(firstLine)) return firstLine;
-    return null;
-  };
-
   const fetchEmployeeByEmployeeId = useCallback(async (empId: string) => {
     const response = await fetch(
       `/api/public/attendance/employee?${new URLSearchParams({ employeeId: empId }).toString()}`,
@@ -727,7 +719,7 @@ export default function AttendancePage() {
           if (scanLockedRef.current) return;
 
           scanLockedRef.current = true;
-          const parsedId = parseEmployeeIdFromText(text);
+          const parsedId = parseEmployeeIdFromQrText(text);
 
           if (!parsedId) {
             scanLockedRef.current = false;
