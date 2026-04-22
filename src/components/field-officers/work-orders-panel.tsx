@@ -13,7 +13,6 @@ import {
 import { startOfToday } from "date-fns";
 import { useAppAuth } from "@/context/auth-context";
 import { authorizedFetch } from "@/lib/api-client";
-import { buildFirestoreAuditEvent } from "@/lib/firestore-audit";
 import { useToast } from "@/hooks/use-toast";
 import { useHaptics } from "@/hooks/use-haptics";
 import type { Employee } from "@/types/employee";
@@ -132,15 +131,6 @@ const AssignGuardsDialog: React.FC<{
         method: "PATCH",
         body: JSON.stringify({
           assignedGuards: selectedGuards,
-          assignmentHistory: buildFirestoreAuditEvent(
-            "work_order_assignments_updated",
-            undefined,
-            {
-              siteId: workOrder.siteId,
-              assignedGuardIds: selectedGuards.map((g) => g.uid),
-              assignedCount: selectedGuards.length,
-            },
-          ),
         }),
       });
       if (!res.ok) throw new Error("Failed to save");

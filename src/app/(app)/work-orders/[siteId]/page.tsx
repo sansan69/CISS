@@ -36,7 +36,6 @@ import type { Employee } from '@/types/employee';
 import type { WorkOrder } from '@/types/work-orders';
 import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
-import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
 
@@ -119,11 +118,6 @@ const AssignGuardsDialog: React.FC<{
                 method: 'PATCH',
                 body: JSON.stringify({
                     assignedGuards: selectedGuards,
-                    assignmentHistory: buildFirestoreAuditEvent('work_order_assignments_updated', undefined, {
-                        siteId: workOrder.siteId,
-                        assignedGuardIds: selectedGuards.map(g => g.uid),
-                        assignedCount: selectedGuards.length,
-                    }),
                 }),
             });
             if (!res.ok) throw new Error('Failed to save');
@@ -598,11 +592,6 @@ export default function AssignGuardsPage() {
                 body: JSON.stringify({
                     maleGuardsRequired: male,
                     femaleGuardsRequired: female,
-                    assignmentHistory: buildFirestoreAuditEvent('work_order_manpower_updated', undefined, {
-                        maleGuardsRequired: male,
-                        femaleGuardsRequired: female,
-                        totalManpower: male + female,
-                    }),
                 }),
             });
             if (!res.ok) throw new Error('Failed to save');
