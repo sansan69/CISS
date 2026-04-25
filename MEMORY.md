@@ -28,6 +28,25 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Session: Work order import — preview table, import history fix, exam name visibility
+
+**File modified:** `src/app/(app)/work-orders/imports/page.tsx`
+- **Fix:** Import history page silently failed when Firestore composite index was missing. Added `queryError` state and clear error display.
+- **Feature:** When the `workOrderImports` query fails due to a missing index, the UI now shows a red alert with the exact deployment command: `firebase deploy --only firestore:indexes`.
+- **UI:** Added `AlertTriangle` and `Alert` component imports for error display.
+
+**File modified:** `src/app/(app)/work-orders/page.tsx`
+- **Feature:** Added full preview details table in the import preview panel.
+- **Table columns:** Date, Site Name, District, Male, Female, Status.
+- **Update rows show before/after counts:** e.g., `0 → 2` for male/female when a row is updated.
+- **Scrollable:** Table is wrapped in `<ScrollArea className="h-[300px]">` so large imports don't break the layout.
+- **Status badges:** Color-coded chips — green for Added, amber for Updated, muted for Unchanged, red for Cancelled.
+- **UI:** Added imports for `ScrollArea` and `Table` components.
+
+**Note on exam names:** The parser already extracts exam names from TCS filenames (e.g., "Adhoc Security Requirement for SBI JA Prelims..." → "SBI JA Prelims"). Each row in a file gets the same exam name. Exam names are prominently displayed in work order cards (previous commit increased font size). No additional backend changes needed.
+
+---
+
 ## [2026-04-19] — Session: Field officers can assign training
 
 **Files modified:**

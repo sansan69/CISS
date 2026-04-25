@@ -4,13 +4,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { onSnapshot } from "firebase/firestore";
-import { CalendarRange, ClipboardList, FileClock, FileText, Loader2, Rows3, SquareStack } from "lucide-react";
+import { CalendarRange, ClipboardList, FileClock, FileText, Loader2, Rows3, SquareStack, AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAppAuth } from "@/context/auth-context";
 import { isWorkOrderAdminRole } from "@/lib/work-orders";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
@@ -198,6 +199,7 @@ export default function WorkOrderImportsPage() {
   const { userRole } = useAppAuth();
   const [imports, setImports] = useState<WorkOrderImportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [queryError, setQueryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userRole !== null && !isWorkOrderAdminRole(userRole)) {
@@ -217,10 +219,19 @@ export default function WorkOrderImportsPage() {
       (snapshot) => {
         const records = normalizeTcsWorkOrderImportRecords(snapshot);
         setImports(records);
+        setQueryError(null);
         setIsLoading(false);
       },
       (error) => {
         console.error("Failed to load work order imports:", error);
+        const message = error?.message || "";
+        if (message.includes("index") || message.includes("requires an index")) {
+          setQueryError(
+            "Firestore index required. Run: firebase deploy --only firestore:indexes",
+          );
+        } else {
+          setQueryError("Could not load import history. Please try again later.");
+        }
         setIsLoading(false);
       },
     );
@@ -284,6 +295,20 @@ export default function WorkOrderImportsPage() {
 
       {isLoading ? (
         <LoadingState />
+      ) : queryError ? (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Import history unavailable</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{queryError}</p>
+            {queryError.includes("index") && (
+              <p className="text-xs">
+                The Firestore composite index for <code>workOrderImports</code> (clientName ASC, createdAt DESC)
+                must be deployed before import history can load.
+              </p>
+            )}
+          </AlertDescription>
+        </Alert>
       ) : imports.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">

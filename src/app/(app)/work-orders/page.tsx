@@ -7,6 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
@@ -628,6 +637,57 @@ export default function WorkOrderPage() {
                                                 </div>
                                             </div>
                                         )}
+
+                                        {/* Preview Details Table */}
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium">Preview Details</p>
+                                            <ScrollArea className="h-[300px] rounded-md border">
+                                                <Table>
+                                                    <TableHeader className="sticky top-0 bg-background">
+                                                        <TableRow>
+                                                            <TableHead className="w-[100px] text-[10px]">Date</TableHead>
+                                                            <TableHead className="text-[10px]">Site</TableHead>
+                                                            <TableHead className="w-[80px] text-[10px]">District</TableHead>
+                                                            <TableHead className="w-[60px] text-right text-[10px]">Male</TableHead>
+                                                            <TableHead className="w-[60px] text-right text-[10px]">Female</TableHead>
+                                                            <TableHead className="w-[80px] text-[10px]">Status</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {importPreview.diffRows
+                                                            .sort((a, b) => a.date.localeCompare(b.date) || a.siteName.localeCompare(b.siteName))
+                                                            .map((row, idx) => {
+                                                                const statusColors: Record<string, string> = {
+                                                                    added: 'text-green-600 bg-green-50',
+                                                                    updated: 'text-amber-600 bg-amber-50',
+                                                                    unchanged: 'text-muted-foreground',
+                                                                    cancelled: 'text-red-600 bg-red-50',
+                                                                };
+                                                                const maleDisplay = row.status === 'updated' && row.previousMaleGuardsRequired !== undefined
+                                                                    ? `${row.previousMaleGuardsRequired} → ${row.maleGuardsRequired}`
+                                                                    : String(row.maleGuardsRequired);
+                                                                const femaleDisplay = row.status === 'updated' && row.previousFemaleGuardsRequired !== undefined
+                                                                    ? `${row.previousFemaleGuardsRequired} → ${row.femaleGuardsRequired}`
+                                                                    : String(row.femaleGuardsRequired);
+                                                                return (
+                                                                    <TableRow key={idx} className={row.status === 'cancelled' ? 'opacity-60' : ''}>
+                                                                        <TableCell className="text-xs font-medium">{row.date}</TableCell>
+                                                                        <TableCell className="text-xs">{row.siteName}</TableCell>
+                                                                        <TableCell className="text-xs">{row.district}</TableCell>
+                                                                        <TableCell className="text-xs text-right font-mono">{maleDisplay}</TableCell>
+                                                                        <TableCell className="text-xs text-right font-mono">{femaleDisplay}</TableCell>
+                                                                        <TableCell>
+                                                                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${statusColors[row.status] || ''}`}>
+                                                                                {row.status}
+                                                                            </span>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                    </TableBody>
+                                                </Table>
+                                            </ScrollArea>
+                                        </div>
                                     </div>
                                 )}
                             </CardContent>
