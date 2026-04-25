@@ -5,6 +5,15 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Session: Fix work order import preview Content-Type bug
+
+**File modified:** `src/lib/api-client.ts`
+- **Bug:** `authorizedFetch` unconditionally set `Content-Type: application/json` whenever `init.body` existed and no Content-Type header was provided.
+- **Impact:** Work order import preview (which sends `FormData`) failed with "Content-Type was not one of multipart/form-data or application/x-www-form-urlencoded" because the browser could not inject the multipart boundary.
+- **Fix:** Added `&& !(init.body instanceof FormData)` condition so that `FormData` requests leave the Content-Type unset, allowing the browser to set the correct `multipart/form-data; boundary=...` header automatically.
+
+---
+
 ## [2026-04-19] — Session: Field officers can assign training
 
 **Files modified:**
