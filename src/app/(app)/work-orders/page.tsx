@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, Download, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
@@ -31,7 +31,6 @@ import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-browser';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
-import WorkOrderTodoPanel from '@/components/work-orders/todo-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Dialog,
@@ -54,12 +53,11 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-type WorkspaceTab = 'assignments' | 'assigned-guards-export' | 'tasks';
+type WorkspaceTab = 'assignments' | 'assigned-guards-export';
 
 const ADMIN_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
     { value: 'assignments', label: 'Assignments', icon: FileSpreadsheet },
     { value: 'assigned-guards-export', label: 'Assigned Guards Export', icon: Download },
-    { value: 'tasks', label: 'Tasks', icon: CheckCircle2 },
 ];
 
 const FIELD_OFFICER_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
@@ -75,7 +73,6 @@ function resolveWorkspaceTab(rawTab: string | null, userRole: string | null): Wo
         return 'assignments';
     }
     if (rawTab === 'assigned-guards-export') return 'assigned-guards-export';
-    if (rawTab === 'tasks') return 'tasks';
     return 'assignments';
 }
 
@@ -1080,19 +1077,6 @@ export default function WorkOrderPage() {
                     </TabsContent>
                 )}
 
-                {canAdminWorkOrders && (
-                    <TabsContent value="tasks" className="mt-0">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Work Order Tasks</CardTitle>
-                                <CardDescription>Track tasks and to-dos for upcoming duties.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <WorkOrderTodoPanel />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                )}
             </Tabs>
 
             {/* ── Bulk Delete Exam Confirmation Dialog ── */}
