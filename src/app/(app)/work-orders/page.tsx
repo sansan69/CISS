@@ -103,6 +103,7 @@ export default function WorkOrderPage() {
     const searchParams = useSearchParams();
     
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
+    const [siteDistricts, setSiteDistricts] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(true);
     const { userRole, assignedDistricts } = useAppAuth();
     const canAdminWorkOrders = isWorkOrderAdminRole(userRole);
@@ -257,18 +258,44 @@ export default function WorkOrderPage() {
 
     }, [userRole, assignedDistricts, toast]);
 
-    // Distinct districts present in current work orders (for filter dropdown)
+    // Fetch site districts so UI always shows the current site district
+    useEffect(() => {
+        const siteIds = Object.keys(workOrdersBySite);
+        if (siteIds.length === 0) {
+            setSiteDistricts({});
+            return;
+        }
+
+        const fetchSites = async () => {
+            const mapping: Record<string, string> = {};
+            // Firestore 'in' queries support up to 30 values
+            const chunkSize = 30;
+            for (let i = 0; i < siteIds.length; i += chunkSize) {
+                const chunk = siteIds.slice(i, i + chunkSize);
+                const q = query(collection(db, "sites"), where("__name__", "in", chunk));
+                const snap = await getDocs(q);
+                snap.docs.forEach((doc) => {
+                    const data = doc.data();
+                    mapping[doc.id] = data.district || data.districtName || "";
+                });
+            }
+            setSiteDistricts(mapping);
+        };
+
+        fetchSites().catch((err) => {
+            console.error("Error fetching site districts:", err);
+        });
+    }, [workOrdersBySite]);
+
+    // Distinct districts present in current sites (uses live site district mapping)
     const availableDistricts = useMemo(() => {
         const set = new Set<string>();
-        Object.values(workOrdersBySite).forEach(orders => {
-            orders.forEach(order => {
-                if (order.district) {
-                    set.add(order.district);
-                }
-            });
+        Object.entries(workOrdersBySite).forEach(([siteId, orders]) => {
+            const district = siteDistricts[siteId] || orders[0]?.district || "";
+            if (district) set.add(district);
         });
         return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [workOrdersBySite]);
+    }, [workOrdersBySite, siteDistricts]);
 
     // Apply district/date filters and sort by date for display
     const filteredEntries = useMemo(() => {
@@ -280,7 +307,8 @@ export default function WorkOrderPage() {
 
             if (selectedDistrict !== 'all') {
                 const districtLower = selectedDistrict.toLowerCase();
-                filtered = filtered.filter(o => (o.district || '').toLowerCase() === districtLower);
+                const siteDistrict = (siteDistricts[siteId] || orders[0]?.district || '').toLowerCase();
+                if (siteDistrict !== districtLower) continue;
             }
 
             if (selectedDate) {
@@ -847,8 +875,16 @@ export default function WorkOrderPage() {
                                                             <span className="font-medium text-foreground">
                                                                 {siteInfo.examName || siteInfo.examCode || "TCS Exam"}
                                                             </span>
-                                                            <span className="text-muted-foreground">·</span>
-                                                            <span className="text-muted-foreground">{siteInfo.district}</span>
+                                                            {(() => {
+                                                                const district = siteDistricts[siteId] || siteInfo.district;
+                                                                if (!district || district === 'South 2') return null;
+                                                                return (
+                                                                    <>
+                                                                        <span className="text-muted-foreground">·</span>
+                                                                        <span className="text-muted-foreground">{district}</span>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </p>
                                                         {isCollapsed && (
                                                             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

@@ -5,6 +5,32 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Session: Firestore backfill + UI cleanup + task management
+
+**Firestore data backfill (direct via Firebase Admin SDK with gcloud ADC):**
+- Fixed 29 work orders: `examName` changed from `"TC Address"` → `"CSL Exam"`.
+- Fixed 1 import document in `workOrderImports`: `examName` changed from `"TC Address"` → `"CSL Exam"`, `examCode` changed from `"tc-address"` → `"csl-exam"`.
+- Fixed 8 sites + their work orders: `district` changed from `"South 2"` to inferred real districts based on site name keywords (Kollam, Kottayam, Thrissur, Ernakulam, Kozhikode, Kannur, Kasaragod).
+- 21 sites still have `"South 2"` district because their names don't contain recognizable location keywords.
+- 2,533 legacy work orders still have no `examName` because they were imported before import tracking existed (no `importId` or `sourceFileName`). These can only be fixed by re-importing original files.
+
+**Files modified:** `src/app/(app)/work-orders/page.tsx`, `src/app/(app)/work-orders/imports/page.tsx`
+- Removed all "TCS" branding from UI copy. Descriptions, placeholders, and empty states now use generic "exam duty" wording.
+- Site headers show exam name instead of "TCS" + district badge.
+
+**Files created:** `src/app/api/admin/work-orders/todos/route.ts`, `src/app/api/admin/work-orders/todos/[id]/route.ts`
+- REST API for work order task management: GET/POST list, PATCH update status, DELETE remove.
+- Collection: `workOrderTodos` with Firestore rules (staff read/write, admin delete).
+
+**File created:** `src/components/work-orders/todo-panel.tsx`
+- Task panel component with stats, filtering, inline create form, priority badges, status actions.
+- Integrated into main Work Orders page ("Tasks" tab) and site detail page ("Site Tasks" card).
+
+**File created:** `src/app/api/admin/work-orders/backfill-exam-names/route.ts`
+- Admin API route to backfill `examName` on work orders missing it. Maps `importId` to `workOrderImports` for exam name lookup, falls back to `sourceFileName` parsing.
+
+---
+
 ## [2026-04-25] — Session: Work order import system fixes and improvements
 
 **File modified:** `src/lib/api-client.ts`
