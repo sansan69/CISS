@@ -19,6 +19,10 @@ const GENERIC_TITLE_HEADERS = new Set([
   ...STATIC_HEADER_ALIASES.siteId,
   ...STATIC_HEADER_ALIASES.siteName,
   ...STATIC_HEADER_ALIASES.district,
+  "zone",
+  "zone name",
+  "tc address",
+  "address",
   "state",
   "male",
   "female",
@@ -27,6 +31,7 @@ const GENERIC_TITLE_HEADERS = new Set([
   "s.no",
   "no",
   "serial no",
+  "sno",
 ]);
 
 function normalizeText(value: unknown): string {
@@ -148,14 +153,30 @@ function cleanExamNameFromFilename(fileName: string): string {
   }
 
   const lower = baseName.toLowerCase();
-  const lastForIndex = lower.lastIndexOf(" for ");
-  let candidate = lastForIndex >= 0 ? baseName.slice(lastForIndex + 5) : baseName;
 
+  // Try to find " for " which typically precedes the exam name in TCS filenames
+  // e.g. "Adhoc Security Guards Requirment for NTA CUET PG Exam from 06 to 27 Mar 2026"
+  let candidate = "";
+  const forIndex = lower.indexOf(" for ");
+  if (forIndex >= 0) {
+    candidate = baseName.slice(forIndex + 5);
+  } else {
+    // Fallback: if no " for ", try " - " separator
+    const dashIndex = lower.indexOf(" - ");
+    if (dashIndex >= 0) {
+      candidate = baseName.slice(dashIndex + 3);
+    } else {
+      candidate = baseName;
+    }
+  }
+
+  // Remove common prefixes
   candidate = candidate
     .replace(/^copy of\s+/i, "")
     .replace(/^revised\s+\d*\s+/i, "")
     .replace(/^\s*(ad hoc|adhoc)\s+/i, "")
-    .replace(/\s+(?:scheduled on|on|from)\s+.*$/i, "")
+    .replace(/^\s*(security guards?|requirement|requirment)\s+/i, "")
+    .replace(/\s+(?:scheduled on|scheduled|which is scheduled|on|from|dated)\s+.*$/i, "")
     .replace(/\s+-\s+copy.*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -244,26 +265,41 @@ function pickFirstNonEmptyText(values: unknown[]): string {
   return "";
 }
 
+function isGenericExamName(value: string): boolean {
+  const lower = normalizeHeader(value);
+  // Reject very short names, single words, or names that look like headers
+  if (lower.length < 3) return true;
+  if (lower.split(/\s+/).length < 2) return true;
+  if (GENERIC_TITLE_HEADERS.has(lower)) return true;
+  // Reject names that are just dates or numbers
+  if (/^\d+$/.test(lower)) return true;
+  if (/^\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4}$/.test(lower)) return true;
+  return false;
+}
+
 function extractExamName(rows: unknown[][], fileName: string): string {
+  // 1. Look for explicit "Exam Name:" in the first 2 rows (legacy format)
   for (const row of rows.slice(0, 2)) {
     for (const cell of row) {
       const text = normalizeText(cell);
-      if (!text) {
-        continue;
-      }
+      if (!text) continue;
       const match = text.match(/exam\s*name\s*[:\-–\s]*([^\r\n]+)$/i);
       if (match?.[1]) {
-        return cleanTitleText(match[1]);
+        const cleaned = cleanTitleText(match[1]);
+        if (!isGenericExamName(cleaned)) {
+          return cleaned;
+        }
       }
     }
   }
 
+  // 2. Try to extract from sheet title row — but reject if it looks like a header
   const firstRow = rows[0] ?? [];
   const candidate = pickFirstNonEmptyText(firstRow.filter((cell) => {
     const text = normalizeHeader(cell);
     return text !== "" && !toIsoDate(cell) && !GENERIC_TITLE_HEADERS.has(text);
   }));
-  if (candidate && !GENERIC_TITLE_HEADERS.has(normalizeHeader(candidate))) {
+  if (candidate && !isGenericExamName(candidate)) {
     return cleanTitleText(candidate);
   }
 
@@ -272,11 +308,12 @@ function extractExamName(rows: unknown[][], fileName: string): string {
       const text = normalizeHeader(cell);
       return text !== "" && !toIsoDate(cell) && !GENERIC_TITLE_HEADERS.has(text);
     }));
-    if (fallback && !GENERIC_TITLE_HEADERS.has(normalizeHeader(fallback))) {
+    if (fallback && !isGenericExamName(fallback)) {
       return cleanTitleText(fallback);
     }
   }
 
+  // 3. Fall back to filename — for TCS files this is the primary source
   return cleanExamNameFromFilename(fileName);
 }
 
