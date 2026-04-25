@@ -43,6 +43,11 @@ This file is the authoritative log of all changes made to the codebase.
 - **Status badges:** Color-coded chips — green for Added, amber for Updated, muted for Unchanged, red for Cancelled.
 - **UI:** Added imports for `ScrollArea` and `Table` components.
 
+**File modified:** `firestore.indexes.json`
+- Removed single-field `foVisitReports` index (Firestore handles single-field indexes automatically; caused 400 error on deploy).
+- Added composite index for `workOrderImports` on `(clientName ASC, createdAt DESC)` required by the import history page.
+- **Deployed:** `firebase deploy --only firestore:indexes` completed successfully on 2026-04-25.
+
 **Note on exam names:** The parser already extracts exam names from TCS filenames (e.g., "Adhoc Security Requirement for SBI JA Prelims..." → "SBI JA Prelims"). Each row in a file gets the same exam name. Exam names are prominently displayed in work order cards (previous commit increased font size). No additional backend changes needed.
 
 ---

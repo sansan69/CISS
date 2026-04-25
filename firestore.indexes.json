@@ -398,9 +398,10 @@
       ]
     },
     {
-      "collectionGroup": "foVisitReports",
+      "collectionGroup": "workOrderImports",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "clientName", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
