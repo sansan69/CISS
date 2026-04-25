@@ -33,6 +33,14 @@ import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
 import WorkOrderTodoPanel from '@/components/work-orders/todo-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import type {
     TcsExamImportPreviewPayload,
     WorkOrder,
@@ -123,6 +131,10 @@ export default function WorkOrderPage() {
 
     const UNDO_MS = 5_000;
 
+    // ── Bulk delete by exam ────────────────────────────────────────────────
+    const [bulkDeleteExam, setBulkDeleteExam] = useState<string | null>(null);
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
     // ── Expand / collapse per site ───────────────────────────────────────────
     // Tracks which siteIds are *expanded*; empty set = all collapsed by default.
     const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
@@ -183,7 +195,28 @@ export default function WorkOrderPage() {
             ) as any,
         });
     }, [toast]);
+
+    const handleBulkDelete = async () => {
+        if (!bulkDeleteExam) return;
+        setIsBulkDeleting(true);
+        try {
+            const res = await authorizedFetch('/api/admin/work-orders/bulk-delete', {
+                method: 'POST',
+                body: JSON.stringify({ examName: bulkDeleteExam }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Bulk delete failed');
+            toast({ title: 'Exam deleted', description: data.message });
+            setBulkDeleteExam(null);
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Error', description: e.message || 'Could not delete exam work orders.' });
+        } finally {
+            setIsBulkDeleting(false);
+        }
+    };
+
     const selectedDistrict = searchParams.get('district') || 'all';
+    const selectedExam = searchParams.get('exam') || 'all';
     const dateSort = searchParams.get('dateSort') === 'desc' ? 'desc' : 'asc';
     const selectedDateValue = searchParams.get('date') || '';
     const selectedDate = useMemo(() => {
@@ -297,6 +330,18 @@ export default function WorkOrderPage() {
         return Array.from(set).sort((a, b) => a.localeCompare(b));
     }, [workOrdersBySite, siteDistricts]);
 
+    // Distinct exam names present in current work orders
+    const availableExams = useMemo(() => {
+        const set = new Set<string>();
+        Object.values(workOrdersBySite).forEach(orders => {
+            orders.forEach(order => {
+                const en = order.examName || order.examCode || "";
+                if (en) set.add(en);
+            });
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [workOrdersBySite]);
+
     // Apply district/date filters and sort by date for display
     const filteredEntries = useMemo(() => {
         const entries = Object.entries(workOrdersBySite);
@@ -309,6 +354,12 @@ export default function WorkOrderPage() {
                 const districtLower = selectedDistrict.toLowerCase();
                 const siteDistrict = (siteDistricts[siteId] || orders[0]?.district || '').toLowerCase();
                 if (siteDistrict !== districtLower) continue;
+            }
+
+            if (selectedExam !== 'all') {
+                const hasExam = orders.some(o => (o.examName || o.examCode || '') === selectedExam);
+                if (!hasExam) continue;
+                filtered = orders.filter(o => (o.examName || o.examCode || '') === selectedExam);
             }
 
             if (selectedDate) {
@@ -798,6 +849,39 @@ export default function WorkOrderPage() {
                                             </SelectContent>
                                         </Select>
                                     </div>
+                                    <div className="flex min-w-[180px] flex-col gap-1">
+                                        <Label className="text-xs font-medium text-muted-foreground">Filter by exam</Label>
+                                        <Select
+                                            value={selectedExam}
+                                            onValueChange={(val) => updateUrlParams({ exam: val })}
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue placeholder="All exams" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All exams</SelectItem>
+                                                {availableExams.map((e) => (
+                                                    <SelectItem key={e} value={e}>
+                                                        {e}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {canAdminWorkOrders && selectedExam !== 'all' && (
+                                        <div className="flex min-w-[140px] flex-col gap-1">
+                                            <Label className="text-xs font-medium text-muted-foreground">Actions</Label>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                className="h-9 text-xs"
+                                                onClick={() => setBulkDeleteExam(selectedExam)}
+                                            >
+                                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                                Delete Exam
+                                            </Button>
+                                        </div>
+                                    )}
                                     <div className="flex min-w-[160px] flex-col gap-1">
                                         <Label className="text-xs font-medium text-muted-foreground">Sort by date</Label>
                                         <Select
@@ -1010,6 +1094,28 @@ export default function WorkOrderPage() {
                     </TabsContent>
                 )}
             </Tabs>
+
+            {/* ── Bulk Delete Exam Confirmation Dialog ── */}
+            <Dialog open={!!bulkDeleteExam} onOpenChange={(open) => !open && setBulkDeleteExam(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete All Work Orders for {bulkDeleteExam}?</DialogTitle>
+                        <DialogDescription>
+                            This will permanently cancel all upcoming work orders for this exam.
+                            Any assigned guards will be unassigned.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 mt-1">
+                        <Button variant="outline" onClick={() => setBulkDeleteExam(null)} className="w-full sm:w-auto">
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkDeleting} className="w-full sm:w-auto">
+                            {isBulkDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete All
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

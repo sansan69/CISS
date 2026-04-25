@@ -290,6 +290,19 @@ async function resolveCommitRows(
     const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
     let site = (codeKey && sites.byCode.get(codeKey)) || sites.byFallback.get(fallbackKey);
 
+    if (site && row.district && row.district !== site.district) {
+      // Update existing site district if the file provides a different one
+      batch.update(adminDb.collection("sites").doc(site.id), {
+        district: row.district,
+        locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
+        ...buildServerUpdateAudit({
+          uid: adminUser.uid,
+          email: adminUser.email ?? undefined,
+        }),
+      });
+      site.district = row.district;
+    }
+
     if (!site) {
       const siteRef = adminDb.collection("sites").doc();
       let geocode:
