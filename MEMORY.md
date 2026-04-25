@@ -5,6 +5,39 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Session: Sort by exam name, import history rewrite, parser fixes, tasks removed
+
+**File modified:** `src/app/(app)/work-orders/page.tsx`
+- **Feature:** Replaced "Sort by date" dropdown with "Sort by" dropdown supporting 4 options:
+  - Date: Earliest first / Latest first
+  - Exam: A to Z / Z to A
+- Sort URL parameter changed from `dateSort` (asc/desc) to `sort` (date-asc, date-desc, exam-asc, exam-desc).
+- Added URL cleanup useEffect to remove old `dateSort` param from bookmarks.
+- Sort applies to both inner work orders within a site and site groups themselves.
+
+**File rewritten:** `src/app/(app)/work-orders/imports/page.tsx`
+- **Feature:** Import History page now queries `workOrders` collection directly instead of `workOrderImports` (which only had 1 document).
+- Groups all work orders by `sourceFileName` + `examName` in the browser.
+- Shows aggregated stats per upload: date range, site count, work order count, total guards.
+- No Firestore composite index required — uses simple collection query.
+- Loads all ~2,598 work orders including legacy data.
+
+**File modified:** `src/lib/work-orders/tcs-exam-parser.ts`
+- **Fix:** Removed `"zone"` and `"zone name"` from `STATIC_HEADER_ALIASES.district`. TCS files have ZONE column ("South 2") before CITY column (real district). Parser was matching ZONE first and never reaching CITY.
+- **Fix:** Added `isGenericExamName()` guard to reject short/single-word/header-like candidates from sheet content before falling back to filename.
+- Added `"zone"`, `"zone name"`, `"tc address"`, `"address"`, `"sno"` to `GENERIC_TITLE_HEADERS` exclusion set.
+- Improved `cleanExamNameFromFilename()`:
+  - Handles `CISS -` prefix via `-` separator fallback.
+  - Removes `security guards` / `requirement` / `requirment` prefixes.
+  - Removes `which is scheduled` / `scheduled` / `dated` date prefixes.
+  - Uses first ` for ` instead of last (safer for typical filenames).
+
+**Files modified:** `src/app/(app)/work-orders/page.tsx`, `src/app/(app)/work-orders/[siteId]/page.tsx`
+- **Removed:** Tasks tab from main Work Orders page and Site Tasks card from site detail page.
+- Todo API routes and component still exist in codebase but are unused.
+
+---
+
 ## [2026-04-25] — Session: Exam filter, bulk delete, district from file
 
 **File modified:** `src/app/(app)/work-orders/page.tsx`
