@@ -3,81 +3,56 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { onSnapshot } from "firebase/firestore";
-import { CalendarRange, ClipboardList, FileClock, FileText, Loader2, Rows3, SquareStack, AlertTriangle } from "lucide-react";
+import { onSnapshot, collection, query } from "firebase/firestore";
+import { CalendarRange, ClipboardList, FileClock, FileText, Loader2, Rows3, SquareStack, MapPin } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAppAuth } from "@/context/auth-context";
 import { isWorkOrderAdminRole } from "@/lib/work-orders";
-import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
-import { cn } from "@/lib/utils";
-import {
-  buildTcsWorkOrderImportsQuery,
-  normalizeTcsWorkOrderImportRecords,
-  type FirestoreTimestampLike,
-  type WorkOrderImportRecord,
-} from "./work-order-imports";
+import { db } from "@/lib/firebase";
 
-const STATUS_STYLES: Record<string, string> = {
-  committed: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  draft: "bg-amber-100 text-amber-700 border-amber-200",
-  failed: "bg-red-100 text-red-700 border-red-200",
-};
+interface GroupedImport {
+  key: string;
+  examName: string;
+  fileName: string;
+  dateFrom: string;
+  dateTo: string;
+  siteCount: number;
+  rowCount: number;
+  totalGuards: number;
+  earliestDate: Date | null;
+}
 
-const MODE_STYLES: Record<string, string> = {
-  new: "bg-blue-100 text-blue-700 border-blue-200",
-  revision: "bg-violet-100 text-violet-700 border-violet-200",
-};
-
-function toDate(value: FirestoreTimestampLike): Date | null {
+function toDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
-  if (typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
-    return value.toDate();
+  if (typeof value === "object" && "toDate" in value && typeof (value as any).toDate === "function") {
+    return (value as any).toDate();
   }
-  if (typeof value === "object" && "seconds" in value && typeof value.seconds === "number") {
-    return new Date(value.seconds * 1000);
+  if (typeof value === "object" && "seconds" in value && typeof (value as any).seconds === "number") {
+    return new Date((value as any).seconds * 1000);
   }
   return null;
 }
 
-function formatDateTime(value: FirestoreTimestampLike): string {
-  const date = toDate(value);
-  return date ? date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
+function formatDate(value: Date | null): string {
+  if (!value) return "—";
+  return value.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function formatDateRange(range?: WorkOrderImportRecord["dateRange"]): string {
-  const from = range?.from?.trim();
-  const to = range?.to?.trim();
+function formatDateRange(from: Date | null, to: Date | null): string {
   if (!from && !to) return "—";
-  if (from && to && from !== to) return `${from} to ${to}`;
-  return from || to || "—";
+  if (from && to && from.getTime() !== to.getTime()) {
+    return `${formatDate(from)} to ${formatDate(to)}`;
+  }
+  return formatDate(from) || formatDate(to) || "—";
 }
 
-function labelForMode(mode?: string): string {
-  if (!mode) return "—";
-  return mode === "revision" ? "Revision" : mode === "new" ? "New import" : mode;
-}
-
-function labelForParserMode(parserMode?: string): string {
-  if (!parserMode) return "—";
-  return parserMode === "pivot-date-sheet" ? "Pivot date sheet" : parserMode === "legacy-sheet" ? "Legacy sheet" : parserMode;
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  icon: React.ElementType;
-}) {
+function StatCard({ label, value, icon: Icon }: { label: string; value: string; icon: React.ElementType }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 py-4">
@@ -93,10 +68,7 @@ function StatCard({
   );
 }
 
-function ImportCard({ record }: { record: WorkOrderImportRecord }) {
-  const statusKey = (record.status ?? "").toLowerCase();
-  const modeKey = (record.mode ?? "").toLowerCase();
-
+function ImportCard({ record }: { record: GroupedImport }) {
   return (
     <Card className="overflow-hidden">
       <CardHeader className="space-y-3">
@@ -110,52 +82,28 @@ function ImportCard({ record }: { record: WorkOrderImportRecord }) {
               <span className="truncate">{record.fileName || "Unknown file"}</span>
             </CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className={cn("capitalize", STATUS_STYLES[statusKey] ?? "bg-muted text-foreground")}>
-              {record.status || "unknown"}
-            </Badge>
-            <Badge variant="outline" className={cn("capitalize", MODE_STYLES[modeKey] ?? "bg-muted text-foreground")}>
-              {labelForMode(record.mode)}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 capitalize">
+            {record.rowCount} work orders
+          </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border bg-muted/30 p-3">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Date range</p>
-            <p className="mt-1 text-sm font-semibold">{formatDateRange(record.dateRange)}</p>
+            <p className="mt-1 text-sm font-semibold">{formatDateRange(record.earliestDate ? new Date(record.dateFrom) : null, record.earliestDate ? new Date(record.dateTo) : null)}</p>
           </div>
           <div className="rounded-xl border bg-muted/30 p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Imported</p>
-            <p className="mt-1 text-sm font-semibold">{formatDateTime(record.createdAt)}</p>
-          </div>
-          <div className="rounded-xl border bg-muted/30 p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parser</p>
-            <p className="mt-1 text-sm font-semibold">{labelForParserMode(record.parserMode)}</p>
-          </div>
-          <div className="rounded-xl border bg-muted/30 p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Client</p>
-            <p className="mt-1 text-sm font-semibold">{record.clientName || OPERATIONAL_CLIENT_NAME}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border p-3">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sites</p>
-            <p className="mt-1 text-xl font-semibold">{record.siteCount ?? "—"}</p>
+            <p className="mt-1 text-sm font-semibold">{record.siteCount}</p>
           </div>
-          <div className="rounded-xl border p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Rows</p>
-            <p className="mt-1 text-xl font-semibold">{record.rowCount ?? "—"}</p>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Work Orders</p>
+            <p className="mt-1 text-sm font-semibold">{record.rowCount}</p>
           </div>
-          <div className="rounded-xl border p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Committed</p>
-            <p className="mt-1 text-xl font-semibold">{record.committedRows ?? "—"}</p>
-          </div>
-          <div className="rounded-xl border p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Cancelled</p>
-            <p className="mt-1 text-xl font-semibold">{record.cancelledRows ?? "—"}</p>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total Guards</p>
+            <p className="mt-1 text-sm font-semibold">{record.totalGuards}</p>
           </div>
         </div>
       </CardContent>
@@ -197,7 +145,7 @@ function LoadingState() {
 export default function WorkOrderImportsPage() {
   const router = useRouter();
   const { userRole } = useAppAuth();
-  const [imports, setImports] = useState<WorkOrderImportRecord[]>([]);
+  const [imports, setImports] = useState<GroupedImport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [queryError, setQueryError] = useState<string | null>(null);
 
@@ -212,26 +160,91 @@ export default function WorkOrderImportsPage() {
       return;
     }
 
-    const importsQuery = buildTcsWorkOrderImportsQuery();
+    const workOrdersQuery = query(collection(db, "workOrders"));
 
     const unsubscribe = onSnapshot(
-      importsQuery,
+      workOrdersQuery,
       (snapshot) => {
-        const records = normalizeTcsWorkOrderImportRecords(snapshot);
+        const orders = snapshot.docs.map((doc) => {
+          const d = doc.data();
+          return {
+            sourceFileName: typeof d.sourceFileName === "string" ? d.sourceFileName : "",
+            examName: typeof d.examName === "string" ? d.examName : "",
+            examCode: typeof d.examCode === "string" ? d.examCode : "",
+            siteId: typeof d.siteId === "string" ? d.siteId : "",
+            siteName: typeof d.siteName === "string" ? d.siteName : "",
+            district: typeof d.district === "string" ? d.district : "",
+            date: toDate(d.date),
+            maleGuardsRequired: Number(d.maleGuardsRequired ?? 0),
+            femaleGuardsRequired: Number(d.femaleGuardsRequired ?? 0),
+            totalManpower: Number(d.totalManpower ?? 0),
+          };
+        });
+
+        // Group by sourceFileName + examName
+        const groups = new Map<string, {
+          examName: string;
+          fileName: string;
+          sites: Set<string>;
+          dates: Date[];
+          rowCount: number;
+          totalGuards: number;
+        }>();
+
+        for (const order of orders) {
+          const key = order.sourceFileName || order.examName || order.examCode || "Legacy";
+          const existing = groups.get(key);
+          if (existing) {
+            existing.sites.add(order.siteId);
+            if (order.date) existing.dates.push(order.date);
+            existing.rowCount += 1;
+            existing.totalGuards += order.totalManpower || order.maleGuardsRequired + order.femaleGuardsRequired;
+          } else {
+            const sites = new Set<string>();
+            if (order.siteId) sites.add(order.siteId);
+            groups.set(key, {
+              examName: order.examName || order.examCode || "Untitled",
+              fileName: order.sourceFileName || "",
+              sites,
+              dates: order.date ? [order.date] : [],
+              rowCount: 1,
+              totalGuards: order.totalManpower || order.maleGuardsRequired + order.femaleGuardsRequired,
+            });
+          }
+        }
+
+        const records: GroupedImport[] = Array.from(groups.entries())
+          .map(([key, group]) => {
+            const sortedDates = [...group.dates].sort((a, b) => a.getTime() - b.getTime());
+            const dateFrom = sortedDates[0] ? sortedDates[0].toISOString().split("T")[0] : "";
+            const dateTo = sortedDates[sortedDates.length - 1] ? sortedDates[sortedDates.length - 1].toISOString().split("T")[0] : "";
+            return {
+              key,
+              examName: group.examName,
+              fileName: group.fileName || group.examName,
+              dateFrom,
+              dateTo,
+              siteCount: group.sites.size,
+              rowCount: group.rowCount,
+              totalGuards: group.totalGuards,
+              earliestDate: sortedDates[0] || null,
+            };
+          })
+          .sort((a, b) => {
+            // Sort by earliest date descending (newest first)
+            if (a.earliestDate && b.earliestDate) {
+              return b.earliestDate.getTime() - a.earliestDate.getTime();
+            }
+            return b.rowCount - a.rowCount;
+          });
+
         setImports(records);
         setQueryError(null);
         setIsLoading(false);
       },
       (error) => {
-        console.error("Failed to load work order imports:", error);
-        const message = error?.message || "";
-        if (message.includes("index") || message.includes("requires an index")) {
-          setQueryError(
-            "Firestore index required. Run: firebase deploy --only firestore:indexes",
-          );
-        } else {
-          setQueryError("Could not load import history. Please try again later.");
-        }
+        console.error("Failed to load work orders:", error);
+        setQueryError("Could not load import history. Please try again later.");
         setIsLoading(false);
       },
     );
@@ -242,13 +255,12 @@ export default function WorkOrderImportsPage() {
   const totals = useMemo(() => {
     return imports.reduce(
       (acc, record) => {
-        acc.rows += record.rowCount ?? 0;
-        acc.committed += record.committedRows ?? 0;
-        acc.cancelled += record.cancelledRows ?? 0;
-        acc.sites += record.siteCount ?? 0;
+        acc.rows += record.rowCount;
+        acc.sites += record.siteCount;
+        acc.guards += record.totalGuards;
         return acc;
       },
-      { rows: 0, committed: 0, cancelled: 0, sites: 0 },
+      { rows: 0, sites: 0, guards: 0 },
     );
   }, [imports]);
 
@@ -270,7 +282,7 @@ export default function WorkOrderImportsPage() {
       <PageHeader
         eyebrow="Work Orders"
         title="Import History"
-        description="Recent exam workbook imports stored in workOrderImports."
+        description="All uploaded exam workbooks grouped by source file."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Work Orders", href: "/work-orders" },
@@ -287,28 +299,26 @@ export default function WorkOrderImportsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Recent imports" value={String(imports.length)} icon={FileClock} />
-        <StatCard label="Rows" value={String(totals.rows)} icon={Rows3} />
-        <StatCard label="Committed" value={String(totals.committed)} icon={SquareStack} />
-        <StatCard label="Cancelled" value={String(totals.cancelled)} icon={CalendarRange} />
+        <StatCard label="Imports" value={String(imports.length)} icon={FileClock} />
+        <StatCard label="Work Orders" value={String(totals.rows)} icon={Rows3} />
+        <StatCard label="Sites" value={String(totals.sites)} icon={MapPin} />
+        <StatCard label="Total Guards" value={String(totals.guards)} icon={SquareStack} />
       </div>
 
       {isLoading ? (
         <LoadingState />
       ) : queryError ? (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Import history unavailable</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>{queryError}</p>
-            {queryError.includes("index") && (
-              <p className="text-xs">
-                The Firestore composite index for <code>workOrderImports</code> (clientName ASC, createdAt DESC)
-                must be deployed before import history can load.
-              </p>
-            )}
-          </AlertDescription>
-        </Alert>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">Import history unavailable</p>
+              <p className="text-sm text-muted-foreground">{queryError}</p>
+            </div>
+          </CardContent>
+        </Card>
       ) : imports.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
@@ -344,7 +354,7 @@ export default function WorkOrderImportsPage() {
 
           <div className="space-y-4">
             {imports.map((record) => (
-              <ImportCard key={record.id} record={record} />
+              <ImportCard key={record.key} record={record} />
             ))}
           </div>
         </div>
