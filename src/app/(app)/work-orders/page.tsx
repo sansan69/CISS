@@ -839,9 +839,12 @@ export default function WorkOrderPage() {
 
                                                     <div className="min-w-0 flex-1">
                                                         <h3 className="text-base font-semibold leading-tight">{siteInfo.siteName}</h3>
-                                                        <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                                            <span>{OPERATIONAL_CLIENT_NAME}</span>
-                                                            <Badge variant="secondary">{siteInfo.district}</Badge>
+                                                        <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                                                            <span className="font-medium text-foreground">
+                                                                {siteInfo.examName || siteInfo.examCode || "TCS Exam"}
+                                                            </span>
+                                                            <span className="text-muted-foreground">·</span>
+                                                            <span className="text-muted-foreground">{siteInfo.district}</span>
                                                         </p>
                                                         {isCollapsed && (
                                                             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -899,7 +902,7 @@ export default function WorkOrderPage() {
                                                                         <div className="mb-2 flex items-center justify-between gap-1">
                                                                             <div className="min-w-0">
                                                                                 <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                                                <p className="truncate text-[11px] font-medium text-foreground">{order.examName || order.examCode || "General Duty"}</p>
+                                                                                <p className="truncate text-xs font-semibold text-foreground">{order.examName || order.examCode || "General Duty"}</p>
                                                                             </div>
                                                                             <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
                                                                         </div>
