@@ -139,11 +139,6 @@ export default function AdminLoginPage() {
 
       {/* Desktop brand panel */}
       <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 top-10 h-96 w-96 rounded-full bg-accent/15 blur-3xl" />
-          <div className="absolute -right-20 bottom-10 h-96 w-96 rounded-full bg-white/8 blur-3xl" />
-        </div>
-
         <div className="relative flex items-center gap-3 animate-slide-up">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
             <Image src="/ciss-logo.png" alt="CISS Logo" width={40} height={40} data-ai-hint="company logo" unoptimized />

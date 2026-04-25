@@ -101,7 +101,7 @@ function SidebarNavLink({
             href={item.href}
             onClick={onClick}
             className={cn(
-              'flex items-center justify-center h-10 w-10 mx-auto rounded-xl transition-all duration-200',
+              'flex items-center justify-center h-10 w-10 mx-auto rounded-lg transition-all duration-200',
               active
                 ? 'bg-white/15 text-white ring-1 ring-brand-gold/40'
                 : 'text-white/55 hover:text-white hover:bg-white/10'
@@ -127,7 +127,7 @@ function SidebarNavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-3 rounded-xl py-2.5 px-3 text-sm font-medium',
+        'group relative flex items-center gap-3 rounded-lg py-2.5 px-3 text-sm font-semibold',
         'transition-all duration-200',
         active
           ? 'bg-white/15 text-white'
@@ -181,14 +181,14 @@ function DesktopSidebar({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <aside className="hidden md:flex flex-col h-full max-h-screen bg-brand-blue overflow-hidden">
+      <aside className="hidden md:flex flex-col h-full max-h-screen bg-sidebar overflow-hidden border-r border-sidebar-border/70">
 
         {/* Logo area */}
         <div className={cn(
           "flex h-16 items-center shrink-0 border-b border-white/10 transition-all duration-300",
           collapsed ? "justify-center px-0" : "gap-3 px-5"
         )}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/10 shrink-0">
             <Image
               src="/ciss-logo.png"
               alt="CISS"
@@ -222,7 +222,7 @@ function DesktopSidebar({
                   <TooltipTrigger asChild>
                     <Link
                       href="/dashboard"
-                      className="flex items-center justify-center h-10 w-10 mx-auto rounded-xl text-white/65 hover:text-white hover:bg-white/10 transition-all mb-2"
+                    className="flex items-center justify-center h-10 w-10 mx-auto rounded-lg text-white/65 hover:text-white hover:bg-white/10 transition-all mb-2"
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </Link>
@@ -233,7 +233,7 @@ function DesktopSidebar({
                 <>
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-white/65 hover:text-white hover:bg-white/10 transition-all mb-3"
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-white/65 hover:text-white hover:bg-white/10 transition-all mb-3"
                   >
                     <ChevronLeft className="h-4 w-4 shrink-0" />
                     Back to Main Menu
@@ -269,7 +269,7 @@ function DesktopSidebar({
               <TooltipTrigger asChild>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex w-full items-center justify-center rounded-xl h-10 text-white/70 hover:text-white hover:bg-white/10 transition-all group">
+                    <button className="flex w-full items-center justify-center rounded-lg h-10 text-white/70 hover:text-white hover:bg-white/10 transition-all group">
                       <Avatar className="h-7 w-7 shrink-0 ring-2 ring-white/20 group-hover:ring-brand-gold/60 transition-all">
                         <AvatarImage src={user?.photoURL || undefined} />
                         <AvatarFallback className="text-[10px] bg-brand-gold text-white font-semibold">
@@ -296,7 +296,7 @@ function DesktopSidebar({
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/10 transition-all text-left group">
+                <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/10 transition-all text-left group">
                   <Avatar className="h-8 w-8 shrink-0 ring-2 ring-white/20 group-hover:ring-brand-gold/60 transition-all">
                     <AvatarImage src={user?.photoURL || undefined} />
                     <AvatarFallback className="text-xs bg-brand-gold text-white font-semibold">
@@ -352,7 +352,7 @@ function MobileBottomNav({
       <nav
         className={cn(
           "flex items-stretch h-[58px]",
-          "bg-white/96 backdrop-blur-xl rounded-2xl",
+          "bg-white/97 backdrop-blur-xl rounded-xl",
           "border border-border/40",
           "shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_2px_8px_hsl(0_0%_0%/0.08)]"
         )}
@@ -367,7 +367,7 @@ function MobileBottomNav({
               className={cn(
                 "bottom-nav-item relative",
                 "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                "active:scale-[0.92] select-none rounded-2xl",
+                "active:scale-[0.94] select-none rounded-xl",
                 active ? "text-brand-blue" : "text-muted-foreground/60"
               )}
             >
@@ -399,7 +399,7 @@ function MobileBottomNav({
           className={cn(
             "bottom-nav-item relative",
             "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
-            "active:scale-[0.92] select-none rounded-2xl",
+            "active:scale-[0.94] select-none rounded-xl",
             moreActive ? "text-brand-blue" : "text-muted-foreground/60"
           )}
         >
@@ -457,13 +457,13 @@ function MobileMoreSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex flex-col p-0 w-[280px] bg-brand-blue border-r-0 shadow-brand-lg">
+      <SheetContent side="left" className="flex flex-col p-0 w-[280px] bg-sidebar border-r-0 shadow-brand-lg">
         <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
         {/* Header */}
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 shrink-0">
           <Link href="/dashboard" onClick={close} className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/10">
               <Image
                 src="/ciss-logo.png"
                 alt="CISS"
@@ -490,7 +490,7 @@ function MobileMoreSheet({
               <Link
                 href="/dashboard"
                 onClick={close}
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-white/65 hover:text-white hover:bg-white/10 transition-all mb-3"
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-white/65 hover:text-white hover:bg-white/10 transition-all mb-3"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Back to Main Menu
@@ -516,7 +516,7 @@ function MobileMoreSheet({
 
         {/* User section */}
         <div className="border-t border-white/10 p-4 shrink-0">
-          <div className="flex items-center gap-3 mb-3 p-2 rounded-xl bg-white/8">
+          <div className="flex items-center gap-3 mb-3 p-2 rounded-lg bg-white/8">
             <Avatar className="h-9 w-9 shrink-0 ring-2 ring-brand-gold/40">
               <AvatarImage src={user?.photoURL || undefined} />
               <AvatarFallback className="text-sm bg-brand-gold text-white font-semibold">
@@ -530,7 +530,7 @@ function MobileMoreSheet({
           </div>
           <Button
             variant="ghost"
-            className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-3 px-3 rounded-xl"
+            className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-3 px-3 rounded-lg"
             onClick={() => { close(); onLogout(); }}
           >
             <LogOut className="h-4 w-4" />
@@ -565,7 +565,7 @@ function MobileHeader({
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
 
   return (
-    <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 bg-white/96 backdrop-blur-xl border-b border-border/50 px-4 shrink-0"
+    <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 bg-card/97 backdrop-blur-xl border-b border-border/70 px-4 shrink-0"
       style={{
         minHeight: 56,
         paddingTop: "env(safe-area-inset-top, 0px)",
@@ -697,7 +697,7 @@ function DesktopTopBar({
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
 
   return (
-    <header className="hidden md:flex h-14 items-center justify-between gap-4 border-b border-border/60 bg-white/95 backdrop-blur-sm px-4 shrink-0 shadow-brand-xs sticky top-0 z-20">
+    <header className="hidden md:flex h-14 items-center justify-between gap-4 border-b border-border/70 bg-card/95 backdrop-blur-sm px-5 shrink-0 shadow-brand-xs sticky top-0 z-20">
       <div className="flex items-center gap-2 min-w-0">
         {/* Sidebar toggle */}
         <button
@@ -712,7 +712,7 @@ function DesktopTopBar({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 hover:bg-muted transition-colors group">
+          <button className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-muted transition-colors group">
             <div className="text-right hidden sm:block">
               <p className="text-xs font-semibold text-foreground leading-tight">
                 {user?.displayName || user?.email?.split('@')[0] || 'Admin'}
@@ -876,7 +876,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-    <div className="flex min-h-[100dvh] w-full bg-background">
+    <div className="flex min-h-[100dvh] w-full app-shell-surface">
       {/* ── Desktop Sidebar ── */}
       <div
         className={cn(

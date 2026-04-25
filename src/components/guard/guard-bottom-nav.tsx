@@ -66,7 +66,7 @@ export function GuardBottomNav() {
       >
         <nav
           aria-label="Guard navigation"
-          className="flex items-stretch bg-white/96 backdrop-blur-xl rounded-2xl border border-border/40 shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_2px_8px_hsl(0_0%_0%/0.08)]"
+          className="flex items-stretch bg-card/97 backdrop-blur-xl rounded-xl border border-border/70 shadow-[0_10px_28px_hsl(214_40%_18%/0.14),0_2px_8px_hsl(214_30%_18%/0.08)]"
           style={{ height: 60 }}
         >
           {navTabs.map((tab) => {
@@ -78,7 +78,7 @@ export function GuardBottomNav() {
                 className={cn(
                   "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
                   "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                  "active:scale-[0.92] select-none rounded-2xl",
+                  "active:scale-[0.94] select-none rounded-xl",
                   active ? "text-[#014c85]" : "text-muted-foreground/60"
                 )}
               >
@@ -112,7 +112,7 @@ export function GuardBottomNav() {
             className={cn(
               "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
               "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
-              "active:scale-[0.92] select-none rounded-2xl",
+              "active:scale-[0.94] select-none rounded-xl",
               isMoreActive ? "text-[#014c85]" : "text-muted-foreground/60"
             )}
           >
@@ -138,7 +138,7 @@ export function GuardBottomNav() {
 
       {/* More Sheet */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl p-0 max-h-[75vh] border-0 shadow-[0_-8px_40px_hsl(0_0%_0%/0.15)]">
+        <SheetContent side="bottom" className="rounded-t-2xl p-0 max-h-[75vh] border-0 shadow-[0_-8px_40px_hsl(214_40%_18%/0.16)]">
           <SheetTitle className="sr-only">More Options</SheetTitle>
 
           {/* Handle */}
@@ -158,11 +158,11 @@ export function GuardBottomNav() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 active:scale-[0.98] hover:bg-muted/60 animate-slide-up"
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:scale-[0.98] hover:bg-muted/60 animate-slide-up"
                   style={{ animationDelay: `${i * 50}ms` }}
                 >
                   <span
-                    className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0"
+                    className="flex items-center justify-center h-10 w-10 rounded-lg shrink-0"
                     style={{ backgroundColor: "hsl(206 98% 26% / 0.09)" }}
                   >
                     <item.icon size={18} style={{ color: "#014c85" }} />
@@ -175,9 +175,9 @@ export function GuardBottomNav() {
 
               <button
                 onClick={() => { setMoreOpen(false); handleSignOut(); }}
-                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 active:scale-[0.98] hover:bg-red-50/80"
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:scale-[0.98] hover:bg-red-50/80"
               >
-                <span className="flex items-center justify-center h-10 w-10 rounded-xl bg-red-50 shrink-0">
+                <span className="flex items-center justify-center h-10 w-10 rounded-lg bg-red-50 shrink-0">
                   <LogOut size={18} className="text-red-500" />
                 </span>
                 <span className="text-sm font-semibold text-red-600">

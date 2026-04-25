@@ -129,7 +129,7 @@ export default function GuardLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-      <div className="flex flex-col min-h-[100dvh] bg-background">
+      <div className="flex flex-col min-h-[100dvh] app-shell-surface">
         {/* Sticky header */}
         <GuardHeader employeeName={displayName} />
 

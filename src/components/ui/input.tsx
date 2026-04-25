@@ -25,13 +25,13 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type={type}
             className={cn(
               // Base
-              "flex w-full rounded-lg border border-input bg-background",
+              "flex w-full rounded-lg border border-input bg-card",
               "text-sm text-foreground placeholder:text-muted-foreground",
               "ring-offset-background",
               // Sizing — 44px height on mobile, 40px on desktop (both ≥ touch target)
               "h-11 md:h-10 py-2",
               // Focus ring — brand blue
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:border-primary/60",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary/70",
               // File inputs
               "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
               // Disabled
@@ -59,10 +59,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          "flex h-11 md:h-10 w-full rounded-lg border border-input bg-background px-3 py-2",
+          "flex h-11 md:h-10 w-full rounded-lg border border-input bg-card px-3 py-2",
           "text-sm text-foreground placeholder:text-muted-foreground",
           "ring-offset-background",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:border-primary/60",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary/70",
           "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted",
           "transition-colors duration-150",

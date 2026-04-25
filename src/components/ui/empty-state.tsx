@@ -37,7 +37,7 @@ export function EmptyState({
     <div
       className={cn(
         "flex flex-col items-center justify-center text-center animate-fade-in",
-        compact ? "py-8 px-4" : "py-16 px-6",
+        compact ? "py-8 px-4" : "py-14 px-6",
         className
       )}
     >
@@ -45,10 +45,10 @@ export function EmptyState({
       {(Icon || emoji) && (
         <div
           className={cn(
-            "flex items-center justify-center rounded-2xl mb-4",
+            "flex items-center justify-center rounded-lg mb-4 ring-1 ring-border/70",
             compact
-              ? "h-10 w-10 bg-muted"
-              : "h-14 w-14 bg-muted",
+              ? "h-10 w-10 bg-muted/70"
+              : "h-14 w-14 bg-muted/70",
             Icon && "text-muted-foreground"
           )}
         >

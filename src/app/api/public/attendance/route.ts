@@ -4,26 +4,26 @@ import { buildPublicAttendanceSiteOption } from "@/lib/attendance/public-attenda
 
 export async function GET() {
   try {
-    // Fetch all sites that are active
-    const sitesSnapshot = await db.collection('sites').get();
+    const [sitesSnapshot, locationsSnapshot] = await Promise.all([
+      db.collection('sites').get(),
+      db.collection('clientLocations').get(),
+    ]);
 
-    const sites = sitesSnapshot.docs.map((doc) =>
-      buildPublicAttendanceSiteOption(
-        doc.id,
-        doc.data() as Record<string, unknown>,
-        'sites',
-      ),
+    const siteDocs = sitesSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      data: doc.data() as Record<string, unknown>,
+    }));
+    const locationDocs = locationsSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      data: doc.data() as Record<string, unknown>,
+    }));
+
+    const sites = siteDocs.map((doc) =>
+      buildPublicAttendanceSiteOption(doc.id, doc.data, 'sites'),
     );
 
-    // Also fetch clientLocations
-    const locationsSnapshot = await db.collection('clientLocations').get();
-
-    const locations = locationsSnapshot.docs.map((doc) =>
-      buildPublicAttendanceSiteOption(
-        doc.id,
-        doc.data() as Record<string, unknown>,
-        'clientLocations',
-      ),
+    const locations = locationDocs.map((doc) =>
+      buildPublicAttendanceSiteOption(doc.id, doc.data, 'clientLocations'),
     );
 
     // Combine and deduplicate by ID

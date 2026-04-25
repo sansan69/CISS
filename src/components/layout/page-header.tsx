@@ -49,10 +49,10 @@ export function PageHeader({
   const router = useRouter();
 
   return (
-    <div className={cn("mb-5 sm:mb-6 animate-slide-down", className)}>
+    <div className={cn("mb-5 rounded-lg border border-border/60 bg-card/70 p-4 shadow-brand-xs backdrop-blur-sm sm:mb-6 sm:p-5 animate-slide-down", className)}>
       {/* Eyebrow */}
       {eyebrow && (
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
           {eyebrow}
         </p>
       )}
@@ -94,7 +94,7 @@ export function PageHeader({
           {backHref && (
             <button
               onClick={() => backHref === "__back" ? router.back() : router.push(backHref)}
-              className="hidden sm:flex items-center justify-center h-8 w-8 rounded-lg border border-border hover:bg-muted transition-colors shrink-0 mt-0.5"
+              className="hidden sm:flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-card hover:bg-muted transition-colors shrink-0 mt-0.5"
               aria-label="Go back"
             >
               <ChevronLeft className="h-4 w-4 text-muted-foreground" />
@@ -112,7 +112,7 @@ export function PageHeader({
               )}
               <h1
                 className={cn(
-                  "text-xl sm:text-2xl font-bold leading-tight truncate font-exo2 tracking-tight",
+                  "text-xl sm:text-2xl font-bold leading-tight font-exo2 tracking-tight",
                   accent ? "text-foreground pl-0" : "text-foreground"
                 )}
               >

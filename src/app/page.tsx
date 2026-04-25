@@ -206,12 +206,6 @@ export default function LandingPage() {
       className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground"
       data-slot="landing-shell"
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-16 top-0 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
-        <div className="absolute right-[-6rem] top-24 h-80 w-80 rounded-full bg-primary/18 blur-3xl" />
-        <div className="absolute bottom-[-5rem] left-1/3 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-      </div>
-
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-4 sm:px-6 sm:py-5 lg:justify-center lg:px-8 lg:py-10">
         <section
           data-mobile-section="header"

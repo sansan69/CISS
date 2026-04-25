@@ -105,8 +105,9 @@ service cloud.firestore {
     }
 
     // ── clients / sites / clientLocations ───────────────────────────────────
-    // Anonymous reads are disabled. Authenticated app users can continue
-    // reading these operational collections.
+    // Public enrollment and attendance must use scrubbed server routes.
+    // Raw documents can include coordinates and operational metadata, so direct
+    // Firestore reads stay authenticated.
 
     match /clients/{clientId} {
       allow read: if isSignedIn();

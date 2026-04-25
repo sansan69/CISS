@@ -11,8 +11,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { storage } from '@/lib/firebase';
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters, validateLocation } from '@/lib/geo';
@@ -889,10 +887,17 @@ export default function AttendancePage() {
     const ts = Date.now();
     const phone = payloadWithoutPhotoUrl.employeePhoneNumber || 'unknown';
     const path = `employees/${phone}/attendance/${ts}_attendance.jpg`;
-    const ref = storageRef(storage, path);
 
-    await withRetry(() => uploadString(ref, photoDataUrl, 'data_url'));
-    const photoUrl = await withRetry(() => getDownloadURL(ref));
+    const uploadResponse = await withRetry(() => fetch('/api/public/attendance/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, photoDataUrl }),
+    }));
+    const uploadBody = await uploadResponse.json().catch(() => ({}));
+    if (!uploadResponse.ok || !uploadBody.url) {
+      throw new Error(uploadBody.error || 'Could not upload attendance photo.');
+    }
+    const photoUrl = uploadBody.url as string;
 
     const response = await fetch('/api/attendance/submit', {
       method: 'POST',
@@ -1516,7 +1521,7 @@ export default function AttendancePage() {
                                     }}
                                     className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                                       isSelected
-                                        ? 'border-primary bg-primary/8 ring-1 ring-primary'
+                                        ? 'border-primary bg-primary/10 ring-1 ring-primary'
                                         : 'border-border bg-background hover:bg-muted/50'
                                     }`}
                                   >

@@ -10,8 +10,19 @@ function initializeAdmin() {
 
   let credential;
 
+  // Local development can prefer the signed-in Google ADC account. This avoids
+  // a revoked local service-account key breaking server routes while keeping
+  // production on explicit service-account credentials.
+  if (process.env.FIREBASE_ADMIN_PREFER_APPLICATION_DEFAULT === 'true') {
+    try {
+      credential = admin.credential.applicationDefault();
+    } catch (e) {
+      console.error("Application Default Credentials failed:", e);
+      throw new Error("Local Firebase Admin ADC setup is incomplete. Run `gcloud auth application-default login`.");
+    }
+  }
   // 1. Recommended for Vercel: Base64 encoded service account
-  if (process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64) {
+  else if (process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64) {
     try {
       const decodedServiceAccount = Buffer.from(
         process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64,

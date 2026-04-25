@@ -10,7 +10,7 @@ interface GuardHeaderProps {
 export function GuardHeader({ employeeName }: GuardHeaderProps) {
   return (
     <header
-      className="sticky top-0 z-40 flex items-center gap-3 bg-white/96 backdrop-blur-xl border-b border-border/50 px-4 shrink-0"
+      className="sticky top-0 z-40 flex items-center gap-3 bg-card/97 backdrop-blur-xl border-b border-border/70 px-4 shrink-0"
       style={{
         minHeight: 56,
         paddingTop: "env(safe-area-inset-top, 0px)",

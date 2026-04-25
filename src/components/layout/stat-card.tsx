@@ -27,7 +27,7 @@ export function StatCard({
     trendDirection === "up" ? TrendingUp : trendDirection === "down" ? TrendingDown : null;
 
   return (
-    <Card className="border-border/80 bg-card/95 shadow-sm">
+    <Card className="border-border/80 bg-card/95 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-brand-md">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
@@ -38,7 +38,7 @@ export function StatCard({
             </div>
           ) : null}
         </div>
-        <div className="rounded-full bg-primary/10 p-2 text-primary">
+        <div className="rounded-lg bg-primary/10 p-2 text-primary ring-1 ring-primary/10">
           <Icon className="h-4 w-4" />
         </div>
       </CardHeader>

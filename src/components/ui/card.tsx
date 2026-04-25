@@ -4,18 +4,18 @@ import { cn } from "@/lib/utils"
 
 /* ─── Card variants ──────────────────────────────────────────── */
 const cardVariants = cva(
-  "rounded-xl bg-card text-card-foreground",
+  "rounded-lg bg-card text-card-foreground",
   {
     variants: {
       variant: {
-        default:     "border border-border shadow-card",
-        elevated:    "border border-border shadow-brand-md",
-        interactive: "border border-border shadow-card card-interactive cursor-pointer",
-        flush:       "border border-border",
-        ghost:       "bg-muted/50 border-0",
-        brand:       "gradient-brand text-white border-0 shadow-brand-md",
-        gold:        "gradient-gold text-white border-0 shadow-gold",
-        outline:     "border-2 border-border bg-transparent",
+        default:     "border border-border/80 shadow-card",
+        elevated:    "border border-border/80 shadow-brand-md",
+        interactive: "border border-border/80 shadow-card card-interactive cursor-pointer",
+        flush:       "border border-border/80 shadow-none",
+        ghost:       "bg-muted/40 border-0 shadow-none",
+        brand:       "bg-brand-blue text-white border-0 shadow-brand-md",
+        gold:        "bg-brand-gold text-white border-0 shadow-brand-sm",
+        outline:     "border border-border bg-transparent shadow-none",
       },
     },
     defaultVariants: { variant: "default" },
@@ -44,7 +44,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1 p-4 sm:p-5", className)}
+    className={cn("flex flex-col space-y-1 border-b border-border/70 p-4 sm:p-5", className)}
     {...props}
   />
 ))
@@ -86,7 +86,7 @@ const CardContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("p-4 sm:p-5 pt-0", className)}
+    className={cn("p-4 sm:p-5", className)}
     {...props}
   />
 ))
@@ -100,7 +100,7 @@ const CardFooter = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex items-center p-4 sm:p-5 pt-0 gap-2",
+      "flex items-center border-t border-border/70 p-4 sm:p-5 gap-2",
       className
     )}
     {...props}
