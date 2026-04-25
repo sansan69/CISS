@@ -810,66 +810,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     }
   };
 
-  // Completion Screen Component
-  if (completionState) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircleIcon className="w-10 h-10 text-green-600" />
-          </div>
-
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Registration Complete!</h1>
-          <p className="text-slate-600 mb-6">Your profile has been created successfully.</p>
-
-          <div className="bg-slate-50 rounded-xl p-4 mb-6">
-            <p className="text-sm text-slate-500 mb-1">Your Employee ID</p>
-            <p className="text-3xl font-bold text-primary font-mono">{completionState.employeeId}</p>
-          </div>
-
-          <div className="space-y-3">
-            <Button
-              onClick={handleDownloadProfile}
-              disabled={isDownloadingPdf}
-              className="w-full"
-              size="lg"
-            >
-              {isDownloadingPdf ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-4 w-4" />
-              )}
-              Download Profile Kit
-            </Button>
-
-            <a
-              href="/guard-login/setup"
-              className="flex items-center justify-center w-full py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <KeyRound className="mr-2 h-4 w-4" />
-              Set up PIN to access your profile
-            </a>
-
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setCompletionState(null);
-                setCurrentStep(0);
-              }}
-              className="w-full text-slate-500"
-            >
-              Register Another Person
-            </Button>
-          </div>
-
-          <p className="text-xs text-slate-400 mt-6">
-            Save your Employee ID. You'll need it to log in.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   useEffect(() => {
     let isCancelled = false;
 
@@ -1389,6 +1329,64 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     jumpToStep(targetStep);
   };
 
+  if (completionState) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircleIcon className="w-10 h-10 text-green-600" />
+          </div>
+
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Registration Complete!</h1>
+          <p className="text-slate-600 mb-6">Your profile has been created successfully.</p>
+
+          <div className="bg-slate-50 rounded-xl p-4 mb-6">
+            <p className="text-sm text-slate-500 mb-1">Your Employee ID</p>
+            <p className="text-3xl font-bold text-primary font-mono">{completionState.employeeId}</p>
+          </div>
+
+          <div className="space-y-3">
+            <Button
+              onClick={handleDownloadProfile}
+              disabled={isDownloadingPdf}
+              className="w-full"
+              size="lg"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Download Profile Kit
+            </Button>
+
+            <a
+              href="/guard-login/setup"
+              className="flex items-center justify-center w-full py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <KeyRound className="mr-2 h-4 w-4" />
+              Set up PIN to access your profile
+            </a>
+
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCompletionState(null);
+                setCurrentStep(0);
+              }}
+              className="w-full text-slate-500"
+            >
+              Register Another Person
+            </Button>
+          </div>
+
+          <p className="text-xs text-slate-400 mt-6">
+            Save your Employee ID. You will need it to log in.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
