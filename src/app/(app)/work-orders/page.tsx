@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { useAppAuth } from '@/context/auth-context';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { isWorkOrderAdminRole } from '@/lib/work-orders';
+import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-browser';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -82,6 +83,7 @@ export default function WorkOrderPage() {
     const [isPreviewing, setIsPreviewing] = useState(false);
     const [isConfirmingImport, setIsConfirmingImport] = useState(false);
     const [importPreview, setImportPreview] = useState<ResolvedImportPreview | null>(null);
+    const [customExamName, setCustomExamName] = useState('');
     const { toast } = useToast();
     const router = useRouter();
     const pathname = usePathname();
@@ -316,6 +318,7 @@ export default function WorkOrderPage() {
 
     const clearImportPreview = React.useCallback(() => {
         setImportPreview(null);
+        setCustomExamName('');
     }, []);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -424,6 +427,27 @@ export default function WorkOrderPage() {
             return;
         }
 
+        const resolvedExamName = customExamName.trim() || importPreview.suggestedExamName;
+        const resolvedExamCode = resolvedExamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const rowsWithExam = importPreview.rows.map((row) => ({
+            ...row,
+            examName: resolvedExamName,
+            examCode: resolvedExamCode,
+        }));
+
+        const resolvedContentHash = await buildTcsExamContentHashBrowser(
+            resolvedExamCode,
+            rowsWithExam.map((row) => ({
+                siteId: row.siteId,
+                siteName: row.siteName,
+                district: row.district,
+                date: row.date,
+                examCode: row.examCode ?? resolvedExamCode,
+                maleGuardsRequired: row.maleGuardsRequired,
+                femaleGuardsRequired: row.femaleGuardsRequired,
+            })),
+        );
+
         setIsConfirmingImport(true);
         try {
             const response = await authorizedFetch('/api/admin/work-orders/import/commit', {
@@ -432,11 +456,11 @@ export default function WorkOrderPage() {
                     mode: importPreview.mode,
                     fileName: file.name,
                     parserMode: importPreview.parserMode,
-                    examName: importPreview.suggestedExamName,
-                    examCode: importPreview.suggestedExamCode,
+                    examName: resolvedExamName,
+                    examCode: resolvedExamCode,
                     binaryFileHash: importPreview.binaryFileHash,
-                    contentHash: importPreview.contentHash,
-                    rows: importPreview.rows,
+                    contentHash: resolvedContentHash,
+                    rows: rowsWithExam,
                     warnings: importPreview.warnings,
                 }),
             });
@@ -539,15 +563,25 @@ export default function WorkOrderPage() {
                                 )}
                                 {importPreview && (
                                     <div className="space-y-4 rounded-lg border p-4">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <Badge variant="outline">{importPreview.suggestedExamName}</Badge>
-                                            <Badge variant="secondary">{importPreview.mode === 'revision' ? 'Revision' : 'New'}</Badge>
-                                            <Badge variant="outline">
-                                                {importPreview.dateRange.from} to {importPreview.dateRange.to}
-                                            </Badge>
-                                            {importPreview.pendingSiteCreations > 0 && (
-                                                <Badge>{importPreview.pendingSiteCreations} site{importPreview.pendingSiteCreations === 1 ? '' : 's'} to create on confirm</Badge>
-                                            )}
+                                        <div className="space-y-3">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge variant="secondary">{importPreview.mode === 'revision' ? 'Revision' : 'New'}</Badge>
+                                                <Badge variant="outline">
+                                                    {importPreview.dateRange.from} to {importPreview.dateRange.to}
+                                                </Badge>
+                                                {importPreview.pendingSiteCreations > 0 && (
+                                                    <Badge>{importPreview.pendingSiteCreations} site{importPreview.pendingSiteCreations === 1 ? '' : 's'} to create on confirm</Badge>
+                                                )}
+                                            </div>
+                                            <div className="grid w-full items-center gap-1.5">
+                                                <Label htmlFor="exam-name-override" className="text-xs text-muted-foreground">Exam Name (editable)</Label>
+                                                <Input
+                                                    id="exam-name-override"
+                                                    value={customExamName || importPreview.suggestedExamName}
+                                                    onChange={(e) => setCustomExamName(e.target.value)}
+                                                    className="h-8 text-sm"
+                                                />
+                                            </div>
                                         </div>
                                         <div className="grid gap-3 sm:grid-cols-4">
                                             <div className="rounded-md bg-muted px-3 py-2">
@@ -572,8 +606,14 @@ export default function WorkOrderPage() {
                                             </div>
                                         </div>
                                         {importPreview.duplicateMessage && (
-                                            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                                                {importPreview.duplicateMessage}
+                                            <div className={`rounded-md border px-3 py-2 text-sm ${importPreview.duplicateState === 'overlap' && importMode === 'revision' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                                                <p className="font-medium">{importPreview.duplicateMessage}</p>
+                                                {importPreview.duplicateState === 'overlap' && importMode === 'revision' && (
+                                                    <p className="mt-1 text-xs">This is expected for revision imports. Existing work orders will be updated and missing ones will be cancelled.</p>
+                                                )}
+                                                {importPreview.duplicateState === 'overlap' && importMode === 'new' && (
+                                                    <p className="mt-1 text-xs">Switch to <strong>Revision Import</strong> mode if you want to update existing work orders instead.</p>
+                                                )}
                                             </div>
                                         )}
                                         {importPreview.warnings.length > 0 && (
@@ -609,7 +649,10 @@ export default function WorkOrderPage() {
                                     </Button>
                                     <Button
                                         onClick={handleConfirmImport}
-                                        disabled={isPreviewing || isConfirmingImport || !file || !importPreview || importPreview.duplicateState !== 'none'}
+                                        disabled={isPreviewing || isConfirmingImport || !file || !importPreview || (
+                                            importPreview.duplicateState !== 'none' &&
+                                            !(importPreview.duplicateState === 'overlap' && importMode === 'revision')
+                                        )}
                                         className="w-full sm:w-auto"
                                     >
                                         {isConfirmingImport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
@@ -796,7 +839,7 @@ export default function WorkOrderPage() {
                                                                         <div className="mb-2 flex items-center justify-between gap-1">
                                                                             <div className="min-w-0">
                                                                                 <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                                                <p className="truncate text-[10px] text-muted-foreground">{order.examName || order.examCode || "General Duty"}</p>
+                                                                                <p className="truncate text-[11px] font-medium text-foreground">{order.examName || order.examCode || "General Duty"}</p>
                                                                             </div>
                                                                             <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
                                                                         </div>

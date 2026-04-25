@@ -709,7 +709,7 @@ export default function AssignGuardsPage() {
                                         <p className="text-xs text-muted-foreground mt-0.5">
                                             {order.date.toDate().getFullYear()}
                                         </p>
-                                        <p className="mt-1 text-xs font-medium text-muted-foreground">
+                                        <p className="mt-1 text-sm font-semibold text-foreground">
                                             {order.examName || order.examCode || "General Duty"}
                                         </p>
                                     </div>

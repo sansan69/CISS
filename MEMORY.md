@@ -5,12 +5,26 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
-## [2026-04-25] — Session: Fix work order import preview Content-Type bug
+## [2026-04-25] — Session: Work order import system fixes and improvements
 
 **File modified:** `src/lib/api-client.ts`
 - **Bug:** `authorizedFetch` unconditionally set `Content-Type: application/json` whenever `init.body` existed and no Content-Type header was provided.
 - **Impact:** Work order import preview (which sends `FormData`) failed with "Content-Type was not one of multipart/form-data or application/x-www-form-urlencoded" because the browser could not inject the multipart boundary.
 - **Fix:** Added `&& !(init.body instanceof FormData)` condition so that `FormData` requests leave the Content-Type unset, allowing the browser to set the correct `multipart/form-data; boundary=...` header automatically.
+
+**Files modified:** `src/app/(app)/work-orders/page.tsx`
+- **Fix:** Confirm Import button was disabled when `duplicateState === 'overlap'` even in Revision mode. Overlap is expected when updating existing work orders. New logic: blocks only `binary-duplicate` and `content-duplicate`; allows `overlap` in revision mode; for new mode still blocks overlap but shows a helpful message to switch to revision mode.
+- **Feature:** Added editable exam name field in the preview panel. Admin can override the auto-extracted exam name before committing. Custom exam name is propagated to all rows and content hash is recomputed client-side via Web Crypto API.
+- **UI:** Improved duplicate warning messages with contextual help (blue info box for revision overlap, amber warning for new-mode overlap with suggestion to switch modes).
+- **UI:** Increased exam name font size and weight in work order cards (main list) so exam names are more prominent.
+
+**File created:** `src/lib/work-orders/tcs-exam-hash-browser.ts`
+- Browser-compatible SHA-256 content hash function using `crypto.subtle.digest()`.
+- Mirrors the server-side `buildTcsExamContentHash` from `tcs-exam-hash.ts` but works in the browser.
+- Used when admin overrides the exam name so the commit route's hash validation still passes.
+
+**File modified:** `src/app/(app)/work-orders/[siteId]/page.tsx`
+- **UI:** Increased exam name font size from `text-xs` to `text-sm font-semibold text-foreground` in site detail cards for better visibility.
 
 ---
 
