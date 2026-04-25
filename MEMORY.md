@@ -5,6 +5,22 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Session: PIN setup optional after enrollment, profile download on completion screen
+
+**File modified:** `src/app/enroll/page.tsx`
+- **Feature:** After successful enrollment, form is replaced by a dedicated completion screen (no redirect to `/profile/{id}`).
+- Completion screen shows: employee ID, "Download Profile Kit" button, "Set up PIN to access your profile" link.
+- Download generates a simple branded PDF profile using `pdf-lib` (fetches employee data via `/api/employees/public-profile/{id}`).
+- "Set up PIN" is a link, not a redirect — guard can skip it.
+- "Register Another Person" button resets state and returns to step 1.
+- PIN setup still required on guard login (unchanged).
+
+**File created:** `src/lib/pdf-utils.ts`
+- Shared PDF helpers: `normalizePdfText`, `wrapTextToWidth`, `drawMultilineText`, `sanitizePdfString`, `titleCase`, `fetchImageBytes`.
+- Extracted from profile page; available for reuse by both completion screen and full profile PDF.
+
+---
+
 ## [2026-04-25] — Session: Sort by exam name, import history rewrite, parser fixes, tasks removed
 
 **File modified:** `src/app/(app)/work-orders/page.tsx`
@@ -1366,3 +1382,78 @@ Draft-specific fields are stripped before saving to Firestore.
 - How to verify:
   - Ensure Vercel environment has the required NEXT_PUBLIC_FIREBASE_API_KEY and related vars set to the Firebase project values.
   - Deploy the change and attempt to open https://cisskerala.site/admin-login; you should see a descriptive error if env vars are missing, instead of a cryptic API key error.
+
+---
+
+## [2026-04-25] — Session: Firebase reliability + rules hardening + Work Orders filters
+
+### Key outcomes
+- Local and production public flows verified end-to-end (enrollment + attendance submit) with dummy data and cleanup.
+- Firebase Admin local auth fixed by preferring ADC for development when service-account key is invalid/revoked.
+- Firestore and Storage rules audited, tightened, and deployed (no raw public reads for operational collections; no public reads of sensitive uploads).
+- Attendance photo upload refactored to a server upload route that returns a tokenized download URL (avoids public Storage read permissions).
+- Work Orders exam filtering fixed and date sorting removed (date filtering remains).
+
+### Files modified
+- `src/lib/firebaseAdmin.ts`
+- `.env.example`
+- `firestore.rules`
+- `storage.rules`
+- `src/app/api/public/clients/route.ts`
+- `src/app/api/public/attendance/route.ts`
+- `src/app/api/public/attendance/upload/route.ts`
+- `src/app/attendance/page.tsx`
+- `src/app/(app)/work-orders/page.tsx`
+- Plus shared UI system files (theme/components/layout) updated as part of the modern redesign pass.
+
+### Firebase Admin credentials (local dev)
+- Root cause: `.env.local` contained a service-account key that parsed but failed to mint tokens (`invalid_grant: Invalid JWT Signature`), causing Admin SDK reads to throw `16 UNAUTHENTICATED`.
+- Fix: `src/lib/firebaseAdmin.ts` now supports a local-only switch:
+  - `FIREBASE_ADMIN_PREFER_APPLICATION_DEFAULT=true` makes local dev use `admin.credential.applicationDefault()`
+  - `.env.example` documents this flag.
+- Notes:
+  - Production (Vercel) continues to use explicit service-account credentials.
+  - ADC requires `gcloud auth application-default login` (or equivalent) on the dev machine.
+
+### Firestore rules (security + functionality)
+- `clients`, `sites`, `clientLocations`:
+  - Read requires signed-in user (no anonymous raw reads).
+  - Writes remain admin-only.
+- Public enrollment/attendance reads are intended to happen via server routes (`/api/public/*`) rather than direct Firestore access.
+- Low-risk lookup collections remain public read:
+  - `districts`, `states`.
+- Rules were deployed via Firebase CLI.
+
+### Storage rules (security + enrollment compatibility)
+- Enrollment uploads:
+  - `enrollments/{employeeKey}/profilePictures` and `signatures`: allow anonymous `create` (image only, 15MB cap).
+  - `enrollments/{employeeKey}/idProofs`, `addressProofs`, `bankDocuments`, `policeCertificates`: allow anonymous `create` (image/pdf only, 5MB cap).
+  - Read for sensitive enrollment files is now restricted to signed-in users (no anonymous reads).
+- Legacy `employees/{employeeKey}/*` paths:
+  - Sensitive documents/portraits are now admin-only `create` and signed-in `read`.
+  - Attendance photo `create` remains allowed (needed by attendance flow), but reads are restricted to signed-in users.
+- Rules were deployed via Firebase CLI.
+
+### Attendance photo upload: server route (fixes anonymous getDownloadURL)
+- Problem: after Storage rules were tightened, anonymous attendance could upload a photo but could not call `getDownloadURL()` (read denied).
+- Fix:
+  - Added `POST /api/public/attendance/upload` in `src/app/api/public/attendance/upload/route.ts`.
+  - This route saves the photo via Admin SDK and returns a tokenized `alt=media&token=...` URL.
+  - `src/app/attendance/page.tsx` now uploads the photo via this route and passes the returned URL into `/api/attendance/submit`.
+
+### Enrollment: public upload + server-side save verified
+- `/api/public/enroll/upload` handles file validation (type/size) and saves via Admin Storage bucket.
+- `/api/employees/enroll` validates payload via Zod and writes the `employees` doc via Admin SDK.
+
+### Work Orders: exam filter and sort fixes
+- Root cause: Work Orders filtered list `useMemo` did not include `selectedExam` as a dependency, causing stale results when changing exam filter.
+- Fixes in `src/app/(app)/work-orders/page.tsx`:
+  - Added `selectedExam` (and required dependencies) to the memo dependency list.
+  - Normalized exam matching (trim + case normalization).
+  - Removed date sort options (`sort=date-asc/date-desc`) since date filtering already exists.
+  - URL cleanup removes any old `dateSort` or date-sort `sort` values.
+  - Exam ordering remains (`exam-asc` / `exam-desc`), with date as stable tie-break.
+
+### Commits (reference)
+- `c288a66b` "feat: refresh UI and secure Firebase uploads" (rules + admin ADC + attendance upload + UI system pass)
+- `c0b00ffb` "fix: repair work order exam filter" (exam filter dependency + remove date sort)

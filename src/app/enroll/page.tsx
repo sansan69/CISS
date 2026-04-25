@@ -49,6 +49,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from 'next/navigation';
 import { Checkbox } from "@/components/ui/checkbox";
+import { Download, KeyRound } from "lucide-react";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { EDUCATION_OPTIONS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
 import {
   canonicalizeDistrictName,
@@ -617,6 +619,17 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [isDraftReady, setIsDraftReady] = useState(false);
   const [isMobileHeaderOpen, setIsMobileHeaderOpen] = useState(false);
+  const [completionState, setCompletionState] = useState<{
+    id: string;
+    employeeId: string;
+    fullName: string;
+    profilePictureUrl?: string | null;
+    phoneNumber: string;
+    dateOfBirth?: string;
+    clientName?: string;
+    joiningDate?: string;
+  } | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
@@ -722,6 +735,145 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       setPoliceCertPreview(null);
     }
   };
+
+  // Completion screen state — after successful enrollment
+  const handleDownloadProfile = async () => {
+    if (!completionState) return;
+    setIsDownloadingPdf(true);
+    const toastId = "pdf-download";
+    // Use toast directly without hook (toast is a ref)
+    // We'll just show loading state via button
+
+    try {
+      // Fetch full employee data for PDF
+      const res = await fetch(`/api/employees/public-profile/${completionState.id}`);
+      if (!res.ok) throw new Error("Failed to fetch employee data");
+      const emp = await res.json();
+
+      const pdfDoc = await PDFDocument.create();
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      const page = pdfDoc.addPage();
+      const { width, height } = page.getSize();
+      const margin = 40;
+
+      // Header
+      const headerY = height - margin - 30;
+      page.drawText("CISS SERVICES LTD", { x: margin, y: headerY, font: helveticaBoldFont, size: 18, color: rgb(0.05, 0.2, 0.45) });
+      page.drawText("EMPLOYEE PROFILE", { x: margin, y: headerY - 20, font: helveticaFont, size: 12, color: rgb(0.3, 0.3, 0.3) });
+
+      // Employee details
+      const nameY = headerY - 60;
+      page.drawText("Name:", { x: margin, y: nameY, font: helveticaBoldFont, size: 12 });
+      page.drawText(completionState.fullName, { x: margin + 60, y: nameY, font: helveticaFont, size: 12 });
+
+      const idY = nameY - 20;
+      page.drawText("Employee ID:", { x: margin, y: idY, font: helveticaBoldFont, size: 12 });
+      page.drawText(completionState.employeeId, { x: margin + 90, y: idY, font: helveticaFont, size: 12 });
+
+      if (completionState.clientName) {
+        const clientY = idY - 20;
+        page.drawText("Client:", { x: margin, y: clientY, font: helveticaBoldFont, size: 12 });
+        page.drawText(completionState.clientName, { x: margin + 60, y: clientY, font: helveticaFont, size: 12 });
+      }
+
+      if (completionState.phoneNumber) {
+        const phoneY = (completionState.clientName ? idY : nameY) - 20;
+        page.drawText("Phone:", { x: margin, y: phoneY, font: helveticaBoldFont, size: 12 });
+        page.drawText(completionState.phoneNumber, { x: margin + 60, y: phoneY, font: helveticaFont, size: 12 });
+      }
+
+      if (completionState.joiningDate) {
+        const joinY = (completionState.clientName ? idY : nameY) - (completionState.phoneNumber ? 60 : 40);
+        page.drawText("Joining Date:", { x: margin, y: joinY, font: helveticaBoldFont, size: 12 });
+        page.drawText(completionState.joiningDate, { x: margin + 100, y: joinY, font: helveticaFont, size: 12 });
+      }
+
+      // QR Code placeholder - would need full employee data for real QR
+      const qrY = margin + 100;
+      page.drawText("QR Code for Attendance:", { x: margin, y: qrY, font: helveticaBoldFont, size: 10 });
+      page.drawRectangle({ x: margin, y: qrY - 80, width: 80, height: 80, borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 1 });
+      page.drawText("Scan to mark attendance", { x: margin, y: qrY - 95, font: helveticaFont, size: 8, color: rgb(0.5, 0.5, 0.5) });
+
+      // Footer
+      page.drawText("Generated on " + new Date().toLocaleDateString("en-IN"), { x: margin, y: margin, font: helveticaFont, size: 8, color: rgb(0.5, 0.5, 0.5) });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Profile_${completionState.employeeId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  // Completion Screen Component
+  if (completionState) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircleIcon className="w-10 h-10 text-green-600" />
+          </div>
+
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Registration Complete!</h1>
+          <p className="text-slate-600 mb-6">Your profile has been created successfully.</p>
+
+          <div className="bg-slate-50 rounded-xl p-4 mb-6">
+            <p className="text-sm text-slate-500 mb-1">Your Employee ID</p>
+            <p className="text-3xl font-bold text-primary font-mono">{completionState.employeeId}</p>
+          </div>
+
+          <div className="space-y-3">
+            <Button
+              onClick={handleDownloadProfile}
+              disabled={isDownloadingPdf}
+              className="w-full"
+              size="lg"
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Download Profile Kit
+            </Button>
+
+            <a
+              href="/guard-login/setup"
+              className="flex items-center justify-center w-full py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <KeyRound className="mr-2 h-4 w-4" />
+              Set up PIN to access your profile
+            </a>
+
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setCompletionState(null);
+                setCurrentStep(0);
+              }}
+              className="w-full text-slate-500"
+            >
+              Register Another Person
+            </Button>
+          </div>
+
+          <p className="text-xs text-slate-400 mt-6">
+            Save your Employee ID. You'll need it to log in.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     let isCancelled = false;
@@ -1098,7 +1250,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         });
 
         await clearDraft({ resetForm: true, keepPhoneNumber: !!initialPhoneNumberFromQuery });
-        router.push(`/profile/${responseBody.id}`);
+        setCompletionState({
+          id: responseBody.id,
+          employeeId: responseBody.employeeId,
+          fullName: `${data.firstName} ${data.lastName}`,
+          profilePictureUrl: uploadedUrls.profilePictureUrl,
+          phoneNumber: data.phoneNumber,
+          dateOfBirth: data.dateOfBirth ? format(data.dateOfBirth, "yyyy-MM-dd") : undefined,
+          clientName: data.clientName,
+          joiningDate: data.joiningDate ? format(data.joiningDate, "yyyy-MM-dd") : undefined,
+        });
 
     } catch (error: any) {
         await Promise.allSettled(
