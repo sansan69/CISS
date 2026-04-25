@@ -12,7 +12,7 @@ const HEADER_SCAN_ROWS = 4;
 const STATIC_HEADER_ALIASES: Record<"siteId" | "siteName" | "district", string[]> = {
   siteId: ["site id", "site code", "tc code", "code", "center code"],
   siteName: ["site name", "site", "center", "centre", "venue", "location", "institution", "school"],
-  district: ["district", "city", "zone", "area"],
+  district: ["district", "city", "zone", "area", "region", "place", "location", "district name", "zone name"],
 };
 
 const GENERIC_TITLE_HEADERS = new Set([
