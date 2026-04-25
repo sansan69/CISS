@@ -95,6 +95,9 @@ const normalizeSegment = (value: string | null | undefined) =>
 const buildFallbackSiteKey = (siteName: string, district: string) =>
     `${normalizeSegment(siteName)}|${normalizeSegment(district)}`;
 
+const getWorkOrderExamLabel = (order: Partial<Pick<WorkOrder, 'examName' | 'examCode'>>) =>
+    String(order.examName || order.examCode || '').replace(/\s+/g, ' ').trim();
+
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
     const [importMode, setImportMode] = useState<WorkOrderImportMode>('new');
@@ -214,7 +217,8 @@ export default function WorkOrderPage() {
 
     const selectedDistrict = searchParams.get('district') || 'all';
     const selectedExam = searchParams.get('exam') || 'all';
-    const sortBy = searchParams.get('sort') || 'date-asc';
+    const rawSort = searchParams.get('sort');
+    const examSort = rawSort === 'exam-desc' ? 'exam-desc' : 'exam-asc';
     const selectedDateValue = searchParams.get('date') || '';
     const selectedDate = useMemo(() => {
         if (!selectedDateValue) return null;
@@ -241,11 +245,20 @@ export default function WorkOrderPage() {
         updateUrlParams({ tab: nextTab === 'assignments' ? null : nextTab });
     };
 
-    // Clean up old dateSort param from URL if present
+    // Clean up old dateSort/date sort params from URL if present
     useEffect(() => {
-        if (searchParams.has('dateSort')) {
+        const sortParam = searchParams.get('sort');
+        if (
+            searchParams.has('dateSort') ||
+            sortParam === 'date-asc' ||
+            sortParam === 'date-desc' ||
+            (sortParam !== null && sortParam !== 'exam-asc' && sortParam !== 'exam-desc')
+        ) {
             const params = new URLSearchParams(searchParams.toString());
             params.delete('dateSort');
+            if (sortParam !== null && sortParam !== 'exam-asc' && sortParam !== 'exam-desc') {
+                params.delete('sort');
+            }
             router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
         }
     }, [searchParams, router, pathname]);
@@ -341,7 +354,7 @@ export default function WorkOrderPage() {
         const set = new Set<string>();
         Object.values(workOrdersBySite).forEach(orders => {
             orders.forEach(order => {
-                const en = order.examName || order.examCode || "";
+                const en = getWorkOrderExamLabel(order);
                 if (en) set.add(en);
             });
         });
@@ -363,9 +376,8 @@ export default function WorkOrderPage() {
             }
 
             if (selectedExam !== 'all') {
-                const hasExam = orders.some(o => (o.examName || o.examCode || '') === selectedExam);
-                if (!hasExam) continue;
-                filtered = orders.filter(o => (o.examName || o.examCode || '') === selectedExam);
+                const selectedExamKey = normalizeSegment(selectedExam);
+                filtered = filtered.filter(o => normalizeSegment(getWorkOrderExamLabel(o)) === selectedExamKey);
             }
 
             if (selectedDate) {
@@ -383,15 +395,14 @@ export default function WorkOrderPage() {
 
             // Sort individual orders within a site
             const sortedOrders = [...filtered].sort((a, b) => {
-                if (sortBy === 'exam-asc' || sortBy === 'exam-desc') {
-                    const aName = (a.examName || a.examCode || '').toLowerCase();
-                    const bName = (b.examName || b.examCode || '').toLowerCase();
-                    return sortBy === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
-                }
+                const aName = getWorkOrderExamLabel(a).toLowerCase();
+                const bName = getWorkOrderExamLabel(b).toLowerCase();
+                const examCompare = examSort === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+                if (examCompare !== 0) return examCompare;
                 try {
                     const aTime = a.date.toMillis();
                     const bTime = b.date.toMillis();
-                    return sortBy === 'date-asc' ? aTime - bTime : bTime - aTime;
+                    return aTime - bTime;
                 } catch {
                     return 0;
                 }
@@ -402,18 +413,17 @@ export default function WorkOrderPage() {
 
         // Sort sites/groups themselves
         result.sort(([, aOrders], [, bOrders]) => {
-            if (sortBy === 'exam-asc' || sortBy === 'exam-desc') {
-                const aName = (aOrders[0]?.examName || aOrders[0]?.examCode || '').toLowerCase();
-                const bName = (bOrders[0]?.examName || bOrders[0]?.examCode || '').toLowerCase();
-                return sortBy === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
-            }
+            const aName = getWorkOrderExamLabel(aOrders[0] ?? {}).toLowerCase();
+            const bName = getWorkOrderExamLabel(bOrders[0] ?? {}).toLowerCase();
+            const examCompare = examSort === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+            if (examCompare !== 0) return examCompare;
             const aTime = aOrders[0]?.date?.toMillis?.() ?? 0;
             const bTime = bOrders[0]?.date?.toMillis?.() ?? 0;
-            return sortBy === 'date-asc' ? aTime - bTime : bTime - aTime;
+            return aTime - bTime;
         });
 
         return result;
-    }, [workOrdersBySite, selectedDistrict, selectedDate, sortBy]);
+    }, [workOrdersBySite, selectedDistrict, selectedExam, selectedDate, siteDistricts, examSort]);
 
     // Derived from filteredEntries — must come after the useMemo above
     const allExpanded = filteredEntries.length > 0 && filteredEntries.every(([id]) => expandedSites.has(id));
@@ -900,17 +910,15 @@ export default function WorkOrderPage() {
                                         </div>
                                     )}
                                     <div className="flex min-w-[180px] flex-col gap-1">
-                                        <Label className="text-xs font-medium text-muted-foreground">Sort by</Label>
+                                        <Label className="text-xs font-medium text-muted-foreground">Exam order</Label>
                                         <Select
-                                            value={sortBy}
+                                            value={examSort}
                                             onValueChange={(val) => updateUrlParams({ sort: val })}
                                         >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="date-asc">Date: Earliest first</SelectItem>
-                                                <SelectItem value="date-desc">Date: Latest first</SelectItem>
                                                 <SelectItem value="exam-asc">Exam: A to Z</SelectItem>
                                                 <SelectItem value="exam-desc">Exam: Z to A</SelectItem>
                                             </SelectContent>
