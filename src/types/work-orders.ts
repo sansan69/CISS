@@ -121,3 +121,27 @@ export interface TcsExamImportCommitPayload {
   rows: TcsExamSourceRow[];
   warnings?: WorkOrderImportWarning[];
 }
+
+export type WorkOrderTodoStatus = "pending" | "in-progress" | "completed" | "cancelled";
+export type WorkOrderTodoPriority = "low" | "medium" | "high" | "urgent";
+
+export interface WorkOrderTodo {
+  id: string;
+  title: string;
+  description?: string;
+  status: WorkOrderTodoStatus;
+  priority: WorkOrderTodoPriority;
+  workOrderId?: string;
+  siteId?: string;
+  siteName?: string;
+  examName?: string;
+  district?: string;
+  dueDate?: string;
+  assignedTo?: string;
+  assignedToName?: string;
+  createdBy: string;
+  createdByName?: string;
+  completedAt?: Timestamp | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}

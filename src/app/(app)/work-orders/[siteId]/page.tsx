@@ -8,7 +8,7 @@ import { collection, query, where, onSnapshot, doc, getDoc, getDocs } from 'fire
 import { authorizedFetch } from '@/lib/api-client';
 import Link from 'next/link';
 
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
+import WorkOrderTodoPanel from '@/components/work-orders/todo-panel';
 
 type WorkOrderExamFields = Pick<
     WorkOrder,
@@ -793,6 +794,23 @@ export default function AssignGuardsPage() {
                         );
                     })}
                 </div>
+            )}
+
+            {/* ── Site Tasks ── */}
+            {activeOrders.length > 0 && (
+                <Card className="mt-4">
+                    <CardHeader>
+                        <CardTitle>Site Tasks</CardTitle>
+                        <CardDescription>Track to-dos for {site?.siteName || 'this site'}.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <WorkOrderTodoPanel
+                            siteId={siteId}
+                            siteName={site?.siteName}
+                            district={site?.district}
+                        />
+                    </CardContent>
+                </Card>
             )}
 
             {/* ── Assign Guards Dialog ── */}
