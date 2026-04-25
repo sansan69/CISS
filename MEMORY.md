@@ -5,6 +5,23 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Session: Exam filter, bulk delete, district from file
+
+**File modified:** `src/app/(app)/work-orders/page.tsx`
+- **Feature:** Added exam name filter dropdown (URL-synced, works alongside district filter).
+- **Feature:** Added "Delete Exam" button (admin only) visible when an exam filter is selected. Opens confirmation dialog, then calls bulk-delete API to cancel all active work orders for that exam.
+- Added Dialog imports and bulk-delete state (`bulkDeleteExam`, `isBulkDeleting`).
+
+**File created:** `src/app/api/admin/work-orders/bulk-delete/route.ts`
+- `POST /api/admin/work-orders/bulk-delete` — requires admin, body `{ examName: string }`.
+- Finds all active work orders with matching `examName`, batch-updates their `recordStatus` to `"cancelled"` with audit fields.
+
+**File modified:** `src/app/api/admin/work-orders/import/commit/route.ts`
+- **Fix:** Existing sites now have their district updated when an uploaded file provides a different district. Previously only new sites got the file's district; existing sites kept their old district forever.
+- This ensures re-importing a file with corrected district names will update both work orders AND sites.
+
+---
+
 ## [2026-04-25] — Session: Firestore backfill + UI cleanup + task management
 
 **Firestore data backfill (direct via Firebase Admin SDK with gcloud ADC):**
