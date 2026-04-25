@@ -745,11 +745,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     // We'll just show loading state via button
 
     try {
-      // Fetch full employee data for PDF
-      const res = await fetch(`/api/employees/public-profile/${completionState.id}`);
-      if (!res.ok) throw new Error("Failed to fetch employee data");
-      const emp = await res.json();
-
       const pdfDoc = await PDFDocument.create();
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
