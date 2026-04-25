@@ -270,7 +270,7 @@ export default function WorkOrderImportsPage() {
       <PageHeader
         eyebrow="Work Orders"
         title="Import History"
-        description="Recent TCS workbook imports stored in workOrderImports."
+        description="Recent exam workbook imports stored in workOrderImports."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Work Orders", href: "/work-orders" },
@@ -318,7 +318,7 @@ export default function WorkOrderImportsPage() {
             <div className="space-y-1">
               <p className="text-base font-semibold">No import history yet</p>
               <p className="text-sm text-muted-foreground">
-                Imported TCS workbooks will appear here once they are committed.
+                Imported exam workbooks will appear here once they are committed.
               </p>
             </div>
           </CardContent>

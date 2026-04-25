@@ -514,8 +514,8 @@ export default function WorkOrderPage() {
                 title={pageTitle}
                 description={
                     canAdminWorkOrders
-                        ? 'Upload and manage TCS duty requirements across active duty sites.'
-                        : 'Review the TCS duty requirements that are relevant to your assigned districts.'
+                        ? 'Upload and manage exam duty requirements across active duty sites.'
+                        : 'Review the exam duty requirements that are relevant to your assigned districts.'
                 }
                 breadcrumbs={[
                     { label: "Dashboard", href: "/dashboard" },
@@ -541,7 +541,7 @@ export default function WorkOrderPage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>Upload Work Order</CardTitle>
-                                <CardDescription>Upload the TCS duty requirement workbook, preview the active-row changes, then confirm the import.</CardDescription>
+                                <CardDescription>Upload the exam duty requirement workbook, preview the active-row changes, then confirm the import.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -734,8 +734,8 @@ export default function WorkOrderPage() {
                                     <CardTitle>Active Duty Sites</CardTitle>
                                     <CardDescription>
                                         {canAdminWorkOrders
-                                            ? 'List of all TCS duty sites with upcoming work orders.'
-                                            : 'List of TCS duty sites in your assigned districts with upcoming duties.'}
+                                            ? 'List of all duty sites with upcoming work orders.'
+                                            : 'List of duty sites in your assigned districts with upcoming duties.'}
                                     </CardDescription>
                                 </div>
                                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
