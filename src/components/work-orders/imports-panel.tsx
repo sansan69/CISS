@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { onSnapshot, collection, query, where } from "firebase/firestore";
-import { startOfMonth } from "date-fns";
+import { onSnapshot, collection, query } from "firebase/firestore";
 import { ChevronDown, ChevronUp, FileClock, Loader2, MapPin, Rows3, SquareStack } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -170,14 +169,8 @@ export function WorkOrderImportsPanel() {
   ];
 
   useEffect(() => {
-    // Only fetch work orders from last 6 months to avoid loading too much data
-    const sixMonthsAgo = startOfMonth(new Date());
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    const workOrdersQuery = query(
-      collection(db, "workOrders"),
-      where("date", ">=", sixMonthsAgo)
-    );
+    // Fetch all work orders without date filter for now
+    const workOrdersQuery = query(collection(db, "workOrders"));
 
     const unsubscribe = onSnapshot(
       workOrdersQuery,
