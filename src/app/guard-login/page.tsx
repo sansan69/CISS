@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, QrCode, Phone, ScanLine, RotateCcw, ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
+import { Loader2, QrCode, Phone, ScanLine, RotateCcw, ArrowRight, KeyRound, ShieldCheck, Sparkles, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
 import { parseEmployeeIdFromQrText } from "@/lib/qr/employee-qr";
@@ -283,6 +283,11 @@ export default function GuardLoginPage() {
     >
       {/* Desktop brand panel — hidden on mobile */}
       <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
+        <div className="absolute top-5 right-5">
+          <Link href="/" className="flex items-center justify-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <Home className="h-5 w-5 text-white" />
+          </Link>
+        </div>
         <div className="relative flex items-center gap-3 animate-slide-up">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
             <Image src="/ciss-logo.png" alt="CISS Logo" width={40} height={40} data-ai-hint="company logo" />
@@ -329,6 +334,11 @@ export default function GuardLoginPage() {
 
           {/* Brand header — mobile only */}
           <div className="flex flex-col items-center justify-center pt-14 pb-7 px-6 md:hidden animate-slide-up">
+            <div className="absolute top-5 right-5">
+              <Link href="/" className="flex items-center justify-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                <Home className="h-5 w-5 text-white" />
+              </Link>
+            </div>
             <div
               className="flex h-20 w-20 items-center justify-center rounded-[22px] mb-5 bg-white/10 ring-1 ring-white/15 inset-highlight"
             >
