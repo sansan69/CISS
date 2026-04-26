@@ -75,6 +75,7 @@ function resolveWorkspaceTab(rawTab: string | null, userRole: string | null): Wo
         return 'assignments';
     }
     if (rawTab === 'assigned-guards-export') return 'assigned-guards-export';
+    if (rawTab === 'imports') return 'imports';
     return 'assignments';
 }
 
