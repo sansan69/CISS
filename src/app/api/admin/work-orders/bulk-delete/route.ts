@@ -7,10 +7,9 @@ export const runtime = "nodejs";
 // Body: { examName: string, examCode?: string }
 export async function POST(request: NextRequest) {
   try {
-    const adminUser = await requireAdmin(request);
+    await requireAdmin(request);
     const body = await request.json();
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const { FieldValue } = await import("firebase-admin/firestore");
 
     const examName = body.examName;
     const examCode = body.examCode;
@@ -18,47 +17,78 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "examName is required" }, { status: 400 });
     }
 
-    // Prefer deleting by examCode (stable key). Fall back to examName.
-    let snapshot = null as any;
+    const workOrderRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+    const importRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+
     if (examCode && typeof examCode === "string") {
-      snapshot = await adminDb
+      const workOrdersByCode = await adminDb
         .collection("workOrders")
         .where("examCode", "==", examCode)
-        .where("recordStatus", "==", "active")
         .get();
-    }
-
-    if (!snapshot || snapshot.empty) {
-      snapshot = await adminDb
-        .collection("workOrders")
-        .where("examName", "==", examName)
-        .where("recordStatus", "==", "active")
-        .get();
-    }
-
-    if (snapshot.empty) {
-      return NextResponse.json({ deleted: 0, message: "No active work orders found for this exam." });
-    }
-
-    const batch = adminDb.batch();
-    let deletedCount = 0;
-
-    snapshot.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-      batch.update(doc.ref, {
-        recordStatus: "cancelled",
-        cancelledByBulkDelete: true,
-        cancelledAt: FieldValue.serverTimestamp(),
-        cancelledBy: adminUser.uid,
+      workOrdersByCode.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+        workOrderRefs.set(doc.id, doc.ref);
       });
-      deletedCount++;
+
+      const importsByCode = await adminDb
+        .collection("workOrderImports")
+        .where("examCode", "==", examCode)
+        .get();
+      importsByCode.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+        importRefs.set(doc.id, doc.ref);
+      });
+    }
+
+    const workOrdersByName = await adminDb
+      .collection("workOrders")
+      .where("examName", "==", examName)
+      .get();
+    workOrdersByName.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+      workOrderRefs.set(doc.id, doc.ref);
     });
 
-    await batch.commit();
+    const importsByName = await adminDb
+      .collection("workOrderImports")
+      .where("examName", "==", examName)
+      .get();
+    importsByName.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+      importRefs.set(doc.id, doc.ref);
+    });
+
+    if (workOrderRefs.size === 0 && importRefs.size === 0) {
+      return NextResponse.json({ deleted: 0, importsDeleted: 0, message: "No work orders found for this exam." });
+    }
+
+    let batch = adminDb.batch();
+    let operationCount = 0;
+    const commitIfNeeded = async () => {
+      if (operationCount >= 450) {
+        await batch.commit();
+        batch = adminDb.batch();
+        operationCount = 0;
+      }
+    };
+
+    for (const ref of workOrderRefs.values()) {
+      batch.delete(ref);
+      operationCount += 1;
+      await commitIfNeeded();
+    }
+
+    for (const ref of importRefs.values()) {
+      batch.delete(ref);
+      operationCount += 1;
+      await commitIfNeeded();
+    }
+
+    if (operationCount > 0) {
+      await batch.commit();
+    }
 
     return NextResponse.json({
-      deleted: deletedCount,
+      deleted: workOrderRefs.size,
+      importsDeleted: importRefs.size,
       examName,
-      message: `Cancelled ${deletedCount} work order(s) for ${examName}.`,
+      message: `Deleted ${workOrderRefs.size} work order(s) and ${importRefs.size} import record(s) for ${examName}.`,
     });
   } catch (error: any) {
     if (error?.message?.includes("access required")) {

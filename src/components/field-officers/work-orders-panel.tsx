@@ -485,23 +485,41 @@ export function WorkOrdersPanel() {
     return () => unsub();
   }, [isAdmin, assignedDistricts, toast]);
 
-  // ── Group by site ──────────────────────────────────────────────────────────
-  const ordersBySite = useMemo(() => {
-    const map = new Map<string, { siteName: string; clientName: string; district: string; orders: WorkOrder[] }>();
+  // ── Group by duty date ─────────────────────────────────────────────────────
+  const ordersByDate = useMemo(() => {
+    const map = new Map<string, { dateLabel: string; orders: WorkOrder[] }>();
     for (const order of activeWorkOrders) {
-      const existing = map.get(order.siteId);
+      const dateLabel = formatDate(order.date);
+      const dateKey = (() => {
+        try {
+          return order.date.toDate().toISOString().slice(0, 10);
+        } catch {
+          return dateLabel;
+        }
+      })();
+      const existing = map.get(dateKey);
       if (existing) {
         existing.orders.push(order);
       } else {
-        map.set(order.siteId, {
-          siteName: order.siteName,
-          clientName: order.clientName,
-          district: order.district,
+        map.set(dateKey, {
+          dateLabel,
           orders: [order],
         });
       }
     }
-    return Array.from(map.entries()).map(([siteId, val]) => ({ siteId, ...val }));
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dateKey, val]) => ({
+        dateKey,
+        dateLabel: val.dateLabel,
+        orders: [...val.orders].sort((a, b) => {
+          const districtCompare = (a.district || "").localeCompare(b.district || "");
+          if (districtCompare !== 0) return districtCompare;
+          const siteCompare = (a.siteName || "").localeCompare(b.siteName || "");
+          if (siteCompare !== 0) return siteCompare;
+          return (a.examName || a.examCode || "").localeCompare(b.examName || b.examCode || "");
+        }),
+      }));
   }, [activeWorkOrders]);
 
   // ── Open assign dialog ─────────────────────────────────────────────────────
@@ -552,7 +570,7 @@ export function WorkOrdersPanel() {
     );
   }
 
-  if (ordersBySite.length === 0) {
+  if (ordersByDate.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-10 text-center">
         <ClipboardList className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
@@ -564,15 +582,25 @@ export function WorkOrdersPanel() {
   return (
     <>
       <div className="space-y-4">
-        {ordersBySite.map(({ siteId, siteName, clientName, district, orders }) => (
-          <Card key={siteId} className="overflow-hidden">
-            {/* Site header */}
+        {ordersByDate.map(({ dateKey, dateLabel, orders }) => {
+          const dateTotalRequired = orders.reduce((sum, order) => sum + (order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired)), 0);
+          const dateAssignedCount = orders.reduce((sum, order) => {
+            const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+            return sum + assignedGuards.length;
+          }, 0);
+
+          return (
+          <Card key={dateKey} className="overflow-hidden">
             <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-3 border-b bg-muted/30">
               <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{siteName}</p>
-                <p className="text-xs text-muted-foreground truncate">{clientName}</p>
+                <p className="font-semibold text-sm truncate">{dateLabel}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {orders.length} dut{orders.length === 1 ? "y" : "ies"} · Assigned {dateAssignedCount}/{dateTotalRequired}
+                </p>
               </div>
-              <Badge variant="secondary" className="shrink-0 text-[10px]">{district}</Badge>
+              <Badge variant={dateAssignedCount >= dateTotalRequired ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                {dateAssignedCount >= dateTotalRequired ? "Ready" : `${dateTotalRequired - dateAssignedCount} pending`}
+              </Badge>
             </div>
 
             <CardContent className="p-0">
@@ -600,12 +628,11 @@ export function WorkOrdersPanel() {
 
                   return (
                     <div key={order.id} className="p-4">
-                      {/* Date + status */}
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{formatDate(order.date)}</p>
+                          <p className="font-medium text-sm truncate">{order.siteName}</p>
                           <p className="truncate text-[11px] text-muted-foreground">
-                            {order.examName || order.examCode || "General Duty"}
+                            {order.examName || order.examCode || "General Duty"} · {order.district}
                           </p>
                         </div>
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
@@ -667,7 +694,8 @@ export function WorkOrdersPanel() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {selectedWorkOrder && (

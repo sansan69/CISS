@@ -16,14 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, ChevronDown, ChevronUp, ChevronsUpDown, Download, FileSpreadsheet } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, getDocs, Timestamp } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 import { useAppAuth } from '@/context/auth-context';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
@@ -101,6 +100,25 @@ const getWorkOrderExamLabel = (order: Partial<Pick<WorkOrder, 'examName' | 'exam
 const getWorkOrderExamKey = (order: Partial<Pick<WorkOrder, 'examName' | 'examCode'>>) =>
     normalizeSegment(order.examCode || order.examName || '');
 
+type WorkOrderBoardRow = {
+    order: WorkOrder;
+    siteId: string;
+    siteName: string;
+    district: string;
+    districtKey: string;
+    examKey: string;
+    examLabel: string;
+    dateMs: number;
+    dateKey: string;
+    dateLabel: string;
+    totalRequired: number;
+    assignedCount: number;
+    assignedMale: number;
+    assignedFemale: number;
+    statusLabel: string;
+    statusClassName: string;
+};
+
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
     const [importMode, setImportMode] = useState<WorkOrderImportMode>('new');
@@ -137,20 +155,6 @@ export default function WorkOrderPage() {
     // ── Bulk delete by exam ────────────────────────────────────────────────
     const [bulkDeleteExam, setBulkDeleteExam] = useState<{ key: string; label: string } | null>(null);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-
-    // ── Expand / collapse per site ───────────────────────────────────────────
-    // Tracks which siteIds are *expanded*; empty set = all collapsed by default.
-    const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
-
-    const toggleSite = React.useCallback((siteId: string) => {
-        setExpandedSites(prev => {
-            const next = new Set(prev);
-            if (next.has(siteId)) next.delete(siteId);
-            else next.add(siteId);
-            return next;
-        });
-    }, []);
-
 
     const handleDeleteOrder = React.useCallback((order: WorkOrder) => {
         const id = order.id;
@@ -209,7 +213,7 @@ export default function WorkOrderPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Bulk delete failed');
-            toast({ title: 'Exam deleted', description: data.message });
+            toast({ title: 'Exam deleted completely', description: data.message });
             setBulkDeleteExam(null);
         } catch (e: any) {
             toast({ variant: 'destructive', title: 'Error', description: e.message || 'Could not delete exam work orders.' });
@@ -220,8 +224,7 @@ export default function WorkOrderPage() {
 
     const selectedDistrict = searchParams.get('district') || 'all';
     const selectedExamParam = searchParams.get('exam') || 'all';
-    const rawSort = searchParams.get('sort');
-    const examSort = rawSort === 'exam-desc' ? 'exam-desc' : 'exam-asc';
+    const searchText = searchParams.get('q') || '';
     const selectedDateValue = searchParams.get('date') || '';
     const selectedDate = useMemo(() => {
         if (!selectedDateValue) return null;
@@ -248,20 +251,12 @@ export default function WorkOrderPage() {
         updateUrlParams({ tab: nextTab === 'assignments' ? null : nextTab });
     };
 
-    // Clean up old dateSort/date sort params from URL if present
+    // Clean up old sort params from earlier work-order screens.
     useEffect(() => {
-        const sortParam = searchParams.get('sort');
-        if (
-            searchParams.has('dateSort') ||
-            sortParam === 'date-asc' ||
-            sortParam === 'date-desc' ||
-            (sortParam !== null && sortParam !== 'exam-asc' && sortParam !== 'exam-desc')
-        ) {
+        if (searchParams.has('dateSort') || searchParams.has('sort')) {
             const params = new URLSearchParams(searchParams.toString());
             params.delete('dateSort');
-            if (sortParam !== null && sortParam !== 'exam-asc' && sortParam !== 'exam-desc') {
-                params.delete('sort');
-            }
+            params.delete('sort');
             router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
         }
     }, [searchParams, router, pathname]);
@@ -345,52 +340,71 @@ export default function WorkOrderPage() {
     const selectedDistrictKey = selectedDistrict === 'all' ? 'all' : normalizeSegment(selectedDistrict);
     const selectedExamKey = selectedExamParam === 'all' ? 'all' : normalizeSegment(selectedExamParam);
 
-    // Flatten work orders for filter option calculations.
-    const allWorkOrderItems = useMemo(() => {
-        const items: Array<{
-            siteId: string;
-            district: string;
-            districtKey: string;
-            examKey: string;
-            examLabel: string;
-            dateMs: number;
-        }> = [];
+    const allWorkOrderRows = useMemo<WorkOrderBoardRow[]>(() => {
+        return Object.entries(workOrdersBySite)
+            .flatMap(([siteId, orders]) => {
+                return orders
+                    .filter((order) => !pendingDeleteIds.has(order.id))
+                    .map((order) => {
+                        const district = siteDistricts[siteId] || order.district || '';
+                        const date = (() => {
+                            try {
+                                return order.date.toDate() as Date;
+                            } catch {
+                                return null;
+                            }
+                        })();
+                        const dateMs = date?.getTime() ?? 0;
+                        const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+                        const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
+                        const assignedMale = assignedGuards.filter((guard: any) => guard.gender === 'Male').length;
+                        const assignedFemale = assignedGuards.filter((guard: any) => guard.gender === 'Female').length;
+                        const assignedCount = assignedGuards.length;
+                        const statusLabel = assignedCount === 0
+                            ? 'Open'
+                            : assignedCount >= totalRequired
+                                ? 'Filled'
+                                : 'Partial';
+                        const statusClassName = assignedCount === 0
+                            ? 'border-red-200 bg-red-50 text-red-700'
+                            : assignedCount >= totalRequired
+                                ? 'border-green-200 bg-green-50 text-green-700'
+                                : 'border-amber-200 bg-amber-50 text-amber-800';
 
-        Object.entries(workOrdersBySite).forEach(([siteId, orders]) => {
-            orders.forEach((order) => {
-                const district = siteDistricts[siteId] || order.district || '';
-                items.push({
-                    siteId,
-                    district,
-                    districtKey: normalizeSegment(district),
-                    examKey: getWorkOrderExamKey(order),
-                    examLabel: getWorkOrderExamLabel(order),
-                    dateMs: (() => {
-                        try {
-                            return order.date.toMillis();
-                        } catch {
-                            return 0;
-                        }
-                    })(),
-                });
+                        return {
+                            order,
+                            siteId,
+                            siteName: order.siteName || siteId,
+                            district,
+                            districtKey: normalizeSegment(district),
+                            examKey: getWorkOrderExamKey(order),
+                            examLabel: getWorkOrderExamLabel(order) || 'General Duty',
+                            dateMs,
+                            dateKey: date ? format(date, 'yyyy-MM-dd') : 'unknown-date',
+                            dateLabel: date ? format(date, 'dd MMM yyyy') : 'Date unavailable',
+                            totalRequired,
+                            assignedCount,
+                            assignedMale,
+                            assignedFemale,
+                            statusLabel,
+                            statusClassName,
+                        };
+                    });
+            })
+            .sort((a, b) => {
+                if (a.dateMs !== b.dateMs) return a.dateMs - b.dateMs;
+                const districtCompare = a.district.localeCompare(b.district);
+                if (districtCompare !== 0) return districtCompare;
+                const siteCompare = a.siteName.localeCompare(b.siteName);
+                if (siteCompare !== 0) return siteCompare;
+                return a.examLabel.localeCompare(b.examLabel);
             });
-        });
+    }, [workOrdersBySite, siteDistricts, pendingDeleteIds]);
 
-        return items;
-    }, [workOrdersBySite, siteDistricts]);
-
-    // Distinct districts present in current sites (uses live site district mapping)
     const availableDistricts = useMemo(() => {
         const set = new Set<string>();
-        const examConstraint = selectedExamKey === 'all' ? null : selectedExamKey;
-
-        for (const item of allWorkOrderItems) {
-            if (selectedDate) {
-                const itemDate = new Date(item.dateMs);
-                if (!isSameDay(itemDate, selectedDate)) continue;
-            }
-            if (examConstraint && item.examKey !== examConstraint) continue;
-            if (item.district) set.add(item.district);
+        for (const row of allWorkOrderRows) {
+            if (row.district) set.add(row.district);
         }
 
         if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
@@ -401,130 +415,72 @@ export default function WorkOrderPage() {
         }
 
         return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [allWorkOrderItems, selectedDate, selectedExamKey, userRole, assignedDistricts]);
+    }, [allWorkOrderRows, userRole, assignedDistricts]);
 
-    // Distinct exam names present in current work orders
     const availableExams = useMemo(() => {
         const map = new Map<string, string>();
-        const districtConstraint = selectedDistrictKey === 'all' ? null : selectedDistrictKey;
-
-        for (const item of allWorkOrderItems) {
-            if (selectedDate) {
-                const itemDate = new Date(item.dateMs);
-                if (!isSameDay(itemDate, selectedDate)) continue;
-            }
-            if (districtConstraint && item.districtKey !== districtConstraint) continue;
-            if (!item.examKey) continue;
-
-            if (!map.has(item.examKey) || (item.examLabel && item.examLabel.length > (map.get(item.examKey) ?? '').length)) {
-                map.set(item.examKey, item.examLabel || item.examKey);
+        for (const row of allWorkOrderRows) {
+            if (!row.examKey) continue;
+            if (!map.has(row.examKey) || row.examLabel.length > (map.get(row.examKey) ?? '').length) {
+                map.set(row.examKey, row.examLabel);
             }
         }
 
         return Array.from(map.entries())
             .map(([key, label]) => ({ key, label }))
             .sort((a, b) => a.label.localeCompare(b.label));
-    }, [allWorkOrderItems, selectedDate, selectedDistrictKey]);
+    }, [allWorkOrderRows]);
 
     const selectedExamLabel = useMemo(() => {
         if (selectedExamKey === 'all') return 'All exams';
         return availableExams.find((e) => e.key === selectedExamKey)?.label ?? selectedExamParam;
     }, [availableExams, selectedExamKey, selectedExamParam]);
 
-    // If a selected filter becomes invalid after another filter changes, clear it.
-    useEffect(() => {
-        if (selectedDistrict !== 'all') {
-            const districtValid = availableDistricts.some((d) => normalizeSegment(d) === selectedDistrictKey);
-            if (!districtValid) {
-                updateUrlParams({ district: null });
-            }
-        }
-        if (selectedExamParam !== 'all') {
-            const examValid = availableExams.some((e) => e.key === selectedExamKey);
-            if (!examValid) {
-                updateUrlParams({ exam: null });
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [availableDistricts, availableExams]);
+    const filteredRows = useMemo(() => {
+        const queryKey = normalizeSegment(searchText);
 
-    // Apply district/date filters and sort for display
-    const filteredEntries = useMemo(() => {
-        const entries = Object.entries(workOrdersBySite);
-        const result: [string, WorkOrder[]][] = [];
+        return allWorkOrderRows.filter((row) => {
+            if (selectedDistrictKey !== 'all' && row.districtKey !== selectedDistrictKey) return false;
+            if (selectedExamKey !== 'all' && row.examKey !== selectedExamKey) return false;
+            if (selectedDate && !isSameDay(new Date(row.dateMs), selectedDate)) return false;
 
-        for (const [siteId, orders] of entries) {
-            let filtered = orders;
-
-            if (selectedDistrict !== 'all') {
-                const siteDistrictKey = normalizeSegment(siteDistricts[siteId] || orders[0]?.district || '');
-                if (siteDistrictKey !== selectedDistrictKey) continue;
+            if (queryKey) {
+                const haystack = normalizeSegment([
+                    row.siteName,
+                    row.district,
+                    row.examLabel,
+                    row.dateLabel,
+                    row.order.sourceFileName,
+                    row.order.siteId,
+                ].filter(Boolean).join(' '));
+                if (!haystack.includes(queryKey)) return false;
             }
 
-            if (selectedExamKey !== 'all') {
-                filtered = filtered.filter((o) => getWorkOrderExamKey(o) === selectedExamKey);
-            }
-
-            if (selectedDate) {
-                filtered = filtered.filter(o => {
-                    try {
-                        const d = o.date.toDate() as Date;
-                        return isSameDay(d, selectedDate);
-                    } catch {
-                        return false;
-                    }
-                });
-            }
-
-            if (filtered.length === 0) continue;
-
-            // Sort individual orders within a site
-            const sortedOrders = [...filtered].sort((a, b) => {
-                try {
-                    const aTime = a.date.toMillis();
-                    const bTime = b.date.toMillis();
-                    if (aTime !== bTime) return aTime - bTime;
-                } catch {
-                    // ignore
-                }
-
-                const aName = getWorkOrderExamLabel(a).toLowerCase();
-                const bName = getWorkOrderExamLabel(b).toLowerCase();
-                const examCompare = examSort === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
-                if (examCompare !== 0) return examCompare;
-
-                return 0;
-            });
-
-            result.push([siteId, sortedOrders]);
-        }
-
-        // Sort sites/groups themselves
-        result.sort(([, aOrders], [, bOrders]) => {
-            const aTime = aOrders[0]?.date?.toMillis?.() ?? 0;
-            const bTime = bOrders[0]?.date?.toMillis?.() ?? 0;
-            if (aTime !== bTime) return aTime - bTime;
-
-            const aName = getWorkOrderExamLabel(aOrders[0] ?? {}).toLowerCase();
-            const bName = getWorkOrderExamLabel(bOrders[0] ?? {}).toLowerCase();
-            const examCompare = examSort === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
-            if (examCompare !== 0) return examCompare;
-
-            return 0;
+            return true;
         });
+    }, [allWorkOrderRows, searchText, selectedDate, selectedDistrictKey, selectedExamKey]);
 
-        return result;
-    }, [workOrdersBySite, selectedDistrict, selectedDistrictKey, selectedExamKey, selectedDate, siteDistricts, examSort]);
-
-    // Derived from filteredEntries — must come after the useMemo above
-    const allExpanded = filteredEntries.length > 0 && filteredEntries.every(([id]) => expandedSites.has(id));
-    const toggleAll = React.useCallback(() => {
-        if (allExpanded) {
-            setExpandedSites(new Set());
-        } else {
-            setExpandedSites(new Set(filteredEntries.map(([id]) => id)));
+    const groupedRowsByDate = useMemo(() => {
+        const map = new Map<string, { dateLabel: string; rows: WorkOrderBoardRow[]; totalRequired: number; assignedCount: number }>();
+        for (const row of filteredRows) {
+            const existing = map.get(row.dateKey) ?? {
+                dateLabel: row.dateLabel,
+                rows: [],
+                totalRequired: 0,
+                assignedCount: 0,
+            };
+            existing.rows.push(row);
+            existing.totalRequired += row.totalRequired;
+            existing.assignedCount += row.assignedCount;
+            map.set(row.dateKey, existing);
         }
-    }, [allExpanded, filteredEntries]);
+        return Array.from(map.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([dateKey, group]) => ({ dateKey, ...group }));
+    }, [filteredRows]);
+
+    const hasActiveFilters = Boolean(searchText || selectedDate || selectedDistrictKey !== 'all' || selectedExamKey !== 'all');
+    const clearFilters = () => updateUrlParams({ q: null, date: null, district: null, exam: null });
 
     const clearImportPreview = React.useCallback(() => {
         setImportPreview(null);
@@ -925,267 +881,238 @@ export default function WorkOrderPage() {
                     )}
 
                     <Card>
-                        <CardHeader>
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <CardHeader className="gap-4">
+                            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                                 <div>
-                                    <CardTitle>Active Duty Sites</CardTitle>
+                                    <CardTitle>Duty Board</CardTitle>
                                     <CardDescription>
                                         {canAdminWorkOrders
-                                            ? 'List of all duty sites with upcoming work orders.'
-                                            : 'List of duty sites in your assigned districts with upcoming duties.'}
+                                            ? 'Upcoming exam duties grouped by date. Use one filter at a time or combine them safely.'
+                                            : 'Upcoming exam duties for your assigned districts, grouped by date.'}
                                     </CardDescription>
                                 </div>
-                                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                                    <div className="flex min-w-[160px] flex-col gap-1">
-                                        <Label className="text-xs font-medium text-muted-foreground">Filter by date</Label>
-                                        <Input
-                                            type="date"
-                                            value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                                            onChange={(e) => {
-                                                const value = e.target.value;
-                                                updateUrlParams({ date: value || null });
-                                            }}
-                                            className="h-9"
-                                        />
-                                    </div>
-                                    <div className="flex min-w-[160px] flex-col gap-1">
-                                        <Label className="text-xs font-medium text-muted-foreground">Filter by district</Label>
-                                        <Select
-                                            value={selectedDistrict}
-                                            onValueChange={(val) => updateUrlParams({ district: val })}
-                                        >
-                                            <SelectTrigger className="h-9">
-                                                <SelectValue placeholder="All districts" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All districts</SelectItem>
-                                                {availableDistricts.map((d) => (
-                                                    <SelectItem key={d} value={d}>
-                                                        {d}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="flex min-w-[180px] flex-col gap-1">
-                                        <Label className="text-xs font-medium text-muted-foreground">Filter by exam</Label>
-                                        <Select
-                                            value={selectedExamKey}
-                                            onValueChange={(val) => updateUrlParams({ exam: val })}
-                                        >
-                                            <SelectTrigger className="h-9">
-                                                <SelectValue placeholder="All exams" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All exams</SelectItem>
-                                                {availableExams.map((exam) => (
-                                                    <SelectItem key={exam.key} value={exam.key}>
-                                                        {exam.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    {canAdminWorkOrders && selectedExamKey !== 'all' && (
-                                        <div className="flex min-w-[140px] flex-col gap-1">
-                                            <Label className="text-xs font-medium text-muted-foreground">Actions</Label>
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                className="h-9 text-xs"
-                                                onClick={() => setBulkDeleteExam({ key: selectedExamKey, label: selectedExamLabel })}
-                                            >
-                                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                                Delete Exam
-                                            </Button>
-                                        </div>
-                                    )}
-                                    <div className="flex min-w-[180px] flex-col gap-1">
-                                        <Label className="text-xs font-medium text-muted-foreground">Exam order</Label>
-                                        <Select
-                                            value={examSort}
-                                            onValueChange={(val) => updateUrlParams({ sort: val })}
-                                        >
-                                            <SelectTrigger className="h-9">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="exam-asc">Exam: A to Z</SelectItem>
-                                                <SelectItem value="exam-desc">Exam: Z to A</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <Badge variant="secondary">{filteredRows.length} duties</Badge>
+                                    <Badge variant="outline">{allWorkOrderRows.length} active rows</Badge>
                                 </div>
                             </div>
+
+                            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.2fr)_160px_180px_220px_auto]">
+                                <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium text-muted-foreground">Search</Label>
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            value={searchText}
+                                            onChange={(e) => updateUrlParams({ q: e.target.value || null })}
+                                            placeholder="Site, district, exam, file..."
+                                            className="h-9 pl-9"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium text-muted-foreground">Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                                        onChange={(e) => updateUrlParams({ date: e.target.value || null })}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium text-muted-foreground">District</Label>
+                                    <Select value={selectedDistrict} onValueChange={(val) => updateUrlParams({ district: val })}>
+                                        <SelectTrigger className="h-9">
+                                            <SelectValue placeholder="All districts" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All districts</SelectItem>
+                                            {availableDistricts.map((d) => (
+                                                <SelectItem key={d} value={d}>
+                                                    {d}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium text-muted-foreground">Exam</Label>
+                                    <Select value={selectedExamKey} onValueChange={(val) => updateUrlParams({ exam: val })}>
+                                        <SelectTrigger className="h-9">
+                                            <SelectValue placeholder="All exams" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All exams</SelectItem>
+                                            {availableExams.map((exam) => (
+                                                <SelectItem key={exam.key} value={exam.key}>
+                                                    {exam.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-end">
+                                    <Button variant="outline" className="h-9 w-full lg:w-auto" onClick={clearFilters} disabled={!hasActiveFilters}>
+                                        <X className="mr-1.5 h-4 w-4" />
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {hasActiveFilters && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {searchText && (
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            Search: {searchText}
+                                            <button aria-label="Remove search filter" onClick={() => updateUrlParams({ q: null })}>
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
+                                    )}
+                                    {selectedDate && (
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            Date: {format(selectedDate, 'dd MMM yyyy')}
+                                            <button aria-label="Remove date filter" onClick={() => updateUrlParams({ date: null })}>
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
+                                    )}
+                                    {selectedDistrictKey !== 'all' && (
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            District: {selectedDistrict}
+                                            <button aria-label="Remove district filter" onClick={() => updateUrlParams({ district: null })}>
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
+                                    )}
+                                    {selectedExamKey !== 'all' && (
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            Exam: {selectedExamLabel}
+                                            <button aria-label="Remove exam filter" onClick={() => updateUrlParams({ exam: null })}>
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
+                                    )}
+                                    {canAdminWorkOrders && selectedExamKey !== 'all' && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 border-destructive/30 text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                            onClick={() => setBulkDeleteExam({ key: selectedExamKey, label: selectedExamLabel })}
+                                        >
+                                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                            Delete exam completely
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent>
                             {isLoading ? (
-                                <div className="flex h-20 items-center justify-center">
+                                <div className="flex h-24 items-center justify-center">
                                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                 </div>
-                            ) : Object.keys(workOrdersBySite).length === 0 ? (
-                                <p className="py-10 text-center text-muted-foreground">No upcoming duties found.</p>
-                            ) : filteredEntries.length === 0 ? (
-                                <p className="py-10 text-center text-muted-foreground">No duties match the current filters.</p>
+                            ) : allWorkOrderRows.length === 0 ? (
+                                <div className="rounded-lg border border-dashed py-10 text-center">
+                                    <p className="font-medium">No upcoming duties found.</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">Upload a work order to start assigning guards.</p>
+                                </div>
+                            ) : filteredRows.length === 0 ? (
+                                <div className="rounded-lg border border-dashed py-10 text-center">
+                                    <p className="font-medium">No duties match these filters.</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">Remove a filter or clear all filters to return to the full duty board.</p>
+                                    <Button variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
+                                        Clear filters
+                                    </Button>
+                                </div>
                             ) : (
-                                <div className="space-y-3">
-                                    <div className="flex justify-end">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                            onClick={toggleAll}
-                                        >
-                                            <ChevronsUpDown className="h-3.5 w-3.5" />
-                                            {allExpanded ? 'Collapse all' : 'Expand all'}
-                                        </Button>
-                                    </div>
+                                <div className="space-y-5">
+                                    {groupedRowsByDate.map((group) => (
+                                        <section key={group.dateKey} className="overflow-hidden rounded-xl border bg-card">
+                                            <div className="flex flex-col gap-2 border-b bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <div>
+                                                    <h3 className="text-base font-semibold">{group.dateLabel}</h3>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {group.rows.length} dut{group.rows.length === 1 ? 'y' : 'ies'} · Assigned {group.assignedCount}/{group.totalRequired}
+                                                    </p>
+                                                </div>
+                                                <Badge variant={group.assignedCount >= group.totalRequired ? 'default' : 'secondary'}>
+                                                    {group.assignedCount >= group.totalRequired ? 'Ready' : `${group.totalRequired - group.assignedCount} pending`}
+                                                </Badge>
+                                            </div>
 
-                                    {filteredEntries.map(([siteId, orders]) => {
-                                        const siteInfo = orders[0];
-                                        const isCollapsed = !expandedSites.has(siteId);
-                                        const visibleOrders = orders.filter((o) => !pendingDeleteIds.has(o.id));
-                                        const totalDates = visibleOrders.length;
-                                        const totalGuards = visibleOrders.reduce((sum, order) => sum + ((order.totalManpower ?? 0) || (order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0)), 0);
-                                        const unassigned = visibleOrders.filter((order) => (Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0) === 0).length;
-                                        const fullyAssigned = visibleOrders.filter((order) => {
-                                            const required = (order.totalManpower ?? 0) || (order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0);
-                                            const assigned = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
-                                            return required > 0 && assigned >= required;
-                                        }).length;
+                                            <div className="divide-y">
+                                                {group.rows.map((row) => {
+                                                    const assignmentLabel = `Assigned ${row.assignedCount}/${row.totalRequired}`;
+                                                    return (
+                                                        <div key={row.order.id} className="grid gap-3 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(260px,1.4fr)_140px_190px_120px_auto] lg:items-center">
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <h4 className="truncate text-sm font-semibold text-foreground">{row.siteName}</h4>
+                                                                    <Badge variant="outline" className="text-[10px]">{row.district || 'No district'}</Badge>
+                                                                </div>
+                                                                <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{row.examLabel}</p>
+                                                            </div>
 
-                                        return (
-                                            <div key={siteId} className="overflow-hidden rounded-lg border">
-                                                <div
-                                                    className="flex cursor-pointer select-none items-start gap-3 p-4 transition-colors hover:bg-muted/40"
-                                                    onClick={() => toggleSite(siteId)}
-                                                >
-                                                    <button
-                                                        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                                                        aria-label={isCollapsed ? 'Expand' : 'Collapse'}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleSite(siteId);
-                                                        }}
-                                                    >
-                                                        {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                                                    </button>
+                                                            <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 px-3 py-2 text-center lg:bg-transparent lg:px-0 lg:py-0">
+                                                                <div>
+                                                                    <p className="text-sm font-semibold">{row.order.maleGuardsRequired || 0}</p>
+                                                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">M</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-semibold">{row.order.femaleGuardsRequired || 0}</p>
+                                                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">F</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-semibold">{row.totalRequired}</p>
+                                                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</p>
+                                                                </div>
+                                                            </div>
 
-                                                    <div className="min-w-0 flex-1">
-                                                        <h3 className="text-base font-semibold leading-tight">{siteInfo.siteName}</h3>
-                                                        <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                                                            <span className="font-medium text-foreground">
-                                                                {siteInfo.examName || siteInfo.examCode || "TCS Exam"}
-                                                            </span>
-                                                            {(() => {
-                                                                const district = siteDistricts[siteId] || siteInfo.district;
-                                                                if (!district || district === 'South 2') return null;
-                                                                return (
-                                                                    <>
-                                                                        <span className="text-muted-foreground">·</span>
-                                                                        <span className="text-muted-foreground">{district}</span>
-                                                                    </>
-                                                                );
-                                                            })()}
-                                                        </p>
-                                                        {isCollapsed && (
-                                                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                                                <span className="font-medium text-foreground">{totalDates} date{totalDates !== 1 ? 's' : ''}</span>
-                                                                <span>·</span>
-                                                                <span>{totalGuards} guards total</span>
-                                                                {unassigned > 0 && <span className="font-semibold text-red-500">{unassigned} unassigned</span>}
-                                                                {unassigned === 0 && fullyAssigned === totalDates && totalDates > 0 && (
-                                                                    <span className="font-semibold text-green-600">All assigned</span>
+                                                            <div className="text-sm">
+                                                                <p className="font-medium">{assignmentLabel}</p>
+                                                                <p className="text-xs text-muted-foreground">M {row.assignedMale} · F {row.assignedFemale}</p>
+                                                            </div>
+
+                                                            <div>
+                                                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${row.statusClassName}`}>
+                                                                    {row.statusLabel}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex flex-wrap gap-2 lg:justify-end">
+                                                                {canAdminWorkOrders && (
+                                                                    <Button size="sm" variant="outline" asChild className="h-8 text-xs">
+                                                                        <Link href={siteHref(row.siteId)}>
+                                                                            <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                                                                            Open
+                                                                        </Link>
+                                                                    </Button>
+                                                                )}
+                                                                <Button size="sm" asChild className="h-8 text-xs">
+                                                                    <Link href={siteHref(row.siteId)}>
+                                                                        <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                                                                        Assign
+                                                                    </Link>
+                                                                </Button>
+                                                                {canAdminWorkOrders && (
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-8 w-8 text-destructive/70 hover:bg-destructive/10 hover:text-destructive"
+                                                                        title="Delete duty (5s undo)"
+                                                                        onClick={() => handleDeleteOrder(row.order)}
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </Button>
                                                                 )}
                                                             </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row" onClick={(e) => e.stopPropagation()}>
-                                                        {canAdminWorkOrders && (
-                                                            <Button size="sm" variant="outline" asChild className="h-8 text-xs">
-                                                                <Link href={siteHref(siteId)}>
-                                                                    <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-                                                                    Edit
-                                                                </Link>
-                                                            </Button>
-                                                        )}
-                                                        <Button size="sm" variant="outline" asChild className="h-8 text-xs">
-                                                            <Link href={siteHref(siteId)}>
-                                                                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                                                                Assign
-                                                            </Link>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-
-                                                {!isCollapsed && (
-                                                    <div className="border-t px-4 pb-4 pt-3">
-                                                        <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                            Required Manpower · {totalDates} date{totalDates !== 1 ? 's' : ''}
-                                                        </h4>
-                                                        <div className="grid gap-2 sm:flex sm:flex-wrap">
-                                                            {visibleOrders.map((order) => {
-                                                                const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
-                                                                const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
-                                                                const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                                                                const status = assignedCount === 0 ? 'Unassigned' : assignedCount >= totalRequired ? 'Fully Assigned' : 'Partial';
-                                                                const statusClasses = assignedCount === 0
-                                                                    ? 'bg-red-100 text-red-700 border-red-200'
-                                                                    : assignedCount >= totalRequired
-                                                                        ? 'bg-green-100 text-green-700 border-green-200'
-                                                                        : 'bg-amber-100 text-amber-800 border-amber-200';
-
-                                                                return (
-                                                                    <div
-                                                                        key={order.id}
-                                                                        className={`relative w-full rounded-md border p-3 sm:min-w-[180px] sm:w-auto ${assignedCount === 0 ? 'bg-red-50/40' : assignedCount >= totalRequired ? 'bg-green-50/40' : 'bg-amber-50/40'}`}
-                                                                    >
-                                                                        <div className="mb-2 flex items-center justify-between gap-1">
-                                                                            <div className="min-w-0">
-                                                                                <p className="text-xs font-semibold">{order.date.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                                                <p className="truncate text-xs font-semibold text-foreground">{order.examName || order.examCode || "General Duty"}</p>
-                                                                            </div>
-                                                                            <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${statusClasses}`}>{status}</span>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-3 items-center gap-2 border-t pt-2">
-                                                                            <div className="text-center">
-                                                                                <p className="text-lg font-bold leading-none">{order.maleGuardsRequired}</p>
-                                                                                <p className="mt-0.5 text-[10px] text-muted-foreground">Male</p>
-                                                                            </div>
-                                                                            <div className="text-center">
-                                                                                <p className="text-lg font-bold leading-none">{order.femaleGuardsRequired}</p>
-                                                                                <p className="mt-0.5 text-[10px] text-muted-foreground">Female</p>
-                                                                            </div>
-                                                                            <div className="text-center">
-                                                                                <p className="text-lg font-bold leading-none">{totalRequired}</p>
-                                                                                <p className="mt-0.5 text-[10px] text-muted-foreground">Total</p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="mt-2 space-y-1">
-                                                                            <Progress value={percent} className="h-1.5" />
-                                                                            <p className="text-[10px] text-muted-foreground">
-                                                                                Assigned {assignedCount}/{totalRequired} ({percent}%)
-                                                                            </p>
-                                                                        </div>
-                                                                        {canAdminWorkOrders && (
-                                                                            <button
-                                                                                className="absolute right-1 top-1 rounded p-1 text-destructive/60 transition-colors hover:bg-red-50 hover:text-destructive"
-                                                                                title="Delete duty (5s undo)"
-                                                                                onClick={() => handleDeleteOrder(order)}
-                                                                            >
-                                                                                <Trash2 className="h-3.5 w-3.5" />
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            })}
                                                         </div>
-                                                    </div>
-                                                )}
+                                                    );
+                                                })}
                                             </div>
-                                        );
-                                    })}
+                                        </section>
+                                    ))}
                                 </div>
                             )}
                         </CardContent>
@@ -1204,10 +1131,10 @@ export default function WorkOrderPage() {
             <Dialog open={!!bulkDeleteExam} onOpenChange={(open) => !open && setBulkDeleteExam(null)}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Delete All Work Orders for {bulkDeleteExam?.label}?</DialogTitle>
+                        <DialogTitle>Delete {bulkDeleteExam?.label} completely?</DialogTitle>
                         <DialogDescription>
-                            This will permanently cancel all upcoming work orders for this exam.
-                            Any assigned guards will be unassigned.
+                            This permanently removes every work order row and import-history record for this exam.
+                            This cannot be undone from the app.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2 mt-1">
@@ -1216,7 +1143,7 @@ export default function WorkOrderPage() {
                         </Button>
                         <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkDeleting} className="w-full sm:w-auto">
                             {isBulkDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Delete All
+                            Delete Completely
                         </Button>
                     </DialogFooter>
                 </DialogContent>

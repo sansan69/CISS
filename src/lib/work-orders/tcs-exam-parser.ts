@@ -278,6 +278,14 @@ function isGenericExamName(value: string): boolean {
 }
 
 function extractExamName(rows: unknown[][], fileName: string): string {
+  // TCS work-order sheets often contain generic operational headers like
+  // "ZONE" or "TC Address" in the first rows. The exam identity is the file
+  // name, so prefer that whenever it provides a concrete exam label.
+  const fileExamName = cleanExamNameFromFilename(fileName);
+  if (fileExamName && fileExamName !== "TCS Exam") {
+    return fileExamName;
+  }
+
   // 1. Look for explicit "Exam Name:" in the first 2 rows (legacy format)
   for (const row of rows.slice(0, 2)) {
     for (const cell of row) {

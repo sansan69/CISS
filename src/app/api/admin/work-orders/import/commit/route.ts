@@ -176,6 +176,13 @@ function buildWorkOrderDocId(row: TcsExamSourceRow) {
   return `${siteToken}_${dateToken}_${examToken}`;
 }
 
+function buildWorkOrderDocIdForExam(row: TcsExamSourceRow, examCode: string) {
+  return buildWorkOrderDocId({
+    ...row,
+    examCode,
+  });
+}
+
 function buildFallbackSiteKey(siteName: string, district: string) {
   return `${normalizeSegment(siteName)}|${normalizeSegment(district)}`;
 }
@@ -383,14 +390,19 @@ export async function POST(request: Request) {
     const adminUser = await requireAdmin(request);
     const payload = validatePayload(await request.json());
     const mode = normalizeMode(payload.mode);
+    const canonicalRows = payload.rows.map((row) => ({
+      ...row,
+      examName: payload.examName,
+      examCode: payload.examCode,
+    }));
     const computedContentHash = buildTcsExamContentHash(
       payload.examCode,
-      payload.rows.map((row) => ({
+      canonicalRows.map((row) => ({
         siteId: row.siteId,
         siteName: row.siteName,
         district: row.district,
         date: row.date,
-        examCode: row.examCode ?? payload.examCode,
+        examCode: payload.examCode,
         maleGuardsRequired: row.maleGuardsRequired,
         femaleGuardsRequired: row.femaleGuardsRequired,
       })),
@@ -404,12 +416,12 @@ export async function POST(request: Request) {
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const existingRows = await fetchExistingRows(adminDb, payload.rows);
+    const existingRows = await fetchExistingRows(adminDb, canonicalRows);
     const activeExistingRows = existingRows.filter(
       (row) => isActiveRecordStatus(row.recordStatus),
     );
 
-    if (mode === "new" && hasIdentityOverlap(payload.rows, activeExistingRows)) {
+    if (mode === "new" && hasIdentityOverlap(canonicalRows, activeExistingRows)) {
       return NextResponse.json(
         {
           error:
@@ -420,13 +432,13 @@ export async function POST(request: Request) {
     }
 
     const diffRows = buildTcsExamDiff({
-      parsedRows: payload.rows,
+      parsedRows: canonicalRows,
       existingRows: activeExistingRows,
       mode,
     });
 
     const parsedByKey = new Map(
-      payload.rows.map((row) => [getIdentityKey(row), row]),
+      canonicalRows.map((row) => [getIdentityKey(row), row]),
     );
 
     const importRef = adminDb.collection("workOrderImports").doc();
@@ -435,13 +447,13 @@ export async function POST(request: Request) {
     const { resolvedRows, createdSites } = await resolveCommitRows(
       adminDb,
       batch,
-      payload.rows,
+      canonicalRows,
       adminUser,
     );
 
     const resolvedByOriginalKey = new Map<string, TcsExamSourceRow>();
-    for (let index = 0; index < payload.rows.length; index += 1) {
-      resolvedByOriginalKey.set(getIdentityKey(payload.rows[index]), resolvedRows[index]);
+    for (let index = 0; index < canonicalRows.length; index += 1) {
+      resolvedByOriginalKey.set(getIdentityKey(canonicalRows[index]), resolvedRows[index]);
     }
 
     let committedRows = 0;
@@ -474,10 +486,15 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const existing = findMatchingExistingRow(originalParsedRow, activeExistingRows);
+      const authoritativeRow = {
+        ...originalParsedRow,
+        examName: payload.examName,
+        examCode: payload.examCode,
+      };
+      const existing = findMatchingExistingRow(authoritativeRow, activeExistingRows);
 
       committedRows += 1;
-      const targetId = existing?.id ?? buildWorkOrderDocId(parsedRow);
+      const targetId = existing?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);
       const workOrderRef = adminDb.collection("workOrders").doc(targetId);
       const basePayload = {
         siteId: parsedRow.siteId,
@@ -492,8 +509,8 @@ export async function POST(request: Request) {
         assignedGuards: Array.isArray(existing?.assignedGuards)
           ? existing.assignedGuards
           : [],
-        examName: parsedRow.examName ?? payload.examName,
-        examCode: parsedRow.examCode ?? payload.examCode,
+        examName: payload.examName,
+        examCode: payload.examCode,
         recordStatus: "active",
         importId,
         sourceFileName: payload.fileName,
@@ -527,9 +544,9 @@ export async function POST(request: Request) {
     }
 
     const uniqueSites = new Set(
-      payload.rows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
+      canonicalRows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
     ).size;
-    const sortedDates = payload.rows.map((row) => row.date).filter(Boolean).sort();
+    const sortedDates = canonicalRows.map((row) => row.date).filter(Boolean).sort();
     batch.set(importRef, {
       id: importId,
       clientName: OPERATIONAL_CLIENT_NAME,
@@ -546,12 +563,12 @@ export async function POST(request: Request) {
         to: sortedDates[sortedDates.length - 1] ?? "",
       },
       siteCount: uniqueSites,
-      rowCount: payload.rows.length,
-      totalMale: payload.rows.reduce<number>(
+      rowCount: canonicalRows.length,
+      totalMale: canonicalRows.reduce<number>(
         (sum, row) => sum + Number(row.maleGuardsRequired ?? 0),
         0,
       ),
-      totalFemale: payload.rows.reduce<number>(
+      totalFemale: canonicalRows.reduce<number>(
         (sum, row) => sum + Number(row.femaleGuardsRequired ?? 0),
         0,
       ),
