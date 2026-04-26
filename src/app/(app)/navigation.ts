@@ -86,6 +86,7 @@ export const mainNavGroups: NavGroup[] = [
 
 export const settingsSubItems: NavItem[] = [
   { href: "/settings/clients", label: "Clients & Sites", icon: Briefcase },
+  { href: "/settings/work-order-imports", label: "Work Order Imports", icon: FileClock, adminOnly: true },
   { href: "/settings/admin-tools", label: "Admin Tools", icon: Wrench },
   { href: "/settings/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings/wage-config", label: "Wage Config", icon: Wallet },

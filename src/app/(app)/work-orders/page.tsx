@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X, Pencil, FileClock } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
@@ -31,7 +31,6 @@ import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-
 import { districtMatches } from '@/lib/districts';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
-import { WorkOrderImportsPanel } from '@/components/work-orders/imports-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Dialog,
@@ -54,11 +53,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-type WorkspaceTab = 'assignments' | 'assigned-guards-export' | 'imports';
+type WorkspaceTab = 'assignments' | 'assigned-guards-export';
 
 const ADMIN_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
     { value: 'assignments', label: 'Assignments', icon: FileSpreadsheet },
-    { value: 'imports', label: 'Imports', icon: FileClock },
     { value: 'assigned-guards-export', label: 'Export', icon: Download },
 ];
 
@@ -75,7 +73,6 @@ function resolveWorkspaceTab(rawTab: string | null, userRole: string | null): Wo
         return 'assignments';
     }
     if (rawTab === 'assigned-guards-export') return 'assigned-guards-export';
-    if (rawTab === 'imports') return 'imports';
     return 'assignments';
 }
 
@@ -1180,14 +1177,6 @@ export default function WorkOrderPage() {
                 {canAdminWorkOrders && (
                     <TabsContent value="assigned-guards-export" className="mt-0">
                         <AssignedGuardsExportPanel />
-                    </TabsContent>
-                )}
-
-                {canAdminWorkOrders && (
-                    <TabsContent value="imports" className="mt-0">
-                        <div className="rounded-md border">
-                            <WorkOrderImportsPanel />
-                        </div>
                     </TabsContent>
                 )}
 
