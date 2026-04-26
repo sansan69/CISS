@@ -44,6 +44,16 @@ function normalizeHeader(value: unknown): string {
   return normalizeText(value).toLowerCase();
 }
 
+function normalizeTcsDistrict(value: unknown): string {
+  const normalized = normalizeText(value);
+  // Some TCS sheets put operational zones in the district column. These are not
+  // assignable field-officer districts, so map known zones to their district.
+  if (/^south\s*2$/i.test(normalized)) {
+    return "Ernakulam";
+  }
+  return normalized;
+}
+
 function formatLocalDate(date: Date): string {
   return [
     date.getFullYear(),
@@ -357,7 +367,7 @@ function buildRowBase(
 ): TcsExamSourceRow | null {
   const siteName = normalizeText(staticIndices.siteName === null ? "" : row[staticIndices.siteName]) ||
     normalizeText(staticIndices.siteId === null ? "" : row[staticIndices.siteId]);
-  const district = normalizeText(staticIndices.district === null ? "" : row[staticIndices.district]);
+  const district = normalizeTcsDistrict(staticIndices.district === null ? "" : row[staticIndices.district]);
   const siteId = staticIndices.siteId === null ? "" : normalizeText(row[staticIndices.siteId]);
 
   if (!siteName) {
@@ -538,7 +548,7 @@ function parsePivotSheet(
 
     const baseSiteName = (staticIndices.siteName === null ? "" : normalizeText(row[staticIndices.siteName])) ||
       (staticIndices.siteId === null ? "" : normalizeText(row[staticIndices.siteId]));
-    const baseDistrict = staticIndices.district === null ? "" : normalizeText(row[staticIndices.district]);
+    const baseDistrict = normalizeTcsDistrict(staticIndices.district === null ? "" : row[staticIndices.district]);
     const baseSiteId = staticIndices.siteId === null ? "" : normalizeText(row[staticIndices.siteId]);
 
     if (!baseSiteName) {

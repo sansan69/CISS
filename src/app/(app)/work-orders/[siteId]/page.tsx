@@ -38,6 +38,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
+import { districtMatches } from '@/lib/districts';
 
 type WorkOrderExamFields = Pick<
     WorkOrder,
@@ -528,7 +529,10 @@ export default function AssignGuardsPage() {
                 if (!siteDoc.exists()) throw new Error("Site not found.");
 
                 const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
-                if (userRole === 'fieldOfficer' && !assignedDistricts.includes(siteData.district)) {
+                if (
+                    userRole === 'fieldOfficer' &&
+                    !assignedDistricts.some((district) => districtMatches(district, siteData.district))
+                ) {
                     throw new Error("You do not have permission to view this site's work orders.");
                 }
                 setSite(siteData);

@@ -2,18 +2,40 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { onSnapshot, collection, query } from "firebase/firestore";
-import { CalendarRange, ClipboardList, FileClock, FileText, Loader2, Rows3, SquareStack, MapPin } from "lucide-react";
+import { CalendarRange, ChevronDown, ChevronUp, ClipboardList, FileClock, FileText, Loader2, Rows3, SquareStack, MapPin } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAppAuth } from "@/context/auth-context";
 import { isWorkOrderAdminRole } from "@/lib/work-orders";
 import { db } from "@/lib/firebase";
+
+interface WorkOrderRow {
+  id: string;
+  siteId: string;
+  siteName: string;
+  district: string;
+  date: string;
+  maleGuardsRequired: number;
+  femaleGuardsRequired: number;
+  totalManpower: number;
+  recordStatus: string;
+  assignedMale: number;
+  assignedFemale: number;
+}
 
 interface GroupedImport {
   key: string;
@@ -25,6 +47,7 @@ interface GroupedImport {
   rowCount: number;
   totalGuards: number;
   earliestDate: Date | null;
+  workOrders: WorkOrderRow[];
 }
 
 function toDate(value: unknown): Date | null {
@@ -68,7 +91,14 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string; 
   );
 }
 
-function ImportCard({ record }: { record: GroupedImport }) {
+function getStatusBadge(status: string) {
+  const s = status.trim().toLowerCase();
+  if (s === "active") return <Badge className="bg-green-100 text-green-700 border-green-200 capitalize">Active</Badge>;
+  if (s === "cancelled") return <Badge variant="destructive" className="capitalize">Cancelled</Badge>;
+  return <Badge variant="outline" className="capitalize">{s || "Active"}</Badge>;
+}
+
+function ImportCard({ record, isExpanded, onToggle }: { record: GroupedImport; isExpanded: boolean; onToggle: () => void }) {
   return (
     <Card className="overflow-hidden">
       <CardHeader className="space-y-3">
@@ -82,9 +112,15 @@ function ImportCard({ record }: { record: GroupedImport }) {
               <span className="truncate">{record.fileName || "Unknown file"}</span>
             </CardDescription>
           </div>
-          <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 capitalize">
-            {record.rowCount} work orders
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 capitalize">
+              {record.rowCount} work orders
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={onToggle} className="gap-1.5 px-2">
+              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              <span className="text-xs">{isExpanded ? "Hide" : "Details"}</span>
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -106,6 +142,45 @@ function ImportCard({ record }: { record: GroupedImport }) {
             <p className="mt-1 text-sm font-semibold">{record.totalGuards}</p>
           </div>
         </div>
+
+        {isExpanded && record.workOrders.length > 0 && (
+          <div className="rounded-xl border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="text-xs">Date</TableHead>
+                  <TableHead className="text-xs">Site</TableHead>
+                  <TableHead className="text-xs">District</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs text-center">Male</TableHead>
+                  <TableHead className="text-xs text-center">Female</TableHead>
+                  <TableHead className="text-xs text-center">Assigned</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {record.workOrders.map((wo) => {
+                  const required = wo.totalManpower || (wo.maleGuardsRequired || 0) + (wo.femaleGuardsRequired || 0);
+                  const assigned = (wo.assignedMale || 0) + (wo.assignedFemale || 0);
+                  return (
+                    <TableRow key={wo.id} className={wo.recordStatus?.trim().toLowerCase() === "cancelled" ? "opacity-50" : ""}>
+                      <TableCell className="text-xs">{wo.date || "—"}</TableCell>
+                      <TableCell className="text-xs max-w-[160px] truncate">{wo.siteName || "—"}</TableCell>
+                      <TableCell className="text-xs capitalize">{wo.district || "—"}</TableCell>
+                      <TableCell className="text-xs">{getStatusBadge(wo.recordStatus || "active")}</TableCell>
+                      <TableCell className="text-xs text-center font-medium">{wo.maleGuardsRequired ?? 0}</TableCell>
+                      <TableCell className="text-xs text-center font-medium">{wo.femaleGuardsRequired ?? 0}</TableCell>
+                      <TableCell className="text-xs text-center">
+                        <span className={assigned >= required ? "text-green-600" : assigned > 0 ? "text-amber-600" : "text-muted-foreground"}>
+                          {assigned}/{required}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -148,6 +223,16 @@ export default function WorkOrderImportsPage() {
   const [imports, setImports] = useState<GroupedImport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const searchParams = useSearchParams();
+  const [sort, setSort] = useState<string>(searchParams.get("sort") || "date-desc");
+
+  const SORT_OPTIONS = [
+    { value: "date-desc", label: "Latest first" },
+    { value: "date-asc", label: "Earliest first" },
+    { value: "exam-asc", label: "Exam A → Z" },
+    { value: "exam-desc", label: "Exam Z → A" },
+  ];
 
   useEffect(() => {
     if (userRole !== null && !isWorkOrderAdminRole(userRole)) {
@@ -167,17 +252,32 @@ export default function WorkOrderImportsPage() {
       (snapshot) => {
         const orders = snapshot.docs.map((doc) => {
           const d = doc.data();
+          const assignedGuards: string[] = Array.isArray(d.assignedGuards) ? d.assignedGuards : [];
           return {
+            id: doc.id,
             sourceFileName: typeof d.sourceFileName === "string" ? d.sourceFileName : "",
             examName: typeof d.examName === "string" ? d.examName : "",
             examCode: typeof d.examCode === "string" ? d.examCode : "",
             siteId: typeof d.siteId === "string" ? d.siteId : "",
             siteName: typeof d.siteName === "string" ? d.siteName : "",
             district: typeof d.district === "string" ? d.district : "",
-            date: toDate(d.date),
+            date: d.date
+              ? new Date(typeof d.date === "string" ? d.date : (d.date.seconds ? d.date.seconds * 1000 : d.date))
+                  .toISOString()
+                  .split("T")[0]
+              : "",
             maleGuardsRequired: Number(d.maleGuardsRequired ?? 0),
             femaleGuardsRequired: Number(d.femaleGuardsRequired ?? 0),
             totalManpower: Number(d.totalManpower ?? 0),
+            recordStatus: typeof d.recordStatus === "string" ? d.recordStatus : "active",
+            assignedMale: assignedGuards.filter((g: string) => {
+              const parts = g.split(":");
+              return parts.length >= 3 && parts[2]?.toLowerCase() === "male";
+            }).length,
+            assignedFemale: assignedGuards.filter((g: string) => {
+              const parts = g.split(":");
+              return parts.length >= 3 && parts[2]?.toLowerCase() === "female";
+            }).length,
           };
         });
 
@@ -189,6 +289,22 @@ export default function WorkOrderImportsPage() {
           dates: Date[];
           rowCount: number;
           totalGuards: number;
+          workOrders: {
+            id: string;
+            sourceFileName: string;
+            examName: string;
+            examCode: string;
+            siteId: string;
+            siteName: string;
+            district: string;
+            date: string;
+            maleGuardsRequired: number;
+            femaleGuardsRequired: number;
+            totalManpower: number;
+            recordStatus: string;
+            assignedMale: number;
+            assignedFemale: number;
+          }[];
         }>();
 
         for (const order of orders) {
@@ -196,9 +312,10 @@ export default function WorkOrderImportsPage() {
           const existing = groups.get(key);
           if (existing) {
             existing.sites.add(order.siteId);
-            if (order.date) existing.dates.push(order.date);
+            if (order.date) existing.dates.push(new Date(order.date));
             existing.rowCount += 1;
             existing.totalGuards += order.totalManpower || order.maleGuardsRequired + order.femaleGuardsRequired;
+            existing.workOrders.push(order);
           } else {
             const sites = new Set<string>();
             if (order.siteId) sites.add(order.siteId);
@@ -206,9 +323,10 @@ export default function WorkOrderImportsPage() {
               examName: order.examName || order.examCode || "Untitled",
               fileName: order.sourceFileName || "",
               sites,
-              dates: order.date ? [order.date] : [],
+              dates: order.date ? [new Date(order.date)] : [],
               rowCount: 1,
               totalGuards: order.totalManpower || order.maleGuardsRequired + order.femaleGuardsRequired,
+              workOrders: [order],
             });
           }
         }
@@ -228,14 +346,8 @@ export default function WorkOrderImportsPage() {
               rowCount: group.rowCount,
               totalGuards: group.totalGuards,
               earliestDate: sortedDates[0] || null,
+              workOrders: group.workOrders,
             };
-          })
-          .sort((a, b) => {
-            // Sort by earliest date descending (newest first)
-            if (a.earliestDate && b.earliestDate) {
-              return b.earliestDate.getTime() - a.earliestDate.getTime();
-            }
-            return b.rowCount - a.rowCount;
           });
 
         setImports(records);
@@ -264,7 +376,22 @@ export default function WorkOrderImportsPage() {
     );
   }, [imports]);
 
-  const latestImport = imports[0];
+  const sortedImports = useMemo(() => {
+    return [...imports].sort((a, b) => {
+      switch (sort) {
+        case "date-asc":
+          return (a.earliestDate?.getTime() ?? 0) - (b.earliestDate?.getTime() ?? 0);
+        case "exam-asc":
+          return (a.examName || "").localeCompare(b.examName || "");
+        case "exam-desc":
+          return (b.examName || "").localeCompare(a.examName || "");
+        default: // date-desc
+          return (b.earliestDate?.getTime() ?? 0) - (a.earliestDate?.getTime() ?? 0);
+      }
+    });
+  }, [imports, sort]);
+
+  const latestImport = sortedImports[0];
 
   if (userRole !== null && !isWorkOrderAdminRole(userRole)) {
     return (
@@ -299,10 +426,28 @@ export default function WorkOrderImportsPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Imports" value={String(imports.length)} icon={FileClock} />
+        <StatCard label="Imports" value={String(sortedImports.length)} icon={FileClock} />
         <StatCard label="Work Orders" value={String(totals.rows)} icon={Rows3} />
         <StatCard label="Sites" value={String(totals.sites)} icon={MapPin} />
         <StatCard label="Total Guards" value={String(totals.guards)} icon={SquareStack} />
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          {sortedImports.length} import{sortedImports.length !== 1 ? "s" : ""}
+        </p>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -319,7 +464,7 @@ export default function WorkOrderImportsPage() {
             </div>
           </CardContent>
         </Card>
-      ) : imports.length === 0 ? (
+      ) : sortedImports.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
@@ -353,8 +498,18 @@ export default function WorkOrderImportsPage() {
           )}
 
           <div className="space-y-4">
-            {imports.map((record) => (
-              <ImportCard key={record.key} record={record} />
+            {sortedImports.map((record) => (
+              <ImportCard
+                key={record.key}
+                record={record}
+                isExpanded={expandedKeys.has(record.key)}
+                onToggle={() => setExpandedKeys(prev => {
+                  const next = new Set(prev);
+                  if (next.has(record.key)) next.delete(record.key);
+                  else next.add(record.key);
+                  return next;
+                })}
+              />
             ))}
           </div>
         </div>

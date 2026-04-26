@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
@@ -28,6 +28,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { isWorkOrderAdminRole } from '@/lib/work-orders';
 import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-browser';
+import { districtMatches } from '@/lib/districts';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -155,6 +156,9 @@ export default function WorkOrderPage() {
     // ── Bulk delete by exam ────────────────────────────────────────────────
     const [bulkDeleteExam, setBulkDeleteExam] = useState<{ key: string; label: string } | null>(null);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+    const [renameExam, setRenameExam] = useState<{ key: string; label: string } | null>(null);
+    const [renameExamName, setRenameExamName] = useState('');
+    const [isRenamingExam, setIsRenamingExam] = useState(false);
 
     const handleDeleteOrder = React.useCallback((order: WorkOrder) => {
         const id = order.id;
@@ -222,6 +226,41 @@ export default function WorkOrderPage() {
         }
     };
 
+    const handleOpenRenameExam = (exam: { key: string; label: string }) => {
+        setRenameExam(exam);
+        setRenameExamName(exam.label);
+    };
+
+    const handleRenameExam = async () => {
+        if (!renameExam) return;
+        const nextName = renameExamName.trim().replace(/\s+/g, ' ');
+        if (!nextName) {
+            toast({ variant: 'destructive', title: 'Exam name required', description: 'Enter a valid exam duty name.' });
+            return;
+        }
+        setIsRenamingExam(true);
+        try {
+            const res = await authorizedFetch('/api/admin/work-orders/rename-exam', {
+                method: 'POST',
+                body: JSON.stringify({
+                    examName: renameExam.label,
+                    examCode: renameExam.key,
+                    newExamName: nextName,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Exam rename failed');
+            toast({ title: 'Exam renamed', description: data.message });
+            setRenameExam(null);
+            setRenameExamName('');
+            updateUrlParams({ exam: data.examCode || null });
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: 'Error', description: e.message || 'Could not rename exam.' });
+        } finally {
+            setIsRenamingExam(false);
+        }
+    };
+
     const selectedDistrict = searchParams.get('district') || 'all';
     const selectedExamParam = searchParams.get('exam') || 'all';
     const searchText = searchParams.get('q') || '';
@@ -264,12 +303,12 @@ export default function WorkOrderPage() {
 
     useEffect(() => {
         setIsLoading(true);
-        // Fetch upcoming work orders starting from today's midnight to include today's duties
+        // Fetch upcoming work orders starting from today's midnight to include today's duties.
+        // Field officers can read work orders, then we normalize district matching
+        // client-side so minor casing/spacing differences do not hide centers.
         let q = query(collection(db, "workOrders"), where("date", ">=", Timestamp.fromDate(startOfToday())));
 
-        if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
-            q = query(q, where("district", "in", assignedDistricts));
-        } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+        if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
             // Field officer has no assigned districts, so they see nothing.
             setIsLoading(false);
             setWorkOrdersBySite({});
@@ -282,6 +321,12 @@ export default function WorkOrderPage() {
                 .map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder))
                 .filter(o => {
                     if ((o.recordStatus ?? 'active').trim().toLowerCase() !== 'active') {
+                        return false;
+                    }
+                    if (
+                        userRole === 'fieldOfficer' &&
+                        !assignedDistricts.some((district) => districtMatches(district, o.district))
+                    ) {
                         return false;
                     }
                     try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
@@ -408,9 +453,8 @@ export default function WorkOrderPage() {
         }
 
         if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
-            const assignedKeys = new Set(assignedDistricts.map((d) => normalizeSegment(d)));
             return Array.from(set)
-                .filter((d) => assignedKeys.has(normalizeSegment(d)))
+                .filter((d) => assignedDistricts.some((assigned) => districtMatches(assigned, d)))
                 .sort((a, b) => a.localeCompare(b));
         }
 
@@ -994,15 +1038,26 @@ export default function WorkOrderPage() {
                                         </Badge>
                                     )}
                                     {canAdminWorkOrders && selectedExamKey !== 'all' && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 border-destructive/30 text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                                            onClick={() => setBulkDeleteExam({ key: selectedExamKey, label: selectedExamLabel })}
-                                        >
-                                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                            Delete exam completely
-                                        </Button>
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs"
+                                                onClick={() => handleOpenRenameExam({ key: selectedExamKey, label: selectedExamLabel })}
+                                            >
+                                                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                                Rename exam
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 border-destructive/30 text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                                onClick={() => setBulkDeleteExam({ key: selectedExamKey, label: selectedExamLabel })}
+                                            >
+                                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                                Delete exam completely
+                                            </Button>
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -1128,6 +1183,47 @@ export default function WorkOrderPage() {
             </Tabs>
 
             {/* ── Bulk Delete Exam Confirmation Dialog ── */}
+            <Dialog open={!!renameExam} onOpenChange={(open) => {
+                if (!open) {
+                    setRenameExam(null);
+                    setRenameExamName('');
+                }
+            }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Rename exam duty</DialogTitle>
+                        <DialogDescription>
+                            This updates the exam name and code for all matching work orders and import-history records.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 py-2">
+                        <Label htmlFor="rename-exam-name">Exam duty name</Label>
+                        <Input
+                            id="rename-exam-name"
+                            value={renameExamName}
+                            onChange={(event) => setRenameExamName(event.target.value)}
+                            placeholder="Enter exam duty name"
+                        />
+                    </div>
+                    <DialogFooter className="gap-2 mt-1">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setRenameExam(null);
+                                setRenameExamName('');
+                            }}
+                            className="w-full sm:w-auto"
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleRenameExam} disabled={isRenamingExam || !renameExamName.trim()} className="w-full sm:w-auto">
+                            {isRenamingExam && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Rename Exam
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={!!bulkDeleteExam} onOpenChange={(open) => !open && setBulkDeleteExam(null)}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>

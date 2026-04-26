@@ -62,6 +62,14 @@ function normalizeSegment(value: string | number | undefined | null): string {
     .toLowerCase();
 }
 
+function normalizeTcsDistrict(value: unknown): string {
+  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (/^south\s*2$/i.test(normalized)) {
+    return "Ernakulam";
+  }
+  return normalized;
+}
+
 function hasConcreteSiteId(row: {
   siteId?: string;
 }) {
@@ -392,6 +400,7 @@ export async function POST(request: Request) {
     const mode = normalizeMode(payload.mode);
     const canonicalRows = payload.rows.map((row) => ({
       ...row,
+      district: normalizeTcsDistrict(row.district),
       examName: payload.examName,
       examCode: payload.examCode,
     }));

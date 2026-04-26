@@ -5,6 +5,28 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-25] — Claude Code Best Practices Implementation
+
+**Files created:**
+- `.claude/settings.json` — Team-shared permissions (clean, no secrets)
+- `.claude/settings.local.json` — Personal overrides, removed hardcoded API keys
+- `.claude/rules/firebase.md` — Firebase/Server-side path rules
+- `.claude/rules/payroll.md` — Payroll/wage-config domain rules
+- `.claude/rules/api-routes.md` — API route patterns
+- `.claude/rules/components.md` — UI component patterns
+- `.claude/commands/deploy.md` — `/deploy` command
+- `.claude/commands/typecheck.md` — `/typecheck` command
+- `.claude/commands/db-query.md` — `/db-query` command
+- `.claude/agents/code-reviewer.md` — Code reviewer subagent
+- `.claude/agents/firebase-expert.md` — Firebase expert subagent
+- `.mcp.json` — Added Context7 MCP server
+
+**Security fix:** Removed OpenAI API keys and Milvus tokens from `settings.local.json` (were hardcoded).
+
+**CLAUDE.md updated:** Added Project Configuration section documenting new structure.
+
+---
+
 ## [2026-04-25] — Session: PIN setup optional after enrollment, profile download on completion screen
 
 **File modified:** `src/app/enroll/page.tsx`

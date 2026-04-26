@@ -51,7 +51,7 @@ export const mainNavGroups: NavGroup[] = [
   {
     label: "Workforce",
     items: [
-      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList },
+      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true },
       { href: "/work-orders/imports", label: "Work Order Imports", icon: FileClock, adminOnly: true },
       { href: "/field-officers", label: "Field Officers", icon: ShieldAlert, fieldOfficerVisible: true },
     ],
@@ -96,7 +96,7 @@ export const bottomNavItems: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard, exact: true, clientVisible: true },
   { href: "/employees", label: "Guards", icon: Users, clientVisible: true },
   { href: "/attendance-logs", label: "Attendance", icon: CalendarCheck, clientVisible: true },
-  { href: "/work-orders", label: "Orders", icon: ClipboardList },
+  { href: "/work-orders", label: "Orders", icon: ClipboardList, fieldOfficerVisible: true },
 ];
 
 export function isVisibleNavItem(item: NavItem, userRole: string | null, isSuperAdmin?: boolean): boolean {

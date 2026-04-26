@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import type { WorkOrder } from "@/types/work-orders";
 import { isWorkOrderAdminRole } from "@/lib/work-orders";
+import { districtMatches } from "@/lib/districts";
 
 type WorkOrderExamFields = Pick<
   WorkOrder,
@@ -454,26 +455,22 @@ export function WorkOrdersPanel() {
 
     const today = startOfToday();
 
-    let q;
-    if (isAdmin) {
-      q = query(
-        collection(db, "workOrders"),
-        where("date", ">=", today),
-        orderBy("date", "asc"),
-      );
-    } else {
-      q = query(
-        collection(db, "workOrders"),
-        where("district", "in", assignedDistricts),
-        where("date", ">=", today),
-        orderBy("date", "asc"),
-      );
-    }
+    const q = query(
+      collection(db, "workOrders"),
+      where("date", ">=", today),
+      orderBy("date", "asc"),
+    );
 
     const unsub = onSnapshot(
       q,
       (snap) => {
-        setWorkOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() } as WorkOrder)));
+        const orders = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as WorkOrder))
+          .filter((order) => {
+            if (isAdmin) return true;
+            return assignedDistricts.some((district) => districtMatches(district, order.district));
+          });
+        setWorkOrders(orders);
         setIsLoading(false);
       },
       () => {
