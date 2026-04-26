@@ -4,7 +4,7 @@ import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 export const runtime = "nodejs";
 
 // POST /api/admin/work-orders/bulk-delete
-// Body: { examName: string }
+// Body: { examName: string, examCode?: string }
 export async function POST(request: NextRequest) {
   try {
     const adminUser = await requireAdmin(request);
@@ -13,16 +13,28 @@ export async function POST(request: NextRequest) {
     const { FieldValue } = await import("firebase-admin/firestore");
 
     const examName = body.examName;
+    const examCode = body.examCode;
     if (!examName || typeof examName !== "string") {
       return NextResponse.json({ error: "examName is required" }, { status: 400 });
     }
 
-    // Find all active work orders with this exam name
-    const snapshot = await adminDb
-      .collection("workOrders")
-      .where("examName", "==", examName)
-      .where("recordStatus", "==", "active")
-      .get();
+    // Prefer deleting by examCode (stable key). Fall back to examName.
+    let snapshot = null as any;
+    if (examCode && typeof examCode === "string") {
+      snapshot = await adminDb
+        .collection("workOrders")
+        .where("examCode", "==", examCode)
+        .where("recordStatus", "==", "active")
+        .get();
+    }
+
+    if (!snapshot || snapshot.empty) {
+      snapshot = await adminDb
+        .collection("workOrders")
+        .where("examName", "==", examName)
+        .where("recordStatus", "==", "active")
+        .get();
+    }
 
     if (snapshot.empty) {
       return NextResponse.json({ deleted: 0, message: "No active work orders found for this exam." });
@@ -31,7 +43,7 @@ export async function POST(request: NextRequest) {
     const batch = adminDb.batch();
     let deletedCount = 0;
 
-    snapshot.docs.forEach((doc) => {
+    snapshot.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
       batch.update(doc.ref, {
         recordStatus: "cancelled",
         cancelledByBulkDelete: true,

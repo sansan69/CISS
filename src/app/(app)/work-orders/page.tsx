@@ -98,6 +98,9 @@ const buildFallbackSiteKey = (siteName: string, district: string) =>
 const getWorkOrderExamLabel = (order: Partial<Pick<WorkOrder, 'examName' | 'examCode'>>) =>
     String(order.examName || order.examCode || '').replace(/\s+/g, ' ').trim();
 
+const getWorkOrderExamKey = (order: Partial<Pick<WorkOrder, 'examName' | 'examCode'>>) =>
+    normalizeSegment(order.examCode || order.examName || '');
+
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
     const [importMode, setImportMode] = useState<WorkOrderImportMode>('new');
@@ -132,7 +135,7 @@ export default function WorkOrderPage() {
     const UNDO_MS = 5_000;
 
     // ── Bulk delete by exam ────────────────────────────────────────────────
-    const [bulkDeleteExam, setBulkDeleteExam] = useState<string | null>(null);
+    const [bulkDeleteExam, setBulkDeleteExam] = useState<{ key: string; label: string } | null>(null);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
     // ── Expand / collapse per site ───────────────────────────────────────────
@@ -202,7 +205,7 @@ export default function WorkOrderPage() {
         try {
             const res = await authorizedFetch('/api/admin/work-orders/bulk-delete', {
                 method: 'POST',
-                body: JSON.stringify({ examName: bulkDeleteExam }),
+                body: JSON.stringify({ examName: bulkDeleteExam.label, examCode: bulkDeleteExam.key }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Bulk delete failed');
@@ -216,7 +219,7 @@ export default function WorkOrderPage() {
     };
 
     const selectedDistrict = searchParams.get('district') || 'all';
-    const selectedExam = searchParams.get('exam') || 'all';
+    const selectedExamParam = searchParams.get('exam') || 'all';
     const rawSort = searchParams.get('sort');
     const examSort = rawSort === 'exam-desc' ? 'exam-desc' : 'exam-asc';
     const selectedDateValue = searchParams.get('date') || '';
@@ -339,27 +342,111 @@ export default function WorkOrderPage() {
         });
     }, [workOrdersBySite]);
 
+    const selectedDistrictKey = selectedDistrict === 'all' ? 'all' : normalizeSegment(selectedDistrict);
+    const selectedExamKey = selectedExamParam === 'all' ? 'all' : normalizeSegment(selectedExamParam);
+
+    // Flatten work orders for filter option calculations.
+    const allWorkOrderItems = useMemo(() => {
+        const items: Array<{
+            siteId: string;
+            district: string;
+            districtKey: string;
+            examKey: string;
+            examLabel: string;
+            dateMs: number;
+        }> = [];
+
+        Object.entries(workOrdersBySite).forEach(([siteId, orders]) => {
+            orders.forEach((order) => {
+                const district = siteDistricts[siteId] || order.district || '';
+                items.push({
+                    siteId,
+                    district,
+                    districtKey: normalizeSegment(district),
+                    examKey: getWorkOrderExamKey(order),
+                    examLabel: getWorkOrderExamLabel(order),
+                    dateMs: (() => {
+                        try {
+                            return order.date.toMillis();
+                        } catch {
+                            return 0;
+                        }
+                    })(),
+                });
+            });
+        });
+
+        return items;
+    }, [workOrdersBySite, siteDistricts]);
+
     // Distinct districts present in current sites (uses live site district mapping)
     const availableDistricts = useMemo(() => {
         const set = new Set<string>();
-        Object.entries(workOrdersBySite).forEach(([siteId, orders]) => {
-            const district = siteDistricts[siteId] || orders[0]?.district || "";
-            if (district) set.add(district);
-        });
+        const examConstraint = selectedExamKey === 'all' ? null : selectedExamKey;
+
+        for (const item of allWorkOrderItems) {
+            if (selectedDate) {
+                const itemDate = new Date(item.dateMs);
+                if (!isSameDay(itemDate, selectedDate)) continue;
+            }
+            if (examConstraint && item.examKey !== examConstraint) continue;
+            if (item.district) set.add(item.district);
+        }
+
+        if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
+            const assignedKeys = new Set(assignedDistricts.map((d) => normalizeSegment(d)));
+            return Array.from(set)
+                .filter((d) => assignedKeys.has(normalizeSegment(d)))
+                .sort((a, b) => a.localeCompare(b));
+        }
+
         return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [workOrdersBySite, siteDistricts]);
+    }, [allWorkOrderItems, selectedDate, selectedExamKey, userRole, assignedDistricts]);
 
     // Distinct exam names present in current work orders
     const availableExams = useMemo(() => {
-        const set = new Set<string>();
-        Object.values(workOrdersBySite).forEach(orders => {
-            orders.forEach(order => {
-                const en = getWorkOrderExamLabel(order);
-                if (en) set.add(en);
-            });
-        });
-        return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [workOrdersBySite]);
+        const map = new Map<string, string>();
+        const districtConstraint = selectedDistrictKey === 'all' ? null : selectedDistrictKey;
+
+        for (const item of allWorkOrderItems) {
+            if (selectedDate) {
+                const itemDate = new Date(item.dateMs);
+                if (!isSameDay(itemDate, selectedDate)) continue;
+            }
+            if (districtConstraint && item.districtKey !== districtConstraint) continue;
+            if (!item.examKey) continue;
+
+            if (!map.has(item.examKey) || (item.examLabel && item.examLabel.length > (map.get(item.examKey) ?? '').length)) {
+                map.set(item.examKey, item.examLabel || item.examKey);
+            }
+        }
+
+        return Array.from(map.entries())
+            .map(([key, label]) => ({ key, label }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [allWorkOrderItems, selectedDate, selectedDistrictKey]);
+
+    const selectedExamLabel = useMemo(() => {
+        if (selectedExamKey === 'all') return 'All exams';
+        return availableExams.find((e) => e.key === selectedExamKey)?.label ?? selectedExamParam;
+    }, [availableExams, selectedExamKey, selectedExamParam]);
+
+    // If a selected filter becomes invalid after another filter changes, clear it.
+    useEffect(() => {
+        if (selectedDistrict !== 'all') {
+            const districtValid = availableDistricts.some((d) => normalizeSegment(d) === selectedDistrictKey);
+            if (!districtValid) {
+                updateUrlParams({ district: null });
+            }
+        }
+        if (selectedExamParam !== 'all') {
+            const examValid = availableExams.some((e) => e.key === selectedExamKey);
+            if (!examValid) {
+                updateUrlParams({ exam: null });
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [availableDistricts, availableExams]);
 
     // Apply district/date filters and sort for display
     const filteredEntries = useMemo(() => {
@@ -370,14 +457,12 @@ export default function WorkOrderPage() {
             let filtered = orders;
 
             if (selectedDistrict !== 'all') {
-                const districtLower = selectedDistrict.toLowerCase();
-                const siteDistrict = (siteDistricts[siteId] || orders[0]?.district || '').toLowerCase();
-                if (siteDistrict !== districtLower) continue;
+                const siteDistrictKey = normalizeSegment(siteDistricts[siteId] || orders[0]?.district || '');
+                if (siteDistrictKey !== selectedDistrictKey) continue;
             }
 
-            if (selectedExam !== 'all') {
-                const selectedExamKey = normalizeSegment(selectedExam);
-                filtered = filtered.filter(o => normalizeSegment(getWorkOrderExamLabel(o)) === selectedExamKey);
+            if (selectedExamKey !== 'all') {
+                filtered = filtered.filter((o) => getWorkOrderExamKey(o) === selectedExamKey);
             }
 
             if (selectedDate) {
@@ -395,17 +480,20 @@ export default function WorkOrderPage() {
 
             // Sort individual orders within a site
             const sortedOrders = [...filtered].sort((a, b) => {
+                try {
+                    const aTime = a.date.toMillis();
+                    const bTime = b.date.toMillis();
+                    if (aTime !== bTime) return aTime - bTime;
+                } catch {
+                    // ignore
+                }
+
                 const aName = getWorkOrderExamLabel(a).toLowerCase();
                 const bName = getWorkOrderExamLabel(b).toLowerCase();
                 const examCompare = examSort === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
                 if (examCompare !== 0) return examCompare;
-                try {
-                    const aTime = a.date.toMillis();
-                    const bTime = b.date.toMillis();
-                    return aTime - bTime;
-                } catch {
-                    return 0;
-                }
+
+                return 0;
             });
 
             result.push([siteId, sortedOrders]);
@@ -413,17 +501,20 @@ export default function WorkOrderPage() {
 
         // Sort sites/groups themselves
         result.sort(([, aOrders], [, bOrders]) => {
+            const aTime = aOrders[0]?.date?.toMillis?.() ?? 0;
+            const bTime = bOrders[0]?.date?.toMillis?.() ?? 0;
+            if (aTime !== bTime) return aTime - bTime;
+
             const aName = getWorkOrderExamLabel(aOrders[0] ?? {}).toLowerCase();
             const bName = getWorkOrderExamLabel(bOrders[0] ?? {}).toLowerCase();
             const examCompare = examSort === 'exam-asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
             if (examCompare !== 0) return examCompare;
-            const aTime = aOrders[0]?.date?.toMillis?.() ?? 0;
-            const bTime = bOrders[0]?.date?.toMillis?.() ?? 0;
-            return aTime - bTime;
+
+            return 0;
         });
 
         return result;
-    }, [workOrdersBySite, selectedDistrict, selectedExam, selectedDate, siteDistricts, examSort]);
+    }, [workOrdersBySite, selectedDistrict, selectedDistrictKey, selectedExamKey, selectedDate, siteDistricts, examSort]);
 
     // Derived from filteredEntries — must come after the useMemo above
     const allExpanded = filteredEntries.length > 0 && filteredEntries.every(([id]) => expandedSites.has(id));
@@ -879,7 +970,7 @@ export default function WorkOrderPage() {
                                     <div className="flex min-w-[180px] flex-col gap-1">
                                         <Label className="text-xs font-medium text-muted-foreground">Filter by exam</Label>
                                         <Select
-                                            value={selectedExam}
+                                            value={selectedExamKey}
                                             onValueChange={(val) => updateUrlParams({ exam: val })}
                                         >
                                             <SelectTrigger className="h-9">
@@ -887,22 +978,22 @@ export default function WorkOrderPage() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">All exams</SelectItem>
-                                                {availableExams.map((e) => (
-                                                    <SelectItem key={e} value={e}>
-                                                        {e}
+                                                {availableExams.map((exam) => (
+                                                    <SelectItem key={exam.key} value={exam.key}>
+                                                        {exam.label}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    {canAdminWorkOrders && selectedExam !== 'all' && (
+                                    {canAdminWorkOrders && selectedExamKey !== 'all' && (
                                         <div className="flex min-w-[140px] flex-col gap-1">
                                             <Label className="text-xs font-medium text-muted-foreground">Actions</Label>
                                             <Button
                                                 variant="destructive"
                                                 size="sm"
                                                 className="h-9 text-xs"
-                                                onClick={() => setBulkDeleteExam(selectedExam)}
+                                                onClick={() => setBulkDeleteExam({ key: selectedExamKey, label: selectedExamLabel })}
                                             >
                                                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                                                 Delete Exam
@@ -1113,7 +1204,7 @@ export default function WorkOrderPage() {
             <Dialog open={!!bulkDeleteExam} onOpenChange={(open) => !open && setBulkDeleteExam(null)}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Delete All Work Orders for {bulkDeleteExam}?</DialogTitle>
+                        <DialogTitle>Delete All Work Orders for {bulkDeleteExam?.label}?</DialogTitle>
                         <DialogDescription>
                             This will permanently cancel all upcoming work orders for this exam.
                             Any assigned guards will be unassigned.
