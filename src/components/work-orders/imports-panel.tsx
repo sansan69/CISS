@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { onSnapshot, collection, query } from "firebase/firestore";
+import { onSnapshot, collection, query, where } from "firebase/firestore";
+import { startOfMonth } from "date-fns";
 import { ChevronDown, ChevronUp, FileClock, Loader2, MapPin, Rows3, SquareStack } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -160,8 +160,7 @@ export function WorkOrderImportsPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
-  const searchParams = useSearchParams();
-  const [sort, setSort] = useState<string>(searchParams.get("sort") || "date-desc");
+  const [sort, setSort] = useState<string>("date-desc");
 
   const SORT_OPTIONS = [
     { value: "date-desc", label: "Latest first" },
@@ -171,7 +170,14 @@ export function WorkOrderImportsPanel() {
   ];
 
   useEffect(() => {
-    const workOrdersQuery = query(collection(db, "workOrders"));
+    // Only fetch work orders from last 6 months to avoid loading too much data
+    const sixMonthsAgo = startOfMonth(new Date());
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const workOrdersQuery = query(
+      collection(db, "workOrders"),
+      where("date", ">=", sixMonthsAgo)
+    );
 
     const unsubscribe = onSnapshot(
       workOrdersQuery,
