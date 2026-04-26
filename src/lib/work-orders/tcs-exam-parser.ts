@@ -12,7 +12,7 @@ const HEADER_SCAN_ROWS = 4;
 const STATIC_HEADER_ALIASES: Record<"siteId" | "siteName" | "district", string[]> = {
   siteId: ["site id", "site code", "tc code", "code", "center code"],
   siteName: ["site name", "site", "center", "centre", "venue", "location", "institution", "school"],
-  district: ["district", "city", "area", "region", "place", "location", "district name"],
+  district: ["city", "district", "area", "region", "place", "location", "district name"],
 };
 
 const GENERIC_TITLE_HEADERS = new Set([
@@ -50,18 +50,6 @@ function normalizeTcsDistrict(value: unknown): string {
   // assignable field-officer districts, so map known zones to their district.
   if (/^south\s*2$/i.test(normalized)) {
     return "Ernakulam";
-  }
-  // Map known venue names that have incorrect districts in TCS sheets
-  const venueCorrections: Record<string, string> = {
-    "exatech": "Thiruvananthapuram",
-    "rajadhani institute of engineering and technology": "Thiruvananthapuram",
-    "amal jyothi college of engineering": "Kottayam",
-    "amrita": "Kollam",
-  };
-  for (const [venue, correctDistrict] of Object.entries(venueCorrections)) {
-    if (normalized.includes(venue)) {
-      return correctDistrict;
-    }
   }
   return normalized;
 }

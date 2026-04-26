@@ -67,19 +67,6 @@ function normalizeTcsDistrict(value: unknown): string {
   if (/^south\s*2$/i.test(normalized)) {
     return "Ernakulam";
   }
-  // Map known venue names that have incorrect districts in TCS sheets
-  const venueCorrections: Record<string, string> = {
-    "exatech": "Thiruvananthapuram",
-    "rajadhani institute of engineering and technology": "Thiruvananthapuram",
-    "amal jyothi college of engineering": "Kottayam",
-    "amrita": "Kollam",
-  };
-  const lower = normalized.toLowerCase();
-  for (const [venue, correctDistrict] of Object.entries(venueCorrections)) {
-    if (lower.includes(venue)) {
-      return correctDistrict;
-    }
-  }
   return normalized;
 }
 

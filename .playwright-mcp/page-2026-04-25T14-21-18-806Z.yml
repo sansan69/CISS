@@ -1,0 +1,64 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - link "Back to Home" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img
+        - text: Back to Home
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - generic [ref=e9]: Employee Registration
+          - generic [ref=e10]: Fill any section now and continue later from this device.
+        - generic [ref=e12]:
+          - generic [ref=e13]:
+            - generic [ref=e15]:
+              - generic [ref=e16]:
+                - paragraph [ref=e17]: Step 1 of 5
+                - paragraph [ref=e18]: Client
+              - generic [ref=e20]: 0% complete
+            - generic [ref=e23]:
+              - button "2 missing Client" [ref=e24] [cursor=pointer]:
+                - generic [ref=e25]: 2 missing
+                - generic [ref=e26]: Client
+              - button "9 missing Personal" [ref=e27] [cursor=pointer]:
+                - generic [ref=e28]: 9 missing
+                - generic [ref=e29]: Personal
+              - button "9 missing Documents" [ref=e30] [cursor=pointer]:
+                - generic [ref=e31]: 9 missing
+                - generic [ref=e32]: Documents
+              - button "4 missing Details" [ref=e33] [cursor=pointer]:
+                - generic [ref=e34]: 4 missing
+                - generic [ref=e35]: Details
+              - button "1 missing Review" [ref=e36] [cursor=pointer]:
+                - generic [ref=e37]: 1 missing
+                - generic [ref=e38]: Review
+          - generic [ref=e39]:
+            - generic [ref=e44]: Client Information
+            - generic [ref=e45]:
+              - generic [ref=e46]:
+                - generic [ref=e47]: Joining Date *
+                - textbox "Joining Date *" [ref=e48]
+                - paragraph [ref=e49]: A native date picker is used here so it is easier on phones.
+              - generic [ref=e50]:
+                - generic [ref=e51]: Client Name *
+                - combobox "Client Name *" [disabled] [ref=e52]:
+                  - generic: Loading clients...
+                  - img [ref=e53]
+                - combobox [disabled] [ref=e55]
+                - paragraph [ref=e56]: Choose the deployment client first. The remaining review stays aligned to this selection.
+          - generic [ref=e58]:
+            - generic [ref=e59]:
+              - paragraph [ref=e60]: Changes stay saved on this device as you go.
+              - button "Clear saved draft" [ref=e61] [cursor=pointer]
+            - generic [ref=e62]:
+              - button "Back" [disabled]:
+                - img
+                - text: Back
+              - button "Next" [ref=e63] [cursor=pointer]:
+                - text: Next
+                - img
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e64]
