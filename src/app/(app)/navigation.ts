@@ -52,7 +52,6 @@ export const mainNavGroups: NavGroup[] = [
     label: "Workforce",
     items: [
       { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true },
-      { href: "/work-orders/imports", label: "Work Order Imports", icon: FileClock, adminOnly: true },
       { href: "/field-officers", label: "Field Officers", icon: ShieldAlert, fieldOfficerVisible: true },
     ],
   },
