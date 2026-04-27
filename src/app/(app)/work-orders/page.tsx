@@ -64,6 +64,10 @@ const FIELD_OFFICER_TABS: { value: WorkspaceTab; label: string; icon: React.Elem
     { value: 'assignments', label: 'Assignments', icon: FileSpreadsheet },
 ];
 
+const CLIENT_TABS: { value: WorkspaceTab; label: string; icon: React.ElementType }[] = [
+    { value: 'assignments', label: 'Deployments', icon: FileSpreadsheet },
+];
+
 const WORK_ORDER_NAV_META = {
     fieldOfficerLabel: 'Upcoming Duties',
 };
@@ -135,13 +139,14 @@ export default function WorkOrderPage() {
     const [workOrdersBySite, setWorkOrdersBySite] = useState<{[key: string]: WorkOrder[]}>({});
     const [siteDistricts, setSiteDistricts] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(true);
-    const { userRole, assignedDistricts } = useAppAuth();
+    const { userRole, assignedDistricts, clientInfo } = useAppAuth();
     const canAdminWorkOrders = isWorkOrderAdminRole(userRole);
+    const isClientView = userRole === 'client';
     const activeTab = useMemo(
         () => resolveWorkspaceTab(searchParams.get('tab'), userRole),
         [searchParams, userRole],
     );
-    const visibleTabs = canAdminWorkOrders ? ADMIN_TABS : FIELD_OFFICER_TABS;
+    const visibleTabs = canAdminWorkOrders ? ADMIN_TABS : isClientView ? CLIENT_TABS : FIELD_OFFICER_TABS;
 
     // ── Soft-delete with undo ────────────────────────────────────────────────
     // Orders hidden optimistically while the undo window is open
@@ -329,6 +334,12 @@ export default function WorkOrderPage() {
             return;
         }
 
+        if (isClientView && !clientInfo?.clientName) {
+            setIsLoading(false);
+            setWorkOrdersBySite({});
+            return;
+        }
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const todayMs = startOfToday().getTime();
             const orders = snapshot.docs
@@ -341,6 +352,9 @@ export default function WorkOrderPage() {
                         userRole === 'fieldOfficer' &&
                         !assignedDistricts.some((district) => districtMatches(district, o.district))
                     ) {
+                        return false;
+                    }
+                    if (isClientView && clientInfo?.clientName && o.clientName !== clientInfo.clientName) {
                         return false;
                     }
                     try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
@@ -365,7 +379,7 @@ export default function WorkOrderPage() {
 
         return () => unsubscribe();
 
-    }, [userRole, assignedDistricts, toast]);
+    }, [userRole, assignedDistricts, toast, isClientView, clientInfo?.clientName]);
 
     // Fetch site districts so UI always shows the current site district
     useEffect(() => {
@@ -722,7 +736,9 @@ export default function WorkOrderPage() {
     
     const pageTitle = userRole === 'fieldOfficer'
         ? `${WORK_ORDER_NAV_META.fieldOfficerLabel} Schedules`
-        : "Work Order Management";
+        : isClientView
+            ? "Client Deployment Board"
+            : "Work Order Management";
     const listQueryString = searchParams.toString();
     const siteHref = (siteId: string) => (listQueryString ? `/work-orders/${siteId}?${listQueryString}` : `/work-orders/${siteId}`);
 
@@ -734,7 +750,9 @@ export default function WorkOrderPage() {
                 description={
                     canAdminWorkOrders
                         ? 'Upload and manage exam duty requirements across active duty sites.'
-                        : 'Review the exam duty requirements that are relevant to your assigned districts.'
+                        : isClientView
+                            ? 'Review upcoming deployment duties and assigned coverage for your linked client sites.'
+                            : 'Review the exam duty requirements that are relevant to your assigned districts.'
                 }
                 breadcrumbs={[
                     { label: "Dashboard", href: "/dashboard" },

@@ -71,7 +71,8 @@ export default function EmployeeDirectoryPage() {
     const searchParams = useSearchParams();
 
     // User auth state
-    const { userRole, assignedDistricts } = useAppAuth();
+    const { userRole, assignedDistricts, clientInfo } = useAppAuth();
+    const isClientView = userRole === 'client';
     
     // Filters state - source of truth is the URL search params
     const client = searchParams.get('client') || 'all';
@@ -180,6 +181,10 @@ export default function EmployeeDirectoryPage() {
             q = query(q, where('district', 'in', assignedDistricts));
         } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
             return null; // Return null to indicate no query should be run
+        } else if (userRole === 'client' && clientInfo?.clientName) {
+            q = query(q, where('clientName', '==', clientInfo.clientName));
+        } else if (userRole === 'client' && !clientInfo?.clientName) {
+            return null;
         }
         
         if (client !== 'all') {
@@ -193,7 +198,7 @@ export default function EmployeeDirectoryPage() {
         }
         // Note: ordering and search are applied in fetchData to support multi-field search
         return q;
-    }, [userRole, assignedDistricts, client, status, district]);
+    }, [userRole, assignedDistricts, client, status, district, clientInfo?.clientName]);
 
     const fetchData = useCallback(async (direction: 'next' | 'prev' | 'first' = 'first') => {
         setIsLoading(true);
@@ -482,7 +487,14 @@ export default function EmployeeDirectoryPage() {
                     </div>
                     <div>
                         <Label htmlFor="client-filter" className="sr-only">Client</Label>
-                        <Select value={client} onValueChange={(val) => handleFilterChange('client', val)}><SelectTrigger id="client-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Clients</SelectItem>{clientOptions.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
+                        <Select value={isClientView ? (clientInfo?.clientName || client) : client} onValueChange={(val) => handleFilterChange('client', val)} disabled={isClientView}>
+                            <SelectTrigger id="client-filter"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Clients</SelectItem>
+                                {clientOptions.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        {isClientView && <p className="text-xs text-muted-foreground mt-1">Locked to your client account.</p>}
                     </div>
                      <div>
                         <Label htmlFor="district-filter" className="sr-only">District</Label>
@@ -505,7 +517,7 @@ export default function EmployeeDirectoryPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Employee List</CardTitle>
-                    <CardDescription>A directory of all personnel in the system.</CardDescription>
+                    <CardDescription>{isClientView ? "A read-only directory of guards linked to your client." : "A directory of all personnel in the system."}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {userRole === 'superAdmin' && superAdminWarnings.length > 0 && (
@@ -666,7 +678,7 @@ export default function EmployeeDirectoryPage() {
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> View / Edit</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> {isClientView ? 'View Profile' : 'View / Edit'}</DropdownMenuItem>
                                                             {userRole === 'admin' && (
                                                                 <>
                                                                     <DropdownMenuSeparator />

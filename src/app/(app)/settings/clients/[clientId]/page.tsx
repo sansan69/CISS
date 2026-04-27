@@ -73,6 +73,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { authorizedFetch } from "@/lib/api-client";
+import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
 import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/route";
 import { useToast } from "@/hooks/use-toast";
 import { KERALA_DISTRICTS, DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
@@ -87,6 +88,8 @@ import type { CoordinateSource, CoordinateStatus, GeoPointLike, SiteType } from 
 interface ClientDoc {
   id: string;
   name: string;
+  portalSubdomain?: string;
+  portalEnabled?: boolean;
   uniformAllowanceMonthly?: number;
   fieldAllowanceMonthly?: number;
   nationalHolidayList?: string[];
@@ -245,7 +248,7 @@ export default function ClientDashboardPage() {
   const [deleteLocationTarget, setDeleteLocationTarget] = useState<LocationDoc | null>(null);
 
   const [clientEditDialog, setClientEditDialog] = useState(false);
-  const [clientForm, setClientForm] = useState({ name: "" });
+  const [clientForm, setClientForm] = useState({ name: "", portalSubdomain: "", portalEnabled: true });
   const [savingClient, setSavingClient] = useState(false);
   const [deleteClientDialog, setDeleteClientDialog] = useState(false);
   const [runningGpsRepair, setRunningGpsRepair] = useState(false);
@@ -323,6 +326,8 @@ export default function ClientDashboardPage() {
     if (!client) return;
     setClientForm({
       name: client.name,
+      portalSubdomain: client.portalSubdomain || "",
+      portalEnabled: client.portalEnabled !== false,
     });
     setClientEditDialog(true);
   };
@@ -654,7 +659,7 @@ export default function ClientDashboardPage() {
       <PageHeader
         eyebrow="Clients & Sites"
         title={client.name}
-        description={`${sites.length} site${sites.length !== 1 ? "s" : ""} · ${locations.length} office location${locations.length !== 1 ? "s" : ""}`}
+        description={`${sites.length} site${sites.length !== 1 ? "s" : ""} · ${locations.length} office location${locations.length !== 1 ? "s" : ""}${client.portalSubdomain ? ` · ${client.portalSubdomain}.cisskerala.site` : ""}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Settings", href: "/settings" },
@@ -663,6 +668,13 @@ export default function ClientDashboardPage() {
         ]}
         actions={
           <div className="flex gap-2">
+            {client.portalSubdomain ? (
+              <Button variant="outline" asChild>
+                <a href={buildClientPortalUrl(client.portalSubdomain) || "#"} target="_blank" rel="noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Open Portal
+                </a>
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={openClientEdit}>
               <Pencil className="mr-2 h-4 w-4" /> Edit Client
             </Button>
@@ -897,6 +909,32 @@ export default function ClientDashboardPage() {
             <div className="space-y-1.5">
               <Label>Client Name *</Label>
               <Input value={clientForm.name} onChange={(e) => setClientForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Portal Subdomain *</Label>
+              <Input
+                value={clientForm.portalSubdomain}
+                onChange={(e) =>
+                  setClientForm((form) => ({
+                    ...form,
+                    portalSubdomain: slugifyPortalSubdomain(e.target.value),
+                  }))
+                }
+                placeholder="e.g. logiware"
+              />
+              <p className="text-xs text-muted-foreground">
+                Portal URL: {buildClientPortalUrl(clientForm.portalSubdomain || clientForm.name) || "https://client.cisskerala.site"}
+              </p>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Portal access</p>
+                <p className="text-xs text-muted-foreground">Admin can pause or resume this client dashboard link at any time.</p>
+              </div>
+              <Switch
+                checked={clientForm.portalEnabled}
+                onCheckedChange={(checked) => setClientForm((form) => ({ ...form, portalEnabled: checked }))}
+              />
             </div>
           </div>
           <DialogFooter className="mt-4">

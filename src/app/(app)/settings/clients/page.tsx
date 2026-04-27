@@ -28,12 +28,16 @@ import { Plus, Building2, MapPin, ChevronRight, Loader2 } from "lucide-react";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { siteBelongsToClient } from "@/lib/sites/site-directory";
+import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
 
 interface ClientRow {
   id: string;
   name: string;
   siteCount?: number;
   locationCount?: number;
+  portalSubdomain?: string;
+  portalEnabled?: boolean;
+  portalUrl?: string | null;
 }
 
 export default function ClientsPage() {
@@ -44,6 +48,7 @@ export default function ClientsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newPortalSubdomain, setNewPortalSubdomain] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -52,6 +57,9 @@ export default function ClientsPage() {
       const rows: ClientRow[] = snap.docs.map((d) => ({
         id: d.id,
         name: (d.data().name as string) || d.data().clientName || "",
+        portalSubdomain: typeof d.data().portalSubdomain === "string" ? d.data().portalSubdomain : "",
+        portalEnabled: d.data().portalEnabled !== false,
+        portalUrl: buildClientPortalUrl(typeof d.data().portalSubdomain === "string" ? d.data().portalSubdomain : ""),
       }));
 
       // Fetch site + location counts in parallel for all clients
@@ -90,13 +98,14 @@ export default function ClientsPage() {
     try {
       const res = await authorizedFetch("/api/admin/clients", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, portalSubdomain: newPortalSubdomain || name }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create client");
       toast({ title: "Client created", description: `${name} has been added.` });
       setDialogOpen(false);
       setNewName("");
+      setNewPortalSubdomain("");
       // Navigate to the new client's dashboard
       if (data.id) router.push(`/settings/clients/${data.id}`);
     } catch (err: any) {
@@ -168,6 +177,11 @@ export default function ClientsPage() {
                   {client.locationCount ?? 0} office
                   {client.locationCount !== 1 ? "s" : ""}
                 </Badge>
+                {client.portalSubdomain ? (
+                  <Badge variant={client.portalEnabled ? "default" : "secondary"} className="gap-1 text-xs">
+                    {client.portalSubdomain}.cisskerala.site
+                  </Badge>
+                ) : null}
               </CardContent>
             </Card>
           ))}
@@ -189,6 +203,17 @@ export default function ClientsPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 autoFocus
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Portal Subdomain *</Label>
+              <Input
+                placeholder="e.g. logiware"
+                value={newPortalSubdomain}
+                onChange={(e) => setNewPortalSubdomain(slugifyPortalSubdomain(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Portal URL: {buildClientPortalUrl(newPortalSubdomain || newName) || "https://client.cisskerala.site"}
+              </p>
             </div>
           </div>
           <DialogFooter className="mt-4">

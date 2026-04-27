@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileClock,
+  FileText,
   Globe,
   GraduationCap,
   LayoutDashboard,
@@ -51,8 +52,15 @@ export const mainNavGroups: NavGroup[] = [
   {
     label: "Workforce",
     items: [
-      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true },
+      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true },
       { href: "/field-officers", label: "Field Officers", icon: ShieldAlert, fieldOfficerVisible: true },
+    ],
+  },
+  {
+    label: "Reports",
+    items: [
+      { href: "/visit-reports", label: "Visit Reports", icon: FileText, fieldOfficerVisible: true, clientVisible: true },
+      { href: "/training-reports", label: "Training Reports", icon: GraduationCap, fieldOfficerVisible: true, clientVisible: true },
     ],
   },
   {
@@ -96,7 +104,7 @@ export const bottomNavItems: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard, exact: true, clientVisible: true },
   { href: "/employees", label: "Guards", icon: Users, clientVisible: true },
   { href: "/attendance-logs", label: "Attendance", icon: CalendarCheck, clientVisible: true },
-  { href: "/work-orders", label: "Orders", icon: ClipboardList, fieldOfficerVisible: true },
+  { href: "/work-orders", label: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true },
 ];
 
 export function isVisibleNavItem(item: NavItem, userRole: string | null, isSuperAdmin?: boolean): boolean {

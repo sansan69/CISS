@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyRequestAuth, requireAdminOrFieldOfficer, hasAdminAccess, unauthorizedResponse } from "@/lib/server/auth";
+import {
+  verifyRequestAuth,
+  hasAdminAccess,
+  hasClientAccess,
+  requireAdminOrFieldOfficer,
+  unauthorizedResponse,
+} from "@/lib/server/auth";
+import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
@@ -16,8 +23,11 @@ function toCsv(rows: Record<string, unknown>[]) {
 export async function GET(request: NextRequest) {
   try {
     const decodedToken = await verifyRequestAuth(request);
-    requireAdminOrFieldOfficer(decodedToken);
     const isAdmin = hasAdminAccess(decodedToken);
+    const isClient = hasClientAccess(decodedToken);
+    if (!isAdmin && !isClient) {
+      requireAdminOrFieldOfficer(decodedToken);
+    }
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const from = request.nextUrl.searchParams.get("from");
     const to = request.nextUrl.searchParams.get("to");
@@ -52,8 +62,17 @@ export async function GET(request: NextRequest) {
       queryRef = queryRef.where("clientName", "==", clientName);
     }
 
-    // Field officers can only export their assigned districts
-    if (!isAdmin) {
+    if (isClient) {
+      const clientScope = await resolveClientScope(adminDb, decodedToken);
+      if (!clientScope) {
+        return NextResponse.json({ error: "Client account is not linked to a valid client profile." }, { status: 403 });
+      }
+      if (clientName && clientName !== "all" && clientName !== clientScope.clientName) {
+        return NextResponse.json({ error: "Access denied for that client." }, { status: 403 });
+      }
+      queryRef = queryRef.where("clientName", "==", clientScope.clientName);
+    } else if (!isAdmin) {
+      // Field officers can only export their assigned districts
       const foDistricts: string[] = Array.isArray(decodedToken.assignedDistricts)
         ? (decodedToken.assignedDistricts as string[])
         : [];
@@ -76,38 +95,41 @@ export async function GET(request: NextRequest) {
     const LIMIT = 1000;
     const snapshot = await queryRef.orderBy("createdAt", "desc").limit(LIMIT).get();
     const truncated = snapshot.size === LIMIT;
-    const rows = snapshot.docs.map((doc) => {
-      const data = doc.data() as Record<string, any>;
-      return {
-        employeeName: data.employeeName || "",
-        employeeId: data.employeeId || "",
-        status: data.status || "",
-        clientName: data.clientName || "",
-        district: data.district || "",
-        siteName: data.siteName || "",
-        locationText: data.locationText || "",
-        complianceStatus: data.photoCompliance?.overallStatus || "",
-        complianceWarnings: Array.isArray(data.photoCompliance?.warnings)
-          ? data.photoCompliance.warnings.join(" | ")
-          : "",
-        requiresLocationReview: data.requiresLocationReview === true ? "yes" : "no",
-        isMockLocationSuspected: data.isMockLocationSuspected === true ? "yes" : "no",
-        gpsAccuracyMeters:
-          typeof data.gpsAccuracyMeters === "number" ? data.gpsAccuracyMeters : "",
-        reportedAt:
-          typeof data.reportedAt?.toDate === "function"
-            ? data.reportedAt.toDate().toISOString()
-            : typeof data.reportedAtClient === "string"
-              ? data.reportedAtClient
-              : typeof data.createdAt?.toDate === "function"
-                ? data.createdAt.toDate().toISOString()
-                : "",
-        createdAt:
-          typeof data.createdAt?.toDate === "function"
-            ? data.createdAt.toDate().toISOString()
+    const clientScope = isClient ? await resolveClientScope(adminDb, decodedToken) : null;
+    const rows = snapshot.docs
+      .map((doc) => {
+        const data = doc.data() as Record<string, any>;
+        return {
+          employeeName: data.employeeName || "",
+          employeeId: data.employeeId || "",
+          status: data.status || "",
+          clientName: data.clientName || "",
+          district: data.district || "",
+          siteName: data.siteName || "",
+          locationText: data.locationText || "",
+          complianceStatus: data.photoCompliance?.overallStatus || "",
+          complianceWarnings: Array.isArray(data.photoCompliance?.warnings)
+            ? data.photoCompliance.warnings.join(" | ")
             : "",
-      };
-    });
+          requiresLocationReview: data.requiresLocationReview === true ? "yes" : "no",
+          isMockLocationSuspected: data.isMockLocationSuspected === true ? "yes" : "no",
+          gpsAccuracyMeters:
+            typeof data.gpsAccuracyMeters === "number" ? data.gpsAccuracyMeters : "",
+          reportedAt:
+            typeof data.reportedAt?.toDate === "function"
+              ? data.reportedAt.toDate().toISOString()
+              : typeof data.reportedAtClient === "string"
+                ? data.reportedAtClient
+                : typeof data.createdAt?.toDate === "function"
+                  ? data.createdAt.toDate().toISOString()
+                  : "",
+          createdAt:
+            typeof data.createdAt?.toDate === "function"
+              ? data.createdAt.toDate().toISOString()
+              : "",
+        };
+      })
+      .filter((row) => !clientScope || matchesClientScope(row, clientScope));
 
     if (format === "csv") {
       const headers: Record<string, string> = {

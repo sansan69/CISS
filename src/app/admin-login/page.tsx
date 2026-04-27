@@ -14,6 +14,18 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { isLegacyAdminEmail } from '@/lib/auth/admin';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import { buildClientPortalUrl } from '@/lib/client-portal';
+
+type PortalContext = {
+  isClientPortal: boolean;
+  client: null | {
+    id: string;
+    name: string;
+    portalSubdomain: string;
+    portalEnabled: boolean;
+    portalUrl: string | null;
+  };
+};
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -21,6 +33,22 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [portalContext, setPortalContext] = useState<PortalContext | null>(null);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/public/portal-context")
+      .then((response) => response.json())
+      .then((data) => {
+        if (active) setPortalContext(data);
+      })
+      .catch(() => {
+        if (active) setPortalContext(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,14 +81,14 @@ export default function AdminLoginPage() {
 
       const idTokenResult = await userCredential.user.getIdTokenResult();
       const role = idTokenResult.claims.role;
-      const isAuthorized = idTokenResult.claims.admin === true
+      const baseAuthorized = idTokenResult.claims.admin === true
         || role === 'admin'
         || role === 'superAdmin'
         || role === 'fieldOfficer'
         || role === 'client'
         || isLegacyAdminEmail(userCredential.user.email);
 
-      if (!isAuthorized) {
+      if (!baseAuthorized) {
         toast({
           variant: 'destructive',
           title: 'Access Denied',
@@ -68,6 +96,41 @@ export default function AdminLoginPage() {
         });
         await auth.signOut();
         return;
+      }
+
+      if (portalContext?.isClientPortal && portalContext.client) {
+        if (portalContext.client.portalEnabled === false) {
+          toast({
+            variant: 'destructive',
+            title: 'Portal Paused',
+            description: 'This client portal is currently disabled by the admin.',
+          });
+          await auth.signOut();
+          return;
+        }
+
+        const tokenClientName =
+          typeof idTokenResult.claims.clientName === "string"
+            ? idTokenResult.claims.clientName
+            : "";
+        const isAdminLike =
+          idTokenResult.claims.admin === true ||
+          role === "admin" ||
+          role === "superAdmin" ||
+          isLegacyAdminEmail(userCredential.user.email);
+        const isMatchingClient =
+          role === "client" &&
+          tokenClientName.trim().toLowerCase() === portalContext.client.name.trim().toLowerCase();
+
+        if (!isAdminLike && !isMatchingClient) {
+          toast({
+            variant: 'destructive',
+            title: 'Wrong Portal',
+            description: `This sign-in does not belong to the ${portalContext.client.name} client portal.`,
+          });
+          await auth.signOut();
+          return;
+        }
       }
 
       if (auth.currentUser) {
@@ -150,12 +213,18 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="relative max-w-md animate-slide-up stagger-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent mb-3">Admin Portal</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent mb-3">
+            {portalContext?.isClientPortal ? "Client Portal" : "Admin Portal"}
+          </p>
           <h1 className="text-4xl lg:text-5xl font-bold font-exo2 tracking-tight leading-[1.1]">
-            Manage the entire workforce at a glance.
+            {portalContext?.isClientPortal && portalContext.client
+              ? `${portalContext.client.name} operations at a glance.`
+              : "Manage the entire workforce at a glance."}
           </h1>
           <p className="mt-4 text-base text-white/70 leading-relaxed">
-            Attendance, payroll, work orders, and field operations — all in one portal.
+            {portalContext?.isClientPortal && portalContext.client
+              ? "Attendance, deployments, site visits, and training visibility for your client account."
+              : "Attendance, payroll, work orders, and field operations — all in one portal."}
           </p>
 
           <div className="mt-8 space-y-3">
@@ -203,10 +272,12 @@ export default function AdminLoginPage() {
               />
             </div>
             <h1 className="text-2xl font-bold text-white font-exo2 tracking-tight">
-              Admin Portal
+              {portalContext?.isClientPortal ? "Client Portal" : "Admin Portal"}
             </h1>
             <p className="text-sm mt-1.5 font-medium text-accent">
-              CISS Workforce
+              {portalContext?.isClientPortal && portalContext.client
+                ? portalContext.client.name
+                : "CISS Workforce"}
             </p>
           </div>
 
@@ -219,7 +290,9 @@ export default function AdminLoginPage() {
               <div className="text-center md:text-left mb-7">
                 <h2 className="text-2xl font-bold font-exo2 tracking-tight">Sign in</h2>
                 <p className="text-base text-muted-foreground mt-1">
-                  Enter your admin credentials to continue.
+                  {portalContext?.isClientPortal && portalContext.client
+                    ? `Sign in to ${portalContext.client.name}. Admin oversight is still allowed here.`
+                    : "Enter your admin credentials to continue."}
                 </p>
               </div>
 

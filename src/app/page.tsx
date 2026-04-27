@@ -38,6 +38,17 @@ type NavigatorWithStandalone = Navigator & {
   standalone?: boolean;
 };
 
+type PortalContext = {
+  isClientPortal: boolean;
+  client: null | {
+    id: string;
+    name: string;
+    portalSubdomain: string;
+    portalEnabled: boolean;
+    portalUrl: string | null;
+  };
+};
+
 const quickLinks: QuickLink[] = [
   {
     href: "/attendance",
@@ -67,6 +78,7 @@ export default function LandingPage() {
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showFallbackGuidance, setShowFallbackGuidance] = useState(false);
+  const [portalContext, setPortalContext] = useState<PortalContext | null>(null);
   const normalizedPhone = phoneNumber.trim().replace(/\D/g, "");
 
   useEffect(() => {
@@ -108,6 +120,21 @@ export default function LandingPage() {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt as EventListener);
       window.removeEventListener("appinstalled", handleAppInstalled);
       window.clearTimeout(fallbackTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/public/portal-context")
+      .then((response) => response.json())
+      .then((data) => {
+        if (active) setPortalContext(data);
+      })
+      .catch(() => {
+        if (active) setPortalContext(null);
+      });
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -232,6 +259,23 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
+
+        {portalContext?.isClientPortal && portalContext.client ? (
+          <section className="mt-3 rounded-3xl border border-brand-blue/10 bg-card/92 p-5 shadow-card lg:mt-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-blue">Client Portal</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight">{portalContext.client.name}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This subdomain is assigned by the admin for the {portalContext.client.name} client dashboard.
+                </p>
+              </div>
+              <Button asChild>
+                <Link href="/admin-login">Open Portal Login</Link>
+              </Button>
+            </div>
+          </section>
+        ) : null}
 
         <div className="mt-3 grid items-start gap-3 lg:mt-0 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-14">
           <section

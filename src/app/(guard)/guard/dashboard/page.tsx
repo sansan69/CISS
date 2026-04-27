@@ -291,7 +291,9 @@ export default function GuardDashboardPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Mark Attendance</p>
               <p className="text-xs text-white/75">
-                Open your attendance camera and submit from this portal
+                {data.nextShift?.siteName
+                  ? `Open the camera for ${data.nextShift.siteName}`
+                  : "Open your attendance camera and submit from this portal"}
               </p>
             </div>
             <ArrowRight size={18} className="shrink-0 text-white/80" />

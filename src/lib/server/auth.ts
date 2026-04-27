@@ -40,6 +40,10 @@ export function hasFieldOfficerAccess(decodedToken: Pick<AppDecodedToken, "role"
   return decodedToken.role === "fieldOfficer";
 }
 
+export function hasClientAccess(decodedToken: Pick<AppDecodedToken, "role">) {
+  return decodedToken.role === "client";
+}
+
 export function requireAdminLike(decodedToken: AppDecodedToken) {
   if (!hasAdminAccess(decodedToken)) {
     throw new Error("Admin access required.");

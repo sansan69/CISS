@@ -32,6 +32,7 @@ import type { RegionOverviewCard, SuperAdminOverviewSummary } from "@/types/regi
 import { DashboardStats } from "@/components/dashboard/stats";
 import { DashboardCharts } from "@/components/dashboard/charts";
 import { DashboardActions } from "@/components/dashboard/actions";
+import { ClientOperationsDashboard } from "@/components/dashboard/client-operations-dashboard";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -496,8 +497,6 @@ export default function DashboardPage() {
   const [newHiresData, setNewHiresData]     = useState<NewHiresData[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [upcomingDuties, setUpcomingDuties] = useState<UpcomingDuty[]>([]);
-  const [todayLogs, setTodayLogs]           = useState<any[]>([]);
-  const [clientAttendance, setClientAttendance] = useState({ inToday: 0, outToday: 0, onDuty: 0 });
   const [activeChartTab, setActiveChartTab] = useState<'hires' | 'distribution'>('hires');
   // Intermediate state for admin coverage — combined via useMemo
   const [clientGuardMap, setClientGuardMap] = useState<Map<string, { total: number; active: number; districts: Set<string> }> | null>(null);
@@ -509,7 +508,7 @@ export default function DashboardPage() {
 
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
-  const { user: currentUser, userRole, assignedDistricts, clientInfo, isSuperAdmin } = useAppAuth();
+  const { user: currentUser, userRole, assignedDistricts, isSuperAdmin } = useAppAuth();
 
   // Client coverage: computed reactively from both live data sources
   const clientCoverage = useMemo<ClientCoverage[]>(() => {
@@ -553,7 +552,7 @@ export default function DashboardPage() {
 
   // Real-time data subscriptions — fire from IndexedDB cache instantly, then sync from server
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (isSuperAdmin || userRole === 'client') {
       setIsLoading(false);
       return;
     }
@@ -571,9 +570,6 @@ export default function DashboardPage() {
 
     // ── Employee subscription (stats + charts + recent activity) ────────────
     let empQ: any = collection(db, "employees");
-    if (userRole === 'client' && clientInfo?.clientName) {
-      empQ = query(empQ, where('clientName', '==', clientInfo.clientName));
-    }
 
     // Field officer with no districts: nothing to show
     if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
@@ -694,38 +690,7 @@ export default function DashboardPage() {
     }
 
     return () => cleanups.forEach(u => u());
-  }, [userRole, assignedDistricts, clientInfo, isSuperAdmin]);
-
-  // Live attendance for client users
-  useEffect(() => {
-    if (isSuperAdmin) return;
-    if (userRole !== 'client' || !clientInfo?.clientName) return;
-    const qLogs = query(
-      collection(db, 'attendanceLogs'),
-      where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
-      orderBy('createdAt', 'desc')
-    );
-    const unsub = onSnapshot(qLogs, (snap) => {
-      const logs = snap.docs
-        .map(d => ({ id: d.id, ...(d.data() as any) }))
-        .filter((log) => log.clientName === clientInfo.clientName);
-      setTodayLogs(logs);
-      const latestByEmp = new Map<string, any>();
-      const seenIn = new Set<string>(), seenOut = new Set<string>();
-      logs.forEach(l => {
-        if (l.status === 'In') seenIn.add(l.employeeId);
-        if (l.status === 'Out') seenOut.add(l.employeeId);
-        const prev = latestByEmp.get(l.employeeId);
-        const prevTs = prev?.createdAt?.toMillis?.() ?? 0;
-        const curTs  = l.createdAt?.toMillis?.()    ?? 0;
-        if (!prev || curTs > prevTs) latestByEmp.set(l.employeeId, l);
-      });
-      let onDuty = 0;
-      latestByEmp.forEach(l => { if (l.status === 'In') onDuty++; });
-      setClientAttendance({ inToday: seenIn.size, outToday: seenOut.size, onDuty });
-    });
-    return () => unsub();
-  }, [userRole, clientInfo, isSuperAdmin]);
+  }, [userRole, assignedDistricts, isSuperAdmin]);
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -806,7 +771,7 @@ export default function DashboardPage() {
             </h1>
           </div>
           {/* Active badge */}
-          {!isLoading && stats && (
+          {userRole !== 'client' && !isLoading && stats && (
             <div className="flex flex-col items-end shrink-0">
               <span className="text-2xl font-bold text-emerald-600 tabular-nums leading-none">
                 {stats.active}
@@ -819,16 +784,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {userRole === 'client' ? (
+        <ClientOperationsDashboard />
+      ) : (
+        <>
       {/* ── Stat Cards 2×2 ───────────────────────────────────────────────── */}
       {stats && (
         <DashboardStats 
           role={userRole as any} 
           stats={stats}
-          roleSpecific={userRole === 'client' ? { 
-            guardsAssigned: stats.total,
-            checkedIn: clientCoverage?.[0]?.checkedInToday,
-            complianceClear: clientCoverage?.[0]?.complianceClear
-          } : undefined}
         />
       )}
 
@@ -898,72 +862,6 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* ── Client: Live Attendance ───────────────────────────────────────── */}
-      {userRole === 'client' && (
-        <>
-          {/* Hero attendance summary */}
-          <div className="rounded-2xl gradient-brand p-5 shadow-brand-md text-white animate-slide-up stagger-2">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="h-4 w-4 text-white/70" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-white/70">Live Attendance</span>
-              <span className="flex items-center gap-1 ml-auto text-xs text-emerald-300 font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-                Live
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Checked In",  value: clientAttendance.inToday,  dim: false },
-                { label: "On Duty",     value: clientAttendance.onDuty,   dim: false },
-                { label: "Checked Out", value: clientAttendance.outToday, dim: true  },
-              ].map(s => (
-                <div key={s.label} className="text-center">
-                  <p className={cn("text-3xl font-bold tabular-nums leading-none", s.dim ? "text-white/60" : "text-white")}>
-                    {s.value}
-                  </p>
-                  <p className="text-[10px] text-white/55 font-semibold uppercase tracking-wide mt-1.5 leading-tight">
-                    {s.label}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Live log */}
-          <div>
-            <p className="section-label mb-3">Today's Check-ins · {clientInfo?.clientName}</p>
-            <Card>
-              <CardContent className="p-0">
-                {todayLogs.length === 0 ? (
-                  <div className="px-4 py-8">
-                    <EmptyState emoji="🕐" title="No attendance yet today" description="Records appear here as guards check in." compact />
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border/60">
-                    {todayLogs.slice(0, 15).map(l => (
-                      <div key={l.id} className="flex items-center gap-3 px-4 py-3.5">
-                        <Avatar className="h-10 w-10 shrink-0">
-                          <AvatarFallback className="text-xs bg-brand-blue/10 text-brand-blue font-semibold">
-                            {(l.employeeName || l.employeeId || '??').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold truncate">{l.employeeName || l.employeeId}</p>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">{l.siteName}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <Badge variant={l.status === 'In' ? 'active' : 'secondary'}>{l.status}</Badge>
-                          <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {getAttendanceTime(l) ? format(getAttendanceTime(l)!, 'hh:mm a') : ''}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </>
       )}
     </div>

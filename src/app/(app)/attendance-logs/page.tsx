@@ -81,6 +81,7 @@ function downloadBlob(content: BlobPart, filename: string, type: string) {
 
 export default function AttendanceLogsPage() {
   const { userRole, assignedDistricts, clientInfo, stateCode } = useAppAuth();
+  const isClientView = userRole === "client";
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -303,7 +304,11 @@ export default function AttendanceLogsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={clientFilter} onValueChange={setClientFilter}>
+          <Select
+            value={isClientView ? (clientInfo?.clientName || clientFilter) : clientFilter}
+            onValueChange={setClientFilter}
+            disabled={isClientView}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Client" />
             </SelectTrigger>
@@ -316,6 +321,11 @@ export default function AttendanceLogsPage() {
               ))}
             </SelectContent>
           </Select>
+          {isClientView && (
+            <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-4">
+              Client filter is locked to your account scope.
+            </p>
+          )}
         </CardContent>
       </Card>
 

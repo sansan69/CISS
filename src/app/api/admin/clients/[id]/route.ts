@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
+import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
 
 export async function PATCH(
   request: Request,
@@ -12,18 +13,36 @@ export async function PATCH(
     const { id } = await params;
     const body = (await request.json()) as {
       name?: string;
+      portalSubdomain?: string;
+      portalEnabled?: boolean;
       nationalHolidayList?: string[];
       uniformAllowanceMonthly?: number;
       fieldAllowanceMonthly?: number;
     };
     const name = body.name?.trim();
+    const portalSubdomain = slugifyPortalSubdomain(body.portalSubdomain || name || "");
 
     if (!name) {
       return NextResponse.json({ error: "Client name is required." }, { status: 400 });
     }
 
+    const existingPortal = await adminDb
+      .collection("clients")
+      .where("portalSubdomain", "==", portalSubdomain)
+      .limit(2)
+      .get();
+    const conflict = existingPortal.docs.find((doc) => doc.id !== id);
+    if (conflict) {
+      return NextResponse.json(
+        { error: "This client portal subdomain is already assigned." },
+        { status: 409 },
+      );
+    }
+
     await adminDb.collection("clients").doc(id).update({
       name,
+      portalSubdomain,
+      portalEnabled: body.portalEnabled !== false,
       nationalHolidayList: Array.isArray(body.nationalHolidayList)
         ? body.nationalHolidayList.filter(Boolean)
         : [],
@@ -41,7 +60,13 @@ export async function PATCH(
       }),
     });
 
-    return NextResponse.json({ id, name });
+    return NextResponse.json({
+      id,
+      name,
+      portalSubdomain,
+      portalEnabled: body.portalEnabled !== false,
+      portalUrl: buildClientPortalUrl(portalSubdomain),
+    });
   } catch (error: any) {
     const status = error?.message === "Admin access required." ? 403 : 401;
     return unauthorizedResponse(error?.message || "Unauthorized", status);

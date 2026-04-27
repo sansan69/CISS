@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import {
   hasAdminAccess,
+  hasClientAccess,
   hasFieldOfficerAccess,
   requireAdminOrFieldOfficer,
   verifyRequestAuth,
   unauthorizedResponse,
   type AppDecodedToken,
 } from "@/lib/server/auth";
+import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { districtMatches } from "@/lib/districts";
 import type FirebaseFirestore from "@google-cloud/firestore";
 
@@ -115,10 +117,13 @@ export async function GET(request: Request) {
     const clientId = url.searchParams.get("clientId");
     const district = url.searchParams.get("district");
     const isAdmin = hasAdminAccess(decoded);
+    const isClient = hasClientAccess(decoded);
 
     let q = adminDb.collection("foTrainingReports") as FirebaseFirestore.Query;
 
-    if (!isAdmin) {
+    if (isClient) {
+      q = q.orderBy("createdAt", "desc");
+    } else if (!isAdmin) {
       q = q.where("fieldOfficerId", "==", decoded.uid);
     } else if (fieldOfficerId) {
       q = q.where("fieldOfficerId", "==", fieldOfficerId);
@@ -127,8 +132,14 @@ export async function GET(request: Request) {
     }
 
     const snapshot = await q.limit(isAdmin ? 500 : 300).get();
+    const clientScope = isClient ? await resolveClientScope(adminDb, decoded) : null;
+    if (isClient && !clientScope) {
+      return unauthorizedResponse("Client account is not linked to a valid client profile.", 403);
+    }
+
     const reports = snapshot.docs
       .map((d) => serializeReport(d))
+      .filter((report) => !clientScope || matchesClientScope(report, clientScope))
       .filter((report) => !status || report.status === status)
       .filter((report) => !clientId || report.clientId === clientId)
       .filter((report) => !district || districtMatches(String(report.district ?? ""), district))
