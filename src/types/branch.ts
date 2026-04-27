@@ -40,6 +40,7 @@ export interface FoTrainingReport {
   clientId: string;
   clientName?: string;
   siteId?: string;
+  siteName?: string;
   trainingDate: Timestamp;
   durationMinutes: number;
   topic: string;

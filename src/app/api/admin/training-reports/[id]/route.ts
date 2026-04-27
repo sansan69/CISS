@@ -48,6 +48,9 @@ export async function PATCH(
       updates.acknowledgedBy = decoded.uid;
       updates.acknowledgedAt = FieldValue.serverTimestamp();
     } else if (body.status && !admin) {
+      if (body.status !== "submitted") {
+        return NextResponse.json({ error: "Only admin can acknowledge training reports" }, { status: 403 });
+      }
       updates.status = body.status;
     }
 

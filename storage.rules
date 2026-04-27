@@ -55,7 +55,7 @@ service firebase.storage {
     // F-01: Field officer report photo uploads
     match /foReports/{folder}/{uid}/{fileName} {
       allow read: if isSignedIn();
-      allow create: if isFieldOfficer() && request.auth.uid == uid && isAllowedSize() && isImage();
+      allow create: if isFieldOfficer() && request.auth.uid == uid && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 

@@ -5,35 +5,135 @@ import {
   requireAdminOrFieldOfficer,
   verifyRequestAuth,
   unauthorizedResponse,
+  type AppDecodedToken,
 } from "@/lib/server/auth";
+import { districtMatches } from "@/lib/districts";
 import type FirebaseFirestore from "@google-cloud/firestore";
+
+type FieldOfficerProfile = {
+  name: string;
+  stateCode: string;
+  assignedDistricts: string[];
+};
+
+type SiteSnapshotData = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  siteName: string;
+  district: string;
+};
+
+function serializeDate(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof (value as { toDate?: unknown }).toDate === "function") {
+    return (value as { toDate(): Date }).toDate().toISOString();
+  }
+  if (typeof (value as { seconds?: unknown }).seconds === "number") {
+    return new Date((value as { seconds: number }).seconds * 1000).toISOString();
+  }
+  if (typeof (value as { _seconds?: unknown })._seconds === "number") {
+    return new Date((value as { _seconds: number })._seconds * 1000).toISOString();
+  }
+  return null;
+}
+
+function createdAtMillis(report: Record<string, unknown>) {
+  const iso = serializeDate(report.createdAt) ?? serializeDate(report.visitDate);
+  return iso ? new Date(iso).getTime() : 0;
+}
+
+function serializeReport(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot): Record<string, unknown> {
+  const data = doc.data() ?? {};
+  return {
+    id: doc.id,
+    ...data,
+    visitDate: serializeDate(data.visitDate),
+    createdAt: serializeDate(data.createdAt),
+    reviewedAt: serializeDate(data.reviewedAt),
+  };
+}
+
+async function getFieldOfficerProfile(
+  adminDb: FirebaseFirestore.Firestore,
+  decoded: AppDecodedToken,
+): Promise<FieldOfficerProfile> {
+  let name = decoded.name ?? decoded.email ?? "";
+  let stateCode = decoded.stateCode ?? "KL";
+  let assignedDistricts = Array.isArray(decoded.assignedDistricts) ? decoded.assignedDistricts : [];
+
+  const foSnapshot = await adminDb
+    .collection("fieldOfficers")
+    .where("uid", "==", decoded.uid)
+    .limit(1)
+    .get();
+
+  if (!foSnapshot.empty) {
+    const foData = foSnapshot.docs[0].data();
+    name = typeof foData.name === "string" ? foData.name : name;
+    stateCode = typeof foData.stateCode === "string" ? foData.stateCode : stateCode;
+    assignedDistricts = Array.isArray(foData.assignedDistricts)
+      ? foData.assignedDistricts.filter((district): district is string => typeof district === "string")
+      : assignedDistricts;
+  }
+
+  return { name, stateCode, assignedDistricts };
+}
+
+async function resolveSite(
+  adminDb: FirebaseFirestore.Firestore,
+  siteId?: string,
+): Promise<SiteSnapshotData | null> {
+  if (!siteId) return null;
+  const snap = await adminDb.collection("sites").doc(siteId).get();
+  if (!snap.exists) return null;
+  const data = snap.data() ?? {};
+  return {
+    id: snap.id,
+    clientId: typeof data.clientId === "string" ? data.clientId : "",
+    clientName: typeof data.clientName === "string" ? data.clientName : "",
+    siteName: typeof data.siteName === "string" ? data.siteName : "",
+    district: typeof data.district === "string" ? data.district : "",
+  };
+}
+
+function canFieldOfficerUseDistrict(profile: FieldOfficerProfile, district?: string) {
+  if (!district) return true;
+  if (profile.assignedDistricts.length === 0) return false;
+  return profile.assignedDistricts.some((assigned) => districtMatches(assigned, district));
+}
 
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const { FieldValue } = await import("firebase-admin/firestore");
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
     const fieldOfficerId = url.searchParams.get("fieldOfficerId");
     const clientId = url.searchParams.get("clientId");
     const district = url.searchParams.get("district");
+    const isAdmin = hasAdminAccess(decoded);
 
-    let q = adminDb.collection("foVisitReports").orderBy("createdAt", "desc") as FirebaseFirestore.Query;
+    let q = adminDb.collection("foVisitReports") as FirebaseFirestore.Query;
 
-    if (!hasAdminAccess(decoded)) {
-      // Field officers only see their own
+    if (!isAdmin) {
       q = q.where("fieldOfficerId", "==", decoded.uid);
     } else if (fieldOfficerId) {
       q = q.where("fieldOfficerId", "==", fieldOfficerId);
+    } else {
+      q = q.orderBy("createdAt", "desc");
     }
 
-    if (status) q = q.where("status", "==", status);
-    if (clientId) q = q.where("clientId", "==", clientId);
-    if (district) q = q.where("district", "==", district);
-
-    const snapshot = await q.limit(200).get();
-    const reports = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const snapshot = await q.limit(isAdmin ? 500 : 300).get();
+    const reports = snapshot.docs
+      .map((d) => serializeReport(d))
+      .filter((report) => !status || report.status === status)
+      .filter((report) => !clientId || report.clientId === clientId)
+      .filter((report) => !district || districtMatches(String(report.district ?? ""), district))
+      .sort((left, right) => createdAtMillis(right) - createdAtMillis(left))
+      .slice(0, 200);
     return NextResponse.json({ reports });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unauthorized";
@@ -52,6 +152,7 @@ export async function POST(request: Request) {
       clientName?: string;
       siteId?: string;
       siteName?: string;
+      district?: string;
       visitDate?: string;
       summary?: string;
       issuesFound?: string;
@@ -70,33 +171,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Field officer or admin access required." }, { status: 403 });
     }
 
-    // Look up field officer doc for name + stateCode
-    let fieldOfficerName = decoded.name ?? decoded.email ?? "";
-    let stateCode = "KL";
-    let district = "";
+    const profile = await getFieldOfficerProfile(adminDb, decoded);
+    const site = await resolveSite(adminDb, body.siteId);
+    const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
 
-    const foSnapshot = await adminDb
-      .collection("fieldOfficers")
-      .where("uid", "==", decoded.uid)
-      .limit(1)
-      .get();
-
-    if (!foSnapshot.empty) {
-      const foData = foSnapshot.docs[0].data();
-      fieldOfficerName = foData.name ?? fieldOfficerName;
-      stateCode = foData.stateCode ?? stateCode;
-      district = foData.assignedDistricts?.[0] ?? foData.district ?? "";
+    if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
+      return NextResponse.json(
+        { error: "This site is outside your assigned districts." },
+        { status: 403 },
+      );
     }
 
     const docRef = await adminDb.collection("foVisitReports").add({
       fieldOfficerId: decoded.uid,
-      fieldOfficerName,
-      stateCode,
-      district,
-      clientId: body.clientId,
-      clientName: body.clientName ?? "",
-      siteId: body.siteId ?? "",
-      siteName: body.siteName ?? "",
+      fieldOfficerName: profile.name,
+      stateCode: profile.stateCode,
+      district: reportDistrict,
+      clientId: site?.clientId || body.clientId,
+      clientName: site?.clientName || body.clientName || "",
+      siteId: site?.id || body.siteId || "",
+      siteName: site?.siteName || body.siteName || "",
       visitDate: new Date(body.visitDate),
       summary: body.summary,
       issuesFound: body.issuesFound ?? "",

@@ -4,7 +4,7 @@ import React, { useRef, useState } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage, auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
-import { Camera, User, ImageIcon, X, Loader2 } from "lucide-react";
+import { Camera, User, ImageIcon, X, Loader2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PhotoCaptureProps {
@@ -64,6 +64,7 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled,
   };
 
   const remove = (i: number) => onChange(urls.filter((_, idx) => idx !== i));
+  const isPdfUrl = (url: string) => decodeURIComponent(url).toLowerCase().includes(".pdf");
 
   const canAdd = !disabled && !uploading && urls.length < maxPhotos;
 
@@ -98,8 +99,20 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled,
         <div className="flex flex-wrap gap-2">
           {urls.map((url, i) => (
             <div key={i} className="relative h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`File ${i + 1}`} className="h-full w-full object-cover" />
+              {isPdfUrl(url) ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-full w-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground"
+                >
+                  <FileText className="h-6 w-6" />
+                  PDF
+                </a>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={url} alt={`File ${i + 1}`} className="h-full w-full object-cover" />
+              )}
               {!disabled && (
                 <button
                   type="button"

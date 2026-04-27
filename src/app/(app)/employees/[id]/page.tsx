@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2 } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -1283,8 +1283,16 @@ export default function AdminEmployeeProfilePage() {
               <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
             </div>
           </div>
-          {isAdminView && (
-            <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
+          <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
+            <Button
+              onClick={() => router.push(`/attendance?employeeId=${encodeURIComponent(employee.employeeId)}`)}
+              className="flex-1 sm:flex-none"
+            >
+              <CalendarCheck className="mr-2 h-4 w-4" />
+              Mark Attendance
+            </Button>
+            {isAdminView && (
+              <>
               <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                   Download Profile Kit
@@ -1292,8 +1300,9 @@ export default function AdminEmployeeProfilePage() {
               <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
                   <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
               </Button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         {!isEditing && (

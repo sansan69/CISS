@@ -12,10 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon } from "lucide-react";
+import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
+import { useClients } from "@/lib/hooks/use-clients";
+import { useSites } from "@/lib/hooks/use-sites";
+import { districtMatches } from "@/lib/districts";
 
 type Tab = "all" | "submitted" | "acknowledged";
 
@@ -32,17 +35,22 @@ const TABS: { key: Tab; label: string }[] = [
 
 function formatDate(ts: { seconds: number } | string | null | undefined): string {
   if (!ts) return "—";
-  const d = typeof ts === "string" ? new Date(ts) : new Date((ts as { seconds: number }).seconds * 1000);
+  const seconds = typeof ts === "object" ? (ts as { seconds?: number; _seconds?: number }).seconds ?? (ts as { _seconds?: number })._seconds : undefined;
+  const d = typeof ts === "string" ? new Date(ts) : new Date((seconds ?? 0) * 1000);
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-interface ClientOption { id: string; name: string; }
+function isPdfUrl(url: string) {
+  return decodeURIComponent(url).toLowerCase().includes(".pdf");
+}
 
 export function TrainingReportsPanel() {
-  const { userRole } = useAppAuth();
+  const { userRole, assignedDistricts } = useAppAuth();
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
   const isFo = userRole === "fieldOfficer";
+  const { clients, isLoading: isLoadingClients } = useClients();
 
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [reports, setReports] = useState<FoTrainingReport[]>([]);
@@ -50,12 +58,16 @@ export function TrainingReportsPanel() {
 
   const [newSheetOpen, setNewSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [clients, setClients] = useState<ClientOption[]>([]);
   const [form, setForm] = useState({
-    clientId: "", clientName: "", siteId: "", trainingDate: "",
+    clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "",
     durationMinutes: "60", topic: "", description: "", attendeeCount: "",
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
+  const visibleSites = sites.filter((site) => {
+    if (!isFo || assignedDistricts.length === 0) return true;
+    return assignedDistricts.some((district) => districtMatches(district, site.district));
+  });
 
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
   const [detailReport, setDetailReport] = useState<FoTrainingReport | null>(null);
@@ -78,18 +90,6 @@ export function TrainingReportsPanel() {
 
   useEffect(() => { loadReports(activeTab); }, [activeTab, loadReports]);
 
-  const loadClients = useCallback(async () => {
-    try {
-      const res = await authorizedFetch("/api/admin/clients");
-      const data = await res.json();
-      setClients((data.clients ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    if (newSheetOpen) loadClients();
-  }, [newSheetOpen, loadClients]);
-
   const handleSubmit = async () => {
     if (!form.clientId || !form.trainingDate || !form.topic) {
       toast({ title: "Missing fields", description: "Client, training date, and topic are required.", variant: "destructive" });
@@ -104,6 +104,8 @@ export function TrainingReportsPanel() {
           clientId: form.clientId,
           clientName: form.clientName,
           siteId: form.siteId,
+          siteName: form.siteName,
+          district: form.district,
           trainingDate: form.trainingDate,
           durationMinutes: parseInt(form.durationMinutes) || 60,
           topic: form.topic,
@@ -117,7 +119,7 @@ export function TrainingReportsPanel() {
       if (!res.ok) throw new Error("Submit failed");
       toast({ title: "Report created", description: "Training report submitted." });
       setNewSheetOpen(false);
-      setForm({ clientId: "", clientName: "", siteId: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "" });
+      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "" });
       setPhotoUrls([]);
       loadReports(activeTab);
     } catch {
@@ -203,6 +205,7 @@ export function TrainingReportsPanel() {
                       </div>
                       <p className="text-xs text-muted-foreground mb-1">
                         {report.clientName}
+                        {report.siteName ? ` · ${report.siteName}` : ""}
                         {report.district ? ` · ${report.district}` : ""}
                       </p>
                       <p className="text-sm font-medium text-foreground mb-1">{report.topic}</p>
@@ -253,7 +256,7 @@ export function TrainingReportsPanel() {
             <div className="space-y-4 mt-6">
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Client</p>
-                <p className="text-sm">{detailReport.clientName}</p>
+                <p className="text-sm">{detailReport.clientName}{detailReport.siteName ? ` - ${detailReport.siteName}` : ""}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Topic</p>
@@ -283,9 +286,16 @@ export function TrainingReportsPanel() {
                   <div className="flex flex-wrap gap-2">
                     {detailReport.photoUrls.map((url, i) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 block hover:opacity-80 transition-opacity">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center hover:opacity-80 transition-opacity">
+                        {isPdfUrl(url) ? (
+                          <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
+                            <FileText className="h-6 w-6" />
+                            PDF
+                          </span>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+                        )}
                       </a>
                     ))}
                   </div>
@@ -323,10 +333,10 @@ export function TrainingReportsPanel() {
                 value={form.clientId}
                 onValueChange={(v) => {
                   const c = clients.find((x) => x.id === v);
-                  setForm((f) => ({ ...f, clientId: v, clientName: c?.name ?? "" }));
+                  setForm((f) => ({ ...f, clientId: v, clientName: c?.name ?? "", siteId: "", siteName: "", district: "" }));
                 }}
               >
-                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={isLoadingClients ? "Loading clients..." : "Select client"} /></SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -334,6 +344,59 @@ export function TrainingReportsPanel() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Site</Label>
+              <Select
+                value={form.siteId || "__manual__"}
+                disabled={!form.clientId || isLoadingSites}
+                onValueChange={(v) => {
+                  if (v === "__manual__") {
+                    setForm((f) => ({ ...f, siteId: "", siteName: "", district: "" }));
+                    return;
+                  }
+                  const site = visibleSites.find((item) => item.id === v);
+                  setForm((f) => ({
+                    ...f,
+                    siteId: v,
+                    siteName: site?.siteName ?? "",
+                    district: site?.district ?? "",
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingSites ? "Loading sites..." : "Select site"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__manual__">Manual / not listed</SelectItem>
+                  {visibleSites.map((site) => (
+                    <SelectItem key={site.id} value={site.id}>
+                      {site.siteName}{site.district ? ` - ${site.district}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!isLoadingSites && form.clientId && visibleSites.length === 0 && (
+                <p className="text-xs text-muted-foreground">No sites found for this client in your assigned districts.</p>
+              )}
+            </div>
+
+            {!form.siteId && (
+              <div className="space-y-1.5">
+                <Label>Manual Site Name</Label>
+                <Input
+                  value={form.siteName}
+                  onChange={(e) => setForm((f) => ({ ...f, siteName: e.target.value }))}
+                  placeholder="Site / location name"
+                />
+              </div>
+            )}
+
+            {form.district && (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                District: <span className="font-medium text-foreground">{form.district}</span>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label>Training Date *</Label>

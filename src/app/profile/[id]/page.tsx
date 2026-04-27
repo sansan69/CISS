@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, ArrowLeft, Home } from 'lucide-react';
+import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, ArrowLeft, Home, CalendarCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { storage } from '@/lib/firebase';
 import { Timestamp } from 'firebase/firestore';
@@ -644,6 +644,13 @@ export default function PublicEmployeeProfilePage() {
             </div>
           </div>
             <div className="flex w-full sm:w-auto gap-2">
+              <Button
+                onClick={() => router.push(`/attendance?employeeId=${encodeURIComponent(employee.employeeId)}`)}
+                className="flex-1 sm:flex-none"
+              >
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                Mark Attendance
+              </Button>
               <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                   Download Kit

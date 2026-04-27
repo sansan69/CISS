@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck, Clock } from 'lucide-react';
@@ -82,6 +83,7 @@ const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
 });
 
 export default function AttendancePage() {
+  const router = useRouter();
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -523,7 +525,7 @@ export default function AttendancePage() {
     }
   };
 
-  const getDeviceLocation = () => new Promise<{ lat: number; lon: number; accuracyMeters?: number }>((resolve, reject) => {
+  const getDeviceLocation = useCallback(() => new Promise<{ lat: number; lon: number; accuracyMeters?: number }>((resolve, reject) => {
     if (!navigator.geolocation) {
       setIsFetchingLocation(false);
       return reject(new Error("Geolocation is not supported by this browser."));
@@ -566,7 +568,7 @@ export default function AttendancePage() {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );
-  });
+  }), [selectedSite?.geofenceRadiusMeters, selectedSite?.strictGeofence, toast]);
   
   const startCameraStream = () => new Promise<void>((resolve, reject) => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -698,6 +700,83 @@ export default function AttendancePage() {
 
     return responseBody.found ? responseBody.employee ?? null : null;
   }, []);
+
+  useEffect(() => {
+    const prefilledEmployeeId =
+      typeof window === 'undefined'
+        ? ''
+        : new URLSearchParams(window.location.search).get('employeeId')?.trim() || '';
+
+    if (!prefilledEmployeeId || scannedEmployee || workflowStep !== 'idle') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const prefillEmployeeFromProfile = async () => {
+      setManualEmployeeId(prefilledEmployeeId);
+
+      try {
+        const employee = await fetchEmployeeByEmployeeId(prefilledEmployeeId);
+        if (!employee) {
+          if (!cancelled) {
+            toast({
+              variant: 'destructive',
+              title: 'Employee not found',
+              description: `No employee record matches ${prefilledEmployeeId}.`,
+            });
+            router.replace('/attendance', { scroll: false });
+          }
+          return;
+        }
+
+        if (cancelled) return;
+
+        setScannedEmployee(employee);
+        setScanResult(`Profile:${prefilledEmployeeId}`);
+        setHasScanned(true);
+        setReportingStartedAt(new Date().toISOString());
+        setWorkflowStep('review');
+
+        if (!locationCoords && !isFetchingLocation) {
+          setIsFetchingLocation(true);
+          void getDeviceLocation().catch((error: any) => {
+            setLocationError(error.message || 'Location could not be captured.');
+          });
+        }
+
+        toast({
+          title: 'Guard loaded from profile',
+          description: `${employee.fullName} is ready for attendance.`,
+        });
+        router.replace('/attendance', { scroll: false });
+      } catch (error: any) {
+        if (!cancelled) {
+          toast({
+            variant: 'destructive',
+            title: 'Could not open attendance',
+            description: error?.message || 'The employee profile could not be prepared for attendance.',
+          });
+          router.replace('/attendance', { scroll: false });
+        }
+      }
+    };
+
+    void prefillEmployeeFromProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    fetchEmployeeByEmployeeId,
+    getDeviceLocation,
+    isFetchingLocation,
+    locationCoords,
+    router,
+    scannedEmployee,
+    toast,
+    workflowStep,
+  ]);
 
   const handleScanAndCapture = useCallback(async () => {
     const video = videoRef.current;
