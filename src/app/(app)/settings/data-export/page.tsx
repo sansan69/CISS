@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
 import { PageHeader } from '@/components/layout/page-header';
+import { dedupeClientOptions } from '@/lib/client-options';
 
 const XLSX_EXCLUDED_FIELDS = new Set([
     'bankAccountNumber',
@@ -112,7 +113,11 @@ export default function DataExportPage() {
         const fetchClients = async () => {
             try {
                 const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
-                setClients(clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string })));
+                setClients(
+                    dedupeClientOptions(
+                        clientsSnapshot.docs.map(docSnap => ({ id: docSnap.id, name: docSnap.data().name as string })),
+                    ),
+                );
             } catch (err) {
                 toast({ variant: "destructive", title: "Error", description: "Could not fetch client list for filters." });
             }

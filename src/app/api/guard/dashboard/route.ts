@@ -104,16 +104,14 @@ export async function GET(request: Request) {
     let attendanceSnap = await adminDb
       .collection("attendanceLogs")
       .where("employeeDocId", "==", guard.employeeDocId)
-      .where("attendanceDate", ">=", startDateStr)
-      .where("attendanceDate", "<=", endDateStr)
+      .limit(200)
       .get();
 
     if (attendanceSnap.empty) {
       attendanceSnap = await adminDb
         .collection("attendanceLogs")
         .where("employeeId", "==", guard.employeeId)
-        .where("attendanceDate", ">=", startDateStr)
-        .where("attendanceDate", "<=", endDateStr)
+        .limit(200)
         .get();
     }
 
@@ -128,6 +126,12 @@ export async function GET(request: Request) {
     }>;
 
     const filteredLogs = logs
+      .filter(
+        (log) =>
+          typeof log.attendanceDate === "string" &&
+          log.attendanceDate >= startDateStr &&
+          log.attendanceDate <= endDateStr,
+      )
       .sort((a, b) => (b.attendanceDate || "").localeCompare(a.attendanceDate || ""));
 
     // Count unique present days (days with at least one "In" log)

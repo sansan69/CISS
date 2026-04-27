@@ -5,6 +5,48 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
+function isLocalHost(host: string | null): boolean {
+  if (!host) return false;
+  return (
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.includes("[::1]")
+  );
+}
+
+async function isCustomTokenAccepted(token: string): Promise<boolean> {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey) return false;
+
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token,
+        returnSecureToken: true,
+      }),
+    },
+  );
+
+  return response.ok;
+}
+
+async function fallbackToProductionLogin(
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://cisskerala.site";
+
+  return fetch(`${baseUrl.replace(/\/$/, "")}/api/guard/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -47,7 +89,13 @@ export async function POST(request: Request) {
       if (now - windowStart >= windowMs) {
         await rateLimitRef.set({ windowStart: now, attempts: 1 });
       } else {
-        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
+        await rateLimitRef.set(
+          {
+            windowStart,
+            attempts: FieldValue.increment(1),
+          },
+          { merge: true },
+        );
       }
     } else {
       await rateLimitRef.set({ windowStart: now, attempts: 1 });
@@ -134,8 +182,9 @@ export async function POST(request: Request) {
     });
 
     // Create custom token
-    const { auth: adminAuth } = await import("@/lib/firebaseAdmin");
-    const customToken = await adminAuth.createCustomToken(
+    const { auth: adminAuth, customTokenAuth } = await import("@/lib/firebaseAdmin");
+    const tokenIssuer = customTokenAuth ?? adminAuth;
+    const customToken = await tokenIssuer.createCustomToken(
       empData.guardAuthUid as string,
       {
         role: "guard",
@@ -143,6 +192,19 @@ export async function POST(request: Request) {
         employeeDocId: empDoc.id,
       }
     );
+
+    if (isLocalHost(request.headers.get("host"))) {
+      const tokenAccepted = await isCustomTokenAccepted(customToken);
+      if (!tokenAccepted) {
+        const fallbackResponse = await fallbackToProductionLogin({
+          phoneNumber,
+          employeeId,
+          pin,
+        });
+        const fallbackData = await fallbackResponse.json();
+        return NextResponse.json(fallbackData, { status: fallbackResponse.status });
+      }
+    }
 
     return NextResponse.json({
       token: customToken,

@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trophy, Medal, Star, Award, TrendingUp, TrendingDown, Minus, ShieldCheck, GraduationCap } from "lucide-react";
 import { format } from "date-fns";
 import { resolveAppUser } from "@/lib/auth/roles";
+import { dedupeClientOptions } from "@/lib/client-options";
 import type { GuardScore, Award as AwardType } from "@/types/evaluation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -56,7 +57,11 @@ export default function LeaderboardPage() {
         // Load clients
         try {
           const snap = await getDocs(collection(db, "clients"));
-          setClients(snap.docs.map((d) => ({ id: d.id, name: d.data().name })));
+          setClients(
+            dedupeClientOptions(
+              snap.docs.map((d) => ({ id: d.id, name: d.data().name })),
+            ),
+          );
         } catch {}
       }
     });

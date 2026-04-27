@@ -1,5 +1,14 @@
 import * as admin from 'firebase-admin';
 
+function getAdminProjectId() {
+  return (
+    process.env.FIREBASE_ADMIN_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    undefined
+  );
+}
+
 // This function robustly initializes the Firebase Admin SDK.
 // It supports multiple environment variable configurations for flexibility across
 // local development and hosting providers like Vercel.
@@ -65,14 +74,75 @@ function initializeAdmin() {
 
   return admin.initializeApp({
     credential,
+    projectId: getAdminProjectId(),
     storageBucket: process.env.FIREBASE_ADMIN_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   });
 }
 
+function initializeCustomTokenSigner() {
+  let existingApp: admin.app.App | undefined;
+  for (const maybeApp of admin.apps) {
+    if (maybeApp && maybeApp.name === "custom-token-signer") {
+      existingApp = maybeApp;
+      break;
+    }
+  }
+  if (existingApp) {
+    return existingApp;
+  }
+
+  let credential: admin.credential.Credential | null = null;
+
+  if (process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64) {
+    try {
+      const decodedServiceAccount = Buffer.from(
+        process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64,
+        "base64",
+      ).toString("utf-8");
+      credential = admin.credential.cert(JSON.parse(decodedServiceAccount));
+    } catch (e) {
+      console.error("Failed to parse FIREBASE_ADMIN_SDK_CONFIG_BASE64 for token signer:", e);
+    }
+  } else if (process.env.FIREBASE_ADMIN_SDK_CONFIG) {
+    try {
+      credential = admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG));
+    } catch (e) {
+      console.error("Failed to parse FIREBASE_ADMIN_SDK_CONFIG for token signer:", e);
+    }
+  } else if (
+    process.env.FIREBASE_ADMIN_PROJECT_ID &&
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY
+  ) {
+    credential = admin.credential.cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+      privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+    });
+  }
+
+  if (!credential) {
+    return adminApp;
+  }
+
+  return admin.initializeApp(
+    {
+      credential,
+      projectId: getAdminProjectId(),
+      storageBucket:
+        process.env.FIREBASE_ADMIN_STORAGE_BUCKET ||
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    },
+    "custom-token-signer",
+  );
+}
+
 const adminApp = initializeAdmin();
+const customTokenSignerApp = initializeCustomTokenSigner();
 
 const db = adminApp.firestore();
 const auth = adminApp.auth();
 const storage = adminApp.storage();
+const customTokenAuth = customTokenSignerApp.auth();
 
-export { adminApp, db, auth, storage };
+export { adminApp, db, auth, storage, customTokenAuth };

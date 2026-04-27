@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
+import { dedupeClientOptions } from "@/lib/client-options";
 
 export const runtime = "nodejs";
 
@@ -15,9 +16,9 @@ export async function GET() {
   try {
     const snapshot = await db.collection("clients").orderBy("name", "asc").get();
 
-    const clients = snapshot.docs
-      .map((doc) => mapClient(doc.id, doc.data() as Record<string, unknown>))
-      .filter((client) => client.name.length > 0);
+    const clients = dedupeClientOptions(
+      snapshot.docs.map((doc) => mapClient(doc.id, doc.data() as Record<string, unknown>)),
+    );
 
     return NextResponse.json({ clients });
   } catch (error) {

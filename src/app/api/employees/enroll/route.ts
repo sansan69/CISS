@@ -7,6 +7,7 @@ import {
 import { generateEmployeeId } from "@/lib/employee-id";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import { REGION_CODE } from "@/lib/runtime-config";
+import { LNG_CLIENT_NAME } from "@/lib/constants";
 import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
@@ -50,6 +51,33 @@ async function generateUniqueEmployeeId(
   throw new Error("Could not generate a unique employee ID. Please try again.");
 }
 
+function splitFullNameForStorage(rawFullName: string) {
+  const parts = rawFullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { firstName: "", lastName: "" };
+  }
+
+  if (parts.length === 1) {
+    return { firstName: parts[0]!, lastName: parts[0]! };
+  }
+
+  return {
+    firstName: parts[0]!,
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function buildLngFallbackEmail(payload: EnrollmentSubmission) {
+  const uniqueToken =
+    payload.legacyUniqueId?.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase() ||
+    payload.phoneNumber;
+  return `${uniqueToken}@lng-petronet.cisskerala.app`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Public endpoint — self-enrollment does not require authentication.
@@ -65,17 +93,35 @@ export async function POST(request: NextRequest) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { Timestamp } = await import("firebase-admin/firestore");
 
+    const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
+    const normalizedEmail =
+      (payload.emailAddress?.trim() || "").toLowerCase() ||
+      (payload.clientName === LNG_CLIENT_NAME ? buildLngFallbackEmail(payload) : "");
+    const normalizedFullNameInput = payload.fullNameInput?.trim() || "";
+    const nameParts =
+      payload.clientName === LNG_CLIENT_NAME && normalizedFullNameInput
+        ? splitFullNameForStorage(normalizedFullNameInput)
+        : {
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+          };
+
+    const phonePromise = adminDb
+      .collection("employees")
+      .where("phoneNumber", "==", normalizedPhone)
+      .limit(1)
+      .get();
+    const emailPromise = normalizedEmail
+      ? adminDb
+          .collection("employees")
+          .where("emailAddress", "==", normalizedEmail)
+          .limit(1)
+          .get()
+      : Promise.resolve(null);
+
     const [phoneSnapshot, emailSnapshot] = await Promise.all([
-      adminDb
-        .collection("employees")
-        .where("phoneNumber", "==", payload.phoneNumber)
-        .limit(1)
-        .get(),
-      adminDb
-        .collection("employees")
-        .where("emailAddress", "==", payload.emailAddress.toLowerCase())
-        .limit(1)
-        .get(),
+      phonePromise,
+      emailPromise,
     ]);
 
     if (!phoneSnapshot.empty) {
@@ -85,31 +131,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!emailSnapshot.empty) {
+    if (emailSnapshot && !emailSnapshot.empty) {
       return NextResponse.json(
         { error: "An employee with this email address already exists." },
         { status: 409 },
       );
     }
 
-    const employeeId = await generateUniqueEmployeeId(adminDb, payload.clientName);
-    const fullName = `${payload.firstName.toUpperCase()} ${payload.lastName.toUpperCase()}`;
+    let employeeId = payload.clientName === LNG_CLIENT_NAME
+      ? payload.legacyUniqueId?.trim()
+      : undefined;
+
+    if (employeeId) {
+      const existingEmployeeId = await adminDb
+        .collection("employees")
+        .where("employeeId", "==", employeeId)
+        .limit(1)
+        .get();
+
+      if (!existingEmployeeId.empty) {
+        return NextResponse.json(
+          { error: "An employee with this LNG unique ID already exists." },
+          { status: 409 },
+        );
+      }
+    } else {
+      employeeId = await generateUniqueEmployeeId(adminDb, payload.clientName);
+    }
+
+    const fullName = `${nameParts.firstName.toUpperCase()} ${nameParts.lastName.toUpperCase()}`.trim();
     const qrCodeUrl = await generateQrCodeDataUrl(
       employeeId,
       fullName,
-      payload.phoneNumber,
+      normalizedPhone,
     );
     const now = Timestamp.now();
-
-    const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
 
     const employeeData = {
       employeeId,
       qrCodeUrl,
-      searchableFields: buildSearchableFields(payload, employeeId),
+      searchableFields: buildSearchableFields(
+        {
+          ...payload,
+          firstName: nameParts.firstName,
+          lastName: nameParts.lastName,
+          phoneNumber: normalizedPhone,
+        },
+        employeeId,
+      ),
       clientName: payload.clientName,
-      firstName: payload.firstName.toUpperCase(),
-      lastName: payload.lastName.toUpperCase(),
+      firstName: nameParts.firstName.toUpperCase(),
+      lastName: nameParts.lastName.toUpperCase(),
       fullName,
       fatherName: payload.fatherName.toUpperCase(),
       motherName: payload.motherName.toUpperCase(),
@@ -120,7 +192,7 @@ export async function POST(request: NextRequest) {
       educationalQualification: payload.educationalQualification,
       district,
       fullAddress: payload.fullAddress.toUpperCase(),
-      emailAddress: payload.emailAddress.toLowerCase(),
+      emailAddress: normalizedEmail,
       phoneNumber: normalizedPhone,
       stateCode: REGION_CODE,
       status: "Active",
@@ -148,6 +220,7 @@ export async function POST(request: NextRequest) {
       }),
       ...(payload.ifscCode && { ifscCode: payload.ifscCode.toUpperCase() }),
       ...(payload.bankName && { bankName: payload.bankName.toUpperCase() }),
+      ...(payload.branchName && { branchName: payload.branchName.toUpperCase() }),
       ...(payload.bankPassbookStatementUrl && {
         bankPassbookStatementUrl: payload.bankPassbookStatementUrl,
       }),
@@ -159,6 +232,26 @@ export async function POST(request: NextRequest) {
         otherQualification: payload.otherQualification.toUpperCase(),
       }),
       ...(payload.panNumber && { panNumber: payload.panNumber.toUpperCase() }),
+      ...(payload.aadharNumber && { aadharNumber: payload.aadharNumber }),
+      ...(payload.nationality && { nationality: payload.nationality.toUpperCase() }),
+      ...(payload.identificationMark && {
+        identificationMark: payload.identificationMark.toUpperCase(),
+      }),
+      ...(payload.heightCm && { heightCm: payload.heightCm }),
+      ...(payload.weightKg && { weightKg: payload.weightKg }),
+      ...(payload.jobDesignation && { jobDesignation: payload.jobDesignation }),
+      ...(payload.lngJobDesignation && { lngJobDesignation: payload.lngJobDesignation }),
+      ...(payload.serviceBookNumber && { serviceBookNumber: payload.serviceBookNumber }),
+      ...(payload.serviceBookDocumentUrl && {
+        serviceBookDocumentUrl: payload.serviceBookDocumentUrl,
+      }),
+      ...(payload.armsLicenseNumber && {
+        armsLicenseNumber: payload.armsLicenseNumber.toUpperCase(),
+      }),
+      ...(payload.armsLicenseDocumentUrl && {
+        armsLicenseDocumentUrl: payload.armsLicenseDocumentUrl,
+      }),
+      ...(payload.legacyUniqueId && { legacyUniqueId: payload.legacyUniqueId }),
       ...(payload.epfUanNumber && { epfUanNumber: payload.epfUanNumber }),
       ...(payload.esicNumber && { esicNumber: payload.esicNumber }),
       ...(payload.policeClearanceCertificateUrl && {

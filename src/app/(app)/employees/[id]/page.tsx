@@ -38,6 +38,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
+import { EDUCATION_OPTIONS } from "@/lib/constants";
+import { dedupeClientOptions } from "@/lib/client-options";
 
 // #region PDF Text Helper Functions
 // Normalize weird whitespace, keep intended line breaks as separators.
@@ -118,13 +120,13 @@ const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
-const educationOptions = ["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"];
+const educationOptions = [...EDUCATION_OPTIONS];
 interface ClientOption { id: string; name: string; }
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
 
 
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
-const qualificationTypes = z.enum(["Primary School", "High School", "Diploma", "Graduation", "Post Graduation", "Doctorate", "Any Other Qualification"]);
+const qualificationTypes = z.enum(EDUCATION_OPTIONS);
 
 
 // Zod schema for validation
@@ -526,7 +528,9 @@ export default function AdminEmployeeProfilePage() {
         try {
             const clientsQuery = query(collection(db, 'clients'), orderBy('name', 'asc'));
             const snapshot = await getDocs(clientsQuery);
-            const fetchedClients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+            const fetchedClients = dedupeClientOptions(
+              snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string })),
+            );
             setAvailableClients(fetchedClients);
         } catch (error) {
             console.error("Error fetching clients: ", error);
@@ -1371,6 +1375,8 @@ export default function AdminEmployeeProfilePage() {
                         </span>
                     </div>
                     <DetailItem label="Client Name" value={employee.clientName} isName />
+                    {employee.legacyUniqueId && <DetailItem label="Legacy Unique ID" value={employee.legacyUniqueId} />}
+                    {employee.jobDesignation && <DetailItem label="Job Designation" value={employee.jobDesignation} />}
                     {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
                     <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
                     <DetailItem label="Status" value={employee.status} />
@@ -1385,14 +1391,22 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="Bank Name" value={employee.bankName} isName />
                     <DetailItem label="Account Number" value={employee.bankAccountNumber} />
                     <DetailItem label="IFSC Code" value={employee.ifscCode} />
+                    {employee.branchName && <DetailItem label="Branch Name" value={employee.branchName} isName />}
                   </div>
                 </TabsContent>
                 <TabsContent value="identification">
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
+                    {employee.aadharNumber && <DetailItem label="Aadhar Number" value={employee.aadharNumber} />}
                     <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
+                    {employee.nationality && <DetailItem label="Nationality" value={employee.nationality} isName />}
+                    {employee.identificationMark && <DetailItem label="Identification Mark" value={employee.identificationMark} />}
+                    {typeof employee.heightCm === 'number' && <DetailItem label="Height (cm)" value={employee.heightCm} />}
+                    {typeof employee.weightKg === 'number' && <DetailItem label="Weight (kg)" value={employee.weightKg} />}
+                    {employee.serviceBookNumber && <DetailItem label="Service Book Number" value={employee.serviceBookNumber} />}
+                    {employee.armsLicenseNumber && <DetailItem label="Arms License Number" value={employee.armsLicenseNumber} />}
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
                   </div>
@@ -1425,6 +1439,8 @@ export default function AdminEmployeeProfilePage() {
                             <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
                             <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                            <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />
+                            <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />
                             <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
                         </div>
                     </div>

@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X, Pencil } from 'lucide-react';
+import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
@@ -159,6 +159,20 @@ export default function WorkOrderPage() {
     const [renameExam, setRenameExam] = useState<{ key: string; label: string } | null>(null);
     const [renameExamName, setRenameExamName] = useState('');
     const [isRenamingExam, setIsRenamingExam] = useState(false);
+    const [collapsedDateKeys, setCollapsedDateKeys] = useState<Set<string>>(new Set());
+    const initializedCollapsedDateKeysRef = React.useRef(false);
+
+    const toggleDateGroup = React.useCallback((dateKey: string) => {
+        setCollapsedDateKeys((current) => {
+            const next = new Set(current);
+            if (next.has(dateKey)) {
+                next.delete(dateKey);
+            } else {
+                next.add(dateKey);
+            }
+            return next;
+        });
+    }, []);
 
     const handleDeleteOrder = React.useCallback((order: WorkOrder) => {
         const id = order.id;
@@ -522,6 +536,14 @@ export default function WorkOrderPage() {
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([dateKey, group]) => ({ dateKey, ...group }));
     }, [filteredRows]);
+
+    useEffect(() => {
+        if (initializedCollapsedDateKeysRef.current || groupedRowsByDate.length === 0) {
+            return;
+        }
+        setCollapsedDateKeys(new Set(groupedRowsByDate.map((group) => group.dateKey)));
+        initializedCollapsedDateKeysRef.current = true;
+    }, [groupedRowsByDate]);
 
     const hasActiveFilters = Boolean(searchText || selectedDate || selectedDistrictKey !== 'all' || selectedExamKey !== 'all');
     const clearFilters = () => updateUrlParams({ q: null, date: null, district: null, exam: null });
@@ -1082,22 +1104,43 @@ export default function WorkOrderPage() {
                                 </div>
                             ) : (
                                 <div className="space-y-5">
-                                    {groupedRowsByDate.map((group) => (
-                                        <section key={group.dateKey} className="overflow-hidden rounded-xl border bg-card">
-                                            <div className="flex flex-col gap-2 border-b bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-semibold">{group.dateLabel}</h3>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {group.rows.length} dut{group.rows.length === 1 ? 'y' : 'ies'} · Assigned {group.assignedCount}/{group.totalRequired}
-                                                    </p>
-                                                </div>
-                                                <Badge variant={group.assignedCount >= group.totalRequired ? 'default' : 'secondary'}>
-                                                    {group.assignedCount >= group.totalRequired ? 'Ready' : `${group.totalRequired - group.assignedCount} pending`}
-                                                </Badge>
-                                            </div>
+                                    {groupedRowsByDate.map((group) => {
+                                        const isCollapsed = collapsedDateKeys.has(group.dateKey);
+                                        const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
 
-                                            <div className="divide-y">
-                                                {group.rows.map((row) => {
+                                        return (
+                                            <section key={group.dateKey} className="overflow-hidden rounded-xl border bg-card">
+                                                <button
+                                                    type="button"
+                                                    className="flex w-full flex-col gap-2 border-b bg-muted/40 px-4 py-3 text-left transition-colors hover:bg-muted/60 sm:flex-row sm:items-center sm:justify-between"
+                                                    onClick={() => toggleDateGroup(group.dateKey)}
+                                                    aria-expanded={!isCollapsed}
+                                                    aria-controls={`work-orders-date-${group.dateKey}`}
+                                                >
+                                                    <div className="flex min-w-0 items-start gap-3">
+                                                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background shadow-sm">
+                                                            <ToggleIcon className="h-4 w-4" />
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <h3 className="text-base font-semibold">{group.dateLabel}</h3>
+                                                            <p className="text-sm text-muted-foreground">
+                                                                {group.rows.length} dut{group.rows.length === 1 ? 'y' : 'ies'} · Assigned {group.assignedCount}/{group.totalRequired}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <Badge variant={group.assignedCount >= group.totalRequired ? 'default' : 'secondary'} className="w-fit">
+                                                            {group.assignedCount >= group.totalRequired ? 'Ready' : `${group.totalRequired - group.assignedCount} pending`}
+                                                        </Badge>
+                                                        <span className="text-xs font-medium text-primary">
+                                                            {isCollapsed ? 'View details' : 'Hide details'}
+                                                        </span>
+                                                    </div>
+                                                </button>
+
+                                                {!isCollapsed && (
+                                                    <div id={`work-orders-date-${group.dateKey}`} className="divide-y">
+                                                        {group.rows.map((row) => {
                                                     const assignmentLabel = `Assigned ${row.assignedCount}/${row.totalRequired}`;
                                                     return (
                                                         <div key={row.order.id} className="grid gap-3 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(260px,1.4fr)_140px_190px_120px_auto] lg:items-center">
@@ -1164,10 +1207,12 @@ export default function WorkOrderPage() {
                                                             </div>
                                                         </div>
                                                     );
-                                                })}
-                                            </div>
-                                        </section>
-                                    ))}
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </section>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </CardContent>

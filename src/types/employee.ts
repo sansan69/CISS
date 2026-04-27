@@ -3,6 +3,7 @@ import {
   EDUCATION_OPTIONS,
   EMPLOYEE_STATUSES,
   GENDER_OPTIONS,
+  LNG_JOB_DESIGNATIONS,
   MARITAL_STATUSES,
   PROOF_TYPES,
 } from "@/lib/constants";
@@ -19,6 +20,7 @@ export const employeeMaritalStatusSchema = z.enum(MARITAL_STATUSES);
 export const employeeQualificationSchema = z.enum(EDUCATION_OPTIONS);
 export const employeeProofTypeSchema = z.enum(PROOF_TYPES);
 export const employeeDistrictSchema = z.string().trim().min(1);
+export const employeeLngDesignationSchema = z.enum(LNG_JOB_DESIGNATIONS);
 
 export const employeeSchema = z.object({
   id: z.string(),
@@ -38,6 +40,17 @@ export const employeeSchema = z.object({
   spouseName: z.string().optional(),
   district: z.string(),
   panNumber: z.string().optional(),
+  aadharNumber: z.string().optional(),
+  nationality: z.string().optional(),
+  identificationMark: z.string().optional(),
+  heightCm: z.number().optional(),
+  weightKg: z.number().optional(),
+  jobDesignation: z.string().optional(),
+  lngJobDesignation: employeeLngDesignationSchema.optional(),
+  serviceBookNumber: z.string().optional(),
+  serviceBookDocumentUrl: z.string().optional(),
+  armsLicenseNumber: z.string().optional(),
+  armsLicenseDocumentUrl: z.string().optional(),
   educationalQualification: employeeQualificationSchema.optional(),
   otherQualification: z.string().optional(),
   identityProofType: z.string().optional(),
@@ -54,8 +67,9 @@ export const employeeSchema = z.object({
   bankAccountNumber: z.string().optional(),
   ifscCode: z.string().optional(),
   bankName: z.string().optional(),
+  branchName: z.string().optional(),
   fullAddress: z.string(),
-  emailAddress: z.string(),
+  emailAddress: z.string().optional(),
   phoneNumber: z.string(),
   profilePictureUrl: z.string().optional(),
   idProofType: z.string().optional(),
@@ -65,6 +79,7 @@ export const employeeSchema = z.object({
   idProofDocumentUrlBack: z.string().optional(),
   bankPassbookStatementUrl: z.string().optional(),
   policeClearanceCertificateUrl: z.string().optional(),
+  legacyUniqueId: z.string().optional(),
   joiningDate: firestoreDateSchema,
   status: employeeStatusSchema,
   qrCodeUrl: z.string().optional(),
@@ -102,12 +117,27 @@ export interface Employee {
   spouseName?: string;
   district: string;
   panNumber?: string;
+  aadharNumber?: string;
+  nationality?: string;
+  identificationMark?: string;
+  heightCm?: number;
+  weightKg?: number;
+  jobDesignation?: string;
+  lngJobDesignation?: (typeof LNG_JOB_DESIGNATIONS)[number];
+  serviceBookNumber?: string;
+  serviceBookDocumentUrl?: string;
+  armsLicenseNumber?: string;
+  armsLicenseDocumentUrl?: string;
   educationalQualification?:
     | "Primary School"
     | "High School"
+    | "Matriculation/10th"
+    | "Pre degree/+2 Equivalent"
     | "Diploma"
     | "Graduation"
+    | "Graduate"
     | "Post Graduation"
+    | "Post graduate"
     | "Doctorate"
     | "Any Other Qualification";
   otherQualification?: string;
@@ -125,8 +155,9 @@ export interface Employee {
   bankAccountNumber?: string;
   ifscCode?: string;
   bankName?: string;
+  branchName?: string;
   fullAddress: string;
-  emailAddress: string;
+  emailAddress?: string;
   phoneNumber: string;
   profilePictureUrl?: string;
   idProofType?: string;
@@ -136,6 +167,7 @@ export interface Employee {
   idProofDocumentUrlBack?: string;
   bankPassbookStatementUrl?: string;
   policeClearanceCertificateUrl?: string;
+  legacyUniqueId?: string;
   joiningDate: any;
   status: "Active" | "Inactive" | "OnLeave" | "Exited";
   qrCodeUrl?: string;

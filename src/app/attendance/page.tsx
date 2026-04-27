@@ -82,6 +82,31 @@ const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
   timeZone: 'Asia/Kolkata',
 });
 
+function buildLocationAccessError(error: GeolocationPositionError) {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return {
+        title: 'Allow location access',
+        message: 'Location permission is blocked. Allow location access in your browser settings before marking attendance.',
+      };
+    case error.POSITION_UNAVAILABLE:
+      return {
+        title: 'Turn on location services',
+        message: 'Device location services appear to be off. Turn on GPS or location services in phone settings and try again.',
+      };
+    case error.TIMEOUT:
+      return {
+        title: 'Location not available',
+        message: 'Could not get a GPS fix. Turn on location services, move outdoors if needed, and try again.',
+      };
+    default:
+      return {
+        title: 'Location unavailable',
+        message: 'Could not fetch device location. Turn on location services and try again.',
+      };
+  }
+}
+
 export default function AttendancePage() {
   const router = useRouter();
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
@@ -564,7 +589,13 @@ export default function AttendancePage() {
         console.error("Error getting location:", error);
         setLocation(null);
         setIsFetchingLocation(false);
-        reject(new Error("Could not fetch device location. Please enable location services."));
+        const locationIssue = buildLocationAccessError(error);
+        toast({
+          variant: 'destructive',
+          title: locationIssue.title,
+          description: locationIssue.message,
+        });
+        reject(new Error(locationIssue.message));
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );

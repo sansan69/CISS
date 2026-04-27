@@ -58,6 +58,7 @@ import {
     normalizeDistrictName,
 } from '@/lib/districts';
 import { REGION_CODE } from '@/lib/runtime-config';
+import { dedupeClientOptions } from '@/lib/client-options';
 
 
 type Site = ManagedSite;
@@ -453,7 +454,11 @@ export default function SiteManagementPage() {
             setIsFilterDataLoading(true);
             try {
                 const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
-                setClients(clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name } as ClientOption)));
+                setClients(
+                    dedupeClientOptions(
+                        clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name } as ClientOption)),
+                    ),
+                );
 
                 const clientLocationsSnapshot = await getDocs(query(collection(db, 'clientLocations'), orderBy('clientName')));
                 setClientLocations(clientLocationsSnapshot.docs.map((clientLocationDoc) => ({

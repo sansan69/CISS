@@ -91,6 +91,18 @@ service firebase.storage {
       allow update, delete: if isAdmin();
     }
 
+    match /employees/{employeeKey}/serviceBooks/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/armsLicenses/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
     match /employees/{employeeKey}/bankDocuments/{fileName} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
@@ -132,6 +144,18 @@ service firebase.storage {
     }
 
     match /enrollments/{employeeKey}/addressProofs/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isEnrollmentDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /enrollments/{employeeKey}/serviceBooks/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isEnrollmentDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /enrollments/{employeeKey}/armsLicenses/{fileName} {
       allow read: if isSignedIn();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();

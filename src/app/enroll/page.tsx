@@ -51,7 +51,15 @@ import { useRouter } from 'next/navigation';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, KeyRound } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { EDUCATION_OPTIONS, MARITAL_STATUSES, PROOF_TYPES } from "@/lib/constants";
+import {
+  EDUCATION_OPTIONS,
+  LNG_CLIENT_NAME,
+  LNG_JOB_DESIGNATIONS,
+  MARITAL_STATUSES,
+  PROOF_TYPES,
+  requiresLngArmsLicense,
+  requiresLngServiceBook,
+} from "@/lib/constants";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
@@ -66,6 +74,7 @@ const optionalFileSchema = fileSchema.optional();
 
 const proofTypes = z.enum(PROOF_TYPES);
 const qualificationTypes = z.enum(EDUCATION_OPTIONS);
+const lngDesignationTypes = z.enum(LNG_JOB_DESIGNATIONS);
 
 const idValidation = {
     "Aadhar Card": /^\d{12}$/,
@@ -82,8 +91,9 @@ const enrollmentFormSchema = z.object({
 
   // Personal Information
   profilePicture: fileSchema,
-  firstName: z.string().min(1, { message: "First name is required." }),
-  lastName: z.string().min(1, { message: "Last name is required." }),
+  fullNameInput: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
   fatherName: z.string().min(2, { message: "Father's name is required." }),
   motherName: z.string().min(2, { message: "Mother's name is required." }),
   dateOfBirth: z.date({ required_error: "Date of birth is required." })
@@ -111,10 +121,20 @@ const enrollmentFormSchema = z.object({
   
   educationalQualification: qualificationTypes,
   otherQualification: z.string().optional(),
-
+  lngJobDesignation: lngDesignationTypes.optional(),
+  serviceBookNumber: z.string().optional(),
+  serviceBookDocument: optionalFileSchema,
+  armsLicenseNumber: z.string().optional(),
+  armsLicenseDocument: optionalFileSchema,
+  
   // Location & Identification
   district: z.string({ required_error: "District is required." }).min(1, {message: "District is required."}),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
+  aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhar number must be 12 digits." }).optional().or(z.literal('')),
+  nationality: z.string().optional(),
+  identificationMark: z.string().optional(),
+  heightCm: z.coerce.number().positive().optional(),
+  weightKg: z.coerce.number().positive().optional(),
   
   identityProofType: proofTypes,
   identityProofNumber: z.string().min(1, { message: "ID proof number is required." }),
@@ -136,12 +156,14 @@ const enrollmentFormSchema = z.object({
   bankAccountNumber: z.string().optional().or(z.literal('')),
   ifscCode: z.string().optional().or(z.literal('')),
   bankName: z.string().optional().or(z.literal('')),
+  branchName: z.string().optional(),
   bankPassbookStatement: optionalFileSchema,
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
-  emailAddress: z.string().email({ message: "Invalid email address." }),
+  emailAddress: z.string().optional().or(z.literal('')),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
+  legacyUniqueId: z.string().optional(),
   
   termsAndConditions: z.boolean().refine((val) => val === true, {
     message: "You must accept the terms and conditions to proceed.",
@@ -158,6 +180,56 @@ const enrollmentFormSchema = z.object({
   }
   if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
+  }
+
+  if (data.clientName === LNG_CLIENT_NAME) {
+    if (!data.fullNameInput || data.fullNameInput.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Full name is required.", path: ["fullNameInput"] });
+    }
+    if (!data.lngJobDesignation) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Job designation is required.", path: ["lngJobDesignation"] });
+    }
+    if (!data.identificationMark || data.identificationMark.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Identification mark is required.", path: ["identificationMark"] });
+    }
+    if (!data.aadharNumber || data.aadharNumber.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar number is required.", path: ["aadharNumber"] });
+    }
+    if (!data.nationality || data.nationality.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Nationality is required.", path: ["nationality"] });
+    }
+    if (!data.heightCm) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Height is required.", path: ["heightCm"] });
+    }
+    if (!data.weightKg) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Weight is required.", path: ["weightKg"] });
+    }
+    if (requiresLngServiceBook(data.lngJobDesignation)) {
+      if (!data.serviceBookNumber || data.serviceBookNumber.trim() === "") {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Service book number is required.", path: ["serviceBookNumber"] });
+      }
+      if (!data.serviceBookDocument) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Service book document is required.", path: ["serviceBookDocument"] });
+      }
+    }
+    if (requiresLngArmsLicense(data.lngJobDesignation)) {
+      if (!data.armsLicenseNumber || data.armsLicenseNumber.trim() === "") {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Arms license number is required.", path: ["armsLicenseNumber"] });
+      }
+      if (!data.armsLicenseDocument) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Arms license document is required.", path: ["armsLicenseDocument"] });
+      }
+    }
+  } else {
+    if (!data.firstName || data.firstName.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "First name is required.", path: ["firstName"] });
+    }
+    if (!data.lastName || data.lastName.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Last name is required.", path: ["lastName"] });
+    }
+    if (!data.emailAddress || !z.string().email().safeParse(data.emailAddress).success) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Valid email address is required.", path: ["emailAddress"] });
+    }
   }
 
   // --- Zod Level Validation for ID Numbers ---
@@ -224,12 +296,15 @@ const DRAFT_FILE_FIELDS: (keyof EnrollmentFormValues)[] = [
   "addressProofUrlFront",
   "addressProofUrlBack",
   "signatureUrl",
+  "serviceBookDocument",
+  "armsLicenseDocument",
   "bankPassbookStatement",
   "policeClearanceCertificate",
 ];
 const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   clientName: "",
   resourceIdNumber: "",
+  fullNameInput: "",
   firstName: "",
   lastName: "",
   fatherName: "",
@@ -239,8 +314,14 @@ const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   spouseName: "",
   educationalQualification: undefined,
   otherQualification: "",
+  lngJobDesignation: undefined,
+  serviceBookNumber: "",
+  armsLicenseNumber: "",
   district: "",
   panNumber: "",
+  aadharNumber: "",
+  nationality: "Indian",
+  identificationMark: "",
   identityProofType: undefined,
   identityProofNumber: "",
   addressProofType: undefined,
@@ -250,9 +331,11 @@ const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   bankAccountNumber: "",
   ifscCode: "",
   bankName: "",
+  branchName: "",
   fullAddress: "",
   emailAddress: "",
   phoneNumber: "",
+  legacyUniqueId: "",
   termsAndConditions: false,
 };
 const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
@@ -260,6 +343,7 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   clientName: "Client name",
   resourceIdNumber: "Resource ID number",
   profilePicture: "Profile picture",
+  fullNameInput: "Full name",
   firstName: "First name",
   lastName: "Last name",
   fatherName: "Father's name",
@@ -270,8 +354,18 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   spouseName: "Spouse name",
   educationalQualification: "Educational qualification",
   otherQualification: "Other qualification",
+  lngJobDesignation: "Job designation",
+  serviceBookNumber: "Service book number",
+  serviceBookDocument: "Service book document",
+  armsLicenseNumber: "Arms license number",
+  armsLicenseDocument: "Arms license document",
   district: "District",
   panNumber: "PAN number",
+  aadharNumber: "Aadhar number",
+  nationality: "Nationality",
+  identificationMark: "Identification mark",
+  heightCm: "Height in cm",
+  weightKg: "Weight in kg",
   identityProofType: "Identity proof type",
   identityProofNumber: "Identity proof number",
   identityProofUrlFront: "Identity proof front",
@@ -287,10 +381,12 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   bankAccountNumber: "Bank account number",
   ifscCode: "IFSC code",
   bankName: "Bank name",
+  branchName: "Branch name",
   bankPassbookStatement: "Bank passbook or statement",
   fullAddress: "Full address",
   emailAddress: "Email address",
   phoneNumber: "Phone number",
+  legacyUniqueId: "Legacy unique ID",
   termsAndConditions: "Terms and declaration",
 };
 
@@ -298,6 +394,7 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "joiningDate",
   "clientName",
   "profilePicture",
+  "fullNameInput",
   "firstName",
   "lastName",
   "fatherName",
@@ -306,7 +403,18 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "gender",
   "maritalStatus",
   "educationalQualification",
+  "lngJobDesignation",
+  "serviceBookNumber",
+  "serviceBookDocument",
+  "armsLicenseNumber",
+  "armsLicenseDocument",
   "district",
+  "panNumber",
+  "aadharNumber",
+  "nationality",
+  "identificationMark",
+  "heightCm",
+  "weightKg",
   "identityProofType",
   "identityProofNumber",
   "identityProofUrlFront",
@@ -316,9 +424,11 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "addressProofUrlFront",
   "addressProofUrlBack",
   "signatureUrl",
+  "branchName",
   "fullAddress",
   "emailAddress",
   "phoneNumber",
+  "legacyUniqueId",
   "termsAndConditions",
 ];
 
@@ -452,7 +562,17 @@ const clearEnrollmentDraftFiles = async () => {
 };
 
 
-type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+type CameraField =
+  | "profilePicture"
+  | "identityProofUrlFront"
+  | "identityProofUrlBack"
+  | "addressProofUrlFront"
+  | "addressProofUrlBack"
+  | "signatureUrl"
+  | "serviceBookDocument"
+  | "armsLicenseDocument"
+  | "bankPassbookStatement"
+  | "policeClearanceCertificate";
 
 interface ActualEnrollmentFormProps {
   initialPhoneNumberFromQuery?: string | null;
@@ -476,6 +596,7 @@ const ENROLLMENT_STEPS: {
     description: "Add the applicant details and photo without scrolling through the whole form.",
     fields: [
       "profilePicture",
+      "fullNameInput",
       "firstName",
       "lastName",
       "fatherName",
@@ -486,6 +607,11 @@ const ENROLLMENT_STEPS: {
       "spouseName",
       "educationalQualification",
       "otherQualification",
+      "lngJobDesignation",
+      "serviceBookNumber",
+      "serviceBookDocument",
+      "armsLicenseNumber",
+      "armsLicenseDocument",
     ],
   },
   {
@@ -511,16 +637,23 @@ const ENROLLMENT_STEPS: {
     fields: [
       "district",
       "panNumber",
+      "aadharNumber",
+      "nationality",
+      "identificationMark",
+      "heightCm",
+      "weightKg",
       "epfUanNumber",
       "esicNumber",
       "policeClearanceCertificate",
       "bankAccountNumber",
       "ifscCode",
       "bankName",
+      "branchName",
       "bankPassbookStatement",
       "fullAddress",
       "emailAddress",
       "phoneNumber",
+      "legacyUniqueId",
     ],
   },
   {
@@ -540,6 +673,27 @@ function buildEnrollmentStoragePath(
   const extension = getUploadFileExtension(file, "bin");
   // Use public enrollments/ path so unauthenticated users can upload
   return `enrollments/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}`;
+}
+
+function splitLngFullName(rawFullName: string) {
+  const parts = rawFullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return { firstName: "", lastName: "" };
+  }
+  if (parts.length === 1) {
+    return { firstName: parts[0]!, lastName: parts[0]! };
+  }
+  return {
+    firstName: parts[0]!,
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function buildLngEnrollmentEmail(uniqueId: string | undefined, phoneNumber: string) {
+  const token =
+    uniqueId?.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase() ||
+    phoneNumber.replace(/\D/g, "");
+  return `${token}@lng-petronet.cisskerala.app`;
 }
 
 const IdNumberInput = ({
@@ -600,6 +754,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [addressProofUrlFrontPreview, setAddressProofUrlFrontPreview] = React.useState<string | null>(null);
   const [addressProofUrlBackPreview, setAddressProofUrlBackPreview] = React.useState<string | null>(null);
   const [signatureUrlPreview, setSignatureUrlPreview] = React.useState<string | null>(null);
+  const [serviceBookPreview, setServiceBookPreview] = React.useState<string | null>(null);
+  const [armsLicensePreview, setArmsLicensePreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
   const [policeCertPreview, setPoliceCertPreview] = React.useState<string | null>(null);
 
@@ -642,9 +798,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const watchClientName = form.watch("clientName");
   const watchMaritalStatus = form.watch("maritalStatus");
   const watchEducationalQualification = form.watch("educationalQualification");
+  const watchLngJobDesignation = form.watch("lngJobDesignation");
   const watchedValues = useWatch({ control: form.control });
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
+  const isLngClient = watchClientName === LNG_CLIENT_NAME;
+  const requiresServiceBook = requiresLngServiceBook(watchLngJobDesignation);
+  const requiresArmsLicense = requiresLngArmsLicense(watchLngJobDesignation);
 
   useEffect(() => {
     if (!fullAddress || fullAddress.length < 15) { 
@@ -684,6 +844,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         break;
       case "signatureUrl":
         setSignatureUrlPreview(previewUrl);
+        break;
+      case "serviceBookDocument":
+        setServiceBookPreview(previewUrl);
+        break;
+      case "armsLicenseDocument":
+        setArmsLicensePreview(previewUrl);
         break;
       case "bankPassbookStatement":
         setBankPassbookPreview(previewUrl);
@@ -1092,6 +1258,19 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     }
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, "");
+    const isLngEnrollment = data.clientName === LNG_CLIENT_NAME;
+    const normalizedLngFullName = data.fullNameInput?.trim() || "";
+    const derivedNameParts = isLngEnrollment
+      ? splitLngFullName(normalizedLngFullName)
+      : {
+          firstName: data.firstName?.trim() || "",
+          lastName: data.lastName?.trim() || "",
+        };
+    const normalizedEmail =
+      (data.emailAddress?.trim() || "") ||
+      (isLngEnrollment
+        ? buildLngEnrollmentEmail(data.legacyUniqueId, phoneNumber)
+        : "");
     const uploadedUrls: { [key: string]: string | null } = {
         profilePictureUrl: null,
         identityProofUrlFront: null,
@@ -1099,6 +1278,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         addressProofUrlFront: null,
         addressProofUrlBack: null,
         signatureUrl: null,
+        serviceBookDocumentUrl: null,
+        armsLicenseDocumentUrl: null,
         bankPassbookStatementUrl: null,
         policeClearanceCertificateUrl: null,
     };
@@ -1111,6 +1292,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             { name: "Address Proof (Front)", file: data.addressProofUrlFront, folder: "addressProofs", fileStem: "addr_front", key: 'addressProofUrlFront' },
             { name: "Address Proof (Back)", file: data.addressProofUrlBack, folder: "addressProofs", fileStem: "addr_back", key: 'addressProofUrlBack' },
             { name: "Signature", file: data.signatureUrl, folder: "signatures", fileStem: "sig", key: 'signatureUrl' },
+            { name: "Service Book", file: data.serviceBookDocument, folder: "serviceBooks", fileStem: "service_book", key: 'serviceBookDocumentUrl' },
+            { name: "Arms License", file: data.armsLicenseDocument, folder: "armsLicenses", fileStem: "arms_license", key: 'armsLicenseDocumentUrl' },
             { name: "Bank Document", file: data.bankPassbookStatement, folder: "bankDocuments", fileStem: "bank", key: 'bankPassbookStatementUrl' },
             { name: "Police Certificate", file: data.policeClearanceCertificate, folder: "policeCertificates", fileStem: "pcc", key: 'policeClearanceCertificateUrl' },
         ];
@@ -1139,8 +1322,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             clientName: data.clientName,
             resourceIdNumber: data.resourceIdNumber || undefined,
             profilePictureUrl: uploadedUrls.profilePictureUrl,
-            firstName: data.firstName,
-            lastName: data.lastName,
+            fullNameInput: normalizedLngFullName || undefined,
+            firstName: derivedNameParts.firstName,
+            lastName: derivedNameParts.lastName,
             fatherName: data.fatherName,
             motherName: data.motherName,
             dateOfBirth: data.dateOfBirth.toISOString(),
@@ -1149,10 +1333,21 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             spouseName: data.spouseName || undefined,
             educationalQualification: data.educationalQualification,
             otherQualification: data.otherQualification || undefined,
+            lngJobDesignation: data.lngJobDesignation || undefined,
+            jobDesignation: data.lngJobDesignation || undefined,
+            serviceBookNumber: data.serviceBookNumber || undefined,
+            serviceBookDocumentUrl: uploadedUrls.serviceBookDocumentUrl || undefined,
+            armsLicenseNumber: data.armsLicenseNumber || undefined,
+            armsLicenseDocumentUrl: uploadedUrls.armsLicenseDocumentUrl || undefined,
             district,
             fullAddress: data.fullAddress,
-            emailAddress: data.emailAddress,
+            emailAddress: normalizedEmail || undefined,
             phoneNumber: data.phoneNumber,
+            aadharNumber: data.aadharNumber || undefined,
+            nationality: data.nationality || undefined,
+            identificationMark: data.identificationMark || undefined,
+            heightCm: data.heightCm || undefined,
+            weightKg: data.weightKg || undefined,
             identityProofType: data.identityProofType,
             identityProofNumber: data.identityProofNumber,
             identityProofUrlFront: uploadedUrls.identityProofUrlFront,
@@ -1165,11 +1360,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             bankAccountNumber: data.bankAccountNumber || undefined,
             ifscCode: data.ifscCode || undefined,
             bankName: data.bankName || undefined,
+            branchName: data.branchName || undefined,
             bankPassbookStatementUrl: uploadedUrls.bankPassbookStatementUrl || undefined,
             panNumber: data.panNumber || undefined,
             epfUanNumber: data.epfUanNumber || undefined,
             esicNumber: data.esicNumber || undefined,
             policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl || undefined,
+            legacyUniqueId: data.legacyUniqueId || undefined,
           }),
         });
 
@@ -1180,7 +1377,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
         toast({
             title: "Registration Successful!",
-            description: `${data.firstName} ${data.lastName}'s profile has been created. ID: ${responseBody.employeeId}`,
+            description: `${normalizedLngFullName || `${derivedNameParts.firstName} ${derivedNameParts.lastName}`.trim()}'s profile has been created. ID: ${responseBody.employeeId}`,
             duration: 7000,
         });
 
@@ -1188,7 +1385,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         setCompletionState({
           id: responseBody.id,
           employeeId: responseBody.employeeId,
-          fullName: `${data.firstName} ${data.lastName}`,
+          fullName: normalizedLngFullName || `${derivedNameParts.firstName} ${derivedNameParts.lastName}`.trim(),
           profilePictureUrl: uploadedUrls.profilePictureUrl,
           phoneNumber: data.phoneNumber,
           dateOfBirth: data.dateOfBirth ? format(data.dateOfBirth, "yyyy-MM-dd") : undefined,
@@ -1234,10 +1431,55 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     return issues;
   })();
   const applicableRequiredFields = (() => {
-    const fields = [...BASE_REQUIRED_FIELDS];
+    let fields = [...BASE_REQUIRED_FIELDS];
+
+    if (formValues.clientName === LNG_CLIENT_NAME) {
+      fields = fields.filter(
+        (fieldName) =>
+          !["firstName", "lastName", "emailAddress", "panNumber"].includes(fieldName),
+      );
+    } else {
+      fields = fields.filter(
+        (fieldName) =>
+          ![
+            "fullNameInput",
+            "lngJobDesignation",
+            "serviceBookNumber",
+            "serviceBookDocument",
+            "armsLicenseNumber",
+            "armsLicenseDocument",
+            "aadharNumber",
+            "nationality",
+            "identificationMark",
+            "heightCm",
+            "weightKg",
+            "branchName",
+            "legacyUniqueId",
+          ].includes(fieldName),
+      );
+    }
 
     if (formValues.clientName === "TCS") {
       fields.push("resourceIdNumber");
+    }
+    if (formValues.clientName === LNG_CLIENT_NAME) {
+      fields.push(
+        "fullNameInput",
+        "lngJobDesignation",
+        "aadharNumber",
+        "nationality",
+        "identificationMark",
+        "heightCm",
+        "weightKg",
+        "branchName",
+        "legacyUniqueId",
+      );
+      if (requiresLngServiceBook(formValues.lngJobDesignation)) {
+        fields.push("serviceBookNumber", "serviceBookDocument");
+      }
+      if (requiresLngArmsLicense(formValues.lngJobDesignation)) {
+        fields.push("armsLicenseNumber", "armsLicenseDocument");
+      }
     }
     if (formValues.maritalStatus === "Married") {
       fields.push("spouseName");
@@ -1576,8 +1818,21 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     )}
                   />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
-                    <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    {isLngClient ? (
+                      <FormField control={form.control} name="fullNameInput" render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Full Name <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="Enter employee full name" {...field} /></FormControl>
+                          <FormDescription>LNG Petronet enrollment uses the employee’s full name as captured in the legacy Google Form.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    ) : (
+                      <>
+                        <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter first name" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter last name" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                      </>
+                    )}
                     <FormField control={form.control} name="fatherName" render={({ field }) => (<FormItem><FormLabel>Father's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter father's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="motherName" render={({ field }) => (<FormItem><FormLabel>Mother's Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter mother's name" {...field} /></FormControl><FormMessage /></FormItem>)} />
                     <DateInputField
@@ -1608,7 +1863,63 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       )}
                     />
                     {watchEducationalQualification === "Any Other Qualification" && <FormField control={form.control} name="otherQualification" render={({ field }) => (<FormItem><FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
+                    {isLngClient && (
+                      <FormField control={form.control} name="lngJobDesignation" render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Job Designation <span className="text-destructive">*</span></FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select LNG job designation" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {LNG_JOB_DESIGNATIONS.map((designation) => (
+                                <SelectItem key={designation} value={designation}>{designation}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    )}
                   </div>
+                  {isLngClient && requiresServiceBook && (
+                    <div className="mt-8 rounded-2xl border bg-muted/20 p-4 space-y-4">
+                      <h3 className="font-medium text-lg">Service Book Details</h3>
+                      <div className="grid grid-cols-1 gap-6">
+                        <FormField control={form.control} name="serviceBookNumber" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Service Book Number <span className="text-destructive">*</span></FormLabel>
+                            <FormControl><Input placeholder="Enter service book number" {...field} value={field.value ?? ""} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
+                      <FormField control={form.control} name="serviceBookDocument" render={({ field }) => (
+                        <FormItem className="text-center">
+                          <FormLabel className="block mb-2">Service Book Document <span className="text-destructive">*</span></FormLabel>
+                          <ImagePreviewAndUpload fieldName="serviceBookDocument" preview={serviceBookPreview} setPreview={setServiceBookPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the service book page showing service details." />
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+                  )}
+                  {isLngClient && requiresArmsLicense && (
+                    <div className="mt-8 rounded-2xl border bg-muted/20 p-4 space-y-4">
+                      <h3 className="font-medium text-lg">Arms License Details</h3>
+                      <FormField control={form.control} name="armsLicenseNumber" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Arms License Number <span className="text-destructive">*</span></FormLabel>
+                          <FormControl><Input placeholder="Enter arms license number" {...field} value={field.value ?? ""} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="armsLicenseDocument" render={({ field }) => (
+                        <FormItem className="text-center">
+                          <FormLabel className="block mb-2">Arms License Copy <span className="text-destructive">*</span></FormLabel>
+                          <ImagePreviewAndUpload fieldName="armsLicenseDocument" preview={armsLicensePreview} setPreview={setArmsLicensePreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the latest arms license copy." />
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+                  )}
                 </FormSection>
               )}
 
@@ -1653,8 +1964,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter your district" list="public-enrollment-districts" /></FormControl><datalist id="public-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Type the district directly. Suggestions are shown when available.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      {isLngClient && <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter 12-digit Aadhar number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                      {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                      {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                      {isLngClient && <FormField control={form.control} name="heightCm" render={({ field }) => (<FormItem><FormLabel>Height (cm) <span className="text-destructive">*</span></FormLabel><FormControl><Input type="number" min="1" placeholder="Enter height in cm" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                      {isLngClient && <FormField control={form.control} name="weightKg" render={({ field }) => (<FormItem><FormLabel>Weight (kg) <span className="text-destructive">*</span></FormLabel><FormControl><Input type="number" min="1" placeholder="Enter weight in kg" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                       <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      {isLngClient && <FormField control={form.control} name="legacyUniqueId" render={({ field }) => (<FormItem><FormLabel>Legacy Unique ID <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g. KL/LNG/2024-26/001" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     </div>
                     <div className="grid grid-cols-1 mt-6"><FormField control={form.control} name="policeClearanceCertificate" render={({ field }) => ( <FormItem className="text-center"><FormLabel className="block mb-2">Police Clearance Certificate</FormLabel><ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} optional helperText="Optional. Upload only if available." /><FormMessage /></FormItem> )}/></div>
                   </FormSection>
@@ -1663,7 +1980,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className={isLngClient ? "" : "md:col-span-2"}><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      {isLngClient && <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter branch name" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     </div>
                     <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} optional helperText="Optional. A clear copy helps speed up verification." /><FormMessage /></FormItem>)}/>
                   </FormSection>
@@ -1680,7 +1998,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       )} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address {isLngClient ? "(optional)" : <span className="text-destructive">*</span>}</FormLabel><FormControl><Input type="email" placeholder={isLngClient ? "Optional for LNG Petronet employees" : "yourname@example.com"} {...field} value={field.value ?? ""} /></FormControl>{isLngClient && <FormDescription>If left empty, a secure LNG placeholder email will be generated automatically.</FormDescription>}<FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "(Pre-filled from login)" : "This is used for your employee profile and document folder."}</FormDescription><FormMessage /></FormItem>)}/>
                     </div>
                   </FormSection>
@@ -1694,12 +2012,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="Joining Date" value={watchedValues?.joiningDate ? format(watchedValues.joiningDate, "dd-MM-yyyy") : "Not added"} />
                       <ReviewRow label="Client" value={watchedValues?.clientName || "Not selected"} />
                       {watchedValues?.clientName === "TCS" && <ReviewRow label="Resource ID" value={watchedValues?.resourceIdNumber || "Missing"} />}
+                      {watchedValues?.clientName === LNG_CLIENT_NAME && <ReviewRow label="Legacy Unique ID" value={watchedValues?.legacyUniqueId || "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Personal">
-                      <ReviewRow label="Name" value={[watchedValues?.firstName, watchedValues?.lastName].filter(Boolean).join(" ") || "Not added"} />
+                      <ReviewRow label="Name" value={watchedValues?.clientName === LNG_CLIENT_NAME ? watchedValues?.fullNameInput || "Not added" : [watchedValues?.firstName, watchedValues?.lastName].filter(Boolean).join(" ") || "Not added"} />
                       <ReviewRow label="DOB" value={watchedValues?.dateOfBirth ? format(watchedValues.dateOfBirth, "dd-MM-yyyy") : "Not added"} />
                       <ReviewRow label="Gender" value={watchedValues?.gender || "Not selected"} />
                       <ReviewRow label="Qualification" value={watchedValues?.educationalQualification || "Not selected"} />
+                      {watchedValues?.clientName === LNG_CLIENT_NAME && <ReviewRow label="Designation" value={watchedValues?.lngJobDesignation || "Not selected"} />}
                     </ReviewCard>
                     <ReviewCard title="Documents">
                       <ReviewRow label="Profile picture" value={profilePicPreview ? "Ready" : "Missing"} />
@@ -1708,10 +2028,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="Address proof front" value={addressProofUrlFrontPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof back" value={addressProofUrlBackPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Signature" value={signatureUrlPreview ? "Ready" : "Missing"} />
+                      {watchedValues?.clientName === LNG_CLIENT_NAME && requiresServiceBook && <ReviewRow label="Service book" value={serviceBookPreview ? "Ready" : "Missing"} />}
+                      {watchedValues?.clientName === LNG_CLIENT_NAME && requiresArmsLicense && <ReviewRow label="Arms license" value={armsLicensePreview ? "Ready" : "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Contact">
                       <ReviewRow label="Phone" value={watchedValues?.phoneNumber || "Not added"} />
-                      <ReviewRow label="Email" value={watchedValues?.emailAddress || "Not added"} />
+                      <ReviewRow label="Email" value={watchedValues?.emailAddress || (watchedValues?.clientName === LNG_CLIENT_NAME ? "Will be generated automatically" : "Not added")} />
                       <ReviewRow label="District" value={watchedValues?.district || "Not selected"} />
                       <ReviewRow label="Address" value={watchedValues?.fullAddress || "Not added"} />
                     </ReviewCard>

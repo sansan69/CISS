@@ -10,6 +10,7 @@ import {
   Clock,
   ArrowRight,
   Building2,
+  Camera,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -272,6 +273,32 @@ export default function GuardDashboardPage() {
         </CardContent>
       </Card>
 
+      <Link
+        href={`/attendance?employeeId=${encodeURIComponent(data.employeeId)}`}
+        className="block animate-slide-up stagger-4"
+      >
+        <div
+          className="rounded-xl p-4 text-white transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.985]"
+          style={{
+            background: "linear-gradient(135deg, #014c85 0%, #0b67ad 100%)",
+            boxShadow: "0 10px 24px hsl(206 98% 26% / 0.22)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+              <Camera size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Mark Attendance</p>
+              <p className="text-xs text-white/75">
+                Open your attendance camera and submit from this portal
+              </p>
+            </div>
+            <ArrowRight size={18} className="shrink-0 text-white/80" />
+          </div>
+        </div>
+      </Link>
+
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-2.5 animate-slide-up stagger-4">
         <Link
@@ -286,7 +313,7 @@ export default function GuardDashboardPage() {
             <CalendarCheck size={20} style={{ color: BRAND_BLUE }} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Attendance</p>
+            <p className="text-sm font-semibold text-foreground">Attendance History</p>
             <p className="text-[10px] text-muted-foreground">View records</p>
           </div>
         </Link>
