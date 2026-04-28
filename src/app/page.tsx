@@ -128,7 +128,11 @@ export default function LandingPage() {
     fetch("/api/public/portal-context")
       .then((response) => response.json())
       .then((data) => {
-        if (active) setPortalContext(data);
+        if (!active) return;
+        setPortalContext(data);
+        if (data?.isClientPortal) {
+          router.replace("/admin-login");
+        }
       })
       .catch(() => {
         if (active) setPortalContext(null);
@@ -136,7 +140,23 @@ export default function LandingPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
+
+  if (portalContext?.isClientPortal) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Opening client portal</p>
+            <p className="text-sm text-muted-foreground">
+              Redirecting to the login page for {portalContext.client?.name ?? "this client"}.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleInstallClick = async () => {
     const prompt = deferredPromptRef.current;
