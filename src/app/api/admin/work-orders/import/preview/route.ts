@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import { parseTcsExamWorkbook } from "@/lib/work-orders/tcs-exam-parser";
 import {
   buildBinaryFileHash,
@@ -157,11 +159,12 @@ async function fetchExistingRows(
 
   const relevantExamCodes = new Set(parsedRows.map((row) => row.examCode ?? "").filter(Boolean));
 
-  return workOrdersSnapshot.docs
-    .map((doc) => {
+  const mappedRows: Array<TcsExamExistingWorkOrder & { clientName: string }> =
+    workOrdersSnapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
+        clientName: typeof data.clientName === "string" ? data.clientName : "",
         siteId: typeof data.siteId === "string" ? data.siteId : undefined,
         siteName: String(data.siteName ?? ""),
         district: String(data.district ?? ""),
@@ -172,8 +175,12 @@ async function fetchExistingRows(
         femaleGuardsRequired: Number(data.femaleGuardsRequired ?? 0),
         totalManpower: Number(data.totalManpower ?? 0),
         recordStatus: normalizeRecordStatus(data.recordStatus),
-      } satisfies TcsExamExistingWorkOrder;
-    })
+      };
+    });
+
+  return mappedRows
+    .filter((row) => isOperationalWorkOrderClientName(row.clientName))
+    .map(({ clientName: _clientName, ...row }) => row)
     .filter((row) => row.date !== "")
     .filter((row) =>
       relevantExamCodes.size === 0 ? true : relevantExamCodes.has(row.examCode),

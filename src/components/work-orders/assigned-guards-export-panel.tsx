@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Download, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { WorkOrder as WorkOrderDoc } from '@/types/work-orders';
+import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
+import { isOperationalWorkOrderClientName } from '@/lib/work-orders';
 
 interface SiteDoc {
   id: string;
@@ -111,7 +113,9 @@ export function AssignedGuardsExportPanel() {
       const workOrdersSnapshot = await getDocs(workOrdersQuery);
       let workOrders = workOrdersSnapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as WorkOrderDoc[];
       workOrders = workOrders.filter(
-        (workOrder) => `${workOrder.recordStatus ?? 'active'}`.trim().toLowerCase() === 'active',
+        (workOrder) =>
+          `${workOrder.recordStatus ?? 'active'}`.trim().toLowerCase() === 'active' &&
+          isOperationalWorkOrderClientName(workOrder.clientName),
       );
 
       if (selectedOfficer !== 'all') {
@@ -219,7 +223,7 @@ export function AssignedGuardsExportPanel() {
       <CardHeader>
         <CardTitle>Assigned Guards Export</CardTitle>
         <CardDescription>
-          Download the next-day or date-range deployment list for TCS sites with district and field officer filters.
+          Download the next-day or date-range deployment list for {OPERATIONAL_CLIENT_NAME} sites with district and field officer filters.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">

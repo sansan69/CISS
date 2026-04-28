@@ -36,7 +36,7 @@ import type { Employee } from '@/types/employee';
 import type { WorkOrder } from '@/types/work-orders';
 import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
-import { isWorkOrderAdminRole } from '@/lib/work-orders';
+import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
 import { districtMatches } from '@/lib/districts';
 
@@ -529,6 +529,9 @@ export default function AssignGuardsPage() {
                 if (!siteDoc.exists()) throw new Error("Site not found.");
 
                 const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
+                if (!isOperationalWorkOrderClientName((siteData as { clientName?: string }).clientName)) {
+                    throw new Error("Work orders are only available for TCS sites.");
+                }
                 if (
                     userRole === 'fieldOfficer' &&
                     !assignedDistricts.some((district) => districtMatches(district, siteData.district))
@@ -542,6 +545,7 @@ export default function AssignGuardsPage() {
                     const todayMs = startOfToday().getTime();
                     const orders = snapshot.docs
                         .map(d => ({ id: d.id, ...d.data() } as WorkOrder))
+                        .filter((order) => isOperationalWorkOrderClientName(order.clientName))
                         .filter(o => {
                             try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
                         });

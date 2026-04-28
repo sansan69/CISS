@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
       const resolvedShift = resolveSiteShift(siteShiftMode, siteShiftTemplates, new Date());
       const nextShift = getNextShift(siteShiftMode, siteShiftTemplates, resolvedShift?.code);
 
-      if (isTcsSite || siteShiftMode !== "fixed") {
+      if (isTcsSite) {
         const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
         const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
         const workOrdersSnapshot = await adminDb
@@ -243,49 +243,7 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
-        const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
-        const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
-        const workOrdersSnapshot = await adminDb
-          .collection("workOrders")
-          .where("siteId", "==", payload.siteId)
-          .where("date", ">=", startOfDay)
-          .where("date", "<=", endOfDay)
-          .get();
-
-        const activeWorkOrders = workOrdersSnapshot.docs
-          .map((doc) => doc.data() as Record<string, any>)
-          .filter(isActiveWorkOrderRecord);
-
-        if (activeWorkOrders.length === 0) {
-          if (!resolvedShift) {
-            throw new AttendanceError(
-              "No active work order or fixed shift found for this site today.",
-            );
-          }
-        } else {
-          const matchingWorkOrder = activeWorkOrders
-            .find((workOrder) => {
-              const assignedGuards = Array.isArray(workOrder.assignedGuards)
-                ? workOrder.assignedGuards
-                : [];
-              return (
-                assignedGuards.length === 0 ||
-                isAssignedGuardMatch(
-                  assignedGuards,
-                  payload.employeeDocId,
-                  payload.employeeId,
-                )
-              );
-            });
-
-          if (!matchingWorkOrder) {
-            throw new AttendanceError(
-              "This employee is not assigned to the selected site for today's work order.",
-            );
-          }
-        }
-
-        if (!resolvedShift && activeWorkOrders.length === 0) {
+        if (siteShiftMode === "fixed" && !resolvedShift) {
           throw new AttendanceError(
             "No active fixed shift matches the current time for this site. Please contact admin.",
           );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit, buildServerUpdateAudit, buildServerAuditEvent } from "@/lib/server/audit";
+import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 
 function normalizeWorkOrderDate(value: unknown) {
   if (value instanceof Date) {
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    filtered.clientName = OPERATIONAL_CLIENT_NAME;
 
     const ref = adminDb.collection("workOrders").doc(workOrderId);
     const existing = await ref.get();

@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { useAppAuth } from '@/context/auth-context';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
-import { isWorkOrderAdminRole } from '@/lib/work-orders';
+import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-browser';
 import { districtMatches } from '@/lib/districts';
 import { PageHeader } from '@/components/layout/page-header';
@@ -355,6 +355,9 @@ export default function WorkOrderPage() {
                         return false;
                     }
                     if (isClientView && clientInfo?.clientName && o.clientName !== clientInfo.clientName) {
+                        return false;
+                    }
+                    if (!isOperationalWorkOrderClientName(o.clientName)) {
                         return false;
                     }
                     try { return o.date.toDate().getTime() >= todayMs; } catch { return true; }
@@ -749,10 +752,10 @@ export default function WorkOrderPage() {
                 title={pageTitle}
                 description={
                     canAdminWorkOrders
-                        ? 'Upload and manage exam duty requirements across active duty sites.'
+                        ? `${OPERATIONAL_CLIENT_NAME} exam-duty workspace for uploading work orders and assigning guards.`
                         : isClientView
-                            ? 'Review upcoming deployment duties and assigned coverage for your linked client sites.'
-                            : 'Review the exam duty requirements that are relevant to your assigned districts.'
+                            ? `Review upcoming ${OPERATIONAL_CLIENT_NAME} exam-duty deployments and assigned coverage for your linked sites.`
+                            : `Review the ${OPERATIONAL_CLIENT_NAME} exam-duty requirements that are relevant to your assigned districts.`
                 }
                 breadcrumbs={[
                     { label: "Dashboard", href: "/dashboard" },
@@ -777,8 +780,8 @@ export default function WorkOrderPage() {
                     {canAdminWorkOrders && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>Upload Work Order</CardTitle>
-                                <CardDescription>Upload the exam duty requirement workbook, preview the active-row changes, then confirm the import.</CardDescription>
+                                <CardTitle>{OPERATIONAL_CLIENT_NAME} Work Order Upload</CardTitle>
+                                <CardDescription>Upload the {OPERATIONAL_CLIENT_NAME} exam-duty workbook, preview the active-row changes, then confirm the import.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -1110,7 +1113,7 @@ export default function WorkOrderPage() {
                             ) : allWorkOrderRows.length === 0 ? (
                                 <div className="rounded-lg border border-dashed py-10 text-center">
                                     <p className="font-medium">No upcoming duties found.</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">Upload a work order to start assigning guards.</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">Upload a {OPERATIONAL_CLIENT_NAME} work order to start assigning guards.</p>
                                 </div>
                             ) : filteredRows.length === 0 ? (
                                 <div className="rounded-lg border border-dashed py-10 text-center">

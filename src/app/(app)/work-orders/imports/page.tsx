@@ -20,8 +20,9 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAppAuth } from "@/context/auth-context";
-import { isWorkOrderAdminRole } from "@/lib/work-orders";
+import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
 import { db } from "@/lib/firebase";
+import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 
 interface WorkOrderRow {
   id: string;
@@ -35,6 +36,7 @@ interface WorkOrderRow {
   recordStatus: string;
   assignedMale: number;
   assignedFemale: number;
+  clientName: string;
 }
 
 interface GroupedImport {
@@ -270,6 +272,7 @@ export default function WorkOrderImportsPage() {
             femaleGuardsRequired: Number(d.femaleGuardsRequired ?? 0),
             totalManpower: Number(d.totalManpower ?? 0),
             recordStatus: typeof d.recordStatus === "string" ? d.recordStatus : "active",
+            clientName: typeof d.clientName === "string" ? d.clientName : "",
             assignedMale: assignedGuards.filter((g: string) => {
               const parts = g.split(":");
               return parts.length >= 3 && parts[2]?.toLowerCase() === "male";
@@ -279,7 +282,7 @@ export default function WorkOrderImportsPage() {
               return parts.length >= 3 && parts[2]?.toLowerCase() === "female";
             }).length,
           };
-        });
+        }).filter((order) => isOperationalWorkOrderClientName(order.clientName));
 
         // Group by sourceFileName + examName
         const groups = new Map<string, {
@@ -302,6 +305,7 @@ export default function WorkOrderImportsPage() {
             femaleGuardsRequired: number;
             totalManpower: number;
             recordStatus: string;
+            clientName: string;
             assignedMale: number;
             assignedFemale: number;
           }[];
@@ -409,7 +413,7 @@ export default function WorkOrderImportsPage() {
       <PageHeader
         eyebrow="Work Orders"
         title="Import History"
-        description="All uploaded exam workbooks grouped by source file."
+        description={`All uploaded ${OPERATIONAL_CLIENT_NAME} exam workbooks grouped by source file.`}
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Work Orders", href: "/work-orders" },
@@ -473,7 +477,7 @@ export default function WorkOrderImportsPage() {
             <div className="space-y-1">
               <p className="text-base font-semibold">No import history yet</p>
               <p className="text-sm text-muted-foreground">
-                Imported exam workbooks will appear here once they are committed.
+                Imported {OPERATIONAL_CLIENT_NAME} exam workbooks will appear here once they are committed.
               </p>
             </div>
           </CardContent>

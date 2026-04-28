@@ -9,12 +9,18 @@ import {
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
 import { REGION_CODE } from "@/lib/runtime-config";
+import {
+  buildClientPortalAuthEmail,
+  looksLikeEmail,
+  normalizeClientLoginId,
+} from "@/lib/client-portal";
 
 type ClientUserRequest = {
   mode: "existing" | "create";
   clientId?: string;
   clientName?: string;
   email?: string;
+  loginId?: string;
   password?: string;
   name?: string;
 };
@@ -27,16 +33,44 @@ export async function POST(request: Request) {
     const clientId = body.clientId?.trim();
     const clientName = body.clientName?.trim();
     const email = body.email?.trim();
+    const loginId = normalizeClientLoginId(body.loginId);
     const stateCode =
       typeof adminUser.stateCode === "string" && adminUser.stateCode.trim()
         ? adminUser.stateCode.trim().toUpperCase()
         : REGION_CODE;
 
-    if (!clientId || !clientName || !email) {
+    if (!clientId || !clientName) {
       return NextResponse.json(
         { error: "Client and user details are required." },
         { status: 400 }
       );
+    }
+
+    const resolvedEmail = looksLikeEmail(email)
+      ? email
+      : buildClientPortalAuthEmail(clientId, loginId);
+
+    if (!resolvedEmail) {
+      return NextResponse.json(
+        { error: "Login ID or email is required for the portal user." },
+        { status: 400 }
+      );
+    }
+
+    if (loginId) {
+      const duplicateLoginId = await adminDb
+        .collection("clientUsers")
+        .where("clientId", "==", clientId)
+        .where("loginId", "==", loginId)
+        .limit(1)
+        .get();
+
+      if (!duplicateLoginId.empty) {
+        return NextResponse.json(
+          { error: "This login ID is already used for the selected client." },
+          { status: 409 }
+        );
+      }
     }
 
     let userRecord;
@@ -49,26 +83,32 @@ export async function POST(request: Request) {
       }
 
       userRecord = await adminAuth.createUser({
-        email,
+        email: resolvedEmail,
         password: body.password,
         displayName: body.name?.trim() || undefined,
         emailVerified: true,
       });
     } else {
-      userRecord = await adminAuth.getUserByEmail(email);
+      userRecord = await adminAuth.getUserByEmail(resolvedEmail);
     }
 
     await adminAuth.setCustomUserClaims(userRecord.uid, {
       role: "client",
       clientId,
       clientName,
+      loginId: loginId || null,
       stateCode,
     });
 
     const payload = {
       uid: userRecord.uid,
-      email: userRecord.email || email,
-      name: body.name?.trim() || userRecord.displayName || email.split("@")[0],
+      email: userRecord.email || resolvedEmail,
+      authEmail: userRecord.email || resolvedEmail,
+      loginId: loginId || null,
+      name:
+        body.name?.trim() ||
+        userRecord.displayName ||
+        (userRecord.email || resolvedEmail).split("@")[0],
       clientId,
       clientName,
       stateCode,
@@ -87,7 +127,8 @@ export async function POST(request: Request) {
             clientId,
             clientName,
             targetUid: userRecord.uid,
-            targetEmail: userRecord.email || email,
+            targetEmail: userRecord.email || resolvedEmail,
+            loginId: loginId || null,
           },
         ),
       ],

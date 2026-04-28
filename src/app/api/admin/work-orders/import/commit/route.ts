@@ -10,6 +10,7 @@ import {
 import { lookupLocationGeocode } from "@/lib/server/location-geocode";
 import { buildTcsExamDiff } from "@/lib/work-orders/tcs-exam-diff";
 import { buildTcsExamContentHash } from "@/lib/work-orders/tcs-exam-hash";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import type {
   TcsExamExistingWorkOrder,
   TcsExamImportCommitPayload,
@@ -29,6 +30,7 @@ type FirestoreTimestampLike = {
 };
 
 type ExistingWorkOrderRecord = TcsExamExistingWorkOrder & {
+  clientName?: string;
   assignedGuards?: unknown[];
   sourceFileName?: string;
   sourceSheetName?: string;
@@ -230,6 +232,7 @@ async function fetchExistingRows(
       const data = doc.data();
       return {
         id: doc.id,
+        clientName: typeof data.clientName === "string" ? data.clientName : "",
         siteId: typeof data.siteId === "string" ? data.siteId : undefined,
         siteName: String(data.siteName ?? ""),
         district: String(data.district ?? ""),
@@ -250,6 +253,7 @@ async function fetchExistingRows(
         contentHash: typeof data.contentHash === "string" ? data.contentHash : undefined,
       } satisfies ExistingWorkOrderRecord;
     })
+    .filter((row) => isOperationalWorkOrderClientName(row.clientName))
     .filter((row) => row.date !== "")
     .filter((row) =>
       relevantExamCodes.size === 0 ? true : relevantExamCodes.has(row.examCode),
@@ -265,6 +269,9 @@ async function fetchSites(
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
+    if (!isOperationalWorkOrderClientName(typeof data.clientName === "string" ? data.clientName : "")) {
+      continue;
+    }
     const site: SiteRecord = {
       id: doc.id,
       siteId: typeof data.siteId === "string" ? data.siteId : null,

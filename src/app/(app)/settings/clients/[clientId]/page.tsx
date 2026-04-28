@@ -78,7 +78,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { authorizedFetch } from "@/lib/api-client";
-import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
+import {
+  buildClientPortalUrl,
+  normalizeClientLoginId,
+  slugifyPortalSubdomain,
+} from "@/lib/client-portal";
 import {
   CLIENT_MODULE_DESCRIPTIONS,
   CLIENT_MODULE_LABELS,
@@ -158,6 +162,8 @@ interface LocationDoc {
 interface ClientUser {
   id: string;
   email: string;
+  authEmail?: string;
+  loginId?: string | null;
   name?: string;
   uid?: string;
 }
@@ -245,6 +251,15 @@ export default function ClientDashboardPage() {
   // ── Users ──
   const [users, setUsers] = useState<ClientUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
+  const [portalUserDialog, setPortalUserDialog] = useState<"create" | "edit" | null>(null);
+  const [editingPortalUser, setEditingPortalUser] = useState<ClientUser | null>(null);
+  const [portalUserForm, setPortalUserForm] = useState({
+    name: "",
+    loginId: "",
+    password: "",
+  });
+  const [savingPortalUser, setSavingPortalUser] = useState(false);
+  const [deletePortalUserTarget, setDeletePortalUserTarget] = useState<ClientUser | null>(null);
 
   // ── Dialogs ──
   const [siteDialog, setSiteDialog] = useState<"create" | "edit" | null>(null);
@@ -264,16 +279,6 @@ export default function ClientDashboardPage() {
   const [savingClient, setSavingClient] = useState(false);
   const [deleteClientDialog, setDeleteClientDialog] = useState(false);
   const [runningGpsRepair, setRunningGpsRepair] = useState(false);
-
-  // ── Portal user management ──
-  const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
-  const [userEditDialog, setUserEditDialog] = useState(false);
-  const [userEditForm, setUserEditForm] = useState({ name: "", email: "", password: "" });
-  const [savingUserEdit, setSavingUserEdit] = useState(false);
-  const [deleteUserTarget, setDeleteUserTarget] = useState<ClientUser | null>(null);
-  const [createUserDialog, setCreateUserDialog] = useState(false);
-  const [createUserForm, setCreateUserForm] = useState({ name: "", email: "", password: "" });
-  const [creatingUser, setCreatingUser] = useState(false);
 
   // ── Dashboard modules config ──
   const [dashboardModules, setDashboardModules] = useState<ClientDashboardModulesConfig>(DEFAULT_CLIENT_MODULES);
@@ -396,6 +401,129 @@ export default function ClientDashboardPage() {
       router.replace("/settings/clients");
     } catch (err: any) {
       toast({ variant: "destructive", title: "Cannot delete client", description: err.message });
+    }
+  };
+
+  // ── Portal User CRUD ──
+
+  const openCreatePortalUser = () => {
+    setEditingPortalUser(null);
+    setPortalUserForm({ name: "", loginId: "", password: "" });
+    setPortalUserDialog("create");
+  };
+
+  const openEditPortalUser = (user: ClientUser) => {
+    setEditingPortalUser(user);
+    setPortalUserForm({
+      name: user.name || "",
+      loginId: user.loginId || "",
+      password: "",
+    });
+    setPortalUserDialog("edit");
+  };
+
+  const handleSavePortalUser = async () => {
+    const loginId = normalizeClientLoginId(portalUserForm.loginId);
+    const name = portalUserForm.name.trim();
+    const password = portalUserForm.password.trim();
+
+    if (!loginId) {
+      toast({
+        variant: "destructive",
+        title: "Login ID required",
+        description: "Set a login ID or username for the client portal user.",
+      });
+      return;
+    }
+
+    if (portalUserDialog === "create" && password.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Password too short",
+        description: "Use at least 6 characters for the portal password.",
+      });
+      return;
+    }
+
+    setSavingPortalUser(true);
+    try {
+      if (portalUserDialog === "create") {
+        const response = await authorizedFetch("/api/admin/client-users", {
+          method: "POST",
+          body: JSON.stringify({
+            mode: "create",
+            clientId,
+            clientName: client?.name ?? "",
+            name,
+            loginId,
+            password,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error((data as { error?: string }).error || "Could not create portal user.");
+        }
+        toast({
+          title: "Portal user created",
+          description: `${loginId} can now sign in to ${client?.portalSubdomain || "the client"} portal.`,
+        });
+      } else if (portalUserDialog === "edit" && editingPortalUser) {
+        const response = await authorizedFetch(`/api/admin/client-users/${editingPortalUser.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name,
+            loginId,
+            password: password || undefined,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error((data as { error?: string }).error || "Could not update portal user.");
+        }
+        toast({
+          title: "Portal user updated",
+          description: password
+            ? "Login details and password were updated."
+            : "Portal login details were updated.",
+        });
+      }
+
+      setPortalUserDialog(null);
+      setEditingPortalUser(null);
+      setPortalUserForm({ name: "", loginId: "", password: "" });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Portal user setup failed",
+        description: error?.message || "Could not save the portal user.",
+      });
+    } finally {
+      setSavingPortalUser(false);
+    }
+  };
+
+  const handleDeletePortalUser = async () => {
+    if (!deletePortalUserTarget) return;
+    try {
+      const response = await authorizedFetch(`/api/admin/client-users/${deletePortalUserTarget.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || "Could not remove portal user.");
+      }
+      toast({
+        title: "Portal user removed",
+        description: `${deletePortalUserTarget.loginId || deletePortalUserTarget.email} no longer has client portal access.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Could not remove portal user",
+        description: error?.message || "Please try again.",
+      });
+    } finally {
+      setDeletePortalUserTarget(null);
     }
   };
 
@@ -650,76 +778,6 @@ export default function ClientDashboardPage() {
       });
     } finally {
       setRunningGpsRepair(false);
-    }
-  };
-
-  // ── Portal User CRUD ──
-
-  const openEditUser = (user: ClientUser) => {
-    setEditingUser(user);
-    setUserEditForm({ name: user.name || "", email: user.email || "", password: "" });
-    setUserEditDialog(true);
-  };
-
-  const handleSaveUserEdit = async () => {
-    if (!editingUser) return;
-    setSavingUserEdit(true);
-    try {
-      const body: Record<string, string> = {};
-      if (userEditForm.name.trim()) body.name = userEditForm.name.trim();
-      if (userEditForm.email.trim()) body.email = userEditForm.email.trim();
-      if (userEditForm.password) body.password = userEditForm.password;
-
-      const res = await authorizedFetch(`/api/admin/client-users/${editingUser.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed");
-      toast({ title: "Portal user updated" });
-      setUserEditDialog(false);
-      setEditingUser(null);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
-    } finally {
-      setSavingUserEdit(false);
-    }
-  };
-
-  const handleDeleteUser = async () => {
-    if (!deleteUserTarget) return;
-    try {
-      const res = await authorizedFetch(`/api/admin/client-users/${deleteUserTarget.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed");
-      toast({ title: "Portal user removed" });
-      setDeleteUserTarget(null);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
-    }
-  };
-
-  const handleCreateUser = async () => {
-    if (!client || !createUserForm.email.trim() || !createUserForm.password) return;
-    setCreatingUser(true);
-    try {
-      const res = await authorizedFetch("/api/admin/client-users", {
-        method: "POST",
-        body: JSON.stringify({
-          mode: "create",
-          clientId,
-          clientName: client.name,
-          email: createUserForm.email.trim(),
-          password: createUserForm.password,
-          name: createUserForm.name.trim() || undefined,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed");
-      toast({ title: "Portal user created" });
-      setCreateUserDialog(false);
-      setCreateUserForm({ name: "", email: "", password: "" });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
-    } finally {
-      setCreatingUser(false);
     }
   };
 
@@ -1010,33 +1068,77 @@ export default function ClientDashboardPage() {
             <p className="text-sm text-muted-foreground">
               Users who can log in to the client portal to view their data.
             </p>
-            <Button size="sm" onClick={() => setCreateUserDialog(true)}>
+            <Button size="sm" onClick={openCreatePortalUser}>
               <Plus className="mr-1.5 h-4 w-4" /> Add Portal User
             </Button>
           </div>
 
           <Card>
-            <CardContent className="pt-6">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" /> Client Portal Users
+              </CardTitle>
+              <CardDescription>
+                Create the login ID and password that this client will use on their portal link.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">Portal login for {client.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Use the assigned login ID and password at {buildClientPortalUrl(client.portalSubdomain) || "the client portal"}.
+                  </p>
+                </div>
+                <Button size="sm" onClick={openCreatePortalUser}>
+                  <Plus className="mr-1.5 h-4 w-4" /> Add Portal User
+                </Button>
+              </div>
               {usersLoading ? (
                 <Skeleton className="h-10 w-full" />
               ) : users.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No portal users linked.</p>
+                <div className="rounded-2xl border border-dashed border-border/70 p-6 text-center">
+                  <KeyRound className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">No portal users created yet.</p>
+                  <Button size="sm" className="mt-4" onClick={openCreatePortalUser}>
+                    <Plus className="mr-1.5 h-4 w-4" /> Create First Login
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {users.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+                    <div key={u.id} className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 p-4 text-sm">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{u.name || u.email}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{u.name || u.loginId || u.email}</span>
+                          {u.loginId ? <Badge variant="secondary">{u.loginId}</Badge> : null}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Login via {client.portalSubdomain ? `${client.portalSubdomain}.cisskerala.site` : "client portal"}
+                        </p>
+                        <p className="mt-1 break-all text-xs text-muted-foreground">
+                          Auth email: {u.authEmail || u.email}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditUser(u)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteUserTarget(u)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="shrink-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditPortalUser(u)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit Login
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => setDeletePortalUserTarget(u)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Remove Access
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   ))}
                 </div>
@@ -1143,11 +1245,84 @@ export default function ClientDashboardPage() {
                 onCheckedChange={(checked) => setClientForm((form) => ({ ...form, portalEnabled: checked }))}
               />
             </div>
+            <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+              <p className="text-sm font-medium">Portal credentials</p>
+              <p className="text-xs text-muted-foreground">
+                Set the client login ID and password from the <strong>Users</strong> tab on this page.
+              </p>
+            </div>
           </div>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setClientEditDialog(false)}>Cancel</Button>
             <Button onClick={handleSaveClient} disabled={savingClient || !clientForm.name.trim()}>
               {savingClient && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!portalUserDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPortalUserDialog(null);
+            setEditingPortalUser(null);
+            setPortalUserForm({ name: "", loginId: "", password: "" });
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{portalUserDialog === "create" ? "Create Portal Login" : "Edit Portal Login"}</DialogTitle>
+            <DialogDescription>
+              Set the login ID and password for this client dashboard.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={portalUserForm.name}
+                onChange={(e) => setPortalUserForm((form) => ({ ...form, name: e.target.value }))}
+                placeholder="Portal user name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Login ID / Username *</Label>
+              <Input
+                value={portalUserForm.loginId}
+                onChange={(e) =>
+                  setPortalUserForm((form) => ({
+                    ...form,
+                    loginId: normalizeClientLoginId(e.target.value),
+                  }))
+                }
+                placeholder="e.g. geodisadmin"
+              />
+              <p className="text-xs text-muted-foreground">
+                This is what the client enters on the portal login page.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{portalUserDialog === "create" ? "Password *" : "New Password"}</Label>
+              <Input
+                type="password"
+                value={portalUserForm.password}
+                onChange={(e) => setPortalUserForm((form) => ({ ...form, password: e.target.value }))}
+                placeholder={portalUserDialog === "create" ? "Create a password" : "Leave empty to keep current password"}
+              />
+              <p className="text-xs text-muted-foreground">
+                {portalUserDialog === "create"
+                  ? "Use at least 6 characters."
+                  : "Enter a new password only when you want to reset it."}
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setPortalUserDialog(null)}>Cancel</Button>
+            <Button onClick={handleSavePortalUser} disabled={savingPortalUser}>
+              {savingPortalUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {portalUserDialog === "create" ? "Create Login" : "Save Login"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1396,108 +1571,18 @@ export default function ClientDashboardPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Delete Client Confirm ── */}
-
-      {/* ── Edit Portal User Dialog ── */}
-      <Dialog open={userEditDialog} onOpenChange={(open) => { if (!open) { setUserEditDialog(false); setEditingUser(null); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Portal User</DialogTitle>
-            <DialogDescription>Update credentials for <strong>{editingUser?.email}</strong></DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="space-y-1.5">
-              <Label>Display Name</Label>
-              <Input
-                value={userEditForm.name}
-                onChange={(e) => setUserEditForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. John Doe"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={userEditForm.email}
-                onChange={(e) => setUserEditForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="user@example.com"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>New Password (leave blank to keep current)</Label>
-              <Input
-                type="password"
-                value={userEditForm.password}
-                onChange={(e) => setUserEditForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Min 6 characters"
-              />
-            </div>
-          </div>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => { setUserEditDialog(false); setEditingUser(null); }}>Cancel</Button>
-            <Button onClick={handleSaveUserEdit} disabled={savingUserEdit}>
-              {savingUserEdit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Create Portal User Dialog ── */}
-      <Dialog open={createUserDialog} onOpenChange={(open) => { if (!open) setCreateUserDialog(false); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Portal User</DialogTitle>
-            <DialogDescription>Create a new login for <strong>{client.name}</strong> portal.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="space-y-1.5">
-              <Label>Display Name</Label>
-              <Input
-                value={createUserForm.name}
-                onChange={(e) => setCreateUserForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. John Doe"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email *</Label>
-              <Input
-                type="email"
-                value={createUserForm.email}
-                onChange={(e) => setCreateUserForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="user@example.com"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Password *</Label>
-              <Input
-                type="password"
-                value={createUserForm.password}
-                onChange={(e) => setCreateUserForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Min 6 characters"
-              />
-            </div>
-          </div>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setCreateUserDialog(false)}>Cancel</Button>
-            <Button onClick={handleCreateUser} disabled={creatingUser || !createUserForm.email.trim() || !createUserForm.password}>
-              {creatingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* ── Delete Portal User Confirm ── */}
-      <AlertDialog open={!!deleteUserTarget} onOpenChange={(open) => { if (!open) setDeleteUserTarget(null); }}>
+      <AlertDialog open={!!deletePortalUserTarget} onOpenChange={(open) => { if (!open) setDeletePortalUserTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove portal user?</AlertDialogTitle>
             <AlertDialogDescription>
-              "<strong>{deleteUserTarget?.name || deleteUserTarget?.email}</strong>" will lose access to the client portal. Their Firebase Auth account will be preserved.
+              <strong>{deletePortalUserTarget?.loginId || deletePortalUserTarget?.email}</strong> will lose access to this client dashboard.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeletePortalUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Remove Access
             </AlertDialogAction>
           </AlertDialogFooter>

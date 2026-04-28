@@ -33,6 +33,7 @@ import { DashboardStats } from "@/components/dashboard/stats";
 import { DashboardCharts } from "@/components/dashboard/charts";
 import { DashboardActions } from "@/components/dashboard/actions";
 import { ClientOperationsDashboard } from "@/components/dashboard/client-operations-dashboard";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -670,6 +671,7 @@ export default function DashboardPage() {
                 totalManpower: data.totalManpower,
               };
             })
+            .filter((duty) => isOperationalWorkOrderClientName(duty.clientName))
             .filter((duty) => assignedDistricts.includes(duty.district))
         )
       );

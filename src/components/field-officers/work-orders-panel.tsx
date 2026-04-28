@@ -44,7 +44,7 @@ import {
   Users,
 } from "lucide-react";
 import type { WorkOrder } from "@/types/work-orders";
-import { isWorkOrderAdminRole } from "@/lib/work-orders";
+import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
 import { districtMatches } from "@/lib/districts";
 
 type WorkOrderExamFields = Pick<
@@ -467,6 +467,7 @@ export function WorkOrdersPanel() {
         const orders = snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as WorkOrder))
           .filter((order) => {
+            if (!isOperationalWorkOrderClientName(order.clientName)) return false;
             if (isAdmin) return true;
             return assignedDistricts.some((district) => districtMatches(district, order.district));
           });

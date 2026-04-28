@@ -6,6 +6,7 @@ export type ClientPortalContext = {
 };
 
 const DEFAULT_ROOT_DOMAIN = "cisskerala.site";
+const CLIENT_PORTAL_AUTH_DOMAIN = "clients.cisskerala.app";
 
 function normalizeHost(host: string | null | undefined) {
   return String(host ?? "")
@@ -29,6 +30,41 @@ export function slugifyPortalSubdomain(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
+}
+
+export function normalizeClientLoginId(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9._-]+/g, "")
+    .slice(0, 40);
+}
+
+function normalizeClientPortalAccountToken(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 40);
+}
+
+export function looksLikeEmail(value: string | null | undefined) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? "").trim());
+}
+
+export function buildClientPortalAuthEmail(
+  clientId: string | null | undefined,
+  loginId: string | null | undefined,
+) {
+  const normalizedClientId = normalizeClientPortalAccountToken(clientId);
+  const normalizedLoginId = normalizeClientLoginId(loginId);
+
+  if (!normalizedClientId || !normalizedLoginId) {
+    return null;
+  }
+
+  return `${normalizedLoginId}--${normalizedClientId}@${CLIENT_PORTAL_AUTH_DOMAIN}`;
 }
 
 export function getClientPortalContext(hostInput: string | null | undefined): ClientPortalContext {

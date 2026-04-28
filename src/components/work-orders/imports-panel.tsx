@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { db } from "@/lib/firebase";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 interface WorkOrderRow {
   id: string;
@@ -30,6 +31,7 @@ interface WorkOrderRow {
   recordStatus: string;
   assignedMale: number;
   assignedFemale: number;
+  clientName: string;
 }
 
 interface GroupedImport {
@@ -195,6 +197,7 @@ export function WorkOrderImportsPanel() {
             femaleGuardsRequired: Number(d.femaleGuardsRequired ?? 0),
             totalManpower: Number(d.totalManpower ?? 0),
             recordStatus: typeof d.recordStatus === "string" ? d.recordStatus : "active",
+            clientName: typeof d.clientName === "string" ? d.clientName : "",
             assignedMale: assignedGuards.filter((g: string) => {
               const parts = g.split(":");
               return parts.length >= 3 && parts[2]?.toLowerCase() === "male";
@@ -204,7 +207,7 @@ export function WorkOrderImportsPanel() {
               return parts.length >= 3 && parts[2]?.toLowerCase() === "female";
             }).length,
           };
-        });
+        }).filter((order) => isOperationalWorkOrderClientName(order.clientName));
 
         const groups = new Map<string, {
           examName: string;

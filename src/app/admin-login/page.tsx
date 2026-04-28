@@ -14,7 +14,12 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { isLegacyAdminEmail } from '@/lib/auth/admin';
 import { isFirebaseConfigured } from '@/lib/firebase';
-import { buildClientPortalUrl } from '@/lib/client-portal';
+import {
+  buildClientPortalAuthEmail,
+  buildClientPortalUrl,
+  looksLikeEmail,
+  normalizeClientLoginId,
+} from '@/lib/client-portal';
 
 type PortalContext = {
   isClientPortal: boolean;
@@ -77,7 +82,15 @@ export default function AdminLoginPage() {
 
     try {
       await ensureAuthPersistence();
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const normalizedInput = email.trim();
+      const credentialEmail =
+        portalContext?.isClientPortal && portalContext.client && !looksLikeEmail(normalizedInput)
+          ? buildClientPortalAuthEmail(
+              portalContext.client.id,
+              normalizeClientLoginId(normalizedInput)
+            ) || normalizedInput
+          : normalizedInput;
+      const userCredential = await signInWithEmailAndPassword(auth, credentialEmail, password);
 
       const idTokenResult = await userCredential.user.getIdTokenResult();
       const role = idTokenResult.claims.role;
@@ -299,13 +312,13 @@ export default function AdminLoginPage() {
               <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-semibold text-foreground">
-                    Email
+                    {portalContext?.isClientPortal ? "Email or Login ID" : "Email"}
                   </Label>
                   <Input
                     id="email"
-                    type="email"
+                    type={portalContext?.isClientPortal ? "text" : "email"}
                     autoComplete="username"
-                    placeholder="admin@example.com"
+                    placeholder={portalContext?.isClientPortal ? "client login ID or email" : "admin@example.com"}
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

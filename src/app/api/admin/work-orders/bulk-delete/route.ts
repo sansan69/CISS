@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,10 @@ export async function POST(request: NextRequest) {
         .where("examCode", "==", examCode)
         .get();
       workOrdersByCode.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-        workOrderRefs.set(doc.id, doc.ref);
+        const data = doc.data();
+        if (isOperationalWorkOrderClientName(typeof data.clientName === "string" ? data.clientName : "")) {
+          workOrderRefs.set(doc.id, doc.ref);
+        }
       });
 
       const importsByCode = await adminDb
@@ -43,7 +47,10 @@ export async function POST(request: NextRequest) {
       .where("examName", "==", examName)
       .get();
     workOrdersByName.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-      workOrderRefs.set(doc.id, doc.ref);
+      const data = doc.data();
+      if (isOperationalWorkOrderClientName(typeof data.clientName === "string" ? data.clientName : "")) {
+        workOrderRefs.set(doc.id, doc.ref);
+      }
     });
 
     const importsByName = await adminDb
