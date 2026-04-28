@@ -86,4 +86,5 @@ export type ClientDashboardPayload = {
   recentVisitReports: ClientDashboardVisitReportRow[];
   recentTrainingReports: ClientDashboardTrainingReportRow[];
   guardHighlights: ClientDashboardGuardHighlight[];
+  dashboardModules?: import("@/types/client-permissions").ClientDashboardModulesConfig;
 };

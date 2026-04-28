@@ -14,6 +14,8 @@ import type {
   ClientDashboardVisitReportRow,
   ClientDashboardWorkOrderRow,
 } from "@/types/client-dashboard";
+import { resolveClientModules } from "@/types/client-permissions";
+import type { ClientDashboardModulesConfig } from "@/types/client-permissions";
 
 type DashboardRecord = Record<string, unknown> & { id: string };
 
@@ -78,6 +80,17 @@ export async function GET(request: Request) {
     const scope = await resolveClientScope(adminDb, decoded);
     if (!scope) {
       return unauthorizedResponse("Client account is not linked to a valid client profile.", 403);
+    }
+
+    // Load per-client dashboard module visibility config
+    let dashboardModules: Required<ClientDashboardModulesConfig> = resolveClientModules(null);
+    if (scope.clientId) {
+      const clientDoc = await adminDb.collection("clients").doc(scope.clientId).get();
+      if (clientDoc.exists) {
+        const clientData = clientDoc.data() as Record<string, unknown>;
+        const modulesConfig = clientData.dashboardModules as ClientDashboardModulesConfig | undefined;
+        dashboardModules = resolveClientModules(modulesConfig);
+      }
     }
 
     const today = new Date();
@@ -388,6 +401,7 @@ export async function GET(request: Request) {
       recentVisitReports: visitReports,
       recentTrainingReports: trainingReports,
       guardHighlights,
+      dashboardModules,
     };
 
     return NextResponse.json(payload);

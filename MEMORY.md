@@ -5,6 +5,63 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-28] — Client Portal: Credential Management + Per-Client Dashboard Visibility
+
+**Problem:** Admin had no way to edit client portal user credentials (name/email/password) or control which dashboard sections each client could see. All clients saw identical dashboards.
+
+**Files created:**
+- `src/types/client-permissions.ts` — `ClientDashboardModule` type, `DEFAULT_CLIENT_MODULES`, `CLIENT_MODULE_LABELS`, `CLIENT_MODULE_DESCRIPTIONS`, `resolveClientModules()` helper
+
+**Files modified:**
+
+### 1. PATCH API for client user credentials
+- `src/app/api/admin/client-users/[id]/route.ts` — added `PATCH` handler
+  - Accepts `name`, `email`, `password` (any subset)
+  - Updates Firebase Auth user (`displayName`, `email`, `password`) via Admin SDK
+  - Updates Firestore mapping docs (`clientUsers` + `clientUsersByUid`)
+  - Validates email format, password min length 6
+  - Writes audit trail to `clientUserAudit`
+  - Password change is optional (blank = keep current)
+
+### 2. Client PATCH API accepts dashboardModules
+- `src/app/api/admin/clients/[id]/route.ts` — `PATCH` now accepts `dashboardModules: Record<string, boolean>`
+  - Stored directly on the client Firestore document
+  - Controls which dashboard sections the client portal shows
+
+### 3. Admin UI: Portal Config tab on client detail page
+- `src/app/(app)/settings/clients/[clientId]/page.tsx` — major additions:
+  - **Enhanced Users tab:** each portal user now has Edit (pencil) and Delete (trash) buttons
+  - **Edit User dialog:** change name, email, password for any portal user
+  - **Create User dialog:** add new portal users directly from client page (no redirect)
+  - **Delete User confirmation:** removes portal access
+  - **Portal Config tab:** new tab with 7 toggle switches for dashboard modules:
+    - Summary Banner & Stats
+    - Live Attendance Table
+    - Top Sites Snapshot
+    - Upcoming Work Orders
+    - Visit Reports
+    - Training Reports
+    - Guard Highlights
+  - "Reset to Default" and "Save Visibility" buttons
+  - Each toggle shows Eye/EyeOff icon for visual clarity
+
+### 4. Dashboard API returns module config
+- `src/app/api/client/dashboard/route.ts` — loads `dashboardModules` from client document and includes it in the response payload
+
+### 5. Client dashboard respects permissions
+- `src/components/dashboard/client-operations-dashboard.tsx` — conditionally renders each section based on `dashboardModules` from the API response
+  - Disabled sections are completely hidden (not just greyed out)
+  - Default: all modules visible (backward compatible)
+
+### 6. Type updates
+- `src/types/client-dashboard.ts` — added optional `dashboardModules` field to `ClientDashboardPayload`
+
+**Firestore field:** `clients/{clientId}.dashboardModules` — `{ summary: true, attendance: true, sites: true, workOrders: true, visitReports: true, trainingReports: true, guardHighlights: true }`
+
+**No migration needed:** existing clients without `dashboardModules` get all modules visible by default via `resolveClientModules()`.
+
+---
+
 ## [2026-04-25] — Claude Code Best Practices Implementation
 
 **Files created:**

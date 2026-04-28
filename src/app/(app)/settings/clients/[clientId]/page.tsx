@@ -71,9 +71,21 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
+  KeyRound,
+  Settings2,
+  Eye,
+  EyeOff,
+  ShieldCheck,
 } from "lucide-react";
 import { authorizedFetch } from "@/lib/api-client";
 import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
+import {
+  CLIENT_MODULE_DESCRIPTIONS,
+  CLIENT_MODULE_LABELS,
+  DEFAULT_CLIENT_MODULES,
+  resolveClientModules,
+} from "@/types/client-permissions";
+import type { ClientDashboardModule, ClientDashboardModulesConfig } from "@/types/client-permissions";
 import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/route";
 import { useToast } from "@/hooks/use-toast";
 import { KERALA_DISTRICTS, DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
@@ -253,6 +265,21 @@ export default function ClientDashboardPage() {
   const [deleteClientDialog, setDeleteClientDialog] = useState(false);
   const [runningGpsRepair, setRunningGpsRepair] = useState(false);
 
+  // ── Portal user management ──
+  const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
+  const [userEditDialog, setUserEditDialog] = useState(false);
+  const [userEditForm, setUserEditForm] = useState({ name: "", email: "", password: "" });
+  const [savingUserEdit, setSavingUserEdit] = useState(false);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<ClientUser | null>(null);
+  const [createUserDialog, setCreateUserDialog] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({ name: "", email: "", password: "" });
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  // ── Dashboard modules config ──
+  const [dashboardModules, setDashboardModules] = useState<ClientDashboardModulesConfig>(DEFAULT_CLIENT_MODULES);
+  const [savingModules, setSavingModules] = useState(false);
+  const [modulesLoaded, setModulesLoaded] = useState(false);
+
   // ── Subscriptions ──
 
   useEffect(() => {
@@ -319,6 +346,14 @@ export default function ClientDashboardPage() {
     });
     return () => unsub();
   }, [clientId]);
+
+  // Load dashboard modules config from client document
+  useEffect(() => {
+    if (!client) return;
+    const modules = (client as any).dashboardModules as ClientDashboardModulesConfig | undefined;
+    setDashboardModules(resolveClientModules(modules));
+    setModulesLoaded(true);
+  }, [client]);
 
   // ── Client CRUD ──
 
@@ -618,6 +653,102 @@ export default function ClientDashboardPage() {
     }
   };
 
+  // ── Portal User CRUD ──
+
+  const openEditUser = (user: ClientUser) => {
+    setEditingUser(user);
+    setUserEditForm({ name: user.name || "", email: user.email || "", password: "" });
+    setUserEditDialog(true);
+  };
+
+  const handleSaveUserEdit = async () => {
+    if (!editingUser) return;
+    setSavingUserEdit(true);
+    try {
+      const body: Record<string, string> = {};
+      if (userEditForm.name.trim()) body.name = userEditForm.name.trim();
+      if (userEditForm.email.trim()) body.email = userEditForm.email.trim();
+      if (userEditForm.password) body.password = userEditForm.password;
+
+      const res = await authorizedFetch(`/api/admin/client-users/${editingUser.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast({ title: "Portal user updated" });
+      setUserEditDialog(false);
+      setEditingUser(null);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    } finally {
+      setSavingUserEdit(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUserTarget) return;
+    try {
+      const res = await authorizedFetch(`/api/admin/client-users/${deleteUserTarget.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast({ title: "Portal user removed" });
+      setDeleteUserTarget(null);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    }
+  };
+
+  const handleCreateUser = async () => {
+    if (!client || !createUserForm.email.trim() || !createUserForm.password) return;
+    setCreatingUser(true);
+    try {
+      const res = await authorizedFetch("/api/admin/client-users", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "create",
+          clientId,
+          clientName: client.name,
+          email: createUserForm.email.trim(),
+          password: createUserForm.password,
+          name: createUserForm.name.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast({ title: "Portal user created" });
+      setCreateUserDialog(false);
+      setCreateUserForm({ name: "", email: "", password: "" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  // ── Dashboard Modules Config ──
+
+  const handleToggleModule = (mod: ClientDashboardModule) => {
+    setDashboardModules((prev) => ({ ...prev, [mod]: !prev[mod] }));
+  };
+
+  const handleSaveModules = async () => {
+    setSavingModules(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/clients/${clientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ dashboardModules }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast({ title: "Dashboard visibility saved" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    } finally {
+      setSavingModules(false);
+    }
+  };
+
+  const handleResetModules = () => {
+    setDashboardModules({ ...DEFAULT_CLIENT_MODULES });
+  };
+
   // ── Helpers ──
 
   const coordBadge = (record: {
@@ -703,6 +834,10 @@ export default function ClientDashboardPage() {
           <TabsTrigger value="users" className="flex-1 sm:flex-none">
             Users
             <Badge variant="secondary" className="ml-2 text-xs">{users.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="portal-config" className="flex-1 sm:flex-none">
+            <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+            Portal Config
           </TabsTrigger>
         </TabsList>
 
@@ -871,31 +1006,103 @@ export default function ClientDashboardPage() {
 
         {/* ── Users Tab ── */}
         <TabsContent value="users" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Users who can log in to the client portal to view their data.
+            </p>
+            <Button size="sm" onClick={() => setCreateUserDialog(true)}>
+              <Plus className="mr-1.5 h-4 w-4" /> Add Portal User
+            </Button>
+          </div>
+
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4" /> Client Portal Users
-              </CardTitle>
-              <CardDescription>Users who can log in to the client portal to view their data.</CardDescription>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               {usersLoading ? (
                 <Skeleton className="h-10 w-full" />
               ) : users.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No portal users linked.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {users.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{u.name || u.email}</span>
-                      <span className="text-xs text-muted-foreground">{u.email}</span>
+                    <div key={u.id} className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{u.name || u.email}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditUser(u)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteUserTarget(u)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
-              <Button size="sm" variant="outline" className="mt-4" asChild>
-                <a href={`/settings/client-management`}>Manage Portal Users</a>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Portal Config Tab ── */}
+        <TabsContent value="portal-config" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Control which dashboard sections this client can see when they log in to their portal.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleResetModules}>
+                Reset to Default
               </Button>
+              <Button size="sm" onClick={handleSaveModules} disabled={savingModules}>
+                {savingModules && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                Save Visibility
+              </Button>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4" /> Dashboard Module Visibility
+              </CardTitle>
+              <CardDescription>
+                Toggle which sections appear on <strong>{client.name}</strong>'s dashboard. Disabled sections will be hidden completely.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {(Object.keys(CLIENT_MODULE_LABELS) as ClientDashboardModule[]).map((mod) => {
+                  const enabled = dashboardModules[mod] !== false;
+                  return (
+                    <div
+                      key={mod}
+                      className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {enabled ? (
+                            <Eye className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <p className="text-sm font-medium">{CLIENT_MODULE_LABELS[mod]}</p>
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground ml-6">
+                          {CLIENT_MODULE_DESCRIPTIONS[mod]}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={enabled}
+                        onCheckedChange={() => handleToggleModule(mod)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1184,6 +1391,114 @@ export default function ClientDashboardPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteLocation} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete Client Confirm ── */}
+
+      {/* ── Edit Portal User Dialog ── */}
+      <Dialog open={userEditDialog} onOpenChange={(open) => { if (!open) { setUserEditDialog(false); setEditingUser(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Portal User</DialogTitle>
+            <DialogDescription>Update credentials for <strong>{editingUser?.email}</strong></DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Display Name</Label>
+              <Input
+                value={userEditForm.name}
+                onChange={(e) => setUserEditForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. John Doe"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={userEditForm.email}
+                onChange={(e) => setUserEditForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="user@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>New Password (leave blank to keep current)</Label>
+              <Input
+                type="password"
+                value={userEditForm.password}
+                onChange={(e) => setUserEditForm((f) => ({ ...f, password: e.target.value }))}
+                placeholder="Min 6 characters"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => { setUserEditDialog(false); setEditingUser(null); }}>Cancel</Button>
+            <Button onClick={handleSaveUserEdit} disabled={savingUserEdit}>
+              {savingUserEdit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create Portal User Dialog ── */}
+      <Dialog open={createUserDialog} onOpenChange={(open) => { if (!open) setCreateUserDialog(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Portal User</DialogTitle>
+            <DialogDescription>Create a new login for <strong>{client.name}</strong> portal.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Display Name</Label>
+              <Input
+                value={createUserForm.name}
+                onChange={(e) => setCreateUserForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. John Doe"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={createUserForm.email}
+                onChange={(e) => setCreateUserForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="user@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password *</Label>
+              <Input
+                type="password"
+                value={createUserForm.password}
+                onChange={(e) => setCreateUserForm((f) => ({ ...f, password: e.target.value }))}
+                placeholder="Min 6 characters"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setCreateUserDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreateUser} disabled={creatingUser || !createUserForm.email.trim() || !createUserForm.password}>
+              {creatingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Portal User Confirm ── */}
+      <AlertDialog open={!!deleteUserTarget} onOpenChange={(open) => { if (!open) setDeleteUserTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove portal user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "<strong>{deleteUserTarget?.name || deleteUserTarget?.email}</strong>" will lose access to the client portal. Their Firebase Auth account will be preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove Access
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

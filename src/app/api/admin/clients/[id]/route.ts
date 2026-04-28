@@ -18,6 +18,7 @@ export async function PATCH(
       nationalHolidayList?: string[];
       uniformAllowanceMonthly?: number;
       fieldAllowanceMonthly?: number;
+      dashboardModules?: Record<string, boolean>;
     };
     const name = body.name?.trim();
     const portalSubdomain = slugifyPortalSubdomain(body.portalSubdomain || name || "");
@@ -39,7 +40,7 @@ export async function PATCH(
       );
     }
 
-    await adminDb.collection("clients").doc(id).update({
+    const updateData: Record<string, unknown> = {
       name,
       portalSubdomain,
       portalEnabled: body.portalEnabled !== false,
@@ -58,7 +59,13 @@ export async function PATCH(
         uid: adminUser.uid,
         email: adminUser.email,
       }),
-    });
+    };
+
+    if (body.dashboardModules && typeof body.dashboardModules === "object") {
+      updateData.dashboardModules = body.dashboardModules;
+    }
+
+    await adminDb.collection("clients").doc(id).update(updateData);
 
     return NextResponse.json({
       id,
