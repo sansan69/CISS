@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
+import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 function workingDaysInMonth(year: number, month: number): number {
   // Approximate: count days excluding Sundays
@@ -216,16 +218,17 @@ export async function GET(request: Request) {
     // ─── Next shift ────────────────────────────────────────────────────────
     let nextShift: { date: string; siteName: string; clientName: string; shiftLabel?: string } | null = null;
     let nextShiftUnavailable = false;
-    try {
-      const sevenDaysLater = new Date(now);
-      sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+    if (isOperationalWorkOrderClientName(clientName)) {
+      try {
+        const sevenDaysLater = new Date(now);
+        sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
-      const workOrderSnap = await adminDb
-        .collection("workOrders")
-        .where("clientName", "==", clientName)
-        .where("date", ">=", now)
-        .where("date", "<=", sevenDaysLater)
-        .get();
+        const workOrderSnap = await adminDb
+          .collection("workOrders")
+          .where("clientName", "==", OPERATIONAL_CLIENT_NAME)
+          .where("date", ">=", now)
+          .where("date", "<=", sevenDaysLater)
+          .get();
 
         const nextActiveWorkOrder = workOrderSnap.docs
           .map((doc) => doc.data())
@@ -253,6 +256,7 @@ export async function GET(request: Request) {
         console.error("[guard/dashboard] nextShift query failed:", err);
         nextShiftUnavailable = true;
       }
+    }
 
     return NextResponse.json({
       employeeName,
