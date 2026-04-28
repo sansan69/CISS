@@ -5,7 +5,6 @@ import {
   DEFAULT_GEOFENCE_RADIUS_METERS,
   DEFAULT_GPS_ACCURACY_LIMIT_METERS,
   OFFLINE_ATTENDANCE_MAX_AGE_HOURS,
-  OPERATIONAL_CLIENT_NAME,
 } from "@/lib/constants";
 import { districtMatches, normalizeDistrictName } from "@/lib/districts";
 import {
@@ -194,9 +193,6 @@ export async function POST(request: NextRequest) {
         throw new AttendanceError("Selected site does not have valid coordinates configured.");
       }
 
-      const isTcsSite =
-        String(siteData.clientName || "").trim().toLowerCase() ===
-        OPERATIONAL_CLIENT_NAME.toLowerCase();
       const siteShiftMode = siteData.shiftMode === "fixed" ? "fixed" : "none";
       const siteShiftTemplates = Array.isArray(siteData.shiftTemplates)
         ? siteData.shiftTemplates
@@ -204,24 +200,22 @@ export async function POST(request: NextRequest) {
       const resolvedShift = resolveSiteShift(siteShiftMode, siteShiftTemplates, new Date());
       const nextShift = getNextShift(siteShiftMode, siteShiftTemplates, resolvedShift?.code);
 
-      if (isTcsSite) {
-        const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
-        const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
-        const workOrdersSnapshot = await adminDb
-          .collection("workOrders")
-          .where("siteId", "==", payload.siteId)
-          .where("date", ">=", startOfDay)
-          .where("date", "<=", endOfDay)
-          .get();
+      // Check work orders for this site (any client, not just TCS)
+      const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
+      const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
+      const workOrdersSnapshot = await adminDb
+        .collection("workOrders")
+        .where("siteId", "==", payload.siteId)
+        .where("date", ">=", startOfDay)
+        .where("date", "<=", endOfDay)
+        .get();
 
-        const activeWorkOrders = workOrdersSnapshot.docs
-          .map((doc) => doc.data() as Record<string, any>)
-          .filter(isActiveWorkOrderRecord);
+      const activeWorkOrders = workOrdersSnapshot.docs
+        .map((doc) => doc.data() as Record<string, any>)
+        .filter(isActiveWorkOrderRecord);
 
-        if (activeWorkOrders.length === 0) {
-          throw new AttendanceError("No active work order exists for the selected site today.");
-        }
-
+      if (activeWorkOrders.length > 0) {
+        // Site has work orders → validate assignment
         const matchingWorkOrder = activeWorkOrders
           .find((workOrder) => {
             const assignedGuards = Array.isArray(workOrder.assignedGuards)
@@ -243,6 +237,7 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
+        // No work orders → validate shift-based attendance
         if (siteShiftMode === "fixed" && !resolvedShift) {
           throw new AttendanceError(
             "No active fixed shift matches the current time for this site. Please contact admin.",

@@ -5,8 +5,6 @@ import {
   matchesClientScope,
   resolveClientScope,
 } from "@/lib/server/client-access";
-import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
-import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import type {
   ClientDashboardGuardHighlight,
   ClientDashboardLiveAttendanceRow,
@@ -109,10 +107,10 @@ export async function GET(request: Request) {
       .where("clientName", "==", scope.clientName)
       .limit(500)
       .get();
-    const workOrdersPromise: Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }> =
-      normalizeText(scope.clientName).toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase()
-        ? (adminDb.collection("workOrders").where("clientName", "==", OPERATIONAL_CLIENT_NAME).get() as any)
-        : Promise.resolve({ docs: [] });
+    const workOrdersPromise = adminDb
+      .collection("workOrders")
+      .where("clientName", "==", scope.clientName)
+      .get();
     const sitesPromise = scope.clientId
       ? adminDb.collection("sites").where("clientId", "==", scope.clientId).get()
       : adminDb.collection("sites").where("clientName", "==", scope.clientName).get();
@@ -239,7 +237,6 @@ export async function GET(request: Request) {
         ...(doc.data() as Record<string, unknown>),
       }) as DashboardRecord)
       .filter((row) => matchesClientScope(row, scope))
-      .filter((row) => isOperationalWorkOrderClientName(String(row.clientName ?? "")))
       .filter((row) => normalizeText(row.recordStatus || "active").toLowerCase() === "active");
 
     const upcomingWorkOrders: ClientDashboardWorkOrderRow[] = workOrders
