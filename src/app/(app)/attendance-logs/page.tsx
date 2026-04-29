@@ -545,10 +545,10 @@ export default function AttendanceLogsPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!selectedLog} onOpenChange={(open) => { if (!open) setSelectedLog(null); }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           {selectedLog && (
             <>
-              <SheetHeader className="mb-4">
+              <SheetHeader className="mb-3">
                 <SheetTitle className="flex items-center gap-2">
                   <Badge variant={selectedLog.status === "In" ? "default" : "secondary"} className="text-sm px-2">{selectedLog.status}</Badge>
                   {selectedLog.employeeName || "Unknown employee"}
@@ -558,173 +558,79 @@ export default function AttendanceLogsPage() {
 
               {/* Photo */}
               {selectedLog.photoUrl && (
-                <div className="mb-4 rounded-lg overflow-hidden border">
-                  <Image
-                    src={selectedLog.photoUrl}
-                    alt="Attendance photo"
-                    width={1200}
-                    height={720}
-                    sizes="(max-width: 640px) 100vw, 32rem"
-                    className="max-h-64 w-full object-cover"
-                  />
+                <div className="mb-4 overflow-hidden rounded-xl border bg-muted/30">
+                  <div className="relative aspect-[4/3] w-full bg-background">
+                    <Image
+                      src={selectedLog.photoUrl}
+                      alt="Attendance photo"
+                      fill
+                      sizes="(max-width: 640px) 100vw, 48rem"
+                      className="object-contain"
+                    />
+                  </div>
                   {selectedLog.photoCapturedAt && (
-                    <p className="text-xs text-muted-foreground px-3 py-1.5 bg-muted">
+                    <p className="border-t bg-background px-3 py-2 text-xs text-muted-foreground">
                       Photo taken: {format(new Date(selectedLog.photoCapturedAt), "dd MMM yyyy, hh:mm:ss a")}
                     </p>
                   )}
                 </div>
               )}
 
-              {/* Timestamp */}
-              <div className="space-y-3 text-sm">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Timestamp</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+              {/* Essentials */}
+              <div className="space-y-4 text-sm">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Reported at</p>
-                    <p>{getReportedAt(selectedLog) ? format(getReportedAt(selectedLog)!, "dd MMM yyyy, hh:mm:ss a") : "—"}</p>
+                    <p className="mt-1 font-medium">
+                      {getReportedAt(selectedLog) ? format(getReportedAt(selectedLog)!, "dd MMM yyyy, hh:mm a") : "—"}
+                    </p>
                   </div>
-                  <div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Server recorded</p>
-                    <p>{selectedLog.createdAt?.toDate ? format(selectedLog.createdAt.toDate(), "dd MMM yyyy, hh:mm:ss a") : "—"}</p>
+                    <p className="mt-1 font-medium">
+                      {selectedLog.createdAt?.toDate ? format(selectedLog.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "—"}
+                    </p>
                   </div>
-                  {selectedLog.attendanceDate && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Attendance date</p>
-                      <p>{selectedLog.attendanceDate}</p>
-                    </div>
-                  )}
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">Attendance date</p>
+                    <p className="mt-1 font-medium">{selectedLog.attendanceDate || "—"}</p>
+                  </div>
                 </div>
 
                 <Separator />
 
-                {/* Site & Shift */}
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Site & Shift</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Site</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-xs text-muted-foreground">Site</p>
-                    <p>{selectedLog.siteName || "—"} {selectedLog.sourceCollection === "clientLocations" && <span className="text-[10px] bg-muted rounded px-1">Office</span>}</p>
+                    <p className="font-medium">
+                      {selectedLog.siteName || "—"} {selectedLog.sourceCollection === "clientLocations" && <span className="ml-1 rounded bg-muted px-1 text-[10px]">Office</span>}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Client</p>
+                    <p className="font-medium">{selectedLog.clientName || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">District</p>
+                    <p className="font-medium">{selectedLog.district || "—"}</p>
                   </div>
                   {selectedLog.dutyPointName && (
                     <div>
                       <p className="text-xs text-muted-foreground">Duty point</p>
-                      <p>{selectedLog.dutyPointName}</p>
+                      <p className="font-medium">{selectedLog.dutyPointName}</p>
                     </div>
                   )}
-                  <div>
-                    <p className="text-xs text-muted-foreground">Client</p>
-                    <p>{selectedLog.clientName || "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">District</p>
-                    <p>{selectedLog.district || "—"}</p>
-                  </div>
                   {(selectedLog.shiftLabel || selectedLog.shiftCode) && (
-                    <div>
+                    <div className="sm:col-span-2">
                       <p className="text-xs text-muted-foreground">Shift</p>
-                      <p>{selectedLog.shiftLabel || selectedLog.shiftCode}</p>
+                      <p className="font-medium">{selectedLog.shiftLabel || selectedLog.shiftCode}</p>
                       {selectedLog.shiftStartTime && selectedLog.shiftEndTime && (
                         <p className="text-xs text-muted-foreground">{selectedLog.shiftStartTime} – {selectedLog.shiftEndTime}</p>
                       )}
                     </div>
                   )}
                 </div>
-
-                <Separator />
-
-                {/* GPS & Location */}
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> GPS & Location</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {selectedLog.locationText && (
-                    <div className="col-span-2">
-                      <p className="text-xs text-muted-foreground">Location text</p>
-                      <p>{selectedLog.locationText}</p>
-                    </div>
-                  )}
-                  {selectedLog.locationCoords && (
-                    <div className="col-span-2">
-                      <p className="text-xs text-muted-foreground">Coordinates</p>
-                      <p className="font-mono text-xs">{selectedLog.locationCoords.lat.toFixed(6)}, {selectedLog.locationCoords.lon.toFixed(6)}</p>
-                    </div>
-                  )}
-                  {selectedLog.distanceMeters != null && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Distance from site</p>
-                      <p className={selectedLog.distanceMeters > (selectedLog.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600"}>
-                        {selectedLog.distanceMeters < 1000
-                          ? `${Math.round(selectedLog.distanceMeters)} m`
-                          : `${(selectedLog.distanceMeters / 1000).toFixed(2)} km`}
-                      </p>
-                    </div>
-                  )}
-                  {selectedLog.geofenceRadiusAtTime != null && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Geofence radius</p>
-                      <p>{selectedLog.geofenceRadiusAtTime} m</p>
-                    </div>
-                  )}
-                  {(selectedLog.gpsAccuracyMeters != null || selectedLog.locationAccuracyMeters != null) && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">GPS accuracy</p>
-                      <p>{selectedLog.gpsAccuracyMeters ?? selectedLog.locationAccuracyMeters} m</p>
-                    </div>
-                  )}
-                </div>
-
-                {(selectedLog.isMockLocationSuspected || selectedLog.requiresLocationReview) && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-1">
-                    <p className="text-xs font-semibold text-red-700 flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5" /> Location Flags</p>
-                    {selectedLog.isMockLocationSuspected && (
-                      <p className="text-xs text-red-700">Mock location suspected{selectedLog.mockLocationReason ? `: ${selectedLog.mockLocationReason}` : ""}</p>
-                    )}
-                    {selectedLog.requiresLocationReview && (
-                      <p className="text-xs text-red-700">Requires location review</p>
-                    )}
-                  </div>
-                )}
-
-                <Separator />
-
-                {/* Photo Compliance */}
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Uniform / Photo Compliance</h3>
-                {selectedLog.photoCompliance ? (
-                  <div className="space-y-2">
-                    <Badge variant={selectedLog.photoCompliance.overallStatus === "clear" ? "outline" : "destructive"}>
-                      {selectedLog.photoCompliance.overallStatus === "clear" ? "Clear" : selectedLog.photoCompliance.overallStatus === "warning" ? "Review required" : "AI check unavailable"}
-                    </Badge>
-                    {selectedLog.photoCompliance.summary && (
-                      <p className="text-xs text-muted-foreground">{selectedLog.photoCompliance.summary}</p>
-                    )}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {[
-                        { label: "Uniform issue", val: selectedLog.photoCompliance.uniformIssue },
-                        { label: "Missing ID card", val: selectedLog.photoCompliance.missingIdCard },
-                        { label: "Missing shoes", val: selectedLog.photoCompliance.missingShoes },
-                        { label: "Full body visible", val: !selectedLog.photoCompliance.fullBodyVisible },
-                        { label: "One person visible", val: !selectedLog.photoCompliance.onePersonVisible },
-                        { label: "Admin flagged", val: selectedLog.photoCompliance.adminFlag },
-                      ].filter(f => f.val).map(f => (
-                        <div key={f.label} className="flex items-center gap-1 text-amber-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                          {f.label}
-                        </div>
-                      ))}
-                    </div>
-                    {selectedLog.photoCompliance.warnings.length > 0 && (
-                      <p className="text-xs text-muted-foreground">{selectedLog.photoCompliance.warnings.join(" · ")}</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Not reviewed</p>
-                )}
-
-                {/* Device */}
-                {selectedLog.deviceInfo?.userAgent && (
-                  <>
-                    <Separator />
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Device</h3>
-                    <p className="text-xs text-muted-foreground break-all">{selectedLog.deviceInfo.userAgent}</p>
-                  </>
-                )}
               </div>
             </>
           )}
