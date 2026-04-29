@@ -45,7 +45,7 @@ import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpda
 import { buildGeocodeReportLine, type GeocodeStatus } from '@/lib/geocode-report';
 import { LocationEditorCard } from '@/components/location/location-editor-card';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
-import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
+import { buildGoogleMapsLink, buildLocationIdentity, buildSiteLocationSyncPatch, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
 import {
     buildDutyPointShiftTemplates,
     buildShiftTemplates,
@@ -256,6 +256,7 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                             ...formData,
                             clientLocationId: value,
                             clientLocationName: linkedLocation?.locationName ?? undefined,
+                            ...buildSiteLocationSyncPatch(linkedLocation),
                         });
                     }}
                 >
@@ -269,6 +270,9 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                         ))}
                     </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                    Use this when the site and office share the same physical address and coordinates.
+                </p>
             </div>
             {isTcsSite ? (
                 <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -1379,18 +1383,19 @@ export default function SiteManagementPage() {
                             <Select
                                 value={createData.clientLocationId || 'none'}
                                 onValueChange={(value) => {
-                                    if (value === 'none') {
-                                        setCreateData({ ...createData, clientLocationId: undefined, clientLocationName: undefined });
-                                        return;
-                                    }
-                                    const linkedLocation = createClientLocations.find(location => location.id === value);
-                                    setCreateData({
-                                        ...createData,
-                                        clientLocationId: value,
-                                        clientLocationName: linkedLocation?.locationName ?? undefined,
-                                    });
-                                }}
-                            >
+                                if (value === 'none') {
+                                    setCreateData({ ...createData, clientLocationId: undefined, clientLocationName: undefined });
+                                    return;
+                                }
+                                const linkedLocation = createClientLocations.find(location => location.id === value);
+                                setCreateData({
+                                    ...createData,
+                                    clientLocationId: value,
+                                    clientLocationName: linkedLocation?.locationName ?? undefined,
+                                    ...buildSiteLocationSyncPatch(linkedLocation),
+                                });
+                            }}
+                        >
                                 <SelectTrigger id="new-client-location"><SelectValue placeholder="Optional linked client location" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">No linked client location</SelectItem>
@@ -1399,7 +1404,7 @@ export default function SiteManagementPage() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground">This links the duty site to a known physical branch or center when one exists.</p>
+                            <p className="text-xs text-muted-foreground">Selecting a linked location copies its address and coordinates into the site. Use this when the site and office are the same place.</p>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-district">District</Label>

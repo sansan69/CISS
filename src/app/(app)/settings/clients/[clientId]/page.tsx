@@ -94,7 +94,7 @@ import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/rou
 import { useToast } from "@/hooks/use-toast";
 import { KERALA_DISTRICTS, DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
 import { buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/firestore-audit";
-import { coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
+import { buildSiteLocationSyncPatch, coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
 import { extractSiteCoordinates, hasUsableSiteGps } from "@/lib/site-gps-repair";
 import { siteBelongsToClient, sortSitesByName } from "@/lib/sites/site-directory";
 import {
@@ -124,6 +124,8 @@ interface SiteDoc {
   siteName: string;
   siteAddress?: string;
   district?: string;
+  clientLocationId?: string | null;
+  clientLocationName?: string | null;
   geofenceRadiusMeters?: number;
   strictGeofence?: boolean;
   coordinateStatus?: string;
@@ -183,6 +185,8 @@ const BLANK_SITE = {
   siteName: "",
   siteAddress: "",
   district: "",
+  clientLocationId: undefined as string | undefined,
+  clientLocationName: undefined as string | undefined,
   geofenceRadiusMeters: DEFAULT_GEOFENCE_RADIUS_METERS,
   strictGeofence: true,
   siteType: "site" as SiteType,
@@ -569,6 +573,8 @@ export default function ClientDashboardPage() {
       siteName: site.siteName,
       siteAddress: site.siteAddress || "",
       district: site.district || "",
+      clientLocationId: site.clientLocationId ?? undefined,
+      clientLocationName: site.clientLocationName ?? undefined,
       geofenceRadiusMeters: site.geofenceRadiusMeters ?? DEFAULT_GEOFENCE_RADIUS_METERS,
       strictGeofence: site.strictGeofence !== false,
       siteType: (site.siteType as SiteType | undefined) ?? "site",
@@ -627,6 +633,8 @@ export default function ClientDashboardPage() {
           siteName: siteForm.siteName.trim(),
           siteAddress: siteForm.siteAddress.trim(),
           district: siteForm.district.trim(),
+          clientLocationId: siteForm.clientLocationId ?? null,
+          clientLocationName: siteForm.clientLocationName ?? null,
           geofenceRadiusMeters: siteForm.geofenceRadiusMeters,
           strictGeofence: siteForm.strictGeofence,
           siteType: siteForm.siteType,
@@ -644,6 +652,8 @@ export default function ClientDashboardPage() {
           siteName: siteForm.siteName.trim(),
           siteAddress: siteForm.siteAddress.trim(),
           district: siteForm.district.trim(),
+          clientLocationId: siteForm.clientLocationId ?? null,
+          clientLocationName: siteForm.clientLocationName ?? null,
           geofenceRadiusMeters: siteForm.geofenceRadiusMeters,
           strictGeofence: siteForm.strictGeofence,
           siteType: siteForm.siteType,
@@ -1412,6 +1422,44 @@ export default function ClientDashboardPage() {
                 </Select>
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Linked Office Location</Label>
+              <Select
+                value={siteForm.clientLocationId || "none"}
+                onValueChange={(value) => {
+                  if (value === "none") {
+                    setSiteForm((current) => ({
+                      ...current,
+                      clientLocationId: undefined,
+                      clientLocationName: undefined,
+                    }));
+                    return;
+                  }
+                  const linkedLocation = locations.find((location) => location.id === value);
+                  setSiteForm((current) => ({
+                    ...current,
+                    clientLocationId: value,
+                    clientLocationName: linkedLocation?.locationName ?? undefined,
+                    ...buildSiteLocationSyncPatch(linkedLocation),
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Optional linked office location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No linked office location</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.locationName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select the office location when the site uses the same physical address and coordinates.
+              </p>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Geofence Radius (metres)</Label>
@@ -1612,7 +1660,7 @@ export default function ClientDashboardPage() {
                   geolocation: patch.geolocation ?? current.geolocation,
                   latString: patch.latString ?? current.latString,
                   lngString: patch.lngString ?? current.lngString,
-                  coordinateStatus: patch.coordinateStatus ?? current.coordinateStatus,
+                  coordinateStatus: patch.coordinateStatus ?? current.coordinateStatus ?? "missing",
                   coordinateSource: patch.coordinateSource ?? current.coordinateSource,
                   placeAccuracy: patch.placeAccuracy ?? current.placeAccuracy,
                 }))

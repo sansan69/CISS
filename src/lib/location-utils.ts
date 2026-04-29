@@ -18,6 +18,55 @@ export const coordinateSourceLabels: Record<CoordinateSource, string> = {
   current_location: "Current location",
 };
 
+const coordinateStatusValues = new Set<CoordinateStatus>([
+  "missing",
+  "geocoded",
+  "verified",
+  "overridden",
+]);
+
+function normalizeCoordinateStatus(value?: CoordinateStatus | string | null) {
+  return typeof value === "string" && coordinateStatusValues.has(value as CoordinateStatus)
+    ? (value as CoordinateStatus)
+    : "missing";
+}
+
+const coordinateSourceValues = new Set<CoordinateSource>([
+  "manual",
+  "geocode",
+  "map_pin",
+  "current_location",
+]);
+
+function normalizeCoordinateSource(value?: CoordinateSource | string | null) {
+  return typeof value === "string" && coordinateSourceValues.has(value as CoordinateSource)
+    ? (value as CoordinateSource)
+    : undefined;
+}
+
+type SyncableLocationGeoPoint =
+  | {
+      latitude?: number;
+      longitude?: number;
+      lat?: number;
+      lng?: number;
+      _latitude?: number;
+      _longitude?: number;
+    }
+  | null
+  | undefined;
+
+export type SiteLocationSyncPatch = {
+  siteAddress: string;
+  district: string;
+  geolocation?: GeoPointLike;
+  latString: string;
+  lngString: string;
+  coordinateStatus: CoordinateStatus;
+  coordinateSource?: CoordinateSource;
+  placeAccuracy: string | null;
+};
+
 export function formatCoordinate(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "";
   return value.toFixed(6).replace(/\.?0+$/, "");
@@ -67,6 +116,61 @@ export function buildLocationIdentity(parts: Array<string | null | undefined>) {
   return parts
     .map((part) => (part ?? "").trim().toLowerCase().replace(/\s+/g, " "))
     .join("::");
+}
+
+export function buildSiteLocationSyncPatch(location?: {
+  address?: string | null;
+  district?: string | null;
+  geolocation?: SyncableLocationGeoPoint;
+  latString?: string | null;
+  lngString?: string | null;
+  coordinateStatus?: CoordinateStatus | string | null;
+  coordinateSource?: CoordinateSource | string | null;
+  placeAccuracy?: string | null;
+} | null | undefined): SiteLocationSyncPatch {
+  if (!location) {
+    return {
+      siteAddress: "",
+      district: "",
+      geolocation: undefined,
+      latString: "",
+      lngString: "",
+      coordinateStatus: "missing" as CoordinateStatus,
+      coordinateSource: undefined,
+      placeAccuracy: null,
+    };
+  }
+
+  const latitude =
+    typeof location.geolocation?.latitude === "number"
+      ? location.geolocation.latitude
+      : typeof location.geolocation?.lat === "number"
+        ? location.geolocation.lat
+        : typeof location.geolocation?._latitude === "number"
+          ? location.geolocation._latitude
+          : undefined;
+  const longitude =
+    typeof location.geolocation?.longitude === "number"
+      ? location.geolocation.longitude
+      : typeof location.geolocation?.lng === "number"
+        ? location.geolocation.lng
+        : typeof location.geolocation?._longitude === "number"
+          ? location.geolocation._longitude
+          : undefined;
+
+  return {
+    siteAddress: typeof location.address === "string" ? location.address : "",
+    district: typeof location.district === "string" ? location.district : "",
+    geolocation:
+      typeof latitude === "number" && typeof longitude === "number"
+        ? { latitude, longitude }
+        : undefined,
+    latString: typeof location.latString === "string" ? location.latString : "",
+    lngString: typeof location.lngString === "string" ? location.lngString : "",
+    coordinateStatus: normalizeCoordinateStatus(location.coordinateStatus),
+    coordinateSource: normalizeCoordinateSource(location.coordinateSource),
+    placeAccuracy: location.placeAccuracy ?? null,
+  };
 }
 
 export function buildGoogleMapsLink(
