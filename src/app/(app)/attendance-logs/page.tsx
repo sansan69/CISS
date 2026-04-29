@@ -34,6 +34,7 @@ type AttendanceLog = {
   district?: string;
   clientName?: string;
   siteName?: string;
+  dutyPointName?: string;
   siteId?: string;
   sourceCollection?: string;
   locationText?: string;
@@ -181,6 +182,7 @@ export default function AttendanceLogsPage() {
         log.employeeName?.toLowerCase().includes(term) ||
         log.employeeId?.toLowerCase().includes(term) ||
         log.siteName?.toLowerCase().includes(term) ||
+        log.dutyPointName?.toLowerCase().includes(term) ||
         log.clientName?.toLowerCase().includes(term);
 
       return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesSearch;
@@ -381,6 +383,9 @@ export default function AttendanceLogsPage() {
                                 <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
                               )}
                             </p>
+                            {log.dutyPointName && (
+                              <p className="text-xs text-muted-foreground">{log.dutyPointName}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</p>
                           </div>
                           <div>
@@ -471,6 +476,9 @@ export default function AttendanceLogsPage() {
                                   <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
                                 )}
                               </div>
+                              {log.dutyPointName && (
+                                <div className="text-xs text-muted-foreground">{log.dutyPointName}</div>
+                              )}
                               <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
                               <div className="text-xs text-muted-foreground">{log.district || ""}</div>
                             </TableCell>
@@ -596,6 +604,12 @@ export default function AttendanceLogsPage() {
                     <p className="text-xs text-muted-foreground">Site</p>
                     <p>{selectedLog.siteName || "—"} {selectedLog.sourceCollection === "clientLocations" && <span className="text-[10px] bg-muted rounded px-1">Office</span>}</p>
                   </div>
+                  {selectedLog.dutyPointName && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Duty point</p>
+                      <p>{selectedLog.dutyPointName}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs text-muted-foreground">Client</p>
                     <p>{selectedLog.clientName || "—"}</p>

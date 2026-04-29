@@ -211,6 +211,7 @@ export default function GuardAttendancePage() {
                 </p>
                 <p className="text-[10px] text-gray-500 truncate">
                   {log.siteName || "—"}
+                  {log.dutyPointName ? ` • ${log.dutyPointName}` : ""}
                   {log.time ? ` · ${log.time}` : ""}
                 </p>
                 {log.shiftLabel && (

@@ -53,6 +53,7 @@ interface DashboardData {
     date: string;
     status: "In" | "Out";
     siteName: string;
+    dutyPointName?: string;
     time: string;
   }>;
 }
@@ -387,6 +388,7 @@ export default function GuardDashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-foreground truncate">
                       {log.siteName || "—"}
+                      {log.dutyPointName ? ` • ${log.dutyPointName}` : ""}
                     </p>
                     <p className="text-[10px] text-muted-foreground">{log.time}</p>
                   </div>

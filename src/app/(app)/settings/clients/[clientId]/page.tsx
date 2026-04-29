@@ -97,7 +97,15 @@ import { buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/fire
 import { coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
 import { extractSiteCoordinates, hasUsableSiteGps } from "@/lib/site-gps-repair";
 import { siteBelongsToClient, sortSitesByName } from "@/lib/sites/site-directory";
-import type { CoordinateSource, CoordinateStatus, GeoPointLike, SiteType } from "@/types/location";
+import {
+  buildDutyPointShiftTemplates,
+  DUTY_POINT_COVERAGE_LABELS,
+  DUTY_POINT_HOURS_LABELS,
+  normalizeDutyPoint,
+  resolveSiteDutyPoints,
+} from "@/lib/shift-utils";
+import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
+import type { CoordinateSource, CoordinateStatus, DutyPoint, DutyPointCoverageMode, DutyPointHours, GeoPointLike, SiteType } from "@/types/location";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +140,7 @@ interface SiteDoc {
   latString?: string;
   lngString?: string;
   siteType?: SiteType | string | null;
+  dutyPoints?: DutyPoint[];
   createdAt?: any;
 }
 
@@ -183,6 +192,7 @@ const BLANK_SITE = {
   coordinateStatus: "missing" as CoordinateStatus,
   coordinateSource: undefined as CoordinateSource | undefined,
   placeAccuracy: null as string | null,
+  dutyPoints: [] as DutyPoint[],
 };
 
 const BLANK_LOCATION = {
@@ -226,6 +236,21 @@ function normalizeGeoPoint(
     latitude: coordinates.lat,
     longitude: coordinates.lng,
   } satisfies GeoPointLike;
+}
+
+function isOperationalClientName(clientName?: string | null) {
+  return (clientName ?? "").trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
+}
+
+function createDutyPointDraft(index: number): DutyPoint {
+  return normalizeDutyPoint({
+    id: `point-${index + 1}`,
+    name: `Duty Point ${index + 1}`,
+    coverageMode: "roundClock",
+    dutyHours: "12",
+    shiftMode: "fixed",
+    shiftTemplates: buildDutyPointShiftTemplates("roundClock", "12"),
+  });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -530,7 +555,10 @@ export default function ClientDashboardPage() {
   // ── Site CRUD ──
 
   const openCreateSite = () => {
-    setSiteForm(BLANK_SITE);
+    setSiteForm({
+      ...BLANK_SITE,
+      dutyPoints: isOperationalClientName(client?.name) ? [] : [createDutyPointDraft(0)],
+    });
     setEditingSite(null);
     setSiteDialog("create");
   };
@@ -550,6 +578,7 @@ export default function ClientDashboardPage() {
       coordinateStatus: (site.coordinateStatus as CoordinateStatus | undefined) ?? "missing",
       coordinateSource: (site.coordinateSource as CoordinateSource | undefined) ?? undefined,
       placeAccuracy: site.placeAccuracy ?? null,
+      dutyPoints: resolveSiteDutyPoints(site).map((point) => normalizeDutyPoint(point)),
     });
     setSiteDialog("edit");
   };
@@ -589,6 +618,9 @@ export default function ClientDashboardPage() {
     try {
       const coordinatePatch = buildCoordinatePayload(siteForm);
       if (siteDialog === "create") {
+        const normalizedDutyPoints = isOperationalClientName(client?.name)
+          ? []
+          : siteForm.dutyPoints.map((point, index) => normalizeDutyPoint(point, index));
         await addDoc(collection(db, "sites"), {
           clientId,
           clientName: client?.name ?? "",
@@ -599,11 +631,15 @@ export default function ClientDashboardPage() {
           strictGeofence: siteForm.strictGeofence,
           siteType: siteForm.siteType,
           shiftMode: "none",
+          dutyPoints: normalizedDutyPoints,
           ...coordinatePatch,
           ...buildFirestoreCreateAudit(),
         });
         toast({ title: "Site created", description: siteForm.siteName });
       } else if (editingSite) {
+        const normalizedDutyPoints = isOperationalClientName(client?.name)
+          ? []
+          : siteForm.dutyPoints.map((point, index) => normalizeDutyPoint(point, index));
         await updateDoc(doc(db, "sites", editingSite.id), {
           siteName: siteForm.siteName.trim(),
           siteAddress: siteForm.siteAddress.trim(),
@@ -611,6 +647,7 @@ export default function ClientDashboardPage() {
           geofenceRadiusMeters: siteForm.geofenceRadiusMeters,
           strictGeofence: siteForm.strictGeofence,
           siteType: siteForm.siteType,
+          dutyPoints: normalizedDutyPoints,
           ...coordinatePatch,
           ...buildFirestoreUpdateAudit(),
         });
@@ -627,21 +664,23 @@ export default function ClientDashboardPage() {
   const handleDeleteSite = async () => {
     if (!deleteSiteTarget) return;
     try {
-      const workOrdersSnap = await getDocs(
-        query(collection(db, "workOrders"), where("siteId", "==", deleteSiteTarget.id))
-      );
-      const hasAssigned = workOrdersSnap.docs.some((d) => {
-        const assigned = (d.data() as any).assignedGuards;
-        return Array.isArray(assigned) && assigned.length > 0;
-      });
-      if (hasAssigned) {
-        toast({
-          variant: "destructive",
-          title: "Cannot delete site",
-          description: "This site has work orders with assigned guards. Remove the assignments or delete the work orders first.",
+      if (isOperationalClientName(client?.name)) {
+        const workOrdersSnap = await getDocs(
+          query(collection(db, "workOrders"), where("siteId", "==", deleteSiteTarget.id))
+        );
+        const hasAssigned = workOrdersSnap.docs.some((d) => {
+          const assigned = (d.data() as any).assignedGuards;
+          return Array.isArray(assigned) && assigned.length > 0;
         });
-        setDeleteSiteTarget(null);
-        return;
+        if (hasAssigned) {
+          toast({
+            variant: "destructive",
+            title: "Cannot delete site",
+            description: "This site has work orders with assigned guards. Remove the assignments or delete the work orders first.",
+          });
+          setDeleteSiteTarget(null);
+          return;
+        }
       }
       await deleteDoc(doc(db, "sites", deleteSiteTarget.id));
       toast({ title: "Site deleted" });
@@ -958,6 +997,11 @@ export default function ClientDashboardPage() {
                         <Badge variant={site.strictGeofence === false ? "secondary" : "default"} className="text-[10px]">
                           {site.strictGeofence === false ? "Soft geofence" : "Strict geofence"}
                         </Badge>
+                        {!isOperationalClientName(client.name) && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {resolveSiteDutyPoints(site).length} duty point{resolveSiteDutyPoints(site).length === 1 ? "" : "s"}
+                          </Badge>
+                        )}
                       </div>
                       <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
                         <p>{[site.district, site.siteAddress].filter(Boolean).join(" · ") || "No address added"}</p>
@@ -1177,7 +1221,9 @@ export default function ClientDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {(Object.keys(CLIENT_MODULE_LABELS) as ClientDashboardModule[]).map((mod) => {
+                {(Object.keys(CLIENT_MODULE_LABELS) as ClientDashboardModule[])
+                  .filter((mod) => !(mod === "workOrders" && !isOperationalClientName(client.name)))
+                  .map((mod) => {
                   const enabled = dashboardModules[mod] !== false;
                   return (
                     <div
@@ -1390,6 +1436,162 @@ export default function ClientDashboardPage() {
                 />
               </div>
             </div>
+            {!isOperationalClientName(client.name) && (
+              <div className="space-y-3 rounded-2xl border border-border/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label>Duty points</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Configure each post under this site and its shift timing for attendance tracking.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setSiteForm((current) => ({
+                        ...current,
+                        dutyPoints: [...current.dutyPoints, createDutyPointDraft(current.dutyPoints.length)],
+                      }))
+                    }
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Duty Point
+                  </Button>
+                </div>
+                {siteForm.dutyPoints.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No duty points yet. Add at least one duty point for this site.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {siteForm.dutyPoints.map((point, index) => (
+                      <div key={point.id || index} className="rounded-2xl border border-border/60 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium">Duty point {index + 1}</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() =>
+                              setSiteForm((current) => ({
+                                ...current,
+                                dutyPoints: current.dutyPoints.filter((_, itemIndex) => itemIndex !== index),
+                              }))
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label>Name</Label>
+                            <Input
+                              value={point.name}
+                              onChange={(e) =>
+                                setSiteForm((current) => ({
+                                  ...current,
+                                  dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? normalizeDutyPoint({ ...item, name: e.target.value }, index)
+                                      : item,
+                                  ),
+                                }))
+                              }
+                              placeholder="e.g. Main Gate"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Coverage</Label>
+                            <Select
+                              value={point.coverageMode}
+                              onValueChange={(value: DutyPointCoverageMode) =>
+                                setSiteForm((current) => ({
+                                  ...current,
+                                  dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? normalizeDutyPoint({
+                                          ...item,
+                                          coverageMode: value,
+                                          shiftTemplates: buildDutyPointShiftTemplates(value, item.dutyHours),
+                                        }, index)
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(DUTY_POINT_COVERAGE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Duty hours</Label>
+                            <Select
+                              value={point.dutyHours}
+                              onValueChange={(value: DutyPointHours) =>
+                                setSiteForm((current) => ({
+                                  ...current,
+                                  dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? normalizeDutyPoint({
+                                          ...item,
+                                          dutyHours: value,
+                                          shiftTemplates: buildDutyPointShiftTemplates(item.coverageMode, value),
+                                        }, index)
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(DUTY_POINT_HOURS_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Radius override (optional)</Label>
+                            <Input
+                              type="number"
+                              min={50}
+                              max={2000}
+                              value={point.geofenceRadiusMeters ?? ""}
+                              onChange={(e) =>
+                                setSiteForm((current) => ({
+                                  ...current,
+                                  dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? normalizeDutyPoint({
+                                          ...item,
+                                          geofenceRadiusMeters: e.target.value ? Number(e.target.value) : undefined,
+                                        }, index)
+                                      : item,
+                                  ),
+                                }))
+                              }
+                              placeholder={`Use site radius (${siteForm.geofenceRadiusMeters}m)`}
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                          {point.shiftTemplates.map((shift) => (
+                            <div key={shift.code} className="rounded-xl bg-muted/50 px-3 py-2 text-xs">
+                              <p className="font-medium text-foreground">{shift.label}</p>
+                              <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <LocationEditorCard
               entityType="site"
               value={{

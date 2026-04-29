@@ -106,16 +106,18 @@ const getWorkOrderExamKey = (order: Partial<Pick<WorkOrder, 'examName' | 'examCo
     normalizeSegment(order.examCode || order.examName || '');
 
 type WorkOrderBoardRow = {
-    order: WorkOrder;
+    orders: WorkOrder[];
     siteId: string;
     siteName: string;
     district: string;
     districtKey: string;
-    examKey: string;
-    examLabel: string;
+    examKeys: string[];
+    examLabels: string[];
     dateMs: number;
     dateKey: string;
     dateLabel: string;
+    maleRequired: number;
+    femaleRequired: number;
     totalRequired: number;
     assignedCount: number;
     assignedMale: number;
@@ -448,16 +450,18 @@ export default function WorkOrderPage() {
                                 : 'border-amber-200 bg-amber-50 text-amber-800';
 
                         return {
-                            order,
+                            orders: [order],
                             siteId,
                             siteName: order.siteName || siteId,
                             district,
                             districtKey: normalizeSegment(district),
-                            examKey: getWorkOrderExamKey(order),
-                            examLabel: getWorkOrderExamLabel(order) || 'General Duty',
+                            examKeys: [getWorkOrderExamKey(order)].filter(Boolean),
+                            examLabels: [getWorkOrderExamLabel(order) || 'General Duty'],
                             dateMs,
                             dateKey: date ? format(date, 'yyyy-MM-dd') : 'unknown-date',
                             dateLabel: date ? format(date, 'dd MMM yyyy') : 'Date unavailable',
+                            maleRequired: order.maleGuardsRequired || 0,
+                            femaleRequired: order.femaleGuardsRequired || 0,
                             totalRequired,
                             assignedCount,
                             assignedMale,
@@ -473,7 +477,7 @@ export default function WorkOrderPage() {
                 if (districtCompare !== 0) return districtCompare;
                 const siteCompare = a.siteName.localeCompare(b.siteName);
                 if (siteCompare !== 0) return siteCompare;
-                return a.examLabel.localeCompare(b.examLabel);
+                return (a.examLabels[0] || '').localeCompare(b.examLabels[0] || '');
             });
     }, [workOrdersBySite, siteDistricts, pendingDeleteIds]);
 
@@ -495,10 +499,13 @@ export default function WorkOrderPage() {
     const availableExams = useMemo(() => {
         const map = new Map<string, string>();
         for (const row of allWorkOrderRows) {
-            if (!row.examKey) continue;
-            if (!map.has(row.examKey) || row.examLabel.length > (map.get(row.examKey) ?? '').length) {
-                map.set(row.examKey, row.examLabel);
-            }
+            row.examKeys.forEach((examKey, index) => {
+                if (!examKey) return;
+                const label = row.examLabels[index] || row.examLabels[0] || 'General Duty';
+                if (!map.has(examKey) || label.length > (map.get(examKey) ?? '').length) {
+                    map.set(examKey, label);
+                }
+            });
         }
 
         return Array.from(map.entries())
@@ -516,17 +523,17 @@ export default function WorkOrderPage() {
 
         return allWorkOrderRows.filter((row) => {
             if (selectedDistrictKey !== 'all' && row.districtKey !== selectedDistrictKey) return false;
-            if (selectedExamKey !== 'all' && row.examKey !== selectedExamKey) return false;
+            if (selectedExamKey !== 'all' && !row.examKeys.includes(selectedExamKey)) return false;
             if (selectedDate && !isSameDay(new Date(row.dateMs), selectedDate)) return false;
 
             if (queryKey) {
                 const haystack = normalizeSegment([
                     row.siteName,
                     row.district,
-                    row.examLabel,
+                    row.examLabels.join(' '),
                     row.dateLabel,
-                    row.order.sourceFileName,
-                    row.order.siteId,
+                    ...row.orders.map((order) => order.sourceFileName),
+                    ...row.orders.map((order) => order.siteId),
                 ].filter(Boolean).join(' '));
                 if (!haystack.includes(queryKey)) return false;
             }
@@ -538,20 +545,65 @@ export default function WorkOrderPage() {
     const groupedRowsByDate = useMemo(() => {
         const map = new Map<string, { dateLabel: string; rows: WorkOrderBoardRow[]; totalRequired: number; assignedCount: number }>();
         for (const row of filteredRows) {
+            const groupedSiteKey = `${row.dateKey}::${row.siteId}`;
             const existing = map.get(row.dateKey) ?? {
                 dateLabel: row.dateLabel,
                 rows: [],
                 totalRequired: 0,
                 assignedCount: 0,
             };
-            existing.rows.push(row);
+            const existingSiteIndex = existing.rows.findIndex((entry) => `${entry.dateKey}::${entry.siteId}` === groupedSiteKey);
+            if (existingSiteIndex === -1) {
+                existing.rows.push(row);
+            } else {
+                const current = existing.rows[existingSiteIndex];
+                const examLabels = Array.from(new Set([...current.examLabels, ...row.examLabels]));
+                const examKeys = Array.from(new Set([...current.examKeys, ...row.examKeys]));
+                const totalRequired = current.totalRequired + row.totalRequired;
+                const assignedCount = current.assignedCount + row.assignedCount;
+                const assignedMale = current.assignedMale + row.assignedMale;
+                const assignedFemale = current.assignedFemale + row.assignedFemale;
+                const statusLabel = assignedCount === 0
+                    ? 'Open'
+                    : assignedCount >= totalRequired
+                        ? 'Filled'
+                        : 'Partial';
+                const statusClassName = assignedCount === 0
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : assignedCount >= totalRequired
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-800';
+
+                existing.rows[existingSiteIndex] = {
+                    ...current,
+                    orders: [...current.orders, ...row.orders],
+                    examLabels,
+                    examKeys,
+                    maleRequired: current.maleRequired + row.maleRequired,
+                    femaleRequired: current.femaleRequired + row.femaleRequired,
+                    totalRequired,
+                    assignedCount,
+                    assignedMale,
+                    assignedFemale,
+                    statusLabel,
+                    statusClassName,
+                };
+            }
             existing.totalRequired += row.totalRequired;
             existing.assignedCount += row.assignedCount;
             map.set(row.dateKey, existing);
         }
         return Array.from(map.entries())
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([dateKey, group]) => ({ dateKey, ...group }));
+            .map(([dateKey, group]) => ({
+                dateKey,
+                ...group,
+                rows: [...group.rows].sort((a, b) => {
+                    const districtCompare = a.district.localeCompare(b.district);
+                    if (districtCompare !== 0) return districtCompare;
+                    return a.siteName.localeCompare(b.siteName);
+                }),
+            }));
     }, [filteredRows]);
 
     useEffect(() => {
@@ -1163,23 +1215,29 @@ export default function WorkOrderPage() {
                                                     <div id={`work-orders-date-${group.dateKey}`} className="divide-y">
                                                         {group.rows.map((row) => {
                                                     const assignmentLabel = `Assigned ${row.assignedCount}/${row.totalRequired}`;
+                                                    const examSummary = row.examLabels.join(' · ');
+                                                    const isMergedRow = row.orders.length > 1;
+                                                    const singleOrder = row.orders[0];
                                                     return (
-                                                        <div key={row.order.id} className="grid gap-3 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(260px,1.4fr)_140px_190px_120px_auto] lg:items-center">
+                                                        <div key={`${row.siteId}-${row.dateKey}-${row.examKeys.join('__') || 'general'}`} className="grid gap-3 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(260px,1.4fr)_140px_190px_120px_auto] lg:items-center">
                                                             <div className="min-w-0">
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <h4 className="truncate text-sm font-semibold text-foreground">{row.siteName}</h4>
                                                                     <Badge variant="outline" className="text-[10px]">{row.district || 'No district'}</Badge>
                                                                 </div>
-                                                                <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{row.examLabel}</p>
+                                                                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{examSummary}</p>
+                                                                {isMergedRow ? (
+                                                                    <p className="mt-1 text-[11px] font-medium text-primary">{row.orders.length} exams merged for this center</p>
+                                                                ) : null}
                                                             </div>
 
                                                             <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 px-3 py-2 text-center lg:bg-transparent lg:px-0 lg:py-0">
                                                                 <div>
-                                                                    <p className="text-sm font-semibold">{row.order.maleGuardsRequired || 0}</p>
+                                                                    <p className="text-sm font-semibold">{row.maleRequired || 0}</p>
                                                                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">M</p>
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-sm font-semibold">{row.order.femaleGuardsRequired || 0}</p>
+                                                                    <p className="text-sm font-semibold">{row.femaleRequired || 0}</p>
                                                                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">F</p>
                                                                 </div>
                                                                 <div>
@@ -1214,13 +1272,13 @@ export default function WorkOrderPage() {
                                                                         Assign
                                                                     </Link>
                                                                 </Button>
-                                                                {canAdminWorkOrders && (
+                                                                {canAdminWorkOrders && !isMergedRow && singleOrder && (
                                                                     <Button
                                                                         size="icon"
                                                                         variant="ghost"
                                                                         className="h-8 w-8 text-destructive/70 hover:bg-destructive/10 hover:text-destructive"
                                                                         title="Delete duty (5s undo)"
-                                                                        onClick={() => handleDeleteOrder(row.order)}
+                                                                        onClick={() => handleDeleteOrder(singleOrder)}
                                                                     >
                                                                         <Trash2 className="h-3.5 w-3.5" />
                                                                     </Button>

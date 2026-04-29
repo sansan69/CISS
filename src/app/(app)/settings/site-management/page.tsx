@@ -46,8 +46,16 @@ import { buildGeocodeReportLine, type GeocodeStatus } from '@/lib/geocode-report
 import { LocationEditorCard } from '@/components/location/location-editor-card';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { buildGoogleMapsLink, buildLocationIdentity, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
-import { buildShiftTemplates, SHIFT_PATTERN_LABELS } from '@/lib/shift-utils';
-import type { ClientLocation, CoordinateSource, CoordinateStatus, ManagedSite, SiteShiftPattern } from '@/types/location';
+import {
+    buildDutyPointShiftTemplates,
+    buildShiftTemplates,
+    DUTY_POINT_COVERAGE_LABELS,
+    DUTY_POINT_HOURS_LABELS,
+    normalizeDutyPoint,
+    resolveSiteDutyPoints,
+    SHIFT_PATTERN_LABELS,
+} from '@/lib/shift-utils';
+import type { ClientLocation, CoordinateSource, CoordinateStatus, DutyPoint, DutyPointCoverageMode, DutyPointHours, ManagedSite, SiteShiftPattern } from '@/types/location';
 import { PageHeader } from '@/components/layout/page-header';
 import { authorizedFetch } from '@/lib/api-client';
 import {
@@ -94,6 +102,17 @@ const defaultDistrictSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
 const SITES_PER_PAGE = 10;
 const formatCoord = formatCoordinate;
 
+function createDutyPointDraft(index: number): DutyPoint {
+    return normalizeDutyPoint({
+        id: `point-${index + 1}`,
+        name: `Duty Point ${index + 1}`,
+        coverageMode: 'roundClock',
+        dutyHours: '12',
+        shiftMode: 'fixed',
+        shiftTemplates: buildDutyPointShiftTemplates('roundClock', '12'),
+    });
+}
+
 function getDistrictValidationMessage() {
     return defaultDistrictSuggestions.length > 0
         ? 'Please use a valid district for this region.'
@@ -139,7 +158,10 @@ interface SiteEditFormProps {
 }
 
 const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onClose, clients, clientLocations }) => {
-    const [formData, setFormData] = useState<Partial<Site>>(site);
+    const [formData, setFormData] = useState<Partial<Site>>({
+        ...site,
+        dutyPoints: resolveSiteDutyPoints(site),
+    });
     const { toast } = useToast();
     const filteredClientLocations = clientLocations.filter((location) => location.clientId === formData.clientId);
     const isTcsSite = (formData.clientName || '').trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
@@ -200,6 +222,7 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                             shiftMode: isTcs ? 'none' : (formData.shiftMode === 'fixed' ? 'fixed' : 'fixed'),
                             shiftPattern: isTcs ? null : (formData.shiftPattern ?? '2x12'),
                             shiftTemplates: isTcs ? [] : buildShiftTemplates((formData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
+                            dutyPoints: isTcs ? [] : ((formData.dutyPoints as DutyPoint[] | undefined)?.length ? (formData.dutyPoints as DutyPoint[]) : [createDutyPointDraft(0)]),
                         });
                     }}
                 >
@@ -253,28 +276,123 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                 </div>
             ) : (
                 <div className="grid gap-3 rounded-lg border p-4">
-                    <div className="space-y-1">
-                        <Label>Shift pattern</Label>
-                        <p className="text-xs text-muted-foreground">Attendance will resolve the expected shift from this site configuration.</p>
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="space-y-1">
+                            <Label>Duty points</Label>
+                            <p className="text-xs text-muted-foreground">Configure each post under this site and the shift timing used for attendance.</p>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFormData((current) => ({
+                                ...current,
+                                dutyPoints: [...((current.dutyPoints as DutyPoint[] | undefined) ?? []), createDutyPointDraft(((current.dutyPoints as DutyPoint[] | undefined) ?? []).length)],
+                            }))}
+                        >
+                            <ListChecks className="mr-1.5 h-3.5 w-3.5" /> Add Duty Point
+                        </Button>
                     </div>
-                    <Select
-                        value={(formData.shiftPattern as string | undefined) || '2x12'}
-                        onValueChange={(value) => updateShiftPattern(value as SiteShiftPattern)}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select shift pattern" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Object.entries(SHIFT_PATTERN_LABELS).map(([key, label]) => (
-                                <SelectItem key={key} value={key}>{label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                        {(formData.shiftTemplates || buildShiftTemplates((formData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')).map((shift) => (
-                            <div key={shift.code} className="rounded-md border bg-muted/20 p-3 text-sm">
-                                <p className="font-medium">{shift.label}</p>
-                                <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                    <div className="space-y-3">
+                        {((formData.dutyPoints as DutyPoint[] | undefined) ?? []).map((point, index) => (
+                            <div key={point.id || index} className="rounded-md border bg-muted/20 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-medium">Duty point {index + 1}</p>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-destructive"
+                                        onClick={() => setFormData((current) => ({
+                                            ...current,
+                                            dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).filter((_, itemIndex) => itemIndex !== index),
+                                        }))}
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <Label>Name</Label>
+                                        <Input
+                                            value={point.name}
+                                            onChange={(e) => setFormData((current) => ({
+                                                ...current,
+                                                dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                    itemIndex === index ? normalizeDutyPoint({ ...item, name: e.target.value }, index) : item,
+                                                ),
+                                            }))}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label>Coverage</Label>
+                                        <Select
+                                            value={point.coverageMode}
+                                            onValueChange={(value: DutyPointCoverageMode) => setFormData((current) => ({
+                                                ...current,
+                                                dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                    itemIndex === index
+                                                        ? normalizeDutyPoint({ ...item, coverageMode: value, shiftTemplates: buildDutyPointShiftTemplates(value, item.dutyHours) }, index)
+                                                        : item,
+                                                ),
+                                            }))}
+                                        >
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(DUTY_POINT_COVERAGE_LABELS).map(([value, label]) => (
+                                                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label>Duty hours</Label>
+                                        <Select
+                                            value={point.dutyHours}
+                                            onValueChange={(value: DutyPointHours) => setFormData((current) => ({
+                                                ...current,
+                                                dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                    itemIndex === index
+                                                        ? normalizeDutyPoint({ ...item, dutyHours: value, shiftTemplates: buildDutyPointShiftTemplates(item.coverageMode, value) }, index)
+                                                        : item,
+                                                ),
+                                            }))}
+                                        >
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(DUTY_POINT_HOURS_LABELS).map(([value, label]) => (
+                                                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label>Radius override</Label>
+                                        <Input
+                                            type="number"
+                                            min={50}
+                                            max={2000}
+                                            value={point.geofenceRadiusMeters ?? ''}
+                                            placeholder={`Use site radius (${formData.geofenceRadiusMeters ?? 150}m)`}
+                                            onChange={(e) => setFormData((current) => ({
+                                                ...current,
+                                                dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                    itemIndex === index
+                                                        ? normalizeDutyPoint({ ...item, geofenceRadiusMeters: e.target.value ? Number(e.target.value) : undefined }, index)
+                                                        : item,
+                                                ),
+                                            }))}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                    {point.shiftTemplates.map((shift) => (
+                                        <div key={shift.code} className="rounded-md border bg-background p-2 text-xs">
+                                            <p className="font-medium">{shift.label}</p>
+                                            <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -419,6 +537,7 @@ export default function SiteManagementPage() {
         latString: '',
         lngString: '',
         coordinateStatus: 'missing',
+        dutyPoints: [],
     });
     
     // Filters
@@ -552,6 +671,7 @@ export default function SiteManagementPage() {
                         coordinateSource: raw.coordinateSource ?? (hasValidCoordinates(raw.geolocation) ? 'manual' : undefined),
                         placeAccuracy: raw.placeAccuracy ?? undefined,
                         siteType: raw.siteType ?? 'site',
+                        dutyPoints: resolveSiteDutyPoints(raw),
                         geocodedAt: raw.geocodedAt ?? undefined,
                     } as Site;
                 })
@@ -815,6 +935,10 @@ export default function SiteManagementPage() {
                 shiftTemplates: isTcs
                     ? []
                     : (updatedData.shiftTemplates ?? editingSite.shiftTemplates ?? buildShiftTemplates(((updatedData.shiftPattern ?? editingSite.shiftPattern) as SiteShiftPattern | undefined) ?? '2x12')),
+                dutyPoints: isTcs
+                    ? []
+                    : (((updatedData.dutyPoints as DutyPoint[] | undefined) ?? (editingSite.dutyPoints as DutyPoint[] | undefined) ?? [])
+                        .map((point, index) => normalizeDutyPoint(point, index))),
                 ...buildFirestoreUpdateAudit(),
                 auditTrail: arrayUnion(
                     buildFirestoreAuditEvent('site_updated', undefined, {
@@ -1228,6 +1352,7 @@ export default function SiteManagementPage() {
                                         shiftMode: isTcs ? 'none' : 'fixed',
                                         shiftPattern: isTcs ? null : ((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
                                         shiftTemplates: isTcs ? [] : buildShiftTemplates(((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')),
+                                        dutyPoints: isTcs ? [] : (((createData.dutyPoints as DutyPoint[] | undefined) ?? []).length ? (createData.dutyPoints as DutyPoint[]) : [createDutyPointDraft(0)]),
                                     });
                                 }}
                             >
@@ -1316,34 +1441,123 @@ export default function SiteManagementPage() {
                             </div>
                         ) : (
                             <div className="grid gap-3 rounded-lg border p-4">
-                                <div className="space-y-1">
-                                    <Label>Shift pattern</Label>
-                                    <p className="text-xs text-muted-foreground">Attendance will automatically expect the next shift after the current shift ends.</p>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="space-y-1">
+                                        <Label>Duty points</Label>
+                                        <p className="text-xs text-muted-foreground">Add each duty point under this site and define how its attendance shift runs.</p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCreateData((current) => ({
+                                            ...current,
+                                            dutyPoints: [...((current.dutyPoints as DutyPoint[] | undefined) ?? []), createDutyPointDraft(((current.dutyPoints as DutyPoint[] | undefined) ?? []).length)],
+                                        }))}
+                                    >
+                                        <ListChecks className="mr-1.5 h-3.5 w-3.5" /> Add Duty Point
+                                    </Button>
                                 </div>
-                                <Select
-                                    value={(createData.shiftPattern as string | undefined) || '2x12'}
-                                    onValueChange={(value) => {
-                                        const pattern = value as SiteShiftPattern;
-                                        setCreateData({
-                                            ...createData,
-                                            shiftMode: 'fixed',
-                                            shiftPattern: pattern,
-                                            shiftTemplates: buildShiftTemplates(pattern),
-                                        });
-                                    }}
-                                >
-                                    <SelectTrigger><SelectValue placeholder="Select shift pattern" /></SelectTrigger>
-                                    <SelectContent>
-                                        {Object.entries(SHIFT_PATTERN_LABELS).map(([key, label]) => (
-                                            <SelectItem key={key} value={key}>{label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <div className="grid gap-2 sm:grid-cols-3">
-                                    {(createData.shiftTemplates || buildShiftTemplates((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')).map((shift) => (
-                                        <div key={shift.code} className="rounded-md border bg-muted/20 p-3 text-sm">
-                                            <p className="font-medium">{shift.label}</p>
-                                            <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                                <div className="space-y-3">
+                                    {((createData.dutyPoints as DutyPoint[] | undefined) ?? []).map((point, index) => (
+                                        <div key={point.id || index} className="rounded-md border bg-muted/20 p-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-sm font-medium">Duty point {index + 1}</p>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-destructive"
+                                                    onClick={() => setCreateData((current) => ({
+                                                        ...current,
+                                                        dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).filter((_, itemIndex) => itemIndex !== index),
+                                                    }))}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                                <div className="grid gap-2">
+                                                    <Label>Name</Label>
+                                                    <Input
+                                                        value={point.name}
+                                                        onChange={(e) => setCreateData((current) => ({
+                                                            ...current,
+                                                            dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                                itemIndex === index ? normalizeDutyPoint({ ...item, name: e.target.value }, index) : item,
+                                                            ),
+                                                        }))}
+                                                    />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label>Coverage</Label>
+                                                    <Select
+                                                        value={point.coverageMode}
+                                                        onValueChange={(value: DutyPointCoverageMode) => setCreateData((current) => ({
+                                                            ...current,
+                                                            dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                                itemIndex === index
+                                                                    ? normalizeDutyPoint({ ...item, coverageMode: value, shiftTemplates: buildDutyPointShiftTemplates(value, item.dutyHours) }, index)
+                                                                    : item,
+                                                            ),
+                                                        }))}
+                                                    >
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {Object.entries(DUTY_POINT_COVERAGE_LABELS).map(([value, label]) => (
+                                                                <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label>Duty hours</Label>
+                                                    <Select
+                                                        value={point.dutyHours}
+                                                        onValueChange={(value: DutyPointHours) => setCreateData((current) => ({
+                                                            ...current,
+                                                            dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                                itemIndex === index
+                                                                    ? normalizeDutyPoint({ ...item, dutyHours: value, shiftTemplates: buildDutyPointShiftTemplates(item.coverageMode, value) }, index)
+                                                                    : item,
+                                                            ),
+                                                        }))}
+                                                    >
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {Object.entries(DUTY_POINT_HOURS_LABELS).map(([value, label]) => (
+                                                                <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label>Radius override</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min={50}
+                                                        max={2000}
+                                                        value={point.geofenceRadiusMeters ?? ''}
+                                                        placeholder={`Use site radius (${createData.geofenceRadiusMeters ?? 150}m)`}
+                                                        onChange={(e) => setCreateData((current) => ({
+                                                            ...current,
+                                                            dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
+                                                                itemIndex === index
+                                                                    ? normalizeDutyPoint({ ...item, geofenceRadiusMeters: e.target.value ? Number(e.target.value) : undefined }, index)
+                                                                    : item,
+                                                            ),
+                                                        }))}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                                {point.shiftTemplates.map((shift) => (
+                                                    <div key={shift.code} className="rounded-md border bg-background p-2 text-xs">
+                                                        <p className="font-medium">{shift.label}</p>
+                                                        <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1410,6 +1624,9 @@ export default function SiteManagementPage() {
                                     shiftMode: isTcs ? 'none' : 'fixed',
                                     shiftPattern: isTcs ? null : ((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12'),
                                     shiftTemplates: isTcs ? [] : (createData.shiftTemplates || buildShiftTemplates((createData.shiftPattern as SiteShiftPattern | undefined) ?? '2x12')),
+                                    dutyPoints: isTcs
+                                        ? []
+                                        : (((createData.dutyPoints as DutyPoint[] | undefined) ?? []).map((point, index) => normalizeDutyPoint(point, index))),
                                     clientLocationId: createData.clientLocationId ?? null,
                                     clientLocationName: createData.clientLocationName ?? null,
                                     locationKey: buildLocationIdentity([createData.clientName, createData.siteName, normalizedDistrict]),
@@ -1423,7 +1640,7 @@ export default function SiteManagementPage() {
                                 });
                                 toast({ title: 'Site Created', description: 'The new site has been added.' });
                                 setIsCreateOpen(false);
-                                setCreateData({ clientId: operationalClient?.id || '', clientName: operationalClient?.name || '', siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, strictGeofence: true, siteType: 'site', latString: '', lngString: '', coordinateStatus: 'missing', shiftMode: operationalClient ? 'none' : undefined });
+                                setCreateData({ clientId: operationalClient?.id || '', clientName: operationalClient?.name || '', siteName: '', siteAddress: '', district: '', geofenceRadiusMeters: 150, strictGeofence: true, siteType: 'site', latString: '', lngString: '', coordinateStatus: 'missing', shiftMode: operationalClient ? 'none' : undefined, dutyPoints: [] });
                                 fetchSites('first');
                                 setCurrentPage(1);
                                 void fetchNeedsReviewSites();

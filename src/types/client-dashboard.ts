@@ -5,7 +5,25 @@ export type ClientDashboardLiveAttendanceRow = {
   status: "In" | "Out";
   siteId: string;
   siteName: string;
+  dutyPointName?: string;
+  shiftLabel?: string;
   reportedAt: string | null;
+};
+
+export type ClientDashboardShiftSnapshot = {
+  code: string;
+  label: string;
+  checkedInToday: number;
+  onDutyNow: number;
+};
+
+export type ClientDashboardDutyPointSnapshot = {
+  id: string;
+  name: string;
+  checkedInToday: number;
+  onDutyNow: number;
+  activeShiftLabel?: string | null;
+  shifts?: ClientDashboardShiftSnapshot[];
 };
 
 export type ClientDashboardSiteSnapshot = {
@@ -16,6 +34,7 @@ export type ClientDashboardSiteSnapshot = {
   onDutyNow: number;
   upcomingDuties: number;
   nextDutyDate: string | null;
+  dutyPoints?: ClientDashboardDutyPointSnapshot[];
 };
 
 export type ClientDashboardWorkOrderRow = {

@@ -122,6 +122,7 @@ export async function GET(request: Request) {
       attendanceDate: string;
       status: string;
       siteName?: string;
+      dutyPointName?: string;
       reportedAt?: FirebaseFirestore.Timestamp;
       distanceMeters?: number;
       shiftLabel?: string;
@@ -150,6 +151,7 @@ export async function GET(request: Request) {
       date: l.attendanceDate ?? "",
       status: l.status as "In" | "Out",
       siteName: l.siteName ?? "",
+      dutyPointName: l.dutyPointName ?? "",
       time: toISTTimeString(l.reportedAt ?? undefined),
     }));
 

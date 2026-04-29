@@ -6,8 +6,10 @@ import {
   resolveClientScope,
 } from "@/lib/server/client-access";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
+import { resolveSiteDutyPoints, resolveSiteShift } from "@/lib/shift-utils";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import type {
+  ClientDashboardDutyPointSnapshot,
   ClientDashboardGuardHighlight,
   ClientDashboardLiveAttendanceRow,
   ClientDashboardPayload,
@@ -83,6 +85,7 @@ export async function GET(request: Request) {
     if (!scope) {
       return unauthorizedResponse("Client account is not linked to a valid client profile.", 403);
     }
+    const isOperationalClient = isOperationalWorkOrderClientName(scope.clientName);
 
     // Load per-client dashboard module visibility config
     let dashboardModules: Required<ClientDashboardModulesConfig> = resolveClientModules(null);
@@ -93,6 +96,9 @@ export async function GET(request: Request) {
         const modulesConfig = clientData.dashboardModules as ClientDashboardModulesConfig | undefined;
         dashboardModules = resolveClientModules(modulesConfig);
       }
+    }
+    if (!isOperationalClient) {
+      dashboardModules = { ...dashboardModules, workOrders: false };
     }
 
     const today = new Date();
@@ -110,7 +116,7 @@ export async function GET(request: Request) {
       .limit(500)
       .get();
     const workOrdersPromise: Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }> =
-      normalizeText(scope.clientName).toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase()
+      isOperationalClient
         ? (adminDb.collection("workOrders").where("clientName", "==", OPERATIONAL_CLIENT_NAME).get() as any)
         : Promise.resolve({ docs: [] });
     const sitesPromise = scope.clientId
@@ -227,6 +233,8 @@ export async function GET(request: Request) {
         status: log.status === "Out" ? "Out" : "In",
         siteId: normalizeText(log.siteId),
         siteName: normalizeText(log.siteName || log.locationText || "Site"),
+        dutyPointName: normalizeText(log.dutyPointName),
+        shiftLabel: normalizeText(log.shiftLabel),
         reportedAt:
           serializeDate(log.reportedAt) ??
           serializeDate(log.createdAt) ??
@@ -278,6 +286,11 @@ export async function GET(request: Request) {
       .filter((site) => matchesClientScope(site, scope));
 
     const attendanceBySite = new Map<string, { checkedIn: Set<string>; onDuty: Set<string> }>();
+    const attendanceByDutyPoint = new Map<string, { checkedIn: Set<string>; onDuty: Set<string> }>();
+    const attendanceByDutyPointShift = new Map<
+      string,
+      Map<string, { code: string; label: string; checkedIn: Set<string>; onDuty: Set<string> }>
+    >();
     for (const log of todayLogs) {
       const siteKey = normalizeText(log.siteId || log.siteName || log.locationText);
       if (!siteKey) continue;
@@ -289,6 +302,33 @@ export async function GET(request: Request) {
       if (log.status === "In") {
         entry.checkedIn.add(employeeId);
       }
+      const dutyKey = `${siteKey}::${normalizeText(log.dutyPointId || log.dutyPointName)}`;
+      if (!attendanceByDutyPoint.has(dutyKey)) {
+        attendanceByDutyPoint.set(dutyKey, { checkedIn: new Set<string>(), onDuty: new Set<string>() });
+      }
+      if (log.status === "In") {
+        attendanceByDutyPoint.get(dutyKey)!.checkedIn.add(employeeId);
+      }
+      const shiftCode = normalizeText(log.shiftCode);
+      const shiftLabel = normalizeText(log.shiftLabel || shiftCode || "Shift");
+      if (shiftCode || shiftLabel) {
+        if (!attendanceByDutyPointShift.has(dutyKey)) {
+          attendanceByDutyPointShift.set(dutyKey, new Map());
+        }
+        const shiftMap = attendanceByDutyPointShift.get(dutyKey)!;
+        const shiftKey = shiftCode || shiftLabel;
+        if (!shiftMap.has(shiftKey)) {
+          shiftMap.set(shiftKey, {
+            code: shiftCode || shiftKey,
+            label: shiftLabel || shiftKey,
+            checkedIn: new Set<string>(),
+            onDuty: new Set<string>(),
+          });
+        }
+        if (log.status === "In") {
+          shiftMap.get(shiftKey)!.checkedIn.add(employeeId);
+        }
+      }
     }
 
     for (const [employeeId, log] of latestByEmployee.entries()) {
@@ -298,6 +338,29 @@ export async function GET(request: Request) {
         attendanceBySite.set(siteKey, { checkedIn: new Set<string>(), onDuty: new Set<string>() });
       }
       attendanceBySite.get(siteKey)!.onDuty.add(employeeId);
+      const dutyKey = `${siteKey}::${normalizeText(log.dutyPointId || log.dutyPointName)}`;
+      if (!attendanceByDutyPoint.has(dutyKey)) {
+        attendanceByDutyPoint.set(dutyKey, { checkedIn: new Set<string>(), onDuty: new Set<string>() });
+      }
+      attendanceByDutyPoint.get(dutyKey)!.onDuty.add(employeeId);
+      const shiftCode = normalizeText(log.shiftCode);
+      const shiftLabel = normalizeText(log.shiftLabel || shiftCode || "Shift");
+      if (shiftCode || shiftLabel) {
+        if (!attendanceByDutyPointShift.has(dutyKey)) {
+          attendanceByDutyPointShift.set(dutyKey, new Map());
+        }
+        const shiftMap = attendanceByDutyPointShift.get(dutyKey)!;
+        const shiftKey = shiftCode || shiftLabel;
+        if (!shiftMap.has(shiftKey)) {
+          shiftMap.set(shiftKey, {
+            code: shiftCode || shiftKey,
+            label: shiftLabel || shiftKey,
+            checkedIn: new Set<string>(),
+            onDuty: new Set<string>(),
+          });
+        }
+        shiftMap.get(shiftKey)!.onDuty.add(employeeId);
+      }
     }
 
     const workOrdersBySite = new Map<
@@ -320,6 +383,34 @@ export async function GET(request: Request) {
         const siteKey = normalizeText(site.id || site.siteId || site.siteName);
         const attendance = attendanceBySite.get(siteKey) ?? { checkedIn: new Set<string>(), onDuty: new Set<string>() };
         const duty = workOrdersBySite.get(siteKey) ?? { upcomingDuties: 0, nextDutyDate: null };
+        const dutyPoints = resolveSiteDutyPoints(site as any);
+        const dutyPointSnapshots: ClientDashboardDutyPointSnapshot[] = dutyPoints.map((point) => {
+          const pointKey = `${siteKey}::${normalizeText(point.id || point.name)}`;
+          const pointAttendance = attendanceByDutyPoint.get(pointKey) ?? {
+            checkedIn: new Set<string>(),
+            onDuty: new Set<string>(),
+          };
+          const shiftAttendance = attendanceByDutyPointShift.get(pointKey);
+          const activeShift = resolveSiteShift(point.shiftMode, point.shiftTemplates, today);
+          return {
+            id: point.id,
+            name: point.name,
+            checkedInToday: pointAttendance.checkedIn.size,
+            onDutyNow: pointAttendance.onDuty.size,
+            activeShiftLabel: activeShift?.label ?? null,
+            shifts:
+              shiftAttendance && shiftAttendance.size > 0
+                ? Array.from(shiftAttendance.values())
+                    .map((shift) => ({
+                      code: shift.code,
+                      label: shift.label,
+                      checkedInToday: shift.checkedIn.size,
+                      onDutyNow: shift.onDuty.size,
+                    }))
+                    .sort((left, right) => right.onDutyNow - left.onDutyNow || left.label.localeCompare(right.label))
+                : [],
+          };
+        });
         return {
           siteId: normalizeText(site.id || site.siteId),
           siteName: normalizeText(site.siteName || "Site"),
@@ -328,6 +419,7 @@ export async function GET(request: Request) {
           onDutyNow: attendance.onDuty.size,
           upcomingDuties: duty.upcomingDuties,
           nextDutyDate: duty.nextDutyDate,
+          dutyPoints: dutyPointSnapshots,
         };
       })
       .sort((left, right) => {

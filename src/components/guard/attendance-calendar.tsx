@@ -12,6 +12,7 @@ export interface AttendanceLog {
   date: string;       // YYYY-MM-DD
   status: "In" | "Out";
   siteName: string;
+  dutyPointName?: string;
   time: string;
   distanceMeters?: number;
   shiftLabel?: string;

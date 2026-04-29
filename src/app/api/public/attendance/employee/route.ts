@@ -26,9 +26,34 @@ export async function GET(request: NextRequest) {
     }
 
     const doc = snapshot.docs[0];
+    const attendanceStateSnap = await db.collection("attendanceState").doc(doc.id).get();
+    const attendanceState = attendanceStateSnap.exists
+      ? (attendanceStateSnap.data() as Record<string, unknown>)
+      : null;
+
     const employee = buildPublicAttendanceEmployee(
       doc.id,
       doc.data() as Record<string, unknown>,
+      attendanceState
+        ? {
+            lastAttendanceDate:
+              typeof attendanceState.lastAttendanceDate === "string"
+                ? attendanceState.lastAttendanceDate
+                : undefined,
+            lastStatus:
+              attendanceState.lastStatus === "In" || attendanceState.lastStatus === "Out"
+                ? attendanceState.lastStatus
+                : undefined,
+            lastDutyPointId:
+              typeof attendanceState.lastDutyPointId === "string"
+                ? attendanceState.lastDutyPointId
+                : undefined,
+            lastShiftCode:
+              typeof attendanceState.lastShiftCode === "string"
+                ? attendanceState.lastShiftCode
+                : undefined,
+          }
+        : undefined,
     );
 
     return NextResponse.json({ found: true, employee });

@@ -10,7 +10,7 @@ import { matchesClientScope, resolveClientScope } from "@/lib/server/client-acce
 
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
-    return "employeeName,employeeId,status,clientName,district,siteName,locationText,complianceStatus,complianceWarnings,requiresLocationReview,isMockLocationSuspected,gpsAccuracyMeters,reportedAt,createdAt\n";
+    return "employeeName,employeeId,status,clientName,district,siteName,dutyPointName,locationText,complianceStatus,complianceWarnings,requiresLocationReview,isMockLocationSuspected,gpsAccuracyMeters,reportedAt,createdAt\n";
   }
 
   const headers = Object.keys(rows[0]);
@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
           clientName: data.clientName || "",
           district: data.district || "",
           siteName: data.siteName || "",
+          dutyPointName: data.dutyPointName || "",
           locationText: data.locationText || "",
           complianceStatus: data.photoCompliance?.overallStatus || "",
           complianceWarnings: Array.isArray(data.photoCompliance?.warnings)

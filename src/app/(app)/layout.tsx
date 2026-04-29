@@ -163,6 +163,7 @@ function DesktopSidebar({
   onLogout,
   collapsed,
   isSuperAdmin,
+  clientInfo,
 }: {
   userRole: string | null;
   isSettingsPage: boolean;
@@ -170,8 +171,9 @@ function DesktopSidebar({
   onLogout: () => void;
   collapsed: boolean;
   isSuperAdmin?: boolean;
+  clientInfo?: { clientId: string; clientName: string } | null;
 }) {
-  const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin);
+  const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin, clientInfo);
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin';
   const initials = displayName.slice(0, 2).toUpperCase();
   const roleBadge = userRole === 'admin' ? 'Administrator'
@@ -436,6 +438,7 @@ function MobileMoreSheet({
   onLogout,
   isSettingsPage,
   isSuperAdmin,
+  clientInfo,
 }: {
   open: boolean;
   onOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
@@ -444,8 +447,9 @@ function MobileMoreSheet({
   onLogout: () => void;
   isSettingsPage: boolean;
   isSuperAdmin?: boolean;
+  clientInfo?: { clientId: string; clientName: string } | null;
 }) {
-  const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin);
+  const visibleGroups = getVisibleGroups(mainNavGroups, userRole, isSuperAdmin, clientInfo);
   const { haptic } = useHaptics();
   const close = () => { haptic('light'); onOpenChange(false); };
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'Admin';
@@ -867,7 +871,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const isSettingsPage = pathname.startsWith('/settings');
-  const visibleBottomNavItems = getVisibleNavItems(bottomNavItems, userRole, isSuperAdmin);
+  const visibleBottomNavItems = getVisibleNavItems(bottomNavItems, userRole, isSuperAdmin, clientInfo);
 
   // Is the "More" sheet active state — active when showing non-bottom-nav routes
   const isMoreActive = moreSheetOpen || (
@@ -892,6 +896,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           onLogout={handleLogout}
           collapsed={sidebarCollapsed}
           isSuperAdmin={isSuperAdmin}
+          clientInfo={clientInfo}
         />
       </div>
 
@@ -940,6 +945,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           onLogout={handleLogout}
           isSettingsPage={isSettingsPage}
           isSuperAdmin={isSuperAdmin}
+          clientInfo={clientInfo}
         />
       )}
     </div>

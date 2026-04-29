@@ -28,6 +28,7 @@ export function useSites(clientId?: string, clientName?: string) {
               geofenceRadiusMeters: data.geofenceRadiusMeters,
               strictGeofence: data.strictGeofence,
               coordinateStatus: data.coordinateStatus,
+              dutyPoints: Array.isArray(data.dutyPoints) ? data.dutyPoints : [],
             } as ManagedSite;
           })
           .filter((site) => {

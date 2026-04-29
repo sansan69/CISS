@@ -68,6 +68,7 @@ export async function GET(request: Request) {
         attendanceDate?: string;
         status?: string;
         siteName?: string;
+        dutyPointName?: string;
         reportedAt?: FirebaseFirestore.Timestamp;
         distanceMeters?: number;
         shiftLabel?: string;
@@ -77,6 +78,7 @@ export async function GET(request: Request) {
         date: data.attendanceDate ?? "",
         status: (data.status ?? "In") as "In" | "Out",
         siteName: data.siteName ?? "",
+        dutyPointName: data.dutyPointName ?? "",
         time: toISTTimeString(data.reportedAt ?? undefined),
         distanceMeters: data.distanceMeters,
         shiftLabel: data.shiftLabel,

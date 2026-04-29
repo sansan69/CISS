@@ -229,7 +229,10 @@ export function ClientOperationsDashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{row.employeeName}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {row.siteName || "Site"} · {formatDateTime(row.reportedAt)}
+                        {row.siteName || "Site"}
+                        {row.dutyPointName ? ` · ${row.dutyPointName}` : ""}
+                        {row.shiftLabel ? ` · ${row.shiftLabel}` : ""}
+                        {` · ${formatDateTime(row.reportedAt)}`}
                       </p>
                     </div>
                     <Badge variant={row.status === "In" ? "active" : "secondary"}>{row.status}</Badge>
@@ -274,6 +277,39 @@ export function ClientOperationsDashboard() {
                       <span>{site.upcomingDuties} upcoming duty slots</span>
                       <span>{formatDateOnly(site.nextDutyDate)}</span>
                     </div>
+                    {site.dutyPoints && site.dutyPoints.length > 0 && (
+                      <div className="mt-3 space-y-2 rounded-2xl bg-muted/40 p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Duty points
+                        </p>
+                        {site.dutyPoints.map((point) => (
+                          <div key={point.id} className="flex items-center justify-between gap-3 text-sm">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{point.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {point.activeShiftLabel || "Shift not active right now"}
+                              </p>
+                              {point.shifts && point.shifts.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {point.shifts.map((shift) => (
+                                    <span
+                                      key={`${point.id}-${shift.code}`}
+                                      className="rounded-full bg-background px-2 py-1 text-[11px] text-muted-foreground"
+                                    >
+                                      {shift.label}: {shift.onDutyNow} on duty
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="text-right text-xs text-muted-foreground">
+                              <p>{point.onDutyNow} on duty</p>
+                              <p>{point.checkedInToday} checked in</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))
               )}

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { haversineDistanceMeters } from "@/lib/geo";
-import { resolveSiteShift, getNextShift } from "@/lib/shift-utils";
+import {
+  getNextShift,
+  resolveShiftByCode,
+  resolveSiteDutyPoints,
+  resolveSiteShift,
+} from "@/lib/shift-utils";
 import {
   DEFAULT_GEOFENCE_RADIUS_METERS,
   DEFAULT_GPS_ACCURACY_LIMIT_METERS,
@@ -13,6 +18,7 @@ import {
   type AttendanceSubmission,
   type AttendancePhotoCompliance,
 } from "@/types/attendance";
+import type { ShiftTemplate, SiteShiftMode } from "@/types/location";
 import { buildServerAuditEvent } from "@/lib/server/audit";
 import {
   SYSTEM_METRIC_NAMES,
@@ -197,12 +203,47 @@ export async function POST(request: NextRequest) {
       const isTcsSite =
         String(siteData.clientName || "").trim().toLowerCase() ===
         OPERATIONAL_CLIENT_NAME.toLowerCase();
-      const siteShiftMode = siteData.shiftMode === "fixed" ? "fixed" : "none";
-      const siteShiftTemplates = Array.isArray(siteData.shiftTemplates)
-        ? siteData.shiftTemplates
-        : [];
-      const resolvedShift = resolveSiteShift(siteShiftMode, siteShiftTemplates, new Date());
-      const nextShift = getNextShift(siteShiftMode, siteShiftTemplates, resolvedShift?.code);
+      const configuredDutyPoints =
+        sourceCol === "sites" ? resolveSiteDutyPoints(siteData as any) : [];
+      const selectedDutyPoint =
+        configuredDutyPoints.find((point) => point.id === payload.dutyPointId) ??
+        configuredDutyPoints.find((point) => point.name === payload.dutyPointName) ??
+        (configuredDutyPoints.length === 1 ? configuredDutyPoints[0] : null);
+
+      if (!isTcsSite && configuredDutyPoints.length > 0 && !selectedDutyPoint) {
+        throw new AttendanceError("Select a valid duty point for this site.");
+      }
+
+      const activeShiftSource: {
+        shiftMode: SiteShiftMode;
+        shiftTemplates: ShiftTemplate[];
+      } = selectedDutyPoint
+        ? {
+            shiftMode: selectedDutyPoint.shiftMode,
+            shiftTemplates: selectedDutyPoint.shiftTemplates,
+          }
+        : {
+            shiftMode: siteData.shiftMode === "fixed" ? "fixed" : "none",
+            shiftTemplates: Array.isArray(siteData.shiftTemplates)
+              ? (siteData.shiftTemplates as ShiftTemplate[])
+              : [],
+          };
+      const resolvedShift = resolveSiteShift(
+        activeShiftSource.shiftMode,
+        activeShiftSource.shiftTemplates,
+        reportedAtDate,
+      );
+      const selectedShift = resolveShiftByCode(
+        activeShiftSource.shiftMode,
+        activeShiftSource.shiftTemplates,
+        payload.shiftCode,
+      );
+      const effectiveShift = selectedShift ?? resolvedShift;
+      const nextShift = getNextShift(
+        activeShiftSource.shiftMode,
+        activeShiftSource.shiftTemplates,
+        effectiveShift?.code,
+      );
 
       if (isTcsSite) {
         const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
@@ -243,9 +284,11 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
-        if (siteShiftMode === "fixed" && !resolvedShift) {
+        if (activeShiftSource.shiftMode === "fixed" && !effectiveShift) {
           throw new AttendanceError(
-            "No active fixed shift matches the current time for this site. Please contact admin.",
+            selectedDutyPoint
+              ? `Select a valid shift configured for duty point "${selectedDutyPoint.name}".`
+              : "Select a valid shift configured for this site before submitting attendance.",
           );
         }
       }
@@ -258,6 +301,8 @@ export async function POST(request: NextRequest) {
       );
 
       const allowedRadiusMeters = getAllowedRadiusMeters(siteData);
+      const effectiveRadiusMeters =
+        selectedDutyPoint?.geofenceRadiusMeters ?? allowedRadiusMeters;
       const siteIsStrictGeofence = siteData.strictGeofence !== false;
       const gpsAccuracyMeters =
         payload.gpsAccuracyMeters ??
@@ -276,9 +321,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (actualDistance > allowedRadiusMeters && siteIsStrictGeofence) {
+      if (actualDistance > effectiveRadiusMeters && siteIsStrictGeofence) {
         throw new AttendanceError(
-          `Attendance can only be recorded within ${allowedRadiusMeters} meters of the site. Current distance: ${Math.round(actualDistance)} meters.`,
+          `Attendance can only be recorded within ${effectiveRadiusMeters} meters of the site. Current distance: ${Math.round(actualDistance)} meters.`,
         );
       }
 
@@ -328,8 +373,8 @@ export async function POST(request: NextRequest) {
         (typeof payload.mockLocationReason === "string" &&
           payload.mockLocationReason.trim().length > 0);
       const locationReviewWarning =
-        actualDistance > allowedRadiusMeters && !siteIsStrictGeofence
-          ? `Location is ${Math.round(actualDistance)}m away from the configured site radius of ${allowedRadiusMeters}m.`
+        actualDistance > effectiveRadiusMeters && !siteIsStrictGeofence
+          ? `Location is ${Math.round(actualDistance)}m away from the configured site radius of ${effectiveRadiusMeters}m.`
           : isMockLocationSuspected
             ? payload.mockLocationReason?.trim() ||
               "Location looks suspicious and requires admin review."
@@ -346,11 +391,13 @@ export async function POST(request: NextRequest) {
         district: normalizeDistrictName(payload.district),
         siteId: payload.siteId,
         siteName: payload.siteName,
+        dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
+        dutyPointName: selectedDutyPoint?.name ?? payload.dutyPointName ?? null,
         clientName: siteData.clientName || payload.clientName || null,
-        shiftCode: payload.shiftCode ?? resolvedShift?.code ?? null,
-        shiftLabel: payload.shiftLabel ?? resolvedShift?.label ?? null,
-        shiftStartTime: payload.shiftStartTime ?? resolvedShift?.startTime ?? null,
-        shiftEndTime: payload.shiftEndTime ?? resolvedShift?.endTime ?? null,
+        shiftCode: effectiveShift?.code ?? payload.shiftCode ?? null,
+        shiftLabel: effectiveShift?.label ?? payload.shiftLabel ?? null,
+        shiftStartTime: effectiveShift?.startTime ?? payload.shiftStartTime ?? null,
+        shiftEndTime: effectiveShift?.endTime ?? payload.shiftEndTime ?? null,
         nextShiftCode: payload.nextShiftCode ?? nextShift?.code ?? null,
         nextShiftStartsAt: payload.nextShiftStartsAt ?? nextShift?.startTime ?? null,
         siteCoords,
@@ -360,7 +407,7 @@ export async function POST(request: NextRequest) {
         gpsAccuracyMeters:
           typeof gpsAccuracyMeters === "number" ? Math.round(gpsAccuracyMeters) : null,
         locationAccuracyMeters: payload.locationAccuracyMeters ?? null,
-        geofenceRadiusAtTime: allowedRadiusMeters,
+        geofenceRadiusAtTime: effectiveRadiusMeters,
         strictGeofence: siteIsStrictGeofence,
         isMockLocationSuspected,
         mockLocationReason: payload.mockLocationReason ?? null,
@@ -389,7 +436,8 @@ export async function POST(request: NextRequest) {
           employeeName: payload.employeeName,
           lastStatus: payload.status,
           lastSiteId: payload.siteId,
-          lastShiftCode: payload.shiftCode ?? resolvedShift?.code ?? null,
+          lastDutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
+          lastShiftCode: effectiveShift?.code ?? payload.shiftCode ?? null,
           lastAttendanceDate: attendanceDate,
           lastLoggedAt: now,
           updatedAt: now,

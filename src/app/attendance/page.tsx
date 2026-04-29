@@ -16,7 +16,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { haversineDistanceMeters, validateLocation } from '@/lib/geo';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { getNextShift, resolveSiteShift } from '@/lib/shift-utils';
+import {
+  DUTY_POINT_COVERAGE_LABELS,
+  DUTY_POINT_HOURS_LABELS,
+  getNextShift,
+  resolveShiftByCode,
+  resolveSiteShift,
+} from '@/lib/shift-utils';
 import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
 import { parseEmployeeIdFromQrText } from '@/lib/qr/employee-qr';
 import { startHybridQrScanner } from '@/lib/qr/scanner-engine';
@@ -28,7 +34,7 @@ import type {
   DeviceAttendanceHistoryItem,
   QueuedAttendanceSubmission,
 } from '@/types/attendance';
-import type { ShiftTemplate } from '@/types/location';
+import type { DutyPoint, ShiftTemplate } from '@/types/location';
 import type { QrScannerErrorCode, QrScannerSession } from '@/lib/qr/scanner-types';
 
 type SiteOption = {
@@ -44,6 +50,7 @@ type SiteOption = {
   shiftMode?: 'none' | 'fixed';
   shiftPattern?: '2x12' | '3x8' | null;
   shiftTemplates?: ShiftTemplate[];
+  dutyPoints?: DutyPoint[];
   sourceCollection: 'sites' | 'clientLocations';
 };
 
@@ -53,6 +60,12 @@ type ScannedEmployee = {
   fullName: string;
   phoneNumber?: string;
   clientName?: string;
+  attendanceHint?: {
+    lastAttendanceDate?: string;
+    lastStatus?: 'In' | 'Out';
+    lastDutyPointId?: string;
+    lastShiftCode?: string;
+  };
 };
 
 type SuggestedSite = SiteOption & {
@@ -120,12 +133,15 @@ export default function AttendancePage() {
   const [locationCapturedAt, setLocationCapturedAt] = useState<string | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+  const [selectedDutyPointId, setSelectedDutyPointId] = useState<string>("");
+  const [selectedShiftCode, setSelectedShiftCode] = useState<string>("");
   const [allSites, setAllSites] = useState<SiteOption[]>([]);
   const [isLoadingCenters, setIsLoadingCenters] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<'In' | 'Out'>('In');
   const [scannedEmployee, setScannedEmployee] = useState<ScannedEmployee | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
   const [hasManualCenterOverride, setHasManualCenterOverride] = useState(false);
+  const [hasManualShiftOverride, setHasManualShiftOverride] = useState(false);
   const [autoDetectedSite, setAutoDetectedSite] = useState<SuggestedSite | null>(null);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   
@@ -151,8 +167,6 @@ export default function AttendancePage() {
 
   const { toast } = useToast();
 
-  // Simplified: we only require a captured photo and a resolved employee
-  const isSelectionComplete = !!selectedDistrict && !!selectedSiteId;
   const districtOptions = useMemo(
     () => Array.from(new Set(allSites.map((site) => site.district).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [allSites],
@@ -162,14 +176,86 @@ export default function AttendancePage() {
     () => allSites.find((site) => site.id === selectedSiteId) ?? null,
     [allSites, selectedSiteId],
   );
-  const resolvedShift = useMemo(
-    () => resolveSiteShift(selectedSite?.shiftMode, selectedSite?.shiftTemplates, new Date()),
+  const dutyPointOptions = useMemo(
+    () => (selectedSite?.sourceCollection === 'sites' ? selectedSite.dutyPoints || [] : []),
     [selectedSite],
   );
-  const nextResolvedShift = useMemo(
-    () => getNextShift(selectedSite?.shiftMode, selectedSite?.shiftTemplates, resolvedShift?.code),
-    [selectedSite, resolvedShift],
+  const selectedDutyPoint = useMemo(
+    () => dutyPointOptions.find((point) => point.id === selectedDutyPointId) ?? null,
+    [dutyPointOptions, selectedDutyPointId],
   );
+  const shiftTemplates = useMemo(
+    () => selectedDutyPoint?.shiftTemplates ?? selectedSite?.shiftTemplates ?? [],
+    [selectedDutyPoint, selectedSite],
+  );
+  const shiftMode = selectedDutyPoint?.shiftMode ?? selectedSite?.shiftMode ?? 'none';
+  const requiresDutyPointSelection = dutyPointOptions.length > 0;
+  const requiresShiftSelection = shiftMode === 'fixed' && shiftTemplates.length > 0;
+  const isSelectionComplete =
+    !!selectedDistrict &&
+    !!selectedSiteId &&
+    (!requiresDutyPointSelection || !!selectedDutyPointId);
+  const autoDetectedShift = useMemo(
+    () =>
+      resolveSiteShift(
+        shiftMode,
+        shiftTemplates,
+        currentTime ?? new Date(),
+      ),
+    [currentTime, shiftMode, shiftTemplates],
+  );
+  const selectedShift = useMemo(
+    () => resolveShiftByCode(shiftMode, shiftTemplates, selectedShiftCode),
+    [selectedShiftCode, shiftMode, shiftTemplates],
+  );
+  const resolvedShift = selectedShift ?? autoDetectedShift;
+  const nextResolvedShift = useMemo(
+    () =>
+      getNextShift(
+        shiftMode,
+        shiftTemplates,
+        resolvedShift?.code,
+      ),
+    [resolvedShift, shiftMode, shiftTemplates],
+  );
+
+  const pickDefaultDutyPoint = useCallback((points: DutyPoint[]) => {
+    if (points.length === 0) return "";
+    const activeNow =
+      points.find((point) => resolveSiteShift(point.shiftMode, point.shiftTemplates, currentTime ?? new Date())) ??
+      null;
+    return activeNow?.id ?? points[0]?.id ?? "";
+  }, [currentTime]);
+
+  const pickSuggestedShiftCode = useCallback((templates: ShiftTemplate[]) => {
+    if (templates.length === 0) return "";
+
+    const sameDutyPointAsLastShift =
+      !selectedDutyPointId ||
+      !scannedEmployee?.attendanceHint?.lastDutyPointId ||
+      scannedEmployee.attendanceHint.lastDutyPointId === selectedDutyPointId;
+
+    if (sameDutyPointAsLastShift && scannedEmployee?.attendanceHint?.lastShiftCode) {
+      const matchedShift = templates.find(
+        (shift) => shift.code === scannedEmployee.attendanceHint?.lastShiftCode,
+      );
+      if (matchedShift) {
+        if (selectedStatus === 'Out') {
+          return matchedShift.code;
+        }
+        if (scannedEmployee.attendanceHint.lastStatus === 'Out') {
+          return getNextShift('fixed', templates, matchedShift.code)?.code ?? matchedShift.code;
+        }
+        return matchedShift.code;
+      }
+    }
+
+    if (autoDetectedShift) {
+      return autoDetectedShift.code;
+    }
+
+    return templates[0]?.code ?? "";
+  }, [autoDetectedShift, scannedEmployee?.attendanceHint, selectedDutyPointId, selectedStatus]);
 
   const districtSiteOptions = useMemo(() => {
     if (!selectedDistrict) return [];
@@ -330,6 +416,60 @@ export default function AttendancePage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!selectedSite) {
+      if (selectedDutyPointId) {
+        setSelectedDutyPointId('');
+      }
+      if (selectedShiftCode) {
+        setSelectedShiftCode('');
+      }
+      if (hasManualShiftOverride) {
+        setHasManualShiftOverride(false);
+      }
+      return;
+    }
+
+    if (selectedSite.sourceCollection !== 'sites' || dutyPointOptions.length === 0) {
+      if (selectedDutyPointId) {
+        setSelectedDutyPointId('');
+      }
+      return;
+    }
+
+    if (!dutyPointOptions.some((point) => point.id === selectedDutyPointId)) {
+      setSelectedDutyPointId(pickDefaultDutyPoint(dutyPointOptions));
+    }
+  }, [dutyPointOptions, hasManualShiftOverride, pickDefaultDutyPoint, selectedDutyPointId, selectedShiftCode, selectedSite]);
+
+  useEffect(() => {
+    if (shiftMode !== 'fixed' || shiftTemplates.length === 0) {
+      if (selectedShiftCode) {
+        setSelectedShiftCode('');
+      }
+      if (hasManualShiftOverride) {
+        setHasManualShiftOverride(false);
+      }
+      return;
+    }
+
+    const isCurrentShiftValid = shiftTemplates.some((shift) => shift.code === selectedShiftCode);
+    if (hasManualShiftOverride && isCurrentShiftValid) {
+      return;
+    }
+
+    const suggestedShiftCode = pickSuggestedShiftCode(shiftTemplates);
+    if (suggestedShiftCode && suggestedShiftCode !== selectedShiftCode) {
+      setSelectedShiftCode(suggestedShiftCode);
+    }
+  }, [
+    hasManualShiftOverride,
+    pickSuggestedShiftCode,
+    selectedShiftCode,
+    shiftMode,
+    shiftTemplates,
+  ]);
+
   // Cleanup camera stream and QR scanner when the component unmounts to prevent
   // media track leaks if the user navigates away while the camera is active.
   useEffect(() => {
@@ -374,6 +514,13 @@ export default function AttendancePage() {
     setAutoDetectedSite(site);
     setSelectedDistrict(site.district);
     setSelectedSiteId(site.id);
+    setHasManualShiftOverride(false);
+    setSelectedShiftCode('');
+    const defaultDutyPoint =
+      site.sourceCollection === 'sites' && Array.isArray(site.dutyPoints)
+        ? pickDefaultDutyPoint(site.dutyPoints)
+        : '';
+    setSelectedDutyPointId(defaultDutyPoint);
 
     if (!options?.silent) {
       toast({
@@ -381,7 +528,7 @@ export default function AttendancePage() {
         description: `${site.siteName}, ${site.district}${Number.isFinite(site.distanceMeters) ? ` • ${Math.round(site.distanceMeters)}m away` : ''}`,
       });
     }
-  }, [toast]);
+  }, [pickDefaultDutyPoint, toast]);
 
   // Auto-select the nearest district containing the employee's client sites
   const autoSelectBestDistrict = useCallback((
@@ -418,7 +565,7 @@ export default function AttendancePage() {
       : 'Lat/Long unavailable';
 
     return [
-      selectedSite?.siteName || 'Duty center pending',
+      [selectedSite?.siteName || 'Duty center pending', selectedDutyPoint?.name].filter(Boolean).join(' • '),
       [selectedDistrict, selectedSite?.clientName].filter(Boolean).join(' • ') || 'Client pending',
       location || 'Location unavailable',
       coordsText,
@@ -428,7 +575,7 @@ export default function AttendancePage() {
         : 'Guard details pending',
       'Captured by CISS Attendance',
     ];
-  }, [location, locationCoords, scannedEmployee, selectedDistrict, selectedSite, selectedStatus]);
+  }, [location, locationCoords, scannedEmployee, selectedDistrict, selectedDutyPoint?.name, selectedSite, selectedStatus]);
 
   const createWatermarkedAttendancePhoto = useCallback(async (
     originalDataUrl: string,
@@ -868,6 +1015,7 @@ export default function AttendancePage() {
     setHasScanned(false);
     setScanResult(null);
     setScannedEmployee(null);
+    setHasManualShiftOverride(false);
     setCapturedPhoto(null);
     setWatermarkedPhoto(null);
     setPhotoCapturedAt(null);
@@ -976,6 +1124,7 @@ export default function AttendancePage() {
     reportedAtIso: payload.reportedAtClient || new Date().toISOString(),
     district: payload.district,
     siteName: payload.siteName,
+    dutyPointName: payload.dutyPointName,
     clientName: payload.clientName,
     shiftLabel: payload.shiftLabel,
     location: payload.locationText,
@@ -1156,11 +1305,11 @@ export default function AttendancePage() {
       });
       return;
     }
-    if (selectedSite.shiftMode === 'fixed' && !resolvedShift) {
+    if (requiresShiftSelection && !resolvedShift) {
       toast({
         variant: 'destructive',
-        title: 'Shift not resolved',
-        description: 'This site uses fixed shifts, but no active shift matches the current time. Please contact admin.',
+        title: 'Select shift',
+        description: 'Choose the shift you are working before submitting attendance.',
       });
       return;
     }
@@ -1214,6 +1363,8 @@ export default function AttendancePage() {
       district: selectedDistrict,
       siteId: selectedSiteId,
       siteName: selectedSite.siteName,
+      dutyPointId: selectedDutyPoint?.id,
+      dutyPointName: selectedDutyPoint?.name,
       sourceCollection: selectedSite.sourceCollection,
       clientName: selectedSite.clientName,
       shiftCode: resolvedShift?.code,
@@ -1314,7 +1465,10 @@ export default function AttendancePage() {
       if (!options?.keepCenter) {
         setSelectedDistrict('');
         setSelectedSiteId('');
+        setSelectedDutyPointId('');
+        setSelectedShiftCode('');
         setHasManualCenterOverride(false);
+        setHasManualShiftOverride(false);
       }
       setScannedEmployee(null);
       setHasScanned(false);
@@ -1330,6 +1484,7 @@ export default function AttendancePage() {
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
     : null;
+  const selectedSiteRadius = selectedDutyPoint?.geofenceRadiusMeters || selectedSite?.geofenceRadiusMeters || 150;
   const mockLocationRiskSummary = useMemo(() => detectMockLocationRisk(), [detectMockLocationRisk]);
 
   return (
@@ -1540,13 +1695,25 @@ export default function AttendancePage() {
                   <p className="text-sm text-muted-foreground">
                     {selectedSite ? `${selectedSite.clientName} • ${selectedDistrict}` : 'Auto-detect will choose the nearest center.'}
                   </p>
-                  {resolvedShift && (
+                  {selectedDutyPoint && (
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Expected shift: <span className="font-medium text-foreground">{resolvedShift.label}</span> ({resolvedShift.startTime} - {resolvedShift.endTime})
+                      Duty point: <span className="font-medium text-foreground">{selectedDutyPoint.name}</span> · {DUTY_POINT_COVERAGE_LABELS[selectedDutyPoint.coverageMode]} · {DUTY_POINT_HOURS_LABELS[selectedDutyPoint.dutyHours]}
                     </p>
                   )}
-                  {!resolvedShift && selectedSite?.shiftMode === 'fixed' && (
-                    <p className="mt-1 text-sm text-amber-700">No active shift matched the current time. Ask admin to check the site shift setup.</p>
+                  {selectedShift && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Selected shift: <span className="font-medium text-foreground">{selectedShift.label}</span> ({selectedShift.startTime} - {selectedShift.endTime})
+                    </p>
+                  )}
+                  {!selectedShift && autoDetectedShift && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Suggested shift: <span className="font-medium text-foreground">{autoDetectedShift.label}</span> ({autoDetectedShift.startTime} - {autoDetectedShift.endTime})
+                    </p>
+                  )}
+                  {!selectedShift && !autoDetectedShift && shiftMode === 'fixed' && (
+                    <p className="mt-1 text-sm text-amber-700">
+                      No shift matched the current time automatically. Choose the correct shift below before submitting.
+                    </p>
                   )}
                   {resolvedShift && nextResolvedShift && (
                     <p className="mt-1 text-xs text-muted-foreground">Next shift expected after this window: {nextResolvedShift.label} from {nextResolvedShift.startTime}</p>
@@ -1559,7 +1726,7 @@ export default function AttendancePage() {
                       Location captured at {new Date(locationCapturedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
                     </p>
                   )}
-                  {selectedSiteDistance != null && selectedSite?.strictGeofence === false && selectedSiteDistance > (selectedSite?.geofenceRadiusMeters || 150) && (
+                  {selectedSiteDistance != null && selectedSite?.strictGeofence === false && selectedSiteDistance > selectedSiteRadius && (
                     <p className="mt-1 text-xs text-amber-700">
                       This site allows soft geofence warnings. Attendance can continue, but admin review will be required.
                     </p>
@@ -1586,6 +1753,9 @@ export default function AttendancePage() {
                             setHasManualCenterOverride(true);
                             setSelectedDistrict(value);
                             setSelectedSiteId('');
+                            setSelectedDutyPointId('');
+                            setSelectedShiftCode('');
+                            setHasManualShiftOverride(false);
                           }}
                         >
                           <SelectTrigger>
@@ -1628,6 +1798,13 @@ export default function AttendancePage() {
                                     onClick={() => {
                                       setHasManualCenterOverride(true);
                                       setSelectedSiteId(site.id);
+                                      setSelectedShiftCode('');
+                                      setHasManualShiftOverride(false);
+                                      setSelectedDutyPointId(
+                                        site.sourceCollection === 'sites'
+                                          ? pickDefaultDutyPoint(site.dutyPoints || [])
+                                          : '',
+                                      );
                                     }}
                                     className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                                       isSelected
@@ -1670,6 +1847,64 @@ export default function AttendancePage() {
                         </div>
                       )}
 
+                      {selectedSite?.sourceCollection === 'sites' && dutyPointOptions.length > 0 && (
+                        <div className="grid gap-2">
+                          <Label>Duty point</Label>
+                          <Select
+                            value={selectedDutyPointId}
+                            onValueChange={(value) => {
+                              setHasManualCenterOverride(true);
+                              setSelectedDutyPointId(value);
+                              setSelectedShiftCode('');
+                              setHasManualShiftOverride(false);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select duty point" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {dutyPointOptions.map((point) => (
+                                <SelectItem key={point.id} value={point.id}>
+                                  {point.name} · {DUTY_POINT_COVERAGE_LABELS[point.coverageMode]} · {DUTY_POINT_HOURS_LABELS[point.dutyHours]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedDutyPoint?.notes ? (
+                            <p className="text-xs text-muted-foreground">{selectedDutyPoint.notes}</p>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {requiresShiftSelection && (
+                        <div className="grid gap-2">
+                          <Label>Shift</Label>
+                          <Select
+                            value={selectedShiftCode}
+                            onValueChange={(value) => {
+                              setSelectedShiftCode(value);
+                              setHasManualShiftOverride(true);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select shift" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {shiftTemplates.map((shift) => (
+                                <SelectItem key={shift.code} value={shift.code}>
+                                  {shift.label} · {shift.startTime} - {shift.endTime} · {shift.hours} hrs
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {scannedEmployee?.attendanceHint?.lastShiftCode && selectedShift
+                              ? `Previous recorded shift was ${scannedEmployee.attendanceHint.lastShiftCode}.`
+                              : 'The app suggests a shift automatically, but you can change it when needed.'}
+                          </p>
+                        </div>
+                      )}
+
                       <Button type="button" variant="outline" onClick={refreshSuggestedCenter} disabled={!locationCoords}>
                         <MapPin className="mr-2 h-4 w-4" />
                         Use nearest center again
@@ -1682,7 +1917,10 @@ export default function AttendancePage() {
 
             <div className="rounded-2xl border p-4">
               <Label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Attendance status</Label>
-              <RadioGroup value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as 'In' | 'Out')} className="mt-3 grid grid-cols-2 gap-2">
+              <RadioGroup value={selectedStatus} onValueChange={(value) => {
+                setSelectedStatus(value as 'In' | 'Out');
+                setHasManualShiftOverride(false);
+              }} className="mt-3 grid grid-cols-2 gap-2">
                 <Label htmlFor="status-in" className={`flex cursor-pointer items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'In' ? 'border-primary bg-primary text-primary-foreground' : ''}`}>
                   <RadioGroupItem value="In" id="status-in" className="sr-only" />
                   Mark IN
@@ -1864,7 +2102,12 @@ export default function AttendancePage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium">{record.employeeName}</p>
-                        <p className="text-xs text-muted-foreground">{record.siteName} • {record.shiftLabel ? `${record.shiftLabel} • ` : ''}{record.time}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.siteName}
+                          {record.dutyPointName ? ` • ${record.dutyPointName}` : ''}
+                          {record.shiftLabel ? ` • ${record.shiftLabel}` : ''}
+                          {record.time ? ` • ${record.time}` : ''}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <Badge variant={record.status === 'In' ? 'default' : 'destructive'}>{record.status}</Badge>

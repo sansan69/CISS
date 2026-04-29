@@ -30,6 +30,7 @@ export type NavItem = {
   superAdminOnly?: boolean;
   fieldOfficerVisible?: boolean;
   clientVisible?: boolean;
+  operationalClientOnly?: boolean;
 };
 
 export type NavGroup = {
@@ -52,7 +53,7 @@ export const mainNavGroups: NavGroup[] = [
   {
     label: "Workforce",
     items: [
-      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true },
+      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true, operationalClientOnly: true },
       { href: "/field-officers", label: "Field Officers", icon: ShieldAlert, fieldOfficerVisible: true },
     ],
   },
@@ -104,23 +105,45 @@ export const bottomNavItems: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard, exact: true, clientVisible: true },
   { href: "/employees", label: "Guards", icon: Users, clientVisible: true },
   { href: "/attendance-logs", label: "Attendance", icon: CalendarCheck, clientVisible: true },
-  { href: "/work-orders", label: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true },
+  { href: "/work-orders", label: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true, operationalClientOnly: true },
 ];
 
-export function isVisibleNavItem(item: NavItem, userRole: string | null, isSuperAdmin?: boolean): boolean {
+export function isVisibleNavItem(
+  item: NavItem,
+  userRole: string | null,
+  isSuperAdmin?: boolean,
+  clientInfo?: { clientId: string; clientName: string } | null,
+): boolean {
   if (item.superAdminOnly) return isSuperAdmin === true;
   if (item.adminOnly && userRole !== "admin" && !isSuperAdmin) return false;
   if (!item.clientVisible && userRole === "client") return false;
+  if (
+    userRole === "client" &&
+    item.operationalClientOnly &&
+    clientInfo?.clientName?.trim().toLowerCase() !== "tcs"
+  ) {
+    return false;
+  }
   if (item.fieldOfficerVisible && userRole === "fieldOfficer") return true;
   if (!item.clientVisible && !item.fieldOfficerVisible && userRole === "fieldOfficer") return false;
   return true;
 }
 
-export function getVisibleNavItems<T extends NavItem>(items: T[], userRole: string | null, isSuperAdmin?: boolean): T[] {
-  return items.filter((item) => isVisibleNavItem(item, userRole, isSuperAdmin));
+export function getVisibleNavItems<T extends NavItem>(
+  items: T[],
+  userRole: string | null,
+  isSuperAdmin?: boolean,
+  clientInfo?: { clientId: string; clientName: string } | null,
+): T[] {
+  return items.filter((item) => isVisibleNavItem(item, userRole, isSuperAdmin, clientInfo));
 }
 
-export function getVisibleGroups(groups: NavGroup[], userRole: string | null, isSuperAdmin?: boolean): NavGroup[] {
+export function getVisibleGroups(
+  groups: NavGroup[],
+  userRole: string | null,
+  isSuperAdmin?: boolean,
+  clientInfo?: { clientId: string; clientName: string } | null,
+): NavGroup[] {
   return groups
     .filter((group) => {
       if (group.superAdminOnly) return isSuperAdmin === true;
@@ -129,7 +152,7 @@ export function getVisibleGroups(groups: NavGroup[], userRole: string | null, is
     })
     .map((group) => ({
       ...group,
-      items: getVisibleNavItems(group.items, userRole, isSuperAdmin),
+      items: getVisibleNavItems(group.items, userRole, isSuperAdmin, clientInfo),
     }))
     .filter((group) => group.items.length > 0);
 }

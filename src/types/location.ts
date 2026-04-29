@@ -18,6 +18,8 @@ export const siteTypeSchema = z.enum(["main", "branch", "site"]);
 
 export const siteShiftModeSchema = z.enum(["none", "fixed"]);
 export const siteShiftPatternSchema = z.enum(["2x12", "3x8"]);
+export const dutyPointCoverageModeSchema = z.enum(["day", "night", "roundClock"]);
+export const dutyPointHoursSchema = z.enum(["8", "12"]);
 
 export const shiftTemplateSchema = z.object({
   code: z.string().min(1),
@@ -26,6 +28,19 @@ export const shiftTemplateSchema = z.object({
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   hours: z.number().positive(),
   crossesMidnight: z.boolean().default(false),
+});
+
+export const dutyPointSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  code: z.string().optional(),
+  active: z.boolean().default(true),
+  coverageMode: dutyPointCoverageModeSchema.default("roundClock"),
+  dutyHours: dutyPointHoursSchema.default("12"),
+  shiftMode: siteShiftModeSchema.default("fixed"),
+  shiftTemplates: z.array(shiftTemplateSchema).default([]),
+  geofenceRadiusMeters: z.number().positive().optional(),
+  notes: z.string().optional(),
 });
 
 export const geoPointLikeSchema = z.object({
@@ -61,6 +76,9 @@ export type SiteType = z.infer<typeof siteTypeSchema>;
 export type SiteShiftMode = z.infer<typeof siteShiftModeSchema>;
 export type SiteShiftPattern = z.infer<typeof siteShiftPatternSchema>;
 export type ShiftTemplate = z.infer<typeof shiftTemplateSchema>;
+export type DutyPointCoverageMode = z.infer<typeof dutyPointCoverageModeSchema>;
+export type DutyPointHours = z.infer<typeof dutyPointHoursSchema>;
+export type DutyPoint = z.infer<typeof dutyPointSchema>;
 export type GeoPointLike = z.infer<typeof geoPointLikeSchema>;
 export type ClientLocation = z.infer<typeof clientLocationSchema>;
 
@@ -86,6 +104,7 @@ export type ManagedSite = {
   shiftMode?: SiteShiftMode;
   shiftPattern?: SiteShiftPattern | null;
   shiftTemplates?: ShiftTemplate[];
+  dutyPoints?: DutyPoint[];
   latString?: string;
   lngString?: string;
   createdAt?: unknown;

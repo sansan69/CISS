@@ -1,3 +1,6 @@
+import { resolveSiteDutyPoints } from "@/lib/shift-utils";
+import type { DutyPoint } from "@/types/location";
+
 type FirestoreGeoPointLike = {
   latitude?: number;
   longitude?: number;
@@ -16,6 +19,7 @@ export type PublicAttendanceSiteOption = {
   shiftMode: string;
   shiftPattern: string | null;
   shiftTemplates: unknown[];
+  dutyPoints: DutyPoint[];
   sourceCollection: "sites" | "clientLocations";
   lat?: number;
   lng?: number;
@@ -27,6 +31,12 @@ export type PublicAttendanceEmployee = {
   fullName: string;
   phoneNumber?: string;
   clientName?: string;
+  attendanceHint?: {
+    lastAttendanceDate?: string;
+    lastStatus?: "In" | "Out";
+    lastDutyPointId?: string;
+    lastShiftCode?: string;
+  };
 };
 
 function toFiniteNumber(value: unknown) {
@@ -86,6 +96,15 @@ export function buildPublicAttendanceSiteOption(
     shiftMode: typeof data.shiftMode === "string" ? data.shiftMode : "none",
     shiftPattern: typeof data.shiftPattern === "string" ? data.shiftPattern : null,
     shiftTemplates: Array.isArray(data.shiftTemplates) ? data.shiftTemplates : [],
+    dutyPoints:
+      sourceCollection === "sites"
+        ? resolveSiteDutyPoints({
+            dutyPoints: Array.isArray(data.dutyPoints) ? (data.dutyPoints as Partial<DutyPoint>[]) : [],
+            shiftMode: typeof data.shiftMode === "string" ? (data.shiftMode as any) : "none",
+            shiftPattern: typeof data.shiftPattern === "string" ? (data.shiftPattern as any) : null,
+            shiftTemplates: Array.isArray(data.shiftTemplates) ? (data.shiftTemplates as any[]) : [],
+          })
+        : [],
     sourceCollection,
     ...(coords ?? {}),
   };
@@ -94,6 +113,7 @@ export function buildPublicAttendanceSiteOption(
 export function buildPublicAttendanceEmployee(
   id: string,
   data: Record<string, unknown>,
+  attendanceHint?: PublicAttendanceEmployee["attendanceHint"],
 ): PublicAttendanceEmployee {
   return {
     id,
@@ -116,5 +136,6 @@ export function buildPublicAttendanceEmployee(
       typeof data.clientName === "string" && data.clientName
         ? data.clientName
         : undefined,
+    attendanceHint,
   };
 }

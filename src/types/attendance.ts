@@ -29,6 +29,8 @@ export const attendanceSubmissionSchema = z.object({
   district: z.string().min(1),
   siteId: z.string().min(1),
   siteName: z.string().min(1),
+  dutyPointId: z.string().optional(),
+  dutyPointName: z.string().optional(),
   clientName: z.string().optional(),
   shiftCode: z.string().optional(),
   shiftLabel: z.string().optional(),
@@ -83,6 +85,7 @@ export interface DeviceAttendanceHistoryItem {
   reportedAtIso?: string;
   district: string;
   siteName: string;
+  dutyPointName?: string;
   clientName?: string;
   shiftLabel?: string;
   location?: string;
