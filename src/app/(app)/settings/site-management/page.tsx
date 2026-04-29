@@ -323,7 +323,7 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                                             onChange={(e) => setFormData((current) => ({
                                                 ...current,
                                                 dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
-                                                    itemIndex === index ? normalizeDutyPoint({ ...item, name: e.target.value }, index) : item,
+                                                    itemIndex === index ? { ...item, name: e.target.value } : item,
                                                 ),
                                             }))}
                                         />
@@ -1489,7 +1489,7 @@ export default function SiteManagementPage() {
                                                         onChange={(e) => setCreateData((current) => ({
                                                             ...current,
                                                             dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((item, itemIndex) =>
-                                                                itemIndex === index ? normalizeDutyPoint({ ...item, name: e.target.value }, index) : item,
+                                                                itemIndex === index ? { ...item, name: e.target.value } : item,
                                                             ),
                                                         }))}
                                                     />

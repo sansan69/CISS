@@ -1705,6 +1705,29 @@ export default function AttendancePage() {
                       Selected shift: <span className="font-medium text-foreground">{selectedShift.label}</span> ({selectedShift.startTime} - {selectedShift.endTime})
                     </p>
                   )}
+                  {dutyPointOptions.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {dutyPointOptions.map((point) => {
+                        const isSelectedPoint = point.id === selectedDutyPointId;
+                        return (
+                          <span
+                            key={point.id}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                              isSelectedPoint
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-muted/40 text-muted-foreground"
+                            }`}
+                          >
+                            <span className="max-w-[12rem] truncate">{point.name}</span>
+                            <span className="opacity-70">·</span>
+                            <span>{DUTY_POINT_COVERAGE_LABELS[point.coverageMode]}</span>
+                            <span className="opacity-70">·</span>
+                            <span>{DUTY_POINT_HOURS_LABELS[point.dutyHours]}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                   {!selectedShift && autoDetectedShift && (
                     <p className="mt-1 text-sm text-muted-foreground">
                       Suggested shift: <span className="font-medium text-foreground">{autoDetectedShift.label}</span> ({autoDetectedShift.startTime} - {autoDetectedShift.endTime})

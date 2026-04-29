@@ -1540,7 +1540,7 @@ export default function ClientDashboardPage() {
                                   ...current,
                                   dutyPoints: current.dutyPoints.map((item, itemIndex) =>
                                     itemIndex === index
-                                      ? normalizeDutyPoint({ ...item, name: e.target.value }, index)
+                                      ? { ...item, name: e.target.value }
                                       : item,
                                   ),
                                 }))
