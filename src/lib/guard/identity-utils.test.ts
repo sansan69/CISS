@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGuardDob } from "./identity-utils";
+import { guardDobMatches, normalizeGuardDob } from "./identity-utils";
 
 describe("normalizeGuardDob", () => {
   it("keeps YYYY-MM-DD strings unchanged", () => {
@@ -38,5 +38,25 @@ describe("normalizeGuardDob", () => {
     expect(normalizeGuardDob(null)).toBe("");
     expect(normalizeGuardDob(undefined)).toBe("");
     expect(normalizeGuardDob({ nope: true })).toBe("");
+  });
+});
+
+describe("guardDobMatches", () => {
+  it("matches exact YYYY-MM-DD values", () => {
+    expect(guardDobMatches("1998-12-04", "1998-12-04")).toBe(true);
+  });
+
+  it("accepts one-day skew for timestamp-backed date-only records", () => {
+    const storedTimestamp = {
+      toDate() {
+        return new Date("1998-12-03T18:30:00.000Z");
+      },
+    };
+
+    expect(guardDobMatches(storedTimestamp, "1998-12-04")).toBe(true);
+  });
+
+  it("does not allow adjacent plain date strings", () => {
+    expect(guardDobMatches("1998-12-03", "1998-12-04")).toBe(false);
   });
 });

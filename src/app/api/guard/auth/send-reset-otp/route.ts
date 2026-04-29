@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db as adminDb } from '@/lib/firebaseAdmin';
+import { normalizeGuardPhone } from '@/lib/guard/identity-utils';
 import { hashOtp } from '@/lib/guard/otp-utils';
 
 export async function POST(request: NextRequest) {
   try {
-    const { phoneNumber } = await request.json();
+    const body = await request.json();
+    const phoneNumber = normalizeGuardPhone(String(body.phoneNumber ?? ""));
 
     if (!phoneNumber || phoneNumber.length !== 10) {
       return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });

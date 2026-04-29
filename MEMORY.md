@@ -1536,3 +1536,29 @@ Draft-specific fields are stripped before saving to Firestore.
 ### Commits (reference)
 - `c288a66b` "feat: refresh UI and secure Firebase uploads" (rules + admin ADC + attendance upload + UI system pass)
 - `c0b00ffb` "fix: repair work order exam filter" (exam filter dependency + remove date sort)
+
+---
+
+## [2026-04-27] — Kerala admin authority
+
+### Admin identity
+- `admin@cisskerala.app` is the Kerala region admin user.
+- This account has full admin authority to manage Kerala operations.
+- Runtime env values were aligned to use `admin@cisskerala.app`:
+  - `NEXT_PUBLIC_SUPER_ADMIN_EMAIL`
+  - `SUPER_ADMIN_EMAIL`
+- Code already treats `admin@cisskerala.app` as a legacy admin fallback in `LEGACY_ADMIN_EMAILS`.
+- Firestore rules already allow this email through `isAdmin()`.
+
+### Firebase Auth claim repair
+- Firebase Auth user `admin@cisskerala.app` existed and was enabled.
+- The account previously had mixed stale custom claims:
+  - `role: "client"`
+  - `clientName: "Logiware"`
+  - `clientId: "dWdAFXalgmRgByC0QzB5"`
+  - `admin: true`
+- Cleaned the claim to a pure Kerala admin claim:
+  - `admin: true`
+  - `role: "admin"`
+  - `stateCode: "KL"`
+- This prevents the admin account from being resolved as a client user in any UI/API path.

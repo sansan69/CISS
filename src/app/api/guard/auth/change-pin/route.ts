@@ -5,50 +5,26 @@ import { requireGuard } from "@/lib/server/guard-auth";
 export async function POST(request: Request) {
   try {
     const { employeeDocId } = await requireGuard(request);
-
-    // Rate limiting — max 5 attempts per employee per 5 minutes
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
-
-    const rateLimitRef = adminDb.doc(`rateLimits/changePin_${employeeDocId}`);    const rateLimitSnap = await rateLimitRef.get();
+    const rateLimitRef = adminDb.doc(`rateLimits/changePin_${employeeDocId}`);
     const now = Date.now();
-    const windowMs = 5 * 60 * 1000;
-
-    if (rateLimitSnap.exists) {
-      const rlData = rateLimitSnap.data()!;
-      const windowStart: number = rlData.windowStart ?? 0;
-      const attempts: number = rlData.attempts ?? 0;
-
-      if (now - windowStart < windowMs && attempts >= 5) {
-        return NextResponse.json(
-          { error: "Too many attempts. Please wait 5 minutes." },
-          { status: 429 }
-        );
-      }
-
-      if (now - windowStart >= windowMs) {
-        await rateLimitRef.set({ windowStart: now, attempts: 1 });
-      } else {
-        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
-      }
-    } else {
-      await rateLimitRef.set({ windowStart: now, attempts: 1 });
-    }
-
     const body = await request.json();
     const { currentPin, newPin } = body as {
       currentPin?: string;
       newPin?: string;
     };
+    const normalizedCurrentPin = String(currentPin ?? "").trim();
+    const normalizedNewPin = String(newPin ?? "").trim();
 
-    if (!currentPin || !newPin) {
+    if (!normalizedCurrentPin || !normalizedNewPin) {
       return NextResponse.json(
         { error: "currentPin and newPin are required." },
         { status: 400 }
       );
     }
 
-    if (!validatePinFormat(newPin)) {
+    if (!validatePinFormat(normalizedNewPin)) {
       return NextResponse.json(
         { error: "New PIN must be 4 to 6 digits." },
         { status: 400 }
@@ -71,17 +47,42 @@ export async function POST(request: Request) {
       );
     }
 
-    const currentValid = await verifyPin(currentPin, empData.guardPin as string);
+    const currentValid = await verifyPin(normalizedCurrentPin, empData.guardPin as string);
     if (!currentValid) {
+      const rateLimitSnap = await rateLimitRef.get();
+      const windowMs = 5 * 60 * 1000;
+      const rlData = rateLimitSnap.exists ? rateLimitSnap.data()! : {};
+      const windowStart: number = (rlData.windowStart as number | undefined) ?? now;
+      const attempts: number = (rlData.attempts as number | undefined) ?? 0;
+      const withinWindow = now - windowStart < windowMs;
+      const nextAttempts = withinWindow ? attempts + 1 : 1;
+
+      await rateLimitRef.set(
+        {
+          windowStart: withinWindow ? windowStart : now,
+          attempts: nextAttempts,
+        },
+        { merge: true },
+      );
+
+      if (withinWindow && nextAttempts >= 5) {
+        return NextResponse.json(
+          { error: "Too many attempts. Please wait 5 minutes." },
+          { status: 429 }
+        );
+      }
+
       return NextResponse.json({ error: "Current PIN is incorrect." }, { status: 401 });
     }
 
-    const newHash = await hashPin(newPin);
+    const newHash = await hashPin(normalizedNewPin);
 
     await empRef.update({
       guardPin: newHash,
       guardPinSetAt: FieldValue.serverTimestamp(),
     });
+
+    await rateLimitRef.delete().catch(() => undefined);
 
     return NextResponse.json({ success: true, message: "PIN changed successfully." });
   } catch (err: unknown) {

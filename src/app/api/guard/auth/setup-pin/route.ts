@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  normalizeGuardDob,
+  guardDobMatches,
   normalizeGuardPhone,
 } from "@/lib/guard/identity-utils";
 import { hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
@@ -33,58 +33,60 @@ export async function POST(request: Request) {
       dateOfBirth?: string;
       pin?: string;
     };
+    const normalizedEmployeeId = String(employeeId ?? "").trim();
+    const normalizedPhone = normalizeGuardPhone(String(phoneNumber ?? ""));
+    const normalizedPin = String(pin ?? "").trim();
 
-    if (!phoneNumber || !dateOfBirth || !pin) {
+    if (!normalizedPhone || !dateOfBirth || !normalizedPin) {
       return NextResponse.json(
         { error: "phoneNumber, dateOfBirth, and pin are required." },
         { status: 400 }
       );
     }
 
-    if (!employeeId && !phoneNumber) {
+    if (!normalizedEmployeeId && !normalizedPhone) {
       return NextResponse.json(
         { error: "Either employeeId or phoneNumber is required." },
         { status: 400 }
       );
     }
-
-    // Rate limiting — max 5 attempts per hour per phone number, with IP fallback.
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       "unknown";
-    const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const { FieldValue } = await import("firebase-admin/firestore");
-
     const rateLimitRef = adminDb.doc(
-      `rateLimits/${buildSetupRateLimitKey(phoneNumber, employeeId, ip)}`,
+      `rateLimits/${buildSetupRateLimitKey(normalizedPhone, normalizedEmployeeId, ip)}`,
     );
-    const rateLimitSnap = await rateLimitRef.get();
     const now = Date.now();
+    const registerFailedAttempt = async () => {
+      const rateLimitSnap = await rateLimitRef.get();
+      const windowMs = 60 * 60 * 1000;
 
-    if (rateLimitSnap.exists) {
+      if (!rateLimitSnap.exists) {
+        await rateLimitRef.set({ windowStart: now, attempts: 1 });
+        return false;
+      }
+
       const data = rateLimitSnap.data()!;
       const windowStart: number = data.windowStart ?? 0;
       const attempts: number = data.attempts ?? 0;
-      const windowMs = 60 * 60 * 1000; // 1 hour
+      const withinWindow = now - windowStart < windowMs;
+      const nextAttempts = withinWindow ? attempts + 1 : 1;
 
-      if (now - windowStart < windowMs && attempts >= 5) {
-        return NextResponse.json(
-          { error: "Too many attempts. Please try again later." },
-          { status: 429 }
-        );
-      }
+      await rateLimitRef.set(
+        {
+          windowStart: withinWindow ? windowStart : now,
+          attempts: nextAttempts,
+        },
+        { merge: true },
+      );
 
-      if (now - windowStart >= windowMs) {
-        await rateLimitRef.set({ windowStart: now, attempts: 1 });
-      } else {
-        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
-      }
-    } else {
-      await rateLimitRef.set({ windowStart: now, attempts: 1 });
-    }
+      return withinWindow && nextAttempts >= 5;
+    };
 
     // Validate PIN format
-    if (!validatePinFormat(pin)) {
+    if (!validatePinFormat(normalizedPin)) {
       return NextResponse.json(
         { error: "PIN must be 4 to 6 digits." },
         { status: 400 }
@@ -95,57 +97,57 @@ export async function POST(request: Request) {
     const employeesRef = adminDb.collection("employees");
     let empQuery;
 
-    if (employeeId) {
+    if (normalizedEmployeeId) {
       empQuery = await employeesRef
-        .where("employeeId", "==", employeeId)
+        .where("employeeId", "==", normalizedEmployeeId)
         .limit(1)
         .get();
     } else {
       empQuery = await employeesRef
-        .where("phoneNumber", "==", normalizeGuardPhone(phoneNumber))
+        .where("phoneNumber", "==", normalizedPhone)
         .limit(1)
         .get();
     }
 
     if (empQuery.empty) {
-      return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+      const blocked = await registerFailedAttempt();
+      return NextResponse.json(
+        { error: blocked ? "Too many attempts. Please try again later." : "Employee not found." },
+        { status: blocked ? 429 : 404 },
+      );
     }
 
     const empDoc = empQuery.docs[0];
     const empData = empDoc.data();
-    const inputPhone = normalizeGuardPhone(phoneNumber);
 
     // Verify phone number if employeeId was provided
-    if (employeeId && phoneNumber) {
+    if (normalizedEmployeeId && normalizedPhone) {
       const storedPhone = normalizeGuardPhone(
         typeof empData.phoneNumber === "string" ? empData.phoneNumber : ""
       );
 
-      if (storedPhone !== inputPhone) {
+      if (storedPhone !== normalizedPhone) {
+        const blocked = await registerFailedAttempt();
         return NextResponse.json(
-          { error: "Identity verification failed." },
-          { status: 401 }
+          { error: blocked ? "Too many attempts. Please try again later." : "Identity verification failed." },
+          { status: blocked ? 429 : 401 }
         );
       }
     }
 
-    // Verify date of birth against enrollment records, which may be stored
-    // as Firestore Timestamps, JS Dates, or legacy strings.
-    const storedDob = normalizeGuardDob(empData.dateOfBirth);
-    const inputDob = normalizeGuardDob(dateOfBirth);
-
-    if (storedDob !== inputDob) {
+    if (!guardDobMatches(empData.dateOfBirth, dateOfBirth)) {
+      const blocked = await registerFailedAttempt();
       return NextResponse.json(
-        { error: "Identity verification failed." },
-        { status: 401 }
+        { error: blocked ? "Too many attempts. Please try again later." : "Identity verification failed." },
+        { status: blocked ? 429 : 401 }
       );
     }
 
     // Hash PIN
-    const pinHash = await hashPin(pin);
+    const pinHash = await hashPin(normalizedPin);
 
     // Firebase Auth user email
-    const guardEmail = `${inputPhone}@${GUARD_AUTH_EMAIL_DOMAIN}`;
+    const guardEmail = `${normalizedPhone}@${GUARD_AUTH_EMAIL_DOMAIN}`;
     const { auth: adminAuth } = await import("@/lib/firebaseAdmin");
 
     let guardUid: string;
@@ -224,6 +226,8 @@ export async function POST(request: Request) {
       guardPin: pinHash,
       guardAuthUid: guardUid,
       guardPinSetAt: FieldValue.serverTimestamp(),
+      guardFailedAttempts: 0,
+      guardLockoutUntil: FieldValue.delete(),
     });
 
     await rateLimitRef.delete().catch(() => undefined);

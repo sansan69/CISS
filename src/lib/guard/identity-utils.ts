@@ -6,6 +6,23 @@ function formatDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function isDateOnlyString(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function parseDateOnlyToUtcDays(value: string): number | null {
+  if (!isDateOnlyString(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
 type TimestampWithToDate = { toDate: () => Date };
 type TimestampWithSeconds = { seconds?: number; _seconds?: number };
 type TimestampLike = TimestampWithToDate | TimestampWithSeconds;
@@ -78,4 +95,43 @@ export function normalizeGuardDob(value: unknown): string {
   }
 
   return "";
+}
+
+function canHaveTimezoneShift(value: unknown): boolean {
+  if (value instanceof Date || isTimestampLike(value)) {
+    return true;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return Boolean(trimmed) && !isDateOnlyString(trimmed);
+  }
+
+  return false;
+}
+
+export function guardDobMatches(storedValue: unknown, inputValue: unknown): boolean {
+  const storedDob = normalizeGuardDob(storedValue);
+  const inputDob = normalizeGuardDob(inputValue);
+
+  if (!storedDob || !inputDob) {
+    return false;
+  }
+
+  if (storedDob === inputDob) {
+    return true;
+  }
+
+  if (!canHaveTimezoneShift(storedValue)) {
+    return false;
+  }
+
+  const storedDays = parseDateOnlyToUtcDays(storedDob);
+  const inputDays = parseDateOnlyToUtcDays(inputDob);
+
+  if (storedDays === null || inputDays === null) {
+    return false;
+  }
+
+  return Math.abs(storedDays - inputDays) === 1;
 }

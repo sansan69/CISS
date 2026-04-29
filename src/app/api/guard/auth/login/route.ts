@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { verifyPin } from "@/lib/guard/pin-utils";
+import { normalizeGuardPhone } from "@/lib/guard/identity-utils";
+import { validatePinFormat, verifyPin } from "@/lib/guard/pin-utils";
 
 function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, "");
+  return normalizeGuardPhone(phone);
 }
 
 function isLocalHost(host: string | null): boolean {
@@ -55,63 +56,38 @@ export async function POST(request: Request) {
       employeeId?: string;
       pin?: string;
     };
+    const normalizedPhone = normalizePhone(String(phoneNumber ?? ""));
+    const normalizedEmployeeId = String(employeeId ?? "").trim();
+    const normalizedPin = String(pin ?? "").trim();
 
-    if ((!phoneNumber && !employeeId) || !pin) {
+    if ((!normalizedPhone && !normalizedEmployeeId) || !normalizedPin) {
       return NextResponse.json(
         { error: "phoneNumber or employeeId, and pin are required." },
         { status: 400 }
       );
     }
 
+    if (!validatePinFormat(normalizedPin)) {
+      return NextResponse.json(
+        { error: "PIN must be 4 to 6 digits." },
+        { status: 400 }
+      );
+    }
+
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
-
     const now = Date.now();
-    const windowMs = 5 * 60 * 1000;
-
-    // Rate limiting keyed by phoneNumber or employeeId
-    const rateLimitKey = phoneNumber ? normalizePhone(phoneNumber) : `eid_${employeeId}`;
-    const rateLimitRef = adminDb.doc(`rateLimits/login_${rateLimitKey}`);
-    const rateLimitSnap = await rateLimitRef.get();
-
-    if (rateLimitSnap.exists) {
-      const data = rateLimitSnap.data()!;
-      const windowStart: number = data.windowStart ?? 0;
-      const attempts: number = data.attempts ?? 0;
-
-      if (now - windowStart < windowMs && attempts >= 5) {
-        return NextResponse.json(
-          { error: "Too many login attempts. Please wait 5 minutes." },
-          { status: 429 }
-        );
-      }
-
-      if (now - windowStart >= windowMs) {
-        await rateLimitRef.set({ windowStart: now, attempts: 1 });
-      } else {
-        await rateLimitRef.set(
-          {
-            windowStart,
-            attempts: FieldValue.increment(1),
-          },
-          { merge: true },
-        );
-      }
-    } else {
-      await rateLimitRef.set({ windowStart: now, attempts: 1 });
-    }
 
     // Find employee by phone number or employeeId
     const employeesRef = adminDb.collection("employees");
     let empQuery;
 
-    if (employeeId) {
+    if (normalizedEmployeeId) {
       empQuery = await employeesRef
-        .where("employeeId", "==", employeeId)
+        .where("employeeId", "==", normalizedEmployeeId)
         .limit(1)
         .get();
     } else {
-      const normalizedPhone = normalizePhone(phoneNumber!);
       empQuery = await employeesRef
         .where("phoneNumber", "==", normalizedPhone)
         .limit(1)
@@ -119,6 +95,36 @@ export async function POST(request: Request) {
     }
 
     if (empQuery.empty) {
+      const rateLimitKey = normalizedPhone || `eid_${normalizedEmployeeId}`;
+      const rateLimitRef = adminDb.doc(`rateLimits/login_unknown_${rateLimitKey}`);
+      const rateLimitSnap = await rateLimitRef.get();
+      const windowMs = 5 * 60 * 1000;
+
+      if (!rateLimitSnap.exists) {
+        await rateLimitRef.set({ windowStart: now, attempts: 1 });
+      } else {
+        const data = rateLimitSnap.data()!;
+        const windowStart: number = data.windowStart ?? 0;
+        const attempts: number = data.attempts ?? 0;
+        const withinWindow = now - windowStart < windowMs;
+        const nextAttempts = withinWindow ? attempts + 1 : 1;
+
+        await rateLimitRef.set(
+          {
+            windowStart: withinWindow ? windowStart : now,
+            attempts: nextAttempts,
+          },
+          { merge: true },
+        );
+
+        if (withinWindow && nextAttempts >= 5) {
+          return NextResponse.json(
+            { error: "Too many login attempts. Please wait 5 minutes." },
+            { status: 429 }
+          );
+        }
+      }
+
       return NextResponse.json(
         { error: "Employee not found." },
         { status: 404 }
@@ -154,7 +160,7 @@ export async function POST(request: Request) {
     }
 
     // Verify PIN
-    const pinValid = await verifyPin(pin, empData.guardPin as string);
+    const pinValid = await verifyPin(normalizedPin, empData.guardPin as string);
 
     if (!pinValid) {
       // Increment failed attempts
@@ -197,9 +203,9 @@ export async function POST(request: Request) {
       const tokenAccepted = await isCustomTokenAccepted(customToken);
       if (!tokenAccepted) {
         const fallbackResponse = await fallbackToProductionLogin({
-          phoneNumber,
-          employeeId,
-          pin,
+          phoneNumber: normalizedPhone || undefined,
+          employeeId: normalizedEmployeeId || undefined,
+          pin: normalizedPin,
         });
         const fallbackData = await fallbackResponse.json();
         return NextResponse.json(fallbackData, { status: fallbackResponse.status });

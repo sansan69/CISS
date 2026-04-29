@@ -1,3 +1,4 @@
+import { normalizeGuardPhone } from "@/lib/guard/identity-utils";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -5,7 +6,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { phoneNumber?: string; employeeId?: string };
-    const phone = String(body.phoneNumber || "").trim().replace(/\D/g, "");
+    const phone = normalizeGuardPhone(String(body.phoneNumber || ""));
     const employeeId = String(body.employeeId || "").trim();
 
     if (!phone && !employeeId) {
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       found: true,
       hasPin,
-      employeeName: data.fullName ?? "",
+      employeeName: data.name ?? data.fullName ?? "",
       employeeId: data.employeeId ?? "",
     });
   } catch (error: any) {

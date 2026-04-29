@@ -1,0 +1,157 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "leave.ts",
+      "file_type": "code",
+      "source_file": "leave.ts",
+      "source_location": "L1",
+      "id": "leave_ts",
+      "community": 1,
+      "norm_label": "leave.ts"
+    },
+    {
+      "label": "training.ts",
+      "file_type": "code",
+      "source_file": "training.ts",
+      "source_location": "L1",
+      "id": "training_ts",
+      "community": 2,
+      "norm_label": "training.ts"
+    },
+    {
+      "label": "client-dashboard.ts",
+      "file_type": "code",
+      "source_file": "client-dashboard.ts",
+      "source_location": "L1",
+      "id": "client_dashboard_ts",
+      "community": 3,
+      "norm_label": "client-dashboard.ts"
+    },
+    {
+      "label": "work-orders.ts",
+      "file_type": "code",
+      "source_file": "work-orders.ts",
+      "source_location": "L1",
+      "id": "work_orders_ts",
+      "community": 4,
+      "norm_label": "work-orders.ts"
+    },
+    {
+      "label": "enrollment.ts",
+      "file_type": "code",
+      "source_file": "enrollment.ts",
+      "source_location": "L1",
+      "id": "enrollment_ts",
+      "community": 5,
+      "norm_label": "enrollment.ts"
+    },
+    {
+      "label": "employee.ts",
+      "file_type": "code",
+      "source_file": "employee.ts",
+      "source_location": "L1",
+      "id": "employee_ts",
+      "community": 6,
+      "norm_label": "employee.ts"
+    },
+    {
+      "label": "app.ts",
+      "file_type": "code",
+      "source_file": "app.ts",
+      "source_location": "L1",
+      "id": "app_ts",
+      "community": 7,
+      "norm_label": "app.ts"
+    },
+    {
+      "label": "client-permissions.ts",
+      "file_type": "code",
+      "source_file": "client-permissions.ts",
+      "source_location": "L1",
+      "id": "client_permissions_ts",
+      "community": 0,
+      "norm_label": "client-permissions.ts"
+    },
+    {
+      "label": "resolveClientModules()",
+      "file_type": "code",
+      "source_file": "client-permissions.ts",
+      "source_location": "L50",
+      "id": "types_client_permissions_resolveclientmodules",
+      "community": 0,
+      "norm_label": "resolveclientmodules()"
+    },
+    {
+      "label": "location.ts",
+      "file_type": "code",
+      "source_file": "location.ts",
+      "source_location": "L1",
+      "id": "location_ts",
+      "community": 8,
+      "norm_label": "location.ts"
+    },
+    {
+      "label": "payroll.ts",
+      "file_type": "code",
+      "source_file": "payroll.ts",
+      "source_location": "L1",
+      "id": "payroll_ts",
+      "community": 9,
+      "norm_label": "payroll.ts"
+    },
+    {
+      "label": "branch.ts",
+      "file_type": "code",
+      "source_file": "branch.ts",
+      "source_location": "L1",
+      "id": "branch_ts",
+      "community": 10,
+      "norm_label": "branch.ts"
+    },
+    {
+      "label": "evaluation.ts",
+      "file_type": "code",
+      "source_file": "evaluation.ts",
+      "source_location": "L1",
+      "id": "evaluation_ts",
+      "community": 11,
+      "norm_label": "evaluation.ts"
+    },
+    {
+      "label": "region.ts",
+      "file_type": "code",
+      "source_file": "region.ts",
+      "source_location": "L1",
+      "id": "region_ts",
+      "community": 12,
+      "norm_label": "region.ts"
+    },
+    {
+      "label": "attendance.ts",
+      "file_type": "code",
+      "source_file": "attendance.ts",
+      "source_location": "L1",
+      "id": "attendance_ts",
+      "community": 13,
+      "norm_label": "attendance.ts"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client-permissions.ts",
+      "source_location": "L50",
+      "weight": 1.0,
+      "_src": "client_permissions_ts",
+      "_tgt": "types_client_permissions_resolveclientmodules",
+      "source": "client_permissions_ts",
+      "target": "types_client_permissions_resolveclientmodules",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": []
+}
