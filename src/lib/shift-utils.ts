@@ -156,21 +156,34 @@ export function normalizeDutyPoint(input: Partial<DutyPoint>, fallbackIndex = 0)
         ? buildDutyPointShiftTemplates(coverageMode, dutyHours)
         : [];
 
-  return {
+  const dutyPoint: DutyPoint = {
     id: String(input.id ?? "").trim() || slugifyDutyPointId(name),
     name,
-    code: String(input.code ?? "").trim() || undefined,
     active: input.active !== false,
     coverageMode,
     dutyHours,
     shiftMode,
     shiftTemplates,
-    geofenceRadiusMeters:
-      typeof input.geofenceRadiusMeters === "number" && Number.isFinite(input.geofenceRadiusMeters)
-        ? input.geofenceRadiusMeters
-        : undefined,
-    notes: String(input.notes ?? "").trim() || undefined,
   };
+
+  const code = String(input.code ?? "").trim();
+  if (code) {
+    dutyPoint.code = code;
+  }
+
+  if (
+    typeof input.geofenceRadiusMeters === "number" &&
+    Number.isFinite(input.geofenceRadiusMeters)
+  ) {
+    dutyPoint.geofenceRadiusMeters = input.geofenceRadiusMeters;
+  }
+
+  const notes = String(input.notes ?? "").trim();
+  if (notes) {
+    dutyPoint.notes = notes;
+  }
+
+  return dutyPoint;
 }
 
 export function resolveSiteDutyPoints(site: {
