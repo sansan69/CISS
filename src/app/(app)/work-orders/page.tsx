@@ -543,14 +543,25 @@ export default function WorkOrderPage() {
     }, [allWorkOrderRows, searchText, selectedDate, selectedDistrictKey, selectedExamKey]);
 
     const groupedRowsByDate = useMemo(() => {
-        const map = new Map<string, { dateLabel: string; rows: WorkOrderBoardRow[]; totalRequired: number; assignedCount: number }>();
+        const map = new Map<string, {
+            dateLabel: string;
+            rows: WorkOrderBoardRow[];
+            maleRequired: number;
+            femaleRequired: number;
+            totalRequired: number;
+            assignedCount: number;
+            examLabels: Set<string>;
+        }>();
         for (const row of filteredRows) {
             const groupedSiteKey = `${row.dateKey}::${row.siteId}`;
             const existing = map.get(row.dateKey) ?? {
                 dateLabel: row.dateLabel,
                 rows: [],
+                maleRequired: 0,
+                femaleRequired: 0,
                 totalRequired: 0,
                 assignedCount: 0,
+                examLabels: new Set<string>(),
             };
             const existingSiteIndex = existing.rows.findIndex((entry) => `${entry.dateKey}::${entry.siteId}` === groupedSiteKey);
             if (existingSiteIndex === -1) {
@@ -589,21 +600,37 @@ export default function WorkOrderPage() {
                     statusClassName,
                 };
             }
+            row.examLabels.forEach((label) => existing.examLabels.add(label));
+            existing.maleRequired += row.maleRequired;
+            existing.femaleRequired += row.femaleRequired;
             existing.totalRequired += row.totalRequired;
             existing.assignedCount += row.assignedCount;
             map.set(row.dateKey, existing);
         }
         return Array.from(map.entries())
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([dateKey, group]) => ({
-                dateKey,
-                ...group,
-                rows: [...group.rows].sort((a, b) => {
+            .map(([dateKey, group]) => {
+                const rows = [...group.rows].sort((a, b) => {
                     const districtCompare = a.district.localeCompare(b.district);
                     if (districtCompare !== 0) return districtCompare;
                     return a.siteName.localeCompare(b.siteName);
-                }),
-            }));
+                });
+                const assignedCenters = rows.filter((row) => row.totalRequired > 0 && row.assignedCount >= row.totalRequired).length;
+                const pendingCenters = rows.length - assignedCenters;
+                return {
+                    dateKey,
+                    dateLabel: group.dateLabel,
+                    rows,
+                    maleRequired: group.maleRequired,
+                    femaleRequired: group.femaleRequired,
+                    totalRequired: group.totalRequired,
+                    assignedCount: group.assignedCount,
+                    totalCenters: rows.length,
+                    assignedCenters,
+                    pendingCenters,
+                    examLabels: Array.from(group.examLabels).sort((a, b) => a.localeCompare(b)),
+                };
+            });
     }, [filteredRows]);
 
     useEffect(() => {
@@ -1180,6 +1207,7 @@ export default function WorkOrderPage() {
                                     {groupedRowsByDate.map((group) => {
                                         const isCollapsed = collapsedDateKeys.has(group.dateKey);
                                         const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
+                                        const examSummary = group.examLabels.join(' · ');
 
                                         return (
                                             <section key={group.dateKey} className="overflow-hidden rounded-xl border bg-card">
@@ -1197,7 +1225,13 @@ export default function WorkOrderPage() {
                                                         <div className="min-w-0">
                                                             <h3 className="text-base font-semibold">{group.dateLabel}</h3>
                                                             <p className="text-sm text-muted-foreground">
-                                                                {group.rows.length} dut{group.rows.length === 1 ? 'y' : 'ies'} · Assigned {group.assignedCount}/{group.totalRequired}
+                                                                {group.maleRequired} M · {group.femaleRequired} F · {group.totalRequired} total
+                                                            </p>
+                                                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                                                                {examSummary || 'No exam names available'}
+                                                            </p>
+                                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                                {group.totalCenters} center{group.totalCenters === 1 ? '' : 's'} · {group.assignedCenters} assigned · {group.pendingCenters} non assigned
                                                             </p>
                                                         </div>
                                                     </div>
