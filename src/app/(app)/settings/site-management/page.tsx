@@ -55,7 +55,7 @@ import {
     resolveSiteDutyPoints,
     SHIFT_PATTERN_LABELS,
 } from '@/lib/shift-utils';
-import type { ClientLocation, CoordinateSource, CoordinateStatus, DutyPoint, DutyPointCoverageMode, DutyPointHours, ManagedSite, SiteShiftPattern } from '@/types/location';
+import type { ClientLocation, CoordinateSource, CoordinateStatus, DutyPoint, DutyPointCoverageMode, DutyPointHours, ManagedSite, SiteShiftPattern, SiteType } from '@/types/location';
 import { PageHeader } from '@/components/layout/page-header';
 import { authorizedFetch } from '@/lib/api-client';
 import {
@@ -117,6 +117,10 @@ function getDistrictValidationMessage() {
     return defaultDistrictSuggestions.length > 0
         ? 'Please use a valid district for this region.'
         : 'Please enter a district.';
+}
+
+function getPrimaryOfficeLocation<T extends { siteType?: SiteType | string | null }>(locations: T[]) {
+    return locations.find((location) => location.siteType === "main") ?? locations[0] ?? null;
 }
 
 const toRadians = (deg: number) => (deg * Math.PI) / 180;
@@ -273,6 +277,26 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                 <p className="text-xs text-muted-foreground">
                     Use this when the site and office share the same physical address and coordinates.
                 </p>
+                {filteredClientLocations.length > 0 && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit px-0 text-xs"
+                        onClick={() => {
+                            const primaryLocation = getPrimaryOfficeLocation(filteredClientLocations);
+                            if (!primaryLocation) return;
+                            setFormData({
+                                ...formData,
+                                clientLocationId: primaryLocation.id,
+                                clientLocationName: primaryLocation.locationName,
+                                ...buildSiteLocationSyncPatch(primaryLocation),
+                            });
+                        }}
+                    >
+                        Use current office location
+                    </Button>
+                )}
             </div>
             {isTcsSite ? (
                 <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -1405,6 +1429,26 @@ export default function SiteManagementPage() {
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">Selecting a linked location copies its address and coordinates into the site. Use this when the site and office are the same place.</p>
+                            {createClientLocations.length > 0 && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-fit px-0 text-xs"
+                                    onClick={() => {
+                                        const primaryLocation = getPrimaryOfficeLocation(createClientLocations);
+                                        if (!primaryLocation) return;
+                                        setCreateData({
+                                            ...createData,
+                                            clientLocationId: primaryLocation.id,
+                                            clientLocationName: primaryLocation.locationName,
+                                            ...buildSiteLocationSyncPatch(primaryLocation),
+                                        });
+                                    }}
+                                >
+                                    Use current office location
+                                </Button>
+                            )}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="new-district">District</Label>

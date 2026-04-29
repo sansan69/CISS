@@ -231,6 +231,10 @@ const SITE_TYPE_LABELS: Record<string, string> = {
   main: "Main Office",
 };
 
+function getPrimaryOfficeLocation<T extends { siteType?: SiteType | string | null }>(locations: T[]) {
+  return locations.find((location) => location.siteType === "main") ?? locations[0] ?? null;
+}
+
 function normalizeGeoPoint(
   record: Pick<SiteDoc | LocationDoc, "geolocation" | "latString" | "lngString">,
 ) {
@@ -1456,9 +1460,29 @@ export default function ClientDashboardPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Select the office location when the site uses the same physical address and coordinates.
-              </p>
+                <p className="text-xs text-muted-foreground">
+                  Select the office location when the site uses the same physical address and coordinates.
+                </p>
+              {locations.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-fit px-0 text-xs"
+                  onClick={() => {
+                    const primaryLocation = getPrimaryOfficeLocation(locations);
+                    if (!primaryLocation) return;
+                    setSiteForm((current) => ({
+                      ...current,
+                      clientLocationId: primaryLocation.id,
+                      clientLocationName: primaryLocation.locationName,
+                      ...buildSiteLocationSyncPatch(primaryLocation),
+                    }));
+                  }}
+                >
+                  Use current office location
+                </Button>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
