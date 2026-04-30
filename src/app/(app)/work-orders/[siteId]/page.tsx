@@ -574,8 +574,9 @@ export default function AssignGuardsPage() {
         setIsAssignDialogOpen(true);
         setIsLoadingGuards(true);
         try {
+            const districtScope = site?.district || workOrder.district;
             const districtsToQuery = canAdminWorkOrders
-                ? expandDistrictQueryValues([workOrder.district])
+                ? expandDistrictQueryValues([districtScope])
                 : expandDistrictQueryValues(assignedDistricts);
             if (districtsToQuery.length === 0) { setAvailableGuards([]); setIsLoadingGuards(false); return; }
             const snap = await getDocs(query(

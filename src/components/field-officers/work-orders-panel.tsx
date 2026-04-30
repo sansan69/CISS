@@ -42,10 +42,12 @@ import {
   CheckCircle2,
   ClipboardList,
   Users,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import type { WorkOrder } from "@/types/work-orders";
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
-import { districtMatches } from "@/lib/districts";
+import { districtMatches, expandDistrictQueryValues } from "@/lib/districts";
 
 type WorkOrderExamFields = Pick<
   WorkOrder,
@@ -432,18 +434,29 @@ export function WorkOrdersPanel() {
   const isAdmin = isWorkOrderAdminRole(userRole);
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [siteDistricts, setSiteDistricts] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
   const [availableGuards, setAvailableGuards] = useState<Employee[]>([]);
   const [isLoadingGuards, setIsLoadingGuards] = useState(false);
+  const [collapsedDateKeys, setCollapsedDateKeys] = useState<Set<string>>(new Set());
 
   const activeWorkOrders = useMemo(
     () =>
-      workOrders.filter(
-        (order) => (order.recordStatus ?? "active").trim().toLowerCase() === "active",
-      ),
-    [workOrders],
+      workOrders.filter((order) => {
+        if ((order.recordStatus ?? "active").trim().toLowerCase() !== "active") {
+          return false;
+        }
+
+        if (isAdmin) {
+          return true;
+        }
+
+        const resolvedDistrict = siteDistricts[order.siteId] || order.district || "";
+        return assignedDistricts.some((district) => districtMatches(district, resolvedDistrict));
+      }),
+    [assignedDistricts, isAdmin, siteDistricts, workOrders],
   );
 
   // ── Fetch work orders ──────────────────────────────────────────────────────
@@ -466,11 +479,7 @@ export function WorkOrdersPanel() {
       (snap) => {
         const orders = snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as WorkOrder))
-          .filter((order) => {
-            if (!isOperationalWorkOrderClientName(order.clientName)) return false;
-            if (isAdmin) return true;
-            return assignedDistricts.some((district) => districtMatches(district, order.district));
-          });
+          .filter((order) => isOperationalWorkOrderClientName(order.clientName));
         setWorkOrders(orders);
         setIsLoading(false);
       },
@@ -482,6 +491,32 @@ export function WorkOrdersPanel() {
 
     return () => unsub();
   }, [isAdmin, assignedDistricts, toast]);
+
+  useEffect(() => {
+    const siteIds = Array.from(new Set(workOrders.map((order) => order.siteId).filter(Boolean)));
+    if (siteIds.length === 0) {
+      setSiteDistricts({});
+      return;
+    }
+
+    const fetchSiteDistricts = async () => {
+      const mapping: Record<string, string> = {};
+      const chunkSize = 30;
+      for (let i = 0; i < siteIds.length; i += chunkSize) {
+        const chunk = siteIds.slice(i, i + chunkSize);
+        const snap = await getDocs(query(collection(db, "sites"), where("__name__", "in", chunk)));
+        snap.docs.forEach((doc) => {
+          const data = doc.data() as { district?: string; districtName?: string };
+          mapping[doc.id] = data.district || data.districtName || "";
+        });
+      }
+      setSiteDistricts(mapping);
+    };
+
+    fetchSiteDistricts().catch((error) => {
+      console.error("Error fetching site districts:", error);
+    });
+  }, [workOrders]);
 
   // ── Group by duty date ─────────────────────────────────────────────────────
   const ordersByDate = useMemo(() => {
@@ -520,12 +555,27 @@ export function WorkOrdersPanel() {
       }));
   }, [activeWorkOrders]);
 
+  const toggleDateGroup = useCallback((dateKey: string) => {
+    setCollapsedDateKeys((current) => {
+      const next = new Set(current);
+      if (next.has(dateKey)) {
+        next.delete(dateKey);
+      } else {
+        next.add(dateKey);
+      }
+      return next;
+    });
+  }, []);
+
   // ── Open assign dialog ─────────────────────────────────────────────────────
   const handleOpenAssign = useCallback(async (order: WorkOrder) => {
     setSelectedWorkOrder(order);
     setIsLoadingGuards(true);
     try {
-      const districtsToQuery = isAdmin ? [order.district] : assignedDistricts;
+      const districtScope = siteDistricts[order.siteId] || order.district || "";
+      const districtsToQuery = isAdmin
+        ? expandDistrictQueryValues([districtScope])
+        : expandDistrictQueryValues(assignedDistricts);
       if (districtsToQuery.length === 0) { setAvailableGuards([]); setIsLoadingGuards(false); return; }
       const snap = await getDocs(
         query(
@@ -540,7 +590,7 @@ export function WorkOrdersPanel() {
     } finally {
       setIsLoadingGuards(false);
     }
-  }, [isAdmin, assignedDistricts, toast]);
+  }, [assignedDistricts, isAdmin, siteDistricts, toast]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -586,112 +636,128 @@ export function WorkOrdersPanel() {
             const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
             return sum + assignedGuards.length;
           }, 0);
+          const isCollapsed = collapsedDateKeys.has(dateKey);
+          const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
 
           return (
-          <Card key={dateKey} className="overflow-hidden">
-            <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-3 border-b bg-muted/30">
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{dateLabel}</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {orders.length} dut{orders.length === 1 ? "y" : "ies"} · Assigned {dateAssignedCount}/{dateTotalRequired}
-                </p>
-              </div>
-              <Badge variant={dateAssignedCount >= dateTotalRequired ? "default" : "secondary"} className="shrink-0 text-[10px]">
-                {dateAssignedCount >= dateTotalRequired ? "Ready" : `${dateTotalRequired - dateAssignedCount} pending`}
-              </Badge>
-            </div>
+            <Card key={dateKey} className="overflow-hidden border-border/70">
+              <button
+                type="button"
+                onClick={() => toggleDateGroup(dateKey)}
+                aria-expanded={!isCollapsed}
+                aria-controls={`work-orders-date-${dateKey}`}
+                className="flex w-full items-start justify-between gap-3 border-b bg-muted/30 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background shadow-sm">
+                    <ToggleIcon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{dateLabel}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {orders.length} dut{orders.length === 1 ? "y" : "ies"} · Assigned {dateAssignedCount}/{dateTotalRequired}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <Badge variant={dateAssignedCount >= dateTotalRequired ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                    {dateAssignedCount >= dateTotalRequired ? "Ready" : `${dateTotalRequired - dateAssignedCount} pending`}
+                  </Badge>
+                  <span className="text-[11px] font-medium text-primary">
+                    {isCollapsed ? "View details" : "Hide details"}
+                  </span>
+                </div>
+              </button>
 
-            <CardContent className="p-0">
-              <div className="divide-y">
-                {orders.map((order) => {
-                  const totalRequired = order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired);
-                  const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
-                  const assignedCount = assignedGuards.length;
-                  const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                  const isFullyAssigned = assignedCount >= totalRequired && totalRequired > 0;
-                  const isUnassigned = assignedCount === 0;
+              {!isCollapsed && (
+                <CardContent id={`work-orders-date-${dateKey}`} className="p-0">
+                  <div className="divide-y">
+                    {orders.map((order) => {
+                      const totalRequired = order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired);
+                      const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+                      const assignedCount = assignedGuards.length;
+                      const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
+                      const isFullyAssigned = assignedCount >= totalRequired && totalRequired > 0;
+                      const isUnassigned = assignedCount === 0;
 
-                  const statusColor = isUnassigned
-                    ? "text-red-600"
-                    : isFullyAssigned
-                      ? "text-green-600"
-                      : "text-amber-600";
+                      const statusColor = isUnassigned
+                        ? "text-red-600"
+                        : isFullyAssigned
+                          ? "text-green-600"
+                          : "text-amber-600";
 
-                  const statusLabel = isUnassigned ? "Unassigned" : isFullyAssigned ? "Full" : "Partial";
-                  const statusBadgeClass = isUnassigned
-                    ? "bg-red-100 text-red-700 border-red-200"
-                    : isFullyAssigned
-                      ? "bg-green-100 text-green-700 border-green-200"
-                      : "bg-amber-100 text-amber-700 border-amber-200";
+                      const statusLabel = isUnassigned ? "Unassigned" : isFullyAssigned ? "Full" : "Partial";
+                      const statusBadgeClass = isUnassigned
+                        ? "bg-red-100 text-red-700 border-red-200"
+                        : isFullyAssigned
+                          ? "bg-green-100 text-green-700 border-green-200"
+                          : "bg-amber-100 text-amber-700 border-amber-200";
 
-                  return (
-                    <div key={order.id} className="p-4">
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{order.siteName}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {order.examName || order.examCode || "General Duty"} · {order.district}
-                          </p>
-                        </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
-                          {statusLabel}
-                        </span>
-                      </div>
-
-                      {/* Stats */}
-                      <div className="grid grid-cols-4 gap-2 text-center mb-3">
-                        <div>
-                          <p className="text-base font-bold leading-none">{order.maleGuardsRequired}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Male</p>
-                        </div>
-                        <div>
-                          <p className="text-base font-bold leading-none">{order.femaleGuardsRequired}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Female</p>
-                        </div>
-                        <div>
-                          <p className="text-base font-bold leading-none">{totalRequired}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Required</p>
-                        </div>
-                        <div>
-                          <p className={`text-base font-bold leading-none ${statusColor}`}>{assignedCount}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Assigned</p>
-                        </div>
-                      </div>
-
-                      {/* Progress */}
-                      <Progress value={percent} className="h-1.5 mb-3" />
-
-                      {/* Assigned guards preview */}
-                      {assignedCount > 0 && (
-                        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-                          <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {assignedGuards.slice(0, 4).map((g) => (
-                            <span key={g.uid} className="text-xs bg-muted rounded-full px-2 py-0.5 truncate max-w-[100px]">
-                              {g.name}
+                      return (
+                        <div key={order.id} className="p-4">
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{order.siteName}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {order.examName || order.examCode || "General Duty"} · {order.district}
+                              </p>
+                            </div>
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
+                              {statusLabel}
                             </span>
-                          ))}
-                          {assignedCount > 4 && (
-                            <span className="text-xs text-muted-foreground">+{assignedCount - 4} more</span>
-                          )}
-                        </div>
-                      )}
+                          </div>
 
-                      {/* Assign button */}
-                      <Button
-                        size="sm"
-                        variant={isUnassigned ? "default" : "outline"}
-                        className="w-full"
-                        onClick={() => handleOpenAssign(order)}
-                      >
-                        <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                        {isUnassigned ? "Assign Guards" : "Edit Assignment"}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                          <div className="grid grid-cols-4 gap-2 text-center mb-3">
+                            <div>
+                              <p className="text-base font-bold leading-none">{order.maleGuardsRequired}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">Male</p>
+                            </div>
+                            <div>
+                              <p className="text-base font-bold leading-none">{order.femaleGuardsRequired}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">Female</p>
+                            </div>
+                            <div>
+                              <p className="text-base font-bold leading-none">{totalRequired}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">Required</p>
+                            </div>
+                            <div>
+                              <p className={`text-base font-bold leading-none ${statusColor}`}>{assignedCount}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">Assigned</p>
+                            </div>
+                          </div>
+
+                          <Progress value={percent} className="h-1.5 mb-3" />
+
+                          {assignedCount > 0 && (
+                            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                              <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              {assignedGuards.slice(0, 4).map((g) => (
+                                <span key={g.uid} className="text-xs bg-muted rounded-full px-2 py-0.5 truncate max-w-[100px]">
+                                  {g.name}
+                                </span>
+                              ))}
+                              {assignedCount > 4 && (
+                                <span className="text-xs text-muted-foreground">+{assignedCount - 4} more</span>
+                              )}
+                            </div>
+                          )}
+
+                          <Button
+                            size="sm"
+                            variant={isUnassigned ? "default" : "outline"}
+                            className="w-full"
+                            onClick={() => handleOpenAssign(order)}
+                          >
+                            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                            {isUnassigned ? "Assign Guards" : "Edit Assignment"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
           );
         })}
       </div>
