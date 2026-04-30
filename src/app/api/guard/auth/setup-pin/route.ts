@@ -102,7 +102,21 @@ export async function POST(request: Request) {
         .where("employeeId", "==", normalizedEmployeeId)
         .limit(1)
         .get();
+
+      if (empQuery.empty) {
+        empQuery = await employeesRef
+          .where("legacyUniqueId", "==", normalizedEmployeeId)
+          .limit(1)
+          .get();
+      }
     } else {
+      empQuery = await employeesRef
+        .where("phoneNumber", "==", normalizedPhone)
+        .limit(1)
+        .get();
+    }
+
+    if (empQuery.empty && normalizedPhone) {
       empQuery = await employeesRef
         .where("phoneNumber", "==", normalizedPhone)
         .limit(1)

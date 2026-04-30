@@ -25,7 +25,23 @@ export async function POST(request: NextRequest) {
         .where("employeeId", "==", employeeId)
         .limit(1)
         .get();
+
+      if (snapshot.empty) {
+        snapshot = await adminDb
+          .collection("employees")
+          .where("legacyUniqueId", "==", employeeId)
+          .limit(1)
+          .get();
+      }
     } else {
+      snapshot = await adminDb
+        .collection("employees")
+        .where("phoneNumber", "==", phone)
+        .limit(1)
+        .get();
+    }
+
+    if (snapshot.empty && phone) {
       snapshot = await adminDb
         .collection("employees")
         .where("phoneNumber", "==", phone)

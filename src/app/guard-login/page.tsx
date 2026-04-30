@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, QrCode, Phone, ScanLine, RotateCcw, ArrowRight, KeyRound, ShieldCheck, Sparkles, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
-import { parseEmployeeIdFromQrText } from "@/lib/qr/employee-qr";
+import { parseEmployeeIdFromQrText, parseEmployeeQrText } from "@/lib/qr/employee-qr";
 import { normalizeScannerError } from "@/lib/qr/scanner-support";
 import { startSafeHybridQrScanner } from "@/lib/qr/scanner-engine";
 import type { QrScannerErrorCode, QrScannerSession } from "@/lib/qr/scanner-types";
@@ -31,6 +31,7 @@ export default function GuardLoginPage() {
 
   const [qrStep, setQrStep] = useState<"scan" | "pin">("scan");
   const [scannedEmployeeId, setScannedEmployeeId] = useState("");
+  const [scannedQrText, setScannedQrText] = useState("");
   const [scannedEmployeeName, setScannedEmployeeName] = useState("");
   const [qrPin, setQrPin] = useState("");
   const [isQrLoading, setIsQrLoading] = useState(false);
@@ -164,6 +165,7 @@ export default function GuardLoginPage() {
           scannerSessionRef.current = null;
         }
         setIsScanning(false);
+        setScannedQrText(text);
         setScannedEmployeeId(parseEmployeeIdFromQrText(text) ?? text.trim());
         setQrStep("pin");
       },
@@ -201,19 +203,24 @@ export default function GuardLoginPage() {
     stopScanner();
     setQrStep("scan");
     setScannedEmployeeId("");
+    setScannedQrText("");
     setScannedEmployeeName("");
     setQrPin("");
   }, [stopScanner]);
 
   const handleQrPinStep = useCallback(async () => {
-    if (!scannedEmployeeId) return;
+    if (!scannedEmployeeId && !scannedQrText) return;
     setIsQrLoading(true);
     try {
-      const employeeId = parseEmployeeIdFromQrText(scannedEmployeeId) ?? scannedEmployeeId;
+      const parsedQr = parseEmployeeQrText(scannedQrText || scannedEmployeeId);
+      const employeeId = parsedQr.employeeId ?? scannedEmployeeId;
       const res = await fetch("/api/guard/auth/pin-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId }),
+        body: JSON.stringify({
+          employeeId,
+          ...(parsedQr.phoneNumber ? { phoneNumber: parsedQr.phoneNumber } : {}),
+        }),
       });
       const data = await res.json();
 
@@ -243,17 +250,22 @@ export default function GuardLoginPage() {
     } finally {
       setIsQrLoading(false);
     }
-  }, [resetQrFlow, router, scannedEmployeeId, toast]);
+  }, [resetQrFlow, router, scannedEmployeeId, scannedQrText, toast]);
 
   const handleQrLogin = async () => {
-    if (!scannedEmployeeId || qrPin.length < 4) return;
+    if ((!scannedEmployeeId && !scannedQrText) || qrPin.length < 4) return;
     setIsQrLoading(true);
     try {
-      const employeeId = parseEmployeeIdFromQrText(scannedEmployeeId) ?? scannedEmployeeId;
+      const parsedQr = parseEmployeeQrText(scannedQrText || scannedEmployeeId);
+      const employeeId = parsedQr.employeeId ?? scannedEmployeeId;
       const res = await fetch("/api/guard/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, pin: qrPin }),
+        body: JSON.stringify({
+          employeeId,
+          ...(parsedQr.phoneNumber ? { phoneNumber: parsedQr.phoneNumber } : {}),
+          pin: qrPin,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
