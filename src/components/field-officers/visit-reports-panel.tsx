@@ -16,6 +16,7 @@ import { Plus, FileText, CheckCircle2, Clock, Eye, ImageIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
+import { getSiteUploadHint, hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -101,6 +102,10 @@ export function VisitReportsPanel() {
   const handleSubmit = async () => {
     if (!form.clientId || !form.visitDate || !form.summary) {
       toast({ title: "Missing fields", description: "Client, visit date, and summary are required.", variant: "destructive" });
+      return;
+    }
+    if (isSiteUploadRequired("visit", form.status) && !hasSiteUploads(photoUrls)) {
+      toast({ title: "Missing uploads", description: "Add at least one site photo or file before submitting.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -411,7 +416,10 @@ export function VisitReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Photos</Label>
+              <Label>Site Uploads {isSiteUploadRequired("visit", form.status) ? "*" : ""}</Label>
+              <p className="text-xs text-muted-foreground">
+                {getSiteUploadHint("visit", form.status)}
+              </p>
               <PhotoCapture
                 urls={photoUrls}
                 onChange={setPhotoUrls}
@@ -485,7 +493,7 @@ export function VisitReportsPanel() {
               {selectedReport.photoUrls?.length > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Photos ({selectedReport.photoUrls.length})
+                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Site Uploads ({selectedReport.photoUrls.length})
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {selectedReport.photoUrls.map((url, i) => (

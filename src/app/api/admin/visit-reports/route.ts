@@ -185,6 +185,14 @@ export async function POST(request: Request) {
     const profile = await getFieldOfficerProfile(adminDb, decoded);
     const site = await resolveSite(adminDb, body.siteId);
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
+    const status = body.status ?? "draft";
+
+    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length === 0)) {
+      return NextResponse.json(
+        { error: "At least one site upload is required before submitting a visit report." },
+        { status: 400 },
+      );
+    }
 
     if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
       return NextResponse.json(
@@ -209,7 +217,7 @@ export async function POST(request: Request) {
       guardsPresentCount: body.guardsPresentCount ?? 0,
       guardsAbsentCount: body.guardsAbsentCount ?? 0,
       photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
-      status: body.status ?? "draft",
+      status,
       createdAt: FieldValue.serverTimestamp(),
     });
 

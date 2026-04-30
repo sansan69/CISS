@@ -186,6 +186,13 @@ export async function POST(request: Request) {
     const site = await resolveSite(adminDb, body.siteId);
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
 
+    if (!Array.isArray(body.photoUrls) || body.photoUrls.length === 0) {
+      return NextResponse.json(
+        { error: "At least one site upload is required before submitting a training report." },
+        { status: 400 },
+      );
+    }
+
     if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
       return NextResponse.json(
         { error: "This site is outside your assigned districts." },

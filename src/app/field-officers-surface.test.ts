@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const appLayoutSource = readFileSync(
-  resolve(process.cwd(), "src/app/(app)/layout.tsx"),
+const navigationSource = readFileSync(
+  resolve(process.cwd(), "src/app/(app)/navigation.ts"),
   "utf8",
 );
 const fieldOfficersPageSource = readFileSync(
@@ -20,16 +20,11 @@ const trainingReportsPageSource = readFileSync(
 );
 
 describe("field officer operations surface", () => {
-  it("keeps a single field officers entry in the sidebar", () => {
-    expect(appLayoutSource).toContain("{ href: '/field-officers'");
-    expect(appLayoutSource).toContain("label: 'Field Officers'");
-  });
-
-  it("removes standalone visit and training report links from the sidebar", () => {
-    expect(appLayoutSource).not.toContain("{ href: '/visit-reports'");
-    expect(appLayoutSource).not.toContain("{ href: '/training-reports'");
-    expect(appLayoutSource).not.toContain("label: 'Visit Reports'");
-    expect(appLayoutSource).not.toContain("label: 'Training Reports'");
+  it("keeps field officer routes in the navigation model", () => {
+    expect(navigationSource).toContain("href: \"/field-officers\"");
+    expect(navigationSource).toContain("href: \"/visit-reports\"");
+    expect(navigationSource).toContain("href: \"/training-reports\"");
+    expect(navigationSource).toContain("fieldOfficerVisible: true");
   });
 
   it("uses the field officers page as the combined workspace", () => {
@@ -42,11 +37,13 @@ describe("field officer operations surface", () => {
     expect(fieldOfficersPageSource).toContain("value=\"training-reports\"");
   });
 
-  it("redirects legacy visit reports route into the field officers workspace", () => {
-    expect(visitReportsPageSource).toContain("redirect('/field-officers?tab=visit-reports')");
+  it("keeps standalone visit reports as a wrapper page", () => {
+    expect(visitReportsPageSource).toContain('title="Visit Reports"');
+    expect(visitReportsPageSource).toContain("<VisitReportsPanel />");
   });
 
-  it("redirects legacy training reports route into the field officers workspace", () => {
-    expect(trainingReportsPageSource).toContain("redirect('/field-officers?tab=training-reports')");
+  it("keeps standalone training reports as a wrapper page", () => {
+    expect(trainingReportsPageSource).toContain('title="Training Reports"');
+    expect(trainingReportsPageSource).toContain("<TrainingReportsPanel />");
   });
 });

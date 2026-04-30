@@ -16,6 +16,7 @@ import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon, FileText } from "luc
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
+import { getSiteUploadHint, hasSiteUploads } from "@/components/field-officers/site-report-upload";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -93,6 +94,10 @@ export function TrainingReportsPanel() {
   const handleSubmit = async () => {
     if (!form.clientId || !form.trainingDate || !form.topic) {
       toast({ title: "Missing fields", description: "Client, training date, and topic are required.", variant: "destructive" });
+      return;
+    }
+    if (!hasSiteUploads(photoUrls)) {
+      toast({ title: "Missing uploads", description: "Add at least one site photo or file before submitting.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -281,7 +286,7 @@ export function TrainingReportsPanel() {
               {detailReport.photoUrls?.length > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Photos ({detailReport.photoUrls.length})
+                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Site Uploads ({detailReport.photoUrls.length})
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {detailReport.photoUrls.map((url, i) => (
@@ -448,7 +453,10 @@ export function TrainingReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Photos</Label>
+              <Label>Site Uploads *</Label>
+              <p className="text-xs text-muted-foreground">
+                {getSiteUploadHint("training")}
+              </p>
               <PhotoCapture
                 urls={photoUrls}
                 onChange={setPhotoUrls}
