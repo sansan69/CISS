@@ -14,6 +14,12 @@ describe("site directory helpers", () => {
     ).toBe(true);
   });
 
+  it("matches client names across punctuation differences", () => {
+    expect(
+      siteBelongsToClient({ clientName: "Anil's" }, undefined, "Anil"),
+    ).toBe(true);
+  });
+
   it("sorts sites by name", () => {
     expect(
       sortSitesByName([{ siteName: "Zulu" }, { siteName: "Alpha" } as any]).map((site) => site.siteName),

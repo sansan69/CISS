@@ -14,6 +14,14 @@ function normalizeText(value: unknown) {
     .trim();
 }
 
+function normalizeClientKey(value: unknown) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/'s\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 export function normalizeClientMatch(value: unknown) {
   return normalizeText(value).toLowerCase();
 }
@@ -27,7 +35,12 @@ export function matchesClientScope(
     return true;
   }
 
-  return normalizeClientMatch(record.clientName) === normalizeClientMatch(scope.clientName);
+  const recordClientName = normalizeClientMatch(record.clientName);
+  if (recordClientName === normalizeClientMatch(scope.clientName)) {
+    return true;
+  }
+
+  return normalizeClientKey(record.clientName) === normalizeClientKey(scope.clientName);
 }
 
 export async function resolveClientScope(

@@ -5,6 +5,31 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-04-30] — Session: Attendance duty-point requirement, work-order district resolution, and client/site name matching
+
+**Files modified:**
+
+### 1. Attendance now requires an explicit duty point selection
+- `src/app/attendance/page.tsx` — removed the silent auto-pick for duty points and made the review step show a prominent required duty-point selector before submission.
+- When a site has duty points, the submit button now clearly blocks with `Select duty point first` until one is chosen.
+
+### 2. Work orders now resolve districts from the site record first
+- `src/components/field-officers/work-orders-panel.tsx` — field officer upcoming duties now use the site district as the authority, not just the raw work-order district.
+- `src/app/(app)/work-orders/[siteId]/page.tsx` — admin assignment lookup now uses the resolved site district and expands district aliases before querying guards.
+- `src/lib/districts.ts` — keeps alias support for district spellings like `Trivandrum` and `Thiruvananthapuram`.
+
+### 3. Client/site matching now tolerates punctuation differences
+- `src/lib/server/client-access.ts` — client scope matching now normalizes punctuation and possessives, so names like `Anil` and `Anil's` resolve together.
+- `src/lib/sites/site-directory.ts` — site-to-client matching now uses the same normalized key, so sites do not disappear from client pages because of punctuation differences.
+- `src/app/page.tsx` — landing page polish and portal entry UI refresh.
+- `src/lib/sites/site-directory.test.ts` — regression for client-name matching across punctuation differences.
+- `src/app/api/mobile/session/route.test.ts` — regression coverage for field officer and guard mobile session resolution.
+
+**Behavioral impact:**  
+These changes keep attendance duty-point selection explicit, make field officer work orders line up with the authoritative site district, and prevent client-scoped sites from disappearing because of punctuation-only name differences.
+
+---
+
 ## [2026-04-28] — Client Portal: Credential Management + Per-Client Dashboard Visibility
 
 **Problem:** Admin had no way to edit client portal user credentials (name/email/password) or control which dashboard sections each client could see. All clients saw identical dashboards.

@@ -249,17 +249,21 @@ export default function LandingPage() {
   };
 
   return (
-    <main
-      className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground"
-      data-slot="landing-shell"
-    >
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-4 sm:px-6 sm:py-5 lg:justify-center lg:px-8 lg:py-10">
+    <main className="relative min-h-[100dvh] overflow-hidden bg-[#f5f8fc] text-foreground" data-slot="landing-shell">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-32 top-[-8rem] h-[24rem] w-[24rem] rounded-full bg-brand-blue/12 blur-3xl" />
+        <div className="absolute right-[-10rem] top-24 h-[34rem] w-[34rem] rounded-full bg-brand-gold/12 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(11,79,130,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(201,167,91,0.08),transparent_24%)]" />
+        <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(to_right,rgba(20,33,51,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(20,33,51,0.06)_1px,transparent_1px)] [background-size:72px_72px]" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
         <section
           data-mobile-section="header"
-          className="flex items-center justify-between px-1 py-1 sm:px-0 lg:hidden"
+          className="flex items-center justify-between gap-4 px-1 py-1 sm:px-0 lg:hidden"
         >
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="rounded-2xl border border-border bg-card/88 p-2 shadow-brand-xs">
+            <div className="rounded-2xl border border-border/80 bg-white/85 p-2 shadow-brand-xs backdrop-blur">
               <Image
                 src="/ciss-logo.png"
                 alt="CISS Workforce Logo"
@@ -278,37 +282,49 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
+          <div className="hidden rounded-full border border-border/70 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-blue shadow-brand-xs sm:inline-flex">
+            Live backend
+          </div>
         </section>
 
         {portalContext?.isClientPortal && portalContext.client ? (
-          <section className="mt-3 rounded-3xl border border-brand-blue/10 bg-card/92 p-5 shadow-card lg:mt-0">
+          <section className="mt-3 rounded-[1.75rem] border border-brand-blue/10 bg-white/82 p-4 shadow-brand-sm backdrop-blur sm:p-5 lg:mt-0">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-blue">Client Portal</p>
-                <h2 className="mt-2 text-2xl font-bold tracking-tight">{portalContext.client.name}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+              <div className="max-w-xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-blue">
+                  Client portal
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-[2rem]">
+                  {portalContext.client.name}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   This subdomain is assigned by the admin for the {portalContext.client.name} client dashboard.
                 </p>
               </div>
-              <Button asChild>
-                <Link href="/admin-login">Open Portal Login</Link>
+              <Button asChild className="h-11 rounded-xl px-4">
+                <Link href="/admin-login">Open portal login</Link>
               </Button>
             </div>
           </section>
         ) : null}
 
-        <div className="mt-3 grid items-start gap-3 lg:mt-0 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-14">
+        <div className="mt-4 grid items-start gap-6 lg:mt-8 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-12">
           <section
             data-desktop-section="brand"
-            className="hidden flex-col justify-center gap-4 px-1 py-1 lg:flex lg:px-1 lg:py-6 animate-slide-up"
+            className="hidden flex-col justify-center gap-6 px-1 py-2 lg:flex lg:px-1 lg:py-6 animate-slide-up"
           >
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border/70 bg-white/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-blue shadow-brand-xs backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-gold" />
+              Security workforce management platform
+            </div>
+
             <div className="flex items-center gap-3.5">
-              <div className="rounded-2xl border border-border bg-card/88 p-2.5 shadow-brand-sm">
+              <div className="rounded-[1.4rem] border border-border/80 bg-white/80 p-2.5 shadow-brand-sm backdrop-blur">
                 <Image
                   src="/ciss-logo.png"
                   alt="CISS Workforce Logo"
-                  width={56}
-                  height={56}
+                  width={60}
+                  height={60}
                   priority
                   className="h-12 w-12"
                 />
@@ -323,31 +339,106 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="max-w-sm space-y-2.5">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/72">
-                Verification-first access
-              </p>
-              <h1 className="text-[1.95rem] font-semibold leading-tight text-foreground sm:text-[2.2rem] lg:text-[2.45rem] lg:leading-[1.08] font-exo2">
+            <div className="max-w-2xl space-y-4">
+              <h1
+                className="text-[clamp(2.9rem,5.2vw,5.1rem)] font-bold leading-[0.96] tracking-[-0.055em] text-foreground font-exo2"
+                style={{ textWrap: "balance" }}
+              >
                 Fast mobile verification for daily workforce access.
               </h1>
+              <p className="max-w-xl text-base leading-7 text-muted-foreground lg:text-[1.03rem]">
+                Use your mobile number to verify attendance, or open the guard and admin portals in one step.
+                The landing page now carries the company name, logo, and support language more consistently.
+              </p>
+            </div>
+
+            <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
+              {[
+                { label: "Attendance", value: "Fast mobile check-in" },
+                { label: "Guard portal", value: "PIN and QR access" },
+                { label: "Admin oversight", value: "Client dashboards and reports" },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-[1.4rem] border border-border/70 bg-white/76 p-4 shadow-brand-xs backdrop-blur"
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-foreground">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="max-w-2xl rounded-[1.75rem] border border-border/70 bg-white/78 p-5 shadow-brand-sm backdrop-blur">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-blue/10 text-brand-blue">
+                  <Phone className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Company contact
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Use this channel for portal access, deployment issues, and guard support.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <a
+                  href="mailto:admin@cisskerala.app"
+                  className="group flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-4 py-3 transition-all duration-200 hover:border-brand-blue/30 hover:bg-brand-blue/5"
+                >
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Support email
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">admin@cisskerala.app</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                </a>
+                <a
+                  href="https://cisskerala.site"
+                  className="group flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-4 py-3 transition-all duration-200 hover:border-brand-blue/30 hover:bg-brand-blue/5"
+                >
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Portal
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">cisskerala.site</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                </a>
+              </div>
             </div>
           </section>
 
-          <div className="flex flex-col gap-3 sm:gap-4 lg:self-center">
+          <div className="flex flex-col gap-4 lg:self-center">
             <section
               data-mobile-section="verification"
-              className="flex flex-col rounded-3xl border border-border bg-card/92 p-4 shadow-brand-lg backdrop-blur sm:p-5 lg:p-7 animate-slide-up stagger-1"
+              className="flex flex-col rounded-[2rem] border border-border/70 bg-white/86 p-4 shadow-brand-lg backdrop-blur sm:p-5 lg:p-8 animate-slide-up stagger-1"
             >
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl font-exo2">
-                  Enter mobile number.
-                </h2>
-                <p className="max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
-                  Use your employee mobile number to continue.
-                </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="max-w-md space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-blue">
+                    Verification first
+                  </p>
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl font-exo2">
+                    Enter mobile number.
+                  </h2>
+                  <p className="max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
+                    Fast mobile verification for daily workforce access.
+                  </p>
+                </div>
+                <div className="hidden rounded-[1.5rem] border border-brand-blue/10 bg-brand-blue/5 px-4 py-3 text-right sm:block">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-blue">
+                    One login
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground">Right portal, right role.</p>
+                </div>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-4 sm:p-5">
+              <div className="mt-5 rounded-[1.5rem] border border-border/80 bg-[#fbfcfe] p-4 sm:p-5">
                 <label
                   htmlFor="employee-phone"
                   className="mb-3 block text-sm font-semibold text-foreground"
@@ -363,7 +454,9 @@ export default function LandingPage() {
                     autoComplete="tel"
                     placeholder="Enter your 10-digit number"
                     value={phoneNumber}
-                    onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                    onChange={(event) =>
+                      setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
+                    }
                     className="h-14 rounded-2xl bg-background pl-12 text-base shadow-none"
                     maxLength={10}
                     disabled={isLoading}
@@ -390,33 +483,49 @@ export default function LandingPage() {
                     </>
                   )}
                 </Button>
+
+                <div className="mt-4 rounded-2xl border border-dashed border-brand-blue/15 bg-brand-blue/5 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                  We check whether the number exists, then route you to the guard portal or enrollment flow.
+                </div>
               </div>
             </section>
 
             <section
               data-mobile-section="quick-access"
-              className="rounded-3xl border border-border bg-card/74 p-3 shadow-brand-sm backdrop-blur-sm sm:p-4 animate-slide-up stagger-2"
+              className="rounded-[2rem] border border-border/70 bg-white/76 p-4 shadow-brand-sm backdrop-blur-sm sm:p-5 animate-slide-up stagger-2"
             >
-              <div className="mb-2.5">
-                <h3 className="text-base font-semibold text-foreground sm:text-lg font-exo2">Quick access</h3>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground sm:text-lg font-exo2">
+                    Quick access
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Direct links for common portal actions.
+                  </p>
+                </div>
+                <span className="rounded-full border border-border/70 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  3 links
+                </span>
               </div>
-              <div className="space-y-2">
+              <div className="mt-4 divide-y divide-border/70 overflow-hidden rounded-[1.5rem] border border-border/70 bg-white">
                 {quickLinks.map(({ href, label, description, icon: Icon }) => (
                   <Link
                     key={href}
                     href={href}
-                    className="group flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 transition-all duration-200 hover:border-primary/40 hover:bg-muted/50 sm:gap-3.5 sm:px-3.5"
+                    className="group flex items-center gap-3 px-4 py-4 transition-colors duration-200 hover:bg-brand-blue/5 sm:gap-3.5"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-blue/10 text-brand-blue transition-colors duration-200 group-hover:bg-brand-blue group-hover:text-white">
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold leading-5 text-foreground sm:text-base">{label}</p>
+                      <p className="text-sm font-semibold leading-5 text-foreground sm:text-base">
+                        {label}
+                      </p>
                       <p className="mt-0.5 text-xs leading-5 text-muted-foreground sm:text-sm">
                         {description}
                       </p>
                     </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </Link>
                 ))}
               </div>
