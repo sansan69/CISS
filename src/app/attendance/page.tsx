@@ -219,14 +219,6 @@ export default function AttendancePage() {
     [resolvedShift, shiftMode, shiftTemplates],
   );
 
-  const pickDefaultDutyPoint = useCallback((points: DutyPoint[]) => {
-    if (points.length === 0) return "";
-    const activeNow =
-      points.find((point) => resolveSiteShift(point.shiftMode, point.shiftTemplates, currentTime ?? new Date())) ??
-      null;
-    return activeNow?.id ?? points[0]?.id ?? "";
-  }, [currentTime]);
-
   const pickSuggestedShiftCode = useCallback((templates: ShiftTemplate[]) => {
     if (templates.length === 0) return "";
 
@@ -438,9 +430,9 @@ export default function AttendancePage() {
     }
 
     if (!dutyPointOptions.some((point) => point.id === selectedDutyPointId)) {
-      setSelectedDutyPointId(pickDefaultDutyPoint(dutyPointOptions));
+      setSelectedDutyPointId('');
     }
-  }, [dutyPointOptions, hasManualShiftOverride, pickDefaultDutyPoint, selectedDutyPointId, selectedShiftCode, selectedSite]);
+  }, [dutyPointOptions, hasManualShiftOverride, selectedDutyPointId, selectedShiftCode, selectedSite]);
 
   useEffect(() => {
     if (shiftMode !== 'fixed' || shiftTemplates.length === 0) {
@@ -516,11 +508,7 @@ export default function AttendancePage() {
     setSelectedSiteId(site.id);
     setHasManualShiftOverride(false);
     setSelectedShiftCode('');
-    const defaultDutyPoint =
-      site.sourceCollection === 'sites' && Array.isArray(site.dutyPoints)
-        ? pickDefaultDutyPoint(site.dutyPoints)
-        : '';
-    setSelectedDutyPointId(defaultDutyPoint);
+    setSelectedDutyPointId('');
 
     if (!options?.silent) {
       toast({
@@ -528,7 +516,7 @@ export default function AttendancePage() {
         description: `${site.siteName}, ${site.district}${Number.isFinite(site.distanceMeters) ? ` • ${Math.round(site.distanceMeters)}m away` : ''}`,
       });
     }
-  }, [pickDefaultDutyPoint, toast]);
+  }, [toast]);
 
   // Auto-select the nearest district containing the employee's client sites
   const autoSelectBestDistrict = useCallback((
@@ -1762,6 +1750,72 @@ export default function AttendancePage() {
                 )}
               </div>
 
+              {selectedSite?.sourceCollection === 'sites' && dutyPointOptions.length > 0 && (
+                <Alert
+                  variant={selectedDutyPoint ? 'default' : 'destructive'}
+                  className={`mt-4 ${selectedDutyPoint ? 'border-amber-200 bg-amber-50/70 text-amber-950' : ''}`}
+                >
+                  <Badge className="mb-2 w-fit" variant={selectedDutyPoint ? 'secondary' : 'destructive'}>
+                    Required
+                  </Badge>
+                  <AlertTitle className="text-sm">
+                    {selectedDutyPoint ? 'Duty point selected' : 'Select a duty point before submitting'}
+                  </AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p className="text-sm">
+                      This site has multiple duty points. Choose the exact duty point now so the attendance record is saved correctly.
+                    </p>
+                    <div className="grid gap-2">
+                      <Label>Duty point</Label>
+                      <Select
+                        value={selectedDutyPointId}
+                        onValueChange={(value) => {
+                          setHasManualCenterOverride(true);
+                          setSelectedDutyPointId(value);
+                          setSelectedShiftCode('');
+                          setHasManualShiftOverride(false);
+                        }}
+                      >
+                        <SelectTrigger className={`h-12 ${selectedDutyPoint ? '' : 'border-destructive focus:ring-destructive/30'}`}>
+                          <SelectValue placeholder="Select duty point" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {dutyPointOptions.map((point) => (
+                            <SelectItem key={point.id} value={point.id}>
+                              {point.name} · {DUTY_POINT_COVERAGE_LABELS[point.coverageMode]} · {DUTY_POINT_HOURS_LABELS[point.dutyHours]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedDutyPoint?.notes ? (
+                        <p className="text-xs text-muted-foreground">{selectedDutyPoint.notes}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {dutyPointOptions.map((point) => {
+                        const isSelectedPoint = point.id === selectedDutyPointId;
+                        return (
+                          <span
+                            key={point.id}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                              isSelectedPoint
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-background text-muted-foreground'
+                            }`}
+                          >
+                            <span className="max-w-[12rem] truncate">{point.name}</span>
+                            <span className="opacity-70">·</span>
+                            <span>{DUTY_POINT_COVERAGE_LABELS[point.coverageMode]}</span>
+                            <span className="opacity-70">·</span>
+                            <span>{DUTY_POINT_HOURS_LABELS[point.dutyHours]}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <Accordion type="single" collapsible className="mt-4">
                 <AccordionItem value="change-center">
                   <AccordionTrigger>Change center if this is wrong</AccordionTrigger>
@@ -1823,11 +1877,7 @@ export default function AttendancePage() {
                                       setSelectedSiteId(site.id);
                                       setSelectedShiftCode('');
                                       setHasManualShiftOverride(false);
-                                      setSelectedDutyPointId(
-                                        site.sourceCollection === 'sites'
-                                          ? pickDefaultDutyPoint(site.dutyPoints || [])
-                                          : '',
-                                      );
+                                      setSelectedDutyPointId('');
                                     }}
                                     className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                                       isSelected
@@ -1867,35 +1917,6 @@ export default function AttendancePage() {
                               })}
                             </div>
                           )}
-                        </div>
-                      )}
-
-                      {selectedSite?.sourceCollection === 'sites' && dutyPointOptions.length > 0 && (
-                        <div className="grid gap-2">
-                          <Label>Duty point</Label>
-                          <Select
-                            value={selectedDutyPointId}
-                            onValueChange={(value) => {
-                              setHasManualCenterOverride(true);
-                              setSelectedDutyPointId(value);
-                              setSelectedShiftCode('');
-                              setHasManualShiftOverride(false);
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select duty point" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {dutyPointOptions.map((point) => (
-                                <SelectItem key={point.id} value={point.id}>
-                                  {point.name} · {DUTY_POINT_COVERAGE_LABELS[point.coverageMode]} · {DUTY_POINT_HOURS_LABELS[point.dutyHours]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {selectedDutyPoint?.notes ? (
-                            <p className="text-xs text-muted-foreground">{selectedDutyPoint.notes}</p>
-                          ) : null}
                         </div>
                       )}
 
@@ -2058,7 +2079,9 @@ export default function AttendancePage() {
                       </Button>
                       <Button size="lg" className="h-12 w-full" onClick={handleSubmitAttendance} disabled={!canSubmit}>
                         <CheckCircle className="mr-2 h-4 w-4" />
-                        Submit attendance
+                        {selectedSite?.sourceCollection === 'sites' && dutyPointOptions.length > 0 && !selectedDutyPoint
+                          ? 'Select duty point first'
+                          : 'Submit attendance'}
                       </Button>
                     </div>
                   </div>
