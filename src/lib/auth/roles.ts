@@ -2,6 +2,7 @@ import type { User } from "firebase/auth";
 import { doc, getDoc, getDocs, query, where, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { isLegacyAdminEmail } from "@/lib/auth/admin";
+import { canonicalizeDistrictList } from "@/lib/districts";
 import type { AppRole, ResolvedAppUser } from "@/types/app";
 
 function claimsToRole(claims: Record<string, unknown> | undefined): AppRole | null {
@@ -84,7 +85,9 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
 
   if (!officerSnapshot.empty) {
     const raw = officerSnapshot.docs[0].data();
-    const assignedDistricts = Array.isArray(raw?.assignedDistricts) ? (raw.assignedDistricts as string[]) : [];
+    const assignedDistricts = Array.isArray(raw?.assignedDistricts)
+      ? canonicalizeDistrictList((raw.assignedDistricts as unknown[]).filter((district): district is string => typeof district === "string"))
+      : [];
     const foStateCode = typeof raw?.stateCode === "string" ? raw.stateCode : stateCode;
     const refreshedRole = claimedRole === "fieldOfficer" ? claimedRole : await refreshClaimedRole(user);
     return {

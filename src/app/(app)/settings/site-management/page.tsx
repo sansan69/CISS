@@ -59,7 +59,9 @@ import type { ClientLocation, CoordinateSource, CoordinateStatus, DutyPoint, Dut
 import { PageHeader } from '@/components/layout/page-header';
 import { authorizedFetch } from '@/lib/api-client';
 import {
+    canonicalizeDistrictList,
     canonicalizeDistrictName,
+    expandDistrictQueryValues,
     getDefaultDistrictSuggestions,
     isRecognizedDistrictName,
     mergeDistrictOptions,
@@ -614,7 +616,14 @@ export default function SiteManagementPage() {
                 } as ClientLocationOption)));
 
                 const officersSnapshot = await getDocs(query(collection(db, 'fieldOfficers'), orderBy('name')));
-                setFieldOfficers(officersSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name, assignedDistricts: doc.data().assignedDistricts } as FieldOfficerOption)));
+                setFieldOfficers(officersSnapshot.docs.map((doc) => {
+                    const raw = doc.data() as { name?: string; assignedDistricts?: Array<string | null | undefined> };
+                    return {
+                        id: doc.id,
+                        name: raw.name ?? '',
+                        assignedDistricts: canonicalizeDistrictList(raw.assignedDistricts ?? []),
+                    } as FieldOfficerOption;
+                }));
 
             } catch (error) {
                 toast({ variant: "destructive", title: "Error", description: "Could not load data for filters." });
@@ -661,7 +670,7 @@ export default function SiteManagementPage() {
             // --- Apply Filters ---
             const officer = fieldOfficers.find(fo => fo.id === selectedOfficer);
             if (officer && officer.assignedDistricts.length > 0) {
-                q = query(q, where('district', 'in', officer.assignedDistricts));
+                q = query(q, where('district', 'in', expandDistrictQueryValues(officer.assignedDistricts)));
             } else if (selectedDistrict !== 'all') {
                 q = query(q, where('district', '==', selectedDistrict));
             }

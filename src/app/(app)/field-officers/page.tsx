@@ -42,6 +42,8 @@ import { VisitReportsPanel } from '@/components/field-officers/visit-reports-pan
 import { TrainingReportsPanel } from '@/components/field-officers/training-reports-panel';
 import { WorkOrdersPanel } from '@/components/field-officers/work-orders-panel';
 import {
+  canonicalizeDistrictList,
+  canonicalizeDistrictName,
   districtMatches,
   getDefaultDistrictSuggestions,
   mergeDistrictOptions,
@@ -146,7 +148,7 @@ const OfficerForm: React.FC<{
     }, [allAuthUsers, assignedOfficerUIDs, isEditing]);
 
     const addCustomDistrict = () => {
-        const normalized = normalizeDistrictName(customDistrict);
+        const normalized = canonicalizeDistrictName(customDistrict);
         if (!normalized) return;
         const alreadyUnavailable = unavailableDistricts.some((district) => districtMatches(district, normalized));
         if (alreadyUnavailable && !assignedDistricts.some((district) => districtMatches(district, normalized))) {
@@ -442,7 +444,10 @@ export default function FieldOfficersPage() {
     const unsubscribe = onSnapshot(officersQuery, (snapshot) => {
       const fetchedOfficers = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        assignedDistricts: canonicalizeDistrictList(
+          (doc.data().assignedDistricts ?? []).filter((district: unknown): district is string => typeof district === 'string'),
+        ),
       } as FieldOfficer));
       setOfficers(fetchedOfficers);
       setIsLoading(false);

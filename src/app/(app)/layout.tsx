@@ -34,6 +34,7 @@ import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { cn } from '@/lib/utils';
+import { canonicalizeDistrictList } from '@/lib/districts';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { useHaptics } from '@/hooks/use-haptics';
@@ -804,7 +805,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         try {
           const appUser = await resolveAppUser(user);
           setUserRole(appUser.role);
-          setAssignedDistricts(appUser.assignedDistricts);
+          setAssignedDistricts(canonicalizeDistrictList(appUser.assignedDistricts));
           setStateCode(appUser.stateCode ?? null);
           setIsSuperAdmin(appUser.isSuperAdmin ?? false);
           setEmployeeId(appUser.employeeId);

@@ -38,7 +38,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
-import { districtMatches } from '@/lib/districts';
+import { districtMatches, expandDistrictQueryValues } from '@/lib/districts';
 
 type WorkOrderExamFields = Pick<
     WorkOrder,
@@ -574,7 +574,9 @@ export default function AssignGuardsPage() {
         setIsAssignDialogOpen(true);
         setIsLoadingGuards(true);
         try {
-            const districtsToQuery = canAdminWorkOrders ? [workOrder.district] : assignedDistricts;
+            const districtsToQuery = canAdminWorkOrders
+                ? expandDistrictQueryValues([workOrder.district])
+                : expandDistrictQueryValues(assignedDistricts);
             if (districtsToQuery.length === 0) { setAvailableGuards([]); setIsLoadingGuards(false); return; }
             const snap = await getDocs(query(
                 collection(db, "employees"),

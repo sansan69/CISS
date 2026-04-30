@@ -350,12 +350,6 @@ export default function WorkOrderPage() {
                     if ((o.recordStatus ?? 'active').trim().toLowerCase() !== 'active') {
                         return false;
                     }
-                    if (
-                        userRole === 'fieldOfficer' &&
-                        !assignedDistricts.some((district) => districtMatches(district, o.district))
-                    ) {
-                        return false;
-                    }
                     if (isClientView && clientInfo?.clientName && o.clientName !== clientInfo.clientName) {
                         return false;
                     }
@@ -425,6 +419,13 @@ export default function WorkOrderPage() {
                     .filter((order) => !pendingDeleteIds.has(order.id))
                     .map((order) => {
                         const district = siteDistricts[siteId] || order.district || '';
+                        if (
+                            userRole === 'fieldOfficer' &&
+                            assignedDistricts.length > 0 &&
+                            !assignedDistricts.some((assigned) => districtMatches(assigned, district))
+                        ) {
+                            return null;
+                        }
                         const date = (() => {
                             try {
                                 return order.date.toDate() as Date;
@@ -471,6 +472,7 @@ export default function WorkOrderPage() {
                         };
                     });
             })
+            .filter((row): row is WorkOrderBoardRow => row !== null)
             .sort((a, b) => {
                 if (a.dateMs !== b.dateMs) return a.dateMs - b.dateMs;
                 const districtCompare = a.district.localeCompare(b.district);

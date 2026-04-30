@@ -1,12 +1,41 @@
 import { KERALA_DISTRICTS } from "@/lib/constants";
 import { REGION_CODE } from "@/lib/runtime-config";
 
+const DISTRICT_ALIASES = new Map<string, string>([
+  ["trivandrum", "Thiruvananthapuram"],
+  ["tvm", "Thiruvananthapuram"],
+  ["trivandrum district", "Thiruvananthapuram"],
+  ["thiruvananthapuram", "Thiruvananthapuram"],
+  ["quilon", "Kollam"],
+  ["alleppey", "Alappuzha"],
+  ["cochin", "Ernakulam"],
+  ["kochi", "Ernakulam"],
+  ["trichur", "Thrissur"],
+  ["calicut", "Kozhikode"],
+]);
+
+const DISTRICT_SEARCH_VARIANTS = new Map<string, string[]>([
+  ["Thiruvananthapuram", ["Trivandrum", "TVM"]],
+  ["Kollam", ["Quilon"]],
+  ["Alappuzha", ["Alleppey"]],
+  ["Ernakulam", ["Cochin", "Kochi"]],
+  ["Thrissur", ["Trichur"]],
+  ["Kozhikode", ["Calicut"]],
+]);
+
 export function normalizeDistrictName(value?: string | null) {
   return (value ?? "").trim().replace(/\s+/g, " ");
 }
 
+function resolveDistrictAlias(value?: string | null) {
+  const normalized = normalizeDistrictName(value);
+  if (!normalized) return "";
+
+  return DISTRICT_ALIASES.get(normalized.toLowerCase()) ?? normalized;
+}
+
 export function districtKey(value?: string | null) {
-  return normalizeDistrictName(value).toLowerCase();
+  return resolveDistrictAlias(value).toLowerCase();
 }
 
 export function districtMatches(left?: string | null, right?: string | null) {
@@ -25,7 +54,7 @@ export function canonicalizeDistrictName(
   value?: string | null,
   suggestions: Array<string | null | undefined> = getDefaultDistrictSuggestions(),
 ) {
-  const normalized = normalizeDistrictName(value);
+  const normalized = resolveDistrictAlias(value);
   if (!normalized) return "";
 
   for (const suggestion of suggestions) {
@@ -35,6 +64,48 @@ export function canonicalizeDistrictName(
   }
 
   return normalized;
+}
+
+export function canonicalizeDistrictList(
+  values: Array<string | null | undefined>,
+  suggestions: Array<string | null | undefined> = getDefaultDistrictSuggestions(),
+) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => canonicalizeDistrictName(value, suggestions))
+        .filter(Boolean),
+    ),
+  );
+}
+
+export function expandDistrictQueryValues(
+  values: Array<string | null | undefined>,
+  suggestions: Array<string | null | undefined> = getDefaultDistrictSuggestions(),
+) {
+  const expanded = new Set<string>();
+
+  for (const value of values) {
+    const normalized = normalizeDistrictName(value);
+    if (!normalized) continue;
+
+    expanded.add(normalized);
+    const canonical = canonicalizeDistrictName(normalized, suggestions);
+    if (canonical) {
+      expanded.add(canonical);
+      for (const variant of DISTRICT_SEARCH_VARIANTS.get(canonical) ?? []) {
+        expanded.add(variant);
+      }
+    }
+    for (const [alias, canonicalName] of DISTRICT_ALIASES.entries()) {
+      if (canonicalizeDistrictName(alias, suggestions) === canonical) {
+        expanded.add(alias);
+        expanded.add(canonicalName);
+      }
+    }
+  }
+
+  return Array.from(expanded);
 }
 
 export function isRecognizedDistrictName(

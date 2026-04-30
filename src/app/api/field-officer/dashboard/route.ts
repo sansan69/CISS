@@ -6,7 +6,7 @@ import {
   verifyRequestAuth,
   type AppDecodedToken,
 } from "@/lib/server/auth";
-import { districtMatches } from "@/lib/districts";
+import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 
 type FieldOfficerProfile = {
   name: string;
@@ -50,7 +50,9 @@ async function getFieldOfficerProfile(
     name = typeof foData.name === "string" ? foData.name : name;
     stateCode = typeof foData.stateCode === "string" ? foData.stateCode : stateCode;
     assignedDistricts = Array.isArray(foData.assignedDistricts)
-      ? foData.assignedDistricts.filter((district): district is string => typeof district === "string")
+      ? canonicalizeDistrictList(
+          foData.assignedDistricts.filter((district): district is string => typeof district === "string"),
+        )
       : assignedDistricts;
   }
 

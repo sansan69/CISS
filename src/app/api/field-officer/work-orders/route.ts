@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasAdminAccess, hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
-import { districtMatches } from "@/lib/districts";
+import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -19,11 +19,15 @@ async function getAssignedDistricts(
   if (!foSnapshot.empty) {
     const foData = foSnapshot.docs[0].data();
     if (Array.isArray(foData.assignedDistricts)) {
-      return foData.assignedDistricts.filter((district): district is string => typeof district === "string");
+      return canonicalizeDistrictList(
+        foData.assignedDistricts.filter((district): district is string => typeof district === "string"),
+      );
     }
   }
 
-  return Array.isArray(decoded.assignedDistricts) ? decoded.assignedDistricts : [];
+  return Array.isArray(decoded.assignedDistricts)
+    ? canonicalizeDistrictList(decoded.assignedDistricts.filter((district): district is string => typeof district === "string"))
+    : [];
 }
 
 export async function GET(request: Request) {
