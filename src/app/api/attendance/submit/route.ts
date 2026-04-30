@@ -24,6 +24,7 @@ import {
   SYSTEM_METRIC_NAMES,
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
+import { canRecordNextDayCheckout } from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 
 export const runtime = "nodejs";
@@ -352,9 +353,20 @@ export async function POST(request: NextRequest) {
           lastState.lastAttendanceDate !== attendanceDate &&
           payload.status === "Out"
         ) {
-          throw new AttendanceError(
-            "Attendance OUT is only allowed after a valid IN mark on the same day.",
-          );
+          const overnightCheckoutAllowed = canRecordNextDayCheckout({
+            attendanceDate,
+            status: payload.status,
+            siteId: payload.siteId,
+            dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
+            shift: effectiveShift,
+            lastState,
+          });
+
+          if (!overnightCheckoutAllowed) {
+            throw new AttendanceError(
+              "Attendance OUT is only allowed after a valid IN mark on the same day, unless the guard is closing an overnight shift the next morning.",
+            );
+          }
         }
 
         if (
