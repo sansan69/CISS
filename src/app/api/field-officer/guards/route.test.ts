@@ -119,4 +119,62 @@ describe("field officer guards route", () => {
       }),
     ]);
   });
+
+  it("keeps guard lists separate for Marian Engineering College sites in different districts", async () => {
+    const db = new FakeFirestore();
+    db.seed("employees", "guard-tvm", {
+      fullName: "Marian TVM Guard",
+      employeeId: "G-TVM",
+      clientName: "CISS",
+      district: "Trivandrum",
+      gender: "Male",
+      phoneNumber: "9999999999",
+      status: "active",
+    });
+    db.seed("employees", "guard-ernakulam", {
+      fullName: "Marian Ernakulam Guard",
+      employeeId: "G-EKM",
+      clientName: "CISS",
+      district: "Ernakulam",
+      gender: "Female",
+      phoneNumber: "8888888888",
+      status: "Active",
+    });
+    db.seed("employees", "guard-kollam", {
+      fullName: "Kollam Guard",
+      employeeId: "G-KLM",
+      clientName: "CISS",
+      district: "Kollam",
+      gender: "Male",
+      phoneNumber: "7777777777",
+      status: "Active",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({
+      uid: "admin-1",
+      role: "admin",
+    });
+
+    const { GET } = await import("./route");
+    const trivandrumResponse = await GET(
+      new Request("http://localhost/api/field-officer/guards?district=Thiruvananthapuram"),
+    );
+    const ernakulamResponse = await GET(
+      new Request("http://localhost/api/field-officer/guards?district=Ernakulam"),
+    );
+
+    expect(trivandrumResponse.status).toBe(200);
+    expect(ernakulamResponse.status).toBe(200);
+
+    const trivandrumPayload = await trivandrumResponse.json();
+    const ernakulamPayload = await ernakulamResponse.json();
+
+    expect(trivandrumPayload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toEqual([
+      "G-TVM",
+    ]);
+    expect(ernakulamPayload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toEqual([
+      "G-EKM",
+    ]);
+  });
 });
