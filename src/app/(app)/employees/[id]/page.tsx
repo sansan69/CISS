@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -31,7 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorage } from "@/lib/storageUtils";
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { EDUCATION_OPTIONS } from "@/lib/constants";
 import { dedupeClientOptions } from "@/lib/client-options";
+import { useAppAuth } from "@/context/auth-context";
+import { districtMatches } from "@/lib/districts";
 
 // #region PDF Text Helper Functions
 // Normalize weird whitespace, keep intended line breaks as separators.
@@ -364,6 +366,7 @@ export default function AdminEmployeeProfilePage() {
   
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const { userRole, assignedDistricts } = useAppAuth();
 
   // State for new file uploads
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
@@ -395,6 +398,10 @@ export default function AdminEmployeeProfilePage() {
   
   const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
   const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
+  const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false);
+  const [resetPin, setResetPin] = useState("");
+  const [confirmResetPin, setConfirmResetPin] = useState("");
+  const [isResettingPin, setIsResettingPin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -757,6 +764,18 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
+  const canResetPin = Boolean(
+    employee &&
+    (
+      userRole === "admin" ||
+      userRole === "superAdmin" ||
+      (
+        userRole === "fieldOfficer" &&
+        assignedDistricts.some((district) => districtMatches(district, employee.district))
+      )
+    )
+  );
+
   const handleRegenerateEmployeeId = async () => {
     if (!employee) return;
     setIsRegeneratingId(true);
@@ -814,6 +833,58 @@ export default function AdminEmployeeProfilePage() {
         toast({ variant: "destructive", title: "QR Regeneration Failed", description: err.message });
     } finally {
         setIsRegeneratingQr(false);
+    }
+  };
+
+  const handleResetPin = async () => {
+    if (!employee || !currentUser) return;
+
+    if (resetPin.length < 4 || resetPin.length > 6) {
+      toast({ variant: "destructive", title: "Invalid PIN", description: "PIN must be 4 to 6 digits." });
+      return;
+    }
+
+    if (resetPin !== confirmResetPin) {
+      toast({ variant: "destructive", title: "PIN mismatch", description: "PINs do not match." });
+      return;
+    }
+
+    setIsResettingPin(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch("/api/guard/auth/reset-pin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          employeeDocId: employee.id,
+          newPin: resetPin,
+          reason: "manual-reset",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not reset PIN.");
+      }
+
+      toast({
+        title: "PIN reset",
+        description: data.message || "The guard PIN has been updated.",
+      });
+      setIsResetPinDialogOpen(false);
+      setResetPin("");
+      setConfirmResetPin("");
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Reset failed",
+        description: err?.message || "Could not reset the guard PIN.",
+      });
+    } finally {
+      setIsResettingPin(false);
     }
   };
 
@@ -1301,6 +1372,16 @@ export default function AdminEmployeeProfilePage() {
                   {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                   Download Profile Kit
               </Button>
+              {canResetPin && (
+                <Button
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setIsResetPinDialogOpen(true)}
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Reset PIN
+                </Button>
+              )}
               <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
                   <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
               </Button>
@@ -1640,6 +1721,63 @@ export default function AdminEmployeeProfilePage() {
             </form>
           </Form>
         )}
+
+        <Dialog open={isResetPinDialogOpen} onOpenChange={setIsResetPinDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reset guard PIN</DialogTitle>
+              <DialogDescription>
+                Set a new PIN for this guard. The old PIN will stop working immediately.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="rounded-xl bg-slate-50 p-3 text-sm">
+                <p className="font-medium text-slate-900">{toTitleCase(employee.fullName)}</p>
+                <p className="text-slate-600">{employee.employeeId}</p>
+                <p className="text-slate-600">{employee.district}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reset-pin">New PIN</Label>
+                <Input
+                  id="reset-pin"
+                  type="password"
+                  inputMode="numeric"
+                  value={resetPin}
+                  onChange={(e) => setResetPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  maxLength={6}
+                  className="text-center tracking-[0.35em]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-reset-pin">Confirm PIN</Label>
+                <Input
+                  id="confirm-reset-pin"
+                  type="password"
+                  inputMode="numeric"
+                  value={confirmResetPin}
+                  onChange={(e) => setConfirmResetPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  maxLength={6}
+                  className="text-center tracking-[0.35em]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={isResettingPin}>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button
+                type="button"
+                onClick={handleResetPin}
+                disabled={isResettingPin || resetPin.length < 4 || resetPin !== confirmResetPin}
+              >
+                {isResettingPin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Set PIN
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   );

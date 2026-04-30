@@ -99,6 +99,12 @@ class FakeCollectionRef extends FakeQuery {
   doc(id?: string) {
     return new FakeDocRef(this.store, this.collectionName, id ?? `${this.collectionName}-auto`);
   }
+
+  async add(value: Record<string, unknown>) {
+    const id = `${this.collectionName}-${this.store.listDocs(this.collectionName).length + 1}`;
+    this.store.seed(this.collectionName, id, value);
+    return new FakeDocRef(this.store, this.collectionName, id);
+  }
 }
 
 class FakeFirestore {
@@ -202,6 +208,9 @@ afterEach(() => {
   vi.doUnmock("@/lib/guard/identity-utils");
   vi.doUnmock("@/lib/guard/pin-utils");
   vi.doUnmock("@/lib/runtime-config");
+  vi.doUnmock("@/lib/qr/employee-qr");
+  vi.doUnmock("@/lib/server/auth");
+  vi.doUnmock("@/lib/districts");
 });
 
 describe("guard auth routes", () => {
@@ -336,5 +345,165 @@ describe("guard auth routes", () => {
         guardFailedAttempts: 0,
       }),
     );
+  });
+
+  it("resets a guard PIN with qr identity and dob without OTP", async () => {
+    const adminDb = new FakeFirestore();
+    const guardPin = await hashPin("1234");
+
+    adminDb.seed("employees", "emp-3", {
+      employeeId: "EMP003",
+      phoneNumber: "7777777777",
+      fullName: "Guard Three",
+      dateOfBirth: "1999-04-30",
+      district: "Ernakulam",
+      guardPin,
+      guardAuthUid: "guard-uid-3",
+    });
+
+    const createUser = vi.fn().mockResolvedValue({ uid: "guard-uid-3-new" });
+    const getUserByEmail = vi.fn().mockRejectedValue(new Error("not found"));
+    const setCustomUserClaims = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+      auth: {
+        createUser,
+        getUserByEmail,
+        setCustomUserClaims,
+      },
+    }));
+    vi.doMock("@/lib/guard/identity-utils", async () => await import("../lib/guard/identity-utils"));
+    vi.doMock("@/lib/guard/pin-utils", async () => await import("../lib/guard/pin-utils"));
+    vi.doMock("@/lib/qr/employee-qr", async () => await import("../lib/qr/employee-qr"));
+    vi.doMock("@/lib/server/auth", () => ({
+      verifyRequestAuth: vi.fn(),
+      hasAdminAccess: (decoded: { role?: string; admin?: boolean }) => decoded.admin === true || decoded.role === "admin" || decoded.role === "superAdmin",
+      hasFieldOfficerAccess: (decoded: { role?: string }) => decoded.role === "fieldOfficer",
+      unauthorizedResponse: (message: string, status = 401) => new Response(JSON.stringify({ error: message }), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    }));
+    vi.doMock("@/lib/districts", () => ({
+      districtMatches: (left: string, right: string) =>
+        String(left).trim().toLowerCase() === String(right).trim().toLowerCase(),
+    }));
+    vi.doMock("@/lib/runtime-config", () => ({
+      GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: {
+        serverTimestamp: () => serverTimestampSentinel,
+        delete: () => deleteSentinel,
+      },
+    }));
+
+    const { POST } = await import("./api/guard/auth/reset-pin/route");
+    const response = await POST(
+      new Request("https://cisskerala.app/api/guard/auth/reset-pin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          qrText: "Employee ID: EMP003\nName: Guard Three\nPhone: +91 77777 77777",
+          dateOfBirth: "1999-04-30",
+          newPin: "4321",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      message: "Your PIN has been reset. Please log in with the new PIN.",
+    });
+    expect(setCustomUserClaims).toHaveBeenCalledWith("guard-uid-3", {
+      role: "guard",
+      employeeId: "EMP003",
+      employeeDocId: "emp-3",
+    });
+    expect(adminDb.getDoc("employees", "emp-3")).toEqual(
+      expect.objectContaining({
+        guardFailedAttempts: 0,
+        guardPinSetAt: "SERVER_TIMESTAMP",
+      }),
+    );
+    expect(adminDb.listDocs("guardPinResetEvents")).toHaveLength(1);
+  });
+
+  it("blocks field officers from resetting guards outside their assigned districts", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("employees", "emp-4", {
+      employeeId: "EMP004",
+      phoneNumber: "6666666666",
+      fullName: "Guard Four",
+      dateOfBirth: "1999-04-30",
+      district: "Ernakulam",
+      guardPin: await hashPin("1234"),
+      guardAuthUid: "guard-uid-4",
+    });
+    adminDb.seed("fieldOfficers", "fo-1", {
+      uid: "fo-uid-1",
+      assignedDistricts: ["Kollam"],
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+      auth: {
+        verifyIdToken: vi.fn().mockResolvedValue({
+          uid: "fo-uid-1",
+          role: "fieldOfficer",
+        }),
+      },
+    }));
+    vi.doMock("@/lib/guard/identity-utils", async () => await import("../lib/guard/identity-utils"));
+    vi.doMock("@/lib/guard/pin-utils", async () => await import("../lib/guard/pin-utils"));
+    vi.doMock("@/lib/qr/employee-qr", async () => await import("../lib/qr/employee-qr"));
+    vi.doMock("@/lib/server/auth", () => ({
+      verifyRequestAuth: vi.fn().mockResolvedValue({
+        uid: "fo-uid-1",
+        role: "fieldOfficer",
+        assignedDistricts: ["Kollam"],
+      }),
+      hasAdminAccess: (decoded: { role?: string; admin?: boolean }) => decoded.admin === true || decoded.role === "admin" || decoded.role === "superAdmin",
+      hasFieldOfficerAccess: (decoded: { role?: string }) => decoded.role === "fieldOfficer",
+      unauthorizedResponse: (message: string, status = 401) => new Response(JSON.stringify({ error: message }), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    }));
+    vi.doMock("@/lib/districts", () => ({
+      districtMatches: (left: string, right: string) =>
+        String(left).trim().toLowerCase() === String(right).trim().toLowerCase(),
+    }));
+    vi.doMock("@/lib/runtime-config", () => ({
+      GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: {
+        serverTimestamp: () => serverTimestampSentinel,
+        delete: () => deleteSentinel,
+      },
+    }));
+
+    const { POST } = await import("./api/guard/auth/reset-pin/route");
+    const response = await POST(
+      new Request("https://cisskerala.app/api/guard/auth/reset-pin", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer fo-token",
+        },
+        body: JSON.stringify({
+          employeeDocId: "emp-4",
+          newPin: "4321",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "This guard is outside your assigned districts.",
+    });
   });
 });

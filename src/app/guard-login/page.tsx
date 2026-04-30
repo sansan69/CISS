@@ -466,7 +466,7 @@ export default function GuardLoginPage() {
                         />
                         <div className="flex items-center justify-between">
                           <p className="text-xs text-muted-foreground">4 to 6 digit PIN</p>
-                          <Link href="/guard-forgot-pin" className="text-xs font-medium text-primary hover:underline">
+                          <Link href="/guard-login/reset" className="text-xs font-medium text-primary hover:underline">
                             Forgot PIN?
                           </Link>
                         </div>
