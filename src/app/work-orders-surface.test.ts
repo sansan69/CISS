@@ -23,6 +23,10 @@ const workOrdersRouteSource = readFileSync(
   resolve(process.cwd(), "src/app/api/admin/work-orders/route.ts"),
   "utf8",
 );
+const workOrdersBulkDeleteRouteSource = readFileSync(
+  resolve(process.cwd(), "src/app/api/admin/work-orders/bulk-delete/route.ts"),
+  "utf8",
+);
 const assignedGuardsExportPageSource = readFileSync(
   resolve(process.cwd(), "src/app/(app)/work-orders/assigned-guards-export/page.tsx"),
   "utf8",
@@ -48,14 +52,14 @@ describe("work orders operations surface", () => {
   it("keeps work orders as the single sidebar entry for assignment and export flow", () => {
     expect(navigationSource).toContain('href: "/work-orders"');
     expect(navigationSource).toContain('label: "Work Orders"');
-    expect(navigationSource).toContain('href: "/work-orders/imports"');
+    expect(navigationSource).toContain('href: "/settings/work-order-imports"');
     expect(navigationSource).toContain('label: "Work Order Imports"');
     expect(appLayoutSource).toContain("getVisibleGroups(mainNavGroups");
     expect(appLayoutSource).toContain("getVisibleNavItems(bottomNavItems");
   });
 
   it("adds an admin-only work order imports entry to the app layout", () => {
-    expect(navigationSource).toContain('href: "/work-orders/imports"');
+    expect(navigationSource).toContain('href: "/settings/work-order-imports"');
     expect(navigationSource).toContain('adminOnly: true');
   });
 
@@ -63,7 +67,7 @@ describe("work orders operations surface", () => {
     expect(workOrdersPageSource).toContain("searchParams.get('tab')");
     expect(workOrdersPageSource).toContain("value=\"assignments\"");
     expect(workOrdersPageSource).toContain("value=\"assigned-guards-export\"");
-    expect(workOrdersPageSource).toContain("label: 'Assigned Guards Export'");
+    expect(workOrdersPageSource).toContain("label: 'Export'");
     expect(workOrdersPageSource).toContain("/api/admin/work-orders/import/preview");
     expect(workOrdersPageSource).toContain("/api/admin/work-orders/import/commit");
     expect(workOrdersPageSource).toContain("Preview Import");
@@ -82,14 +86,24 @@ describe("work orders operations surface", () => {
 
   it("confirms imports through the batch commit route and still normalizes dates on the server", () => {
     expect(workOrdersPageSource).toContain("parserMode: importPreview.parserMode");
-    expect(workOrdersPageSource).toContain("rows: importPreview.rows");
+    expect(workOrdersPageSource).toContain("rows: rowsWithExam");
     expect(workOrdersPageSource).not.toContain("buildTcsExamDiff({");
     expect(workOrdersRouteSource).toContain("function normalizeWorkOrderDate");
     expect(workOrdersRouteSource).toContain('if ("date" in filtered)');
-    expect(workOrdersImportsPageSource).toContain("workOrderImports");
+    expect(workOrdersImportsPageSource).toContain('collection(db, "workOrders")');
     expect(workOrdersImportsPageSource).toContain("onSnapshot");
-    expect(workOrdersImportsPageSource).toContain("committedRows");
-    expect(workOrdersImportsPageSource).toContain("cancelledRows");
+    expect(workOrdersImportsPageSource).toContain("rowCount");
+    expect(workOrdersImportsPageSource).toContain("recordStatus");
+  });
+
+  it("supports editable previews and deletes visible site rows from the database", () => {
+    expect(workOrdersPageSource).toContain("updatePreviewRow");
+    expect(workOrdersPageSource).toContain('onChange={(event) => updatePreviewRow(originalIndex, "siteName", event.target.value)}');
+    expect(workOrdersPageSource).toContain('onChange={(event) => updatePreviewRow(originalIndex, "maleGuardsRequired", event.target.value)}');
+    expect(workOrdersPageSource).toContain("handleDeleteOrders(row.orders)");
+    expect(workOrdersPageSource).toContain("body: JSON.stringify({ workOrderIds: ids })");
+    expect(workOrdersBulkDeleteRouteSource).toContain("Array.isArray(body.workOrderIds)");
+    expect(workOrdersBulkDeleteRouteSource).toContain('batch.delete(adminDb.collection("workOrders").doc(id))');
   });
 
   it("work order shared types migration", () => {
@@ -116,7 +130,7 @@ describe("work orders operations surface", () => {
     expect(fieldOfficerWorkOrdersPanelSource).toContain("assignedGuards.slice(0, 4).map");
     expect(fieldOfficerWorkOrdersPanelSource).toContain('order.examName || order.examCode || "General Duty"');
     expect(workOrdersPageSource).toContain("recordStatus ?? 'active'");
-    expect(workOrdersPageSource).toContain('order.examName || order.examCode || "General Duty"');
+    expect(workOrdersPageSource).toContain("getWorkOrderExamLabel(order) || 'General Duty'");
     expect(assignedGuardsExportPanelSource).toContain("'Exam Name'");
     expect(assignedGuardsExportPanelSource).toContain('workOrder.examName || workOrder.examCode || "General Duty"');
   });

@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import type {
     TcsExamImportPreviewPayload,
+    TcsExamSourceRow,
     WorkOrder,
     WorkOrderImportMode,
 } from '@/types/work-orders';
@@ -92,6 +93,8 @@ type ResolvedImportPreview = TcsExamImportPreviewPayload & {
     matchedSites: number;
     pendingSiteCreations: number;
 };
+
+type PreviewEditableField = "siteName" | "district" | "date" | "maleGuardsRequired" | "femaleGuardsRequired";
 
 const normalizeSegment = (value: string | null | undefined) =>
     String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -187,43 +190,67 @@ export default function WorkOrderPage() {
         });
     }, []);
 
-    const handleDeleteOrder = React.useCallback((order: WorkOrder) => {
-        const id = order.id;
+    const handleDeleteOrders = React.useCallback((orders: WorkOrder[]) => {
+        const ids = Array.from(new Set(orders.map((order) => order.id).filter(Boolean)));
+        if (ids.length === 0) return;
 
         // 1. Optimistically hide
-        setPendingDeleteIds(prev => new Set(prev).add(id));
-        pendingDeleteData.current.set(id, order);
+        setPendingDeleteIds(prev => {
+            const next = new Set(prev);
+            ids.forEach((id) => next.add(id));
+            return next;
+        });
+        orders.forEach((order) => pendingDeleteData.current.set(order.id, order));
 
         // 2. Schedule actual Firestore delete after UNDO_MS
         const timer = setTimeout(async () => {
             try {
-                const res = await authorizedFetch(`/api/admin/work-orders/${id}`, { method: 'DELETE' });
+                const res = await authorizedFetch('/api/admin/work-orders/bulk-delete', {
+                    method: 'POST',
+                    body: JSON.stringify({ workOrderIds: ids }),
+                });
                 if (!res.ok) throw new Error('Delete failed');
             } catch (e) {
                 console.error('Delete failed', e);
                 // Restore on error
-                setPendingDeleteIds(prev => { const s = new Set(prev); s.delete(id); return s; });
-                toast({ title: 'Delete failed', description: 'The work order could not be deleted.', variant: 'destructive' });
+                setPendingDeleteIds(prev => {
+                    const next = new Set(prev);
+                    ids.forEach((id) => next.delete(id));
+                    return next;
+                });
+                toast({ title: 'Delete failed', description: 'The work orders could not be deleted.', variant: 'destructive' });
             }
-            pendingDeleteData.current.delete(id);
-            pendingDeleteTimers.current.delete(id);
-            setPendingDeleteIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+            ids.forEach((id) => {
+                pendingDeleteData.current.delete(id);
+                pendingDeleteTimers.current.delete(id);
+            });
+            setPendingDeleteIds(prev => {
+                const next = new Set(prev);
+                ids.forEach((id) => next.delete(id));
+                return next;
+            });
         }, UNDO_MS);
-        pendingDeleteTimers.current.set(id, timer);
+        ids.forEach((id) => pendingDeleteTimers.current.set(id, timer));
 
         // 3. Show undo toast
         toast({
-            title: 'Work order deleted',
-            description: 'The duty entry has been removed.',
+            title: ids.length === 1 ? 'Work order deleted' : 'Site duties deleted',
+            description: ids.length === 1 ? 'The duty entry has been removed.' : `${ids.length} duty entries have been removed.`,
             duration: UNDO_MS,
             action: (
                 <button
                     onClick={() => {
                         // Cancel the delete
-                        clearTimeout(pendingDeleteTimers.current.get(id));
-                        pendingDeleteTimers.current.delete(id);
-                        pendingDeleteData.current.delete(id);
-                        setPendingDeleteIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+                        ids.forEach((id) => {
+                            clearTimeout(pendingDeleteTimers.current.get(id));
+                            pendingDeleteTimers.current.delete(id);
+                            pendingDeleteData.current.delete(id);
+                        });
+                        setPendingDeleteIds(prev => {
+                            const next = new Set(prev);
+                            ids.forEach((id) => next.delete(id));
+                            return next;
+                        });
                         toast({ title: 'Undo successful', description: 'Work order has been restored.', duration: 2500 });
                     }}
                     className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -757,6 +784,30 @@ export default function WorkOrderPage() {
         }
     };
 
+    const updatePreviewRow = React.useCallback((rowIndex: number, field: PreviewEditableField, value: string) => {
+        setImportPreview((current) => {
+            if (!current) return current;
+            const rows = current.rows.map((row, index) => {
+                if (index !== rowIndex) return row;
+                if (field === "maleGuardsRequired" || field === "femaleGuardsRequired") {
+                    return { ...row, [field]: Math.max(0, Number(value) || 0) };
+                }
+                return { ...row, [field]: value } as TcsExamSourceRow;
+            });
+            const sortedDates = rows.map((row) => row.date).filter(Boolean).sort();
+            return {
+                ...current,
+                rows,
+                rowCount: rows.length,
+                siteCount: new Set(rows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`)).size,
+                dateRange: {
+                    from: sortedDates[0] ?? current.dateRange.from,
+                    to: sortedDates[sortedDates.length - 1] ?? current.dateRange.to,
+                },
+            };
+        });
+    }, []);
+
     const handleConfirmImport = async () => {
         if (!file || !importPreview) {
             toast({ variant: 'destructive', title: 'Preview Required', description: 'Preview the file before confirming the import.' });
@@ -978,38 +1029,75 @@ export default function WorkOrderPage() {
                                                         <TableRow>
                                                             <TableHead className="w-[100px] text-[10px]">Date</TableHead>
                                                             <TableHead className="text-[10px]">Site</TableHead>
-                                                            <TableHead className="w-[80px] text-[10px]">District</TableHead>
+                                                            <TableHead className="w-[120px] text-[10px]">District</TableHead>
                                                             <TableHead className="w-[60px] text-right text-[10px]">Male</TableHead>
                                                             <TableHead className="w-[60px] text-right text-[10px]">Female</TableHead>
                                                             <TableHead className="w-[80px] text-[10px]">Status</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {importPreview.diffRows
-                                                            .sort((a, b) => a.date.localeCompare(b.date) || a.siteName.localeCompare(b.siteName))
-                                                            .map((row, idx) => {
+                                                        {importPreview.rows
+                                                            .map((row, originalIndex) => ({ row, originalIndex }))
+                                                            .sort((a, b) => a.row.date.localeCompare(b.row.date) || a.row.siteName.localeCompare(b.row.siteName))
+                                                            .map(({ row, originalIndex }) => {
+                                                                const diffRow = importPreview.diffRows.find((diff) =>
+                                                                    diff.date === row.date &&
+                                                                    diff.siteName === row.siteName &&
+                                                                    diff.district === row.district &&
+                                                                    (diff.siteId ?? "") === (row.siteId ?? ""),
+                                                                );
+                                                                const status = diffRow?.status ?? 'added';
                                                                 const statusColors: Record<string, string> = {
                                                                     added: 'text-green-600 bg-green-50',
                                                                     updated: 'text-amber-600 bg-amber-50',
                                                                     unchanged: 'text-muted-foreground',
                                                                     cancelled: 'text-red-600 bg-red-50',
                                                                 };
-                                                                const maleDisplay = row.status === 'updated' && row.previousMaleGuardsRequired !== undefined
-                                                                    ? `${row.previousMaleGuardsRequired} → ${row.maleGuardsRequired}`
-                                                                    : String(row.maleGuardsRequired);
-                                                                const femaleDisplay = row.status === 'updated' && row.previousFemaleGuardsRequired !== undefined
-                                                                    ? `${row.previousFemaleGuardsRequired} → ${row.femaleGuardsRequired}`
-                                                                    : String(row.femaleGuardsRequired);
                                                                 return (
-                                                                    <TableRow key={idx} className={row.status === 'cancelled' ? 'opacity-60' : ''}>
-                                                                        <TableCell className="text-xs font-medium">{row.date}</TableCell>
-                                                                        <TableCell className="text-xs">{row.siteName}</TableCell>
-                                                                        <TableCell className="text-xs">{row.district}</TableCell>
-                                                                        <TableCell className="text-xs text-right font-mono">{maleDisplay}</TableCell>
-                                                                        <TableCell className="text-xs text-right font-mono">{femaleDisplay}</TableCell>
+                                                                    <TableRow key={`${row.sourceSheetName ?? 'sheet'}-${row.sourceRowNumber ?? originalIndex}-${originalIndex}`}>
                                                                         <TableCell>
-                                                                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${statusColors[row.status] || ''}`}>
-                                                                                {row.status}
+                                                                            <Input
+                                                                                type="date"
+                                                                                value={row.date}
+                                                                                onChange={(event) => updatePreviewRow(originalIndex, "date", event.target.value)}
+                                                                                className="h-8 min-w-28 text-xs"
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <Input
+                                                                                value={row.siteName}
+                                                                                onChange={(event) => updatePreviewRow(originalIndex, "siteName", event.target.value)}
+                                                                                className="h-8 min-w-48 text-xs"
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <Input
+                                                                                value={row.district}
+                                                                                onChange={(event) => updatePreviewRow(originalIndex, "district", event.target.value)}
+                                                                                className="h-8 min-w-32 text-xs"
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                value={row.maleGuardsRequired}
+                                                                                onChange={(event) => updatePreviewRow(originalIndex, "maleGuardsRequired", event.target.value)}
+                                                                                className="h-8 w-20 text-right font-mono text-xs"
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                value={row.femaleGuardsRequired}
+                                                                                onChange={(event) => updatePreviewRow(originalIndex, "femaleGuardsRequired", event.target.value)}
+                                                                                className="h-8 w-20 text-right font-mono text-xs"
+                                                                            />
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${statusColors[status] || ''}`}>
+                                                                                {status}
                                                                             </span>
                                                                         </TableCell>
                                                                     </TableRow>
@@ -1259,7 +1347,6 @@ export default function WorkOrderPage() {
                                                     const assignmentLabel = `Assigned ${row.assignedCount}/${row.totalRequired}`;
                                                     const examSummary = row.examLabels.join(' · ');
                                                     const isMergedRow = row.orders.length > 1;
-                                                    const singleOrder = row.orders[0];
                                                     return (
                                                         <div key={`${row.siteId}-${row.dateKey}-${row.examKeys.join('__') || 'general'}`} className="grid gap-3 p-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(260px,1.4fr)_140px_190px_120px_auto] lg:items-center">
                                                             <div className="min-w-0">
@@ -1314,13 +1401,13 @@ export default function WorkOrderPage() {
                                                                         Assign
                                                                     </Link>
                                                                 </Button>
-                                                                {canAdminWorkOrders && !isMergedRow && singleOrder && (
+                                                                {canAdminWorkOrders && (
                                                                     <Button
                                                                         size="icon"
                                                                         variant="ghost"
                                                                         className="h-8 w-8 text-destructive/70 hover:bg-destructive/10 hover:text-destructive"
-                                                                        title="Delete duty (5s undo)"
-                                                                        onClick={() => handleDeleteOrder(singleOrder)}
+                                                                        title={isMergedRow ? 'Delete site duties (5s undo)' : 'Delete duty (5s undo)'}
+                                                                        onClick={() => handleDeleteOrders(row.orders)}
                                                                     >
                                                                         <Trash2 className="h-3.5 w-3.5" />
                                                                     </Button>

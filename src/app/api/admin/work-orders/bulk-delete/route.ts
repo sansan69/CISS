@@ -5,12 +5,47 @@ import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 export const runtime = "nodejs";
 
 // POST /api/admin/work-orders/bulk-delete
-// Body: { examName: string, examCode?: string }
+// Body: { examName: string, examCode?: string } or { workOrderIds: string[] }
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin(request);
     const body = await request.json();
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
+
+    if (Array.isArray(body.workOrderIds)) {
+      const ids: string[] = Array.from(
+        new Set(
+          body.workOrderIds
+            .filter((id: unknown): id is string => typeof id === "string")
+            .map((id: string) => id.trim())
+            .filter(Boolean),
+        ),
+      );
+      if (ids.length === 0) {
+        return NextResponse.json({ error: "workOrderIds must include at least one id." }, { status: 400 });
+      }
+
+      let batch = adminDb.batch();
+      let operationCount = 0;
+      for (const id of ids) {
+        batch.delete(adminDb.collection("workOrders").doc(id));
+        operationCount += 1;
+        if (operationCount >= 450) {
+          await batch.commit();
+          batch = adminDb.batch();
+          operationCount = 0;
+        }
+      }
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+
+      return NextResponse.json({
+        deleted: ids.length,
+        importsDeleted: 0,
+        message: `Deleted ${ids.length} work order${ids.length === 1 ? "" : "s"}.`,
+      });
+    }
 
     const examName = body.examName;
     const examCode = body.examCode;
