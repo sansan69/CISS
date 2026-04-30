@@ -582,7 +582,6 @@ export default function AssignGuardsPage() {
         try {
             const districtScope = site?.district || site?.districtName || workOrder.district;
             const guards = await fetchActiveGuardsForDistricts(
-                db,
                 canAdminWorkOrders ? [districtScope] : assignedDistricts,
             );
             setAvailableGuards(guards);

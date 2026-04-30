@@ -575,7 +575,6 @@ export function WorkOrdersPanel() {
     try {
       const districtScope = siteDistricts[order.siteId] || order.district || "";
       const guards = await fetchActiveGuardsForDistricts(
-        db,
         isAdmin ? [districtScope] : assignedDistricts,
       );
       setAvailableGuards(guards);

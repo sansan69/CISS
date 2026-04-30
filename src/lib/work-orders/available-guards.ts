@@ -1,6 +1,13 @@
-import { collection, getDocs, query, where, type Firestore } from "firebase/firestore";
 import { districtMatches } from "@/lib/districts";
 import type { Employee } from "@/types/employee";
+
+function normalizeText(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function isActiveStatus(value: unknown) {
+  return normalizeText(value).toLowerCase() === "active";
+}
 
 export function filterActiveGuardsForDistricts(
   guards: Employee[],
@@ -12,7 +19,7 @@ export function filterActiveGuardsForDistricts(
   if (districtScope.length === 0) return [];
 
   return guards
-    .filter((guard) => guard.status === "Active")
+    .filter((guard) => isActiveStatus(guard.status))
     .filter((guard) =>
       districtScope.some((district) => districtMatches(district, guard.district)),
     )
@@ -24,7 +31,6 @@ export function filterActiveGuardsForDistricts(
 }
 
 export async function fetchActiveGuardsForDistricts(
-  firestore: Firestore,
   districts: Array<string | null | undefined>,
 ) {
   const districtScope = districts.filter((district): district is string =>
@@ -32,12 +38,13 @@ export async function fetchActiveGuardsForDistricts(
   );
   if (districtScope.length === 0) return [];
 
-  const snap = await getDocs(
-    query(collection(firestore, "employees"), where("status", "==", "Active")),
-  );
-
-  return filterActiveGuardsForDistricts(
-    snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Employee)),
-    districtScope,
-  );
+  const params = new URLSearchParams();
+  districtScope.forEach((district) => params.append("district", district));
+  const { authorizedFetch } = await import("@/lib/api-client");
+  const response = await authorizedFetch(`/api/field-officer/guards?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error("Could not load guards.");
+  }
+  const payload = (await response.json()) as { guards?: Employee[] };
+  return filterActiveGuardsForDistricts(payload.guards ?? [], districtScope);
 }
