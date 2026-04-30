@@ -28,7 +28,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-browser';
-import { districtMatches } from '@/lib/districts';
+import { districtKey, districtMatches } from '@/lib/districts';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -97,7 +97,13 @@ const normalizeSegment = (value: string | null | undefined) =>
     String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 const buildFallbackSiteKey = (siteName: string, district: string) =>
-    `${normalizeSegment(siteName)}|${normalizeSegment(district)}`;
+    `${normalizeSegment(siteName)}|district:${districtKey(district) || normalizeSegment(district)}`;
+
+const buildSiteCodeDistrictKey = (siteId: string | null | undefined, district: string) => {
+    const codeKey = normalizeSegment(siteId);
+    const resolvedDistrictKey = districtKey(district) || normalizeSegment(district);
+    return codeKey && resolvedDistrictKey ? `${codeKey}|district:${resolvedDistrictKey}` : '';
+};
 
 const getWorkOrderExamLabel = (order: Partial<Pick<WorkOrder, 'examName' | 'examCode'>>) =>
     String(order.examName || order.examCode || '').replace(/\s+/g, ' ').trim();
@@ -672,14 +678,14 @@ export default function WorkOrderPage() {
         rows: TcsExamImportPreviewPayload['rows'],
     ) => {
         const sitesSnapshot = await getDocs(collection(db, 'sites'));
-        const sitesByCode = new Map<string, { id: string; siteId?: string | null; siteName: string; district: string }>();
+        const sitesByCodeDistrict = new Map<string, { id: string; siteId?: string | null; siteName: string; district: string }>();
         const sitesByNameDistrict = new Map<string, { id: string; siteId?: string | null; siteName: string; district: string }>();
 
         for (const siteDoc of sitesSnapshot.docs) {
             const site = { id: siteDoc.id, ...(siteDoc.data() as any) };
-            const codeKey = normalizeSegment(site.siteId);
-            if (codeKey && !sitesByCode.has(codeKey)) {
-                sitesByCode.set(codeKey, site);
+            const codeDistrictKey = buildSiteCodeDistrictKey(site.siteId, site.district);
+            if (codeDistrictKey && !sitesByCodeDistrict.has(codeDistrictKey)) {
+                sitesByCodeDistrict.set(codeDistrictKey, site);
             }
             const fallbackKey = buildFallbackSiteKey(site.siteName, site.district);
             if (!sitesByNameDistrict.has(fallbackKey)) {
@@ -690,9 +696,9 @@ export default function WorkOrderPage() {
         let pendingSiteCreations = 0;
 
         for (const row of rows) {
-            const fileSiteCode = normalizeSegment(row.siteId);
+            const codeDistrictKey = buildSiteCodeDistrictKey(row.siteId, row.district);
             const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
-            const site = (fileSiteCode && sitesByCode.get(fileSiteCode)) || sitesByNameDistrict.get(fallbackKey);
+            const site = (codeDistrictKey && sitesByCodeDistrict.get(codeDistrictKey)) || sitesByNameDistrict.get(fallbackKey);
             if (site) {
                 matchedSites += 1;
             } else {

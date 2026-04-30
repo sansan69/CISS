@@ -11,6 +11,7 @@ import { lookupLocationGeocode } from "@/lib/server/location-geocode";
 import { buildTcsExamDiff } from "@/lib/work-orders/tcs-exam-diff";
 import { buildTcsExamContentHash } from "@/lib/work-orders/tcs-exam-hash";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
+import { districtKey, districtMatches } from "@/lib/districts";
 import type {
   TcsExamExistingWorkOrder,
   TcsExamImportCommitPayload,
@@ -194,7 +195,13 @@ function buildWorkOrderDocIdForExam(row: TcsExamSourceRow, examCode: string) {
 }
 
 function buildFallbackSiteKey(siteName: string, district: string) {
-  return `${normalizeSegment(siteName)}|${normalizeSegment(district)}`;
+  return `${normalizeSegment(siteName)}|district:${districtKey(district) || normalizeSegment(district)}`;
+}
+
+function buildSiteCodeDistrictKey(siteId: string | null | undefined, district: string) {
+  const codeKey = normalizeSegment(siteId);
+  const resolvedDistrictKey = districtKey(district) || normalizeSegment(district);
+  return codeKey && resolvedDistrictKey ? `${codeKey}|district:${resolvedDistrictKey}` : "";
 }
 
 function validatePayload(body: unknown): TcsExamImportCommitPayload {
@@ -264,7 +271,7 @@ async function fetchSites(
   adminDb: any,
 ) {
   const snapshot = await adminDb.collection("sites").get();
-  const byCode = new Map<string, SiteRecord>();
+  const byCodeDistrict = new Map<string, SiteRecord>();
   const byFallback = new Map<string, SiteRecord>();
 
   for (const doc of snapshot.docs) {
@@ -278,9 +285,9 @@ async function fetchSites(
       siteName: String(data.siteName ?? ""),
       district: String(data.district ?? ""),
     };
-    const codeKey = normalizeSegment(site.siteId);
-    if (codeKey && !byCode.has(codeKey)) {
-      byCode.set(codeKey, site);
+    const codeDistrictKey = buildSiteCodeDistrictKey(site.siteId, site.district);
+    if (codeDistrictKey && !byCodeDistrict.has(codeDistrictKey)) {
+      byCodeDistrict.set(codeDistrictKey, site);
     }
     const fallbackKey = buildFallbackSiteKey(site.siteName, site.district);
     if (!byFallback.has(fallbackKey)) {
@@ -288,7 +295,7 @@ async function fetchSites(
     }
   }
 
-  return { byCode, byFallback };
+  return { byCodeDistrict, byFallback };
 }
 
 async function resolveCommitRows(
@@ -308,12 +315,13 @@ async function resolveCommitRows(
   const resolvedRows: TcsExamSourceRow[] = [];
 
   for (const row of rows) {
-    const codeKey = normalizeSegment(row.siteId);
+    const codeDistrictKey = buildSiteCodeDistrictKey(row.siteId, row.district);
     const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
-    let site = (codeKey && sites.byCode.get(codeKey)) || sites.byFallback.get(fallbackKey);
+    let site =
+      (codeDistrictKey && sites.byCodeDistrict.get(codeDistrictKey)) ||
+      sites.byFallback.get(fallbackKey);
 
-    if (site && row.district && row.district !== site.district) {
-      // Update existing site district if the file provides a different one
+    if (site && row.district && !districtMatches(row.district, site.district)) {
       batch.update(adminDb.collection("sites").doc(site.id), {
         district: row.district,
         locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
@@ -383,8 +391,8 @@ async function resolveCommitRows(
         district: row.district,
       };
       createdSites += 1;
-      if (codeKey) {
-        sites.byCode.set(codeKey, site);
+      if (codeDistrictKey) {
+        sites.byCodeDistrict.set(codeDistrictKey, site);
       }
       sites.byFallback.set(fallbackKey, site);
     }

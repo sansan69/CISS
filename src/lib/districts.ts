@@ -27,11 +27,43 @@ export function normalizeDistrictName(value?: string | null) {
   return (value ?? "").trim().replace(/\s+/g, " ");
 }
 
-function resolveDistrictAlias(value?: string | null) {
-  const normalized = normalizeDistrictName(value);
-  if (!normalized) return "";
+function stripDistrictSuffix(value?: string | null) {
+  return normalizeDistrictName(value)
+    .replace(/\s*(?:district|dist\.?)\s*$/i, "")
+    .trim();
+}
 
-  return DISTRICT_ALIASES.get(normalized.toLowerCase()) ?? normalized;
+function getDistrictCandidates(value?: string | null) {
+  const normalized = normalizeDistrictName(value);
+  if (!normalized) return [];
+
+  const candidates = new Set<string>();
+  const queue = [normalized, stripDistrictSuffix(normalized)];
+
+  for (const segment of normalized.split(/[\/,&|;]+/)) {
+    queue.push(segment, stripDistrictSuffix(segment));
+  }
+
+  for (const candidate of queue) {
+    const cleaned = normalizeDistrictName(candidate);
+    if (cleaned) {
+      candidates.add(cleaned);
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+function resolveDistrictAlias(value?: string | null) {
+  const candidates = getDistrictCandidates(value);
+  if (candidates.length === 0) return "";
+
+  for (const candidate of candidates) {
+    const aliased = DISTRICT_ALIASES.get(candidate.toLowerCase());
+    if (aliased) return aliased;
+  }
+
+  return candidates[0];
 }
 
 export function districtKey(value?: string | null) {

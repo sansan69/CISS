@@ -332,6 +332,12 @@ vi.mock("@/lib/constants", () => ({
 }));
 
 vi.mock("@/lib/districts", () => ({
+  districtKey: vi.fn((value: string) => {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return ["trivandrum", "tvm", "trivandrum district"].includes(normalized)
+      ? "thiruvananthapuram"
+      : normalized;
+  }),
   districtMatches: vi.fn(() => true),
   normalizeDistrictName: vi.fn((value: string) => value),
 }));
@@ -1043,6 +1049,79 @@ describe("TCS exam work order import server slice", () => {
       }),
     );
     expect(lookupLocationGeocodeMock).toHaveBeenCalled();
+  });
+
+  it("matches existing TCS sites by site code and district together", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "marian-kochi", {
+      siteId: "MARIAN",
+      siteName: "Marian Engineering College",
+      district: "Ernakulam",
+      clientName: "TCS",
+    });
+    adminDb.seed("sites", "marian-tvm", {
+      siteId: "MARIAN",
+      siteName: "Marian Engineering College",
+      district: "Thiruvananthapuram",
+      clientName: "TCS",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+    }));
+
+    buildDiffMock.mockReturnValue([
+      {
+        key: "site-id:marian|date:2026-04-23|exam:tcs-exam",
+        siteId: "MARIAN",
+        siteName: "Marian Engineering College",
+        district: "Trivandrum",
+        date: "2026-04-23",
+        examCode: "tcs-exam",
+        maleGuardsRequired: 6,
+        femaleGuardsRequired: 2,
+        totalManpower: 8,
+        status: "added",
+      },
+    ]);
+
+    const { POST } = await import("./api/admin/work-orders/import/commit/route");
+
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/import/commit", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "new",
+        fileName: "tcs-exam.xlsx",
+        parserMode: "legacy-sheet",
+        examName: "TCS Exam",
+        examCode: "tcs-exam",
+        binaryFileHash: "binary-hash-1",
+        contentHash: "content-hash-1",
+        rows: [
+          {
+            siteId: "MARIAN",
+            siteName: "Marian Engineering College",
+            district: "Trivandrum",
+            date: "2026-04-23",
+            examName: "TCS Exam",
+            examCode: "tcs-exam",
+            maleGuardsRequired: 6,
+            femaleGuardsRequired: 2,
+            sourceSheetName: "Sheet1",
+            sourceRowNumber: 7,
+          },
+        ],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    const workOrders = adminDb.listDocs("workOrders");
+    expect(workOrders.some(({ data }) => data.siteId === "marian-tvm")).toBe(true);
+    expect(workOrders.some(({ data }) => data.siteId === "marian-kochi")).toBe(false);
   });
 
   it("matches attendance assignments across legacy string, uid, and employeeId shapes", async () => {

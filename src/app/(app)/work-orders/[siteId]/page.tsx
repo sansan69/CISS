@@ -38,7 +38,8 @@ import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
-import { districtMatches, expandDistrictQueryValues } from '@/lib/districts';
+import { districtMatches } from '@/lib/districts';
+import { fetchActiveGuardsForDistricts } from '@/lib/work-orders/available-guards';
 
 type WorkOrderExamFields = Pick<
     WorkOrder,
@@ -62,6 +63,7 @@ interface Site {
     siteName: string;
     clientName: string;
     district: string;
+    districtName?: string;
 }
 
 
@@ -529,16 +531,20 @@ export default function AssignGuardsPage() {
                 if (!siteDoc.exists()) throw new Error("Site not found.");
 
                 const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
+                const resolvedDistrict = siteData.district || siteData.districtName || "";
                 if (!isOperationalWorkOrderClientName((siteData as { clientName?: string }).clientName)) {
                     throw new Error("Work orders are only available for TCS sites.");
                 }
                 if (
                     userRole === 'fieldOfficer' &&
-                    !assignedDistricts.some((district) => districtMatches(district, siteData.district))
+                    !assignedDistricts.some((district) => districtMatches(district, resolvedDistrict))
                 ) {
                     throw new Error("You do not have permission to view this site's work orders.");
                 }
-                setSite(siteData);
+                setSite({
+                    ...siteData,
+                    district: resolvedDistrict,
+                });
 
                 const q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
                 unsubscribe = onSnapshot(q, (snapshot) => {
@@ -574,17 +580,12 @@ export default function AssignGuardsPage() {
         setIsAssignDialogOpen(true);
         setIsLoadingGuards(true);
         try {
-            const districtScope = site?.district || workOrder.district;
-            const districtsToQuery = canAdminWorkOrders
-                ? expandDistrictQueryValues([districtScope])
-                : expandDistrictQueryValues(assignedDistricts);
-            if (districtsToQuery.length === 0) { setAvailableGuards([]); setIsLoadingGuards(false); return; }
-            const snap = await getDocs(query(
-                collection(db, "employees"),
-                where("district", "in", districtsToQuery),
-                where("status", "==", "Active")
-            ));
-            setAvailableGuards(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
+            const districtScope = site?.district || site?.districtName || workOrder.district;
+            const guards = await fetchActiveGuardsForDistricts(
+                db,
+                canAdminWorkOrders ? [districtScope] : assignedDistricts,
+            );
+            setAvailableGuards(guards);
         } catch {
             setError("Could not load guards for assignment.");
         } finally {

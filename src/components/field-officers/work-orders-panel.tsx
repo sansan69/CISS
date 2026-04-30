@@ -47,7 +47,8 @@ import {
 } from "lucide-react";
 import type { WorkOrder } from "@/types/work-orders";
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
-import { districtMatches, expandDistrictQueryValues } from "@/lib/districts";
+import { districtMatches } from "@/lib/districts";
+import { fetchActiveGuardsForDistricts } from "@/lib/work-orders/available-guards";
 
 type WorkOrderExamFields = Pick<
   WorkOrder,
@@ -573,18 +574,11 @@ export function WorkOrdersPanel() {
     setIsLoadingGuards(true);
     try {
       const districtScope = siteDistricts[order.siteId] || order.district || "";
-      const districtsToQuery = isAdmin
-        ? expandDistrictQueryValues([districtScope])
-        : expandDistrictQueryValues(assignedDistricts);
-      if (districtsToQuery.length === 0) { setAvailableGuards([]); setIsLoadingGuards(false); return; }
-      const snap = await getDocs(
-        query(
-          collection(db, "employees"),
-          where("district", "in", districtsToQuery),
-          where("status", "==", "Active"),
-        ),
+      const guards = await fetchActiveGuardsForDistricts(
+        db,
+        isAdmin ? [districtScope] : assignedDistricts,
       );
-      setAvailableGuards(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Employee)));
+      setAvailableGuards(guards);
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not load guards." });
     } finally {
