@@ -5,6 +5,71 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-05-01] — Session: Date-wise expand/collapse for attendance logs page
+
+**File modified:** `src/app/(app)/attendance-logs/page.tsx`
+
+- Attendance records now grouped by `attendanceDate` in collapsible accordion sections.
+- Each date header shows: formatted date, total records, IN/OUT counts, unique employee count.
+- Desktop table rows rendered inside each date group's accordion content.
+- Mobile card view also grouped by date within accordion sections.
+- Expand All / Collapse All toggle button in the card header (visible when multiple dates present).
+- Default: only the most recent date is expanded. Expand All opens every date group.
+- All existing features preserved (search, filters, export, detail sheet, clock drift alerts).
+
+---
+
+## [2026-05-01] — Session: Fix client-time vs server-time attendanceDate (AT-12) + attendance flow hardening
+
+### AT-12 fixed: attendanceDate now uses server-authoritative clock
+
+**Root cause:** `attendanceDate` (the field used by payroll, reports, guard dashboards, and Work Order lookups) was derived from `reportedAtClient` — the guard's untrusted phone clock. A wrong phone date would silently store attendance on the wrong calendar day, breaking payroll LOP calculations, shift matching, work order validation, and duplicate prevention.
+
+**File modified:** `src/app/api/attendance/submit/route.ts`
+- `attendanceDate` now always computed from server clock (`Asia/Kolkata` timezone) via `now.toDate()`, not from `reportedAtClient`.
+- New stored fields on every attendance log:
+  - `serverProcessedAt` — server timestamp when the record was written.
+  - `clockDriftMinutes` — absolute difference between client-reported time and server time.
+  - `clockDriftWarning` — set to a human-readable warning when `clockDriftMinutes > 120` (2 hours).
+  - `requiresAdminReview` — OR of `requiresLocationReview`, `clockDriftWarning`, `isMockLocationSuspected`, and `photoCompliance.adminFlag`. Gives admins a single field to query for records needing attention.
+- Max-age check (`reportedAtClient` older than 4 hours) preserved for offline-queue safety.
+- Worker-shift resolution (`resolveSiteShift`) still uses `reportedAtDate` (client time) because it needs the time the guard was actually present, not the submission time.
+
+**Behavior impact:**
+- Payroll aggregator queries by `attendanceDate` → now matches the server's authoritative calendar date, eliminating wrong-month LOP from clock skew.
+- Guard dashboards / attendance history → correct present-day counts even if device clock is wrong.
+- Work Order validation (`workOrders` queried by `date` on the TCS attendance path) → uses the now-trusted `attendanceDate`.
+- Duplicate attendance prevention (attendanceState) → uses server date, closes the "set phone to future date to bypass duplicate check" vector.
+- Offline queuing still works: `reportedAtClient` is stored for audit; the 4-hour max-age gate remains.
+
+### Guard dashboard attendance query now uses server-side date range filtering
+
+**File modified:** `src/app/api/guard/dashboard/route.ts`
+- Replaced unsafe `.limit(200)` without date filtering → `where("attendanceDate", ">=", startDateStr).where("attendanceDate", "<=", endDateStr).orderBy("attendanceDate", "desc")`.
+- Removed in-memory date filtering on returned logs.
+- Uses existing composite index `(employeeDocId ASC, attendanceDate ASC)` in `firestore.indexes.json`.
+- Fallback query (by `employeeId`) also uses date range now.
+
+**File modified:** `src/app/api/guard/attendance/route.ts`
+- Present-day count changed from `status === "In" || status === "Out"` → `status === "In"` for consistency with the dashboard's present-day logic. (Using "Out" as a separate present-day signal was counting overnight checkout days as "present" when the guard was not actually on duty that day.)
+
+### Admin attendance report export now includes attendanceDate
+
+**File modified:** `src/app/api/admin/reports/attendance/route.ts`
+- Added `attendanceDate` to both JSON response rows and the CSV header so reports show which calendar date the attendance belongs to.
+
+### Attendance logs detail sheet shows clock drift warnings
+
+**File modified:** `src/app/(app)/attendance-logs/page.tsx`
+- Added `Alert` imports, `clockDriftWarning` display in the log detail sheet when drift exceeds 2 hours.
+- Updated `getReportedAt` fallback chain to prefer `serverProcessedAt` as a last resort.
+
+### Verification
+- `npx tsc --noEmit -p tsconfig.typecheck.json` → clean.
+- `npx vitest run src/app/api/attendance/ src/lib/payroll/ src/lib/attendance/` → 15 passed (5 files).
+
+---
+
 ## [2026-05-01] — Session: Legacy employee district visibility for field officers
 
 - Root cause: older employee docs can have district data in legacy shapes/aliases, while field-officer employee directory used an exact Firestore `district in assignedDistricts` filter and assignment lookup only read `employee.district`. That made older guards disappear from FO pages or assignment dialogs even when they belonged to the correct district.
@@ -772,7 +837,7 @@ These changes keep attendance duty-point selection explicit, make field officer 
 - AT-09: Architecture issue requiring significant refactoring, skip per instructions
 - AT-10: FALSE — transaction-based `attendanceState` check prevents duplicates atomically
 - AT-11: Architecture issue requiring significant refactoring, skip per instructions
-- AT-12: TRUE but not simple to fix without breaking offline queuing — client time used for `reportedAtClient` which feeds `attendanceDate`; server enforces max-age check but cannot fully replace client time for offline scenarios
+- AT-12: client time used for `reportedAtClient` which feeds `attendanceDate` — **FIXED on 2026-05-01** (attendanceDate now uses server-authoritative clock; client time stored for reference; clock drift >2h flagged for admin review).
 
 ---
 

@@ -106,18 +106,23 @@ export async function GET(request: Request) {
     let attendanceSnap = await adminDb
       .collection("attendanceLogs")
       .where("employeeDocId", "==", guard.employeeDocId)
-      .limit(200)
+      .where("attendanceDate", ">=", startDateStr)
+      .where("attendanceDate", "<=", endDateStr)
+      .orderBy("attendanceDate", "desc")
       .get();
 
     if (attendanceSnap.empty) {
       attendanceSnap = await adminDb
         .collection("attendanceLogs")
         .where("employeeId", "==", guard.employeeId)
-        .limit(200)
+        .where("attendanceDate", ">=", startDateStr)
+        .where("attendanceDate", "<=", endDateStr)
+        .orderBy("attendanceDate", "desc")
         .get();
     }
 
-    const logs = attendanceSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as Array<{
+    const filteredLogs = attendanceSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() })) as Array<{
       id: string;
       attendanceDate: string;
       status: string;
@@ -127,15 +132,6 @@ export async function GET(request: Request) {
       distanceMeters?: number;
       shiftLabel?: string;
     }>;
-
-    const filteredLogs = logs
-      .filter(
-        (log) =>
-          typeof log.attendanceDate === "string" &&
-          log.attendanceDate >= startDateStr &&
-          log.attendanceDate <= endDateStr,
-      )
-      .sort((a, b) => (b.attendanceDate || "").localeCompare(a.attendanceDate || ""));
 
     // Count unique present days (days with at least one "In" log)
     const presentDates = new Set(

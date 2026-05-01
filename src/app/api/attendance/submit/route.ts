@@ -145,18 +145,25 @@ export async function POST(request: NextRequest) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { Timestamp } = await import("firebase-admin/firestore");
     const now = Timestamp.now();
+    const serverNow = now.toDate();
     const reportedAt = payload.reportedAtClient
       ? Timestamp.fromDate(new Date(payload.reportedAtClient))
       : now;
     const reportedAtDate = reportedAt.toDate();
-    const maxQueueAgeMs =
+    const oldestAllowedMs =
       OFFLINE_ATTENDANCE_MAX_AGE_HOURS * 60 * 60 * 1000;
-    if (Date.now() - reportedAtDate.getTime() > maxQueueAgeMs) {
+    if (Date.now() - reportedAtDate.getTime() > oldestAllowedMs) {
       throw new AttendanceError(
         `Queued attendance older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours cannot be submitted. Please record attendance again.`,
       );
     }
-    const attendanceDate = INDIA_DATE_FORMATTER.format(reportedAtDate);
+    const attendanceDate = INDIA_DATE_FORMATTER.format(serverNow);
+    const clockDriftMs = Math.abs(serverNow.getTime() - reportedAtDate.getTime());
+    const clockDriftMinutes = Math.round(clockDriftMs / 60000);
+    const clockDriftWarning =
+      clockDriftMinutes > 120
+        ? `Device clock appears off by ${clockDriftMinutes} minutes compared to server time. Attendance was recorded using server time.`
+        : null;
     const employeeRef = adminDb.collection("employees").doc(payload.employeeDocId);
     const sourceCol = (payload as any).sourceCollection === 'clientLocations' ? 'clientLocations' : 'sites';
     const siteRef = adminDb.collection(sourceCol).doc(payload.siteId);
@@ -399,6 +406,9 @@ export async function POST(request: NextRequest) {
         employeePhoneNumber: payload.employeePhoneNumber ?? null,
         reportedAtClient: payload.reportedAtClient ?? null,
         reportedAt,
+        serverProcessedAt: now,
+        clockDriftMinutes,
+        clockDriftWarning,
         status: payload.status,
         district: normalizeDistrictName(payload.district),
         siteId: payload.siteId,
@@ -424,6 +434,11 @@ export async function POST(request: NextRequest) {
         isMockLocationSuspected,
         mockLocationReason: payload.mockLocationReason ?? null,
         requiresLocationReview: Boolean(locationReviewWarning),
+        requiresAdminReview:
+          Boolean(locationReviewWarning) ||
+          Boolean(clockDriftWarning) ||
+          isMockLocationSuspected ||
+          (typeof payload.photoCompliance?.adminFlag === "boolean" && payload.photoCompliance.adminFlag),
         photoUrl: payload.photoUrl,
         photoCapturedAt: payload.photoCapturedAt ?? null,
         photoCompliance: locationReviewWarning

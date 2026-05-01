@@ -87,7 +87,7 @@ export async function GET(request: Request) {
 
     // Summary
     const presentDates = new Set(
-      rawLogs.filter((l) => l.status === "In" || l.status === "Out").map((l) => l.date)
+      rawLogs.filter((l) => l.status === "In").map((l) => l.date)
     );
     const presentDays = presentDates.size;
     const workingDays = workingDaysInMonth(year, month);
