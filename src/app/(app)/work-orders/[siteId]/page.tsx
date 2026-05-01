@@ -580,10 +580,25 @@ export default function AssignGuardsPage() {
         setIsAssignDialogOpen(true);
         setIsLoadingGuards(true);
         try {
-            const districtScope = site?.district || site?.districtName || workOrder.district;
-            const guards = await fetchActiveGuardsForDistricts(
-                canAdminWorkOrders ? [districtScope] : assignedDistricts,
-            );
+            const resolvedDistrict = (site?.district || site?.districtName || workOrder.district || '').trim();
+            // Admin: when the site/work-order has no usable district (legacy
+            // import without a district column), fetch every active guard so
+            // the dialog never silently shows "no guards to map". Toast a
+            // warning so the operator knows to fix the site district.
+            let scope: string[];
+            if (canAdminWorkOrders) {
+                scope = resolvedDistrict ? [resolvedDistrict] : [];
+                if (!resolvedDistrict) {
+                    toast({
+                        variant: 'destructive',
+                        title: 'Missing district',
+                        description: 'This site has no district set. Showing all active guards. Fix the site district to scope the list.',
+                    });
+                }
+            } else {
+                scope = assignedDistricts;
+            }
+            const guards = await fetchActiveGuardsForDistricts(scope, { allowEmptyScope: canAdminWorkOrders });
             setAvailableGuards(guards);
         } catch {
             setError("Could not load guards for assignment.");

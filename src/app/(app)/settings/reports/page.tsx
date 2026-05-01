@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { KERALA_DISTRICTS } from "@/lib/constants";
+import { KERALA_DISTRICTS } from "@/lib/districts";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/layout/page-header";

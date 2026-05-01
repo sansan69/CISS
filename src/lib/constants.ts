@@ -1,20 +1,4 @@
-export const KERALA_DISTRICTS = [
-  "Thiruvananthapuram",
-  "Kollam",
-  "Pathanamthitta",
-  "Alappuzha",
-  "Kottayam",
-  "Idukki",
-  "Ernakulam",
-  "Thrissur",
-  "Palakkad",
-  "Malappuram",
-  "Kozhikode",
-  "Wayanad",
-  "Kannur",
-  "Kasaragod",
-  "Lakshadweep",
-] as const;
+export { KERALA_DISTRICTS } from "./districts";
 
 export const EMPLOYEE_STATUSES = [
   "Active",

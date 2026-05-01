@@ -1,4 +1,10 @@
 import * as XLSX from "xlsx";
+import {
+  canonicalizeDistrictName,
+  inferKeralaDistrictFromText,
+  isCanonicalKeralaDistrict,
+  resolveKeralaDistrictFromRow,
+} from "@/lib/districts";
 import type {
   TcsExamParserMode,
   TcsExamSourceRow,
@@ -9,10 +15,28 @@ import type {
 const EMPTY_RESULT_DATE = "";
 const HEADER_SCAN_ROWS = 4;
 
+// "Location" is intentionally only a siteName alias — TCS files often label
+// the centre column "Location" while the actual district lives in a CITY or
+// DISTRICT column. The keyword-scan fallback in `resolveDistrictFromRow`
+// covers files that have no district column at all.
 const STATIC_HEADER_ALIASES: Record<"siteId" | "siteName" | "district", string[]> = {
   siteId: ["site id", "site code", "tc code", "code", "center code"],
-  siteName: ["site name", "site", "center", "centre", "venue", "location", "institution", "school"],
-  district: ["city", "district", "area", "region", "place", "location", "district name"],
+  siteName: [
+    "site name",
+    "site",
+    "center",
+    "centre",
+    "venue",
+    "location",
+    "institution",
+    "school",
+    "place name",
+    "centre name",
+    "center name",
+    "tc address",
+    "address",
+  ],
+  district: ["city", "district", "area", "region", "place", "district name", "zone", "zone name"],
 };
 
 const GENERIC_TITLE_HEADERS = new Set([
@@ -44,15 +68,17 @@ function normalizeHeader(value: unknown): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeTcsDistrict(value: unknown): string {
-  const normalized = normalizeText(value);
-  // Some TCS sheets put operational zones in the district column. These are not
-  // assignable field-officer districts, so map known zones to their district.
-  if (/^south\s*2$/i.test(normalized)) {
-    return "Ernakulam";
+function resolveDistrictFromRow(rawDistrict: unknown, row: unknown[]): string {
+  const resolved = resolveKeralaDistrictFromRow(rawDistrict, row);
+  if (resolved && isCanonicalKeralaDistrict(resolved)) {
+    return canonicalizeDistrictName(resolved) || resolved;
   }
-  return normalized;
+  return resolved || "";
 }
+
+// Re-export so call-sites that previously imported this helper from the
+// parser keep compiling.
+export { inferKeralaDistrictFromText };
 
 function formatLocalDate(date: Date): string {
   return [
@@ -246,14 +272,20 @@ function resolveStaticHeaderIndices(rows: unknown[][], headerRowIndex: number): 
       continue;
     }
 
+    // Prefer siteId, then siteName, then district. Never assign two roles to
+    // the same column (prevents "Location" from also being treated as district
+    // when it's already serving as siteName).
     if (resolved.siteId === null && STATIC_HEADER_ALIASES.siteId.includes(normalized)) {
       resolved.siteId = index;
+      continue;
     }
     if (resolved.siteName === null && STATIC_HEADER_ALIASES.siteName.includes(normalized)) {
       resolved.siteName = index;
+      continue;
     }
     if (resolved.district === null && STATIC_HEADER_ALIASES.district.includes(normalized)) {
       resolved.district = index;
+      continue;
     }
   }
 
@@ -291,8 +323,11 @@ function extractExamName(rows: unknown[][], fileName: string): string {
   // TCS work-order sheets often contain generic operational headers like
   // "ZONE" or "TC Address" in the first rows. The exam identity is the file
   // name, so prefer that whenever it provides a concrete exam label.
+  // Reject generic single-word residues left over from filenames like
+  // "Adhoc Security guard requirement.xlsx" → "requirement". The row-title
+  // fallback below handles those cases.
   const fileExamName = cleanExamNameFromFilename(fileName);
-  if (fileExamName && fileExamName !== "TCS Exam") {
+  if (fileExamName && fileExamName !== "TCS Exam" && !isGenericExamName(fileExamName)) {
     return fileExamName;
   }
 
@@ -367,7 +402,8 @@ function buildRowBase(
 ): TcsExamSourceRow | null {
   const siteName = normalizeText(staticIndices.siteName === null ? "" : row[staticIndices.siteName]) ||
     normalizeText(staticIndices.siteId === null ? "" : row[staticIndices.siteId]);
-  const district = normalizeTcsDistrict(staticIndices.district === null ? "" : row[staticIndices.district]);
+  const rawDistrict = staticIndices.district === null ? "" : row[staticIndices.district];
+  const district = resolveDistrictFromRow(rawDistrict, row);
   const siteId = staticIndices.siteId === null ? "" : normalizeText(row[staticIndices.siteId]);
 
   if (!siteName) {
@@ -548,7 +584,8 @@ function parsePivotSheet(
 
     const baseSiteName = (staticIndices.siteName === null ? "" : normalizeText(row[staticIndices.siteName])) ||
       (staticIndices.siteId === null ? "" : normalizeText(row[staticIndices.siteId]));
-    const baseDistrict = normalizeTcsDistrict(staticIndices.district === null ? "" : row[staticIndices.district]);
+    const baseRawDistrict = staticIndices.district === null ? "" : row[staticIndices.district];
+    const baseDistrict = resolveDistrictFromRow(baseRawDistrict, row);
     const baseSiteId = staticIndices.siteId === null ? "" : normalizeText(row[staticIndices.siteId]);
 
     if (!baseSiteName) {

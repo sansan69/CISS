@@ -10,7 +10,7 @@ service cloud.firestore {
     }
 
     // Guard: authenticated via synthetic email {phone}@guard.cisskerala.app
-    // The Flutter app signs guards in with Firebase Auth (email+PIN).
+    // Guard clients sign in with Firebase Auth (email+PIN).
     // Guards have role == 'guard' in custom claims (set at PIN setup).
     function isGuard() {
       return isSignedIn() && (
@@ -73,7 +73,7 @@ service cloud.firestore {
     }
 
     // ── users collection ────────────────────────────────────────────────────
-    // Guards self-register here during PIN setup (Flutter app writes user doc).
+    // Guards self-register here during PIN setup.
     // Staff read their own doc. Admin reads all.
 
     match /users/{uid} {
@@ -163,14 +163,14 @@ service cloud.firestore {
     }
 
     // ── attendanceLogs ───────────────────────────────────────────────────────
-    // Guards (Flutter) create their own logs directly from the device.
+    // Guards create their own logs directly from their device.
     // Next.js Admin SDK still creates logs server-side — both are supported.
     // Guards can ONLY read and create their OWN logs (scoped by employeeDocId).
     // They CANNOT update or delete any log (immutable audit trail).
 
     match /attendanceLogs/{logId} {
-      // Guards can create their own attendance records from the Flutter app.
-      // Flutter app writes: status ('In'/'Out'), employeeDocId, reportedAt (server ts)
+      // Guards can create their own attendance records.
+      // Guard client writes: status ('In'/'Out'), employeeDocId, reportedAt (server ts)
       allow create: if isGuard() &&
         request.resource.data.employeeDocId == guardEmployeeDocId() &&
         request.resource.data.status in ['In', 'Out'] &&
@@ -187,7 +187,7 @@ service cloud.firestore {
     }
 
     // attendanceStates — hot doc per guard tracking isCheckedIn, lastCheckIn, streak
-    // Flutter app uses collection name 'attendanceStates' (plural)
+    // Primary collection name is 'attendanceStates' (plural)
     match /attendanceStates/{employeeId} {
       allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
       allow create, update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
@@ -202,7 +202,7 @@ service cloud.firestore {
     }
 
     // ── leaveRequests ────────────────────────────────────────────────────────
-    // Guards submit leave requests from the Flutter app.
+    // Guards submit leave requests from authenticated guard clients.
     // Admins/HR approve or reject.
 
     match /leaveRequests/{requestId} {
@@ -323,7 +323,7 @@ service cloud.firestore {
     }
 
     match /leaveBalances/{balanceId} {
-      // Guards can read their own leave balance (needed by Flutter leave screen)
+      // Guards can read their own leave balance.
       allow read: if isAdmin() || isAccounts() || isHR() ||
         (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
       allow write: if isAdmin() || isAccounts() || isHR();
@@ -348,7 +348,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ── notifications (Flutter push + web) ─────────────────────────────────
+    // ── notifications (push + web) ─────────────────────────────────────────
 
     match /notifications/{notifId} {
       // Each user can read their own notifications

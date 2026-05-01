@@ -29,11 +29,12 @@ import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/fires
 import { PageHeader } from '@/components/layout/page-header';
 import { useClients } from '@/lib/hooks/use-clients';
 import type { RegionRecord } from '@/types/region';
+import { KERALA_DISTRICTS } from '@/lib/districts';
+import { employeeMatchesAnyDistrict } from '@/lib/employees/visibility';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
 
-const keralaDistricts = [ "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha", "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad", "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep" ];
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 
 // A custom hook for debouncing a value
@@ -171,15 +172,13 @@ export default function EmployeeDirectoryPage() {
                 new Set(superAdminResults.map((employee) => employee.district).filter(Boolean)),
             ).sort((a, b) => a.localeCompare(b));
         }
-        return keralaDistricts;
+        return [...KERALA_DISTRICTS];
     }, [assignedDistricts, superAdminResults, userRole]);
     
     const buildBaseQuery = useCallback(() => {
         let q: Query = collection(db, "employees");
 
-        if (userRole === 'fieldOfficer' && assignedDistricts.length > 0) {
-            q = query(q, where('district', 'in', assignedDistricts));
-        } else if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
+        if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
             return null; // Return null to indicate no query should be run
         } else if (userRole === 'client' && clientInfo?.clientName) {
             q = query(q, where('clientName', '==', clientInfo.clientName));
@@ -251,12 +250,13 @@ export default function EmployeeDirectoryPage() {
                 const queries: Promise<any>[] = [];
 
                 // Name prefix searches (different case variants to improve matches)
-                queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(term), endAt(term + '\uf8ff'), limit(ITEMS_PER_PAGE)) as Query));
+                const searchLimit = userRole === 'fieldOfficer' ? 200 : ITEMS_PER_PAGE;
+                queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(term), endAt(term + '\uf8ff'), limit(searchLimit)) as Query));
                 if (termCap !== term) {
-                    queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(termCap), endAt(termCap + '\uf8ff'), limit(ITEMS_PER_PAGE)) as Query));
+                    queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(termCap), endAt(termCap + '\uf8ff'), limit(searchLimit)) as Query));
                 }
                 if (termUpper !== term && termUpper !== termCap) {
-                    queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(termUpper), endAt(termUpper + '\uf8ff'), limit(ITEMS_PER_PAGE)) as Query));
+                    queries.push(getDocs(query(baseQuery, orderBy('fullName'), startAt(termUpper), endAt(termUpper + '\uf8ff'), limit(searchLimit)) as Query));
                 }
 
                 // Exact employeeId and phoneNumber matches (no extra indexes needed)
@@ -279,16 +279,39 @@ export default function EmployeeDirectoryPage() {
                         }
                     });
                 });
+                const visibleEmployees = userRole === 'fieldOfficer'
+                    ? merged.filter((employee) => employeeMatchesAnyDistrict(employee, assignedDistricts))
+                    : merged;
                 // Sort by createdAt desc to keep recency
-                merged.sort((a: any, b: any) => {
+                visibleEmployees.sort((a: any, b: any) => {
                     const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
                     const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
                     return tb - ta;
                 });
-                setEmployees(merged.slice(0, ITEMS_PER_PAGE));
+                setEmployees(visibleEmployees.slice(0, ITEMS_PER_PAGE));
                 setHasNextPage(false);
                 setHasPreviousPage(false);
                 setCurrentPage(1);
+                setFirstVisible(null);
+                setLastVisible(null);
+                return;
+            }
+
+            if (userRole === 'fieldOfficer') {
+                const orderedFoQuery = query(baseQuery, orderBy('createdAt', 'desc')) as Query;
+                const documentSnapshots = await getDocs(orderedFoQuery);
+                const allVisibleEmployees = documentSnapshots.docs
+                    .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee))
+                    .filter((employee) => employeeMatchesAnyDistrict(employee, assignedDistricts));
+                const targetPage = direction === 'next' ? currentPage + 1 : direction === 'prev' ? Math.max(1, currentPage - 1) : 1;
+                const totalPages = Math.max(1, Math.ceil(allVisibleEmployees.length / ITEMS_PER_PAGE));
+                const boundedPage = Math.min(targetPage, totalPages);
+                const startIndex = (boundedPage - 1) * ITEMS_PER_PAGE;
+
+                setEmployees(allVisibleEmployees.slice(startIndex, startIndex + ITEMS_PER_PAGE));
+                setHasNextPage(startIndex + ITEMS_PER_PAGE < allVisibleEmployees.length);
+                setHasPreviousPage(boundedPage > 1);
+                setCurrentPage(boundedPage);
                 setFirstVisible(null);
                 setLastVisible(null);
                 return;
@@ -343,7 +366,7 @@ export default function EmployeeDirectoryPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [buildBaseQuery, currentPage, pageCursors, debouncedSearchTerm, userRole, region, client, status, district]);
+    }, [buildBaseQuery, currentPage, pageCursors, debouncedSearchTerm, userRole, region, client, status, district, assignedDistricts]);
 
     useEffect(() => {
         if (userRole !== null) {

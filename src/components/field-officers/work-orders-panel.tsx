@@ -573,10 +573,21 @@ export function WorkOrdersPanel() {
     setSelectedWorkOrder(order);
     setIsLoadingGuards(true);
     try {
-      const districtScope = siteDistricts[order.siteId] || order.district || "";
-      const guards = await fetchActiveGuardsForDistricts(
-        isAdmin ? [districtScope] : assignedDistricts,
-      );
+      const districtScope = (siteDistricts[order.siteId] || order.district || "").trim();
+      let scope: string[];
+      if (isAdmin) {
+        scope = districtScope ? [districtScope] : [];
+        if (!districtScope) {
+          toast({
+            variant: "destructive",
+            title: "Missing district",
+            description: "This site has no district set. Showing all active guards.",
+          });
+        }
+      } else {
+        scope = assignedDistricts;
+      }
+      const guards = await fetchActiveGuardsForDistricts(scope, { allowEmptyScope: isAdmin });
       setAvailableGuards(guards);
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not load guards." });

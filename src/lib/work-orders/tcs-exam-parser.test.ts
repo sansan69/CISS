@@ -119,4 +119,42 @@ describe("parseTcsExamWorkbook", () => {
     expect(result.rows[0]?.date).toBe("");
     expect(result.warnings.some((warning) => warning.code === "missing_date")).toBe(true);
   });
+
+  it("infers the district from address text when TCS sheets have no district column", () => {
+    const workbook = workbookFromRows([
+      ["STATE", "TC ADDRESS", "ZONE", "Male", "Female", "05 May 2026"],
+      [
+        "Kerala",
+        "TCS iON Digital Zone, Kakkanad, Ernakulam",
+        "South 2",
+        3,
+        1,
+        "",
+      ],
+    ]);
+
+    const result = parseTcsExamWorkbook(workbook, "Adhoc Security guard requirement.xlsx");
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      siteName: "TCS iON Digital Zone, Kakkanad, Ernakulam",
+      district: "Ernakulam",
+      maleGuardsRequired: 3,
+      femaleGuardsRequired: 1,
+    });
+  });
+
+  it("does not treat a Location centre-name column as the district column", () => {
+    const workbook = workbookFromRows([
+      ["District", "Location", "Male", "Female", "05 May 2026"],
+      ["Kozhikode", "TCS Center Location A", 2, 0, ""],
+    ]);
+
+    const result = parseTcsExamWorkbook(workbook, "BITSAT Exam on 05 May 2026.xlsx");
+
+    expect(result.rows[0]).toMatchObject({
+      siteName: "TCS Center Location A",
+      district: "Kozhikode",
+    });
+  });
 });

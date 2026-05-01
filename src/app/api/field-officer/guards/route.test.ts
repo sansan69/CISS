@@ -114,7 +114,7 @@ describe("field officer guards route", () => {
     expect(payload.guards).toEqual([
       expect.objectContaining({
         fullName: "Marian Guard One",
-        district: "Trivandrum",
+        district: "Thiruvananthapuram",
         status: "Active",
       }),
     ]);
@@ -175,6 +175,44 @@ describe("field officer guards route", () => {
     ]);
     expect(ernakulamPayload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toEqual([
       "G-EKM",
+    ]);
+  });
+
+  it("returns legacy enrolled guards whose district is stored under districtName", async () => {
+    const db = new FakeFirestore();
+    db.seed("fieldOfficers", "fo-ernakulam", {
+      uid: "fo-ernakulam",
+      assignedDistricts: ["Ernakulam"],
+    });
+    db.seed("employees", "legacy-guard", {
+      fullName: "Legacy Enrolled Guard",
+      employeeId: "G-LEGACY",
+      clientName: "TCS",
+      districtName: "Cochin",
+      gender: "Male",
+      phoneNumber: "9999990000",
+      status: "Active",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({
+      uid: "fo-ernakulam",
+      role: "fieldOfficer",
+      assignedDistricts: ["Ernakulam"],
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/field-officer/guards?district=Ernakulam"),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.guards).toEqual([
+      expect.objectContaining({
+        employeeId: "G-LEGACY",
+        district: "Ernakulam",
+      }),
     ]);
   });
 });

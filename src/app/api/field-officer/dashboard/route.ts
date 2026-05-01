@@ -7,6 +7,7 @@ import {
   type AppDecodedToken,
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
 
 type FieldOfficerProfile = {
   name: string;
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
     const assignedDistricts = profile.assignedDistricts;
 
     const [employeesSnap, workOrdersSnap, visitReportsSnap, trainingReportsSnap] = await Promise.all([
-      adminDb.collection("employees").where("status", "==", "Active").limit(500).get(),
+      adminDb.collection("employees").where("status", "==", "Active").get(),
       adminDb.collection("workOrders").orderBy("date", "desc").limit(500).get(),
       adminDb.collection("foVisitReports").where("fieldOfficerId", "==", decoded.uid).limit(50).get(),
       adminDb.collection("foTrainingReports").where("fieldOfficerId", "==", decoded.uid).limit(50).get(),
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
       .filter((employee) => {
         if (assignedDistricts.length === 0) return true;
-        return assignedDistricts.some((district) => districtMatches(district, String(employee.district ?? "")));
+        return employeeMatchesAnyDistrict(employee, assignedDistricts);
       });
 
     const workOrders = workOrdersSnap.docs

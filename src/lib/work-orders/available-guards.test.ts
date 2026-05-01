@@ -37,4 +37,15 @@ describe("filterActiveGuardsForDistricts", () => {
       filterActiveGuardsForDistricts(guards, ["Thiruvananthapuram"]).map((g) => g.id),
     ).toEqual(["tvm"]);
   });
+
+  it("keeps legacy employees visible when district is stored under districtName", () => {
+    const guards = [
+      { ...guard({ id: "legacy", district: "" }), districtName: "Cochin" },
+      guard({ id: "other", district: "Kollam" }),
+    ] as Array<Employee & { districtName?: string }>;
+
+    expect(
+      filterActiveGuardsForDistricts(guards, ["Ernakulam"]).map((g) => g.id),
+    ).toEqual(["legacy"]);
+  });
 });

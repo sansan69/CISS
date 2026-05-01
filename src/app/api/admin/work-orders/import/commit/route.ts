@@ -11,7 +11,13 @@ import { lookupLocationGeocode } from "@/lib/server/location-geocode";
 import { buildTcsExamDiff } from "@/lib/work-orders/tcs-exam-diff";
 import { buildTcsExamContentHash } from "@/lib/work-orders/tcs-exam-hash";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
-import { districtKey, districtMatches } from "@/lib/districts";
+import {
+  canonicalizeDistrictName,
+  districtKey,
+  districtMatches,
+  isCanonicalKeralaDistrict,
+  normalizeOperationalZoneLabel,
+} from "@/lib/districts";
 import type {
   TcsExamExistingWorkOrder,
   TcsExamImportCommitPayload,
@@ -66,11 +72,16 @@ function normalizeSegment(value: string | number | undefined | null): string {
 }
 
 function normalizeTcsDistrict(value: unknown): string {
-  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (/^south\s*2$/i.test(normalized)) {
-    return "Ernakulam";
+  // Run every district through the shared resolver so TCS imports always
+  // store one of the canonical Kerala district names. Operational zone
+  // labels (e.g. "South 2") are mapped first; aliases (Trivandrum, Cochin,
+  // …) are then canonicalised to the field-officer-facing district name.
+  const zoneNormalized = normalizeOperationalZoneLabel(value as string | null | undefined);
+  if (!zoneNormalized) return "";
+  if (isCanonicalKeralaDistrict(zoneNormalized)) {
+    return canonicalizeDistrictName(zoneNormalized) || zoneNormalized;
   }
-  return normalized;
+  return zoneNormalized;
 }
 
 function hasConcreteSiteId(row: {
@@ -204,6 +215,16 @@ function buildSiteCodeDistrictKey(siteId: string | null | undefined, district: s
   return codeKey && resolvedDistrictKey ? `${codeKey}|district:${resolvedDistrictKey}` : "";
 }
 
+function buildSiteCodeKey(siteId: string | null | undefined) {
+  const codeKey = normalizeSegment(siteId);
+  return codeKey ? `code:${codeKey}` : "";
+}
+
+function buildSiteNameKey(siteName: string) {
+  const nameKey = normalizeSegment(siteName);
+  return nameKey ? `name:${nameKey}` : "";
+}
+
 function validatePayload(body: unknown): TcsExamImportCommitPayload {
   const payload = body as Partial<TcsExamImportCommitPayload>;
   if (!payload || typeof payload !== "object") {
@@ -269,14 +290,25 @@ async function fetchExistingRows(
 
 async function fetchSites(
   adminDb: any,
+  tcsClientId: string | null,
 ) {
   const snapshot = await adminDb.collection("sites").get();
   const byCodeDistrict = new Map<string, SiteRecord>();
   const byFallback = new Map<string, SiteRecord>();
+  const byCode = new Map<string, SiteRecord>();
+  const byName = new Map<string, SiteRecord>();
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
-    if (!isOperationalWorkOrderClientName(typeof data.clientName === "string" ? data.clientName : "")) {
+    const clientNameValue = typeof data.clientName === "string" ? data.clientName : "";
+    const clientIdValue = typeof data.clientId === "string" ? data.clientId : "";
+    // Accept the canonical TCS client AND any pre-existing TCS variants linked
+    // via clientId. This prevents the importer from creating duplicate sites
+    // for legacy records whose clientName drifted from the strict constant.
+    const isTcsClient =
+      isOperationalWorkOrderClientName(clientNameValue) ||
+      (Boolean(tcsClientId) && clientIdValue === tcsClientId);
+    if (!isTcsClient) {
       continue;
     }
     const site: SiteRecord = {
@@ -293,9 +325,17 @@ async function fetchSites(
     if (!byFallback.has(fallbackKey)) {
       byFallback.set(fallbackKey, site);
     }
+    const codeKey = buildSiteCodeKey(site.siteId);
+    if (codeKey && !byCode.has(codeKey)) {
+      byCode.set(codeKey, site);
+    }
+    const nameKey = buildSiteNameKey(site.siteName);
+    if (nameKey && !byName.has(nameKey)) {
+      byName.set(nameKey, site);
+    }
   }
 
-  return { byCodeDistrict, byFallback };
+  return { byCodeDistrict, byFallback, byCode, byName };
 }
 
 async function resolveCommitRows(
@@ -304,12 +344,12 @@ async function resolveCommitRows(
   rows: readonly TcsExamSourceRow[],
   adminUser: { uid: string; email?: string | null },
 ) {
-  const sites = await fetchSites(adminDb);
   const clientSnap = await adminDb
     .collection("clients")
     .where("name", "==", OPERATIONAL_CLIENT_NAME)
     .get();
   const tcsClientId = clientSnap.docs[0]?.id ?? null;
+  const sites = await fetchSites(adminDb, tcsClientId);
 
   let createdSites = 0;
   const resolvedRows: TcsExamSourceRow[] = [];
@@ -317,13 +357,26 @@ async function resolveCommitRows(
   for (const row of rows) {
     const codeDistrictKey = buildSiteCodeDistrictKey(row.siteId, row.district);
     const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
+    const codeKey = buildSiteCodeKey(row.siteId);
+    const nameKey = buildSiteNameKey(row.siteName);
+    // Lookup priority:
+    //   1. Exact (siteId + district) match — same site, same district.
+    //   2. Exact (siteName + district) fallback for files without site IDs.
+    //   3. siteId-only — same TC code but the existing record has a stale
+    //      district (e.g. "South 2" → "Ernakulam"). Update in place rather
+    //      than creating a duplicate.
+    //   4. siteName-only — same fallback story when there is no siteId at all.
     let site =
       (codeDistrictKey && sites.byCodeDistrict.get(codeDistrictKey)) ||
-      sites.byFallback.get(fallbackKey);
+      sites.byFallback.get(fallbackKey) ||
+      (codeKey ? sites.byCode.get(codeKey) : undefined) ||
+      (nameKey ? sites.byName.get(nameKey) : undefined);
 
     if (site && row.district && !districtMatches(row.district, site.district)) {
       batch.update(adminDb.collection("sites").doc(site.id), {
         district: row.district,
+        clientName: OPERATIONAL_CLIENT_NAME,
+        clientId: tcsClientId,
         locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
         ...buildServerUpdateAudit({
           uid: adminUser.uid,
@@ -395,6 +448,12 @@ async function resolveCommitRows(
         sites.byCodeDistrict.set(codeDistrictKey, site);
       }
       sites.byFallback.set(fallbackKey, site);
+      if (codeKey) {
+        sites.byCode.set(codeKey, site);
+      }
+      if (nameKey) {
+        sites.byName.set(nameKey, site);
+      }
     }
 
     resolvedRows.push({

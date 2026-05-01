@@ -4,6 +4,8 @@ import {
   canonicalizeDistrictName,
   expandDistrictQueryValues,
   districtMatches,
+  inferKeralaDistrictFromText,
+  resolveKeralaDistrictFromRow,
 } from "./districts";
 
 describe("district aliases", () => {
@@ -27,5 +29,23 @@ describe("district aliases", () => {
     expect(expandDistrictQueryValues(["Trivandrum"])).toEqual(
       expect.arrayContaining(["Trivandrum", "Thiruvananthapuram", "TVM"]),
     );
+  });
+
+  it("maps TCS operational zones to the canonical district", () => {
+    expect(resolveKeralaDistrictFromRow("South 2", ["South 2", "TC Address"])).toBe("Ernakulam");
+  });
+
+  it("infers district from site names and addresses when the district cell is empty", () => {
+    expect(
+      resolveKeralaDistrictFromRow("", [
+        "TCS iON Digital Zone",
+        "Near Civil Station, Kakkanad, Kerala",
+      ]),
+    ).toBe("Ernakulam");
+  });
+
+  it("canonicalizes district aliases before field-officer matching", () => {
+    expect(resolveKeralaDistrictFromRow("Cochin", ["Cochin", "Center A"])).toBe("Ernakulam");
+    expect(inferKeralaDistrictFromText("Venue at Calicut")).toBe("Kozhikode");
   });
 });

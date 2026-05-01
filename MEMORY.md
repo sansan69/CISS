@@ -5,6 +5,96 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-05-01] — Session: Legacy employee district visibility for field officers
+
+- Root cause: older employee docs can have district data in legacy shapes/aliases, while field-officer employee directory used an exact Firestore `district in assignedDistricts` filter and assignment lookup only read `employee.district`. That made older guards disappear from FO pages or assignment dialogs even when they belonged to the correct district.
+- Added `src/lib/employees/visibility.ts` to resolve employee district from modern `district`, legacy district-like fields (`districtName`, `currentDistrict`, `permanentDistrict`, `addressDistrict`, `locationDistrict`, `city`), or address keyword inference.
+- Updated work-order guard assignment filtering and `/api/field-officer/guards` to use shared employee district resolution and return canonical district names.
+- Updated FO employee directory to avoid exact district-only Firestore filtering; it now applies legacy-aware district matching in memory after fetching the candidate employee set.
+- Updated FO dashboard guard count to remove unsafe `.limit(500)` and use the same legacy-aware district matcher.
+- Added regression tests for legacy `districtName: "Cochin"` and address-inferred employee districts.
+- Data audit: current live employee docs already have valid district values for real districts; no production employee district backfill was required.
+- Verification: `npx vitest run src/app/api/field-officer/ src/lib/work-orders/ src/lib/employees/visibility.test.ts src/lib/districts.test.ts src/app/work-orders-surface.test.ts` → 37 passed (8 files). `npx tsc --noEmit -p tsconfig.typecheck.json` → clean.
+
+---
+
+## [2026-05-01] — Session: Remove legacy mobile app
+
+- Deleted the tracked legacy mobile app tree from the repository.
+- Deleted the three old mobile planning documents under `docs/`.
+- Updated `firestore.rules` comments to remove stale platform-specific wording while preserving the existing guard-auth rule behavior.
+- Verification: the legacy mobile app directory is absent, and a repository scan found no remaining platform-specific references in the active working tree.
+
+---
+
+## [2026-05-01] — Session: End-to-end work-order import + assignment fixes (May 2-10 regression)
+
+**Symptoms reported:** Recently uploaded TCS centres/sites missing from field-officer pages; assignment dialog often shows "no guards to map"; suspected district parsing/mapping issue; problem most visible for uploads dated 2-10 May 2026.
+
+**Root causes identified:** empty/non-canonical district on imports when the file has no recognised district column; "Location" alias collision between `siteName` and `district`; commit-route site lookup keys district into the cache so a corrected district creates a duplicate site instead of updating the existing one; `field-officer/guards` and `field-officer/work-orders` API routes used `.limit(1000)` without ordering (silent truncation past the cap); admin assign dialog passed `[""]` as district scope when site district was missing → empty guard list; legacy "South 2" zone label and alias districts (Trivandrum/Cochin) not consistently canonicalised.
+
+**Files modified:**
+
+### 1. Parser district resolution
+- `src/lib/work-orders/tcs-exam-parser.ts`
+  - Removed `"location"` from `STATIC_HEADER_ALIASES.district` so it no longer doubles as siteName + district.
+  - Added `"tc address"` / `"address"` as site-name fallbacks and `"zone"` / `"zone name"` as district-zone inputs, so TCS rows with `STATE / TC ADDRESS / ZONE / Male / Female` parse instead of being skipped.
+  - `resolveStaticHeaderIndices` now skips a header role once a previous role has claimed the column (prevents the same column index being assigned to siteName *and* district).
+  - Uses the shared Kerala-district keyword scan from `src/lib/districts.ts` (covers all 14 districts plus common town-level keywords like Aluva, Kakkanad, Calicut, Kanhangad, etc.).
+  - New `resolveDistrictFromRow(rawDistrict, row)` is used by both the legacy and pivot parsers — if the district column is missing or doesn't resolve to a Kerala district, scan all cells in the row for a keyword.
+  - `extractExamName` now rejects single-word generic file-derived names (e.g. "requirement") so the row-title fallback can fire.
+- `src/lib/work-orders/tcs-exam-parser.test.ts` — added tests for keyword fallback, Location-collision avoidance, "South 2" → Ernakulam, alias canonicalisation (Trivandrum/Cochin), and the no-signal case.
+
+### 1a. Shared district source of truth
+- `src/lib/districts.ts`
+  - Now owns `KERALA_DISTRICTS`, aliases, search variants, TCS zone mapping, and district keyword inference helpers.
+  - `src/lib/constants.ts` re-exports `KERALA_DISTRICTS` for compatibility; new/direct district consumers should import from `@/lib/districts`.
+  - Settings pages now import `KERALA_DISTRICTS` from `@/lib/districts`.
+- `src/lib/districts.test.ts` — added coverage for `"South 2"` mapping, address-based district inference, and alias canonicalisation before FO matching.
+
+### 2. Commit route site lookup tolerates district changes
+- `src/app/api/admin/work-orders/import/commit/route.ts`
+  - Added `buildSiteCodeKey` and `buildSiteNameKey` helpers (district-free).
+  - `fetchSites` now also indexes `byCode` and `byName`, and accepts the TCS client via `clientId` match (in addition to `clientName`) so legacy variants of the client name are still recognised.
+  - `resolveCommitRows` now tries `byCodeDistrict → byFallback → byCode → byName` for site lookup. When district has changed, the existing site is updated in place (instead of creating a duplicate). The update also pins `clientName` to the canonical `OPERATIONAL_CLIENT_NAME` and links `clientId`.
+  - Newly created sites are inserted into all four lookup maps to avoid a row in the same import re-creating them.
+
+### 3. `field-officer/guards` endpoint
+- `src/app/api/field-officer/guards/route.ts`
+  - Removed unsafe `.limit(1000)` on the employees collection. The active-status filter still runs in memory because it has to be case-insensitive.
+
+### 4. `field-officer/work-orders` endpoint
+- `src/app/api/field-officer/work-orders/route.ts`
+  - Replaced `.limit(1000)` with a server-side `where("date", ">=", today)` + `orderBy("date", "asc")` query that mirrors the FO panel's client-side query.
+  - Filters by `isOperationalWorkOrderClientName` (TCS-only).
+  - Resolves the authoritative district from `sites/{siteId}` first, then falls back to the work-order's own district — same logic as the panel uses.
+
+### 5. Available-guards helper
+- `src/lib/work-orders/available-guards.ts`
+  - `fetchActiveGuardsForDistricts` accepts a new `{ allowEmptyScope?: boolean }` option. When the admin opens the assign dialog on a site with no district, the helper falls through to the API (which returns all active guards for admins) instead of returning an empty list.
+  - When the scope is empty and the API returns guards, the helper sorts them by name client-side without district filtering.
+
+### 6. Admin assign dialog (site detail page)
+- `src/app/(app)/work-orders/[siteId]/page.tsx`
+  - `handleOpenAssignDialog` now resolves the dialog scope explicitly: admins fall back to "all active guards" (with a destructive toast warning to fix the site district); field officers stay scoped to their assigned districts even when the site district is missing.
+
+### 7. Field-officer panel assign dialog
+- `src/components/field-officers/work-orders-panel.tsx`
+  - Same fallback pattern in `handleOpenAssign`: admin without site district → all active guards + warning toast; FO → their assigned districts.
+
+### 8. District backfill API
+- `src/app/api/admin/work-orders/backfill-districts/route.ts` (new)
+  - Admin-only `POST` route. Optional `?dryRun=true` for preview.
+  - Pass 1 — sites: scans every TCS site, canonicalises aliases, runs the Kerala keyword scan over `district + siteName + siteAddress` to infer a real district when the stored value is empty or non-canonical (incl. legacy `"South 2"`), and updates the site doc + `locationKey`.
+  - Pass 2 — workOrders: iterates work orders in 500-doc batches and aligns `workOrders.district` to the resolved site district.
+  - Reports `sitesScanned`, `sitesUpdated`, `workOrdersUpdated`, plus a list of sites still needing manual attention (no district signal in any field).
+
+**Tests:** `npx vitest run src/app/api/field-officer/ src/lib/work-orders/ src/lib/districts.test.ts src/app/work-orders-surface.test.ts` → 32 passed (7 files). `npx tsc --noEmit -p tsconfig.typecheck.json` → clean.
+
+**Operator follow-up:** run `POST /api/admin/work-orders/backfill-districts?dryRun=true` once on production to preview, then run it for real to repair sites/work-orders that still hold `"South 2"` or empty districts from the May 2-10 imports.
+
+---
+
 ## [2026-04-30] — Session: Attendance duty-point requirement, work-order district resolution, and client/site name matching
 
 **Files modified:**

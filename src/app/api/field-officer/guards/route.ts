@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasAdminAccess, hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { employeeMatchesAnyDistrict, resolveEmployeeDistrict } from "@/lib/employees/visibility";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -59,24 +60,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ guards: [] });
     }
 
-    const employeesSnap = await adminDb
-      .collection("employees")
-      .limit(1000)
-      .get();
+    // Load every employee. The previous `.limit(1000)` was unbounded by
+    // ordering, so a workforce past the cap could silently exclude guards in
+    // the requested district. Status/district matching has to run in memory
+    // anyway because both are case-insensitive and alias-aware.
+    const employeesSnap = await adminDb.collection("employees").get();
 
     const guards = employeesSnap.docs
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
       .filter((employee) => {
         if (!isActiveStatus(employee.status)) return false;
         if (districtScope.length === 0) return true;
-        return districtScope.some((district) => districtMatches(district, String(employee.district ?? "")));
+        return employeeMatchesAnyDistrict(employee, districtScope);
       })
       .map((employee) => ({
         id: String(employee.id),
         fullName: normalizeText(employee.fullName || employee.name || "Guard"),
         employeeId: normalizeText(employee.employeeId),
         clientName: normalizeText(employee.clientName),
-        district: normalizeText(employee.district),
+        district: resolveEmployeeDistrict(employee),
         gender: normalizeText(employee.gender),
         phoneNumber: normalizeText(employee.phoneNumber),
         status: "Active",

@@ -92,7 +92,8 @@ import {
 import type { ClientDashboardModule, ClientDashboardModulesConfig } from "@/types/client-permissions";
 import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/route";
 import { useToast } from "@/hooks/use-toast";
-import { KERALA_DISTRICTS, DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
+import { DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
+import { KERALA_DISTRICTS } from "@/lib/districts";
 import { buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/firestore-audit";
 import { buildSiteLocationSyncPatch, coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
 import { extractSiteCoordinates, hasUsableSiteGps } from "@/lib/site-gps-repair";
