@@ -348,7 +348,6 @@ export default function LandingPage() {
               </h1>
               <p className="max-w-xl text-base leading-7 text-muted-foreground lg:text-[1.03rem]">
                 Use your mobile number to verify attendance, or open the guard and admin portals in one step.
-                The landing page now carries the company name, logo, and support language more consistently.
               </p>
             </div>
 
@@ -384,31 +383,42 @@ export default function LandingPage() {
                   </p>
                 </div>
               </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <a
-                  href="mailto:admin@cisskerala.app"
-                  className="group flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-4 py-3 transition-all duration-200 hover:border-brand-blue/30 hover:bg-brand-blue/5"
-                >
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      Support email
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-foreground">admin@cisskerala.app</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
-                </a>
-                <a
-                  href="https://cisskerala.site"
-                  className="group flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-4 py-3 transition-all duration-200 hover:border-brand-blue/30 hover:bg-brand-blue/5"
-                >
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      Portal
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-foreground">cisskerala.site</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
-                </a>
+              <div className="mt-4 space-y-2">
+                <div className="rounded-2xl border border-border/70 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Address
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground">CISS Services Ltd</p>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Green Earth Building, Poriyampadam Link Road, Padivattom, Ernakulam - 24
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <a
+                    href="mailto:am.kerala@cissindia.co.in"
+                    className="group flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-4 py-3 transition-all duration-200 hover:border-brand-blue/30 hover:bg-brand-blue/5"
+                  >
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Support email
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-foreground">am.kerala@cissindia.co.in</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                  </a>
+                  <a
+                    href="tel:04842943262"
+                    className="group flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white px-4 py-3 transition-all duration-200 hover:border-brand-blue/30 hover:bg-brand-blue/5"
+                  >
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Phone
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-foreground">0484 2943262</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                  </a>
+                </div>
               </div>
             </div>
           </section>
