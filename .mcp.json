@@ -7,6 +7,10 @@
     "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "firebase": {
+      "command": "npx",
+      "args": ["-y", "firebase-tools@latest", "experimental:mcp"]
     }
   }
 }
