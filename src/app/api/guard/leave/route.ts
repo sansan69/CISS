@@ -60,24 +60,29 @@ export async function GET(request: Request) {
     });
 
     // Fetch leave balance doc (may not exist)
-    const balanceDocId = `${guard.employeeDocId}_${currentYear}`;
-    const balanceDoc = await adminDb
-      .collection("leaveBalances")
-      .doc(balanceDocId)
-      .get();
-
     let balance = null;
-    if (balanceDoc.exists) {
-      const b = balanceDoc.data() as {
-        casual?: { entitled: number; taken: number; balance: number };
-        sick?: { entitled: number; taken: number; balance: number };
-        earned?: { entitled: number; taken: number; balance: number };
-      };
-      balance = {
-        casual: b.casual ?? { entitled: 0, taken: 0, balance: 0 },
-        sick: b.sick ?? { entitled: 0, taken: 0, balance: 0 },
-        earned: b.earned ?? { entitled: 0, taken: 0, balance: 0 },
-      };
+    try {
+      const safeId = guard.employeeDocId.replace(/\//g, "_");
+      const balanceDocId = `${safeId}_${currentYear}`;
+      const balanceDoc = await adminDb
+        .collection("leaveBalances")
+        .doc(balanceDocId)
+        .get();
+
+      if (balanceDoc.exists) {
+        const b = balanceDoc.data() as {
+          casual?: { entitled: number; taken: number; balance: number };
+          sick?: { entitled: number; taken: number; balance: number };
+          earned?: { entitled: number; taken: number; balance: number };
+        };
+        balance = {
+          casual: b.casual ?? { entitled: 0, taken: 0, balance: 0 },
+          sick: b.sick ?? { entitled: 0, taken: 0, balance: 0 },
+          earned: b.earned ?? { entitled: 0, taken: 0, balance: 0 },
+        };
+      }
+    } catch {
+      // leaveBalances lookup may fail if employeeDocId contains slashes
     }
 
     return NextResponse.json({ requests, balance });

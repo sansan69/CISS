@@ -152,28 +152,33 @@ export async function GET(request: Request) {
     }));
 
     // ─── Leave balance ─────────────────────────────────────────────────────
-    const leaveBalanceKey = `${guard.employeeDocId}_${year}`;
-    const leaveDoc = await adminDb.doc(`leaveBalances/${leaveBalanceKey}`).get();
     let leaveBalance = null;
-    if (leaveDoc.exists) {
-      const lb = leaveDoc.data()!;
-      leaveBalance = {
-        casual: {
-          entitled: lb.casualEntitled ?? 12,
-          taken: lb.casualTaken ?? 0,
-          balance: (lb.casualEntitled ?? 12) - (lb.casualTaken ?? 0),
-        },
-        sick: {
-          entitled: lb.sickEntitled ?? 6,
-          taken: lb.sickTaken ?? 0,
-          balance: (lb.sickEntitled ?? 6) - (lb.sickTaken ?? 0),
-        },
-        earned: {
-          entitled: lb.earnedEntitled ?? 15,
-          taken: lb.earnedTaken ?? 0,
-          balance: (lb.earnedEntitled ?? 15) - (lb.earnedTaken ?? 0),
-        },
-      };
+    try {
+      const safeId = guard.employeeDocId.replace(/\//g, "_");
+      const leaveBalanceKey = `${safeId}_${year}`;
+      const leaveDoc = await adminDb.doc(`leaveBalances/${leaveBalanceKey}`).get();
+      if (leaveDoc.exists) {
+        const lb = leaveDoc.data()!;
+        leaveBalance = {
+          casual: {
+            entitled: lb.casualEntitled ?? 12,
+            taken: lb.casualTaken ?? 0,
+            balance: (lb.casualEntitled ?? 12) - (lb.casualTaken ?? 0),
+          },
+          sick: {
+            entitled: lb.sickEntitled ?? 6,
+            taken: lb.sickTaken ?? 0,
+            balance: (lb.sickEntitled ?? 6) - (lb.sickTaken ?? 0),
+          },
+          earned: {
+            entitled: lb.earnedEntitled ?? 15,
+            taken: lb.earnedTaken ?? 0,
+            balance: (lb.earnedEntitled ?? 15) - (lb.earnedTaken ?? 0),
+          },
+        };
+      }
+    } catch {
+      // leaveBalances lookup may fail if employeeDocId contains slashes
     }
 
     // ─── Latest evaluation ─────────────────────────────────────────────────

@@ -74,7 +74,8 @@ export async function PATCH(
       leaveData.status !== status
     ) {
       const year = leaveData.fromDate?.toDate?.().getFullYear() ?? new Date().getFullYear();
-      const balanceId = `${leaveData.employeeId}_${year}`;
+      const safeEmpId = (leaveData.employeeId ?? "").replace(/\//g, "_");
+      const balanceId = `${safeEmpId}_${year}`;
       const balanceRef = adminDb.collection("leaveBalances").doc(balanceId);
       const balanceDoc = await balanceRef.get();
       const { FieldValue } = await import("firebase-admin/firestore");
