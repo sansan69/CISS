@@ -18,11 +18,19 @@ export async function GET(request: Request) {
     const guard = await requireGuard(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-    const snapshot = await adminDb
+    let snapshot = await adminDb
       .collection("incidents")
       .where("reporterEmployeeDocId", "==", guard.employeeDocId)
       .limit(100)
       .get();
+
+    if (snapshot.empty) {
+      snapshot = await adminDb
+        .collection("incidents")
+        .where("reporterEmployeeId", "==", guard.employeeId)
+        .limit(100)
+        .get();
+    }
 
     const incidents = snapshot.docs
       .map((doc) => {
@@ -63,9 +71,9 @@ export async function POST(request: Request) {
       photoUrls?: string[];
     };
 
-    if (!body.category || !body.severity || !body.description || !body.siteId) {
+    if (!body.category || !body.severity || !body.description) {
       return NextResponse.json(
-        { error: "category, severity, siteId, and description are required." },
+        { error: "category, severity, and description are required." },
         { status: 400 },
       );
     }
@@ -83,8 +91,8 @@ export async function POST(request: Request) {
       category: body.category,
       severity: body.severity,
       status: "open",
-      siteId: body.siteId,
-      siteName: body.siteName ?? "",
+      siteId: body.siteId || "mobile-unspecified",
+      siteName: body.siteName ?? employeeData.siteName ?? "Unspecified site",
       district: body.district ?? employeeData.district ?? "",
       description: body.description,
       locationText: body.locationText ?? "",

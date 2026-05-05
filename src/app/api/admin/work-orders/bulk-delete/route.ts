@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cleanup";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 export const runtime = "nodejs";
@@ -25,10 +26,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "workOrderIds must include at least one id." }, { status: 400 });
       }
 
+      const deletedWorkOrders: Array<Record<string, unknown>> = [];
       let batch = adminDb.batch();
       let operationCount = 0;
       for (const id of ids) {
-        batch.delete(adminDb.collection("workOrders").doc(id));
+        const ref = adminDb.collection("workOrders").doc(id);
+        const snapshot = await ref.get();
+        if (!snapshot.exists) {
+          continue;
+        }
+        deletedWorkOrders.push(snapshot.data() ?? {});
+        batch.delete(ref);
         operationCount += 1;
         if (operationCount >= 450) {
           await batch.commit();
@@ -40,10 +48,12 @@ export async function POST(request: NextRequest) {
         await batch.commit();
       }
 
+      const importsDeleted = await cleanupOrphanWorkOrderImports(adminDb, deletedWorkOrders);
+
       return NextResponse.json({
-        deleted: ids.length,
-        importsDeleted: 0,
-        message: `Deleted ${ids.length} work order${ids.length === 1 ? "" : "s"}.`,
+        deleted: deletedWorkOrders.length,
+        importsDeleted,
+        message: `Deleted ${deletedWorkOrders.length} work order${deletedWorkOrders.length === 1 ? "" : "s"}.`,
       });
     }
 

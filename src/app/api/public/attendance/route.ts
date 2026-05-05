@@ -4,37 +4,13 @@ import { buildPublicAttendanceSiteOption } from "@/lib/attendance/public-attenda
 
 export async function GET() {
   try {
-    const [sitesSnapshot, locationsSnapshot] = await Promise.all([
-      db.collection('sites').get(),
-      db.collection('clientLocations').get(),
-    ]);
+    const sitesSnapshot = await db.collection('sites').get();
 
-    const siteDocs = sitesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      data: doc.data() as Record<string, unknown>,
-    }));
-    const locationDocs = locationsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      data: doc.data() as Record<string, unknown>,
-    }));
-
-    const sites = siteDocs.map((doc) =>
-      buildPublicAttendanceSiteOption(doc.id, doc.data, 'sites'),
+    const sites = sitesSnapshot.docs.map((doc) =>
+      buildPublicAttendanceSiteOption(doc.id, doc.data() as Record<string, unknown>, 'sites'),
     );
 
-    const locations = locationDocs.map((doc) =>
-      buildPublicAttendanceSiteOption(doc.id, doc.data, 'clientLocations'),
-    );
-
-    // Combine and deduplicate by ID
-    const allOptions = [...sites];
-    locations.forEach(loc => {
-      if (!allOptions.find(o => o.id === loc.id)) {
-        allOptions.push(loc);
-      }
-    });
-
-    return NextResponse.json({ options: allOptions });
+    return NextResponse.json({ options: sites });
   } catch (error) {
     console.error('Error loading duty centers:', error);
     return NextResponse.json(

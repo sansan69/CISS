@@ -64,6 +64,16 @@ export async function GET(request: Request) {
       new Set(rawRows.map((row) => normalizeText(row.siteId)).filter(Boolean)),
     );
     const siteDistrictById = new Map<string, string>();
+    const siteMetaById = new Map<
+      string,
+      {
+        clientId: string;
+        clientName: string;
+        siteName: string;
+        latitude: number | null;
+        longitude: number | null;
+      }
+    >();
     for (let index = 0; index < siteIds.length; index += 30) {
       const chunk = siteIds.slice(index, index + 30);
       const sitesSnap = await adminDb
@@ -71,8 +81,42 @@ export async function GET(request: Request) {
         .where("__name__", "in", chunk)
         .get();
       sitesSnap.docs.forEach((doc) => {
-        const data = doc.data() as { district?: string; districtName?: string };
+        const data = doc.data() as {
+          district?: string;
+          districtName?: string;
+          clientId?: string;
+          clientName?: string;
+          siteName?: string;
+          latitude?: number;
+          longitude?: number;
+          geolocation?: { latitude?: number; longitude?: number };
+          latString?: string;
+          lngString?: string;
+        };
+        const latitude =
+          typeof data.latitude === "number"
+            ? data.latitude
+            : typeof data.geolocation?.latitude === "number"
+              ? data.geolocation.latitude
+              : typeof data.latString === "string"
+                ? Number(data.latString)
+                : null;
+        const longitude =
+          typeof data.longitude === "number"
+            ? data.longitude
+            : typeof data.geolocation?.longitude === "number"
+              ? data.geolocation.longitude
+              : typeof data.lngString === "string"
+                ? Number(data.lngString)
+                : null;
         siteDistrictById.set(doc.id, normalizeText(data.district || data.districtName || ""));
+        siteMetaById.set(doc.id, {
+          clientId: normalizeText(data.clientId),
+          clientName: normalizeText(data.clientName),
+          siteName: normalizeText(data.siteName),
+          latitude: Number.isFinite(latitude) ? latitude : null,
+          longitude: Number.isFinite(longitude) ? longitude : null,
+        });
       });
     }
 
@@ -90,7 +134,15 @@ export async function GET(request: Request) {
       .map(({ row, resolvedDistrict, siteIdString }) => ({
         id: String(row.id),
         siteId: siteIdString,
-        siteName: normalizeText(row.siteName || "Site"),
+        siteName: normalizeText(
+          siteMetaById.get(siteIdString)?.siteName || row.siteName || "Site",
+        ),
+        clientId: normalizeText(
+          siteMetaById.get(siteIdString)?.clientId || row.clientId,
+        ),
+        clientName: normalizeText(
+          siteMetaById.get(siteIdString)?.clientName || row.clientName,
+        ),
         district: resolvedDistrict,
         examName: normalizeText(row.examName || row.examCode || "Duty"),
         examCode: normalizeText(row.examCode),
@@ -99,6 +151,8 @@ export async function GET(request: Request) {
           : String(row.date ?? ""),
         totalManpower: Number(row.totalManpower ?? Number(row.maleGuardsRequired ?? 0) + Number(row.femaleGuardsRequired ?? 0)),
         assignedCount: Array.isArray(row.assignedGuards) ? row.assignedGuards.length : 0,
+        latitude: siteMetaById.get(siteIdString)?.latitude ?? null,
+        longitude: siteMetaById.get(siteIdString)?.longitude ?? null,
       }))
       .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
 

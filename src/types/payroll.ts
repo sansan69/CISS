@@ -131,7 +131,6 @@ export interface PayrollEntryEarnings {
   conveyance: number;
   specialAllowance: number;
   otherAllowances: number;
-  overtimeAmount: number;
   grossEarnings: number;
   componentBreakdown?: Record<string, number>;
 }
@@ -141,7 +140,6 @@ export interface PayrollEntryDeductions {
   esicEmployee: number;
   professionalTax: number;
   tds: number;
-  lopDeduction: number;
   otherDeductions: number;
   totalDeductions: number;
 }
@@ -159,11 +157,6 @@ export interface PayrollEntry {
   workingDays: number;
   presentDays: number;
   payableDays?: number;
-  approvedPaidLeaveDays?: number;
-  approvedUnpaidLeaveDays?: number;
-  lopDays: number;
-  overtimeHours: number;
-  overtimeAmount: number;
   earnings: PayrollEntryEarnings;
   deductions: PayrollEntryDeductions;
   employerContributions: { epfEmployer: number; esicEmployer: number };

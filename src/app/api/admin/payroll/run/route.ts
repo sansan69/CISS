@@ -13,7 +13,6 @@ import {
   summarizeNamedEarnings,
 } from "@/lib/payroll/calculate";
 import { aggregateAttendance } from "@/lib/payroll/attendance-aggregator";
-import { aggregateApprovedLeave } from "@/lib/payroll/leave-aggregator";
 import { cloneComplianceSettings } from "@/lib/payroll/defaults";
 import type { ClientWageConfig, ComplianceSettings, WageComponent, WageTemplateRule } from "@/types/payroll";
 
@@ -181,24 +180,19 @@ export async function POST(request: Request) {
       }
 
       const attendance = await aggregateAttendance(employeeDoc.id, period, adminDb);
-      const leave = await aggregateApprovedLeave(employeeDoc.id, period, adminDb);
       const payableDays = Math.min(
         attendance.workingDays,
-        attendance.presentDays + leave.approvedPaidLeaveDays,
-      );
-      const lopDays = Math.max(
-        0,
-        attendance.workingDays - attendance.presentDays - leave.approvedPaidLeaveDays,
+        attendance.presentDays,
       );
 
       const attendanceInputs = {
         payable_duties: payableDays,
         duties: attendance.presentDays,
-        weekly_off: leave.approvedPaidLeaveDays,
-        extra_duty_days: leave.approvedUnpaidLeaveDays,
+        weekly_off: 0,
+        extra_duty_days: 0,
         half_day: 0,
         total: payableDays,
-        additional_duties: attendance.overtimeHours,
+        additional_duties: 0,
       };
 
       const templateSyntheticComponents: WageComponent[] = templateRules.map((rule, index) => ({
@@ -228,7 +222,7 @@ export async function POST(request: Request) {
         : Object.fromEntries(
             Object.entries(mergedComponentAmounts).map(([componentId, amount]) => [
               componentId,
-              prorateAmount(amount, attendance.workingDays, attendance.workingDays - lopDays),
+              prorateAmount(amount, attendance.workingDays, payableDays),
             ]),
           );
 
@@ -252,10 +246,6 @@ export async function POST(request: Request) {
                 return sum + amount;
               }, 0),
             );
-      const baseTotal = templateRules.length
-        ? grossEarnings
-        : round2(Object.values(mergedComponentAmounts).reduce((sum, amount) => sum + amount, 0));
-      const lopDeduction = round2(baseTotal - grossEarnings);
       const epfBase = computeEpfApplicableWage(proratedComponents, componentMeta);
       const epfResult = calculateEPF(epfBase, compliance.epf);
       const esicResult = calculateESIC(grossEarnings, compliance.esic);
@@ -265,11 +255,10 @@ export async function POST(request: Request) {
         epfResult.employeeEPF +
         (esicResult?.employeeESIC ?? 0) +
         pt +
-        tds +
-        lopDeduction
+        tds
       );
       const netPay = round2(
-        grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds - lopDeduction,
+        grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds,
       );
 
       const entryRef = adminDb.collection("payrollEntries").doc();
@@ -288,14 +277,8 @@ export async function POST(request: Request) {
         workingDays: attendance.workingDays,
         presentDays: attendance.presentDays,
         payableDays,
-        approvedPaidLeaveDays: leave.approvedPaidLeaveDays,
-        approvedUnpaidLeaveDays: leave.approvedUnpaidLeaveDays,
-        lopDays,
-        overtimeHours: attendance.overtimeHours,
-        overtimeAmount: 0,
         earnings: {
           ...earningsSummary,
-          overtimeAmount: 0,
           grossEarnings,
           componentBreakdown: proratedComponents,
         },
@@ -304,7 +287,6 @@ export async function POST(request: Request) {
           esicEmployee: esicResult?.employeeESIC ?? 0,
           professionalTax: pt,
           tds,
-          lopDeduction,
           otherDeductions: 0,
           totalDeductions,
         },

@@ -2,25 +2,33 @@ import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
 
-function toISTTimeString(ts: FirebaseFirestore.Timestamp | null | undefined): string {
+function timestampToMillis(value: unknown) {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (
+    typeof value === "object" &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  ) {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+function toISTTimeString(ts: unknown): string {
   if (!ts) return "";
-  const date = ts.toDate();
+  const millis = timestampToMillis(ts);
+  if (!millis) return "";
+  const date = new Date(millis);
   return date.toLocaleTimeString("en-IN", {
     timeZone: "Asia/Kolkata",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
-}
-
-function workingDaysInMonth(year: number, month: number): number {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  let count = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const day = new Date(year, month, d).getDay();
-    if (day !== 0) count++;
-  }
-  return count;
 }
 
 export async function GET(request: Request) {
@@ -54,14 +62,21 @@ export async function GET(request: Request) {
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-    const attendanceSnap = await adminDb
+    let attendanceSnap = await adminDb
       .collection("attendanceLogs")
       .where("employeeDocId", "==", guard.employeeDocId)
       .where("attendanceDate", ">=", firstDay)
       .where("attendanceDate", "<=", lastDay)
-      .orderBy("attendanceDate", "desc")
-      .orderBy("reportedAt", "desc")
       .get();
+
+    if (attendanceSnap.empty) {
+      attendanceSnap = await adminDb
+        .collection("attendanceLogs")
+        .where("employeeId", "==", guard.employeeId)
+        .where("attendanceDate", ">=", firstDay)
+        .where("attendanceDate", "<=", lastDay)
+        .get();
+    }
 
     const rawLogs = attendanceSnap.docs.map((d) => {
       const data = d.data() as {
@@ -72,6 +87,7 @@ export async function GET(request: Request) {
         reportedAt?: FirebaseFirestore.Timestamp;
         distanceMeters?: number;
         shiftLabel?: string;
+        createdAt?: FirebaseFirestore.Timestamp;
       };
       return {
         id: d.id,
@@ -79,25 +95,28 @@ export async function GET(request: Request) {
         status: (data.status ?? "In") as "In" | "Out",
         siteName: data.siteName ?? "",
         dutyPointName: data.dutyPointName ?? "",
-        time: toISTTimeString(data.reportedAt ?? undefined),
+        time: toISTTimeString(data.reportedAt ?? data.createdAt),
         distanceMeters: data.distanceMeters,
         shiftLabel: data.shiftLabel,
+        reportedAtMillis: timestampToMillis(data.reportedAt ?? data.createdAt),
       };
-    });
+    }).sort((left, right) => {
+        const dateOrder = right.date.localeCompare(left.date);
+        if (dateOrder !== 0) return dateOrder;
+        return right.reportedAtMillis - left.reportedAtMillis;
+      })
+      .map(({ reportedAtMillis: _reportedAtMillis, ...log }) => log);
 
     // Summary
     const presentDates = new Set(
       rawLogs.filter((l) => l.status === "In").map((l) => l.date)
     );
     const presentDays = presentDates.size;
-    const workingDays = workingDaysInMonth(year, month);
-    const absentDays = Math.max(0, workingDays - presentDays);
 
     return NextResponse.json({
       month: monthStr,
       logs: rawLogs,
       presentDays,
-      absentDays,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Internal server error.";

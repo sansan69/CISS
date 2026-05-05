@@ -38,7 +38,7 @@ import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-interface DashboardStats  { total: number; active: number; onLeave: number; inactiveOrExited: number; }
+interface DashboardStats  { total: number; active: number; inactiveOrExited: number; }
 interface NewHiresData    { month: string; hires: number; }
 interface RecentActivity  { id: string; text: string; subtext: string; timestamp: Date; }
 interface UpcomingDuty    { id: string; siteName: string; clientName: string; date: Date; totalManpower: number; }
@@ -276,7 +276,6 @@ function ClientStrengthTable({ data, isLoading }: { data: ClientCoverage[]; isLo
 const statDefs = [
   { key: "total",           label: "Total Guards",     barColor: "bg-brand-blue",   icon: Users,     iconBg: "bg-brand-blue/10 text-brand-blue" },
   { key: "active",          label: "Active",           barColor: "bg-emerald-500",  icon: UserCheck, iconBg: "bg-emerald-50 text-emerald-700" },
-  { key: "onLeave",         label: "On Leave",         barColor: "bg-amber-400",    icon: Clock,     iconBg: "bg-amber-50 text-amber-700" },
   { key: "inactiveOrExited",label: "Inactive / Exited",barColor: "bg-red-400",      icon: UserMinus, iconBg: "bg-red-50 text-red-500" },
 ];
 
@@ -387,7 +386,7 @@ function SuperAdminOverviewPanel({
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Connected Regions</p><p className="mt-2 text-3xl font-bold text-brand-blue">{isLoading ? "..." : `${summary?.connectedRegions ?? 0}/${summary?.totalRegions ?? 0}`}</p></CardContent></Card>
-        <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Employees</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.employees ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.activeEmployees ?? 0} active · ${summary?.onLeaveEmployees ?? 0} on leave`}</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Employees</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.employees ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.activeEmployees ?? 0} active`}</p></CardContent></Card>
         <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Clients & Field Officers</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.clients ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.fieldOfficers ?? 0} field officers`}</p></CardContent></Card>
         <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Today&apos;s Attendance</p><p className="mt-2 text-3xl font-bold">{isLoading ? "..." : summary?.attendanceToday ?? 0}</p><p className="mt-1 text-xs text-muted-foreground">{isLoading ? "" : `${summary?.upcomingWorkOrders ?? 0} upcoming work orders`}</p></CardContent></Card>
       </div>
@@ -476,7 +475,6 @@ function SuperAdminOverviewPanel({
                 <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Employees</p><p className="mt-1 text-xl font-bold">{region.totals.employees}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Active</p><p className="mt-1 text-xl font-bold text-emerald-600">{region.totals.activeEmployees}</p></div>
-                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">On Leave</p><p className="mt-1 text-xl font-bold text-amber-600">{region.totals.onLeaveEmployees}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Clients</p><p className="mt-1 text-xl font-bold">{region.totals.clients}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Field Officers</p><p className="mt-1 text-xl font-bold">{region.totals.fieldOfficers}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attendance Today</p><p className="mt-1 text-xl font-bold">{region.totals.attendanceToday}</p><p className="text-[10px] text-muted-foreground">{region.totals.upcomingWorkOrders} work orders</p></div>
@@ -582,7 +580,7 @@ export default function DashboardPage() {
     const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));
 
     const unsub1 = onSnapshot(empQ as Query, (snap) => {
-      let total = 0, active = 0, onLeave = 0, inactiveOrExited = 0;
+      let total = 0, active = 0, inactiveOrExited = 0;
       const byMonth: Record<string, number> = Object.fromEntries(monthLabels.map(l => [l, 0]));
       const newGuardMap = new Map<string, { total: number; active: number; districts: Set<string> }>();
       const sortable: Array<{ id: string; data: Employee; ts: number }> = [];
@@ -595,7 +593,6 @@ export default function DashboardPage() {
         }
         total++;
         if (emp.status === 'Active') active++;
-        else if (emp.status === 'OnLeave') onLeave++;
         else if (emp.status === 'Inactive' || emp.status === 'Exited') inactiveOrExited++;
 
         if (includeCharts) {
@@ -615,7 +612,7 @@ export default function DashboardPage() {
         sortable.push({ id: d.id, data: emp, ts: (emp.createdAt as any)?.toMillis?.() ?? 0 });
       });
 
-      setStats({ total, active, onLeave, inactiveOrExited });
+      setStats({ total, active, inactiveOrExited });
       if (includeCharts) {
         setNewHiresData(monthLabels.map(m => ({ month: m, hires: byMonth[m] })));
         setClientGuardMap(newGuardMap);

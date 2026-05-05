@@ -7,11 +7,19 @@ export async function GET(request: Request) {
     const guard = await requireGuard(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-    const snapshot = await adminDb
+    let snapshot = await adminDb
       .collection("payrollEntries")
       .where("employeeDocId", "==", guard.employeeDocId)
       .limit(24)
       .get();
+
+    if (snapshot.empty) {
+      snapshot = await adminDb
+        .collection("payrollEntries")
+        .where("employeeId", "==", guard.employeeId)
+        .limit(24)
+        .get();
+    }
 
     const payslips = snapshot.docs
       .map(

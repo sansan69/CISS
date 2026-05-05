@@ -152,7 +152,6 @@ export async function GET(request: Request) {
 
     const totalGuards = employees.length;
     const activeGuards = employees.filter((employee) => employee.status === "Active").length;
-    const onLeaveGuards = employees.filter((employee) => employee.status === "OnLeave").length;
     const inactiveGuards = employees.filter(
       (employee) => employee.status === "Inactive" || employee.status === "Exited",
     ).length;
@@ -475,7 +474,6 @@ export async function GET(request: Request) {
         clientName: scope.clientName,
         totalGuards,
         activeGuards,
-        onLeaveGuards,
         inactiveGuards,
         checkedInToday: seenIn.size,
         checkedOutToday: seenOut.size,

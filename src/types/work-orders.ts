@@ -9,6 +9,7 @@ export interface AssignedGuardSummary {
 
 export type WorkOrderLifecycleStatus = "active" | "cancelled" | "superseded" | "draft";
 export type WorkOrderImportMode = "new" | "revision";
+export type WorkOrderDuplicateResolution = "reject" | "replace" | "omit";
 export type WorkOrderDiffStatus = "added" | "updated" | "unchanged" | "cancelled";
 export type TcsExamParserMode = "legacy-sheet" | "pivot-date-sheet";
 export type WorkOrderImportDuplicateState =
@@ -112,6 +113,7 @@ export interface TcsExamImportPreviewPayload extends TcsExamWorkbookParseResult 
 
 export interface TcsExamImportCommitPayload {
   mode?: WorkOrderImportMode;
+  duplicateResolution?: WorkOrderDuplicateResolution;
   fileName: string;
   parserMode: TcsExamParserMode;
   examName: string;

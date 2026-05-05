@@ -3,11 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 export interface AttendanceSummary {
   presentDays: number;
   workingDays: number;
-  lopDays: number;
-  overtimeHours: number;
 }
-
-const STANDARD_WORKING_HOURS = 8;
 
 export async function aggregateAttendance(
   employeeDocId: string,
@@ -35,7 +31,7 @@ export async function aggregateAttendance(
     createdAt?: { seconds?: number; nanoseconds?: number; toDate?: () => Date };
   };
 
-  const logsByDate = new Map<string, { inTime: Date | null; outTime: Date | null }>();
+  const presentDates = new Set<string>();
 
   snapshot.docs.forEach((d) => {
     const data = d.data() as LogEntry;
@@ -54,43 +50,8 @@ export async function aggregateAttendance(
     }
     if (!dateStr) return;
 
-    const existing = logsByDate.get(dateStr) ?? { inTime: null, outTime: null };
-
-    const timestampToDate = (ts: LogEntry["reportedAt"]): Date | null => {
-      if (!ts) return null;
-      if (typeof ts.toDate === "function") return ts.toDate();
-      if (typeof ts.seconds === "number") return new Date(ts.seconds * 1000);
-      return null;
-    };
-
     if (data.status === "In") {
-      const inTime = timestampToDate(data.reportedAt);
-      if (!existing.inTime || (inTime && inTime < existing.inTime)) {
-        existing.inTime = inTime;
-      }
-    } else if (data.status === "Out") {
-      const outTime = timestampToDate(data.reportedAt);
-      if (!existing.outTime || (outTime && outTime > existing.outTime)) {
-        existing.outTime = outTime;
-      }
-    }
-
-    logsByDate.set(dateStr, existing);
-  });
-
-  const presentSet = new Set<string>();
-  let totalOvertimeHours = 0;
-
-  logsByDate.forEach((entry, dateStr) => {
-    if (entry.inTime) {
-      presentSet.add(dateStr);
-    }
-
-    if (entry.inTime && entry.outTime) {
-      const hoursWorked = (entry.outTime.getTime() - entry.inTime.getTime()) / (1000 * 60 * 60);
-      if (hoursWorked > STANDARD_WORKING_HOURS) {
-        totalOvertimeHours += hoursWorked - STANDARD_WORKING_HOURS;
-      }
+      presentDates.add(dateStr);
     }
   });
 
@@ -100,8 +61,7 @@ export async function aggregateAttendance(
     if (new Date(year, month - 1, day).getDay() === 0) sundays++;
   }
   const workingDays = daysInMonth - sundays;
-  const presentDays = Math.min(presentSet.size, workingDays);
-  const lopDays = Math.max(0, workingDays - presentDays);
+  const presentDays = Math.min(presentDates.size, workingDays);
 
-  return { presentDays, workingDays, lopDays, overtimeHours: Math.round(totalOvertimeHours * 100) / 100 };
+  return { presentDays, workingDays };
 }

@@ -7,10 +7,6 @@ function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
-function isActiveStatus(value: unknown) {
-  return normalizeText(value).toLowerCase() === "active";
-}
-
 async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
@@ -69,7 +65,6 @@ export async function GET(request: Request) {
     const guards = employeesSnap.docs
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
       .filter((employee) => {
-        if (!isActiveStatus(employee.status)) return false;
         if (districtScope.length === 0) return true;
         return employeeMatchesAnyDistrict(employee, districtScope);
       })
@@ -81,7 +76,15 @@ export async function GET(request: Request) {
         district: resolveEmployeeDistrict(employee),
         gender: normalizeText(employee.gender),
         phoneNumber: normalizeText(employee.phoneNumber),
-        status: "Active",
+        status: normalizeText(employee.status || "Active"),
+        joiningDate:
+          typeof employee.joiningDate === "string"
+            ? employee.joiningDate
+            : typeof (employee.joiningDate as { toDate?: unknown } | undefined)?.toDate === "function"
+              ? ((employee.joiningDate as { toDate: () => Date }).toDate()).toISOString()
+              : "",
+        resourceIdNumber: normalizeText(employee.resourceIdNumber),
+        address: normalizeText(employee.address),
         profilePictureUrl:
           typeof employee.profilePictureUrl === "string"
             ? employee.profilePictureUrl

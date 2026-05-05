@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, requireAdminOrFieldOfficer, requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
+import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cleanup";
 
 export async function PATCH(
   request: Request,
@@ -79,8 +80,17 @@ export async function DELETE(
     await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
-    await adminDb.collection("workOrders").doc(id).delete();
-    return NextResponse.json({ ok: true });
+    const workOrderRef = adminDb.collection("workOrders").doc(id);
+    const snapshot = await workOrderRef.get();
+    if (!snapshot.exists) {
+      return NextResponse.json({ ok: true, deleted: false, importsDeleted: 0 });
+    }
+
+    const deletedWorkOrder = snapshot.data() ?? {};
+    await workOrderRef.delete();
+    const importsDeleted = await cleanupOrphanWorkOrderImports(adminDb, [deletedWorkOrder]);
+
+    return NextResponse.json({ ok: true, deleted: true, importsDeleted });
   } catch (error: any) {
     if (error?.message?.includes("access required")) {
       return unauthorizedResponse(error.message, 403);

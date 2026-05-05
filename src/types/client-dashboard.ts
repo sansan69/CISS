@@ -85,7 +85,6 @@ export type ClientDashboardSummary = {
   clientName: string;
   totalGuards: number;
   activeGuards: number;
-  onLeaveGuards: number;
   inactiveGuards: number;
   checkedInToday: number;
   checkedOutToday: number;

@@ -44,6 +44,7 @@ import type {
     TcsExamImportPreviewPayload,
     TcsExamSourceRow,
     WorkOrder,
+    WorkOrderDuplicateResolution,
     WorkOrderImportMode,
 } from '@/types/work-orders';
 import {
@@ -138,6 +139,7 @@ type WorkOrderBoardRow = {
 export default function WorkOrderPage() {
     const [file, setFile] = useState<File | null>(null);
     const [importMode, setImportMode] = useState<WorkOrderImportMode>('new');
+    const [duplicateResolution, setDuplicateResolution] = useState<WorkOrderDuplicateResolution>('replace');
     const [isPreviewing, setIsPreviewing] = useState(false);
     const [isConfirmingImport, setIsConfirmingImport] = useState(false);
     const [importPreview, setImportPreview] = useState<ResolvedImportPreview | null>(null);
@@ -682,6 +684,7 @@ export default function WorkOrderPage() {
     const clearImportPreview = React.useCallback(() => {
         setImportPreview(null);
         setCustomExamName('');
+        setDuplicateResolution('replace');
     }, []);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -845,6 +848,7 @@ export default function WorkOrderPage() {
                     parserMode: importPreview.parserMode,
                     examName: resolvedExamName,
                     examCode: resolvedExamCode,
+                    duplicateResolution,
                     binaryFileHash: importPreview.binaryFileHash,
                     contentHash: resolvedContentHash,
                     rows: rowsWithExam,
@@ -1003,8 +1007,30 @@ export default function WorkOrderPage() {
                                                     <p className="mt-1 text-xs">This is expected for revision imports. Existing work orders will be updated and missing ones will be cancelled.</p>
                                                 )}
                                                 {importPreview.duplicateState === 'overlap' && importMode === 'new' && (
-                                                    <p className="mt-1 text-xs">Switch to <strong>Revision Import</strong> mode if you want to update existing work orders instead.</p>
+                                                    <p className="mt-1 text-xs">Choose whether matching site/date work orders should be replaced or omitted before confirming.</p>
                                                 )}
+                                            </div>
+                                        )}
+                                        {importPreview.duplicateState !== 'none' && importMode === 'new' && (
+                                            <div className="grid gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-blue-950 sm:grid-cols-[minmax(0,1fr)_260px] sm:items-center">
+                                                <div>
+                                                    <p className="text-sm font-semibold">Duplicate handling for re-upload</p>
+                                                    <p className="mt-1 text-xs text-blue-800">
+                                                        Replace updates matching site/date work orders. Omit skips matching rows and imports only new site/date rows.
+                                                    </p>
+                                                </div>
+                                                <Select
+                                                    value={duplicateResolution}
+                                                    onValueChange={(value) => setDuplicateResolution(value as WorkOrderDuplicateResolution)}
+                                                >
+                                                    <SelectTrigger aria-label="Duplicate handling">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="replace">Replace matching work orders</SelectItem>
+                                                        <SelectItem value="omit">Omit matching work orders</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         )}
                                         {importPreview.warnings.length > 0 && (
@@ -1130,7 +1156,7 @@ export default function WorkOrderPage() {
                                         onClick={handleConfirmImport}
                                         disabled={isPreviewing || isConfirmingImport || !file || !importPreview || (
                                             importPreview.duplicateState !== 'none' &&
-                                            !(importPreview.duplicateState === 'overlap' && importMode === 'revision')
+                                            !(importMode === 'revision' || duplicateResolution === 'replace' || duplicateResolution === 'omit')
                                         )}
                                         className="w-full sm:w-auto"
                                     >

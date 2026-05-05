@@ -27,7 +27,7 @@ import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, sav
 import { parseEmployeeIdFromQrText } from '@/lib/qr/employee-qr';
 import { startHybridQrScanner } from '@/lib/qr/scanner-engine';
 import { normalizeScannerError } from '@/lib/qr/scanner-support';
-import { DEFAULT_GPS_ACCURACY_LIMIT_METERS, OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from '@/lib/constants';
+import { DEFAULT_GEOFENCE_RADIUS_METERS, DEFAULT_GPS_ACCURACY_LIMIT_METERS, OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from '@/lib/constants';
 import type {
   AttendancePhotoCompliance,
   AttendanceSubmission,
@@ -51,7 +51,7 @@ type SiteOption = {
   shiftPattern?: '2x12' | '3x8' | null;
   shiftTemplates?: ShiftTemplate[];
   dutyPoints?: DutyPoint[];
-  sourceCollection: 'sites' | 'clientLocations';
+  sourceCollection?: 'sites' | 'clientLocations';
 };
 
 type ScannedEmployee = {
@@ -177,7 +177,7 @@ export default function AttendancePage() {
     [allSites, selectedSiteId],
   );
   const dutyPointOptions = useMemo(
-    () => (selectedSite?.sourceCollection === 'sites' ? selectedSite.dutyPoints || [] : []),
+    () => (selectedSite?.dutyPoints || []),
     [selectedSite],
   );
   const selectedDutyPoint = useMemo(
@@ -422,7 +422,7 @@ export default function AttendancePage() {
       return;
     }
 
-    if (selectedSite.sourceCollection !== 'sites' || dutyPointOptions.length === 0) {
+    if (dutyPointOptions.length === 0) {
       if (selectedDutyPointId) {
         setSelectedDutyPointId('');
       }
@@ -476,7 +476,7 @@ export default function AttendancePage() {
       .filter((site) => typeof site.lat === 'number' && typeof site.lng === 'number')
       .map((site) => {
         const distanceMeters = haversineDistanceMeters(coords.lat, coords.lon, site.lat!, site.lng!);
-        const allowedRadius = site.geofenceRadiusMeters || 150;
+        const allowedRadius = site.geofenceRadiusMeters || DEFAULT_GEOFENCE_RADIUS_METERS;
         return {
           ...site,
           distanceMeters,
@@ -1280,7 +1280,7 @@ export default function AttendancePage() {
       toast({ variant: 'destructive', title: 'Incomplete Verification', description: 'Scan QR (or use manual ID) and capture photo before submitting.' });
       return;
     }
-    // Geofence: ensure within 150 meters of selected site
+    // Geofence: ensure within allowed radius of selected site
     if (!selectedSite || selectedSite.lat == null || selectedSite.lng == null) {
       toast({ variant: 'destructive', title: 'Site Location Missing', description: 'Selected site does not have coordinates configured.' });
       return;
@@ -1313,7 +1313,7 @@ export default function AttendancePage() {
     }
 
     const distance = haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng);
-    const allowedRadius = selectedSite.geofenceRadiusMeters || 150;
+    const allowedRadius = selectedSite.geofenceRadiusMeters || DEFAULT_GEOFENCE_RADIUS_METERS;
     const gpsAccuracyMeters = locationCoords?.accuracyMeters ? Math.round(locationCoords.accuracyMeters) : null;
     if (gpsAccuracyMeters && gpsAccuracyMeters > GPS_ACCURACY_LIMIT_METERS) {
       toast({
@@ -1353,7 +1353,7 @@ export default function AttendancePage() {
       siteName: selectedSite.siteName,
       dutyPointId: selectedDutyPoint?.id,
       dutyPointName: selectedDutyPoint?.name,
-      sourceCollection: selectedSite.sourceCollection,
+      sourceCollection: selectedSite.sourceCollection ?? 'sites',
       clientName: selectedSite.clientName,
       shiftCode: resolvedShift?.code,
       shiftLabel: resolvedShift?.label,
@@ -1472,7 +1472,7 @@ export default function AttendancePage() {
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
     : null;
-  const selectedSiteRadius = selectedDutyPoint?.geofenceRadiusMeters || selectedSite?.geofenceRadiusMeters || 150;
+  const selectedSiteRadius = selectedDutyPoint?.geofenceRadiusMeters || selectedSite?.geofenceRadiusMeters || DEFAULT_GEOFENCE_RADIUS_METERS;
   const mockLocationRiskSummary = useMemo(() => detectMockLocationRisk(), [detectMockLocationRisk]);
 
   return (
@@ -1750,7 +1750,7 @@ export default function AttendancePage() {
                 )}
               </div>
 
-              {selectedSite?.sourceCollection === 'sites' && dutyPointOptions.length > 0 && (
+              {dutyPointOptions.length > 0 && (
                 <Alert
                   variant={selectedDutyPoint ? 'default' : 'destructive'}
                   className={`mt-4 ${selectedDutyPoint ? 'border-amber-200 bg-amber-50/70 text-amber-950' : ''}`}
@@ -1862,7 +1862,7 @@ export default function AttendancePage() {
                                 const dist = locationCoords && typeof site.lat === 'number' && typeof site.lng === 'number'
                                   ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, site.lat, site.lng)
                                   : null;
-                                const withinFence = dist !== null && dist <= (site.geofenceRadiusMeters || 150);
+                                const withinFence = dist !== null && dist <= (site.geofenceRadiusMeters || DEFAULT_GEOFENCE_RADIUS_METERS);
                                 const nearby = dist !== null && !withinFence && dist <= 500;
                                 const isSelected = site.id === selectedSiteId;
                                 const distLabel = dist === null ? null
@@ -1892,9 +1892,6 @@ export default function AttendancePage() {
                                         </p>
                                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                                           {site.clientName}
-                                          {site.sourceCollection === 'clientLocations' && (
-                                            <span className="ml-1 text-[10px] bg-muted rounded px-1 py-0.5">Office</span>
-                                          )}
                                         </p>
                                       </div>
                                       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -2079,7 +2076,7 @@ export default function AttendancePage() {
                       </Button>
                       <Button size="lg" className="h-12 w-full" onClick={handleSubmitAttendance} disabled={!canSubmit}>
                         <CheckCircle className="mr-2 h-4 w-4" />
-                        {selectedSite?.sourceCollection === 'sites' && dutyPointOptions.length > 0 && !selectedDutyPoint
+                        {dutyPointOptions.length > 0 && !selectedDutyPoint
                           ? 'Select duty point first'
                           : 'Submit attendance'}
                       </Button>

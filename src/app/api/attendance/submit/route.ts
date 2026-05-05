@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
         ? `Device clock appears off by ${clockDriftMinutes} minutes compared to server time. Attendance was recorded using server time.`
         : null;
     const employeeRef = adminDb.collection("employees").doc(payload.employeeDocId);
-    const sourceCol = (payload as any).sourceCollection === 'clientLocations' ? 'clientLocations' : 'sites';
+    const sourceCol = payload.sourceCollection === 'clientLocations' ? 'clientLocations' : 'sites';
     const siteRef = adminDb.collection(sourceCol).doc(payload.siteId);
     const attendanceStateRef = adminDb
       .collection("attendanceState")
@@ -416,6 +416,7 @@ export async function POST(request: NextRequest) {
         dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
         dutyPointName: selectedDutyPoint?.name ?? payload.dutyPointName ?? null,
         clientName: siteData.clientName || payload.clientName || null,
+        sourceCollection: sourceCol,
         shiftCode: effectiveShift?.code ?? payload.shiftCode ?? null,
         shiftLabel: effectiveShift?.label ?? payload.shiftLabel ?? null,
         shiftStartTime: effectiveShift?.startTime ?? payload.shiftStartTime ?? null,

@@ -65,14 +65,65 @@ export const attendanceSubmissionSchema = z.object({
 
 export type AttendanceSubmission = z.infer<typeof attendanceSubmissionSchema>;
 
+const firestoreTimestampSchema = z.custom<
+  | { seconds: number; nanoseconds: number; toDate: () => Date }
+  | Date
+  | null
+  | undefined
+>((val) => {
+  if (val == null) return true;
+  if (val instanceof Date) return true;
+  if (typeof val === "object" && typeof (val as any).seconds === "number") return true;
+  return false;
+}, "Expected a Firestore Timestamp or Date");
+
 export const attendanceLogSchema = attendanceSubmissionSchema.extend({
   id: z.string().optional(),
   attendanceDate: z.string().optional(),
-  reportedAt: z.any().optional(),
-  createdAt: z.any().optional(),
+  reportedAt: firestoreTimestampSchema.optional(),
+  createdAt: firestoreTimestampSchema.optional(),
 });
 
 export type AttendanceLog = z.infer<typeof attendanceLogSchema>;
+
+export interface FirestoreAttendanceLog {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeePhoneNumber?: string;
+  reportedAtClient?: string | null;
+  status: "In" | "Out";
+  district?: string;
+  siteId?: string;
+  siteName?: string;
+  dutyPointId?: string | null;
+  dutyPointName?: string | null;
+  clientName?: string | null;
+  sourceCollection?: string | null;
+  shiftCode?: string | null;
+  shiftLabel?: string | null;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  locationText?: string;
+  locationCoords?: { lat: number; lon: number; accuracyMeters?: number };
+  siteCoords?: { lat: number; lng: number };
+  distanceMeters?: number;
+  gpsAccuracyMeters?: number | null;
+  locationAccuracyMeters?: number | null;
+  geofenceRadiusAtTime?: number | null;
+  strictGeofence?: boolean;
+  isMockLocationSuspected?: boolean;
+  mockLocationReason?: string | null;
+  requiresLocationReview?: boolean;
+  photoUrl?: string;
+  photoCapturedAt?: string | null;
+  photoCompliance?: AttendancePhotoCompliance | null;
+  deviceInfo?: { userAgent: string };
+  reportedAt?: { seconds: number; nanoseconds: number; toDate: () => Date } | null;
+  createdAt?: { seconds: number; nanoseconds: number; toDate: () => Date } | null;
+  attendanceDate?: string;
+  auditTrail?: unknown[];
+}
 
 export type AttendanceSyncStatus = "queued" | "synced" | "failed";
 

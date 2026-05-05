@@ -125,7 +125,6 @@ export default function PayrollEntryDetailPage({
           <div><p className="text-sm text-muted-foreground">Gross Earnings</p><p className="text-base font-semibold">₹{entry.earnings.grossEarnings.toLocaleString("en-IN")}</p></div>
           <div><p className="text-sm text-muted-foreground">Total Deductions</p><p className="text-base font-semibold">₹{entry.deductions.totalDeductions.toLocaleString("en-IN")}</p></div>
           <div><p className="text-sm text-muted-foreground">Present / Working Days</p><p className="text-base font-semibold">{entry.presentDays}/{entry.workingDays}</p></div>
-          <div><p className="text-sm text-muted-foreground">LOP Days</p><p className="text-base font-semibold">{entry.lopDays}</p></div>
         </CardContent>
       </Card>
 
@@ -148,9 +147,8 @@ export default function PayrollEntryDetailPage({
               <div className="flex justify-between"><span className="text-muted-foreground">EPF</span><span>₹{entry.deductions.epfEmployee.toLocaleString("en-IN")}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">ESIC</span><span>₹{entry.deductions.esicEmployee.toLocaleString("en-IN")}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Professional Tax</span><span>₹{entry.deductions.professionalTax.toLocaleString("en-IN")}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">TDS</span><span>₹{entry.deductions.tds.toLocaleString("en-IN")}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">LOP Deduction</span><span>₹{entry.deductions.lopDeduction.toLocaleString("en-IN")}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span>₹{entry.deductions.totalDeductions.toLocaleString("en-IN")}</span></div>
+               <div className="flex justify-between"><span className="text-muted-foreground">TDS</span><span>₹{entry.deductions.tds.toLocaleString("en-IN")}</span></div>
+               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span>₹{entry.deductions.totalDeductions.toLocaleString("en-IN")}</span></div>
             </div>
           </div>
         </CardContent>

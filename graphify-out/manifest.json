@@ -1,168 +1,1562 @@
 {
-  "/Users/mymac/Documents/CISS/src/app/work-orders-surface.behavior.test.ts": 1776678659.9739347,
-  "/Users/mymac/Documents/CISS/src/app/branch-admin-removal.test.ts": 1775999593.4261103,
-  "/Users/mymac/Documents/CISS/src/app/work-orders-surface.test.ts": 1776678677.865276,
-  "/Users/mymac/Documents/CISS/src/app/landing-page-surface.test.ts": 1776091129.383954,
-  "/Users/mymac/Documents/CISS/src/app/browser-warnings.test.ts": 1775928669.9281554,
-  "/Users/mymac/Documents/CISS/src/app/work-orders-import-preview.test.ts": 1776744216.8126597,
-  "/Users/mymac/Documents/CISS/src/app/field-officers-surface.test.ts": 1775974446.4721992,
-  "/Users/mymac/Documents/CISS/src/app/layout.tsx": 1776401441.291453,
-  "/Users/mymac/Documents/CISS/src/app/settings-surface.test.ts": 1775973400.350078,
-  "/Users/mymac/Documents/CISS/src/app/page.tsx": 1777349960.3117945,
-  "/Users/mymac/Documents/CISS/src/app/not-found.tsx": 1773670396.2654943,
-  "/Users/mymac/Documents/CISS/src/app/attendance/layout.tsx": 1763547091.0,
-  "/Users/mymac/Documents/CISS/src/app/attendance/page.tsx": 1777438705.3821309,
-  "/Users/mymac/Documents/CISS/src/app/(app)/navigation.ts": 1777438705.3778415,
-  "/Users/mymac/Documents/CISS/src/app/(app)/layout.tsx": 1777438705.377473,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/page.tsx": 1775999396.1283903,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/clients/page.tsx": 1777296354.2337465,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/clients/[clientId]/page.tsx": 1777438705.378259,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/clients/[clientId]/geocode-coordinates/page.tsx": 1775921326.4764898,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/data-export/page.tsx": 1777291179.5439925,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/qr-management/page.tsx": 1776203006.3877025,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/wage-config/page.tsx": 1776590900.325093,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/client-locations/page.tsx": 1775880165.7541857,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/admin-tools/page.tsx": 1775972683.327663,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/assigned-guards-export/page.tsx": 1775835039.3286567,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/site-management/page.tsx": 1777438705.378766,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/bulk-import/page.tsx": 1776785131.906662,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/state-management/page.tsx": 1776202690.7573133,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/work-order-imports/page.tsx": 1777188283.4918506,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/client-management/page.tsx": 1775880164.5445006,
-  "/Users/mymac/Documents/CISS/src/app/(app)/settings/reports/page.tsx": 1775829040.5533614,
-  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/page.tsx": 1777439333.7012,
-  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/assigned-guards-export/page.tsx": 1776003214.795926,
-  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/[siteId]/page.tsx": 1777383719.0785835,
-  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/imports/work-order-imports.ts": 1776678223.00791,
-  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/imports/page.tsx": 1777383719.0789342,
-  "/Users/mymac/Documents/CISS/src/app/(app)/evaluations/page.tsx": 1775829040.5305552,
-  "/Users/mymac/Documents/CISS/src/app/(app)/evaluations/[id]/page.tsx": 1774119516.097217,
-  "/Users/mymac/Documents/CISS/src/app/(app)/training/page.tsx": 1776590900.2842982,
-  "/Users/mymac/Documents/CISS/src/app/(app)/training/assignments/page.tsx": 1776590900.2830215,
-  "/Users/mymac/Documents/CISS/src/app/(app)/training/banks/page.tsx": 1776590900.2835245,
-  "/Users/mymac/Documents/CISS/src/app/(app)/training/banks/[id]/page.tsx": 1776590900.2833273,
-  "/Users/mymac/Documents/CISS/src/app/(app)/training-reports/page.tsx": 1777294931.8506892,
-  "/Users/mymac/Documents/CISS/src/app/(app)/leaderboard/page.tsx": 1777291227.054455,
-  "/Users/mymac/Documents/CISS/src/app/(app)/visit-reports/page.tsx": 1777294931.8502874,
-  "/Users/mymac/Documents/CISS/src/app/(app)/dashboard/page.tsx": 1777383719.0778239,
-  "/Users/mymac/Documents/CISS/src/app/(app)/attendance-logs/page.tsx": 1777438705.377019,
-  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/page.tsx": 1776200443.213832,
-  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/cycles/[id]/page.tsx": 1776200465.6820335,
-  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/cycles/[id]/entries/[entryId]/page.tsx": 1774196798.9604795,
-  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/run/page.tsx": 1776008169.0023844,
-  "/Users/mymac/Documents/CISS/src/app/(app)/field-officers/page.tsx": 1776590900.2821708,
-  "/Users/mymac/Documents/CISS/src/app/(app)/leave/page.tsx": 1774119123.187596,
-  "/Users/mymac/Documents/CISS/src/app/(app)/employees/page.tsx": 1777294953.1369295,
-  "/Users/mymac/Documents/CISS/src/app/(app)/employees/enroll/page.tsx": 1776786542.0313785,
-  "/Users/mymac/Documents/CISS/src/app/(app)/employees/[id]/page.tsx": 1777291194.6134815,
-  "/Users/mymac/Documents/CISS/src/app/enroll/layout.tsx": 1763547091.0,
-  "/Users/mymac/Documents/CISS/src/app/enroll/page.tsx": 1777274019.3170576,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/layout.tsx": 1777109691.1335013,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/attendance/page.tsx": 1777438705.3795443,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/evaluations/page.tsx": 1774119346.8167071,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/training/page.tsx": 1776590900.2850127,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/training/quiz/[assignmentId]/page.tsx": 1776590900.2853534,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/payslips/page.tsx": 1775829040.5575182,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/dashboard/page.tsx": 1777438705.379859,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/profile/page.tsx": 1774119346.816894,
-  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/leave/page.tsx": 1774119346.816354,
-  "/Users/mymac/Documents/CISS/src/app/guard-forgot-pin/page.tsx": 1776251829.821043,
-  "/Users/mymac/Documents/CISS/src/app/guard-login/layout.tsx": 1776419242.5304854,
-  "/Users/mymac/Documents/CISS/src/app/guard-login/page.tsx": 1777185386.2989426,
-  "/Users/mymac/Documents/CISS/src/app/guard-login/reset/page.tsx": 1776251703.844234,
-  "/Users/mymac/Documents/CISS/src/app/guard-login/setup/page.tsx": 1776255765.659641,
-  "/Users/mymac/Documents/CISS/src/app/profile/layout.tsx": 1773670396.2669742,
-  "/Users/mymac/Documents/CISS/src/app/profile/[id]/page.tsx": 1777265739.3717597,
-  "/Users/mymac/Documents/CISS/src/app/api/attendance/submit/route.ts": 1777438705.3804517,
-  "/Users/mymac/Documents/CISS/src/app/api/attendance/analyze-photo/route.ts": 1774201754.7931619,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/route.ts": 1777296315.0518649,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/[id]/route.ts": 1777383719.042745,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/[id]/wage-config/route.ts": 1773757719.902309,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/[id]/wage-config/upload/route.ts": 1776590900.3253007,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/fix-email-verified/route.ts": 1776324602.6075475,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/route.ts": 1777383719.081576,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/bulk-delete/route.ts": 1777383719.0804956,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/rename-exam/route.ts": 1777383719.0813713,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/backfill-exam-names/route.ts": 1777102105.7860684,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/todos/route.ts": 1777101533.1707926,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/todos/[id]/route.ts": 1777101555.412392,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/[id]/route.ts": 1776664002.6427574,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/import/commit/route.ts": 1777383719.0807645,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/import/preview/route.ts": 1777383719.0811155,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/evaluations/route.ts": 1774118943.490601,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/assignments/route.ts": 1776590900.2857177,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/modules/route.ts": 1776590900.288157,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/modules/[id]/route.ts": 1776590900.2879322,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/route.ts": 1776590900.287674,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/[id]/route.ts": 1776590900.2875276,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/[id]/questions/route.ts": 1776590900.2862787,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/[id]/questions/[qid]/route.ts": 1776590900.2860806,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training-reports/route.ts": 1777294883.6166048,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/training-reports/[id]/route.ts": 1777207729.4786875,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/client-users/route.ts": 1777383719.0802703,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/client-users/[id]/route.ts": 1777384428.4193857,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/leaderboard/route.ts": 1773737118.2573268,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/visit-reports/route.ts": 1777294868.7612503,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/visit-reports/[id]/route.ts": 1776150050.585894,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/sites/batch-geocode/route.ts": 1775923996.3645988,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/sites/unverified/route.ts": 1773680468.6341524,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/sites/[id]/verify-coordinates/route.ts": 1773677938.6190944,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/states/route.ts": 1773806353.4649692,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/awards/route.ts": 1773737118.2566497,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/auth-users/route.ts": 1774164069.061793,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/compliance-settings/route.ts": 1774196234.18879,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/route.ts": 1773757719.9039774,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/route.ts": 1776008114.500263,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/payslips/route.ts": 1774196560.575828,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/worksheet/route.ts": 1775829040.558034,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/finalize/route.ts": 1774197269.1326203,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/validate/route.ts": 1776008091.5779917,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/entries/[id]/route.ts": 1774197024.6292481,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/entries/[id]/payslip/route.ts": 1774196533.188658,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/run/route.ts": 1776590900.3255513,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/field-officers/route.ts": 1776323568.4364314,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/field-officers/[id]/route.ts": 1773563448.0657265,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/leave/requests/route.ts": 1774122054.2824326,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/leave/requests/[id]/route.ts": 1775824027.7886577,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/reports/attendance/route.ts": 1777438705.3801663,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/claims/repair/route.ts": 1776324219.128943,
-  "/Users/mymac/Documents/CISS/src/app/api/admin/employees/route.ts": 1776197069.146538,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/route.ts": 1774191790.1887496,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/route.ts": 1776202675.6282444,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/validate/route.ts": 1776202559.2990625,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/seed/route.ts": 1774186965.7176714,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/deployment-config/route.ts": 1776202546.3756225,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/create-admin/route.ts": 1774186994.283247,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/overview/route.ts": 1776202594.3596537,
-  "/Users/mymac/Documents/CISS/src/app/api/super-admin/employees/route.ts": 1774204716.4254959,
-  "/Users/mymac/Documents/CISS/src/app/api/public/attendance/route.ts": 1777112449.1434774,
-  "/Users/mymac/Documents/CISS/src/app/api/public/attendance/employee/route.ts": 1777438705.3816855,
-  "/Users/mymac/Documents/CISS/src/app/api/public/attendance/upload/route.ts": 1777113889.9894304,
-  "/Users/mymac/Documents/CISS/src/app/api/public/clients/route.ts": 1777291101.9247189,
-  "/Users/mymac/Documents/CISS/src/app/api/public/enroll/upload/route.ts": 1777273910.274879,
-  "/Users/mymac/Documents/CISS/src/app/api/public/portal-context/route.ts": 1777296298.4903066,
-  "/Users/mymac/Documents/CISS/src/app/api/locations/geocode/route.ts": 1775829040.5601056,
-  "/Users/mymac/Documents/CISS/src/app/api/geocode-site/route.ts": 1775829040.5591252,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/attendance/route.ts": 1777438705.3810244,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/evaluations/route.ts": 1774122598.144011,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/send-reset-otp/route.ts": 1776195774.469971,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/setup-pin/route.ts": 1776763240.00395,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/verify-reset-otp/route.ts": 1776195702.3268034,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/change-pin/route.ts": 1776196356.4379778,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/pin-status/route.ts": 1776250711.014388,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/login/route.ts": 1777269773.8935785,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/reset-pin/route.ts": 1776196197.7766414,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/training/route.ts": 1776590900.2892087,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/training/quiz/[assignmentId]/route.ts": 1776590900.2886324,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/training/quiz/[assignmentId]/submit/route.ts": 1776590900.28881,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/payslips/route.ts": 1776200839.3146956,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/payslips/[id]/payslip/route.ts": 1776200808.640788,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/dashboard/route.ts": 1777438705.3813868,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/profile/route.ts": 1774119185.0330365,
-  "/Users/mymac/Documents/CISS/src/app/api/guard/leave/route.ts": 1774122431.6355283,
-  "/Users/mymac/Documents/CISS/src/app/api/client/dashboard/route.ts": 1777438705.3807476,
-  "/Users/mymac/Documents/CISS/src/app/api/employees/public-profile/[id]/route.ts": 1777267197.1609805,
-  "/Users/mymac/Documents/CISS/src/app/api/employees/enroll/route.ts": 1777274229.340008,
-  "/Users/mymac/Documents/CISS/src/app/api/employees/lookup/route.ts": 1776195968.0044806,
-  "/Users/mymac/Documents/CISS/src/app/admin-login/page.tsx": 1777383719.079703
+  "/Users/mymac/Documents/CISS/postcss.config.mjs": {
+    "mtime": 1763547091.0,
+    "hash": "b7941c02b947e17ae32f67ae7e664ec8"
+  },
+  "/Users/mymac/Documents/CISS/next-env.d.ts": {
+    "mtime": 1773479776.3568156,
+    "hash": "ba64ff7d54714a8f64db89b1003207d8"
+  },
+  "/Users/mymac/Documents/CISS/tailwind.config.ts": {
+    "mtime": 1776399984.7503898,
+    "hash": "1577109d17428dc5307ca7fa9c076cd4"
+  },
+  "/Users/mymac/Documents/CISS/vitest.config.ts": {
+    "mtime": 1777550369.12256,
+    "hash": "d0db21d189784d2987cfa1f8d4f7c1ba"
+  },
+  "/Users/mymac/Documents/CISS/eslint.config.mjs": {
+    "mtime": 1775829040.526374,
+    "hash": "b669d04824f83ba1b645d670c57dbe5d"
+  },
+  "/Users/mymac/Documents/CISS/next.config.ts": {
+    "mtime": 1776003603.3252766,
+    "hash": "0944c8291fa50bfdf92677d2290c9c11"
+  },
+  "/Users/mymac/Documents/CISS/public/sw.js": {
+    "mtime": 1773582419.7495635,
+    "hash": "71ad422182f17047aab54eb5ac75cfda"
+  },
+  "/Users/mymac/Documents/CISS/scripts/import-lng-petronet.mjs": {
+    "mtime": 1777276694.6252947,
+    "hash": "d11f91112b2d371f6b559d6f5b866fae"
+  },
+  "/Users/mymac/Documents/CISS/scripts/migrate-add-state-code.ts": {
+    "mtime": 1773759898.6548116,
+    "hash": "cf423d56368c6ca8165ce9b3f17caaf0"
+  },
+  "/Users/mymac/Documents/CISS/scripts/backfill-workorder-site-day-aggregates.mjs": {
+    "mtime": 1777438705.3765273,
+    "hash": "355607d906ba56aa006a7d7293f0e309"
+  },
+  "/Users/mymac/Documents/CISS/scripts/backfill-workorder-exam-names.ts": {
+    "mtime": 1777101961.3803172,
+    "hash": "3c39fcc49265611217f6c51b58c20c33"
+  },
+  "/Users/mymac/Documents/CISS/scripts/provision-region-vercel.mjs": {
+    "mtime": 1774194836.8405812,
+    "hash": "7efe65ef80a97d6d27cc1eb301ba70cc"
+  },
+  "/Users/mymac/Documents/CISS/scripts/repair-site-gps.mjs": {
+    "mtime": 1775923996.36509,
+    "hash": "ad1d50c33693671ff503fc86004ce985"
+  },
+  "/Users/mymac/Documents/CISS/src/next-config.test.ts": {
+    "mtime": 1776003603.3258755,
+    "hash": "c457facf3ab904476f9eea1e40ee7dc0"
+  },
+  "/Users/mymac/Documents/CISS/src/types/leave.ts": {
+    "mtime": 1773757719.9068854,
+    "hash": "6952709bc30c9578ca557ead9e349a4d"
+  },
+  "/Users/mymac/Documents/CISS/src/types/training.ts": {
+    "mtime": 1776590900.2898705,
+    "hash": "0d20c70f6429aa1a33f225fcfa6b65c2"
+  },
+  "/Users/mymac/Documents/CISS/src/types/client-dashboard.ts": {
+    "mtime": 1777706570.809695,
+    "hash": "cbfbb786a081f3a345752813bfbe29d6"
+  },
+  "/Users/mymac/Documents/CISS/src/types/work-orders.ts": {
+    "mtime": 1777619061.6719496,
+    "hash": "b2554ce88605f88c48870e270e01bca5"
+  },
+  "/Users/mymac/Documents/CISS/src/types/enrollment.ts": {
+    "mtime": 1777273982.5540175,
+    "hash": "ab31ad194a783472c0c36551ef8dd636"
+  },
+  "/Users/mymac/Documents/CISS/src/types/employee.ts": {
+    "mtime": 1777273480.0000272,
+    "hash": "5c9a22da36bacceac26f27d07ee3fe93"
+  },
+  "/Users/mymac/Documents/CISS/src/types/app.ts": {
+    "mtime": 1774073281.223268,
+    "hash": "b0b2993794ab08aab7f8a3136ca9f907"
+  },
+  "/Users/mymac/Documents/CISS/src/types/client-permissions.ts": {
+    "mtime": 1777383719.049716,
+    "hash": "cb02a7e8eb7d258459fb7af01b203729"
+  },
+  "/Users/mymac/Documents/CISS/src/types/location.ts": {
+    "mtime": 1777438705.3842173,
+    "hash": "890bdc1620d7956c9e833da53d535188"
+  },
+  "/Users/mymac/Documents/CISS/src/types/payroll.ts": {
+    "mtime": 1777702907.6819031,
+    "hash": "5d67194652a17583e7de423d3e568389"
+  },
+  "/Users/mymac/Documents/CISS/src/types/branch.ts": {
+    "mtime": 1777207482.900686,
+    "hash": "76b9e4d15dedef91894d062ffb2dad48"
+  },
+  "/Users/mymac/Documents/CISS/src/types/evaluation.ts": {
+    "mtime": 1773737118.2627509,
+    "hash": "1bee274958eef81ac50a39388151e4ad"
+  },
+  "/Users/mymac/Documents/CISS/src/types/region.ts": {
+    "mtime": 1777706520.689569,
+    "hash": "ac9320b4a82add202a7303bae81e7f86"
+  },
+  "/Users/mymac/Documents/CISS/src/types/attendance.ts": {
+    "mtime": 1777700340.3937216,
+    "hash": "9ffc267da54c4de22af1bb67dcff631c"
+  },
+  "/Users/mymac/Documents/CISS/src/context/auth-context.tsx": {
+    "mtime": 1774073295.1388404,
+    "hash": "c6de27472f51f9ac1a3e3c628b5cebbd"
+  },
+  "/Users/mymac/Documents/CISS/src/app/guard-auth-routes.test.ts": {
+    "mtime": 1777522695.9785128,
+    "hash": "21524fb22d971b215d1ecdac496192d6"
+  },
+  "/Users/mymac/Documents/CISS/src/app/work-orders-surface.behavior.test.ts": {
+    "mtime": 1776678659.9739347,
+    "hash": "97652ce94e14116159af8fc019c206d5"
+  },
+  "/Users/mymac/Documents/CISS/src/app/branch-admin-removal.test.ts": {
+    "mtime": 1775999593.4261103,
+    "hash": "fe6024ffad6e70c28360a74b9a23f96a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/work-orders-surface.test.ts": {
+    "mtime": 1777619246.6741853,
+    "hash": "30e72e89d641ff77111e584c49d2ea09"
+  },
+  "/Users/mymac/Documents/CISS/src/app/landing-page-surface.test.ts": {
+    "mtime": 1776091129.383954,
+    "hash": "e1b25be1335cae7ea8f867f0e20acb50"
+  },
+  "/Users/mymac/Documents/CISS/src/app/browser-warnings.test.ts": {
+    "mtime": 1775928669.9281554,
+    "hash": "428a3b40f0669d007db3cd2dfe99ed76"
+  },
+  "/Users/mymac/Documents/CISS/src/app/work-orders-import-preview.test.ts": {
+    "mtime": 1777619328.6559362,
+    "hash": "0712942b0952f91424df4c535a61542c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/field-officers-surface.test.ts": {
+    "mtime": 1777532539.3996012,
+    "hash": "9e89b64bdc13dc5c7948430d893c9720"
+  },
+  "/Users/mymac/Documents/CISS/src/app/layout.tsx": {
+    "mtime": 1776401441.291453,
+    "hash": "b5ae112ca2af2eca2a38c28f7159ad3f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/settings-surface.test.ts": {
+    "mtime": 1775973400.350078,
+    "hash": "1c4ddde03f72c59a6162721641469d9f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/page.tsx": {
+    "mtime": 1777526210.9921236,
+    "hash": "169148bb4f997731dd64aabe7625503e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/attendance-logs-surface.test.ts": {
+    "mtime": 1777486455.2712774,
+    "hash": "b5d73f09e8c99cc98a083cb868ed9555"
+  },
+  "/Users/mymac/Documents/CISS/src/app/not-found.tsx": {
+    "mtime": 1773670396.2654943,
+    "hash": "07c15e2334a2fbf7b1208d1fef8046e3"
+  },
+  "/Users/mymac/Documents/CISS/src/app/attendance/layout.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "1334fe9081a278af291a2e5124073806"
+  },
+  "/Users/mymac/Documents/CISS/src/app/attendance/page.tsx": {
+    "mtime": 1777700753.4463077,
+    "hash": "c4bb91d89261f1086291f976c4d9cf37"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/navigation.ts": {
+    "mtime": 1777438705.3778415,
+    "hash": "968825abffd3d0a22419e08c78987331"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/layout.tsx": {
+    "mtime": 1777552582.7981312,
+    "hash": "a0f8fc51912499b82f77299a281bc079"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/page.tsx": {
+    "mtime": 1775999396.1283903,
+    "hash": "27b7f8a6dd2a99bd72653789559e8a2f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/clients/page.tsx": {
+    "mtime": 1777296354.2337465,
+    "hash": "db2e0856a07e3c03b9fe6f261898fc1c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/clients/[clientId]/page.tsx": {
+    "mtime": 1777616453.3810356,
+    "hash": "78cd05dcc8f7bd872d32ee52ed2766fa"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/clients/[clientId]/geocode-coordinates/page.tsx": {
+    "mtime": 1775921326.4764898,
+    "hash": "64edb18ff6536f7086fa8d832aa8f55e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/data-export/page.tsx": {
+    "mtime": 1777291179.5439925,
+    "hash": "4ffb3a70935bf53067592c77a946d5d7"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/qr-management/page.tsx": {
+    "mtime": 1776203006.3877025,
+    "hash": "f4ea5d1b79aafb934a8fcc2daebd9ad1"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/wage-config/page.tsx": {
+    "mtime": 1776590900.325093,
+    "hash": "fce08488b515c36f1117c0af189c8f87"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/client-locations/page.tsx": {
+    "mtime": 1775880165.7541857,
+    "hash": "2b46821d3a33e3176eac694a17041371"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/admin-tools/page.tsx": {
+    "mtime": 1775972683.327663,
+    "hash": "145b7d01a001e7701f920cdb35b09f8a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/assigned-guards-export/page.tsx": {
+    "mtime": 1775835039.3286567,
+    "hash": "8437c2b5c012f3f4a7ae19538dd20119"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/site-management/page.tsx": {
+    "mtime": 1777550333.6795108,
+    "hash": "367ea3b5bea794d348bd370b89726a3f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/bulk-import/page.tsx": {
+    "mtime": 1776785131.906662,
+    "hash": "9d54ecd6feb6cf7d513efcae8996eb7b"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/state-management/page.tsx": {
+    "mtime": 1776202690.7573133,
+    "hash": "ff63b4586c2a00c23ad3c57ab75c5e27"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/work-order-imports/page.tsx": {
+    "mtime": 1777188283.4918506,
+    "hash": "e1577e0f24d291ad3dd7e165823f1128"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/client-management/page.tsx": {
+    "mtime": 1775880164.5445006,
+    "hash": "f2b07db939e14d1d131d4116e283e96a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/settings/reports/page.tsx": {
+    "mtime": 1777616450.0733204,
+    "hash": "db0999c6b1a8638d62f3ec3cce5cdb01"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/page.tsx": {
+    "mtime": 1777619117.8313117,
+    "hash": "40c3f269c6f9b2a01e6e9805785f0cb3"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/assigned-guards-export/page.tsx": {
+    "mtime": 1776003214.795926,
+    "hash": "6c7be1fb96fafcfda53c0727e212f2ba"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/[siteId]/page.tsx": {
+    "mtime": 1777616218.5745637,
+    "hash": "8cc8d67fcdd480a141278ca71c3c276b"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/imports/work-order-imports.ts": {
+    "mtime": 1776678223.00791,
+    "hash": "009fbeb7c042f116ae53a0178bfd3055"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/work-orders/imports/page.tsx": {
+    "mtime": 1777383719.0789342,
+    "hash": "eed3786995564e921bbc5abfddef9435"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/evaluations/page.tsx": {
+    "mtime": 1775829040.5305552,
+    "hash": "2d56684bbf6721ae0a645402038ce0e3"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/evaluations/[id]/page.tsx": {
+    "mtime": 1774119516.097217,
+    "hash": "ee69a597f926f5cf703a42ecdf370937"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/training/page.tsx": {
+    "mtime": 1776590900.2842982,
+    "hash": "450df10281f1ce5d1cf593496ea83c58"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/training/assignments/page.tsx": {
+    "mtime": 1776590900.2830215,
+    "hash": "f9383f4fc16e4cd6bdca98643c8ca758"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/training/banks/page.tsx": {
+    "mtime": 1776590900.2835245,
+    "hash": "79334bd5f4cc7ed6c0ae6728a9135ca0"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/training/banks/[id]/page.tsx": {
+    "mtime": 1776590900.2833273,
+    "hash": "08b283ec8a681b7e3468c6d8b2f5f1e5"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/training-reports/page.tsx": {
+    "mtime": 1777294931.8506892,
+    "hash": "2e468fd705cd8c89385cf6d1042a097f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/leaderboard/page.tsx": {
+    "mtime": 1777291227.054455,
+    "hash": "c00673dbf99fb91b750d5354d167f8e4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/visit-reports/page.tsx": {
+    "mtime": 1777294931.8502874,
+    "hash": "2c3f816f02a24a1e4641251db0c631ae"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/dashboard/page.tsx": {
+    "mtime": 1777706058.935026,
+    "hash": "6e41cd8046351b462cb35d5c8e7615b9"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/attendance-logs/page.tsx": {
+    "mtime": 1777700348.254139,
+    "hash": "02f2ebef08a117a8e74253587398f0a2"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/page.tsx": {
+    "mtime": 1776200443.213832,
+    "hash": "4cc18aac276a2d26227f7e38addd8033"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/cycles/[id]/page.tsx": {
+    "mtime": 1777706257.0103488,
+    "hash": "feae2ec1ca46fc4bdde8e61eebf8b3dd"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/cycles/[id]/entries/[entryId]/page.tsx": {
+    "mtime": 1777706284.5315163,
+    "hash": "a515bb8907d37acbba3f54162df007c8"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/payroll/run/page.tsx": {
+    "mtime": 1776008169.0023844,
+    "hash": "3a7266d2ac586d050f2fad609905f92c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/field-officers/page.tsx": {
+    "mtime": 1777550311.4028294,
+    "hash": "4c444e76b5752a51ad21f3ce72657348"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/employees/page.tsx": {
+    "mtime": 1777617121.643894,
+    "hash": "a65b888764a8d1ceb4ba2ad435063956"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/employees/enroll/page.tsx": {
+    "mtime": 1776786542.0313785,
+    "hash": "d173a8e919baad8adb66285f26c9e661"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(app)/employees/[id]/page.tsx": {
+    "mtime": 1777522411.4925973,
+    "hash": "68f8038f50cf2a194cd238a7d42bccb0"
+  },
+  "/Users/mymac/Documents/CISS/src/app/enroll/layout.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "dc624a863f70d36d35e27a8513e5e23d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/enroll/page.tsx": {
+    "mtime": 1777274019.3170576,
+    "hash": "00beb619a493d377b1f4e0c7d9e07b55"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/layout.tsx": {
+    "mtime": 1777109691.1335013,
+    "hash": "9e48d8356f37854c9cedb64f8baa40b4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/attendance/page.tsx": {
+    "mtime": 1777704015.6463885,
+    "hash": "28faf8a05a6650e1a0c3c61f67a9bb32"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/evaluations/page.tsx": {
+    "mtime": 1774119346.8167071,
+    "hash": "0688529278197142b5289a6c3ca3583f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/training/page.tsx": {
+    "mtime": 1776590900.2850127,
+    "hash": "b8538e5e7a39469b711ca0da214f4f31"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/training/quiz/[assignmentId]/page.tsx": {
+    "mtime": 1776590900.2853534,
+    "hash": "dd4f3d7949b4227ec8d4be257c286407"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/payslips/page.tsx": {
+    "mtime": 1775829040.5575182,
+    "hash": "f6f6e1160c4357c529da42b2aff1da7f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/dashboard/page.tsx": {
+    "mtime": 1777704409.9937904,
+    "hash": "55b6aa8f7cdff6fda291d53dc7e0be2d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/(guard)/guard/profile/page.tsx": {
+    "mtime": 1774119346.816894,
+    "hash": "16620a8349a94a514065b263d9620803"
+  },
+  "/Users/mymac/Documents/CISS/src/app/guard-forgot-pin/page.tsx": {
+    "mtime": 1777522368.5910058,
+    "hash": "06de5075bf2475ad94609361080f549f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/guard-login/layout.tsx": {
+    "mtime": 1776419242.5304854,
+    "hash": "516601e07de7daf9bfe33e7185c26769"
+  },
+  "/Users/mymac/Documents/CISS/src/app/guard-login/page.tsx": {
+    "mtime": 1777522372.4377108,
+    "hash": "55aa7453a5519cf2ee835020b46da1c6"
+  },
+  "/Users/mymac/Documents/CISS/src/app/guard-login/reset/page.tsx": {
+    "mtime": 1777522464.6386669,
+    "hash": "4402f6ed2a8fb6b4cc12a3622c61a1a6"
+  },
+  "/Users/mymac/Documents/CISS/src/app/guard-login/setup/page.tsx": {
+    "mtime": 1776255765.659641,
+    "hash": "dddaa9d7ced438ac05d29e68e36aed59"
+  },
+  "/Users/mymac/Documents/CISS/src/app/profile/layout.tsx": {
+    "mtime": 1773670396.2669742,
+    "hash": "9edf07d64fcebb818f13ae68e21cc95d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/profile/[id]/page.tsx": {
+    "mtime": 1777265739.3717597,
+    "hash": "4ab5e1074e2536291b302cb7a99134e4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/attendance/submit/route.ts": {
+    "mtime": 1777699887.5172534,
+    "hash": "a9dfc48ec8d8bc9a3bd0b0aae191031f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/attendance/analyze-photo/route.ts": {
+    "mtime": 1774201754.7931619,
+    "hash": "53b48878d953e8f5b82acd8ba7eb34f3"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/route.ts": {
+    "mtime": 1777296315.0518649,
+    "hash": "81d9a2315e9f52d5c165289fd36add0b"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/[id]/route.ts": {
+    "mtime": 1777383719.042745,
+    "hash": "7df6fa9e0cae8964d7f6e2c43a9b2988"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/[id]/wage-config/route.ts": {
+    "mtime": 1773757719.902309,
+    "hash": "f980cae343d7dc02ec8380a7e160ed7a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/clients/[id]/wage-config/upload/route.ts": {
+    "mtime": 1776590900.3253007,
+    "hash": "fc9077af26adfa9a4ebb0cb3e23ccf49"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/fix-email-verified/route.ts": {
+    "mtime": 1776324602.6075475,
+    "hash": "a4debd713c542751e886a7bd544a7a6f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/route.ts": {
+    "mtime": 1777383719.081576,
+    "hash": "d1744d8890e462ae425db73a05b7cdfc"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/backfill-districts/route.ts": {
+    "mtime": 1777615777.9360802,
+    "hash": "994ca0b9bb10ad9f9fd0e62f806c3443"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/bulk-delete/route.ts": {
+    "mtime": 1777618634.9404204,
+    "hash": "ee9c9b3fab478737f2e4eda3690f3db4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/rename-exam/route.ts": {
+    "mtime": 1777383719.0813713,
+    "hash": "26a09e33f7793db9e312a8f5396d62c9"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/backfill-exam-names/route.ts": {
+    "mtime": 1777102105.7860684,
+    "hash": "d2d4f4b8fe75d62ae434524b5596fa52"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/todos/route.ts": {
+    "mtime": 1777101533.1707926,
+    "hash": "641a434ca38a6cdbcaf472529e7ee126"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/todos/[id]/route.ts": {
+    "mtime": 1777101555.412392,
+    "hash": "5c42548849f2c043ec2d5d925006c189"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/[id]/route.ts": {
+    "mtime": 1777618625.88345,
+    "hash": "1fa6e2897c9a7e352331f575ecdd7f52"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/import/commit/route.ts": {
+    "mtime": 1777619301.5813358,
+    "hash": "2a0fade470ce8f591393933de0bec817"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/work-orders/import/preview/route.ts": {
+    "mtime": 1777618736.1299825,
+    "hash": "d3cc7abb92df3feddf102fd96351b8e7"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/evaluations/route.ts": {
+    "mtime": 1774118943.490601,
+    "hash": "07985f450ec2a9e57f4bc308b889d0b1"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/assignments/route.ts": {
+    "mtime": 1776590900.2857177,
+    "hash": "8ce8d7c3cc06d5b7d716140d77f8bd72"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/modules/route.ts": {
+    "mtime": 1776590900.288157,
+    "hash": "af31b1ecb18094c2d1f46434b218ae2f"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/modules/[id]/route.ts": {
+    "mtime": 1776590900.2879322,
+    "hash": "5568e852209606faff46096ad613e84c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/route.ts": {
+    "mtime": 1776590900.287674,
+    "hash": "0de25303be4846886b565b5fa5e6c440"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/[id]/route.ts": {
+    "mtime": 1776590900.2875276,
+    "hash": "44f1ba3651e90adba1fe93350d232a13"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/[id]/questions/route.ts": {
+    "mtime": 1776590900.2862787,
+    "hash": "9d3a7e35204315320c56f7d7ac2a256e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training/banks/[id]/questions/[qid]/route.ts": {
+    "mtime": 1776590900.2860806,
+    "hash": "ececcbdb1e05764ee841d6c9f067a278"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training-reports/route.ts": {
+    "mtime": 1777531794.193585,
+    "hash": "7ba10ed314f4ccbc097cfb4e0dc64bcc"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/training-reports/[id]/route.ts": {
+    "mtime": 1777207729.4786875,
+    "hash": "14471344434f808625133200c33aba4e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/client-users/route.ts": {
+    "mtime": 1777383719.0802703,
+    "hash": "a782e25960f26c623e2da642b1122f91"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/client-users/[id]/route.ts": {
+    "mtime": 1777384428.4193857,
+    "hash": "ba522fe1abba0da7641b5be5d11c9a4a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/leaderboard/route.ts": {
+    "mtime": 1773737118.2573268,
+    "hash": "25804b5e91d66c69dae44013e983b886"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/visit-reports/route.ts": {
+    "mtime": 1777531791.0098984,
+    "hash": "d51059b13109c0ffcd4d5734d445a37b"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/visit-reports/[id]/route.ts": {
+    "mtime": 1776150050.585894,
+    "hash": "1d8bb899e6133d8bc995f2cf2fa17047"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/sites/batch-geocode/route.ts": {
+    "mtime": 1775923996.3645988,
+    "hash": "2d18272ec4ef311c7c860eed76adbbac"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/sites/unverified/route.ts": {
+    "mtime": 1773680468.6341524,
+    "hash": "8c5b5ff51b791a424a60e96db1034c0a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/sites/[id]/verify-coordinates/route.ts": {
+    "mtime": 1773677938.6190944,
+    "hash": "96057963c38d498b81760510812cf1b7"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/states/route.ts": {
+    "mtime": 1773806353.4649692,
+    "hash": "08babeb00006241d8178d570b843a65b"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/awards/route.ts": {
+    "mtime": 1773737118.2566497,
+    "hash": "8890968d1b61ec4e3127fbf4e0d00900"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/auth-users/route.ts": {
+    "mtime": 1774164069.061793,
+    "hash": "a94695c00bd391b0c19f75a6119678f4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/compliance-settings/route.ts": {
+    "mtime": 1774196234.18879,
+    "hash": "1b9a2dfcdf4712d79f2f38166875aa94"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/route.ts": {
+    "mtime": 1773757719.9039774,
+    "hash": "2f6876c539d51984a3c2471b2b4ad6ba"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/route.ts": {
+    "mtime": 1776008114.500263,
+    "hash": "cc5f334952f1b8e02d377110e95c976e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/payslips/route.ts": {
+    "mtime": 1774196560.575828,
+    "hash": "147cd1c9cf08163797e4694dfaf6fd5d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/worksheet/route.ts": {
+    "mtime": 1777707015.4945986,
+    "hash": "085c1505434e37790002eba7250127ee"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/cycles/[id]/finalize/route.ts": {
+    "mtime": 1774197269.1326203,
+    "hash": "892745a205b53469b82f6bde8ca7d306"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/validate/route.ts": {
+    "mtime": 1776008091.5779917,
+    "hash": "5d53d7e10342b27f0037efbc130ec750"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/entries/[id]/route.ts": {
+    "mtime": 1774197024.6292481,
+    "hash": "417228e3bb760161559da8d572749d22"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/entries/[id]/payslip/route.ts": {
+    "mtime": 1774196533.188658,
+    "hash": "d282452ce7a4ef1a0d0e9948d05532e1"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/payroll/run/route.ts": {
+    "mtime": 1777703552.9772336,
+    "hash": "c4d19d6066e9ddb34f6797f5ab66a0c5"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/field-officers/route.ts": {
+    "mtime": 1776323568.4364314,
+    "hash": "e163ddb7bc5d24cebea4be7f3d80657e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/field-officers/[id]/route.ts": {
+    "mtime": 1773563448.0657265,
+    "hash": "cb40f8d74cfcce7b172e4fd40bf682ee"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/reports/attendance/route.ts": {
+    "mtime": 1777438705.3801663,
+    "hash": "5ab470b8f8b5cfa39bcc7f2f262ea414"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/claims/repair/route.ts": {
+    "mtime": 1776324219.128943,
+    "hash": "69aec75d0e43ce19c504f33c74361a17"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/admin/employees/route.ts": {
+    "mtime": 1776197069.146538,
+    "hash": "375fc46fa98a088a2b371e25d007b522"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/guard-attendance/route.ts": {
+    "mtime": 1777990715.5343912,
+    "hash": "465a510b18608fac369d2ffcc1fa9445"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/work-orders/route.ts": {
+    "mtime": 1777991564.9809656,
+    "hash": "412cda777fff2a98e71cf505b2dc009b"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/training-reports/route.ts": {
+    "mtime": 1777990673.256982,
+    "hash": "a3ef8e11ea37db51c6f8412329cba701"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/visit-reports/route.ts": {
+    "mtime": 1777990673.245524,
+    "hash": "96f326eeca1973ec8851d3d5da083137"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/dashboard/route.ts": {
+    "mtime": 1777996588.5689662,
+    "hash": "31b670c013469f326cdf0351634bec1d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/sites/route.ts": {
+    "mtime": 1777992172.8400178,
+    "hash": "52dfb53225dd85f5e392acfbd8480124"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/guards/route.test.ts": {
+    "mtime": 1777617146.2125041,
+    "hash": "cdfbd4eb7f7aede0e8f7fc6f5749e1d6"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/field-officer/guards/route.ts": {
+    "mtime": 1777995257.1950653,
+    "hash": "9e682bc8afb8956a5074ddf2dac1ccd4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/route.ts": {
+    "mtime": 1774191790.1887496,
+    "hash": "de9e19358d0757b42c56dfc70cf04496"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/route.ts": {
+    "mtime": 1776202675.6282444,
+    "hash": "c1ce7ca69516db73b72b286fe722e194"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/validate/route.ts": {
+    "mtime": 1776202559.2990625,
+    "hash": "9599cb721a84ce8c05cecd0d6400511d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/seed/route.ts": {
+    "mtime": 1774186965.7176714,
+    "hash": "eeba121f8199a50c0324b162e9ed46b7"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/deployment-config/route.ts": {
+    "mtime": 1776202546.3756225,
+    "hash": "51b75f9324f66d951eb5e4972fa199de"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/regions/[id]/create-admin/route.ts": {
+    "mtime": 1774186994.283247,
+    "hash": "7bc1e696597a543034cf663c5682600c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/overview/route.ts": {
+    "mtime": 1777707073.4297285,
+    "hash": "f11d16e0daff07480ff24eec62b1188c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/super-admin/employees/route.ts": {
+    "mtime": 1774204716.4254959,
+    "hash": "c4e85ea271335f5ef3f5d20d6efb382c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/public/attendance/route.ts": {
+    "mtime": 1777699811.843212,
+    "hash": "f8ff5b133ceef13c2fb2eb557b9e116d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/public/attendance/employee/route.ts": {
+    "mtime": 1777438705.3816855,
+    "hash": "b36034bc847fb0f6052f161bdfc8339e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/public/attendance/upload/route.ts": {
+    "mtime": 1777113889.9894304,
+    "hash": "3d22d20b40fd14c78b89104738bae639"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/public/clients/route.ts": {
+    "mtime": 1777291101.9247189,
+    "hash": "f713cbd90746b776532cffe004a2169c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/public/enroll/upload/route.ts": {
+    "mtime": 1777273910.274879,
+    "hash": "a7c2e7125743459a3a14441ad9b6307e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/public/portal-context/route.ts": {
+    "mtime": 1777296298.4903066,
+    "hash": "50122fdd33c01af95a74810b4ef280a6"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/mobile/session/route.test.ts": {
+    "mtime": 1777537860.4740026,
+    "hash": "5adae97512685cd7ad9ed2604155a073"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/mobile/session/route.ts": {
+    "mtime": 1777552587.2448573,
+    "hash": "100e555bd2fc38901d92c661e7e02e93"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/locations/geocode/route.ts": {
+    "mtime": 1775829040.5601056,
+    "hash": "f2a7bc51fb25b58cdd6c86a7373cb9a4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/geocode-site/route.ts": {
+    "mtime": 1775829040.5591252,
+    "hash": "089a67b725c46143d8148cb00676ba09"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/attendance/route.ts": {
+    "mtime": 1777704158.9867165,
+    "hash": "3f2017423d9762cd12f9950653f5df58"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/evaluations/route.ts": {
+    "mtime": 1774122598.144011,
+    "hash": "fa3bd5833818c690a06773c5a44bc938"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/send-reset-otp/route.ts": {
+    "mtime": 1777522317.1988533,
+    "hash": "1cf0814465d8abfa2ae56d0eb4079a3a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/setup-pin/route.ts": {
+    "mtime": 1777520975.5245392,
+    "hash": "525271ab4dda514f1fd66724db33b247"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/verify-reset-otp/route.ts": {
+    "mtime": 1777522325.491173,
+    "hash": "1cf0814465d8abfa2ae56d0eb4079a3a"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/change-pin/route.ts": {
+    "mtime": 1777447648.2749276,
+    "hash": "3f7bb13dd4a22034c786b834b238fad4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/pin-status/route.ts": {
+    "mtime": 1777520966.3574896,
+    "hash": "a35f75856bc5c1bd4a5f0c67de57bb46"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/login/route.ts": {
+    "mtime": 1777520970.2975059,
+    "hash": "df431aef8c4f9455978f74569c7d5e6d"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/auth/reset-pin/route.ts": {
+    "mtime": 1777522602.158595,
+    "hash": "878c205c640e1c592979871ba7d32a2e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/training/route.ts": {
+    "mtime": 1776590900.2892087,
+    "hash": "6005c281b03a437193d030603091e924"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/training/quiz/[assignmentId]/route.ts": {
+    "mtime": 1776590900.2886324,
+    "hash": "774cf1439f09576d7612c84f592c6e11"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/training/quiz/[assignmentId]/submit/route.ts": {
+    "mtime": 1776590900.28881,
+    "hash": "94e85f780bb903dabc356ead09d04767"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/payslips/route.ts": {
+    "mtime": 1777662343.140536,
+    "hash": "dc3acbbf71c6df9c61108c1d3589848c"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/payslips/[id]/payslip/route.ts": {
+    "mtime": 1777662347.2765987,
+    "hash": "60c7eac32c33be1d8d5ea4d2ccc72efc"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/dashboard/route.ts": {
+    "mtime": 1777704694.547345,
+    "hash": "0b3ce2cfef02ec4110e797e222129908"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/profile/route.ts": {
+    "mtime": 1774119185.0330365,
+    "hash": "30b9685f664f5763f58ad9a2f11ab9b4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/guard/incidents/route.ts": {
+    "mtime": 1777662330.9498715,
+    "hash": "0bd2cc369026da1108b8ee6a0668adc7"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/client/dashboard/route.ts": {
+    "mtime": 1777707016.8151243,
+    "hash": "91646a33b9cd76cea13b770ea4d4f3c4"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/employees/public-profile/[id]/route.ts": {
+    "mtime": 1777267197.1609805,
+    "hash": "20b6a03a5d1fdb161997f5aa890438eb"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/employees/enroll/route.ts": {
+    "mtime": 1777274229.340008,
+    "hash": "9b5cc4109fe811bdac96bd65f970e76e"
+  },
+  "/Users/mymac/Documents/CISS/src/app/api/employees/lookup/route.ts": {
+    "mtime": 1776195968.0044806,
+    "hash": "7127fcb6ee85e82ff2bf12c92022b069"
+  },
+  "/Users/mymac/Documents/CISS/src/app/admin-login/page.tsx": {
+    "mtime": 1777383719.079703,
+    "hash": "e3d4f21ef966b6fb7296604fab410a93"
+  },
+  "/Users/mymac/Documents/CISS/src/components/error-boundary.tsx": {
+    "mtime": 1773670396.2671084,
+    "hash": "de541f97bfd3f888f292b6d38cb99759"
+  },
+  "/Users/mymac/Documents/CISS/src/components/pwa-loader.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "0efc549fcb31e6bec5daa30fe1e16241"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/alert-dialog.tsx": {
+    "mtime": 1773566175.799071,
+    "hash": "1aae17b02d51a7300fb348a85cceb224"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/tabs.tsx": {
+    "mtime": 1777109558.7999718,
+    "hash": "8dd0bc28833f84db4f26f1aaa679414c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/card.tsx": {
+    "mtime": 1777109464.2886696,
+    "hash": "e3d3e5d095823ce24852d1bff8e9b486"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/slider.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "6920b37928705eb8de5ca91ba528225d"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/popover.tsx": {
+    "mtime": 1776400757.859185,
+    "hash": "4a09116a8f760b434ad16574f1a7cd9d"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/progress.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "f99d4c689a0cac272cb0b1e7ea222ba8"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/toaster.tsx": {
+    "mtime": 1773585882.7629988,
+    "hash": "e057d0d7c4fa695b8df9a3ae280ced5c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/chart.tsx": {
+    "mtime": 1774167393.0205297,
+    "hash": "c734f45c808c43dfd5c81e90f70f139c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/sheet.tsx": {
+    "mtime": 1777109616.4484167,
+    "hash": "0cf3778a2f9671b55b28a7e10e068b31"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/empty-state.tsx": {
+    "mtime": 1777110120.9673848,
+    "hash": "0eb47a634a402ae80e2a99b39a74aed1"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/scroll-area.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "3205f3686c10fa46810af9db517d72dd"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/label.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "14579f07e6e3133b6ee65d3ec778b013"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/accordion.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "561bb8af4899db592c7623851235979a"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/tooltip.tsx": {
+    "mtime": 1776400770.9413736,
+    "hash": "3fffff741abb84284b17ea5dc3d1f1cb"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/alert.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "48dac79c18e0c3ff687c320c6fcf1590"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/switch.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "368340dd3f28bce468a5ffdebb321520"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/calendar.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "8ac9efb2b5d134009a2ca4b99586910d"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/radio-group.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "58ddcb1875be36f21402c1ddcc328867"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/avatar.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "0008445bf0b90f231d702bcd9141726c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/menubar.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "58cf7fc18611a53a35131555279c211b"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/dialog.tsx": {
+    "mtime": 1777109588.3843677,
+    "hash": "26bf1b7324e39a6a27fdd27a34281a58"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/badge.tsx": {
+    "mtime": 1777109491.3946173,
+    "hash": "bf32b1de97cd25bff1832c051823a636"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/sidebar.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "0dc9bee51c4cfef1b09325d5ebeef845"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/table.tsx": {
+    "mtime": 1777109544.3482106,
+    "hash": "254121e4562a69610111c12e21dec552"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/separator.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "85fd1a835601a122f1f226ccb31a0d67"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/button.tsx": {
+    "mtime": 1777109479.8477955,
+    "hash": "7ac4be09bfe9a0396e3fecd4944624ae"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/toast.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "76897a3e705e7de71984e7a6d6caff4c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/checkbox.tsx": {
+    "mtime": 1776204426.404871,
+    "hash": "a02b1ee9698fe175e6f6de44d4fbf366"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/dropdown-menu.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "f5ec5c19d1c912a1f62695ec8556a284"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/select.tsx": {
+    "mtime": 1777109706.7424872,
+    "hash": "2b96af127c91fb90b99007b7147f160d"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/textarea.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "d9898f2a9a54893be4ff329a0562df31"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/input.tsx": {
+    "mtime": 1777109508.3965313,
+    "hash": "c85cef76ee0924fd5a17ac18d43c7056"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/stat-card.tsx": {
+    "mtime": 1773737118.2620804,
+    "hash": "1d51a6d1b12e5b7383b9ddd7f2902155"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/skeleton.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "a5a4d6d5551d4c7feb8176a23e7eb07c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/ui/form.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "1df53cf0afd884a27f799b2ce9917799"
+  },
+  "/Users/mymac/Documents/CISS/src/components/work-orders/todo-panel.tsx": {
+    "mtime": 1777101591.1652927,
+    "hash": "1b2677116c1ee8b0dbc2d153d9e428f9"
+  },
+  "/Users/mymac/Documents/CISS/src/components/work-orders/imports-panel.tsx": {
+    "mtime": 1777383719.0838435,
+    "hash": "3e06357fe2b05b0dd50bf37f1beaf27c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/work-orders/assigned-guards-export-panel.tsx": {
+    "mtime": 1777383719.0835183,
+    "hash": "1597bc69d042519fb7b5bab0fdba43a4"
+  },
+  "/Users/mymac/Documents/CISS/src/components/location/location-editor-card.tsx": {
+    "mtime": 1775926527.4253924,
+    "hash": "9bc533770fc67eeabf9067cfa8ed80e5"
+  },
+  "/Users/mymac/Documents/CISS/src/components/location/location-picker-map.tsx": {
+    "mtime": 1775926527.4248145,
+    "hash": "25b383ca275d0c9372e48c48acd8e044"
+  },
+  "/Users/mymac/Documents/CISS/src/components/layout/page-header.tsx": {
+    "mtime": 1777110106.1814682,
+    "hash": "de08f70c76d174cc6067e962742b9e79"
+  },
+  "/Users/mymac/Documents/CISS/src/components/layout/stat-card.tsx": {
+    "mtime": 1777110089.837714,
+    "hash": "575eb453d4b3a52fb37f31f1e6ab8cd7"
+  },
+  "/Users/mymac/Documents/CISS/src/components/dashboard/actions.tsx": {
+    "mtime": 1777707021.9766505,
+    "hash": "738b45f136e60dbf9a05860ff110c331"
+  },
+  "/Users/mymac/Documents/CISS/src/components/dashboard/client-operations-dashboard.tsx": {
+    "mtime": 1777438705.3824177,
+    "hash": "b5c432910a512396a7ad83e499cc7019"
+  },
+  "/Users/mymac/Documents/CISS/src/components/dashboard/charts.tsx": {
+    "mtime": 1775824027.789893,
+    "hash": "de3443b4f8c5026d0f823a369b42bc08"
+  },
+  "/Users/mymac/Documents/CISS/src/components/dashboard/stats.tsx": {
+    "mtime": 1777704996.5922463,
+    "hash": "ef25716f13a046abd6cb96c86058ce5b"
+  },
+  "/Users/mymac/Documents/CISS/src/components/guard/guard-bottom-nav.tsx": {
+    "mtime": 1777704793.911979,
+    "hash": "d0b07eaab083ba078c5b73e422307d67"
+  },
+  "/Users/mymac/Documents/CISS/src/components/guard/guard-header.tsx": {
+    "mtime": 1777109661.0971541,
+    "hash": "54155509913d3e4cd546eeda378921ef"
+  },
+  "/Users/mymac/Documents/CISS/src/components/guard/attendance-calendar.tsx": {
+    "mtime": 1777700357.5489833,
+    "hash": "d6a34d5096a8482f157b2cb30cf4d185"
+  },
+  "/Users/mymac/Documents/CISS/src/components/field-officers/site-report-upload.ts": {
+    "mtime": 1777531775.1517758,
+    "hash": "89188b8aa799e3fe3297137610c94d6a"
+  },
+  "/Users/mymac/Documents/CISS/src/components/field-officers/visit-reports-panel.tsx": {
+    "mtime": 1777531780.0389593,
+    "hash": "50a8e71afac43da290b9c73d4d44659c"
+  },
+  "/Users/mymac/Documents/CISS/src/components/field-officers/work-orders-panel.tsx": {
+    "mtime": 1777616226.7462509,
+    "hash": "d98d5c7add1f7e0a58df39890131cebf"
+  },
+  "/Users/mymac/Documents/CISS/src/components/field-officers/training-reports-panel.tsx": {
+    "mtime": 1777531787.3256574,
+    "hash": "921fc8793466e9de8cf8a836b944eb99"
+  },
+  "/Users/mymac/Documents/CISS/src/components/field-officers/site-report-upload.test.ts": {
+    "mtime": 1777531775.1523485,
+    "hash": "7805a1c416ad8c5a66ba020b1059e0d4"
+  },
+  "/Users/mymac/Documents/CISS/src/components/field-officers/photo-capture.tsx": {
+    "mtime": 1777207718.3352835,
+    "hash": "a14bfd5c8a59ca865cedfb486532efc0"
+  },
+  "/Users/mymac/Documents/CISS/src/ai/genkit.ts": {
+    "mtime": 1763547091.0,
+    "hash": "c973c7ef9c90c5f3d4414dc6dbc2f735"
+  },
+  "/Users/mymac/Documents/CISS/src/ai/dev.ts": {
+    "mtime": 1763547091.0,
+    "hash": "63691f9d907f771b840d08ad1fe86cea"
+  },
+  "/Users/mymac/Documents/CISS/src/hooks/use-mobile.tsx": {
+    "mtime": 1763547091.0,
+    "hash": "209b5193af16624cdd89d3591480dd48"
+  },
+  "/Users/mymac/Documents/CISS/src/hooks/use-haptics.ts": {
+    "mtime": 1773744513.1675742,
+    "hash": "cccab2c219c6d3aec5a7352010290910"
+  },
+  "/Users/mymac/Documents/CISS/src/hooks/use-toast.ts": {
+    "mtime": 1776204405.5795243,
+    "hash": "1756dc210de9754676e78f14940299c8"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/api-client.ts": {
+    "mtime": 1777098714.3805196,
+    "hash": "e3b8e378933b72c66ae608b962d89635"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/geocode-report.ts": {
+    "mtime": 1775922744.0147448,
+    "hash": "bbb23ef25643061c360d28235aec350c"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/firestore-audit.ts": {
+    "mtime": 1773562948.556953,
+    "hash": "3e306e0a6858bd98bbc7b03b4e2399bd"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/shift-utils.ts": {
+    "mtime": 1777486333.036095,
+    "hash": "676606abc469e3014a6cef7e77e63c0f"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/fcm.ts": {
+    "mtime": 1775928681.1002033,
+    "hash": "40dcd105675d15c2c3345151132e675b"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/site-gps-repair.ts": {
+    "mtime": 1775923996.3636975,
+    "hash": "9720302e3ac5e6d49dbda6efadcd9bfe"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/firebaseAdmin.ts": {
+    "mtime": 1777269574.189568,
+    "hash": "d2e7b643f598bbd76464717841dd7c14"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/employee-id.ts": {
+    "mtime": 1776197384.6424708,
+    "hash": "1fc8307df0ff6a03909f74f4cd036708"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders.ts": {
+    "mtime": 1777383719.084284,
+    "hash": "b682b6cd3cb3b2a7f911d64de1478f0b"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/site-gps-repair.test.ts": {
+    "mtime": 1775923261.1485891,
+    "hash": "04a1d739472ff4aec8ff8ae331455480"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/firebase.ts": {
+    "mtime": 1776590900.3257797,
+    "hash": "d87a8146947c611c021e5020fe8d54bf"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/shift-utils.test.ts": {
+    "mtime": 1777486333.0366185,
+    "hash": "06aea4a94873eca944ff5f0cdc0711fb"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/notifications.ts": {
+    "mtime": 1777704837.4975061,
+    "hash": "4dec7264463aa312d287edba6084f93f"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/location-utils.ts": {
+    "mtime": 1777486874.36323,
+    "hash": "5399601a5cc25d5ce817bd6a25aadfdf"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/districts.ts": {
+    "mtime": 1777616442.3939412,
+    "hash": "26a39cd56c8796807bd8199ea463c784"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/client-portal.ts": {
+    "mtime": 1777383719.0840676,
+    "hash": "cfed5c05e83ccc5b822c1e1deccdb0dd"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/pdf-utils.ts": {
+    "mtime": 1777126693.8561218,
+    "hash": "ad6e9e1c2308d6368c0e620c38d10241"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/storageUtils.ts": {
+    "mtime": 1776789291.5889378,
+    "hash": "ed1a645a06a6f1933a1d237cfe07ecdb"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/districts.test.ts": {
+    "mtime": 1777616461.0486586,
+    "hash": "51f1962a77f67884886c91617db397ba"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/utils.ts": {
+    "mtime": 1763547091.0,
+    "hash": "5a6fd53fdcf2be529e9cc0b718fde352"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/attendance-offline.ts": {
+    "mtime": 1775824027.7909358,
+    "hash": "b4df7fc7f77b3796e2d8ee4c5f8263df"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/client-options.ts": {
+    "mtime": 1777291285.5019736,
+    "hash": "650e434030b4a5fea27ee89addbb5eb2"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr.ts": {
+    "mtime": 1773476457.946755,
+    "hash": "c4255837d25459b5394b305f966550b9"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/location-utils.test.ts": {
+    "mtime": 1777486768.076315,
+    "hash": "1ed42e1612eaace2b628d656c2f99265"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/geocode-report.test.ts": {
+    "mtime": 1775922744.0150018,
+    "hash": "93b77984230ddb0ee794f0f45d9a72b0"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/enrollmentFiles.ts": {
+    "mtime": 1776788903.4951653,
+    "hash": "2e41771fc6e08997111e54d6ba1b30cc"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/constants.ts": {
+    "mtime": 1777616447.3945448,
+    "hash": "793239925aca71dd17e4559f4b1f40b9"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/runtime-config.ts": {
+    "mtime": 1774182997.7284203,
+    "hash": "f775e8f0b38a015154e47b16d520bc1d"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/vercel-region.ts": {
+    "mtime": 1774191672.6131046,
+    "hash": "f7c0213cb0200f56ba3190ac84f0eafa"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/geo.ts": {
+    "mtime": 1775824027.7917078,
+    "hash": "d51f84a41da0be492e77f8b115ea2afa"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/attendance/attendance-validation.ts": {
+    "mtime": 1777520712.3957872,
+    "hash": "489f827b4e8e3bee1007aa10e10a68d6"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/attendance/attendance-validation.test.ts": {
+    "mtime": 1777520709.7134166,
+    "hash": "57653624faaa49ae6f6704e2bde2655c"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/attendance/public-attendance.test.ts": {
+    "mtime": 1776435091.658815,
+    "hash": "f7694e53f70b02c623df4c2c126168b3"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/attendance/public-attendance.ts": {
+    "mtime": 1777700451.3976552,
+    "hash": "c47427c5ff7f5b05a902224970455fb0"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-diff.ts": {
+    "mtime": 1776664218.8017612,
+    "hash": "03783e32b3fcc767b403ac837f12cbab"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-hash.test.ts": {
+    "mtime": 1776661613.2863731,
+    "hash": "6fdc8640e971552cb050fc155746442c"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/available-guards.test.ts": {
+    "mtime": 1777617242.4174912,
+    "hash": "6359b3587572e808b4ef4d0d6c3d6d30"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-hash.ts": {
+    "mtime": 1776661587.0836136,
+    "hash": "5c18a95cfa05974f837402ee46990093"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/available-guards.ts": {
+    "mtime": 1777617072.9037116,
+    "hash": "5b753692c61eecf2b73dabe79d6008f5"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-parser.ts": {
+    "mtime": 1777616494.9068758,
+    "hash": "a8b92a2d15d38a016ad51b8993e39f3b"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-parser.test.ts": {
+    "mtime": 1777616471.6892548,
+    "hash": "ed8faa01a7d0f47b3ecf01c858b2e31c"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-hash-browser.ts": {
+    "mtime": 1777099562.6340408,
+    "hash": "2db8d5856354553280c2737b04ca2ca0"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/assignment-match.ts": {
+    "mtime": 1776744233.5401742,
+    "hash": "9eb1e71cc6fb0529452e392d441b9492"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/work-orders/tcs-exam-diff.test.ts": {
+    "mtime": 1776664224.9889374,
+    "hash": "2bb2d7b83b586875338df4c0eef0fd51"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/auth/admin.ts": {
+    "mtime": 1773481432.7515361,
+    "hash": "93c5396af3f90689f8bbb7017a7e442e"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/auth/roles.ts": {
+    "mtime": 1777552570.0442383,
+    "hash": "d12e432d60359f5857e892b0174bfa80"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/client-access.ts": {
+    "mtime": 1777549957.2384984,
+    "hash": "a85f9084c5c5fe2ae90488ec208b356e"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/work-order-import-cleanup.ts": {
+    "mtime": 1777618802.5440052,
+    "hash": "7e64a394d208b9de6fd08d561132ff31"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/guard-auth.ts": {
+    "mtime": 1777662270.3551075,
+    "hash": "0f4f5979bb29c5d6be0f166ea795afbe"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/region-onboarding.ts": {
+    "mtime": 1776324059.5914752,
+    "hash": "a2e01fcf7a5e0cc08f90a1645e75c325"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/location-geocode.ts": {
+    "mtime": 1775923842.5659816,
+    "hash": "03624e319c2225f78e57638923960209"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/monitoring.ts": {
+    "mtime": 1773587145.753086,
+    "hash": "7390bc9a068accb0a13b97e1b51d9af2"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/openrouter.ts": {
+    "mtime": 1774201491.0207047,
+    "hash": "f4c8e3a3557fd45490ea3f314f1dc74c"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/audit.ts": {
+    "mtime": 1773562948.5570984,
+    "hash": "93e3f688ccb0cd3d7fc1b65364f04028"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/auth.ts": {
+    "mtime": 1777294493.785189,
+    "hash": "e191762d6eecbaa1ea54aa90ce1b9811"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/server/region-connections.ts": {
+    "mtime": 1776202731.9833045,
+    "hash": "75c53d1996d56ffcf16823768c9edc06"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/scanner-types.ts": {
+    "mtime": 1776141834.351574,
+    "hash": "e6c2d13c6d6865323d6b003acf7911c5"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/scanner-support.ts": {
+    "mtime": 1776142052.7023833,
+    "hash": "c92caebc82ac941951deff95877c8c49"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/scanner-engine.test.ts": {
+    "mtime": 1776142063.5089896,
+    "hash": "588e465459bf2d9578c96d56d6eeba81"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/employee-qr.test.ts": {
+    "mtime": 1777520951.4634132,
+    "hash": "a227c656386947c14d074d3150d8fad3"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/employee-qr.ts": {
+    "mtime": 1777521000.9387326,
+    "hash": "35499a733f19e0425465f85e99b122e4"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/scanner-engine.ts": {
+    "mtime": 1776142059.5510027,
+    "hash": "328462aca94009844b7f67ae0c570aff"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/qr/scanner-support.test.ts": {
+    "mtime": 1776142037.0905938,
+    "hash": "5e0f4aa2087cec9a1e8fa4fbfabd6c5f"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/sites/site-directory.ts": {
+    "mtime": 1777549957.2382505,
+    "hash": "1d93d7c35c877a4a99791d74e04768e9"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/sites/site-directory.test.ts": {
+    "mtime": 1777549942.5451708,
+    "hash": "2915a4631dc0cc62e311e89a1c2df49f"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/hooks/use-sites.ts": {
+    "mtime": 1777438705.3832395,
+    "hash": "03fa5ea9d0cd08c8b6af7f311ac8e36d"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/hooks/use-clients.ts": {
+    "mtime": 1777291087.076071,
+    "hash": "f78eff0f67ffd7a04a6ee12958ab306a"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/guard/otp-utils.ts": {
+    "mtime": 1776195712.9328277,
+    "hash": "b8eee223f86fcb6c5c2441c5428d888a"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/guard/identity-utils.test.ts": {
+    "mtime": 1777447648.2724848,
+    "hash": "178d24fd0ca5cc4cdb7ca7f36fc290d6"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/guard/pin-utils.ts": {
+    "mtime": 1776195916.1397269,
+    "hash": "5f204510fa57b1b90aeea5be247eb8f7"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/guard/identity-utils.ts": {
+    "mtime": 1777447648.2719278,
+    "hash": "36518f9edd670841988e271bd9550bbb"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/wage-template-evaluator.ts": {
+    "mtime": 1776426296.4215124,
+    "hash": "bee178f419582c34086322287395648f"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/wage-template-evaluator.test.ts": {
+    "mtime": 1776426267.2016263,
+    "hash": "ca205199112c533af3fa6b60cb2703ac"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/defaults.ts": {
+    "mtime": 1774196087.2032523,
+    "hash": "749fc6098dbd99a3f6b804019bf123ed"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/attendance-aggregator.ts": {
+    "mtime": 1777706831.18017,
+    "hash": "c11d55716a5a63f926f7e41d1690b975"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/wage-template-parser.test.ts": {
+    "mtime": 1776425926.611678,
+    "hash": "acb84b73d405d5fd50ac2315ffefb3bd"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/calculate.test.ts": {
+    "mtime": 1775973558.2306406,
+    "hash": "ff1ae6d4d22ff5492ccc0ecc6c95751b"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/calculate.ts": {
+    "mtime": 1777703717.6966832,
+    "hash": "941f2c2c7f5e508a0d659523ae0f7e9d"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/wage-template-parser.ts": {
+    "mtime": 1777703857.7190597,
+    "hash": "31d74fc5b2cbf2ad74e6ad6d1b7f8952"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/payroll/payslip.ts": {
+    "mtime": 1777703666.7158883,
+    "hash": "345007ec4fcdb3c969d7b97dbd15a982"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/employees/visibility.ts": {
+    "mtime": 1777617218.683588,
+    "hash": "12510d1e92dd9dc31578183f2adfb5ab"
+  },
+  "/Users/mymac/Documents/CISS/src/lib/employees/visibility.test.ts": {
+    "mtime": 1777617061.9837387,
+    "hash": "0f6f46948887333560390ae14f53589a"
+  },
+  "/Users/mymac/Documents/CISS/COMPREHENSIVE_AUDIT_REPORT.md": {
+    "mtime": 1776787490.859068,
+    "hash": "aec206ff178d355f7c260c1ea8895f4d"
+  },
+  "/Users/mymac/Documents/CISS/README.md": {
+    "mtime": 1775922054.4203515,
+    "hash": "4c5a6f7aee7031a3b7eaf90412b059ad"
+  },
+  "/Users/mymac/Documents/CISS/MEMORY.md": {
+    "mtime": 1777707378.188957,
+    "hash": "35be1191bb7625dca215d5b7d08b4a08"
+  },
+  "/Users/mymac/Documents/CISS/ROADMAP.md": {
+    "mtime": 1763547091.0,
+    "hash": "2cf3143ea9ff4d8a40e994d12843ef86"
+  },
+  "/Users/mymac/Documents/CISS/apphosting.yaml": {
+    "mtime": 1763547091.0,
+    "hash": "66b66dcf03140222743f6d18e119e729"
+  },
+  "/Users/mymac/Documents/CISS/CLAUDE.md": {
+    "mtime": 1777132434.87759,
+    "hash": "3a15988fb2e17fe068e60ec9b96d9d57"
+  },
+  "/Users/mymac/Documents/CISS/current-profile-snapshot.md": {
+    "mtime": 1777267159.795,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/mymac/Documents/CISS/docs/full-app-architecture-map-2026-04-29.md": {
+    "mtime": 1777444021.5062904,
+    "hash": "06c8fc7b10de574c7196fc9d4c81d8bb"
+  },
+  "/Users/mymac/Documents/CISS/docs/hrm-upgrade-todo.md": {
+    "mtime": 1775999433.196253,
+    "hash": "c01d9da248576c15e4182e200236bf29"
+  },
+  "/Users/mymac/Documents/CISS/docs/app-context.md": {
+    "mtime": 1776003895.4992833,
+    "hash": "2947313e84212c9d22828b8b4e78ab8a"
+  },
+  "/Users/mymac/Documents/CISS/docs/training-quiz-spec.md": {
+    "mtime": 1776590900.2814174,
+    "hash": "2a70c221f8ad7a768f86f8c8969b0cc3"
+  },
+  "/Users/mymac/Documents/CISS/docs/tcs-work-order-import-recommendation.md": {
+    "mtime": 1777099896.0407362,
+    "hash": "de13e86f20607181716a2b9f8039c88d"
+  },
+  "/Users/mymac/Documents/CISS/docs/ui-ux-update-plan.md": {
+    "mtime": 1776399608.0326712,
+    "hash": "259b0aa843aed41aac45fb8e37b7393b"
+  },
+  "/Users/mymac/Documents/CISS/docs/blueprint.md": {
+    "mtime": 1775922054.421367,
+    "hash": "378f8ad8c216e025a7f079a9084b9ab1"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-13-right-heavy-landing-balance.md": {
+    "mtime": 1776089563.8900042,
+    "hash": "5be831337d00d0fd2487383372ff58ac"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-19-tcs-exam-work-orders.md": {
+    "mtime": 1776593672.1327662,
+    "hash": "e3cf1149be85617ce8689965111b3246"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-13-editorial-split-landing-desktop.md": {
+    "mtime": 1776087380.3019419,
+    "hash": "d63415637893b4f515de1fb61783ca12"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-13-landing-hero-minimal-cleanup.md": {
+    "mtime": 1776056240.7142208,
+    "hash": "941200535960a53307429f169bf9f81e"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-13-native-mobile-landing-refactor.md": {
+    "mtime": 1776058805.3368142,
+    "hash": "68d5bc6be51ab129a4d0a1725883cb51"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-17-wage-sheet-client-template.md": {
+    "mtime": 1776425775.268289,
+    "hash": "0bcb91a62714261ba18f8f617a4880e8"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-13-unboxed-landing-layout-refinement.md": {
+    "mtime": 1776062968.645052,
+    "hash": "1422771a7ad546be796b53fcee6f5594"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/plans/2026-04-13-hybrid-qr-scanner.md": {
+    "mtime": 1776103797.139678,
+    "hash": "60e4af2a75aee983c2e4dc04a34559f5"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-08-payroll-wagesheet-attendance-design.md": {
+    "mtime": 1775668574.376407,
+    "hash": "3b3e9e7c9cda580d581e6032fa6bbdde"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-12-wage-sheet-template-setup-design.md": {
+    "mtime": 1776018608.2600088,
+    "hash": "57dd2f1e823369b17913b480df180861"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-13-landing-hero-minimal-design.md": {
+    "mtime": 1776056140.6629763,
+    "hash": "f083a087538d28cae36fe6747e378658"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-13-unboxed-landing-layout-design.md": {
+    "mtime": 1776062212.1032157,
+    "hash": "765d3ac5dfd7e6bb3a16c39c0caeec0a"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-13-hybrid-qr-scanner-design.md": {
+    "mtime": 1776103616.4301593,
+    "hash": "427e2cc0a6e09877d6af7ba12d685a3a"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-13-right-heavy-landing-balance.md": {
+    "mtime": 1776089504.3100865,
+    "hash": "e1a1f35cbbbaba5546055903a9c0d609"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-13-editorial-split-landing-desktop.md": {
+    "mtime": 1776087293.5021021,
+    "hash": "e4186664203cef60a023a7d38d66fa21"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-17-wage-sheet-client-template-design.md": {
+    "mtime": 1776425498.1429775,
+    "hash": "c5c595f2c1cdb98e23f7a49553b3767b"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-19-tcs-exam-work-orders-design.md": {
+    "mtime": 1776592923.291343,
+    "hash": "3521cdeb3ab16ce4c9e3c37edea39b8d"
+  },
+  "/Users/mymac/Documents/CISS/docs/superpowers/specs/2026-04-13-native-mobile-landing-design.md": {
+    "mtime": 1776058597.8185725,
+    "hash": "278042128f3426d88d654c94b47a706f"
+  },
+  "/Users/mymac/Documents/CISS/public/offline.html": {
+    "mtime": 1763547091.0,
+    "hash": "01611d9503fbd221d1d626d28ce6f227"
+  },
+  "/Users/mymac/Documents/CISS/profile-not-found.png": {
+    "mtime": 1773737118.253518,
+    "hash": "e43a0a3b51311917c2ea5612ac206314"
+  },
+  "/Users/mymac/Documents/CISS/public/icon-192x192.png": {
+    "mtime": 1776401422.405172,
+    "hash": "69d0da417752fb7913d05becfaf55c09"
+  },
+  "/Users/mymac/Documents/CISS/public/icon-512x512.png": {
+    "mtime": 1776401422.4144132,
+    "hash": "c9394ccb0144a204490f20d8565b9bfb"
+  },
+  "/Users/mymac/Documents/CISS/public/ciss-logo.png": {
+    "mtime": 1763547091.0,
+    "hash": "91e1fd43867d09e5d63744853dbef920"
+  },
+  "/Users/mymac/Documents/CISS/public/icons/icon-192x192.png": {
+    "mtime": 1776401422.3904521,
+    "hash": "69d0da417752fb7913d05becfaf55c09"
+  },
+  "/Users/mymac/Documents/CISS/public/icons/maskable_icon.png": {
+    "mtime": 1776401422.4224002,
+    "hash": "2432b5c2176f83f5a3d0ef018035fcad"
+  },
+  "/Users/mymac/Documents/CISS/public/icons/apple-touch-icon.png": {
+    "mtime": 1776401422.4026802,
+    "hash": "9031e2421bb3c6d4bdfad8480628c394"
+  },
+  "/Users/mymac/Documents/CISS/public/icons/icon-512x512.png": {
+    "mtime": 1776401422.3998828,
+    "hash": "c9394ccb0144a204490f20d8565b9bfb"
+  },
+  "/Users/mymac/Documents/CISS/public/icons/mstile-150x150.png": {
+    "mtime": 1776401422.474117,
+    "hash": "4b9d8fb0af273164a393c5116966d4b4"
+  }
 }

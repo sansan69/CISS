@@ -181,7 +181,7 @@ export default function PayrollCyclePage({
 
   const downloadCSV = () => {
     if (!entries.length) return;
-    const headers = ["Employee", "Code", "Client", "District", "Present Days", "Working Days", "LOP", "Gross", "EPF", "ESIC", "PT", "TDS", "LOP Deduction", "Net Pay", "Status"];
+    const headers = ["Employee", "Code", "Client", "District", "Present Days", "Working Days", "Gross", "EPF", "ESIC", "PT", "TDS", "Net Pay", "Status"];
     const rows = entries.map((e) => [
       e.employeeName,
       e.employeeCode,
@@ -189,13 +189,11 @@ export default function PayrollCyclePage({
       e.district,
       e.presentDays,
       e.workingDays,
-      e.lopDays,
       e.earnings.grossEarnings,
       e.deductions.epfEmployee,
       e.deductions.esicEmployee,
       e.deductions.professionalTax,
       e.deductions.tds,
-      e.deductions.lopDeduction,
       e.netPay,
       e.status,
     ]);
@@ -306,7 +304,7 @@ export default function PayrollCyclePage({
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Client</th>
                     <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Present/Working</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">LOP</th>
+
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Gross</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Deductions</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Net Pay</th>
@@ -327,9 +325,7 @@ export default function PayrollCyclePage({
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
                         {entry.presentDays}/{entry.workingDays}
                       </td>
-                      <td className="px-4 py-3 text-right hidden sm:table-cell text-red-600">
-                        {entry.lopDays > 0 ? entry.lopDays : "—"}
-                      </td>
+
                       <td className="px-4 py-3 text-right">₹{entry.earnings.grossEarnings.toLocaleString()}</td>
                       <td className="px-4 py-3 text-right hidden lg:table-cell text-red-600">
                         ₹{entry.deductions.totalDeductions.toLocaleString()}

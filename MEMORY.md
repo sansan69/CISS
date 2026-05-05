@@ -5,68 +5,136 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
-## [2026-05-01] — Session: Date-wise expand/collapse for attendance logs page
+## [2026-05-02] — Session: Remove overtime, LOP, and leave from entire app
 
-**File modified:** `src/app/(app)/attendance-logs/page.tsx`
+Overtime and leave are not part of the CISS workforce model. All related code removed.
 
-- Attendance records now grouped by `attendanceDate` in collapsible accordion sections.
-- Each date header shows: formatted date, total records, IN/OUT counts, unique employee count.
-- Desktop table rows rendered inside each date group's accordion content.
-- Mobile card view also grouped by date within accordion sections.
-- Expand All / Collapse All toggle button in the card header (visible when multiple dates present).
-- Default: only the most recent date is expanded. Expand All opens every date group.
-- All existing features preserved (search, filters, export, detail sheet, clock drift alerts).
+### Deleted files
+- `src/types/leave.ts` — Leave request and balance types
+- `src/lib/payroll/leave-aggregator.ts` — Leave aggregation for payroll
+- `src/lib/leave-balances.ts` — Leave balance doc ID builders
+- `src/lib/leave-balances.test.ts` — Tests for leave-balances
+- `src/app/(guard)/guard/leave/page.tsx` — Guard leave application page
+- `src/app/api/guard/leave/route.ts` — Guard leave API (GET/POST/PATCH)
+- `src/app/(app)/leave/page.tsx` — Admin leave management page
+- `src/app/api/admin/leave/requests/route.ts` — Admin leave requests API
+- `src/app/api/admin/leave/requests/[id]/route.ts` — Admin leave approve/reject API
+
+### attendance-aggregator.ts
+- Removed `lopDays` and `overtimeHours` from `AttendanceSummary` interface
+- Removed all overtime calculation logic (shift hours, logsByDate with timestamps, hoursWorked)
+- Removed lopDays calculation
+- Simplified to just count unique present dates per month and compute working days
+
+### Payroll types (`src/types/payroll.ts`)
+- Removed `overtimeAmount` from `PayrollEntryEarnings`
+- Removed `lopDeduction` from `PayrollEntryDeductions`
+- Removed `approvedPaidLeaveDays`, `approvedUnpaidLeaveDays`, `lopDays`, `overtimeHours`, `overtimeAmount` from `PayrollEntry`
+
+### Payroll run (`src/app/api/admin/payroll/run/route.ts`)
+- Removed `aggregateApprovedLeave` import and call
+- Removed `lopDays` computation and `payableDays` offset by leave
+- `payableDays` now equals `min(workingDays, presentDays)` directly
+- Removed `lopDeduction` from deductions object
+- Removed `overtimeHours`/`overtimeAmount` and leave days from entry construction
+- `attendanceInputs.weekly_off` and `extra_duty_days` set to 0; `additional_duties` set to 0
+
+### Payroll calculate.ts
+- Removed `calculateLOP()` function
+
+### Payslip (`src/lib/payroll/payslip.ts`)
+- Removed "LOP Days" label from header
+- Removed "Overtime" row from earnings
+- Removed "LOP Deduction" row from deductions
+
+### Wage template parser
+- Removed `overtime` alias from extra_duty_amount regex
+- Removed `leave_salary|leave` alias
+
+### Notifications (`src/lib/notifications.ts`)
+- Removed `leave_approved` and `leave_rejected` notification types
+
+### Guard pages
+- `guard/attendance/page.tsx` — Removed `absentDays` from interface and UI (was red "Absent" card)
+- `guard/attendance/route.ts` — Removed `absentDays` from API response, removed `workingDaysInMonth` function
+- `guard/dashboard/page.tsx` — Removed `leaveBalance` from `DashboardData` type; replaced "Leave balance" stat card with "Working days"; replaced "Apply Leave" quick action with "Training"
+- `guard/dashboard/route.ts` — Removed `leaveBalance` section (30+ lines of leave doc lookup), removed `absentDays` from response, removed `buildLeaveBalanceLookupIds` import
+- `guard-bottom-nav.tsx` — Removed "Leave" tab from bottom nav
+
+### Admin dashboard
+- `dashboard/page.tsx` — Removed `onLeave` from `DashboardStats`, removed "On Leave" stat def, removed `onLeave` counting from employee snapshot loop, removed "on leave" text from super-admin card, removed "On Leave" from region detail card
+- `components/dashboard/stats.tsx` — Removed `onLeave` from stats interface, removed "On Leave"/"Pending Leave" from all role configs, updated `getValue()` mapping
+- `components/dashboard/actions.tsx` — Removed "Leave Requests" from HR quick actions
+
+### Region + client types
+- `src/types/region.ts` — Removed `onLeaveEmployees` from `RegionDetail.totals` and `SuperAdminOverviewSummary`
+- `src/types/client-dashboard.ts` — Removed `onLeaveGuards` from `ClientDashboardSummary`
+
+### Super-admin overview + client dashboard APIs
+- `src/app/api/super-admin/overview/route.ts` — Removed all `onLeaveEmployees` references
+- `src/app/api/client/dashboard/route.ts` — Removed `onLeaveGuards` computation
+
+### Payroll UI
+- `payroll/cycles/[id]/page.tsx` — Removed LOP column from table and CSV export
+- `payroll/cycles/[id]/entries/[entryId]/page.tsx` — Removed LOP Days and LOP Deduction display
+- `payroll/cycles/[id]/worksheet/route.ts` — Removed LOP Days, LOP Deduction, Paid Leave Days, Unpaid Leave Days columns
+
+### Verification
+- `tsc --noEmit` clean, `eslint` clean (only pre-existing warnings)
 
 ---
 
-## [2026-05-01] — Session: Fix client-time vs server-time attendanceDate (AT-12) + attendance flow hardening
+## [2026-05-02] — Session: Attendance flow audit fixes
 
-### AT-12 fixed: attendanceDate now uses server-authoritative clock
+Continuation of attendance flow fix. Addresses remaining issues from full audit.
 
-**Root cause:** `attendanceDate` (the field used by payroll, reports, guard dashboards, and Work Order lookups) was derived from `reportedAtClient` — the guard's untrusted phone clock. A wrong phone date would silently store attendance on the wrong calendar day, breaking payroll LOP calculations, shift matching, work order validation, and duplicate prevention.
+### Guard attendance API — date-range filter (`src/app/api/guard/attendance/route.ts`)
+- Added `attendanceDate >= firstDay` and `attendanceDate <= lastDay` to both the `employeeDocId` and `employeeId` fallback Firestore queries.
+- Removed `.limit(500)` from both queries — date-range filter constrains results naturally.
+- Removed in-memory `.filter((log) => log.date >= firstDay && log.date <= lastDay)` since Firestore now handles it.
 
-**File modified:** `src/app/api/attendance/submit/route.ts`
-- `attendanceDate` now always computed from server clock (`Asia/Kolkata` timezone) via `now.toDate()`, not from `reportedAtClient`.
-- New stored fields on every attendance log:
-  - `serverProcessedAt` — server timestamp when the record was written.
-  - `clockDriftMinutes` — absolute difference between client-reported time and server time.
-  - `clockDriftWarning` — set to a human-readable warning when `clockDriftMinutes > 120` (2 hours).
-  - `requiresAdminReview` — OR of `requiresLocationReview`, `clockDriftWarning`, `isMockLocationSuspected`, and `photoCompliance.adminFlag`. Gives admins a single field to query for records needing attention.
-- Max-age check (`reportedAtClient` older than 4 hours) preserved for offline-queue safety.
-- Worker-shift resolution (`resolveSiteShift`) still uses `reportedAtDate` (client time) because it needs the time the guard was actually present, not the submission time.
+### Attendance calendar UTC vs IST (`src/components/guard/attendance-calendar.tsx`)
+- `isToday()` and `isFutureDate()` used `new Date().toISOString().slice(0,10)` which is UTC — wrong between 11:30 PM–midnight IST.
+- Replaced with `new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date())` for IST-correct date.
+- Also fixed `canGoNext` month comparison which used the same UTC `toISOString()`.
 
-**Behavior impact:**
-- Payroll aggregator queries by `attendanceDate` → now matches the server's authoritative calendar date, eliminating wrong-month LOP from clock skew.
-- Guard dashboards / attendance history → correct present-day counts even if device clock is wrong.
-- Work Order validation (`workOrders` queried by `date` on the TCS attendance path) → uses the now-trusted `attendanceDate`.
-- Duplicate attendance prevention (attendanceState) → uses server date, closes the "set phone to future date to bypass duplicate check" vector.
-- Offline queuing still works: `reportedAtClient` is stored for audit; the 4-hour max-age gate remains.
+### Zod schema for attendance logs (`src/types/attendance.ts`)
+- `attendanceLogSchema` used `z.any()` for `reportedAt` and `createdAt`, losing all type safety.
+- Replaced with `z.custom()` that validates Firestore Timestamp-like objects (`{ seconds, nanoseconds, toDate() }`), `Date`, or `null/undefined`.
+- Added `FirestoreAttendanceLog` interface for admin attendance-logs page — matches actual Firestore document shape with `Timestamp`-like objects, optional fields, and `attendanceDate`.
 
-### Guard dashboard attendance query now uses server-side date range filtering
+### Duplicate AttendanceLog types
+- `src/app/(app)/attendance-logs/page.tsx` had its own 35-line `AttendanceLog` type duplicating `@/types/attendance`. Replaced with `type AttendanceLog = FirestoreAttendanceLog`.
+- `src/components/guard/attendance-calendar.tsx` had `AttendanceLog` with completely different fields (view-model for calendar). Renamed to `CalendarAttendanceEntry` to avoid confusion. Updated `src/app/(guard)/guard/attendance/page.tsx` import.
 
-**File modified:** `src/app/api/guard/dashboard/route.ts`
-- Replaced unsafe `.limit(200)` without date filtering → `where("attendanceDate", ">=", startDateStr).where("attendanceDate", "<=", endDateStr).orderBy("attendanceDate", "desc")`.
-- Removed in-memory date filtering on returned logs.
-- Uses existing composite index `(employeeDocId ASC, attendanceDate ASC)` in `firestore.indexes.json`.
-- Fallback query (by `employeeId`) also uses date range now.
+### Hardcoded geofence radius 150
+- `src/app/attendance/page.tsx` had 4 instances of `|| 150`. Replaced with `|| DEFAULT_GEOFENCE_RADIUS_METERS` from `@/lib/constants`.
+- `src/lib/attendance/public-attendance.ts` had `?? 150`. Replaced with `?? DEFAULT_GEOFENCE_RADIUS_METERS`.
+- Added `DEFAULT_GEOFENCE_RADIUS_METERS` import to both files.
 
-**File modified:** `src/app/api/guard/attendance/route.ts`
-- Present-day count changed from `status === "In" || status === "Out"` → `status === "In"` for consistency with the dashboard's present-day logic. (Using "Out" as a separate present-day signal was counting overnight checkout days as "present" when the guard was not actually on duty that day.)
+### Firestore rules — attendanceState vs attendanceStates (`firestore.rules`)
+- Rules comments said `attendanceStates` (plural) was "primary" and `attendanceState` (singular) was "legacy".
+- All server code uses `attendanceState` (singular) — it is the active collection. Corrected comments and reordered rules to put singular first with proper permissions (guards can create/update their own). Plural marked as legacy.
 
-### Admin attendance report export now includes attendanceDate
-
-**File modified:** `src/app/api/admin/reports/attendance/route.ts`
-- Added `attendanceDate` to both JSON response rows and the CSV header so reports show which calendar date the attendance belongs to.
-
-### Attendance logs detail sheet shows clock drift warnings
-
-**File modified:** `src/app/(app)/attendance-logs/page.tsx`
-- Added `Alert` imports, `clockDriftWarning` display in the log detail sheet when drift exceeds 2 hours.
-- Updated `getReportedAt` fallback chain to prefer `serverProcessedAt` as a last resort.
+### Payroll attendance aggregator — shift-aware overtime (`src/lib/payroll/attendance-aggregator.ts`)
+- `STANDARD_WORKING_HOURS = 8` was hardcoded — guards on 12-hour shifts got 4hrs fake overtime every day.
+- Added `parseShiftHours(startTime, endTime)` helper that parses `HH:MM` shift times from attendance log data.
+- Overtime now computed per-day against the actual shift hours from the log (`shiftStartTime`/`shiftEndTime`). Falls back to 8 hours if shift data is missing.
+- `LogEntry` type extended with `shiftStartTime`/`shiftEndTime` fields.
 
 ### Verification
-- `npx tsc --noEmit -p tsconfig.typecheck.json` → clean.
-- `npx vitest run src/app/api/attendance/ src/lib/payroll/ src/lib/attendance/` → 15 passed (5 files).
+- `tsc --noEmit` clean, `eslint` clean (only pre-existing warnings).
+- 3 pre-existing surface-test failures unrelated to these changes.
+
+---
+
+## [2026-05-02] — Session: Attendance flow — remove clientLocations, fix sourceCollection
+
+- Guards should only record attendance at sites (duty centers), not office/client locations. The attendance page was incorrectly including `clientLocations` in the site picker and auto-detection, mixing office locations with actual guard duty sites.
+- **`src/app/api/public/attendance/route.ts`** — Removed `clientLocations` fetch entirely. Now only returns `sites` collection. Removed the dedup logic since there's no second collection.
+- **`src/app/attendance/page.tsx`** — Removed "Office" badge rendering for `clientLocations`. Made `sourceCollection` optional in `SiteOption` type. Removed `sourceCollection === 'sites'` guards on duty-point display (now always shows duty points). Defaulted `sourceCollection` to `'sites'` in the submission payload.
+- **`src/app/api/attendance/submit/route.ts`** — Added `sourceCollection` to the `transaction.set()` Firestore write (was missing, causing the field to always be `undefined` in stored logs). Removed `(payload as any).sourceCollection` cast since the Zod schema already defines the field.
+- Verification: `tsc --noEmit` and `eslint` pass clean.
 
 ---
 
@@ -837,7 +905,7 @@ These changes keep attendance duty-point selection explicit, make field officer 
 - AT-09: Architecture issue requiring significant refactoring, skip per instructions
 - AT-10: FALSE — transaction-based `attendanceState` check prevents duplicates atomically
 - AT-11: Architecture issue requiring significant refactoring, skip per instructions
-- AT-12: client time used for `reportedAtClient` which feeds `attendanceDate` — **FIXED on 2026-05-01** (attendanceDate now uses server-authoritative clock; client time stored for reference; clock drift >2h flagged for admin review).
+- AT-12: TRUE but not simple to fix without breaking offline queuing — client time used for `reportedAtClient` which feeds `attendanceDate`; server enforces max-age check but cannot fully replace client time for offline scenarios
 
 ---
 
@@ -1742,3 +1810,26 @@ Draft-specific fields are stripped before saving to Firestore.
   - `role: "admin"`
   - `stateCode: "KL"`
 - This prevents the admin account from being resolved as a client user in any UI/API path.
+
+---
+
+## [2026-05-01] — Work-order delete must clear import fingerprints
+
+### Root cause
+- Frontend row delete hid/deleted `workOrders`, but the bulk row-delete path left matching `workOrderImports` documents behind.
+- Import preview checked `workOrderImports.binaryFileHash` / `contentHash` first and blocked re-upload as duplicate, even when no active work orders remained for that import.
+
+### Fix
+- Added `cleanupOrphanWorkOrderImports` in `src/lib/server/work-order-import-cleanup.ts`.
+- Single row delete and frontend bulk row delete now load the deleted work-order data, delete the row(s), then delete orphan import records only when no active `workOrders` remain for the same `importId`, `binaryFileHash`, or `contentHash`.
+- Import preview now treats matching import hashes as duplicates only when active work orders still back that import/fingerprint.
+- Regression coverage added for:
+  - re-upload after orphan import metadata,
+  - single work-order delete import cleanup,
+  - frontend bulk row-delete import cleanup.
+
+### Duplicate re-upload handling
+- New imports that detect duplicate/overlapping work orders can now be committed with an explicit duplicate handling choice:
+  - `replace`: update matching active site/date work orders with the uploaded row while preserving assigned guards.
+  - `omit`: skip matching active site/date rows and import only genuinely new rows.
+- Revision imports keep their existing behavior: update matching rows and cancel missing active rows.

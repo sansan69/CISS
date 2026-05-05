@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   CalendarCheck,
-  CalendarDays,
   Wallet,
   MoreHorizontal,
   GraduationCap,
@@ -29,7 +28,6 @@ interface NavTab {
 const navTabs: NavTab[] = [
   { href: "/guard/dashboard",  label: "Home",       icon: LayoutDashboard },
   { href: "/guard/attendance", label: "Attendance", icon: CalendarCheck   },
-  { href: "/guard/leave",      label: "Leave",      icon: CalendarDays    },
   { href: "/guard/payslips",   label: "Pay",        icon: Wallet          },
 ];
 

@@ -79,7 +79,6 @@ export interface RegionOverviewCard {
   totals: {
     employees: number;
     activeEmployees: number;
-    onLeaveEmployees: number;
     clients: number;
     fieldOfficers: number;
     attendanceToday: number;
@@ -93,7 +92,6 @@ export interface SuperAdminOverviewSummary {
   totalRegions: number;
   employees: number;
   activeEmployees: number;
-  onLeaveEmployees: number;
   clients: number;
   fieldOfficers: number;
   attendanceToday: number;

@@ -52,7 +52,6 @@ export async function generatePayslipPdf(args: {
   cursorY -= 56;
   drawLabelValue(page, "District", entry.district || "NA", 36, cursorY, { regular, bold });
   drawLabelValue(page, "Present / Working", `${entry.presentDays}/${entry.workingDays}`, 220, cursorY, { regular, bold });
-  drawLabelValue(page, "LOP Days", String(entry.lopDays), 360, cursorY, { regular, bold });
 
   cursorY -= 76;
   page.drawText("Earnings", { x: 36, y: cursorY, size: 14, font: bold, color: rgb(0.01, 0.3, 0.52) });
@@ -66,7 +65,6 @@ export async function generatePayslipPdf(args: {
     ["Conveyance", entry.earnings.conveyance],
     ["Special Allowance", entry.earnings.specialAllowance],
     ["Other Allowances", entry.earnings.otherAllowances],
-    ["Overtime", entry.earnings.overtimeAmount],
     ["Gross Earnings", entry.earnings.grossEarnings],
   ] as const;
 
@@ -75,7 +73,6 @@ export async function generatePayslipPdf(args: {
     ["ESIC", entry.deductions.esicEmployee],
     ["Professional Tax", entry.deductions.professionalTax],
     ["TDS", entry.deductions.tds],
-    ["LOP Deduction", entry.deductions.lopDeduction],
     ["Other Deductions", entry.deductions.otherDeductions],
     ["Total Deductions", entry.deductions.totalDeductions],
   ] as const;

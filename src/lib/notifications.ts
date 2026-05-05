@@ -3,8 +3,6 @@
 import { db } from '@/lib/firebaseAdmin';
 
 export type NotificationType = 
-  | 'leave_approved' 
-  | 'leave_rejected' 
   | 'payslip_ready'
   | 'training_assigned'
   | 'evaluation_complete'

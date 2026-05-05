@@ -15,9 +15,29 @@ function workingDaysInMonth(year: number, month: number): number {
   return count;
 }
 
-function toISTTimeString(ts: FirebaseFirestore.Timestamp | null | undefined): string {
-  if (!ts) return "";
-  const date = ts.toDate();
+function timestampToMillis(value: unknown): number {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (
+    typeof value === "object" &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  ) {
+    const converted = (value as { toDate: () => Date }).toDate();
+    return converted instanceof Date && !Number.isNaN(converted.getTime())
+      ? converted.getTime()
+      : 0;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+function toISTTimeString(ts: unknown): string {
+  const millis = timestampToMillis(ts);
+  if (!millis) return "";
+  const date = new Date(millis);
   return date.toLocaleTimeString("en-IN", {
     timeZone: "Asia/Kolkata",
     hour: "2-digit",
@@ -88,7 +108,8 @@ export async function GET(request: Request) {
     }
     const empData = empDoc.data()!;
 
-    const employeeName: string = empData.name ?? "";
+    const employeeName: string =
+      empData.fullName ?? empData.name ?? [empData.firstName, empData.lastName].filter(Boolean).join(" ") ?? "";
     const clientName: string = empData.clientName ?? "";
     const district: string = empData.district ?? "";
     const profilePhotoUrl: string | null = empData.profilePhotoUrl ?? null;
@@ -106,32 +127,37 @@ export async function GET(request: Request) {
     let attendanceSnap = await adminDb
       .collection("attendanceLogs")
       .where("employeeDocId", "==", guard.employeeDocId)
-      .where("attendanceDate", ">=", startDateStr)
-      .where("attendanceDate", "<=", endDateStr)
-      .orderBy("attendanceDate", "desc")
+      .limit(200)
       .get();
 
     if (attendanceSnap.empty) {
       attendanceSnap = await adminDb
         .collection("attendanceLogs")
         .where("employeeId", "==", guard.employeeId)
-        .where("attendanceDate", ">=", startDateStr)
-        .where("attendanceDate", "<=", endDateStr)
-        .orderBy("attendanceDate", "desc")
+        .limit(200)
         .get();
     }
 
-    const filteredLogs = attendanceSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() })) as Array<{
+    const logs = attendanceSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as Array<{
       id: string;
       attendanceDate: string;
       status: string;
       siteName?: string;
       dutyPointName?: string;
       reportedAt?: FirebaseFirestore.Timestamp;
+      createdAt?: FirebaseFirestore.Timestamp;
       distanceMeters?: number;
       shiftLabel?: string;
     }>;
+
+    const filteredLogs = logs
+      .filter(
+        (log) =>
+          typeof log.attendanceDate === "string" &&
+          log.attendanceDate >= startDateStr &&
+          log.attendanceDate <= endDateStr,
+      )
+      .sort((a, b) => (b.attendanceDate || "").localeCompare(a.attendanceDate || ""));
 
     // Count unique present days (days with at least one "In" log)
     const presentDates = new Set(
@@ -139,7 +165,6 @@ export async function GET(request: Request) {
     );
     const presentDays = presentDates.size;
     const workingDays = workingDaysInMonth(year, month);
-    const absentDays = Math.max(0, workingDays - presentDays);
 
     // Recent 5 logs
     const recentAttendance = filteredLogs.slice(0, 5).map((l) => ({
@@ -148,38 +173,8 @@ export async function GET(request: Request) {
       status: l.status as "In" | "Out",
       siteName: l.siteName ?? "",
       dutyPointName: l.dutyPointName ?? "",
-      time: toISTTimeString(l.reportedAt ?? undefined),
+      time: toISTTimeString(l.reportedAt ?? l.createdAt),
     }));
-
-    // ─── Leave balance ─────────────────────────────────────────────────────
-    let leaveBalance = null;
-    try {
-      const safeId = guard.employeeDocId.replace(/\//g, "_");
-      const leaveBalanceKey = `${safeId}_${year}`;
-      const leaveDoc = await adminDb.doc(`leaveBalances/${leaveBalanceKey}`).get();
-      if (leaveDoc.exists) {
-        const lb = leaveDoc.data()!;
-        leaveBalance = {
-          casual: {
-            entitled: lb.casualEntitled ?? 12,
-            taken: lb.casualTaken ?? 0,
-            balance: (lb.casualEntitled ?? 12) - (lb.casualTaken ?? 0),
-          },
-          sick: {
-            entitled: lb.sickEntitled ?? 6,
-            taken: lb.sickTaken ?? 0,
-            balance: (lb.sickEntitled ?? 6) - (lb.sickTaken ?? 0),
-          },
-          earned: {
-            entitled: lb.earnedEntitled ?? 15,
-            taken: lb.earnedTaken ?? 0,
-            balance: (lb.earnedEntitled ?? 15) - (lb.earnedTaken ?? 0),
-          },
-        };
-      }
-    } catch {
-      // leaveBalances lookup may fail if employeeDocId contains slashes
-    }
 
     // ─── Latest evaluation ─────────────────────────────────────────────────
     let latestEvalScore: number | null = null;
@@ -267,8 +262,7 @@ export async function GET(request: Request) {
       clientName,
       district,
       profilePhotoUrl,
-      attendanceStats: { presentDays, absentDays, workingDays },
-      leaveBalance,
+      attendanceStats: { presentDays, workingDays },
       latestEvalScore,
       latestEvalPeriod,
       nextShift,

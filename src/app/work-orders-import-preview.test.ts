@@ -65,6 +65,10 @@ class FakeDocRef {
   async update(value: Record<string, unknown>) {
     this.store.updateDoc(this.collectionName, this.id, value);
   }
+
+  async delete() {
+    this.store.deleteDoc(this.collectionName, this.id);
+  }
 }
 
 class FakeQuery {
@@ -132,6 +136,12 @@ class FakeBatch {
     });
   }
 
+  delete(ref: FakeDocRef) {
+    this.operations.push(() => {
+      ref.delete();
+    });
+  }
+
   async commit() {
     for (const operation of this.operations) {
       await operation();
@@ -144,7 +154,11 @@ class FakeFirestore {
   private idCounter = 0;
 
   seed(collectionName: string, id: string, value: Record<string, unknown>) {
-    this.ensureCollection(collectionName).set(id, structuredClone(value));
+    const nextValue =
+      collectionName === "workOrders" && typeof value.clientName !== "string"
+        ? { clientName: "TCS", ...value }
+        : value;
+    this.ensureCollection(collectionName).set(id, structuredClone(nextValue));
   }
 
   collection(name: string) {
@@ -188,6 +202,10 @@ class FakeFirestore {
       throw new Error(`Document ${collectionName}/${id} does not exist.`);
     }
     collection.set(id, { ...current, ...structuredClone(value) });
+  }
+
+  deleteDoc(collectionName: string, id: string) {
+    this.ensureCollection(collectionName).delete(id);
   }
 
   nextId(collectionName: string) {
@@ -340,6 +358,11 @@ vi.mock("@/lib/districts", () => ({
   }),
   districtMatches: vi.fn(() => true),
   normalizeDistrictName: vi.fn((value: string) => value),
+  normalizeOperationalZoneLabel: vi.fn((value: string) => value),
+  canonicalizeDistrictName: vi.fn((value: string) => value),
+  inferKeralaDistrictFromText: vi.fn(() => ""),
+  isCanonicalKeralaDistrict: vi.fn(() => true),
+  resolveKeralaDistrictFromRow: vi.fn((values: unknown[]) => String(values.find(Boolean) ?? "")),
 }));
 
 vi.mock("@/types/attendance", () => ({
@@ -393,6 +416,7 @@ describe("TCS exam work order import server slice", () => {
     adminDb.seed("workOrders", "wo-active", {
       siteId: "site-a",
       siteName: "Alpha Site",
+      clientName: "TCS",
       district: "Ernakulam",
       date: new Date("2026-04-21T00:00:00.000Z"),
       examCode: "tcs-exam",
@@ -495,6 +519,156 @@ describe("TCS exam work order import server slice", () => {
     );
   });
 
+  it("allows re-upload when matching import hash has no active work orders left", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("workOrderImports", "import-1", {
+      contentHash: "content-hash-1",
+      binaryFileHash: "binary-hash-1",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+    }));
+
+    parseWorkbookMock.mockReturnValue({
+      parserMode: "legacy-sheet",
+      suggestedExamName: "TCS Exam",
+      suggestedExamCode: "tcs-exam",
+      dateRange: { from: "2026-04-21", to: "2026-04-21" },
+      dates: ["2026-04-21"],
+      rows: [
+        {
+          siteId: "site-a",
+          siteName: "Alpha Site",
+          district: "Ernakulam",
+          date: "2026-04-21",
+          examName: "TCS Exam",
+          examCode: "tcs-exam",
+          maleGuardsRequired: 3,
+          femaleGuardsRequired: 1,
+          sourceSheetName: "Sheet1",
+          sourceRowNumber: 3,
+        },
+      ],
+      siteCount: 1,
+      rowCount: 1,
+      totalMale: 3,
+      totalFemale: 1,
+      warnings: [],
+    });
+    buildDiffMock.mockReturnValue([
+      {
+        key: "site-id:site-a|date:2026-04-21|exam:tcs-exam",
+        siteId: "site-a",
+        siteName: "Alpha Site",
+        district: "Ernakulam",
+        date: "2026-04-21",
+        examCode: "tcs-exam",
+        maleGuardsRequired: 3,
+        femaleGuardsRequired: 1,
+        totalManpower: 4,
+        status: "added",
+      },
+    ]);
+
+    const { POST } = await import("./api/admin/work-orders/import/preview/route");
+
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File([makeWorkbookBuffer()], "tcs-exam.xlsx", {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    );
+    formData.set("mode", "new");
+
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/import/preview", {
+      method: "POST",
+      body: formData,
+      headers: { authorization: "Bearer token" },
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.duplicateState).toBe("none");
+    expect(payload.duplicateMessage).toBeUndefined();
+  });
+
+  it("deletes import metadata when deleting the last work order from an import", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("workOrderImports", "import-1", {
+      contentHash: "content-hash-1",
+      binaryFileHash: "binary-hash-1",
+    });
+    adminDb.seed("workOrders", "wo-1", {
+      importId: "import-1",
+      contentHash: "content-hash-1",
+      binaryFileHash: "binary-hash-1",
+      clientName: "TCS",
+      recordStatus: "active",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+    }));
+
+    const { DELETE } = await import("./api/admin/work-orders/[id]/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/admin/work-orders/wo-1", {
+        method: "DELETE",
+        headers: { authorization: "Bearer token" },
+      }),
+      { params: Promise.resolve({ id: "wo-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.deleted).toBe(true);
+    expect(payload.importsDeleted).toBe(1);
+    expect(adminDb.listDocs("workOrders")).toHaveLength(0);
+    expect(adminDb.listDocs("workOrderImports")).toHaveLength(0);
+  });
+
+  it("bulk row delete cleans stale import metadata used by the frontend delete action", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("workOrderImports", "import-1", {
+      contentHash: "content-hash-1",
+      binaryFileHash: "binary-hash-1",
+    });
+    adminDb.seed("workOrders", "wo-1", {
+      importId: "import-1",
+      contentHash: "content-hash-1",
+      binaryFileHash: "binary-hash-1",
+      clientName: "TCS",
+      recordStatus: "active",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+    }));
+
+    const { POST } = await import("./api/admin/work-orders/bulk-delete/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/admin/work-orders/bulk-delete", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ workOrderIds: ["wo-1"] }),
+      }) as any,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.deleted).toBe(1);
+    expect(payload.importsDeleted).toBe(1);
+    expect(adminDb.listDocs("workOrders")).toHaveLength(0);
+    expect(adminDb.listDocs("workOrderImports")).toHaveLength(0);
+  });
+
   it("does not mark overlap when active rows share examCode but not identity scope", async () => {
     const adminDb = new FakeFirestore();
     adminDb.seed("workOrders", "wo-other-site", {
@@ -582,6 +756,7 @@ describe("TCS exam work order import server slice", () => {
     adminDb.seed("workOrders", "wo-siteid", {
       siteId: "site-a",
       siteName: "Alpha Site",
+      clientName: "TCS",
       district: "Ernakulam",
       date: new Date("2026-04-21T00:00:00.000Z"),
       examCode: "tcs-exam",
@@ -768,6 +943,190 @@ describe("TCS exam work order import server slice", () => {
         contentHash: "content-hash-1",
         committedRows: 1,
         cancelledRows: 1,
+      }),
+    );
+  });
+
+  it("replaces matching active work orders during a duplicate re-upload", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "site-a", {
+      id: "site-a",
+      siteId: "site-a",
+      siteName: "Alpha Site",
+      district: "Ernakulam",
+      clientName: "TCS",
+    });
+    adminDb.seed("workOrders", "existing-row", {
+      siteId: "site-a",
+      siteName: "Alpha Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      date: new Date("2026-04-21T00:00:00.000Z"),
+      examName: "TCS Exam",
+      examCode: "tcs-exam",
+      maleGuardsRequired: 2,
+      femaleGuardsRequired: 1,
+      totalManpower: 3,
+      assignedGuards: [{ uid: "guard-1" }],
+      recordStatus: "active",
+      importId: "import-old",
+      sourceFileName: "old.xlsx",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+    }));
+
+    buildDiffMock.mockReturnValue([
+      {
+        key: "site-id:site-a|date:2026-04-21|exam:tcs-exam",
+        siteId: "site-a",
+        siteName: "Alpha Site",
+        district: "Ernakulam",
+        date: "2026-04-21",
+        examCode: "tcs-exam",
+        maleGuardsRequired: 5,
+        femaleGuardsRequired: 2,
+        totalManpower: 7,
+        status: "updated",
+      },
+    ]);
+
+    const { POST } = await import("./api/admin/work-orders/import/commit/route");
+
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/import/commit", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "new",
+        duplicateResolution: "replace",
+        fileName: "reupload.xlsx",
+        parserMode: "legacy-sheet",
+        examName: "TCS Exam",
+        examCode: "tcs-exam",
+        binaryFileHash: "binary-hash-1",
+        contentHash: "content-hash-1",
+        rows: [
+          {
+            siteId: "site-a",
+            siteName: "Alpha Site",
+            district: "Ernakulam",
+            date: "2026-04-21",
+            examName: "TCS Exam",
+            examCode: "tcs-exam",
+            maleGuardsRequired: 5,
+            femaleGuardsRequired: 2,
+            sourceSheetName: "Sheet1",
+            sourceRowNumber: 4,
+          },
+        ],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.committedRows).toBe(1);
+
+    const updated = adminDb.getDoc("workOrders", "existing-row");
+    expect(updated).toEqual(
+      expect.objectContaining({
+        maleGuardsRequired: 5,
+        femaleGuardsRequired: 2,
+        totalManpower: 7,
+        sourceFileName: "reupload.xlsx",
+        recordStatus: "active",
+      }),
+    );
+    expect(updated?.assignedGuards).toEqual([{ uid: "guard-1" }]);
+  });
+
+  it("omits matching active work orders during a duplicate re-upload", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("workOrders", "existing-row", {
+      siteId: "site-a",
+      siteName: "Alpha Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      date: new Date("2026-04-21T00:00:00.000Z"),
+      examName: "TCS Exam",
+      examCode: "tcs-exam",
+      maleGuardsRequired: 2,
+      femaleGuardsRequired: 1,
+      totalManpower: 3,
+      assignedGuards: [{ uid: "guard-1" }],
+      recordStatus: "active",
+      importId: "import-old",
+      sourceFileName: "old.xlsx",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db: adminDb,
+    }));
+
+    buildDiffMock.mockReturnValue([
+      {
+        key: "site-id:site-a|date:2026-04-21|exam:tcs-exam",
+        siteId: "site-a",
+        siteName: "Alpha Site",
+        district: "Ernakulam",
+        date: "2026-04-21",
+        examCode: "tcs-exam",
+        maleGuardsRequired: 5,
+        femaleGuardsRequired: 2,
+        totalManpower: 7,
+        status: "updated",
+      },
+    ]);
+
+    const { POST } = await import("./api/admin/work-orders/import/commit/route");
+
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/import/commit", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        mode: "new",
+        duplicateResolution: "omit",
+        fileName: "reupload.xlsx",
+        parserMode: "legacy-sheet",
+        examName: "TCS Exam",
+        examCode: "tcs-exam",
+        binaryFileHash: "binary-hash-1",
+        contentHash: "content-hash-1",
+        rows: [
+          {
+            siteId: "site-a",
+            siteName: "Alpha Site",
+            district: "Ernakulam",
+            date: "2026-04-21",
+            examName: "TCS Exam",
+            examCode: "tcs-exam",
+            maleGuardsRequired: 5,
+            femaleGuardsRequired: 2,
+            sourceSheetName: "Sheet1",
+            sourceRowNumber: 4,
+          },
+        ],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.committedRows).toBe(0);
+    expect(payload.createdSites).toBe(0);
+
+    const unchanged = adminDb.getDoc("workOrders", "existing-row");
+    expect(unchanged).toEqual(
+      expect.objectContaining({
+        maleGuardsRequired: 2,
+        femaleGuardsRequired: 1,
+        totalManpower: 3,
+        sourceFileName: "old.xlsx",
       }),
     );
   });

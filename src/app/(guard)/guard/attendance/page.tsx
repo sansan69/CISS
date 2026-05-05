@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AttendanceCalendar,
-  type AttendanceLog,
+  type CalendarAttendanceEntry,
 } from "@/components/guard/attendance-calendar";
 import { useAppAuth } from "@/context/auth-context";
 
@@ -17,9 +17,8 @@ const BRAND_BLUE = "#014c85";
 
 interface AttendanceResponse {
   month: string;
-  logs: AttendanceLog[];
+  logs: CalendarAttendanceEntry[];
   presentDays: number;
-  absentDays: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,7 +143,6 @@ export default function GuardAttendancePage() {
 
   const logs = data?.logs ?? [];
   const presentDays = data?.presentDays ?? 0;
-  const absentDays = data?.absentDays ?? 0;
 
   return (
     <div className="p-4 space-y-4 pb-6">
@@ -158,14 +156,10 @@ export default function GuardAttendancePage() {
       />
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-green-600">{presentDays}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Present</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-          <p className="text-2xl font-bold text-red-500">{absentDays}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Absent</p>
+          <p className="text-xs text-gray-500 mt-0.5">Present this month</p>
         </div>
       </div>
 

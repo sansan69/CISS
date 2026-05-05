@@ -73,7 +73,6 @@ async function buildRegionMetrics(
   const [
     employees,
     activeEmployees,
-    onLeaveEmployees,
     clients,
     fieldOfficers,
     attendanceToday,
@@ -81,7 +80,6 @@ async function buildRegionMetrics(
   ] = await Promise.all([
     countDocs(db.collection("employees")),
     countDocs(db.collection("employees").where("status", "==", "Active")),
-    countDocs(db.collection("employees").where("status", "==", "OnLeave")),
     countDocs(db.collection("clients")),
     countDocs(db.collection("fieldOfficers")),
     countDocs(db.collection("attendanceLogs").where("createdAt", ">=", todayTimestamp)),
@@ -102,7 +100,6 @@ async function buildRegionMetrics(
     totals: {
       employees,
       activeEmployees,
-      onLeaveEmployees,
       clients,
       fieldOfficers,
       attendanceToday,
@@ -121,7 +118,6 @@ function summarize(cards: RegionOverviewCard[]): SuperAdminOverviewSummary {
       }
       acc.employees += card.totals.employees;
       acc.activeEmployees += card.totals.activeEmployees;
-      acc.onLeaveEmployees += card.totals.onLeaveEmployees;
       acc.clients += card.totals.clients;
       acc.fieldOfficers += card.totals.fieldOfficers;
       acc.attendanceToday += card.totals.attendanceToday;
@@ -133,7 +129,6 @@ function summarize(cards: RegionOverviewCard[]): SuperAdminOverviewSummary {
       totalRegions: 0,
       employees: 0,
       activeEmployees: 0,
-      onLeaveEmployees: 0,
       clients: 0,
       fieldOfficers: 0,
       attendanceToday: 0,
@@ -195,7 +190,6 @@ export async function GET(request: Request) {
           totals: {
             employees: 0,
             activeEmployees: 0,
-            onLeaveEmployees: 0,
             clients: 0,
             fieldOfficers: 0,
             attendanceToday: 0,
@@ -225,7 +219,6 @@ export async function GET(request: Request) {
           totals: {
             employees: 0,
             activeEmployees: 0,
-            onLeaveEmployees: 0,
             clients: 0,
             fieldOfficers: 0,
             attendanceToday: 0,

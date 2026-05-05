@@ -187,6 +187,78 @@ async function fetchExistingRows(
     );
 }
 
+async function hasActiveRowsForField(
+  adminDb: {
+    collection: (name: string) => {
+      where: (field: string, op: "==", value: unknown) => any;
+    };
+  },
+  field: "importId" | "binaryFileHash" | "contentHash",
+  value: string,
+): Promise<boolean> {
+  if (!value) return false;
+  const snapshot = await adminDb
+    .collection("workOrders")
+    .where(field, "==", value)
+    .get();
+  return snapshot.docs.some((doc: { data: () => Record<string, unknown> }) =>
+    isActiveRecordStatus(doc.data().recordStatus),
+  );
+}
+
+async function hasActiveRowsForImportDuplicate(
+  adminDb: {
+    collection: (name: string) => {
+      where: (field: string, op: "==", value: unknown) => any;
+    };
+  },
+  importSnapshot: {
+    docs?: Array<{ id: string; data: () => Record<string, unknown> }>;
+  },
+  hashField: "binaryFileHash" | "contentHash",
+  hash: string,
+  parsedRows: readonly TcsExamSourceRow[],
+  existingRows: readonly TcsExamExistingWorkOrder[],
+): Promise<boolean> {
+  if (await hasActiveRowsForField(adminDb, hashField, hash)) {
+    return true;
+  }
+
+  if (
+    hasIdentityOverlap(
+      parsedRows,
+      existingRows.filter((row) => isActiveRecordStatus(row.recordStatus)),
+    )
+  ) {
+    return true;
+  }
+
+  const importDocs = Array.isArray(importSnapshot.docs) ? importSnapshot.docs : [];
+  for (const importDoc of importDocs) {
+    if (await hasActiveRowsForField(adminDb, "importId", importDoc.id)) {
+      return true;
+    }
+
+    const data = importDoc.data();
+    const alternateBinaryHash = typeof data.binaryFileHash === "string" ? data.binaryFileHash.trim() : "";
+    const alternateContentHash = typeof data.contentHash === "string" ? data.contentHash.trim() : "";
+    if (
+      hashField !== "binaryFileHash" &&
+      (await hasActiveRowsForField(adminDb, "binaryFileHash", alternateBinaryHash))
+    ) {
+      return true;
+    }
+    if (
+      hashField !== "contentHash" &&
+      (await hasActiveRowsForField(adminDb, "contentHash", alternateContentHash))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function detectDuplicateState(
   adminDb: {
     collection: (name: string) => {
@@ -208,7 +280,17 @@ async function detectDuplicateState(
     .where("binaryFileHash", "==", binaryFileHash)
     .limit(1)
     .get();
-  if (!binaryDuplicateSnap.empty) {
+  if (
+    !binaryDuplicateSnap.empty &&
+    (await hasActiveRowsForImportDuplicate(
+      adminDb,
+      binaryDuplicateSnap,
+      "binaryFileHash",
+      binaryFileHash,
+      parsedRows,
+      existingRows,
+    ))
+  ) {
     return {
       duplicateState: "binary-duplicate",
       duplicateMessage: "This exact workbook file has already been imported.",
@@ -220,7 +302,17 @@ async function detectDuplicateState(
     .where("contentHash", "==", contentHash)
     .limit(1)
     .get();
-  if (!contentDuplicateSnap.empty) {
+  if (
+    !contentDuplicateSnap.empty &&
+    (await hasActiveRowsForImportDuplicate(
+      adminDb,
+      contentDuplicateSnap,
+      "contentHash",
+      contentHash,
+      parsedRows,
+      existingRows,
+    ))
+  ) {
     return {
       duplicateState: "content-duplicate",
       duplicateMessage: "A prior import already contains the same normalized TCS exam rows.",

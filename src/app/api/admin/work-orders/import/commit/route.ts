@@ -22,6 +22,7 @@ import type {
   TcsExamExistingWorkOrder,
   TcsExamImportCommitPayload,
   TcsExamSourceRow,
+  WorkOrderDuplicateResolution,
   WorkOrderImportMode,
 } from "@/types/work-orders";
 import { GeoPoint } from "firebase-admin/firestore";
@@ -54,6 +55,10 @@ type SiteRecord = {
 
 function normalizeMode(value: unknown): WorkOrderImportMode {
   return value === "revision" ? "revision" : "new";
+}
+
+function normalizeDuplicateResolution(value: unknown): WorkOrderDuplicateResolution {
+  return value === "replace" || value === "omit" ? value : "reject";
 }
 
 function normalizeRecordStatus(value: unknown): string {
@@ -472,6 +477,8 @@ export async function POST(request: Request) {
     const adminUser = await requireAdmin(request);
     const payload = validatePayload(await request.json());
     const mode = normalizeMode(payload.mode);
+    const duplicateResolution =
+      mode === "revision" ? "replace" : normalizeDuplicateResolution(payload.duplicateResolution);
     const canonicalRows = payload.rows.map((row) => ({
       ...row,
       district: normalizeTcsDistrict(row.district),
@@ -504,11 +511,15 @@ export async function POST(request: Request) {
       (row) => isActiveRecordStatus(row.recordStatus),
     );
 
-    if (mode === "new" && hasIdentityOverlap(canonicalRows, activeExistingRows)) {
+    if (
+      mode === "new" &&
+      duplicateResolution === "reject" &&
+      hasIdentityOverlap(canonicalRows, activeExistingRows)
+    ) {
       return NextResponse.json(
         {
           error:
-            "Active TCS exam work orders already exist for this exam/date range. Preview with revision mode before committing.",
+            "Active TCS exam work orders already exist for this exam/date range. Choose replace or omit before committing the re-upload.",
         },
         { status: 409 },
       );
@@ -524,19 +535,46 @@ export async function POST(request: Request) {
       canonicalRows.map((row) => [getIdentityKey(row), row]),
     );
 
+    const commitDiffRows = diffRows.filter((diffRow) => {
+      if (diffRow.status === "cancelled") {
+        return false;
+      }
+      const parsedRow = parsedByKey.get(diffRow.key);
+      if (!parsedRow) {
+        return false;
+      }
+      const existing = findMatchingExistingRow(
+        {
+          ...parsedRow,
+          examName: payload.examName,
+          examCode: payload.examCode,
+        },
+        activeExistingRows,
+      );
+      return !(existing && duplicateResolution === "omit");
+    });
+    const commitDiffKeys = new Set(commitDiffRows.map((row) => row.key));
+    const rowsToResolve = commitDiffRows.reduce<TcsExamSourceRow[]>((rows, diffRow) => {
+      const row = parsedByKey.get(diffRow.key);
+      if (row) {
+        rows.push(row);
+      }
+      return rows;
+    }, []);
+
     const importRef = adminDb.collection("workOrderImports").doc();
     const importId = importRef.id;
     const batch = adminDb.batch();
     const { resolvedRows, createdSites } = await resolveCommitRows(
       adminDb,
       batch,
-      canonicalRows,
+      rowsToResolve,
       adminUser,
     );
 
     const resolvedByOriginalKey = new Map<string, TcsExamSourceRow>();
-    for (let index = 0; index < canonicalRows.length; index += 1) {
-      resolvedByOriginalKey.set(getIdentityKey(canonicalRows[index]), resolvedRows[index]);
+    for (let index = 0; index < rowsToResolve.length; index += 1) {
+      resolvedByOriginalKey.set(getIdentityKey(rowsToResolve[index]), resolvedRows[index]);
     }
 
     let committedRows = 0;
@@ -558,6 +596,10 @@ export async function POST(request: Request) {
             email: adminUser.email,
           }),
         });
+        continue;
+      }
+
+      if (!commitDiffKeys.has(diffRow.key)) {
         continue;
       }
 
@@ -627,9 +669,9 @@ export async function POST(request: Request) {
     }
 
     const uniqueSites = new Set(
-      canonicalRows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
+      rowsToResolve.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
     ).size;
-    const sortedDates = canonicalRows.map((row) => row.date).filter(Boolean).sort();
+    const sortedDates = rowsToResolve.map((row) => row.date).filter(Boolean).sort();
     batch.set(importRef, {
       id: importId,
       clientName: OPERATIONAL_CLIENT_NAME,
@@ -646,12 +688,12 @@ export async function POST(request: Request) {
         to: sortedDates[sortedDates.length - 1] ?? "",
       },
       siteCount: uniqueSites,
-      rowCount: canonicalRows.length,
-      totalMale: canonicalRows.reduce<number>(
+      rowCount: rowsToResolve.length,
+      totalMale: rowsToResolve.reduce<number>(
         (sum, row) => sum + Number(row.maleGuardsRequired ?? 0),
         0,
       ),
-      totalFemale: canonicalRows.reduce<number>(
+      totalFemale: rowsToResolve.reduce<number>(
         (sum, row) => sum + Number(row.femaleGuardsRequired ?? 0),
         0,
       ),

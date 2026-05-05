@@ -1,3 +1,4 @@
+import { DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
 import { resolveSiteDutyPoints } from "@/lib/shift-utils";
 import type { DutyPoint } from "@/types/location";
 
@@ -91,7 +92,7 @@ export function buildPublicAttendanceSiteOption(
     clientName: typeof data.clientName === "string" ? data.clientName : "",
     clientId: typeof data.clientId === "string" ? data.clientId : "",
     district: typeof data.district === "string" ? data.district : "",
-    geofenceRadiusMeters: toFiniteNumber(data.geofenceRadiusMeters) ?? 150,
+    geofenceRadiusMeters: toFiniteNumber(data.geofenceRadiusMeters) ?? DEFAULT_GEOFENCE_RADIUS_METERS,
     strictGeofence: data.strictGeofence === true,
     shiftMode: typeof data.shiftMode === "string" ? data.shiftMode : "none",
     shiftPattern: typeof data.shiftPattern === "string" ? data.shiftPattern : null,

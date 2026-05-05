@@ -186,19 +186,19 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // attendanceStates — hot doc per guard tracking isCheckedIn, lastCheckIn, streak
-    // Primary collection name is 'attendanceStates' (plural)
-    match /attendanceStates/{employeeId} {
+    // attendanceState — hot doc per guard tracking last check-in status, shift, duty point
+    // This is the active collection used by the submit route and employee lookup API.
+    match /attendanceState/{employeeId} {
       allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
       allow create, update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
       allow delete: if isAdmin();
     }
 
-    // Legacy singular collection — keep for backwards-compatibility
-    match /attendanceState/{employeeId} {
+    // Legacy plural collection — retained for backwards-compatibility only
+    match /attendanceStates/{employeeId} {
       allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
-      allow update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
-      allow create, delete: if isAdmin();
+      allow create, update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
+      allow delete: if isAdmin();
     }
 
     // ── leaveRequests ────────────────────────────────────────────────────────

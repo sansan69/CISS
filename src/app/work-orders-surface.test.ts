@@ -102,8 +102,12 @@ describe("work orders operations surface", () => {
     expect(workOrdersPageSource).toContain('onChange={(event) => updatePreviewRow(originalIndex, "maleGuardsRequired", event.target.value)}');
     expect(workOrdersPageSource).toContain("handleDeleteOrders(row.orders)");
     expect(workOrdersPageSource).toContain("body: JSON.stringify({ workOrderIds: ids })");
+    expect(workOrdersPageSource).toContain("duplicateResolution");
+    expect(workOrdersPageSource).toContain("Replace matching work orders");
+    expect(workOrdersPageSource).toContain("Omit matching work orders");
     expect(workOrdersBulkDeleteRouteSource).toContain("Array.isArray(body.workOrderIds)");
-    expect(workOrdersBulkDeleteRouteSource).toContain('batch.delete(adminDb.collection("workOrders").doc(id))');
+    expect(workOrdersBulkDeleteRouteSource).toContain("cleanupOrphanWorkOrderImports");
+    expect(workOrdersBulkDeleteRouteSource).toContain("batch.delete(ref)");
   });
 
   it("work order shared types migration", () => {

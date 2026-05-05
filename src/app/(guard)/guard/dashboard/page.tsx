@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   CalendarCheck,
-  CalendarDays,
   Star,
   MapPin,
   Clock,
@@ -32,14 +31,8 @@ interface DashboardData {
   profilePhotoUrl: string | null;
   attendanceStats: {
     presentDays: number;
-    absentDays: number;
     workingDays: number;
   };
-  leaveBalance: {
-    casual: { entitled: number; taken: number; balance: number };
-    sick: { entitled: number; taken: number; balance: number };
-    earned: { entitled: number; taken: number; balance: number };
-  } | null;
   latestEvalScore: number | null;
   latestEvalPeriod: string | null;
   nextShift: {
@@ -196,12 +189,6 @@ export default function GuardDashboardPage() {
 
   if (!data) return null;
 
-  const totalLeaveBalance = data.leaveBalance
-    ? data.leaveBalance.casual.balance +
-      data.leaveBalance.sick.balance +
-      data.leaveBalance.earned.balance
-    : null;
-
   return (
     <div className="p-4 space-y-4 pb-6">
       {/* Greeting */}
@@ -229,9 +216,9 @@ export default function GuardDashboardPage() {
           index={0}
         />
         <StatCard
-          label="Leave balance"
-          value={totalLeaveBalance !== null ? totalLeaveBalance : "—"}
-          icon={CalendarDays}
+          label="Working days"
+          value={data.attendanceStats.workingDays}
+          icon={Clock}
           color={BRAND_GOLD}
           index={1}
         />
@@ -321,7 +308,7 @@ export default function GuardDashboardPage() {
           </div>
         </Link>
         <Link
-          href="/guard/leave"
+          href="/guard/training"
           className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
           style={{ boxShadow: "0 1px 4px hsl(0 0% 0% / 0.06)" }}
         >
@@ -329,11 +316,11 @@ export default function GuardDashboardPage() {
             className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0"
             style={{ backgroundColor: `${BRAND_GOLD}12` }}
           >
-            <CalendarDays size={20} style={{ color: BRAND_GOLD }} />
+            <CalendarCheck size={20} style={{ color: BRAND_GOLD }} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Apply Leave</p>
-            <p className="text-[10px] text-muted-foreground">Submit request</p>
+            <p className="text-sm font-semibold text-foreground">Training</p>
+            <p className="text-[10px] text-muted-foreground">View assignments</p>
           </div>
         </Link>
       </div>

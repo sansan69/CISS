@@ -203,12 +203,6 @@ export function derivePayrollTemplateFromWageConfig(
   };
 }
 
-/** LOP deduction: (gross / workingDays) * lopDays */
-export function calculateLOP(grossMonthly: number, workingDays: number, lopDays: number): number {
-  if (workingDays <= 0 || lopDays <= 0) return 0;
-  return round2((grossMonthly / workingDays) * lopDays);
-}
-
 export function prorateAmount(amount: number, workingDays: number, payableDays: number): number {
   if (workingDays <= 0) return round2(amount);
   return round2(amount * Math.max(0, Math.min(payableDays, workingDays)) / workingDays);

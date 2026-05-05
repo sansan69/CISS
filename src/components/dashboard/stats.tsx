@@ -10,7 +10,6 @@ interface DashboardStatsProps {
   stats: {
     total: number;
     active: number;
-    onLeave: number;
     inactiveOrExited: number;
   };
   roleSpecific?: {
@@ -25,18 +24,15 @@ const roleConfig: Record<UserRole, { label: string; icon: any; color: string }[]
   admin: [
     { label: 'Total Employees', icon: Users, color: 'bg-blue-50 text-blue-600' },
     { label: 'Active', icon: UserCheck, color: 'bg-green-50 text-green-600' },
-    { label: 'On Leave', icon: Clock, color: 'bg-amber-50 text-amber-600' },
     { label: 'Inactive', icon: UserMinus, color: 'bg-gray-50 text-gray-600' },
   ],
   fieldOfficer: [
     { label: 'Assigned Guards', icon: Users, color: 'bg-blue-50 text-blue-600' },
     { label: 'Present Today', icon: UserCheck, color: 'bg-green-50 text-green-600' },
-    { label: 'On Leave', icon: Clock, color: 'bg-amber-50 text-amber-600' },
   ],
   client: [
     { label: 'My Guards', icon: Users, color: 'bg-blue-50 text-blue-600' },
     { label: 'Checked In', icon: UserCheck, color: 'bg-green-50 text-green-600' },
-    { label: 'On Leave', icon: Clock, color: 'bg-amber-50 text-amber-600' },
     { label: 'Compliance', icon: Building2, color: 'bg-purple-50 text-purple-600' },
   ],
   accounts: [
@@ -47,7 +43,6 @@ const roleConfig: Record<UserRole, { label: string; icon: any; color: string }[]
   hr: [
     { label: 'Total Employees', icon: Users, color: 'bg-blue-50 text-blue-600' },
     { label: 'New This Month', icon: TrendingUp, color: 'bg-green-50 text-green-600' },
-    { label: 'Pending Leave', icon: Clock, color: 'bg-amber-50 text-amber-600' },
   ],
   compliance: [
     { label: 'Total Employees', icon: Users, color: 'bg-blue-50 text-blue-600' },
@@ -56,7 +51,6 @@ const roleConfig: Record<UserRole, { label: string; icon: any; color: string }[]
   superAdmin: [
     { label: 'Total Employees', icon: Users, color: 'bg-blue-50 text-blue-600' },
     { label: 'Active', icon: UserCheck, color: 'bg-green-50 text-green-600' },
-    { label: 'On Leave', icon: Clock, color: 'bg-amber-50 text-amber-600' },
     { label: 'Inactive', icon: UserMinus, color: 'bg-gray-50 text-gray-600' },
   ],
 };
@@ -65,9 +59,9 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
   const config = roleConfig[role] || roleConfig.admin;
   
   const getValue = (index: number): number => {
-    const values = [stats.total, stats.active, stats.onLeave, stats.inactiveOrExited];
+    const values = [stats.total, stats.active, stats.inactiveOrExited];
     if (role === 'client' && roleSpecific) {
-      return [roleSpecific.guardsAssigned ?? 0, roleSpecific.checkedIn ?? 0, stats.onLeave, roleSpecific.complianceClear ?? 0][index] || values[index];
+      return [roleSpecific.guardsAssigned ?? 0, roleSpecific.checkedIn ?? 0, roleSpecific.complianceClear ?? 0][index] || values[index];
     }
     return values[index] || 0;
   };

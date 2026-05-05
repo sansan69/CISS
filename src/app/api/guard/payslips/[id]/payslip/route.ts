@@ -19,7 +19,11 @@ export async function GET(
     }
 
     const data = entryDoc.data() ?? {};
-    if (data.employeeDocId !== guard.employeeDocId) {
+    const ownsPayslip =
+      data.employeeDocId === guard.employeeDocId ||
+      (Boolean(data.employeeId) && data.employeeId === guard.employeeId);
+
+    if (!ownsPayslip) {
       return unauthorizedResponse("Not authorized to view this payslip.");
     }
 

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const BRAND_BLUE = "hsl(206 98% 26%)";
 const BRAND_GOLD = "hsl(41 44% 54%)";
 
-export interface AttendanceLog {
+export interface CalendarAttendanceEntry {
   id: string;
   date: string;       // YYYY-MM-DD
   status: "In" | "Out";
@@ -20,7 +20,7 @@ export interface AttendanceLog {
 
 interface AttendanceCalendarProps {
   month: Date;
-  logs: AttendanceLog[];
+  logs: CalendarAttendanceEntry[];
   onMonthChange: (direction: "prev" | "next") => void;
 }
 
@@ -34,13 +34,17 @@ function formatMonthYear(date: Date): string {
   });
 }
 
+function getISTDateString(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
 function isFutureDate(dateStr: string): boolean {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getISTDateString();
   return dateStr > today;
 }
 
 function isToday(dateStr: string): boolean {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getISTDateString();
   return dateStr === today;
 }
 
@@ -89,7 +93,7 @@ export function AttendanceCalendar({
   }, [month]);
 
   // Can we go to next month? (Don't allow beyond current month)
-  const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const currentMonthStr = getISTDateString().slice(0, 7);
   const displayedMonthStr = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
   const canGoNext = displayedMonthStr < currentMonthStr;
 
