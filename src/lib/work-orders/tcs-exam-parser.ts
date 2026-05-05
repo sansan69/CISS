@@ -36,7 +36,7 @@ const STATIC_HEADER_ALIASES: Record<"siteId" | "siteName" | "district", string[]
     "tc address",
     "address",
   ],
-  district: ["city", "district", "area", "region", "place", "district name", "zone", "zone name"],
+  district: ["city", "district", "area", "region", "place", "district name"],
 };
 
 const GENERIC_TITLE_HEADERS = new Set([
