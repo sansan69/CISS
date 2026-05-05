@@ -68,6 +68,12 @@ const quickLinks: QuickLink[] = [
     description: "Open workforce operations and oversight.",
     icon: ShieldCheck,
   },
+  {
+    href: "/download",
+    label: "Download App",
+    description: "Get the Android app for guards and field officers.",
+    icon: DownloadCloud,
+  },
 ];
 
 export default function LandingPage() {
