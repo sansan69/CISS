@@ -83,9 +83,21 @@ export async function POST(request: NextRequest) {
       let newDistrict = "";
       let source = "";
 
+      // Always try to infer district from siteName + siteAddress first.
+      // Site names like "iON Digital Zone iDZ Kollam" contain the correct
+      // district keyword, which overrides a wrongly-assigned canonical district
+      // (e.g. "Ernakulam" that came from the ZONE column bug).
+      const nameInferred = inferKeralaDistrictFromText(
+        [site.siteName, site.siteAddress].filter(Boolean).join(" ")
+      );
+
       if (site.district && isCanonical) {
         const canonical = canonicalizeDistrictName(site.district);
-        if (canonical && canonical !== site.district) {
+        // If site name inference strongly disagrees, trust site name over stored district.
+        if (nameInferred && nameInferred !== (canonical || site.district)) {
+          newDistrict = nameInferred;
+          source = "sitename-keyword";
+        } else if (canonical && canonical !== site.district) {
           newDistrict = canonical;
           source = "canonicalize";
         }
