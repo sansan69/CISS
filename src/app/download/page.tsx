@@ -37,7 +37,7 @@ export default function DownloadPage() {
 
         {/* Download Button */}
         <a
-          href="https://firebasestorage.googleapis.com/v0/b/ciss-workforce.firebasestorage.app/o/releases%2Fciss-workforce.apk?alt=media&token=YOUR_TOKEN_HERE"
+          href="https://firebasestorage.googleapis.com/v0/b/ciss-workforce.firebasestorage.app/o/releases%2Fciss-workforce.apk?alt=media"
           className="inline-flex items-center gap-2 px-8 py-4 bg-[#bd9c55] text-[#014c85] font-bold text-lg rounded-2xl hover:bg-[#d4b368] transition-colors shadow-lg shadow-black/20"
         >
           <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -47,7 +47,7 @@ export default function DownloadPage() {
         </a>
 
         <p className="text-xs text-white/40 mt-4">
-          Version 1.0.0 · 57 MB · Android 7.0+
+          Version 1.0.0 · 74 MB · Android 7.0+
         </p>
 
         <p className="text-xs text-white/30 mt-6">
