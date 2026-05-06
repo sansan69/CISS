@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, messaging } from "@/lib/firebaseAdmin";
+import { db } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
-import type { AppNotification } from "@/types/notification";
+
+type NotificationType = "work_order" | "attendance_marked" | "leave_approved" | "training_assigned" | "broadcast" | "report_review";
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +37,8 @@ export async function POST(request: NextRequest) {
 
     const notifId = docRef.id;
 
-    // FCM push — best effort, non-blocking
+    // FCM push — best effort, non-blocking. Lazy-load messaging to avoid
+    // crashing the route if the Firebase Admin messaging API isn't configured.
     const fcmPayload: Record<string, string> = {
       type: "broadcast",
       notifId,
@@ -45,25 +47,33 @@ export async function POST(request: NextRequest) {
 
     const fcmErrors: string[] = [];
 
-    const sendToTopic = async (topic: string) => {
-      try {
-        return await messaging.send({
-          topic,
-          notification: { title, body: msgBody },
-          data: fcmPayload,
-        });
-      } catch (e: any) {
-        fcmErrors.push(`${topic}: ${e?.message || e}`);
-        return null;
-      }
-    };
+    try {
+      // Dynamic import to isolate any messaging init failures
+      const { messaging } = await import("@/lib/firebaseAdmin");
 
-    if (role === "guard") {
-      await sendToTopic("guards");
-    } else if (role === "fieldOfficer") {
-      await sendToTopic("field_officers");
-    } else {
-      await Promise.all([sendToTopic("guards"), sendToTopic("field_officers")]);
+      const sendToTopic = async (topic: string) => {
+        try {
+          await messaging.send({
+            topic,
+            notification: { title, body: msgBody },
+            data: fcmPayload,
+          });
+        } catch (e: any) {
+          fcmErrors.push(`${topic}: ${e?.message || e}`);
+        }
+      };
+
+      if (role === "guard") {
+        await sendToTopic("guards");
+      } else if (role === "fieldOfficer") {
+        await sendToTopic("field_officers");
+      } else {
+        await Promise.all([sendToTopic("guards"), sendToTopic("field_officers")]);
+      }
+    } catch (e: any) {
+      // messaging module itself failed to load — non-critical
+      console.warn("FCM messaging module unavailable:", e?.message);
+      fcmErrors.push(`init: ${e?.message || e}`);
     }
 
     return NextResponse.json({
