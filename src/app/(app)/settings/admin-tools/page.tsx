@@ -6,6 +6,7 @@ import {
   ChevronRight,
   DownloadCloud,
   FileUp,
+  Megaphone,
   QrCode,
   Wrench,
 } from "lucide-react";
@@ -50,6 +51,16 @@ const toolCards = [
     bullets: [
       "Filter exports by client, district, and joining date range.",
       "Use PDF exports for client-ready profile kits and XLSX for raw analysis.",
+    ],
+  },
+  {
+    title: "Broadcast Notifications",
+    description: "Send push notifications to guards and field officers. Messages appear in the mobile app inbox.",
+    icon: Megaphone,
+    href: "/admin/notifications",
+    bullets: [
+      "Target all users, guards only, or field officers only.",
+      "Optionally filter by district for location-specific announcements.",
     ],
   },
 ] as const;
