@@ -21,73 +21,67 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save to Firestore
-    const notification: Omit<AppNotification, "id"> = {
+    // Always save to Firestore first
+    const docRef = await db.collection("notifications").add({
       type: "broadcast",
       title,
       body: msgBody,
       recipientRole: role ?? "all",
       recipientDistrict: district || undefined,
-      data: data ?? undefined,
+      data: data || undefined,
       read: false,
-      createdAt: FieldValue.serverTimestamp() as any,
+      createdAt: FieldValue.serverTimestamp(),
       createdBy: "admin",
-    };
+    });
 
-    const docRef = await db.collection("notifications").add(notification);
     const notifId = docRef.id;
 
-    // Send FCM push via topic
+    // FCM push — best effort, non-blocking
     const fcmPayload: Record<string, string> = {
       type: "broadcast",
       notifId,
       ...(data ?? {}),
     };
 
-    let fcmResults: string[] = [];
+    const fcmErrors: string[] = [];
 
-    try {
-      if (role === "guard") {
-        const msgId = await messaging.send({
+    const sendToTopic = async (topic: string) => {
+      try {
+        return await messaging.send({
+          topic,
           notification: { title, body: msgBody },
           data: fcmPayload,
-          topic: "guards",
         });
-        fcmResults.push(`guards:${msgId}`);
-      } else if (role === "fieldOfficer") {
-        const msgId = await messaging.send({
-          notification: { title, body: msgBody },
-          data: fcmPayload,
-          topic: "field_officers",
-        });
-        fcmResults.push(`fo:${msgId}`);
-      } else {
-        // Send to both
-        const gId = await messaging.send({
-          notification: { title, body: msgBody },
-          data: fcmPayload,
-          topic: "guards",
-        });
-        const foId = await messaging.send({
-          notification: { title, body: msgBody },
-          data: fcmPayload,
-          topic: "field_officers",
-        });
-        fcmResults = [`guards:${gId}`, `fo:${foId}`];
+      } catch (e: any) {
+        fcmErrors.push(`${topic}: ${e?.message || e}`);
+        return null;
       }
-    } catch (fcmError) {
-      console.error("FCM send error (notification saved to Firestore):", fcmError);
+    };
+
+    if (role === "guard") {
+      await sendToTopic("guards");
+    } else if (role === "fieldOfficer") {
+      await sendToTopic("field_officers");
+    } else {
+      await Promise.all([sendToTopic("guards"), sendToTopic("field_officers")]);
     }
 
     return NextResponse.json({
       success: true,
       notifId,
-      fcmResults,
+      savedToFirestore: true,
+      fcmDelivered: fcmErrors.length === 0,
+      ...(fcmErrors.length > 0
+        ? { fcmWarning: `Push delivery partially failed: ${fcmErrors.join("; ")}` }
+        : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Notification send error:", error);
     return NextResponse.json(
-      { error: "Failed to send notification" },
+      {
+        error: error?.message || "Failed to send notification",
+        detail: process.env.NODE_ENV === "development" ? String(error) : undefined,
+      },
       { status: 500 }
     );
   }
