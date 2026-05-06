@@ -588,6 +588,22 @@
         { "fieldPath": "uid", "order": "ASCENDING" },
         { "fieldPath": "clientId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "guardLocations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "guardLocations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "clientName", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

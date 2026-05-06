@@ -431,5 +431,23 @@ service cloud.firestore {
     match /fieldOfficerAudit/{docId} {
       allow read, write: if false;
     }
+
+    // ── guardLocations — live GPS tracking heartbeat ─────────────────────────
+    // Guards write their own location doc (employeeId == doc ID).
+    // All authenticated users can read (FO, admin, client dashboards).
+
+    match /guardLocations/{employeeId} {
+      // Any authenticated user can read live locations
+      allow read: if isSignedIn();
+
+      // Guard can write only their own location document
+      allow create, update: if isGuard() && guardEmployeeId() == employeeId;
+
+      // Staff (FO, admin) can update (e.g. mark guard OF)
+      allow update: if isStaff();
+
+      // Only guards or staff can delete
+      allow delete: if isGuard() && guardEmployeeId() == employeeId || isStaff();
+    }
   }
 }
