@@ -143,6 +143,7 @@ const customTokenSignerApp = initializeCustomTokenSigner();
 const db = adminApp.firestore();
 const auth = adminApp.auth();
 const storage = adminApp.storage();
+const messaging = adminApp.messaging();
 const customTokenAuth = customTokenSignerApp.auth();
 
-export { adminApp, db, auth, storage, customTokenAuth };
+export { adminApp, db, auth, storage, messaging, customTokenAuth };
