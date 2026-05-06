@@ -33,6 +33,7 @@ import { DashboardStats } from "@/components/dashboard/stats";
 import { DashboardCharts } from "@/components/dashboard/charts";
 import { DashboardActions } from "@/components/dashboard/actions";
 import { ClientOperationsDashboard } from "@/components/dashboard/client-operations-dashboard";
+import LiveGuardsSection from "@/components/dashboard/live-guards-section";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -797,6 +798,17 @@ export default function DashboardPage() {
 
       {/* ── Quick Actions (admin + FO) ────────────────────────────────────── */}
       {userRole !== 'client' && <DashboardActions role={userRole as any} />}
+
+      {/* ── Live Guard Locations (admin + FO) ────────────────────────────── */}
+      {userRole !== 'client' && (
+        <LiveGuardsSection
+          district={
+            userRole === 'fieldOfficer' && assignedDistricts?.length
+              ? assignedDistricts[0]
+              : undefined
+          }
+        />
+      )}
 
       {/* ── Field Officer: Upcoming Duties ───────────────────────────────── */}
       {userRole === 'fieldOfficer' && (
