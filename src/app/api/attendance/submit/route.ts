@@ -24,7 +24,10 @@ import {
   SYSTEM_METRIC_NAMES,
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
-import { canRecordNextDayCheckout } from "@/lib/attendance/attendance-validation";
+import {
+  canRecordNextDayCheckout,
+  resolveOperationalAttendanceDate,
+} from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 
 export const runtime = "nodejs";
@@ -157,7 +160,7 @@ export async function POST(request: NextRequest) {
         `Queued attendance older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours cannot be submitted. Please record attendance again.`,
       );
     }
-    const attendanceDate = INDIA_DATE_FORMATTER.format(serverNow);
+    const submittedAttendanceDate = INDIA_DATE_FORMATTER.format(reportedAtDate);
     const clockDriftMs = Math.abs(serverNow.getTime() - reportedAtDate.getTime());
     const clockDriftMinutes = Math.round(clockDriftMs / 60000);
     const clockDriftWarning =
@@ -253,6 +256,18 @@ export async function POST(request: NextRequest) {
         effectiveShift?.code,
       );
 
+      const lastState = stateSnap.exists
+        ? (stateSnap.data() as Record<string, any>)
+        : null;
+      const attendanceDate = resolveOperationalAttendanceDate({
+        attendanceDate: submittedAttendanceDate,
+        status: payload.status,
+        siteId: payload.siteId,
+        dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
+        shift: effectiveShift,
+        lastState,
+      });
+
       if (isTcsSite) {
         const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
         const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
@@ -335,8 +350,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (stateSnap.exists) {
-        const lastState = stateSnap.data() as Record<string, any>;
+      if (lastState) {
         if (
           lastState.lastAttendanceDate === attendanceDate &&
           lastState.lastStatus === payload.status

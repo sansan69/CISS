@@ -222,6 +222,10 @@ export default function AttendancePage() {
   const pickSuggestedShiftCode = useCallback((templates: ShiftTemplate[]) => {
     if (templates.length === 0) return "";
 
+    if (autoDetectedShift) {
+      return autoDetectedShift.code;
+    }
+
     const sameDutyPointAsLastShift =
       !selectedDutyPointId ||
       !scannedEmployee?.attendanceHint?.lastDutyPointId ||
@@ -240,10 +244,6 @@ export default function AttendancePage() {
         }
         return matchedShift.code;
       }
-    }
-
-    if (autoDetectedShift) {
-      return autoDetectedShift.code;
     }
 
     return templates[0]?.code ?? "";

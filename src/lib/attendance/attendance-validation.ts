@@ -47,3 +47,32 @@ export function canRecordNextDayCheckout(input: {
 
   return true;
 }
+
+export function resolveOperationalAttendanceDate(input: {
+  attendanceDate: string;
+  status: "In" | "Out";
+  siteId: string;
+  dutyPointId?: string | null;
+  shift: AttendanceShiftSnapshot;
+  lastState?: AttendanceStateSnapshot | null;
+}) {
+  const lastState = input.lastState ?? null;
+  if (!lastState) {
+    return input.attendanceDate;
+  }
+
+  if (
+    canRecordNextDayCheckout({
+      attendanceDate: input.attendanceDate,
+      status: input.status,
+      siteId: input.siteId,
+      dutyPointId: input.dutyPointId,
+      shift: input.shift,
+      lastState,
+    })
+  ) {
+    return lastState.lastAttendanceDate ?? input.attendanceDate;
+  }
+
+  return input.attendanceDate;
+}
