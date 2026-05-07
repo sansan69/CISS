@@ -71,6 +71,19 @@ export type ClientDashboardTrainingReportRow = {
   attendeeCount: number;
 };
 
+export type ClientDashboardPatrolActivityRow = {
+  id: string;
+  type: "patrol" | "hourly_photo";
+  guardName: string;
+  siteName: string;
+  district: string;
+  dutyPointName?: string;
+  patrolPointName?: string;
+  shiftLabel?: string;
+  activityAt: string | null;
+  photoUrl?: string | null;
+};
+
 export type ClientDashboardGuardHighlight = {
   id: string;
   fullName: string;
@@ -94,6 +107,8 @@ export type ClientDashboardSummary = {
   upcomingDuties: number;
   pendingVisitReports: number;
   pendingTrainingReports: number;
+  patrolActivitiesToday: number;
+  hourlyNightChecksToday: number;
 };
 
 export type ClientDashboardPayload = {
@@ -103,6 +118,7 @@ export type ClientDashboardPayload = {
   upcomingWorkOrders: ClientDashboardWorkOrderRow[];
   recentVisitReports: ClientDashboardVisitReportRow[];
   recentTrainingReports: ClientDashboardTrainingReportRow[];
+  recentPatrolActivities: ClientDashboardPatrolActivityRow[];
   guardHighlights: ClientDashboardGuardHighlight[];
   dashboardModules?: import("@/types/client-permissions").ClientDashboardModulesConfig;
 };

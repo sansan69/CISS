@@ -6,6 +6,7 @@ import type {
   SiteShiftMode,
   SiteShiftPattern,
 } from "@/types/location";
+import { normalizePatrolPoints } from "@/lib/patrol";
 
 export const SHIFT_PATTERN_LABELS: Record<SiteShiftPattern, string> = {
   "2x12": "2 shifts / 12 hours",
@@ -164,6 +165,7 @@ export function normalizeDutyPoint(input: Partial<DutyPoint>, fallbackIndex = 0)
     dutyHours,
     shiftMode,
     shiftTemplates,
+    patrolPoints: normalizePatrolPoints(input.patrolPoints),
   };
 
   const code = String(input.code ?? "").trim();

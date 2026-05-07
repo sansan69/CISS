@@ -12,6 +12,7 @@ import type {
   ClientDashboardDutyPointSnapshot,
   ClientDashboardGuardHighlight,
   ClientDashboardLiveAttendanceRow,
+  ClientDashboardPatrolActivityRow,
   ClientDashboardPayload,
   ClientDashboardSiteSnapshot,
   ClientDashboardTrainingReportRow,
@@ -128,6 +129,9 @@ export async function GET(request: Request) {
     const trainingReportsPromise = scope.clientId
       ? adminDb.collection("foTrainingReports").where("clientId", "==", scope.clientId).limit(80).get()
       : adminDb.collection("foTrainingReports").where("clientName", "==", scope.clientName).limit(80).get();
+    const patrolActivitiesPromise = scope.clientId
+      ? adminDb.collection("guardPatrolActivities").where("clientId", "==", scope.clientId).limit(120).get()
+      : adminDb.collection("guardPatrolActivities").where("clientName", "==", scope.clientName).limit(120).get();
 
     const [
       employeesSnapshot,
@@ -136,6 +140,7 @@ export async function GET(request: Request) {
       sitesSnapshot,
       visitReportsSnapshot,
       trainingReportsSnapshot,
+      patrolActivitiesSnapshot,
     ] = await Promise.all([
       employeesPromise,
       attendancePromise,
@@ -143,6 +148,7 @@ export async function GET(request: Request) {
       sitesPromise,
       visitReportsPromise,
       trainingReportsPromise,
+      patrolActivitiesPromise,
     ]);
 
     const employees = employeesSnapshot.docs.map((doc) => ({
@@ -468,6 +474,37 @@ export async function GET(request: Request) {
       (row) => row.createdAt ?? row.trainingDate,
     ).slice(0, 6);
 
+    const patrolActivities = patrolActivitiesSnapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Record<string, unknown>),
+      }) as DashboardRecord)
+      .filter((row) => matchesClientScope(row, scope))
+      .sort((left, right) => {
+        const leftIso = serializeDate(left.activityAt) ?? serializeDate(left.createdAt) ?? "";
+        const rightIso = serializeDate(right.activityAt) ?? serializeDate(right.createdAt) ?? "";
+        return new Date(rightIso).getTime() - new Date(leftIso).getTime();
+      });
+
+    const patrolActivitiesToday = patrolActivities.filter((row) =>
+      isTodayInIst(row.activityAt ?? row.createdAt, todayKey),
+    );
+
+    const recentPatrolActivities: ClientDashboardPatrolActivityRow[] = patrolActivities
+      .slice(0, 8)
+      .map((row) => ({
+        id: String(row.id),
+        type: row.type === "hourly_photo" ? "hourly_photo" : "patrol",
+        guardName: normalizeText(row.guardName || row.employeeName || row.employeeId || "Guard"),
+        siteName: normalizeText(row.siteName || "Site"),
+        district: normalizeText(row.district),
+        dutyPointName: normalizeText(row.dutyPointName) || undefined,
+        patrolPointName: normalizeText(row.patrolPointName) || undefined,
+        shiftLabel: normalizeText(row.shiftLabel) || undefined,
+        activityAt: serializeDate(row.activityAt) ?? serializeDate(row.createdAt),
+        photoUrl: typeof row.photoUrl === "string" ? row.photoUrl : null,
+      }));
+
     const payload: ClientDashboardPayload = {
       summary: {
         clientId: scope.clientId,
@@ -487,12 +524,15 @@ export async function GET(request: Request) {
         }).length,
         pendingVisitReports: visitReports.filter((row) => row.status !== "reviewed").length,
         pendingTrainingReports: trainingReports.filter((row) => row.status !== "acknowledged").length,
+        patrolActivitiesToday: patrolActivitiesToday.length,
+        hourlyNightChecksToday: patrolActivitiesToday.filter((row) => row.type === "hourly_photo").length,
       },
       liveAttendance,
       siteSnapshots,
       upcomingWorkOrders: upcomingWorkOrders.slice(0, 8),
       recentVisitReports: visitReports,
       recentTrainingReports: trainingReports,
+      recentPatrolActivities,
       guardHighlights,
       dashboardModules,
     };

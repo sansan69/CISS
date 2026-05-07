@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
 import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
+import { resolvePatrolSettings } from "@/lib/patrol";
 
 export async function PATCH(
   request: Request,
@@ -19,6 +20,7 @@ export async function PATCH(
       uniformAllowanceMonthly?: number;
       fieldAllowanceMonthly?: number;
       dashboardModules?: Record<string, boolean>;
+      patrolSettings?: Record<string, unknown>;
     };
     const name = body.name?.trim();
     const portalSubdomain = slugifyPortalSubdomain(body.portalSubdomain || name || "");
@@ -63,6 +65,9 @@ export async function PATCH(
 
     if (body.dashboardModules && typeof body.dashboardModules === "object") {
       updateData.dashboardModules = body.dashboardModules;
+    }
+    if (body.patrolSettings && typeof body.patrolSettings === "object") {
+      updateData.patrolSettings = resolvePatrolSettings(body.patrolSettings);
     }
 
     await adminDb.collection("clients").doc(id).update(updateData);

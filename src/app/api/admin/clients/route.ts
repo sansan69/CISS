@@ -3,6 +3,7 @@ import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
+import { resolvePatrolSettings } from "@/lib/patrol";
 
 export async function GET(request: Request) {
   try {
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       nationalHolidayList?: string[];
       uniformAllowanceMonthly?: number;
       fieldAllowanceMonthly?: number;
+      patrolSettings?: Record<string, unknown>;
     };
     const name = body.name?.trim();
     const portalSubdomain = slugifyPortalSubdomain(body.portalSubdomain || name || "");
@@ -84,6 +86,7 @@ export async function POST(request: Request) {
         typeof body.fieldAllowanceMonthly === "number"
           ? body.fieldAllowanceMonthly
           : 0,
+      patrolSettings: resolvePatrolSettings(body.patrolSettings),
       ...buildServerCreateAudit({
         uid: adminUser.uid,
         email: adminUser.email,

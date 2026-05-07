@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileClock,
   FileText,
+  Footprints,
   Globe,
   GraduationCap,
   LayoutDashboard,
@@ -62,6 +63,7 @@ export const mainNavGroups: NavGroup[] = [
     items: [
       { href: "/visit-reports", label: "Visit Reports", icon: FileText, fieldOfficerVisible: true, clientVisible: true },
       { href: "/training-reports", label: "Training Reports", icon: GraduationCap, fieldOfficerVisible: true, clientVisible: true },
+      { href: "/patrol-activity", label: "Patrol Activity", icon: Footprints, clientVisible: true },
     ],
   },
   {

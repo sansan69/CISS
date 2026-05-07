@@ -8,9 +8,11 @@ import {
   ArrowRight,
   Briefcase,
   Building2,
+  Camera,
   CalendarCheck,
   Clock3,
   FileText,
+  Footprints,
   GraduationCap,
   ShieldCheck,
   Users,
@@ -86,6 +88,12 @@ const summaryCards = [
     label: "Reports Awaiting Review",
     icon: FileText,
     color: "bg-slate-100 text-slate-700",
+  },
+  {
+    key: "hourlyNightChecksToday",
+    label: "Night Checks Today",
+    icon: Footprints,
+    color: "bg-sky-50 text-sky-700",
   },
 ] as const;
 
@@ -408,7 +416,7 @@ export function ClientOperationsDashboard() {
         )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-3">
         {modules.visitReports && (
           <Card className="rounded-2xl border-border/60 shadow-card">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -483,6 +491,68 @@ export function ClientOperationsDashboard() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       {report.fieldOfficerName} · {formatDateOnly(report.trainingDate || report.createdAt)}
                     </p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {modules.patrolActivity && (
+          <Card className="rounded-2xl border-border/60 shadow-card">
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle>Patrol Activity</CardTitle>
+                <CardDescription>Latest hourly night-photo proofs and patrol rounds.</CardDescription>
+              </div>
+              <Link href="/patrol-activity" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline">
+                Open activity <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {data.recentPatrolActivities.length === 0 ? (
+                <EmptyState
+                  icon={Footprints}
+                  compact
+                  title="No patrol activity yet"
+                  description="Night checks and patrol rounds will appear here once guards start submitting them."
+                />
+              ) : (
+                data.recentPatrolActivities.map((activity) => (
+                  <div key={activity.id} className="rounded-2xl border border-border/60 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {activity.guardName} · {activity.siteName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.type === "hourly_photo" ? "Hourly night photo" : "Patrol round"}
+                          {activity.dutyPointName ? ` · ${activity.dutyPointName}` : ""}
+                          {activity.patrolPointName ? ` · ${activity.patrolPointName}` : ""}
+                        </p>
+                      </div>
+                      <Badge variant={activity.type === "hourly_photo" ? "secondary" : "outline"}>
+                        {activity.type === "hourly_photo" ? "Hourly" : "Patrol"}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span>
+                        {activity.district || "District pending"}
+                        {activity.shiftLabel ? ` · ${activity.shiftLabel}` : ""}
+                      </span>
+                      <span>{formatDateTime(activity.activityAt)}</span>
+                    </div>
+                    {activity.photoUrl ? (
+                      <a
+                        href={activity.photoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        View photo
+                      </a>
+                    ) : null}
                   </div>
                 ))
               )}

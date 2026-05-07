@@ -10,6 +10,7 @@ export type ClientDashboardModule =
   | "workOrders"
   | "visitReports"
   | "trainingReports"
+  | "patrolActivity"
   | "guardHighlights";
 
 export type ClientDashboardModulesConfig = Partial<Record<ClientDashboardModule, boolean>>;
@@ -22,6 +23,7 @@ export const DEFAULT_CLIENT_MODULES: Required<ClientDashboardModulesConfig> = {
   workOrders: true,
   visitReports: true,
   trainingReports: true,
+  patrolActivity: true,
   guardHighlights: true,
 };
 
@@ -33,6 +35,7 @@ export const CLIENT_MODULE_LABELS: Record<ClientDashboardModule, string> = {
   workOrders: "Upcoming Work Orders",
   visitReports: "Visit Reports",
   trainingReports: "Training Reports",
+  patrolActivity: "Patrol Activity",
   guardHighlights: "Guard Highlights",
 };
 
@@ -44,6 +47,7 @@ export const CLIENT_MODULE_DESCRIPTIONS: Record<ClientDashboardModule, string> =
   workOrders: "Upcoming exam/deployment duties with manpower counts",
   visitReports: "Field officer visit reports with review status",
   trainingReports: "Training session reports with attendee counts",
+  patrolActivity: "Hourly night-photo proofs and patrol round submissions",
   guardHighlights: "Quick access to active guard profiles with photos",
 };
 

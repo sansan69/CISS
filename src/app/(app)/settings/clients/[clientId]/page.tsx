@@ -64,6 +64,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Footprints,
   MapPin,
   Building2,
   Users,
@@ -107,6 +108,8 @@ import {
 } from "@/lib/shift-utils";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import type { CoordinateSource, CoordinateStatus, DutyPoint, DutyPointCoverageMode, DutyPointHours, GeoPointLike, SiteType } from "@/types/location";
+import type { PatrolPoint, PatrolSettings } from "@/types/patrol";
+import { resolvePatrolSettings } from "@/lib/patrol";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +121,8 @@ interface ClientDoc {
   uniformAllowanceMonthly?: number;
   fieldAllowanceMonthly?: number;
   nationalHolidayList?: string[];
+  patrolSettings?: PatrolSettings;
+  dashboardModules?: ClientDashboardModulesConfig;
 }
 
 interface SiteDoc {
@@ -262,6 +267,17 @@ function createDutyPointDraft(index: number): DutyPoint {
   });
 }
 
+function createPatrolPointDraft(index: number): PatrolPoint {
+  return {
+    id: `patrol-point-${index + 1}`,
+    name: `Patrol Point ${index + 1}`,
+    description: "",
+    active: true,
+    requiresPhoto: true,
+    order: index,
+  };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ClientDashboardPage() {
@@ -313,6 +329,8 @@ export default function ClientDashboardPage() {
   const [savingClient, setSavingClient] = useState(false);
   const [deleteClientDialog, setDeleteClientDialog] = useState(false);
   const [runningGpsRepair, setRunningGpsRepair] = useState(false);
+  const [patrolSettings, setPatrolSettings] = useState<PatrolSettings>(resolvePatrolSettings(null));
+  const [savingPatrolSettings, setSavingPatrolSettings] = useState(false);
 
   // ── Dashboard modules config ──
   const [dashboardModules, setDashboardModules] = useState<ClientDashboardModulesConfig>(DEFAULT_CLIENT_MODULES);
@@ -391,6 +409,7 @@ export default function ClientDashboardPage() {
     if (!client) return;
     const modules = (client as any).dashboardModules as ClientDashboardModulesConfig | undefined;
     setDashboardModules(resolveClientModules(modules));
+    setPatrolSettings(resolvePatrolSettings(client.patrolSettings));
     setModulesLoaded(true);
   }, [client]);
 
@@ -861,6 +880,28 @@ export default function ClientDashboardPage() {
     setDashboardModules({ ...DEFAULT_CLIENT_MODULES });
   };
 
+  const handleSavePatrolSettings = async () => {
+    if (!client) return;
+    setSavingPatrolSettings(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/clients/${clientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: client.name,
+          portalSubdomain: client.portalSubdomain || client.name,
+          portalEnabled: client.portalEnabled !== false,
+          patrolSettings,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast({ title: "Patrol settings updated" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    } finally {
+      setSavingPatrolSettings(false);
+    }
+  };
+
   // ── Helpers ──
 
   const coordBadge = (record: {
@@ -947,6 +988,10 @@ export default function ClientDashboardPage() {
             Users
             <Badge variant="secondary" className="ml-2 text-xs">{users.length}</Badge>
           </TabsTrigger>
+          <TabsTrigger value="patrol" className="flex-1 sm:flex-none">
+            <Footprints className="mr-1.5 h-3.5 w-3.5" />
+            Patrol
+          </TabsTrigger>
           <TabsTrigger value="portal-config" className="flex-1 sm:flex-none">
             <Settings2 className="mr-1.5 h-3.5 w-3.5" />
             Portal Config
@@ -1015,6 +1060,11 @@ export default function ClientDashboardPage() {
                         {!isOperationalClientName(client.name) && (
                           <Badge variant="outline" className="text-[10px]">
                             {resolveSiteDutyPoints(site).length} duty point{resolveSiteDutyPoints(site).length === 1 ? "" : "s"}
+                          </Badge>
+                        )}
+                        {!isOperationalClientName(client.name) && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {resolveSiteDutyPoints(site).reduce((count, point) => count + (point.patrolPoints?.length ?? 0), 0)} patrol point{resolveSiteDutyPoints(site).reduce((count, point) => count + (point.patrolPoints?.length ?? 0), 0) === 1 ? "" : "s"}
                           </Badge>
                         )}
                       </div>
@@ -1202,6 +1252,133 @@ export default function ClientDashboardPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Portal Config Tab ── */}
+        <TabsContent value="patrol" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Enable client-specific patrol monitoring and hourly night-photo proof collection.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleSavePatrolSettings} disabled={savingPatrolSettings}>
+              {savingPatrolSettings && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save Patrol Settings
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Footprints className="h-4 w-4" /> Patrol Monitoring
+              </CardTitle>
+              <CardDescription>
+                Turn this on only for clients that need patrol rounds or hourly proof-of-presence during night duty.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">Enable patrol monitoring</p>
+                  <p className="text-xs text-muted-foreground">
+                    Allows guards on the Android app to submit patrol rounds and hourly night checks.
+                  </p>
+                </div>
+                <Switch
+                  checked={patrolSettings.enabled}
+                  onCheckedChange={(checked) =>
+                    setPatrolSettings((current) => ({ ...current, enabled: checked }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Hourly reminder interval (minutes)</Label>
+                  <Input
+                    type="number"
+                    min={30}
+                    max={180}
+                    value={patrolSettings.hourlyIntervalMinutes}
+                    onChange={(e) =>
+                      setPatrolSettings((current) => ({
+                        ...current,
+                        hourlyIntervalMinutes: Number(e.target.value) || 60,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Hourly night-photo proof</p>
+                    <p className="text-xs text-muted-foreground">
+                      Requires guards on night duty to share a fresh photo every interval.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={patrolSettings.hourlyNightPhotoEnabled}
+                    onCheckedChange={(checked) =>
+                      setPatrolSettings((current) => ({
+                        ...current,
+                        hourlyNightPhotoEnabled: checked,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label>Night window start</Label>
+                  <Input
+                    value={patrolSettings.nightWindowStart}
+                    onChange={(e) =>
+                      setPatrolSettings((current) => ({
+                        ...current,
+                        nightWindowStart: e.target.value,
+                      }))
+                    }
+                    placeholder="20:00"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Night window end</Label>
+                  <Input
+                    value={patrolSettings.nightWindowEnd}
+                    onChange={(e) =>
+                      setPatrolSettings((current) => ({
+                        ...current,
+                        nightWindowEnd: e.target.value,
+                      }))
+                    }
+                    placeholder="06:00"
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Photo required for patrol rounds</p>
+                    <p className="text-xs text-muted-foreground">
+                      Default enforcement for every site patrol point.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={patrolSettings.photoRequiredForPatrol}
+                    onCheckedChange={(checked) =>
+                      setPatrolSettings((current) => ({
+                        ...current,
+                        photoRequiredForPatrol: checked,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-dashed border-border/60 px-4 py-3 text-xs text-muted-foreground">
+                Configure patrol points under each site’s duty points from the <strong>Sites</strong> tab. Those checkpoints will appear in the guard Android app whenever patrol monitoring is enabled here.
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1658,6 +1835,161 @@ export default function ClientDashboardPage() {
                               <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
                             </div>
                           ))}
+                        </div>
+                        <div className="mt-4 rounded-2xl border border-border/60 bg-muted/20 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <Label>Patrol points</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Add the physical checkpoints a guard should cover during a patrol round.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setSiteForm((current) => ({
+                                  ...current,
+                                  dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? {
+                                          ...item,
+                                          patrolPoints: [
+                                            ...(item.patrolPoints ?? []),
+                                            createPatrolPointDraft(item.patrolPoints?.length ?? 0),
+                                          ],
+                                        }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            >
+                              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Patrol Point
+                            </Button>
+                          </div>
+                          {(point.patrolPoints?.length ?? 0) === 0 ? (
+                            <p className="mt-3 text-sm text-muted-foreground">
+                              No patrol checkpoints configured for this duty point.
+                            </p>
+                          ) : (
+                            <div className="mt-3 space-y-3">
+                              {(point.patrolPoints ?? []).map((patrolPoint, patrolIndex) => (
+                                <div
+                                  key={patrolPoint.id || patrolIndex}
+                                  className="rounded-xl border border-border/60 bg-background px-3 py-3"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-medium">Checkpoint {patrolIndex + 1}</p>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-destructive hover:text-destructive"
+                                      onClick={() =>
+                                        setSiteForm((current) => ({
+                                          ...current,
+                                          dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                            itemIndex === index
+                                              ? {
+                                                  ...item,
+                                                  patrolPoints: (item.patrolPoints ?? []).filter(
+                                                    (_, itemPatrolIndex) => itemPatrolIndex !== patrolIndex,
+                                                  ),
+                                                }
+                                              : item,
+                                          ),
+                                        }))
+                                      }
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-1.5">
+                                      <Label>Name</Label>
+                                      <Input
+                                        value={patrolPoint.name}
+                                        onChange={(e) =>
+                                          setSiteForm((current) => ({
+                                            ...current,
+                                            dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                              itemIndex === index
+                                                ? {
+                                                    ...item,
+                                                    patrolPoints: (item.patrolPoints ?? []).map(
+                                                      (entry, entryIndex) =>
+                                                        entryIndex === patrolIndex
+                                                          ? { ...entry, name: e.target.value }
+                                                          : entry,
+                                                    ),
+                                                  }
+                                                : item,
+                                            ),
+                                          }))
+                                        }
+                                        placeholder="e.g. Main Gate East"
+                                      />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <Label>Description</Label>
+                                      <Input
+                                        value={patrolPoint.description ?? ""}
+                                        onChange={(e) =>
+                                          setSiteForm((current) => ({
+                                            ...current,
+                                            dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                              itemIndex === index
+                                                ? {
+                                                    ...item,
+                                                    patrolPoints: (item.patrolPoints ?? []).map(
+                                                      (entry, entryIndex) =>
+                                                        entryIndex === patrolIndex
+                                                          ? { ...entry, description: e.target.value }
+                                                          : entry,
+                                                    ),
+                                                  }
+                                                : item,
+                                            ),
+                                          }))
+                                        }
+                                        placeholder="Optional instructions"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+                                    <div>
+                                      <p className="text-sm font-medium">Require photo at this point</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        When enabled, the guard must attach a photo before submitting this checkpoint.
+                                      </p>
+                                    </div>
+                                    <Switch
+                                      checked={patrolPoint.requiresPhoto !== false}
+                                      onCheckedChange={(checked) =>
+                                        setSiteForm((current) => ({
+                                          ...current,
+                                          dutyPoints: current.dutyPoints.map((item, itemIndex) =>
+                                            itemIndex === index
+                                              ? {
+                                                  ...item,
+                                                  patrolPoints: (item.patrolPoints ?? []).map(
+                                                    (entry, entryIndex) =>
+                                                      entryIndex === patrolIndex
+                                                        ? { ...entry, requiresPhoto: checked }
+                                                        : entry,
+                                                  ),
+                                                }
+                                              : item,
+                                          ),
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

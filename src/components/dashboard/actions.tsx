@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { QrCode, UserPlus, Briefcase, Star, FileText, DollarSign, GraduationCap, Users } from "lucide-react";
+import { QrCode, UserPlus, Briefcase, Star, FileText, DollarSign, GraduationCap, Users, Footprints } from "lucide-react";
 
 type UserRole = 'admin' | 'superAdmin' | 'hr' | 'accounts' | 'compliance' | 'fieldOfficer' | 'client';
 
@@ -19,6 +19,7 @@ const roleActions: Record<UserRole, QuickAction[]> = {
     { label: "Work Orders", href: "/work-orders", icon: Briefcase, color: "bg-amber-50 text-amber-700" },
     { label: "Visit Reports", href: "/visit-reports", icon: FileText, color: "bg-green-50 text-green-700" },
     { label: "Training Reports", href: "/training-reports", icon: GraduationCap, color: "bg-purple-50 text-purple-700" },
+    { label: "Patrol Activity", href: "/patrol-activity", icon: Footprints, color: "bg-slate-100 text-slate-700" },
   ],
   fieldOfficer: [
     { label: "Upcoming Duties", href: "/work-orders", icon: Briefcase, color: "bg-blue-50 text-blue-600" },
@@ -31,6 +32,7 @@ const roleActions: Record<UserRole, QuickAction[]> = {
     { label: "Attendance", href: "/attendance-logs", icon: QrCode, color: "bg-green-50 text-green-700" },
     { label: "Deployments", href: "/work-orders", icon: Briefcase, color: "bg-amber-50 text-amber-700" },
     { label: "Site Reports", href: "/visit-reports", icon: FileText, color: "bg-purple-50 text-purple-700" },
+    { label: "Patrol Activity", href: "/patrol-activity", icon: Footprints, color: "bg-slate-100 text-slate-700" },
   ],
   accounts: [
     { label: "Run Payroll", href: "/payroll/run", icon: DollarSign, color: "bg-green-50 text-green-700" },

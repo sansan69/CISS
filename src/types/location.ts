@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { patrolPointSchema } from "@/types/patrol";
 
 export const coordinateStatusSchema = z.enum([
   "missing",
@@ -41,6 +42,7 @@ export const dutyPointSchema = z.object({
   shiftTemplates: z.array(shiftTemplateSchema).default([]),
   geofenceRadiusMeters: z.number().positive().optional(),
   notes: z.string().optional(),
+  patrolPoints: z.array(patrolPointSchema).default([]),
 });
 
 export const geoPointLikeSchema = z.object({
