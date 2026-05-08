@@ -7,7 +7,7 @@ import {
 import { generateEmployeeId } from "@/lib/employee-id";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import { REGION_CODE } from "@/lib/runtime-config";
-import { LNG_CLIENT_NAME } from "@/lib/constants";
+import { isLngClientName, LNG_CLIENT_NAME } from "@/lib/constants";
 import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
@@ -94,12 +94,14 @@ export async function POST(request: NextRequest) {
     const { Timestamp } = await import("firebase-admin/firestore");
 
     const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
+    const isLngEnrollment = isLngClientName(payload.clientName);
+    const canonicalClientName = isLngEnrollment ? LNG_CLIENT_NAME : payload.clientName;
     const normalizedEmail =
       (payload.emailAddress?.trim() || "").toLowerCase() ||
-      (payload.clientName === LNG_CLIENT_NAME ? buildLngFallbackEmail(payload) : "");
+      (isLngEnrollment ? buildLngFallbackEmail(payload) : "");
     const normalizedFullNameInput = payload.fullNameInput?.trim() || "";
     const nameParts =
-      payload.clientName === LNG_CLIENT_NAME && normalizedFullNameInput
+      isLngEnrollment && normalizedFullNameInput
         ? splitFullNameForStorage(normalizedFullNameInput)
         : {
             firstName: payload.firstName,
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let employeeId = payload.clientName === LNG_CLIENT_NAME
+    let employeeId = isLngEnrollment
       ? payload.legacyUniqueId?.trim()
       : undefined;
 
@@ -156,7 +158,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      employeeId = await generateUniqueEmployeeId(adminDb, payload.clientName);
+      employeeId = await generateUniqueEmployeeId(adminDb, canonicalClientName);
     }
 
     const fullName = `${nameParts.firstName.toUpperCase()} ${nameParts.lastName.toUpperCase()}`.trim();
@@ -179,7 +181,7 @@ export async function POST(request: NextRequest) {
         },
         employeeId,
       ),
-      clientName: payload.clientName,
+      clientName: canonicalClientName,
       firstName: nameParts.firstName.toUpperCase(),
       lastName: nameParts.lastName.toUpperCase(),
       fullName,
@@ -211,7 +213,7 @@ export async function POST(request: NextRequest) {
       publicProfile: {
         fullName,
         employeeId,
-        clientName: payload.clientName,
+        clientName: canonicalClientName,
         profilePictureUrl: payload.profilePictureUrl,
         status: "Active",
       },

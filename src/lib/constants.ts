@@ -37,6 +37,25 @@ export const GENDER_OPTIONS = ["Male", "Female", "Other"] as const;
 
 export const OPERATIONAL_CLIENT_NAME = "TCS" as const;
 export const LNG_CLIENT_NAME = "LNG Petronet" as const;
+export function normalizeClientNameKey(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+const LNG_CLIENT_KEYS = new Set([
+  normalizeClientNameKey(LNG_CLIENT_NAME),
+  normalizeClientNameKey("Petronet LNG"),
+  normalizeClientNameKey("Petronet LNG Limited"),
+  normalizeClientNameKey("LNG Petronet Limited"),
+]);
+
+export function isLngClientName(value: string | null | undefined) {
+  return LNG_CLIENT_KEYS.has(normalizeClientNameKey(value));
+}
+
 export const LNG_JOB_DESIGNATIONS = [
   "Ex Servicemen Security Guard - Military",
   "Ex Servicemen Security Guard - Paramilitary",

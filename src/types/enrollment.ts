@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   EDUCATION_OPTIONS,
   GENDER_OPTIONS,
-  LNG_CLIENT_NAME,
+  isLngClientName,
   LNG_JOB_DESIGNATIONS,
   MARITAL_STATUSES,
   PROOF_TYPES,
@@ -100,7 +100,7 @@ export const enrollmentSubmissionSchema = z
       });
     }
 
-    if (data.clientName === LNG_CLIENT_NAME) {
+    if (isLngClientName(data.clientName)) {
       if (!data.fullNameInput?.trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

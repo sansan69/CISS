@@ -53,7 +53,7 @@ import { Download, KeyRound } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import {
   EDUCATION_OPTIONS,
-  LNG_CLIENT_NAME,
+  isLngClientName,
   LNG_JOB_DESIGNATIONS,
   MARITAL_STATUSES,
   PROOF_TYPES,
@@ -182,7 +182,7 @@ const enrollmentFormSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
   }
 
-  if (data.clientName === LNG_CLIENT_NAME) {
+  if (isLngClientName(data.clientName)) {
     if (!data.fullNameInput || data.fullNameInput.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Full name is required.", path: ["fullNameInput"] });
     }
@@ -404,10 +404,6 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "maritalStatus",
   "educationalQualification",
   "lngJobDesignation",
-  "serviceBookNumber",
-  "serviceBookDocument",
-  "armsLicenseNumber",
-  "armsLicenseDocument",
   "district",
   "panNumber",
   "aadharNumber",
@@ -802,7 +798,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const watchedValues = useWatch({ control: form.control });
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
-  const isLngClient = watchClientName === LNG_CLIENT_NAME;
+  const isLngClient = isLngClientName(watchClientName);
   const requiresServiceBook = requiresLngServiceBook(watchLngJobDesignation);
   const requiresArmsLicense = requiresLngArmsLicense(watchLngJobDesignation);
 
@@ -1258,7 +1254,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     }
 
     const phoneNumber = data.phoneNumber.replace(/\D/g, "");
-    const isLngEnrollment = data.clientName === LNG_CLIENT_NAME;
+    const isLngEnrollment = isLngClientName(data.clientName);
     const normalizedLngFullName = data.fullNameInput?.trim() || "";
     const derivedNameParts = isLngEnrollment
       ? splitLngFullName(normalizedLngFullName)
@@ -1433,7 +1429,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const applicableRequiredFields = (() => {
     let fields = [...BASE_REQUIRED_FIELDS];
 
-    if (formValues.clientName === LNG_CLIENT_NAME) {
+    if (isLngClientName(formValues.clientName)) {
       fields = fields.filter(
         (fieldName) =>
           !["firstName", "lastName", "emailAddress", "panNumber"].includes(fieldName),
@@ -1462,7 +1458,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     if (formValues.clientName === "TCS") {
       fields.push("resourceIdNumber");
     }
-    if (formValues.clientName === LNG_CLIENT_NAME) {
+    if (isLngClientName(formValues.clientName)) {
       fields.push(
         "fullNameInput",
         "lngJobDesignation",
@@ -2012,14 +2008,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="Joining Date" value={watchedValues?.joiningDate ? format(watchedValues.joiningDate, "dd-MM-yyyy") : "Not added"} />
                       <ReviewRow label="Client" value={watchedValues?.clientName || "Not selected"} />
                       {watchedValues?.clientName === "TCS" && <ReviewRow label="Resource ID" value={watchedValues?.resourceIdNumber || "Missing"} />}
-                      {watchedValues?.clientName === LNG_CLIENT_NAME && <ReviewRow label="Legacy Unique ID" value={watchedValues?.legacyUniqueId || "Missing"} />}
+                      {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Legacy Unique ID" value={watchedValues?.legacyUniqueId || "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Personal">
-                      <ReviewRow label="Name" value={watchedValues?.clientName === LNG_CLIENT_NAME ? watchedValues?.fullNameInput || "Not added" : [watchedValues?.firstName, watchedValues?.lastName].filter(Boolean).join(" ") || "Not added"} />
+                      <ReviewRow label="Name" value={isLngClientName(watchedValues?.clientName) ? watchedValues?.fullNameInput || "Not added" : [watchedValues?.firstName, watchedValues?.lastName].filter(Boolean).join(" ") || "Not added"} />
                       <ReviewRow label="DOB" value={watchedValues?.dateOfBirth ? format(watchedValues.dateOfBirth, "dd-MM-yyyy") : "Not added"} />
                       <ReviewRow label="Gender" value={watchedValues?.gender || "Not selected"} />
                       <ReviewRow label="Qualification" value={watchedValues?.educationalQualification || "Not selected"} />
-                      {watchedValues?.clientName === LNG_CLIENT_NAME && <ReviewRow label="Designation" value={watchedValues?.lngJobDesignation || "Not selected"} />}
+                      {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Designation" value={watchedValues?.lngJobDesignation || "Not selected"} />}
                     </ReviewCard>
                     <ReviewCard title="Documents">
                       <ReviewRow label="Profile picture" value={profilePicPreview ? "Ready" : "Missing"} />
@@ -2028,12 +2024,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="Address proof front" value={addressProofUrlFrontPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof back" value={addressProofUrlBackPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Signature" value={signatureUrlPreview ? "Ready" : "Missing"} />
-                      {watchedValues?.clientName === LNG_CLIENT_NAME && requiresServiceBook && <ReviewRow label="Service book" value={serviceBookPreview ? "Ready" : "Missing"} />}
-                      {watchedValues?.clientName === LNG_CLIENT_NAME && requiresArmsLicense && <ReviewRow label="Arms license" value={armsLicensePreview ? "Ready" : "Missing"} />}
+                      {isLngClientName(watchedValues?.clientName) && requiresServiceBook && <ReviewRow label="Service book" value={serviceBookPreview ? "Ready" : "Missing"} />}
+                      {isLngClientName(watchedValues?.clientName) && requiresArmsLicense && <ReviewRow label="Arms license" value={armsLicensePreview ? "Ready" : "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Contact">
                       <ReviewRow label="Phone" value={watchedValues?.phoneNumber || "Not added"} />
-                      <ReviewRow label="Email" value={watchedValues?.emailAddress || (watchedValues?.clientName === LNG_CLIENT_NAME ? "Will be generated automatically" : "Not added")} />
+                      <ReviewRow label="Email" value={watchedValues?.emailAddress || (isLngClientName(watchedValues?.clientName) ? "Will be generated automatically" : "Not added")} />
                       <ReviewRow label="District" value={watchedValues?.district || "Not selected"} />
                       <ReviewRow label="Address" value={watchedValues?.fullAddress || "Not added"} />
                     </ReviewCard>
