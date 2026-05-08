@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/layout/page-header";
+import { authorizedFetch } from "@/lib/api-client";
 import { Send, Megaphone, Users, Shield, UserCheck, Loader2, CheckCircle } from "lucide-react";
 
 export default function AdminNotificationsPage() {
@@ -31,7 +32,7 @@ export default function AdminNotificationsPage() {
     setSent(false);
 
     try {
-      const res = await fetch("/api/admin/notifications/send", {
+      const res = await authorizedFetch("/api/admin/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

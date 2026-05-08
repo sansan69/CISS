@@ -154,12 +154,15 @@ service cloud.firestore {
     }
 
     // ── fcmTokens (push notification device registration) ────────────────────
-    // Any authenticated user can write their own FCM token.
+    // Any authenticated user can write their own FCM token records.
     // Admins can read all tokens (for targeted push notifications).
 
     match /fcmTokens/{tokenId} {
       allow read: if isAdmin();
-      allow write: if isSignedIn() && request.auth.uid == tokenId;
+      allow write: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.token is string &&
+        request.resource.data.platform is string;
     }
 
     // ── attendanceLogs ───────────────────────────────────────────────────────
@@ -405,6 +408,10 @@ service cloud.firestore {
     // Explicit deny ensures no client can ever read or write them directly.
 
     match /foVisitReports/{docId} {
+      allow read, write: if false;
+    }
+
+    match /foTrainingReports/{docId} {
       allow read, write: if false;
     }
 

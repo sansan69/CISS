@@ -204,10 +204,14 @@ describe("GET /api/mobile/session", () => {
       clientName: "Client A",
       claimsRepaired: true,
     });
-    expect(setCustomUserClaims).toHaveBeenCalledWith("guard-uid-99", {
-      role: "guard",
-      employeeId: "EMP099",
-      employeeDocId: "emp-99",
-    });
+    expect(setCustomUserClaims).toHaveBeenCalledWith(
+      "guard-uid-99",
+      expect.objectContaining({
+        role: "guard",
+        employeeId: "EMP099",
+        employeeDocId: "emp-99",
+        clientName: "Client A",
+      }),
+    );
   });
 });
