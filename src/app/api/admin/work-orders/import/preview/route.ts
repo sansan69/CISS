@@ -9,6 +9,10 @@ import {
   buildTcsExamContentHash,
 } from "@/lib/work-orders/tcs-exam-hash";
 import { buildTcsExamDiff } from "@/lib/work-orders/tcs-exam-diff";
+import {
+  buildSiteLookupMaps,
+  resolveParsedRowSiteIds,
+} from "@/lib/work-orders/tcs-site-resolver";
 import type {
   TcsExamExistingWorkOrder,
   TcsExamImportPreviewPayload,
@@ -368,12 +372,21 @@ export async function POST(request: Request) {
     );
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const existingRows = await fetchExistingRows(adminDb, parseResult.rows);
+
+    // Resolve TC centre codes → Firestore site document IDs so that
+    // diff identity keys match the siteId stored on existing work orders.
+    const siteLookupMaps = await buildSiteLookupMaps(adminDb);
+    const resolvedParsedRows = resolveParsedRowSiteIds(
+      parseResult.rows,
+      siteLookupMaps,
+    );
+
+    const existingRows = await fetchExistingRows(adminDb, resolvedParsedRows);
     const activeExistingRows = existingRows.filter((row) =>
       isActiveRecordStatus(row.recordStatus),
     );
     const diffRows = buildTcsExamDiff({
-      parsedRows: parseResult.rows,
+      parsedRows: resolvedParsedRows,
       existingRows: activeExistingRows,
       mode,
     });
@@ -381,12 +394,16 @@ export async function POST(request: Request) {
       adminDb,
       binaryFileHash,
       contentHash,
-      parseResult.rows,
+      resolvedParsedRows,
       existingRows,
     );
 
+    // Return the *original* parse result (with TC codes) so the client
+    // sends back the same rows. The commit route will resolve site IDs
+    // again before writing.
     const payload: TcsExamImportPreviewPayload = {
       ...parseResult,
+      rows: parseResult.rows,
       mode,
       binaryFileHash,
       contentHash,

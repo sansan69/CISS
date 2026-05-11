@@ -12,6 +12,10 @@ import { buildTcsExamDiff } from "@/lib/work-orders/tcs-exam-diff";
 import { buildTcsExamContentHash } from "@/lib/work-orders/tcs-exam-hash";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import {
+  buildSiteLookupMaps,
+  resolveParsedRowSiteIds,
+} from "@/lib/work-orders/tcs-site-resolver";
+import {
   canonicalizeDistrictName,
   districtKey,
   districtMatches,
@@ -506,7 +510,32 @@ export async function POST(request: Request) {
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const existingRows = await fetchExistingRows(adminDb, canonicalRows);
+
+    // Resolve TC centre codes → Firestore site document IDs so that diff
+    // identity keys match the `siteId` stored on existing work orders.
+    const siteLookupMaps = await buildSiteLookupMaps(adminDb);
+    const resolvedCanonicalRows = resolveParsedRowSiteIds(
+      canonicalRows,
+      siteLookupMaps,
+    );
+
+    // Build key maps for bridging between original (TC-code) keys and
+    // resolved (Firestore-doc-ID) keys.
+    const parsedByKey = new Map(
+      canonicalRows.map((row) => [getIdentityKey(row), row]),
+    );
+    const parsedByResolvedKey = new Map(
+      resolvedCanonicalRows.map((row) => [getIdentityKey(row), row]),
+    );
+    const originalKeyByResolvedKey = new Map<string, string>();
+    for (let i = 0; i < canonicalRows.length; i += 1) {
+      originalKeyByResolvedKey.set(
+        getIdentityKey(resolvedCanonicalRows[i]),
+        getIdentityKey(canonicalRows[i]),
+      );
+    }
+
+    const existingRows = await fetchExistingRows(adminDb, resolvedCanonicalRows);
     const activeExistingRows = existingRows.filter(
       (row) => isActiveRecordStatus(row.recordStatus),
     );
@@ -514,7 +543,7 @@ export async function POST(request: Request) {
     if (
       mode === "new" &&
       duplicateResolution === "reject" &&
-      hasIdentityOverlap(canonicalRows, activeExistingRows)
+      hasIdentityOverlap(resolvedCanonicalRows, activeExistingRows)
     ) {
       return NextResponse.json(
         {
@@ -526,26 +555,25 @@ export async function POST(request: Request) {
     }
 
     const diffRows = buildTcsExamDiff({
-      parsedRows: canonicalRows,
+      parsedRows: resolvedCanonicalRows,
       existingRows: activeExistingRows,
       mode,
     });
 
-    const parsedByKey = new Map(
-      canonicalRows.map((row) => [getIdentityKey(row), row]),
-    );
-
+    // Resolve original rows for the diff entries that will be committed.
+    // diffRows use resolved (Firestore-doc-ID) keys; we bridge back to
+    // original TC-code keys so that resolveCommitRows can look up sites.
     const commitDiffRows = diffRows.filter((diffRow) => {
       if (diffRow.status === "cancelled") {
         return false;
       }
-      const parsedRow = parsedByKey.get(diffRow.key);
-      if (!parsedRow) {
+      const resolvedRow = parsedByResolvedKey.get(diffRow.key);
+      if (!resolvedRow) {
         return false;
       }
       const existing = findMatchingExistingRow(
         {
-          ...parsedRow,
+          ...resolvedRow,
           examName: payload.examName,
           examCode: payload.examCode,
         },
@@ -553,14 +581,21 @@ export async function POST(request: Request) {
       );
       return !(existing && duplicateResolution === "omit");
     });
+
     const commitDiffKeys = new Set(commitDiffRows.map((row) => row.key));
-    const rowsToResolve = commitDiffRows.reduce<TcsExamSourceRow[]>((rows, diffRow) => {
-      const row = parsedByKey.get(diffRow.key);
-      if (row) {
-        rows.push(row);
+
+    // Build the list of *original* rows to pass to resolveCommitRows (which
+    // needs TC codes for site lookup/creation).
+    const rowsToResolve: TcsExamSourceRow[] = [];
+    const resolvedDiffKeyToOriginalRow = new Map<string, TcsExamSourceRow>();
+    for (const diffRow of commitDiffRows) {
+      const originalKey = originalKeyByResolvedKey.get(diffRow.key);
+      const originalRow = originalKey ? parsedByKey.get(originalKey) : undefined;
+      if (originalRow) {
+        rowsToResolve.push(originalRow);
+        resolvedDiffKeyToOriginalRow.set(diffRow.key, originalRow);
       }
-      return rows;
-    }, []);
+    }
 
     const importRef = adminDb.collection("workOrderImports").doc();
     const importId = importRef.id;
@@ -572,9 +607,17 @@ export async function POST(request: Request) {
       adminUser,
     );
 
+    // Build a lookup from *resolved* identity key to the row returned by
+    // resolveCommitRows (which carries the definitive Firestore doc ID).
     const resolvedByOriginalKey = new Map<string, TcsExamSourceRow>();
+    const resolvedByResolvedKey = new Map<string, TcsExamSourceRow>();
     for (let index = 0; index < rowsToResolve.length; index += 1) {
-      resolvedByOriginalKey.set(getIdentityKey(rowsToResolve[index]), resolvedRows[index]);
+      const originalKey = getIdentityKey(rowsToResolve[index]);
+      const resolved = resolvedRows[index];
+      resolvedByOriginalKey.set(originalKey, resolved);
+      // Also compute the resolved key from the resolved row (its siteId is
+      // now a Firestore doc ID) so we can do a direct O(1) lookup.
+      resolvedByResolvedKey.set(getIdentityKey(resolved), resolved);
     }
 
     let committedRows = 0;
@@ -582,6 +625,8 @@ export async function POST(request: Request) {
 
     for (const diffRow of diffRows) {
       if (diffRow.status === "cancelled") {
+        // diffRow.key already uses Firestore doc IDs (from existingRows),
+        // so it matches getIdentityKey(existingRow) directly.
         const existing = activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key);
         if (!existing) {
           continue;
@@ -603,20 +648,22 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const originalParsedRow = parsedByKey.get(diffRow.key);
-      const parsedRow = originalParsedRow
-        ? resolvedByOriginalKey.get(getIdentityKey(originalParsedRow)) ?? originalParsedRow
-        : null;
-      if (!parsedRow || !originalParsedRow) {
+      // Resolved row: prefer the row from resolveCommitRows (which may
+      // have created a new site), falling back to the pre-resolved row.
+      const parsedRow =
+        resolvedByResolvedKey.get(diffRow.key) ??
+        parsedByResolvedKey.get(diffRow.key) ??
+        null;
+
+      if (!parsedRow) {
         continue;
       }
 
-      const authoritativeRow = {
-        ...originalParsedRow,
-        examName: payload.examName,
-        examCode: payload.examCode,
-      };
-      const existing = findMatchingExistingRow(authoritativeRow, activeExistingRows);
+      // Look up the existing work order using the resolved identity key
+      // (which uses Firestore doc IDs), not the TC-code-based key.
+      const existing =
+        activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
+        null;
 
       committedRows += 1;
       const targetId = existing?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);
