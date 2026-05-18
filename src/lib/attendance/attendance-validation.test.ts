@@ -43,6 +43,46 @@ describe("canRecordNextDayCheckout", () => {
     ).toBe(false);
   });
 
+  it("allows next-morning checkout when the current time resolves to a day shift but the previous IN shift crossed midnight", () => {
+    expect(
+      canRecordNextDayCheckout({
+        attendanceDate: "2026-05-17",
+        status: "Out",
+        siteId: "site-1",
+        dutyPointId: "duty-1",
+        shift: { code: "day", crossesMidnight: false },
+        lastShift: { code: "night", crossesMidnight: true },
+        lastState: {
+          lastAttendanceDate: "2026-05-16",
+          lastStatus: "In",
+          lastSiteId: "site-1",
+          lastDutyPointId: "duty-1",
+          lastShiftCode: "night",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps next-morning checkout attached to the previous shift day even if the current time resolves to a day shift", () => {
+    expect(
+      resolveOperationalAttendanceDate({
+        attendanceDate: "2026-05-17",
+        status: "Out",
+        siteId: "site-1",
+        dutyPointId: "duty-1",
+        shift: { code: "day", crossesMidnight: false },
+        lastShift: { code: "night", crossesMidnight: true },
+        lastState: {
+          lastAttendanceDate: "2026-05-16",
+          lastStatus: "In",
+          lastSiteId: "site-1",
+          lastDutyPointId: "duty-1",
+          lastShiftCode: "night",
+        },
+      }),
+    ).toBe("2026-05-16");
+  });
+
   it("keeps an overnight next-day checkout attached to the previous shift day", () => {
     expect(
       resolveOperationalAttendanceDate({

@@ -11,16 +11,38 @@ export type AttendanceShiftSnapshot = {
   crossesMidnight?: boolean | null;
 } | null;
 
+function getCheckoutShift(input: {
+  shift: AttendanceShiftSnapshot;
+  lastShift?: AttendanceShiftSnapshot;
+  lastState: AttendanceStateSnapshot;
+}) {
+  const currentShiftCode = input.shift?.code ?? null;
+  const lastShiftCode = input.lastState.lastShiftCode ?? null;
+
+  if (
+    input.lastShift?.crossesMidnight === true &&
+    (!lastShiftCode || input.lastShift.code === lastShiftCode)
+  ) {
+    return input.lastShift;
+  }
+
+  if (currentShiftCode && lastShiftCode && currentShiftCode !== lastShiftCode) {
+    return null;
+  }
+
+  return input.shift;
+}
+
 export function canRecordNextDayCheckout(input: {
   attendanceDate: string;
   status: "In" | "Out";
   siteId: string;
   dutyPointId?: string | null;
   shift: AttendanceShiftSnapshot;
+  lastShift?: AttendanceShiftSnapshot;
   lastState: AttendanceStateSnapshot;
 }) {
   if (input.status !== "Out") return false;
-  if (!input.shift?.crossesMidnight) return false;
 
   const lastAttendanceDate = input.lastState.lastAttendanceDate ?? null;
   if (!lastAttendanceDate || lastAttendanceDate === input.attendanceDate) {
@@ -39,9 +61,13 @@ export function canRecordNextDayCheckout(input: {
     return false;
   }
 
-  const currentShiftCode = input.shift.code ?? null;
-  const lastShiftCode = input.lastState.lastShiftCode ?? null;
-  if (currentShiftCode && lastShiftCode && currentShiftCode !== lastShiftCode) {
+  const checkoutShift = getCheckoutShift({
+    shift: input.shift,
+    lastShift: input.lastShift,
+    lastState: input.lastState,
+  });
+
+  if (!checkoutShift?.crossesMidnight) {
     return false;
   }
 
@@ -54,6 +80,7 @@ export function resolveOperationalAttendanceDate(input: {
   siteId: string;
   dutyPointId?: string | null;
   shift: AttendanceShiftSnapshot;
+  lastShift?: AttendanceShiftSnapshot;
   lastState?: AttendanceStateSnapshot | null;
 }) {
   const lastState = input.lastState ?? null;
@@ -68,6 +95,7 @@ export function resolveOperationalAttendanceDate(input: {
       siteId: input.siteId,
       dutyPointId: input.dutyPointId,
       shift: input.shift,
+      lastShift: input.lastShift,
       lastState,
     })
   ) {

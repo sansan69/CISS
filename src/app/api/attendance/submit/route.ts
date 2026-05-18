@@ -259,12 +259,20 @@ export async function POST(request: NextRequest) {
       const lastState = stateSnap.exists
         ? (stateSnap.data() as Record<string, any>)
         : null;
+      const lastRecordedShift = lastState?.lastShiftCode
+        ? resolveShiftByCode(
+            activeShiftSource.shiftMode,
+            activeShiftSource.shiftTemplates,
+            String(lastState.lastShiftCode),
+          )
+        : null;
       const attendanceDate = resolveOperationalAttendanceDate({
         attendanceDate: submittedAttendanceDate,
         status: payload.status,
         siteId: payload.siteId,
         dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
         shift: effectiveShift,
+        lastShift: lastRecordedShift,
         lastState,
       });
 
@@ -380,6 +388,7 @@ export async function POST(request: NextRequest) {
             siteId: payload.siteId,
             dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
             shift: effectiveShift,
+            lastShift: lastRecordedShift,
             lastState,
           });
 
