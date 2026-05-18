@@ -48,7 +48,9 @@ export function normalizeClientNameKey(value: string | null | undefined) {
 const LNG_CLIENT_KEYS = new Set([
   normalizeClientNameKey(LNG_CLIENT_NAME),
   normalizeClientNameKey("Petronet LNG"),
+  normalizeClientNameKey("Petronet LNG Ltd"),
   normalizeClientNameKey("Petronet LNG Limited"),
+  normalizeClientNameKey("LNG Petronet Ltd"),
   normalizeClientNameKey("LNG Petronet Limited"),
 ]);
 

@@ -75,6 +75,10 @@ const optionalFileSchema = fileSchema.optional();
 const proofTypes = z.enum(PROOF_TYPES);
 const qualificationTypes = z.enum(EDUCATION_OPTIONS);
 const lngDesignationTypes = z.enum(LNG_JOB_DESIGNATIONS);
+const optionalPositiveNumber = z.preprocess(
+  (value) => (value === "" || value === null ? undefined : value),
+  z.coerce.number().finite().positive().optional(),
+);
 
 const idValidation = {
     "Aadhar Card": /^\d{12}$/,
@@ -133,8 +137,8 @@ const enrollmentFormSchema = z.object({
   aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhar number must be 12 digits." }).optional().or(z.literal('')),
   nationality: z.string().optional(),
   identificationMark: z.string().optional(),
-  heightCm: z.coerce.number().positive().optional(),
-  weightKg: z.coerce.number().positive().optional(),
+  heightCm: optionalPositiveNumber,
+  weightKg: optionalPositiveNumber,
   
   identityProofType: proofTypes,
   identityProofNumber: z.string().min(1, { message: "ID proof number is required." }),
@@ -265,7 +269,7 @@ type StepIssue = {
   title: string;
   fields: string[];
 };
-type SerializedDraftValue = string | boolean | null | { type: "date"; value: string };
+type SerializedDraftValue = string | number | boolean | null | { type: "date"; value: string };
 type EnrollmentDraft = {
   currentStep: number;
   updatedAt: string;
@@ -322,6 +326,8 @@ const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   aadharNumber: "",
   nationality: "Indian",
   identificationMark: "",
+  heightCm: undefined,
+  weightKg: undefined,
   identityProofType: undefined,
   identityProofNumber: "",
   addressProofType: undefined,
@@ -452,7 +458,7 @@ const serializeDraftValues = (values: EnrollmentFormValues): EnrollmentDraft["va
       continue;
     }
 
-    if (typeof value === "string" || typeof value === "boolean" || value === null) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
       serialized[rawKey] = value;
     }
   }
@@ -1368,7 +1374,46 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
         const responseBody = await response.json();
         if (!response.ok) {
-          throw new Error(responseBody.error || "Could not create employee record.");
+          const fieldErrors = responseBody?.details?.fieldErrors;
+          let highlightedFieldCount = 0;
+
+          if (fieldErrors && typeof fieldErrors === "object") {
+            for (const [fieldName, messages] of Object.entries(fieldErrors)) {
+              if (!Array.isArray(messages) || messages.length === 0) {
+                continue;
+              }
+
+              const firstMessage = messages.find(
+                (message): message is string =>
+                  typeof message === "string" && message.trim().length > 0,
+              );
+
+              if (!firstMessage) {
+                continue;
+              }
+
+              form.setError(fieldName as keyof EnrollmentFormValues, {
+                type: "server",
+                message: firstMessage,
+              });
+              highlightedFieldCount += 1;
+            }
+          }
+
+          const formErrors = Array.isArray(responseBody?.details?.formErrors)
+            ? responseBody.details.formErrors
+            : [];
+          const firstFormError = formErrors.find(
+            (message: unknown): message is string =>
+              typeof message === "string" && message.trim().length > 0,
+          );
+
+          throw new Error(
+            firstFormError ||
+              (highlightedFieldCount > 0
+                ? "Please review the highlighted fields and try again."
+                : responseBody.error || "Could not create employee record."),
+          );
         }
 
         toast({
@@ -1963,8 +2008,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       {isLngClient && <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter 12-digit Aadhar number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
-                      {isLngClient && <FormField control={form.control} name="heightCm" render={({ field }) => (<FormItem><FormLabel>Height (cm) <span className="text-destructive">*</span></FormLabel><FormControl><Input type="number" min="1" placeholder="Enter height in cm" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
-                      {isLngClient && <FormField control={form.control} name="weightKg" render={({ field }) => (<FormItem><FormLabel>Weight (kg) <span className="text-destructive">*</span></FormLabel><FormControl><Input type="number" min="1" placeholder="Enter weight in kg" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                      {isLngClient && (
+                        <div className="md:col-span-2 rounded-2xl border bg-muted/20 p-4">
+                          <h3 className="font-medium text-lg">Physical Details</h3>
+                          <p className="text-sm text-muted-foreground">Required for LNG Petronet employee registration and document verification.</p>
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <FormField control={form.control} name="heightCm" render={({ field }) => (<FormItem><FormLabel>Height (cm) <span className="text-destructive">*</span></FormLabel><FormControl><Input type="number" min="1" inputMode="decimal" placeholder="Enter height in cm" {...field} value={field.value ?? ""} onChange={(event) => field.onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="weightKg" render={({ field }) => (<FormItem><FormLabel>Weight (kg) <span className="text-destructive">*</span></FormLabel><FormControl><Input type="number" min="1" inputMode="decimal" placeholder="Enter weight in kg" {...field} value={field.value ?? ""} onChange={(event) => field.onChange(event.target.value === "" ? undefined : Number(event.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+                          </div>
+                        </div>
+                      )}
                       <FormField control={form.control} name="epfUanNumber" render={({ field }) => (<FormItem><FormLabel>EPF UAN Number</FormLabel><FormControl><Input placeholder="Enter EPF UAN number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       {isLngClient && <FormField control={form.control} name="legacyUniqueId" render={({ field }) => (<FormItem><FormLabel>Legacy Unique ID <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g. KL/LNG/2024-26/001" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
@@ -2016,6 +2069,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="Gender" value={watchedValues?.gender || "Not selected"} />
                       <ReviewRow label="Qualification" value={watchedValues?.educationalQualification || "Not selected"} />
                       {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Designation" value={watchedValues?.lngJobDesignation || "Not selected"} />}
+                      {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Height" value={watchedValues?.heightCm ? `${watchedValues.heightCm} cm` : "Missing"} />}
+                      {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Weight" value={watchedValues?.weightKg ? `${watchedValues.weightKg} kg` : "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Documents">
                       <ReviewRow label="Profile picture" value={profilePicPreview ? "Ready" : "Missing"} />
