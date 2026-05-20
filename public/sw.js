@@ -4,7 +4,13 @@
 const CACHE_NAME = 'ciss-workforce-cache-v4'; // Increment version to force update
 const APP_SHELL_URLS = [
   '/',
+  '/guard/dashboard',
+  '/guard/attendance',
+  '/guard/training',
+  '/guard/payslips',
+  '/guard/profile',
   '/admin-login',
+  '/guard-login',
   '/enroll',
   '/manifest.json',
   '/favicon.ico',
@@ -62,7 +68,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       (async () => {
         try {
-          const networkResponse = await fetch(event.request);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          const networkResponse = await fetch(event.request, { signal: controller.signal });
+          clearTimeout(timeout);
           return networkResponse;
         } catch (err) {
           // If the network fails, serve an offline fallback page if available.

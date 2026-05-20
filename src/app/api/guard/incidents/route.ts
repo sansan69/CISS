@@ -6,6 +6,10 @@ function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function isActiveEmployee(employee: Record<string, unknown>) {
+  return normalizeText(employee.status || "Active").toLowerCase() === "active";
+}
+
 function serializeDate(value: unknown) {
   if (value && typeof value === "object" && typeof (value as { toDate?: unknown }).toDate === "function") {
     return (value as { toDate: () => Date }).toDate().toISOString();
@@ -82,6 +86,12 @@ export async function POST(request: Request) {
     const { FieldValue } = await import("firebase-admin/firestore");
     const empDoc = await adminDb.collection("employees").doc(guard.employeeDocId).get();
     const employeeData = empDoc.data() ?? {};
+    if (!empDoc.exists) {
+      return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+    }
+    if (!isActiveEmployee(employeeData)) {
+      return NextResponse.json({ error: "Only active guards can create incidents." }, { status: 403 });
+    }
 
     const ref = await adminDb.collection("incidents").add({
       reporterEmployeeDocId: guard.employeeDocId,

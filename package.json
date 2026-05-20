@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .js,.ts,.tsx",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "postinstall": "patch-package"
   },

@@ -60,13 +60,14 @@ type ScannedEmployee = {
   fullName: string;
   phoneNumber?: string;
   clientName?: string;
-  attendanceHint?: {
-    lastAttendanceDate?: string;
-    lastStatus?: 'In' | 'Out';
-    lastDutyPointId?: string;
-    lastShiftCode?: string;
-  };
-};
+	  attendanceHint?: {
+	    lastAttendanceDate?: string;
+	    lastStatus?: 'In' | 'Out';
+	    lastDutyPointId?: string;
+	    lastShiftCode?: string;
+	    openSessionId?: string;
+	  };
+	};
 
 type SuggestedSite = SiteOption & {
   distanceMeters: number;
@@ -149,6 +150,7 @@ export default function AttendancePage() {
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [isWatermarking, setIsWatermarking] = useState(false);
+  const [isSubmittingAttendance, setIsSubmittingAttendance] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
   const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
   const [photoCompliance, setPhotoCompliance] = useState<AttendancePhotoCompliance | null>(null);
@@ -219,8 +221,17 @@ export default function AttendancePage() {
     [resolvedShift, shiftMode, shiftTemplates],
   );
 
-  const pickSuggestedShiftCode = useCallback((templates: ShiftTemplate[]) => {
-    if (templates.length === 0) return "";
+	  const pickSuggestedShiftCode = useCallback((templates: ShiftTemplate[]) => {
+	    if (templates.length === 0) return "";
+
+    if (selectedStatus === 'Out' && scannedEmployee?.attendanceHint?.lastShiftCode) {
+      const activeSessionShift = templates.find(
+        (shift) => shift.code === scannedEmployee.attendanceHint?.lastShiftCode,
+      );
+      if (activeSessionShift) {
+        return activeSessionShift.code;
+      }
+    }
 
     if (autoDetectedShift) {
       return autoDetectedShift.code;
@@ -1272,6 +1283,8 @@ export default function AttendancePage() {
   }, [flushQueuedAttendance]);
   
   const handleSubmitAttendance = async () => {
+    if (isSubmittingAttendance) return;
+
     if (!isSelectionComplete) {
       toast({ variant: 'destructive', title: 'Select District & Site', description: 'Please choose district and site before submitting.' });
       return;
@@ -1375,26 +1388,27 @@ export default function AttendancePage() {
       deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      const queuedItem: QueuedAttendanceSubmission = {
-        id: `${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        payload: {
-          ...payloadWithoutPhotoUrl,
-          photoDataUrl: watermarkedPhoto || capturedPhoto,
-        },
-      };
-      queueAttendanceSubmission(queuedItem);
-      appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
-      toast({
-        title: 'Attendance queued',
-        description: 'You are offline. The attendance entry will sync automatically when the connection returns.',
-      });
-      resetVerificationState({ keepCenter: true, keepLocation: true });
-      return;
-    }
-
+    setIsSubmittingAttendance(true);
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const queuedItem: QueuedAttendanceSubmission = {
+          id: `${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          payload: {
+            ...payloadWithoutPhotoUrl,
+            photoDataUrl: watermarkedPhoto || capturedPhoto,
+          },
+        };
+        queueAttendanceSubmission(queuedItem);
+        appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
+        toast({
+          title: 'Attendance queued',
+          description: 'You are offline. The attendance entry will sync automatically when the connection returns.',
+        });
+        resetVerificationState({ keepCenter: true, keepLocation: true });
+        return;
+      }
+
       const result = await submitAttendanceOnline(
         payloadWithoutPhotoUrl,
         watermarkedPhoto || capturedPhoto,
@@ -1428,6 +1442,8 @@ export default function AttendancePage() {
       const failedId = `${Date.now()}`;
       appendRecentAttendance(buildHistoryItem(failedId, payloadWithoutPhotoUrl, undefined, 'failed'));
       toast({ variant: 'destructive', title: 'Submit Failed', description: e?.message || 'Could not submit attendance.' });
+    } finally {
+      setIsSubmittingAttendance(false);
     }
   };
 
@@ -2074,10 +2090,16 @@ export default function AttendancePage() {
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Retake photo
                       </Button>
-                      <Button size="lg" className="h-12 w-full" onClick={handleSubmitAttendance} disabled={!canSubmit}>
-                        <CheckCircle className="mr-2 h-4 w-4" />
+                      <Button size="lg" className="h-12 w-full" onClick={handleSubmitAttendance} disabled={!canSubmit || isSubmittingAttendance}>
+                        {isSubmittingAttendance ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                        )}
                         {dutyPointOptions.length > 0 && !selectedDutyPoint
                           ? 'Select duty point first'
+                          : isSubmittingAttendance
+                            ? 'Submitting...'
                           : 'Submit attendance'}
                       </Button>
                     </div>

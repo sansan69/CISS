@@ -26,7 +26,7 @@ import {
 } from "@/lib/server/monitoring";
 import {
   canRecordNextDayCheckout,
-  resolveOperationalAttendanceDate,
+  resolveAttendanceSubmissionWindow,
 } from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 
@@ -51,6 +51,24 @@ type FirestoreGeoPointLike = {
   lng?: number;
 };
 
+type GuardLocationWrite = {
+  employeeId: string;
+  guardName: string;
+  siteId: string;
+  siteName: string;
+  clientName: string;
+  district: string;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  isOutOfZone: boolean;
+  status: "In" | "Out";
+  siteLat: number | null;
+  siteLng: number | null;
+  geofenceRadius: number;
+  attendanceId: string;
+};
+
 function parseSiteCoordinates(siteData: Record<string, any>) {
   const geolocation = siteData.geolocation as FirestoreGeoPointLike | undefined;
   const lat =
@@ -58,12 +76,16 @@ function parseSiteCoordinates(siteData: Record<string, any>) {
       ? geolocation.latitude
       : typeof geolocation?.lat === "number"
         ? geolocation.lat
+        : typeof siteData.lat === "number"
+          ? siteData.lat
         : Number(siteData.latString);
   const lng =
     typeof geolocation?.longitude === "number"
       ? geolocation.longitude
       : typeof geolocation?.lng === "number"
         ? geolocation.lng
+        : typeof siteData.lng === "number"
+          ? siteData.lng
         : Number(siteData.lngString);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -142,11 +164,20 @@ function isActiveWorkOrderRecord(workOrder: Record<string, any>) {
   return String(workOrder.recordStatus ?? "active").trim().toLowerCase() === "active";
 }
 
+function buildGuardName(employeeData: Record<string, any>, fallbackEmployeeId: string) {
+  return String(
+    employeeData.fullName ||
+      employeeData.name ||
+      [employeeData.firstName, employeeData.lastName].filter(Boolean).join(" ") ||
+      fallbackEmployeeId,
+  ).trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const payload = attendanceSubmissionSchema.parse(await request.json());
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const { Timestamp } = await import("firebase-admin/firestore");
+    const { FieldValue, Timestamp } = await import("firebase-admin/firestore");
     const now = Timestamp.now();
     const serverNow = now.toDate();
     const reportedAt = payload.reportedAtClient
@@ -174,6 +205,7 @@ export async function POST(request: NextRequest) {
       .collection("attendanceState")
       .doc(payload.employeeDocId);
     const attendanceLogRef = adminDb.collection("attendanceLogs").doc();
+    let guardLocationWrite: GuardLocationWrite | null = null;
 
     await adminDb.runTransaction(async (transaction) => {
       const [employeeSnap, siteSnap, stateSnap] = await Promise.all([
@@ -266,15 +298,23 @@ export async function POST(request: NextRequest) {
             String(lastState.lastShiftCode),
           )
         : null;
-      const attendanceDate = resolveOperationalAttendanceDate({
+      const selectedDutyPointId = selectedDutyPoint?.id ?? payload.dutyPointId ?? null;
+      const selectedDutyPointName = selectedDutyPoint?.name ?? payload.dutyPointName ?? null;
+      const selectedShiftCode = effectiveShift?.code ?? payload.shiftCode ?? null;
+      const selectedShiftLabel = effectiveShift?.label ?? payload.shiftLabel ?? null;
+      const selectedShiftStartTime = effectiveShift?.startTime ?? payload.shiftStartTime ?? null;
+      const selectedShiftEndTime = effectiveShift?.endTime ?? payload.shiftEndTime ?? null;
+      const submissionWindow = resolveAttendanceSubmissionWindow({
         attendanceDate: submittedAttendanceDate,
         status: payload.status,
         siteId: payload.siteId,
-        dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
+        dutyPointId: selectedDutyPointId,
         shift: effectiveShift,
         lastShift: lastRecordedShift,
         lastState,
       });
+      const attendanceDate = submissionWindow.attendanceDate;
+      let workOrderReviewWarning: string | null = null;
 
       if (isTcsSite) {
         const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
@@ -291,7 +331,11 @@ export async function POST(request: NextRequest) {
           .filter(isActiveWorkOrderRecord);
 
         if (activeWorkOrders.length === 0) {
-          throw new AttendanceError("No active work order exists for the selected site today.");
+          if (payload.status === "Out" && submissionWindow.closingOpenSession) {
+            workOrderReviewWarning = "Checkout was accepted for an open session even though no active work order was found for the session date.";
+          } else {
+            throw new AttendanceError("No active work order exists for the selected site today.");
+          }
         }
 
         const matchingWorkOrder = activeWorkOrders
@@ -309,10 +353,14 @@ export async function POST(request: NextRequest) {
             );
           });
 
-        if (!matchingWorkOrder) {
-          throw new AttendanceError(
-            "This employee is not assigned to the selected site for today's work order.",
-          );
+        if (!matchingWorkOrder && !workOrderReviewWarning) {
+          if (payload.status === "Out" && submissionWindow.closingOpenSession) {
+            workOrderReviewWarning = "Checkout was accepted for an open session even though the guard was not matched to the work order for the session date.";
+          } else {
+            throw new AttendanceError(
+              "This employee is not assigned to the selected site for today's work order.",
+            );
+          }
         }
       } else {
         if (activeShiftSource.shiftMode === "fixed" && !effectiveShift) {
@@ -358,7 +406,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      if (!lastState && payload.status === "Out") {
+        throw new AttendanceError(
+          "Attendance OUT is only allowed after a valid IN mark.",
+        );
+      }
+
       if (lastState) {
+        if (payload.status === "In" && lastState.lastStatus === "In") {
+          throw new AttendanceError(
+            "Attendance IN is already open. Please submit OUT before marking IN again.",
+          );
+        }
+
         if (
           lastState.lastAttendanceDate === attendanceDate &&
           lastState.lastStatus === payload.status
@@ -399,6 +459,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        if (payload.status === "Out" && lastState.lastStatus !== "In") {
+          throw new AttendanceError(
+            "Attendance OUT is only allowed after a valid IN mark.",
+          );
+        }
+
         if (
           lastState.lastAttendanceDate === attendanceDate &&
           lastState.lastStatus !== "In" &&
@@ -421,6 +487,17 @@ export async function POST(request: NextRequest) {
             ? payload.mockLocationReason?.trim() ||
               "Location looks suspicious and requires admin review."
             : null;
+      const attendanceReviewWarnings = [
+        locationReviewWarning,
+        workOrderReviewWarning,
+        submissionWindow.contextChanged
+          ? "Checkout context differed from the original IN session and requires admin review."
+          : null,
+      ].filter(Boolean) as string[];
+      const attendanceSessionId =
+        payload.status === "In"
+          ? attendanceLogRef.id
+          : submissionWindow.openSessionId ?? null;
 
       transaction.set(attendanceLogRef, {
         employeeId: payload.employeeId,
@@ -436,14 +513,14 @@ export async function POST(request: NextRequest) {
         district: normalizeDistrictName(payload.district),
         siteId: payload.siteId,
         siteName: payload.siteName,
-        dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
-        dutyPointName: selectedDutyPoint?.name ?? payload.dutyPointName ?? null,
+        dutyPointId: selectedDutyPointId,
+        dutyPointName: selectedDutyPointName,
         clientName: siteData.clientName || payload.clientName || null,
         sourceCollection: sourceCol,
-        shiftCode: effectiveShift?.code ?? payload.shiftCode ?? null,
-        shiftLabel: effectiveShift?.label ?? payload.shiftLabel ?? null,
-        shiftStartTime: effectiveShift?.startTime ?? payload.shiftStartTime ?? null,
-        shiftEndTime: effectiveShift?.endTime ?? payload.shiftEndTime ?? null,
+        shiftCode: selectedShiftCode,
+        shiftLabel: selectedShiftLabel,
+        shiftStartTime: selectedShiftStartTime,
+        shiftEndTime: selectedShiftEndTime,
         nextShiftCode: payload.nextShiftCode ?? nextShift?.code ?? null,
         nextShiftStartsAt: payload.nextShiftStartsAt ?? nextShift?.startTime ?? null,
         siteCoords,
@@ -455,10 +532,18 @@ export async function POST(request: NextRequest) {
         locationAccuracyMeters: payload.locationAccuracyMeters ?? null,
         geofenceRadiusAtTime: effectiveRadiusMeters,
         strictGeofence: siteIsStrictGeofence,
+        attendanceSessionId,
+        checkoutContextChanged: submissionWindow.contextChanged,
+        checkoutOriginalSiteId: submissionWindow.contextChanged ? lastState?.lastSiteId ?? null : null,
+        checkoutOriginalDutyPointId: submissionWindow.contextChanged ? lastState?.lastDutyPointId ?? null : null,
+        checkoutOriginalShiftCode: submissionWindow.contextChanged ? lastState?.lastShiftCode ?? null : null,
+        attendanceReviewWarnings,
         isMockLocationSuspected,
         mockLocationReason: payload.mockLocationReason ?? null,
         requiresLocationReview: Boolean(locationReviewWarning),
         requiresAdminReview:
+          attendanceReviewWarnings.length > 0 ||
+          submissionWindow.requiresAdminReview ||
           Boolean(locationReviewWarning) ||
           Boolean(clockDriftWarning) ||
           isMockLocationSuspected ||
@@ -480,6 +565,46 @@ export async function POST(request: NextRequest) {
         ],
       });
 
+      if (payload.status === "In") {
+        transaction.set(adminDb.collection("attendanceSessions").doc(attendanceLogRef.id), {
+          employeeId: payload.employeeId,
+          employeeDocId: payload.employeeDocId,
+          employeeName: payload.employeeName,
+          status: "open",
+          attendanceDate,
+          siteId: payload.siteId,
+          siteName: payload.siteName,
+          dutyPointId: selectedDutyPointId,
+          dutyPointName: selectedDutyPointName,
+          clientName: siteData.clientName || payload.clientName || null,
+          sourceCollection: sourceCol,
+          shiftCode: selectedShiftCode,
+          shiftLabel: selectedShiftLabel,
+          shiftStartTime: selectedShiftStartTime,
+          shiftEndTime: selectedShiftEndTime,
+          inLogId: attendanceLogRef.id,
+          startedAt: reportedAt,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else if (submissionWindow.openSessionId) {
+        transaction.set(
+          adminDb.collection("attendanceSessions").doc(submissionWindow.openSessionId),
+          {
+            status: "closed",
+            outLogId: attendanceLogRef.id,
+            endedAt: reportedAt,
+            checkoutSiteId: payload.siteId,
+            checkoutDutyPointId: selectedDutyPointId,
+            checkoutShiftCode: selectedShiftCode,
+            checkoutContextChanged: submissionWindow.contextChanged,
+            requiresAdminReview: submissionWindow.requiresAdminReview || attendanceReviewWarnings.length > 0,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+      }
+
       transaction.set(
         attendanceStateRef,
         {
@@ -487,15 +612,67 @@ export async function POST(request: NextRequest) {
           employeeName: payload.employeeName,
           lastStatus: payload.status,
           lastSiteId: payload.siteId,
-          lastDutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
-          lastShiftCode: effectiveShift?.code ?? payload.shiftCode ?? null,
+          lastDutyPointId: selectedDutyPointId,
+          lastShiftCode: selectedShiftCode,
           lastAttendanceDate: attendanceDate,
+          lastAttendanceId: attendanceLogRef.id,
+          openSessionId: payload.status === "In" ? attendanceLogRef.id : FieldValue.delete(),
+          openSessionStartedAt: payload.status === "In" ? reportedAt : FieldValue.delete(),
           lastLoggedAt: now,
           updatedAt: now,
         },
         { merge: true },
       );
+
+      guardLocationWrite = {
+        employeeId: payload.employeeId,
+        guardName: buildGuardName(employeeData, payload.employeeId),
+        siteId: payload.siteId,
+        siteName: String(siteData.siteName || payload.siteName || "").trim(),
+        clientName: String(siteData.clientName || payload.clientName || "").trim(),
+        district: normalizeDistrictName(payload.district),
+        lat: payload.status === "In" ? payload.locationCoords.lat : 0,
+        lng: payload.status === "In" ? payload.locationCoords.lon : 0,
+        accuracy:
+          typeof gpsAccuracyMeters === "number" && Number.isFinite(gpsAccuracyMeters)
+            ? gpsAccuracyMeters
+            : 0,
+        isOutOfZone: payload.status === "In" ? actualDistance > effectiveRadiusMeters : false,
+        status: payload.status,
+        siteLat: siteCoords.lat,
+        siteLng: siteCoords.lng,
+        geofenceRadius: effectiveRadiusMeters,
+        attendanceId: attendanceLogRef.id,
+      };
     });
+
+    const liveLocationWrite = guardLocationWrite as GuardLocationWrite | null;
+    if (liveLocationWrite) {
+      await adminDb
+        .collection("guardLocations")
+        .doc(liveLocationWrite.employeeId)
+        .set(
+          {
+            employeeId: liveLocationWrite.employeeId,
+            guardName: liveLocationWrite.guardName,
+            siteId: liveLocationWrite.siteId,
+            siteName: liveLocationWrite.siteName,
+            clientName: liveLocationWrite.clientName,
+            district: liveLocationWrite.district,
+            lat: liveLocationWrite.lat,
+            lng: liveLocationWrite.lng,
+            accuracy: liveLocationWrite.accuracy,
+            isOutOfZone: liveLocationWrite.isOutOfZone,
+            status: liveLocationWrite.status,
+            attendanceId: liveLocationWrite.attendanceId,
+            siteLat: liveLocationWrite.siteLat,
+            siteLng: liveLocationWrite.siteLng,
+            geofenceRadius: liveLocationWrite.geofenceRadius,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+    }
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);
 

@@ -19,6 +19,7 @@ describe("normalizeDutyPoint", () => {
       coverageMode: "roundClock",
       dutyHours: "12",
       shiftMode: "fixed",
+      patrolPoints: [],
       shiftTemplates: [
         {
           code: "day",

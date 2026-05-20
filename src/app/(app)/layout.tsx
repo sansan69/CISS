@@ -369,7 +369,7 @@ function MobileBottomNav({
               onClick={() => haptic('light')}
               className={cn(
                 "bottom-nav-item relative",
-                "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                "transition-all duration-150 ease-out",
                 "active:scale-[0.94] select-none rounded-xl",
                 active ? "text-brand-blue" : "text-muted-foreground/60"
               )}
@@ -401,7 +401,7 @@ function MobileBottomNav({
           onClick={() => { haptic('light'); onMoreClick(); }}
           className={cn(
             "bottom-nav-item relative",
-            "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+            "transition-all duration-150 ease-out",
             "active:scale-[0.94] select-none rounded-xl",
             moreActive ? "text-brand-blue" : "text-muted-foreground/60"
           )}

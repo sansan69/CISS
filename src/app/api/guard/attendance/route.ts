@@ -45,9 +45,20 @@ export async function GET(request: Request) {
 
     if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
       const [y, m] = monthParam.split("-").map(Number);
+      if (m < 1 || m > 12) {
+        return NextResponse.json(
+          { error: "Invalid month. Use YYYY-MM with month 01-12." },
+          { status: 400 },
+        );
+      }
       year = y;
       month = m - 1;
       monthStr = monthParam;
+    } else if (monthParam) {
+      return NextResponse.json(
+        { error: "Invalid month. Use YYYY-MM." },
+        { status: 400 },
+      );
     } else {
       const now = new Date();
       year = now.getFullYear();

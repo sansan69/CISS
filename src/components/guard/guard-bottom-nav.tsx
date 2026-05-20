@@ -75,7 +75,7 @@ export function GuardBottomNav() {
                 href={tab.href}
                 className={cn(
                   "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
-                  "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                  "transition-all duration-150 ease-out",
                   "active:scale-[0.94] select-none rounded-xl",
                   active ? "text-[#014c85]" : "text-muted-foreground/60"
                 )}
@@ -109,7 +109,7 @@ export function GuardBottomNav() {
             onClick={() => setMoreOpen(true)}
             className={cn(
               "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
-              "transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+              "transition-all duration-150 ease-out",
               "active:scale-[0.94] select-none rounded-xl",
               isMoreActive ? "text-[#014c85]" : "text-muted-foreground/60"
             )}

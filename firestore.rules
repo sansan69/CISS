@@ -197,6 +197,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // attendanceSessions — durable IN/OUT pairing used to close the exact
+    // open duty session even if roster, shift, or duty point metadata changes.
+    match /attendanceSessions/{sessionId} {
+      allow read: if isStaff() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+      allow create, update, delete: if isAdmin();
+    }
+
     // Legacy plural collection — retained for backwards-compatibility only
     match /attendanceStates/{employeeId} {
       allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
@@ -211,12 +219,14 @@ service cloud.firestore {
     match /leaveRequests/{requestId} {
       // Guards can create their own leave requests
       allow create: if (isGuard() &&
-        request.resource.data.employeeDocId == guardEmployeeDocId() &&
+        (request.resource.data.employeeDocId == guardEmployeeDocId() ||
+          request.resource.data.employeeId == guardEmployeeDocId()) &&
         request.resource.data.status == 'pending') || isStaff();
 
       // Guards can read their own requests; staff reads all
       allow read: if isStaff() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+        (isGuard() && (resource.data.employeeDocId == guardEmployeeDocId() ||
+          resource.data.employeeId == guardEmployeeDocId()));
 
       // Admins/HR can approve/reject (update status); guards cannot change status
       allow update: if isAdmin() || isHR() ||
@@ -447,11 +457,9 @@ service cloud.firestore {
       // Any authenticated user can read live locations
       allow read: if isSignedIn();
 
-      // Guard can write only their own location document
-      allow create, update: if isGuard() && guardEmployeeId() == employeeId;
-
-      // Staff (FO, admin) can update (e.g. mark guard OF)
-      allow update: if isStaff();
+      // Guards write their own location document, and staff can create/update
+      // guard location records during QR attendance and monitoring workflows.
+      allow create, update: if (isGuard() && guardEmployeeId() == employeeId) || isStaff();
 
       // Only guards or staff can delete
       allow delete: if isGuard() && guardEmployeeId() == employeeId || isStaff();

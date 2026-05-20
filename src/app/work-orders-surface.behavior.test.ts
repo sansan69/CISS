@@ -13,7 +13,7 @@ import {
   buildTcsWorkOrderImportsQuery,
   normalizeTcsWorkOrderImportRecords,
 } from "./(app)/work-orders/imports/work-order-imports";
-import { bottomNavItems, getVisibleGroups, mainNavGroups } from "./(app)/navigation";
+import { bottomNavItems, getVisibleNavItems, mainNavGroups, settingsSubItems } from "./(app)/navigation";
 
 describe("work orders surface behavior", () => {
   it("builds a TCS-only imports query instead of fetching a broad page", () => {
@@ -88,11 +88,10 @@ describe("work orders surface behavior", () => {
   });
 
   it("uses the shared nav config for desktop and mobile visibility", () => {
-    const workforceGroup = mainNavGroups.find((group) => group.label === "Workforce");
-
-    expect(workforceGroup?.items.map((item) => item.label)).toContain("Work Order Imports");
-    expect(getVisibleGroups(mainNavGroups, "admin", false).flatMap((group) => group.items.map((item) => item.label))).toContain("Work Order Imports");
-    expect(getVisibleGroups(mainNavGroups, "fieldOfficer", false).flatMap((group) => group.items.map((item) => item.label))).not.toContain("Work Order Imports");
+    expect(mainNavGroups.find((group) => group.label === "Workforce")?.items.map((item) => item.label)).toContain("Work Orders");
+    expect(settingsSubItems.map((item) => item.label)).toContain("Work Order Imports");
+    expect(getVisibleNavItems(settingsSubItems, "admin", false).map((item) => item.label)).toContain("Work Order Imports");
+    expect(getVisibleNavItems(settingsSubItems, "fieldOfficer", false).map((item) => item.label)).not.toContain("Work Order Imports");
     expect(bottomNavItems.map((item) => item.label)).toEqual(["Home", "Guards", "Attendance", "Orders"]);
   });
 });

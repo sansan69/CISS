@@ -32,13 +32,15 @@ export type PublicAttendanceEmployee = {
   fullName: string;
   phoneNumber?: string;
   clientName?: string;
-  attendanceHint?: {
-    lastAttendanceDate?: string;
-    lastStatus?: "In" | "Out";
-    lastDutyPointId?: string;
-    lastShiftCode?: string;
-  };
-};
+	  attendanceHint?: {
+	    lastAttendanceDate?: string;
+	    lastStatus?: "In" | "Out";
+	    lastSiteId?: string;
+	    lastDutyPointId?: string;
+	    lastShiftCode?: string;
+	    openSessionId?: string;
+	  };
+	};
 
 function toFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {

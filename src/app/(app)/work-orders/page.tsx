@@ -516,7 +516,7 @@ export default function WorkOrderPage() {
                 if (siteCompare !== 0) return siteCompare;
                 return (a.examLabels[0] || '').localeCompare(b.examLabels[0] || '');
             });
-    }, [workOrdersBySite, siteDistricts, pendingDeleteIds]);
+    }, [workOrdersBySite, siteDistricts, pendingDeleteIds, userRole, assignedDistricts]);
 
     const availableDistricts = useMemo(() => {
         const set = new Set<string>();

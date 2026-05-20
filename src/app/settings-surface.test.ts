@@ -6,8 +6,8 @@ const settingsPageSource = readFileSync(
   resolve(process.cwd(), "src/app/(app)/settings/page.tsx"),
   "utf8",
 );
-const appLayoutSource = readFileSync(
-  resolve(process.cwd(), "src/app/(app)/layout.tsx"),
+const navigationSource = readFileSync(
+  resolve(process.cwd(), "src/app/(app)/navigation.ts"),
   "utf8",
 );
 const dashboardActionsSource = readFileSync(
@@ -108,29 +108,29 @@ describe("admin settings surface", () => {
   });
 
   it("does not expose compliance settings in the settings sidebar", () => {
-    expect(appLayoutSource).not.toContain("'/settings/compliance-settings'");
-    expect(appLayoutSource).not.toContain("label: 'Compliance Settings'");
+    expect(navigationSource).not.toContain('"/settings/compliance-settings"');
+    expect(navigationSource).not.toContain('label: "Compliance Settings"');
   });
 
   it("shows a single admin tools item in the settings sidebar", () => {
-    expect(appLayoutSource).toContain("{ href: '/settings/admin-tools'");
-    expect(appLayoutSource).toContain("label: 'Admin Tools'");
+    expect(navigationSource).toContain('{ href: "/settings/admin-tools"');
+    expect(navigationSource).toContain('label: "Admin Tools"');
   });
 
   it("does not expose bulk import, qr codes, or data export as separate settings sidebar items", () => {
-    expect(appLayoutSource).not.toContain("{ href: '/settings/bulk-import'");
-    expect(appLayoutSource).not.toContain("{ href: '/settings/qr-management'");
-    expect(appLayoutSource).not.toContain("{ href: '/settings/data-export'");
-    expect(appLayoutSource).not.toContain("label: 'Bulk Import'");
-    expect(appLayoutSource).not.toContain("label: 'QR Codes'");
-    expect(appLayoutSource).not.toContain("label: 'Data Export'");
+    expect(navigationSource).not.toContain('{ href: "/settings/bulk-import"');
+    expect(navigationSource).not.toContain('{ href: "/settings/qr-management"');
+    expect(navigationSource).not.toContain('{ href: "/settings/data-export"');
+    expect(navigationSource).not.toContain('label: "Bulk Import"');
+    expect(navigationSource).not.toContain('label: "QR Codes"');
+    expect(navigationSource).not.toContain('label: "Data Export"');
   });
 
   it("does not expose salary grade workflows in the settings sidebar", () => {
-    expect(appLayoutSource).not.toContain("{ href: '/settings/salary-grades'");
-    expect(appLayoutSource).not.toContain("{ href: '/payroll/salaries'");
-    expect(appLayoutSource).not.toContain("label: 'Salary Grades'");
-    expect(appLayoutSource).not.toContain("label: 'Salary Assignments'");
+    expect(navigationSource).not.toContain('{ href: "/settings/salary-grades"');
+    expect(navigationSource).not.toContain('{ href: "/payroll/salaries"');
+    expect(navigationSource).not.toContain('label: "Salary Grades"');
+    expect(navigationSource).not.toContain('label: "Salary Assignments"');
   });
 
   it("does not expose a compliance settings quick action", () => {

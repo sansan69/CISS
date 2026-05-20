@@ -40,19 +40,27 @@ export async function GET(request: NextRequest) {
               typeof attendanceState.lastAttendanceDate === "string"
                 ? attendanceState.lastAttendanceDate
                 : undefined,
-            lastStatus:
-              attendanceState.lastStatus === "In" || attendanceState.lastStatus === "Out"
-                ? attendanceState.lastStatus
-                : undefined,
-            lastDutyPointId:
-              typeof attendanceState.lastDutyPointId === "string"
-                ? attendanceState.lastDutyPointId
-                : undefined,
-            lastShiftCode:
-              typeof attendanceState.lastShiftCode === "string"
-                ? attendanceState.lastShiftCode
-                : undefined,
-          }
+	            lastStatus:
+	              attendanceState.lastStatus === "In" || attendanceState.lastStatus === "Out"
+	                ? attendanceState.lastStatus
+	                : undefined,
+	            lastSiteId:
+	              typeof attendanceState.lastSiteId === "string"
+	                ? attendanceState.lastSiteId
+	                : undefined,
+	            lastDutyPointId:
+	              typeof attendanceState.lastDutyPointId === "string"
+	                ? attendanceState.lastDutyPointId
+	                : undefined,
+	            lastShiftCode:
+	              typeof attendanceState.lastShiftCode === "string"
+	                ? attendanceState.lastShiftCode
+	                : undefined,
+	            openSessionId:
+	              typeof attendanceState.openSessionId === "string"
+	                ? attendanceState.openSessionId
+	                : undefined,
+	          }
         : undefined,
     );
 

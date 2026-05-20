@@ -352,6 +352,7 @@ async function resolveCommitRows(
   batch: any,
   rows: readonly TcsExamSourceRow[],
   adminUser: { uid: string; email?: string | null },
+  existingRows: readonly ExistingWorkOrderRecord[] = [],
 ) {
   const clientSnap = await adminDb
     .collection("clients")
@@ -364,6 +365,17 @@ async function resolveCommitRows(
   const resolvedRows: TcsExamSourceRow[] = [];
 
   for (const row of rows) {
+    const existing = findMatchingExistingRow(row, existingRows);
+    if (existing?.siteId) {
+      resolvedRows.push({
+        ...row,
+        siteId: existing.siteId,
+        siteName: row.siteName || existing.siteName,
+        district: row.district || existing.district,
+      });
+      continue;
+    }
+
     const codeDistrictKey = buildSiteCodeDistrictKey(row.siteId, row.district);
     const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
     const codeKey = buildSiteCodeKey(row.siteId);
@@ -567,13 +579,14 @@ export async function POST(request: Request) {
       if (diffRow.status === "cancelled") {
         return false;
       }
-      const resolvedRow = parsedByResolvedKey.get(diffRow.key);
-      if (!resolvedRow) {
+      const originalRow = parsedByKey.get(diffRow.key);
+      const comparisonRow = parsedByResolvedKey.get(diffRow.key) ?? originalRow;
+      if (!comparisonRow) {
         return false;
       }
       const existing = findMatchingExistingRow(
         {
-          ...resolvedRow,
+          ...comparisonRow,
           examName: payload.examName,
           examCode: payload.examCode,
         },
@@ -587,13 +600,13 @@ export async function POST(request: Request) {
     // Build the list of *original* rows to pass to resolveCommitRows (which
     // needs TC codes for site lookup/creation).
     const rowsToResolve: TcsExamSourceRow[] = [];
-    const resolvedDiffKeyToOriginalRow = new Map<string, TcsExamSourceRow>();
     for (const diffRow of commitDiffRows) {
       const originalKey = originalKeyByResolvedKey.get(diffRow.key);
-      const originalRow = originalKey ? parsedByKey.get(originalKey) : undefined;
+      const originalRow =
+        (originalKey ? parsedByKey.get(originalKey) : undefined) ??
+        parsedByKey.get(diffRow.key);
       if (originalRow) {
         rowsToResolve.push(originalRow);
-        resolvedDiffKeyToOriginalRow.set(diffRow.key, originalRow);
       }
     }
 
@@ -605,6 +618,7 @@ export async function POST(request: Request) {
       batch,
       rowsToResolve,
       adminUser,
+      activeExistingRows,
     );
 
     // Build a lookup from *resolved* identity key to the row returned by
@@ -650,9 +664,13 @@ export async function POST(request: Request) {
 
       // Resolved row: prefer the row from resolveCommitRows (which may
       // have created a new site), falling back to the pre-resolved row.
+      const originalKey = originalKeyByResolvedKey.get(diffRow.key) ?? diffRow.key;
+      const originalRow = parsedByKey.get(originalKey) ?? null;
       const parsedRow =
         resolvedByResolvedKey.get(diffRow.key) ??
+        (originalRow ? resolvedByOriginalKey.get(getIdentityKey(originalRow)) : undefined) ??
         parsedByResolvedKey.get(diffRow.key) ??
+        originalRow ??
         null;
 
       if (!parsedRow) {
@@ -660,9 +678,12 @@ export async function POST(request: Request) {
       }
 
       // Look up the existing work order using the resolved identity key
-      // (which uses Firestore doc IDs), not the TC-code-based key.
+      // (which uses Firestore doc IDs), then fall back to the original
+      // imported row so legacy rows without concrete site IDs can still
+      // update an existing active work order.
       const existing =
         activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
+        (originalRow ? findMatchingExistingRow(originalRow, activeExistingRows) : null) ??
         null;
 
       committedRows += 1;

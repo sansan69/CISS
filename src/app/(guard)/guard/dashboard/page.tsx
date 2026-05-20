@@ -266,7 +266,7 @@ export default function GuardDashboardPage() {
         className="block animate-slide-up stagger-4"
       >
         <div
-          className="rounded-xl p-4 text-white transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.985]"
+          className="rounded-xl p-4 text-white transition-all duration-150 ease-out active:scale-[0.985]"
           style={{
             background: "linear-gradient(135deg, #014c85 0%, #0b67ad 100%)",
             boxShadow: "0 10px 24px hsl(206 98% 26% / 0.22)",
@@ -293,7 +293,7 @@ export default function GuardDashboardPage() {
       <div className="grid grid-cols-2 gap-2.5 animate-slide-up stagger-4">
         <Link
           href="/guard/attendance"
-          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
+          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
           style={{ boxShadow: "0 1px 4px hsl(0 0% 0% / 0.06)" }}
         >
           <div
@@ -309,7 +309,7 @@ export default function GuardDashboardPage() {
         </Link>
         <Link
           href="/guard/training"
-          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
+          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
           style={{ boxShadow: "0 1px 4px hsl(0 0% 0% / 0.06)" }}
         >
           <div

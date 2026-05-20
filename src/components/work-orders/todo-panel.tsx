@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle, Clock, AlertCircle, Plus, Trash2, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,7 @@ export default function WorkOrderTodoPanel({
   const [filterStatus, setFilterStatus] = useState<WorkOrderTodoStatus | "all">("all");
   const { toast } = useToast();
 
-  const fetchTodos = async () => {
+  const fetchTodos = useCallback(async () => {
     try {
       setIsLoading(true);
       const params = new URLSearchParams();
@@ -74,11 +74,11 @@ export default function WorkOrderTodoPanel({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [siteId, toast, workOrderId]);
 
   useEffect(() => {
     fetchTodos();
-  }, [workOrderId, siteId]);
+  }, [fetchTodos]);
 
   const filteredTodos = useMemo(() => {
     if (filterStatus === "all") return todos;

@@ -9,6 +9,15 @@ export default function PwaLoader() {
       navigator.serviceWorker.register('/sw.js')
         .then(registration => {
           console.log('SW registered:', registration.scope);
+          registration.addEventListener('updatefound', () => {
+            const worker = registration.installing;
+            if (!worker) return;
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                window.dispatchEvent(new CustomEvent('ciss-pwa-update-ready'));
+              }
+            });
+          });
         })
         .catch(err => {
           console.log('SW registration failed:', err);

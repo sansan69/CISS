@@ -4,6 +4,8 @@ export type AttendanceStateSnapshot = {
   lastSiteId?: string | null;
   lastDutyPointId?: string | null;
   lastShiftCode?: string | null;
+  openSessionId?: string | null;
+  openSessionStartedAt?: unknown;
 };
 
 export type AttendanceShiftSnapshot = {
@@ -103,4 +105,48 @@ export function resolveOperationalAttendanceDate(input: {
   }
 
   return input.attendanceDate;
+}
+
+export function resolveAttendanceSubmissionWindow(input: {
+  attendanceDate: string;
+  status: "In" | "Out";
+  siteId: string;
+  dutyPointId?: string | null;
+  shift: AttendanceShiftSnapshot;
+  lastShift?: AttendanceShiftSnapshot;
+  lastState?: AttendanceStateSnapshot | null;
+}) {
+  const lastState = input.lastState ?? null;
+  const closingOpenSession =
+    input.status === "Out" &&
+    lastState?.lastStatus === "In" &&
+    Boolean(lastState.lastAttendanceDate);
+
+  if (!closingOpenSession) {
+    return {
+      attendanceDate: resolveOperationalAttendanceDate(input),
+      openSessionId: null,
+      closingOpenSession: false,
+      contextChanged: false,
+      requiresAdminReview: false,
+    };
+  }
+
+  const currentDutyPointId = input.dutyPointId ?? null;
+  const currentShiftCode = input.shift?.code ?? null;
+  const lastSiteId = lastState.lastSiteId ?? null;
+  const lastDutyPointId = lastState.lastDutyPointId ?? null;
+  const lastShiftCode = lastState.lastShiftCode ?? null;
+  const contextChanged =
+    lastSiteId !== input.siteId ||
+    lastDutyPointId !== currentDutyPointId ||
+    Boolean(lastShiftCode && currentShiftCode && lastShiftCode !== currentShiftCode);
+
+  return {
+    attendanceDate: lastState.lastAttendanceDate ?? input.attendanceDate,
+    openSessionId: lastState.openSessionId ?? null,
+    closingOpenSession: true,
+    contextChanged,
+    requiresAdminReview: contextChanged,
+  };
 }

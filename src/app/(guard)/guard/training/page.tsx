@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { BookOpen, ExternalLink, GraduationCap, FileText, Presentation, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -176,7 +177,14 @@ export default function GuardTrainingPage() {
           </div>
           <div className="relative flex-1 bg-white">
             {viewer.contentType === "image" ? (
-              <img src={viewer.contentUrl} alt={viewer.moduleName || "Training material"} className="h-full w-full object-contain" />
+              <Image
+                src={viewer.contentUrl}
+                alt={viewer.moduleName || "Training material"}
+                fill
+                sizes="100vw"
+                className="object-contain"
+                unoptimized
+              />
             ) : viewer.contentType === "pptx" ? (
               <iframe
                 title={viewer.moduleName || "Training material"}

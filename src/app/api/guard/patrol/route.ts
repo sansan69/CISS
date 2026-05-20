@@ -19,6 +19,21 @@ function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function isActiveEmployee(employee: Record<string, unknown>) {
+  return normalizeText(employee.status || "Active").toLowerCase() === "active";
+}
+
+function resolveClientActivityAt(value: unknown) {
+  if (!value) return new Date();
+  if (typeof value !== "string") return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const driftMs = Math.abs(Date.now() - date.getTime());
+  return driftMs <= 15 * 60 * 1000 ? date : null;
+}
+
 function formatRelativeIstLabel(value: Date | null) {
   if (!value) return null;
   return value.toLocaleString("en-IN", {
@@ -38,6 +53,10 @@ async function loadGuardContext(request: Request) {
   }
 
   const employee = employeeDoc.data() as Record<string, unknown>;
+  if (!isActiveEmployee(employee)) {
+    return { error: NextResponse.json({ error: "Only active guards can submit patrol activity." }, { status: 403 }) };
+  }
+
   const clientId = normalizeText(employee.clientId);
   const clientName = normalizeText(employee.clientName);
   if (!clientName) {
@@ -275,6 +294,13 @@ export async function POST(request: Request) {
     if (type === "patrol" && patrolPoints.length > 0 && !patrolPoint) {
       return NextResponse.json({ error: "Select the patrol point you completed." }, { status: 400 });
     }
+    const activityAt = resolveClientActivityAt(body.activityAt);
+    if (!activityAt) {
+      return NextResponse.json(
+        { error: "Patrol time is outside the allowed submission window. Please sync device time and retry." },
+        { status: 400 },
+      );
+    }
 
     const payload = buildPatrolActivityPayload({
       type,
@@ -297,7 +323,7 @@ export async function POST(request: Request) {
       photoUrl,
       notes: body.notes,
       source: "android",
-      activityAt: body.activityAt ? new Date(body.activityAt) : new Date(),
+      activityAt,
     });
 
     const docRef = await adminDb.collection("guardPatrolActivities").add({

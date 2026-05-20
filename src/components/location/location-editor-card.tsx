@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { authorizedFetch } from "@/lib/api-client";
 import {
   buildGoogleMapsLink,
   buildOsmEmbedUrl,
@@ -106,7 +107,7 @@ export function LocationEditorCard({
 
     setIsGeocoding(true);
     try {
-      const response = await fetch("/api/locations/geocode", {
+      const response = await authorizedFetch("/api/locations/geocode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -159,7 +160,7 @@ export function LocationEditorCard({
         try {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          const response = await fetch("/api/locations/geocode", {
+          const response = await authorizedFetch("/api/locations/geocode", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

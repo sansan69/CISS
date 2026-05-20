@@ -217,7 +217,15 @@ export default function AdminLoginPage() {
       <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
         <div className="relative flex items-center gap-3 animate-slide-up">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
-            <Image src="/ciss-logo.png" alt="CISS Logo" width={40} height={40} data-ai-hint="company logo" unoptimized />
+            <Image
+              src="/ciss-logo.png"
+              alt="CISS Logo"
+              width={200}
+              height={202}
+              className="h-10 w-auto"
+              data-ai-hint="company logo"
+              unoptimized
+            />
           </div>
           <div>
             <p className="text-base font-bold font-exo2 tracking-tight">CISS Workforce</p>
@@ -277,8 +285,9 @@ export default function AdminLoginPage() {
               <Image
                 src="/ciss-logo.png"
                 alt="CISS Workforce Logo"
-                width={50}
-                height={50}
+                width={200}
+                height={202}
+                className="h-12 w-auto"
                 priority
                 data-ai-hint="company logo"
                 unoptimized
