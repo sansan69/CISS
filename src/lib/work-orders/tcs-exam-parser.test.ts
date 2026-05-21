@@ -73,6 +73,38 @@ describe("parseTcsExamWorkbook", () => {
     expect(result.totalFemale).toBe(6);
   });
 
+  it("keeps Excel serial date headers on their intended calendar date", () => {
+    const workbook = workbookFromRows([
+      ["S.No", "ZONE", "STATE", "CITY", "TC CODE", "CENTER", "TC Address", 46165, "", 46166, ""],
+      ["", "", "", "", "", "", "", "MALE", "FEMALE", "MALE", "FEMALE"],
+      [1, "South 2", "Kerala", "Ernakulam", "12176", "iON Digital Zone iDZ Aluva", "Aluva", 2, 1, 3, 2],
+    ]);
+
+    const result = parseTcsExamWorkbook(
+      workbook,
+      "Adhoc Security Guards Requirment for MAHE MET Exam on 23 and 24 May 2026.xlsx",
+    );
+
+    expect(result.parserMode).toBe("pivot-date-sheet");
+    expect(result.dates).toEqual(["2026-05-23", "2026-05-24"]);
+    expect(result.dateRange).toEqual({ from: "2026-05-23", to: "2026-05-24" });
+    expect(result.rows.map((row) => row.date)).toEqual(["2026-05-23", "2026-05-24"]);
+  });
+
+  it("rounds XLSX date-only objects that land seconds before local midnight", () => {
+    const workbook = workbookFromRows([
+      ["District", "Site", new Date(2026, 4, 22, 23, 59, 50), ""],
+      ["District", "Site", "MALE", "FEMALE"],
+      ["Ernakulam", "Center B", 3, 2],
+    ]);
+
+    const result = parseTcsExamWorkbook(workbook, "MAHE MET Exam on 23 May 2026.xlsx");
+
+    expect(result.parserMode).toBe("pivot-date-sheet");
+    expect(result.dates).toEqual(["2026-05-23"]);
+    expect(result.rows[0]?.date).toBe("2026-05-23");
+  });
+
   it("prefers a cleaned filename exam name when sheet title text is generic", () => {
     const workbook = workbookFromRows([
       ["STATE", "05 Nov 2025"],

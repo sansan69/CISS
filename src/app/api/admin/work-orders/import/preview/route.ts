@@ -354,7 +354,7 @@ export async function POST(request: Request) {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(fileBuffer, {
       type: "buffer",
-      cellDates: true,
+      cellDates: false,
     });
     const parseResult = parseTcsExamWorkbook(workbook, file.name);
     const binaryFileHash = buildBinaryFileHash(fileBuffer);

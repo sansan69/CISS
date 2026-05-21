@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { buildTcsExamDiff } from "./tcs-exam-diff";
+import type { TcsExamExistingWorkOrder, TcsExamSourceRow } from "@/types/work-orders";
+
+function row(
+  siteId: string,
+  siteName: string,
+  date: string,
+  maleGuardsRequired: number,
+  femaleGuardsRequired: number,
+): TcsExamSourceRow {
+  return {
+    siteId,
+    siteName,
+    district: "Kerala",
+    date,
+    examName: "MAHE MET Exam",
+    examCode: "mahe-met-exam",
+    maleGuardsRequired,
+    femaleGuardsRequired,
+  };
+}
+
+function existing(rowValue: TcsExamSourceRow): TcsExamExistingWorkOrder {
+  return {
+    ...rowValue,
+    id: `${rowValue.siteId}_${rowValue.date}_${rowValue.examCode}`,
+    examCode: rowValue.examCode ?? "",
+    totalManpower: rowValue.maleGuardsRequired + rowValue.femaleGuardsRequired,
+    recordStatus: "active",
+  };
+}
 
 describe("buildTcsExamDiff", () => {
   it("marks added, updated, unchanged, and cancelled rows in revision mode", () => {
@@ -274,5 +304,66 @@ describe("buildTcsExamDiff", () => {
       date: "2026-04-15",
       examCode: "bitsat",
     });
+  });
+
+  it("handles revised work orders with cancelled centres, changed counts, moved dates, and new centres", () => {
+    const originalRows = [
+      row("12176", "iON Digital Zone iDZ Aluva", "2026-05-23", 2, 1),
+      row("12176", "iON Digital Zone iDZ Aluva", "2026-05-24", 2, 1),
+      row("38987", "Bishop Jerome Institute", "2026-05-23", 1, 1),
+      row("38987", "Bishop Jerome Institute", "2026-05-24", 1, 1),
+      row("15836", "Mount Carmel Residential School", "2026-05-23", 2, 2),
+      row("15836", "Mount Carmel Residential School", "2026-05-24", 2, 2),
+      row("41032", "Welkin Online Assessment Centre", "2026-05-23", 1, 0),
+      row("41032", "Welkin Online Assessment Centre", "2026-05-24", 1, 0),
+    ];
+    const revisedRows = [
+      row("12176", "iON Digital Zone iDZ Aluva", "2026-05-23", 2, 1),
+      row("12176", "iON Digital Zone iDZ Aluva", "2026-05-24", 2, 1),
+      row("15836", "Mount Carmel Residential School", "2026-05-23", 3, 2),
+      row("15836", "Mount Carmel Residential School", "2026-05-24", 3, 2),
+      row("41032", "Welkin Online Assessment Centre", "2026-05-24", 1, 0),
+      row("9498", "iON Digital Zone iDZ Kollam", "2026-05-23", 1, 1),
+      row("9498", "iON Digital Zone iDZ Kollam", "2026-05-24", 1, 1),
+    ];
+
+    const diff = buildTcsExamDiff({
+      parsedRows: revisedRows,
+      existingRows: originalRows.map(existing),
+      mode: "revision",
+    });
+
+    expect(diff.filter((diffRow) => diffRow.status === "unchanged")).toHaveLength(3);
+    expect(diff.filter((diffRow) => diffRow.status === "updated")).toHaveLength(2);
+    expect(diff.filter((diffRow) => diffRow.status === "added")).toHaveLength(2);
+    expect(diff.filter((diffRow) => diffRow.status === "cancelled")).toHaveLength(3);
+    expect(diff).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          siteId: "38987",
+          siteName: "Bishop Jerome Institute",
+          date: "2026-05-23",
+          status: "cancelled",
+        }),
+        expect.objectContaining({
+          siteId: "41032",
+          siteName: "Welkin Online Assessment Centre",
+          date: "2026-05-23",
+          status: "cancelled",
+        }),
+        expect.objectContaining({
+          siteId: "15836",
+          date: "2026-05-23",
+          status: "updated",
+          previousTotalManpower: 4,
+          totalManpower: 5,
+        }),
+        expect.objectContaining({
+          siteId: "9498",
+          date: "2026-05-24",
+          status: "added",
+        }),
+      ]),
+    );
   });
 });

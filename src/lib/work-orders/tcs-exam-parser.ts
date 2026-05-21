@@ -88,6 +88,14 @@ function formatLocalDate(date: Date): string {
   ].join("-");
 }
 
+function formatExcelDateObject(date: Date): string {
+  const adjusted = new Date(date.getTime());
+  if (adjusted.getHours() === 23 && adjusted.getMinutes() === 59) {
+    adjusted.setMinutes(adjusted.getMinutes() + 1);
+  }
+  return formatLocalDate(adjusted);
+}
+
 function buildValidatedDate(year: number, monthIndex: number, day: number): string | null {
   const date = new Date(year, monthIndex, day);
   if (
@@ -148,7 +156,7 @@ function parseDateText(text: string): string | null {
 
 function toIsoDate(value: unknown): string | null {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return formatLocalDate(value);
+    return formatExcelDateObject(value);
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
