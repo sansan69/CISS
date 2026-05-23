@@ -29,8 +29,96 @@ import {
   resolveAttendanceSubmissionWindow,
 } from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
+import type { AppDecodedToken } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
+
+// Rate limiting: in-memory per-IP limiter.
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_AUTH_MAX = 30;
+const RATE_LIMIT_ANON_MAX = 5;
+
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
+function checkRateLimit(ip: string, max: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= max) {
+    return false;
+  }
+  entry.count += 1;
+  return true;
+}
+
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap.entries()) {
+      if (now > entry.resetAt) rateLimitMap.delete(ip);
+    }
+  }, RATE_LIMIT_WINDOW_MS * 5);
+}
+
+/**
+ * Verify the caller's identity when a Bearer token is present.
+ * Returns the decoded token if authenticated, or null if no token.
+ * Throws if the token is present but invalid.
+ */
+async function tryVerifyAuth(
+  request: NextRequest,
+): Promise<AppDecodedToken | null> {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    return null;
+  }
+  const { verifyRequestAuth } = await import("@/lib/server/auth");
+  return verifyRequestAuth(request);
+}
+
+/**
+ * Verify that the authenticated caller owns the employeeDocId they are
+ * submitting attendance for. Prevents one guard from submitting for another.
+ */
+async function verifyCallerOwnership(
+  decoded: AppDecodedToken,
+  employeeDocId: string,
+): Promise<void> {
+  // Fast path: token has the employeeDocId claim (set by mobile-session repair).
+  if (decoded.employeeDocId && decoded.employeeDocId === employeeDocId) {
+    return;
+  }
+
+  // Fallback: look up the employee and check guardAuthUid matches the caller.
+  const { db: adminDb } = await import("@/lib/firebaseAdmin");
+  const employeeSnap = await adminDb
+    .collection("employees")
+    .doc(employeeDocId)
+    .get();
+
+  if (!employeeSnap.exists) {
+    throw new AttendanceError("Employee not found.");
+  }
+
+  const employeeData = employeeSnap.data() as Record<string, any>;
+  if (employeeData.guardAuthUid === decoded.uid) {
+    return;
+  }
+
+  throw new AttendanceError(
+    "You can only submit attendance for your own account.",
+  );
+}
 
 /** Business-logic errors that should return HTTP 400 (not 500). */
 class AttendanceError extends Error {
@@ -175,7 +263,25 @@ function buildGuardName(employeeData: Record<string, any>, fallbackEmployeeId: s
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting.
+    const ip = getClientIp(request);
+    const decoded = await tryVerifyAuth(request);
+    const isAuthenticated = decoded !== null;
+    const rateLimit = isAuthenticated ? RATE_LIMIT_AUTH_MAX : RATE_LIMIT_ANON_MAX;
+    if (!checkRateLimit(ip, rateLimit)) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait a moment and try again." },
+        { status: 429 },
+      );
+    }
+
     const payload = attendanceSubmissionSchema.parse(await request.json());
+
+    // Ownership check: authenticated callers can only submit for themselves.
+    if (isAuthenticated) {
+      await verifyCallerOwnership(decoded, payload.employeeDocId);
+    }
+
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue, Timestamp } = await import("firebase-admin/firestore");
     const now = Timestamp.now();
@@ -429,16 +535,6 @@ export async function POST(request: NextRequest) {
         }
 
         if (
-          lastState.lastAttendanceDate === attendanceDate &&
-          lastState.lastStatus === "Out" &&
-          payload.status === "In"
-        ) {
-          throw new AttendanceError(
-            "Attendance IN is already closed for today. Please contact admin if this is incorrect.",
-          );
-        }
-
-        if (
           lastState.lastAttendanceDate !== attendanceDate &&
           payload.status === "Out"
         ) {
@@ -556,12 +652,18 @@ export async function POST(request: NextRequest) {
         deviceInfo: payload.deviceInfo,
         attendanceDate,
         createdAt: now,
+        submittedByUid: decoded?.uid ?? null,
+        submittedByRole: decoded?.role ?? null,
         auditTrail: [
-          buildServerAuditEvent("attendance_submitted", undefined, {
-            employeeDocId: payload.employeeDocId,
-            siteId: payload.siteId,
-            status: payload.status,
-          }),
+          buildServerAuditEvent(
+            "attendance_submitted",
+            decoded ? { uid: decoded.uid, email: decoded.email } : undefined,
+            {
+              employeeDocId: payload.employeeDocId,
+              siteId: payload.siteId,
+              status: payload.status,
+            },
+          ),
         ],
       });
 

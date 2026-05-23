@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDutyPoint } from "./shift-utils";
+import { buildShiftTemplates, normalizeDutyPoint, resolveSiteShift } from "./shift-utils";
 
 describe("normalizeDutyPoint", () => {
   it("omits undefined optional fields so Firestore can store the duty point", () => {
@@ -18,8 +18,8 @@ describe("normalizeDutyPoint", () => {
       active: true,
       coverageMode: "roundClock",
       dutyHours: "12",
-      shiftMode: "fixed",
       patrolPoints: [],
+      shiftMode: "fixed",
       shiftTemplates: [
         {
           code: "day",
@@ -42,5 +42,18 @@ describe("normalizeDutyPoint", () => {
     expect(Object.prototype.hasOwnProperty.call(point, "code")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(point, "geofenceRadiusMeters")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(point, "notes")).toBe(false);
+  });
+});
+
+describe("resolveSiteShift", () => {
+  it("resolves shift windows in the configured site timezone", () => {
+    const shift = resolveSiteShift(
+      "fixed",
+      buildShiftTemplates("3x8"),
+      new Date("2026-05-22T16:45:00.000Z"),
+      "Asia/Kolkata",
+    );
+
+    expect(shift?.code).toBe("night");
   });
 });

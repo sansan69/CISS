@@ -24,6 +24,8 @@ export const DUTY_POINT_HOURS_LABELS: Record<DutyPointHours, string> = {
   "12": "12 hours",
 };
 
+export const DEFAULT_SHIFT_TIME_ZONE = "Asia/Kolkata";
+
 export function buildShiftTemplates(pattern?: SiteShiftPattern | null): ShiftTemplate[] {
   if (pattern === "2x12") {
     return [
@@ -225,16 +227,35 @@ function timeToMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
+function getMinutesInTimeZone(at: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(at);
+
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return at.getHours() * 60 + at.getMinutes();
+  }
+
+  return hour * 60 + minute;
+}
+
 export function resolveSiteShift(
   shiftMode?: SiteShiftMode,
   shiftTemplates?: ShiftTemplate[] | null,
   at: Date = new Date(),
+  timeZone = DEFAULT_SHIFT_TIME_ZONE,
 ) {
   if (shiftMode !== "fixed" || !shiftTemplates?.length) {
     return null;
   }
 
-  const totalMinutes = at.getHours() * 60 + at.getMinutes();
+  const totalMinutes = getMinutesInTimeZone(at, timeZone);
 
   for (const shift of shiftTemplates) {
     const start = timeToMinutes(shift.startTime);

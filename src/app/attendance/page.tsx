@@ -9,6 +9,7 @@ import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, Aler
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
+import { useAppAuth } from '@/context/auth-context';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -123,6 +124,7 @@ function buildLocationAccessError(error: GeolocationPositionError) {
 
 export default function AttendancePage() {
   const router = useRouter();
+  const { user } = useAppAuth();
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -1156,11 +1158,13 @@ export default function AttendancePage() {
       throw new Error(uploadBody.error || 'Could not upload attendance photo.');
     }
     const photoUrl = uploadBody.url as string;
+    const authToken = user ? await user.getIdToken() : null;
 
     const response = await fetch('/api/attendance/submit', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       body: JSON.stringify({
         ...payloadWithoutPhotoUrl,
@@ -1177,7 +1181,7 @@ export default function AttendancePage() {
       photoUrl,
       recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
     };
-  }, []);
+  }, [user]);
 
   const flushQueuedAttendance = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;

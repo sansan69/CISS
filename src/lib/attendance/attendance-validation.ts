@@ -13,6 +13,25 @@ export type AttendanceShiftSnapshot = {
   crossesMidnight?: boolean | null;
 } | null;
 
+function parseDateKey(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day));
+}
+
+function isImmediateNextDate(previousDate: string, nextDate: string) {
+  const previous = parseDateKey(previousDate);
+  const next = parseDateKey(nextDate);
+
+  if (previous === null || next === null) {
+    return false;
+  }
+
+  return next - previous === 24 * 60 * 60 * 1000;
+}
+
 function getCheckoutShift(input: {
   shift: AttendanceShiftSnapshot;
   lastShift?: AttendanceShiftSnapshot;
@@ -35,6 +54,37 @@ function getCheckoutShift(input: {
   return input.shift;
 }
 
+function canUseOpenSessionDateForCheckout(input: {
+  attendanceDate: string;
+  status: "In" | "Out";
+  shift: AttendanceShiftSnapshot;
+  lastShift?: AttendanceShiftSnapshot;
+  lastState: AttendanceStateSnapshot;
+}) {
+  if (input.status !== "Out") return false;
+
+  const lastAttendanceDate = input.lastState.lastAttendanceDate ?? null;
+  if (!lastAttendanceDate || lastAttendanceDate === input.attendanceDate) {
+    return false;
+  }
+
+  if (!isImmediateNextDate(lastAttendanceDate, input.attendanceDate)) {
+    return false;
+  }
+
+  if (input.lastState.lastStatus !== "In") {
+    return false;
+  }
+
+  const checkoutShift = getCheckoutShift({
+    shift: input.shift,
+    lastShift: input.lastShift,
+    lastState: input.lastState,
+  });
+
+  return checkoutShift?.crossesMidnight === true;
+}
+
 export function canRecordNextDayCheckout(input: {
   attendanceDate: string;
   status: "In" | "Out";
@@ -48,6 +98,10 @@ export function canRecordNextDayCheckout(input: {
 
   const lastAttendanceDate = input.lastState.lastAttendanceDate ?? null;
   if (!lastAttendanceDate || lastAttendanceDate === input.attendanceDate) {
+    return false;
+  }
+
+  if (!isImmediateNextDate(lastAttendanceDate, input.attendanceDate)) {
     return false;
   }
 
@@ -142,8 +196,20 @@ export function resolveAttendanceSubmissionWindow(input: {
     lastDutyPointId !== currentDutyPointId ||
     Boolean(lastShiftCode && currentShiftCode && lastShiftCode !== currentShiftCode);
 
+  const shouldUseOpenSessionDate =
+    lastState.lastAttendanceDate === input.attendanceDate ||
+    canUseOpenSessionDateForCheckout({
+      attendanceDate: input.attendanceDate,
+      status: input.status,
+      shift: input.shift,
+      lastShift: input.lastShift,
+      lastState,
+    });
+
   return {
-    attendanceDate: lastState.lastAttendanceDate ?? input.attendanceDate,
+    attendanceDate: shouldUseOpenSessionDate
+      ? lastState.lastAttendanceDate ?? input.attendanceDate
+      : input.attendanceDate,
     openSessionId: lastState.openSessionId ?? null,
     closingOpenSession: true,
     contextChanged,
