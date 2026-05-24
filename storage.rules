@@ -103,6 +103,24 @@ service firebase.storage {
       allow update, delete: if isAdmin();
     }
 
+    match /employees/{employeeKey}/aadharCards/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/panCards/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeKey}/passports/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isAllowedSize() && isDocument();
+      allow update, delete: if isAdmin();
+    }
+
     match /employees/{employeeKey}/bankDocuments/{fileName} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
@@ -156,6 +174,24 @@ service firebase.storage {
     }
 
     match /enrollments/{employeeKey}/armsLicenses/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isEnrollmentDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /enrollments/{employeeKey}/aadharCards/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isEnrollmentDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /enrollments/{employeeKey}/panCards/{fileName} {
+      allow read: if isSignedIn();
+      allow create: if isEnrollmentDocument();
+      allow update, delete: if isAdmin();
+    }
+
+    match /enrollments/{employeeKey}/passports/{fileName} {
       allow read: if isSignedIn();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();

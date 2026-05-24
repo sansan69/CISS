@@ -138,6 +138,8 @@ const enrollmentFormSchema = z.object({
   serviceBookDocument: optionalFileSchema,
   armsLicenseNumber: z.string().optional(),
   armsLicenseDocument: optionalFileSchema,
+  passportCountryName: z.string().optional(),
+  passportDocument: optionalFileSchema,
 
   // Location & Identification
   district: z.string({ required_error: "District is required." }),
@@ -157,6 +159,8 @@ const enrollmentFormSchema = z.object({
   addressProofNumber: z.string().min(1, { message: "Address proof number is required." }),
   addressProofUrlFront: fileSchema,
   addressProofUrlBack: fileSchema,
+  aadharCardDocument: optionalFileSchema,
+  panCardDocument: optionalFileSchema,
   
   signatureUrl: fileSchema,
   
@@ -203,6 +207,15 @@ const enrollmentFormSchema = z.object({
     if (!data.aadharNumber || data.aadharNumber.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar number is required.", path: ["aadharNumber"] });
     }
+    if (!data.aadharCardDocument) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar card copy is required.", path: ["aadharCardDocument"] });
+    }
+    if (!data.panNumber || data.panNumber.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "PAN card number is required.", path: ["panNumber"] });
+    }
+    if (!data.panCardDocument) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "PAN card copy is required.", path: ["panCardDocument"] });
+    }
     if (!data.nationality || data.nationality.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Nationality is required.", path: ["nationality"] });
     }
@@ -235,8 +248,8 @@ const enrollmentFormSchema = z.object({
     if (!data.lastName || data.lastName.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Last name is required.", path: ["lastName"] });
     }
-    if (!data.emailAddress || !z.string().email().safeParse(data.emailAddress).success) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Valid email address is required.", path: ["emailAddress"] });
+    if (data.emailAddress?.trim() && !z.string().email().safeParse(data.emailAddress).success) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid email address or leave it blank.", path: ["emailAddress"] });
     }
   }
   
@@ -276,7 +289,7 @@ const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
 
 
-type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate" | "serviceBookDocument" | "armsLicenseDocument";
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate" | "serviceBookDocument" | "armsLicenseDocument" | "aadharCardDocument" | "panCardDocument" | "passportDocument";
 
 function buildEnrollmentStoragePath(
   phoneNumber: string,
@@ -358,6 +371,9 @@ export default function EnrollEmployeePage() {
   const [policeCertPreview, setPoliceCertPreview] = React.useState<string | null>(null);
   const [serviceBookPreview, setServiceBookPreview] = React.useState<string | null>(null);
   const [armsLicensePreview, setArmsLicensePreview] = React.useState<string | null>(null);
+  const [aadharCardPreview, setAadharCardPreview] = React.useState<string | null>(null);
+  const [panCardPreview, setPanCardPreview] = React.useState<string | null>(null);
+  const [passportPreview, setPassportPreview] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
@@ -393,6 +409,7 @@ export default function EnrollEmployeePage() {
         lngJobDesignation: undefined,
         serviceBookNumber: '',
         armsLicenseNumber: '',
+        passportCountryName: '',
         district: '',
         panNumber: '',
         aadharNumber: '',
@@ -545,6 +562,9 @@ export default function EnrollEmployeePage() {
             case "policeClearanceCertificate": setPoliceCertPreview(previewUrl); break;
             case "serviceBookDocument": setServiceBookPreview(previewUrl); break;
             case "armsLicenseDocument": setArmsLicensePreview(previewUrl); break;
+            case "aadharCardDocument": setAadharCardPreview(previewUrl); break;
+            case "panCardDocument": setPanCardPreview(previewUrl); break;
+            case "passportDocument": setPassportPreview(previewUrl); break;
         }
         
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
@@ -617,6 +637,9 @@ export default function EnrollEmployeePage() {
         policeClearanceCertificateUrl: null,
         serviceBookDocumentUrl: null,
         armsLicenseDocumentUrl: null,
+        aadharCardDocumentUrl: null,
+        panCardDocumentUrl: null,
+        passportDocumentUrl: null,
     };
 
     try {
@@ -636,6 +659,9 @@ export default function EnrollEmployeePage() {
             { name: "Police Certificate", file: data.policeClearanceCertificate, folder: "policeCertificates", fileStem: "pcc", key: 'policeClearanceCertificateUrl' },
             { name: "Service Book Document", file: data.serviceBookDocument, folder: "serviceBooks", fileStem: "service_book", key: 'serviceBookDocumentUrl' },
             { name: "Arms License Document", file: data.armsLicenseDocument, folder: "armsLicenses", fileStem: "arms_license", key: 'armsLicenseDocumentUrl' },
+            { name: "Aadhar Card", file: data.aadharCardDocument, folder: "aadharCards", fileStem: "aadhar", key: 'aadharCardDocumentUrl' },
+            { name: "PAN Card", file: data.panCardDocument, folder: "panCards", fileStem: "pan", key: 'panCardDocumentUrl' },
+            { name: "Passport", file: data.passportDocument, folder: "passports", fileStem: "passport", key: 'passportDocumentUrl' },
         ];
 
 
@@ -681,9 +707,11 @@ export default function EnrollEmployeePage() {
           serviceBookDocumentUrl: uploadedUrls.serviceBookDocumentUrl || undefined,
           armsLicenseNumber: data.armsLicenseNumber || undefined,
           armsLicenseDocumentUrl: uploadedUrls.armsLicenseDocumentUrl || undefined,
+          passportCountryName: data.passportCountryName || undefined,
+          passportDocumentUrl: uploadedUrls.passportDocumentUrl || undefined,
           district,
           fullAddress: data.fullAddress,
-          emailAddress: data.emailAddress || undefined,
+          emailAddress: data.emailAddress?.trim() || undefined,
           phoneNumber: data.phoneNumber,
           identityProofType: data.identityProofType,
           identityProofNumber: data.identityProofNumber,
@@ -693,6 +721,8 @@ export default function EnrollEmployeePage() {
           addressProofNumber: data.addressProofNumber,
           addressProofUrlFront: uploadedUrls.addressProofUrlFront,
           addressProofUrlBack: uploadedUrls.addressProofUrlBack,
+          aadharCardDocumentUrl: uploadedUrls.aadharCardDocumentUrl || undefined,
+          panCardDocumentUrl: uploadedUrls.panCardDocumentUrl || undefined,
           signatureUrl: uploadedUrls.signatureUrl,
           bankAccountNumber: data.bankAccountNumber || undefined,
           ifscCode: data.ifscCode || undefined,
@@ -758,7 +788,7 @@ export default function EnrollEmployeePage() {
       
       toast({
         title: "Registration Successful!",
-        description: `${data.firstName} ${data.lastName}'s registration (ID: ${responseBody.employeeId}) has been saved.`,
+        description: `${data.fullNameInput || `${data.firstName || ""} ${data.lastName || ""}`.trim()}'s registration (ID: ${responseBody.employeeId}) has been saved.`,
         action: <Check className="h-5 w-5 text-green-500" />,
       });
       form.reset();
@@ -1125,6 +1155,30 @@ export default function EnrollEmployeePage() {
                     </div>
                 </div>
 
+                {isLngClient && (
+                  <div className="p-4 border rounded-lg mt-6 space-y-4">
+                    <h3 className="font-medium text-lg">LNG Statutory Card Copies</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="aadharCardDocument" render={({ field }) => (
+                        <FormItem className="text-center">
+                          <FormLabel className="block mb-2">Aadhar Card Copy <span className="text-destructive">*</span></FormLabel>
+                          <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
+                          <FormDescription>Dedicated LNG Aadhar copy.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="panCardDocument" render={({ field }) => (
+                        <FormItem className="text-center">
+                          <FormLabel className="block mb-2">PAN Card Copy <span className="text-destructive">*</span></FormLabel>
+                          <ImagePreviewAndUpload fieldName="panCardDocument" preview={panCardPreview} setPreview={setPanCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
+                          <FormDescription>Dedicated LNG PAN copy.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+                  </div>
+                )}
+
                 {/* Signature */}
                  <div className="p-4 border rounded-lg mt-6 space-y-4">
                     <h3 className="font-medium text-lg">Signature</h3>
@@ -1139,6 +1193,7 @@ export default function EnrollEmployeePage() {
                     <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
                     {isLngClient && <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter 12-digit Aadhar number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                    {isLngClient && <FormField control={form.control} name="passportCountryName" render={({ field }) => (<FormItem><FormLabel>Passport Country Name</FormLabel><FormControl><Input placeholder="Enter passport country, if applicable" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && (
                       <div className="md:col-span-2 rounded-2xl border bg-muted/20 p-4">
@@ -1154,6 +1209,22 @@ export default function EnrollEmployeePage() {
                     <FormField control={form.control} name="esicNumber" render={({ field }) => (<FormItem><FormLabel>ESIC Number</FormLabel><FormControl><Input placeholder="Enter ESIC number" {...field} /></FormControl><FormDescription>ESIC Number (optional)</FormDescription><FormMessage /></FormItem>)} />
                     {isLngClient && <FormField control={form.control} name="legacyUniqueId" render={({ field }) => (<FormItem><FormLabel>Legacy Unique ID</FormLabel><FormControl><Input placeholder="e.g. KL/LNG/2024-26/001" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Optional. If left blank, the system generates an employee ID.</FormDescription><FormMessage /></FormItem>)} />}
                  </div>
+                 {isLngClient && (
+                   <div className="grid grid-cols-1 mt-6">
+                    <FormField
+                        control={form.control}
+                        name="passportDocument"
+                        render={({ field }) => (
+                        <FormItem className="text-center">
+                            <FormLabel className="block mb-2">Passport Copy</FormLabel>
+                            <ImagePreviewAndUpload fieldName="passportDocument" preview={passportPreview} setPreview={setPassportPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
+                            <FormDescription>Optional. Upload only if passport details apply.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                   </div>
+                 )}
                  <div className="grid grid-cols-1 mt-6">
                     <FormField
                         control={form.control}
@@ -1209,7 +1280,7 @@ export default function EnrollEmployeePage() {
                   )} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address (optional)</FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications, if available</FormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormDescription>Your primary contact number</FormDescription><FormMessage /></FormItem>)} />
                 </div>
               </section>

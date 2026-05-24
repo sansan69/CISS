@@ -51,6 +51,8 @@ export const employeeSchema = z.object({
   serviceBookDocumentUrl: z.string().optional(),
   armsLicenseNumber: z.string().optional(),
   armsLicenseDocumentUrl: z.string().optional(),
+  passportCountryName: z.string().optional(),
+  passportDocumentUrl: z.string().optional(),
   educationalQualification: employeeQualificationSchema.optional(),
   otherQualification: z.string().optional(),
   identityProofType: z.string().optional(),
@@ -61,6 +63,8 @@ export const employeeSchema = z.object({
   addressProofNumber: z.string().optional(),
   addressProofUrlFront: z.string().optional(),
   addressProofUrlBack: z.string().optional(),
+  aadharCardDocumentUrl: z.string().optional(),
+  panCardDocumentUrl: z.string().optional(),
   signatureUrl: z.string().optional(),
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
@@ -128,6 +132,8 @@ export interface Employee {
   serviceBookDocumentUrl?: string;
   armsLicenseNumber?: string;
   armsLicenseDocumentUrl?: string;
+  passportCountryName?: string;
+  passportDocumentUrl?: string;
   educationalQualification?:
     | "Primary School"
     | "High School"
@@ -149,6 +155,8 @@ export interface Employee {
   addressProofNumber?: string;
   addressProofUrlFront?: string;
   addressProofUrlBack?: string;
+  aadharCardDocumentUrl?: string;
+  panCardDocumentUrl?: string;
   signatureUrl?: string;
   epfUanNumber?: string;
   esicNumber?: string;

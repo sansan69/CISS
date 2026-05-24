@@ -37,6 +37,8 @@ function buildLngPayload(
     addressProofNumber: "123456789012",
     addressProofUrlFront: "https://example.com/address-front.png",
     addressProofUrlBack: "https://example.com/address-back.png",
+    aadharCardDocumentUrl: "https://example.com/aadhar.pdf",
+    panCardDocumentUrl: "https://example.com/pan.pdf",
     signatureUrl: "https://example.com/signature.png",
     fullAddress: "Dummy House, Dummy Road, Ernakulam, Kerala - 682001",
     emailAddress: "dummy-browser-guard@lng-petronet.cisskerala.app",
@@ -46,11 +48,55 @@ function buildLngPayload(
     bankName: "STATE BANK OF INDIA",
     branchName: "ERNAKULAM MAIN",
     legacyUniqueId: "DUMMY-LNG-CODEX-REGRESSION",
+    termsAccepted: true,
+    ...overrides,
+  };
+}
+
+function buildStandardPayload(
+  overrides: Partial<EnrollmentSubmission> = {},
+): EnrollmentSubmission {
+  return {
+    joiningDate: "2026-04-30T18:30:00.000Z",
+    clientName: "TCS",
+    resourceIdNumber: "TCS-RESOURCE-001",
+    profilePictureUrl: "https://example.com/profile.png",
+    firstName: "Standard",
+    lastName: "Guard",
+    fatherName: "Standard Father",
+    motherName: "Standard Mother",
+    dateOfBirth: "1994-02-14T18:30:00.000Z",
+    gender: "Male",
+    maritalStatus: "Unmarried",
+    educationalQualification: "Graduation",
+    district: "Ernakulam",
+    identityProofType: "PAN Card",
+    identityProofNumber: "AABCT1234C",
+    identityProofUrlFront: "https://example.com/id-front.png",
+    identityProofUrlBack: "https://example.com/id-back.png",
+    addressProofType: "Aadhar Card",
+    addressProofNumber: "123456789012",
+    addressProofUrlFront: "https://example.com/address-front.png",
+    addressProofUrlBack: "https://example.com/address-back.png",
+    signatureUrl: "https://example.com/signature.png",
+    fullAddress: "Standard House, Standard Road, Ernakulam, Kerala - 682001",
+    phoneNumber: "9012345690",
+    termsAccepted: true,
     ...overrides,
   };
 }
 
 describe("enrollmentSubmissionSchema", () => {
+  it("accepts standard client submissions without an employee email address", () => {
+    const parsed = enrollmentSubmissionSchema.safeParse(
+      buildStandardPayload({
+        emailAddress: undefined,
+      }),
+    );
+
+    expect(parsed.success).toBe(true);
+  });
+
   it("accepts the LNG payload shape proven by the live browser enrollment flow", () => {
     const parsed = enrollmentSubmissionSchema.safeParse(buildLngPayload());
 
@@ -95,6 +141,26 @@ describe("enrollmentSubmissionSchema", () => {
     );
 
     expect(parsed.success).toBe(true);
+  });
+
+  it("requires dedicated Aadhar and PAN copies for LNG Petronet enrollment", () => {
+    const parsed = enrollmentSubmissionSchema.safeParse(
+      buildLngPayload({
+        aadharCardDocumentUrl: undefined,
+        panCardDocumentUrl: undefined,
+      }),
+    );
+
+    expect(parsed.success).toBe(false);
+
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.aadharCardDocumentUrl).toContain(
+        "Aadhar card copy is required for LNG Petronet enrollment.",
+      );
+      expect(parsed.error.flatten().fieldErrors.panCardDocumentUrl).toContain(
+        "PAN card copy is required for LNG Petronet enrollment.",
+      );
+    }
   });
 
   it("still requires service book details for applicable LNG designations", () => {

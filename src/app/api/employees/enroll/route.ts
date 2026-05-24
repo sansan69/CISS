@@ -253,12 +253,26 @@ export async function POST(request: NextRequest) {
       ...(payload.armsLicenseDocumentUrl && {
         armsLicenseDocumentUrl: payload.armsLicenseDocumentUrl,
       }),
+      ...(payload.passportCountryName && {
+        passportCountryName: payload.passportCountryName.toUpperCase(),
+      }),
+      ...(payload.passportDocumentUrl && {
+        passportDocumentUrl: payload.passportDocumentUrl,
+      }),
       ...(payload.legacyUniqueId && { legacyUniqueId: payload.legacyUniqueId }),
       ...(payload.epfUanNumber && { epfUanNumber: payload.epfUanNumber }),
       ...(payload.esicNumber && { esicNumber: payload.esicNumber }),
+      ...(payload.aadharCardDocumentUrl && {
+        aadharCardDocumentUrl: payload.aadharCardDocumentUrl,
+      }),
+      ...(payload.panCardDocumentUrl && {
+        panCardDocumentUrl: payload.panCardDocumentUrl,
+      }),
       ...(payload.policeClearanceCertificateUrl && {
         policeClearanceCertificateUrl: payload.policeClearanceCertificateUrl,
       }),
+      termsAccepted: payload.termsAccepted === true,
+      ...(payload.termsAccepted === true && { termsAcceptedAt: now }),
     };
 
     const docRef = await adminDb.collection("employees").add(employeeData);

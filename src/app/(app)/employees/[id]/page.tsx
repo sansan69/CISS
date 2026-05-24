@@ -1488,6 +1488,7 @@ export default function AdminEmployeeProfilePage() {
                     {typeof employee.weightKg === 'number' && <DetailItem label="Weight (kg)" value={employee.weightKg} />}
                     {employee.serviceBookNumber && <DetailItem label="Service Book Number" value={employee.serviceBookNumber} />}
                     {employee.armsLicenseNumber && <DetailItem label="Arms License Number" value={employee.armsLicenseNumber} />}
+                    {employee.passportCountryName && <DetailItem label="Passport Country" value={employee.passportCountryName} isName />}
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
                   </div>
@@ -1520,8 +1521,11 @@ export default function AdminEmployeeProfilePage() {
                             <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
                             <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
+                            <DocumentItem name="Aadhar Card Copy" url={employee.aadharCardDocumentUrl} type="LNG Statutory Document" />
+                            <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />
                             <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />
                             <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />
+                            <DocumentItem name="Passport Copy" url={employee.passportDocumentUrl} type="Passport" />
                             <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
                         </div>
                     </div>

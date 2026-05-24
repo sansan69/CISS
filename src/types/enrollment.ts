@@ -42,6 +42,8 @@ export const enrollmentSubmissionSchema = z
     serviceBookDocumentUrl: z.string().url().optional(),
     armsLicenseNumber: z.string().trim().optional(),
     armsLicenseDocumentUrl: z.string().url().optional(),
+    passportCountryName: z.string().trim().optional(),
+    passportDocumentUrl: z.string().url().optional(),
     identityProofType: z.enum(PROOF_TYPES),
     identityProofNumber: z.string().min(1),
     identityProofUrlFront: z.string().url(),
@@ -50,6 +52,8 @@ export const enrollmentSubmissionSchema = z
     addressProofNumber: z.string().min(1),
     addressProofUrlFront: z.string().url(),
     addressProofUrlBack: z.string().url(),
+    aadharCardDocumentUrl: z.string().url().optional(),
+    panCardDocumentUrl: z.string().url().optional(),
     signatureUrl: z.string().url(),
     policeClearanceCertificateUrl: z.string().url().optional(),
     epfUanNumber: z.string().trim().optional(),
@@ -63,6 +67,7 @@ export const enrollmentSubmissionSchema = z
     emailAddress: z.string().trim().optional(),
     phoneNumber: z.string().regex(/^\d{10}$/),
     legacyUniqueId: z.string().trim().optional(),
+    termsAccepted: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.clientName === "TCS" && !data.resourceIdNumber) {
@@ -122,6 +127,30 @@ export const enrollmentSubmissionSchema = z
           code: z.ZodIssueCode.custom,
           message: "Aadhar number is required for LNG Petronet enrollment.",
           path: ["aadharNumber"],
+        });
+      }
+
+      if (!data.aadharCardDocumentUrl) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Aadhar card copy is required for LNG Petronet enrollment.",
+          path: ["aadharCardDocumentUrl"],
+        });
+      }
+
+      if (!data.panNumber?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "PAN card number is required for LNG Petronet enrollment.",
+          path: ["panNumber"],
+        });
+      }
+
+      if (!data.panCardDocumentUrl) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "PAN card copy is required for LNG Petronet enrollment.",
+          path: ["panCardDocumentUrl"],
         });
       }
 
@@ -188,10 +217,13 @@ export const enrollmentSubmissionSchema = z
           path: ["armsLicenseDocumentUrl"],
         });
       }
-    } else if (!data.emailAddress || !z.string().email().safeParse(data.emailAddress).success) {
+    } else if (
+      data.emailAddress?.trim() &&
+      !z.string().email().safeParse(data.emailAddress).success
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "A valid email address is required.",
+        message: "Please enter a valid email address.",
         path: ["emailAddress"],
       });
     }
