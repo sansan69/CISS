@@ -531,6 +531,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      let staleSessionAutoClosed = false;
+
       if (!lastState && payload.status === "Out") {
         throw new AttendanceError(
           "Attendance OUT is only allowed after a valid IN mark.",
@@ -539,9 +541,16 @@ export async function POST(request: NextRequest) {
 
       if (lastState) {
         if (payload.status === "In" && lastState.lastStatus === "In") {
-          throw new AttendanceError(
-            "Attendance IN is already open. Please submit OUT before marking IN again.",
-          );
+          // Guard is checking IN while a previous IN session is still open.
+          // Allow if the open session is stale (from a different date);
+          // block only for same-day duplicates (likely a double-tap).
+          if (lastState.lastAttendanceDate === submittedAttendanceDate) {
+            throw new AttendanceError(
+              "Attendance IN is already open today. Please submit OUT before marking IN again.",
+            );
+          }
+          // Stale session from a previous date — will auto-close below
+          staleSessionAutoClosed = true;
         }
 
         if (
@@ -609,6 +618,55 @@ export async function POST(request: NextRequest) {
           ? "Checkout context differed from the original IN session and requires admin review."
           : null,
       ].filter(Boolean) as string[];
+
+      // Auto-close stale open session from a previous date
+      if (staleSessionAutoClosed && lastState) {
+        const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
+        const staleDate = lastState.lastAttendanceDate ?? "unknown";
+        transaction.set(staleOutLogRef, {
+          employeeId: payload.employeeId,
+          employeeDocId: payload.employeeDocId,
+          employeeName: payload.employeeName,
+          status: "Out",
+          attendanceDate: staleDate,
+          siteId: lastState.lastSiteId ?? payload.siteId,
+          siteName: payload.siteName,
+          clientName: lastState.lastSiteClientName ?? siteClientName,
+          autoClosed: true,
+          autoClosedReason:
+            "Previous IN session from " +
+            staleDate +
+            " was never checked out. Auto-closed by new IN on " +
+            submittedAttendanceDate +
+            ".",
+          reportedAt: now,
+          serverProcessedAt: now,
+          createdAt: now,
+          attendanceReviewWarnings: [
+            "Auto-closed stale session from " + staleDate + ".",
+          ],
+        });
+        if (lastState.openSessionId) {
+          transaction.set(
+            adminDb
+              .collection("attendanceSessions")
+              .doc(String(lastState.openSessionId)),
+            {
+              status: "closed",
+              outLogId: staleOutLogRef.id,
+              endedAt: now,
+              autoClosed: true,
+              autoClosedReason: "Auto-closed by new IN on " + submittedAttendanceDate,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        }
+        attendanceReviewWarnings.push(
+          "Previous session from " + staleDate + " was auto-closed (no OUT was recorded).",
+        );
+      }
+
       const attendanceSessionId =
         payload.status === "In"
           ? attendanceLogRef.id
