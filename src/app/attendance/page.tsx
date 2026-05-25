@@ -653,7 +653,7 @@ export default function AttendancePage() {
       'Uniform review is pending manual verification.',
       'Retake the photo if shoes, ID card, or full body are not clearly visible.',
     ],
-    summary: 'Attendance can continue now. Admin will review the photo for shoes, ID card, and uniform compliance.',
+    summary: 'Photo captured successfully. Admin may review it later for compliance.',
     missingShoes: false,
     missingIdCard: false,
     uniformIssue: false,
@@ -805,29 +805,7 @@ export default function AttendancePage() {
         description: 'Attendance can continue. Admin will review the photo, or you can retake it now.',
       });
 
-      const analyzePhotoCompliance = async () => {
-        try {
-          const response = await fetch('/api/attendance/analyze-photo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              photoDataUrl,
-              employeeName: scannedEmployee?.fullName,
-              employeeId: scannedEmployee?.employeeCode || scannedEmployee?.id,
-              siteName: selectedSite?.siteName,
-              district: selectedDistrict,
-              clientName: selectedSite?.clientName || scannedEmployee?.clientName,
-            }),
-          });
-          const result = await response.json();
-          if (result.compliance) {
-            setPhotoCompliance(result.compliance);
-          }
-        } catch {
-          // AI analysis failed, manual review compliance already set
-        }
-      };
-      void analyzePhotoCompliance();
+
     } catch (error: any) {
       setWatermarkedPhoto(photoDataUrl);
       setPhotoCompliance(manualReviewCompliance);
@@ -2082,8 +2060,8 @@ export default function AttendancePage() {
                             </Badge>
                           </div>
                           {photoCompliance.adminFlag && (
-                            <p className="text-sm font-medium">
-                              This record will be marked for admin review even if you submit now.
+                            <p className="text-sm text-muted-foreground">
+                              Photo saved for records. You can submit now.
                             </p>
                           )}
                         </AlertDescription>
