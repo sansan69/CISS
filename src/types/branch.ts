@@ -1,7 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 
 export type VisitReportStatus = "draft" | "submitted" | "reviewed";
-export type TrainingReportStatus = "submitted" | "acknowledged";
+export type TrainingReportStatus = "draft" | "submitted" | "acknowledged";
 
 export interface FoVisitReport {
   id: string;

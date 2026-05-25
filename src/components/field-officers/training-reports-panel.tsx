@@ -21,15 +21,17 @@ import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
 
-type Tab = "all" | "submitted" | "acknowledged";
+type Tab = "all" | "draft" | "submitted" | "acknowledged";
 
 const STATUS_CONFIG: Record<TrainingReportStatus, { label: string; className: string }> = {
+  draft:        { label: "Draft",        className: "bg-gray-100 text-gray-600" },
   submitted:    { label: "Submitted",    className: "bg-amber-100 text-amber-700" },
   acknowledged: { label: "Acknowledged", className: "bg-green-100 text-green-700" },
 };
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all",          label: "All" },
+  { key: "draft",        label: "Draft" },
   { key: "submitted",    label: "Submitted" },
   { key: "acknowledged", label: "Acknowledged" },
 ];
@@ -72,6 +74,7 @@ export function TrainingReportsPanel() {
   const [form, setForm] = useState({
     clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "",
     durationMinutes: "60", topic: "", description: "", attendeeCount: "",
+    status: "draft" as TrainingReportStatus,
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
@@ -114,7 +117,7 @@ export function TrainingReportsPanel() {
       toast({ title: "Missing fields", description: "Client, training date, and topic are required.", variant: "destructive" });
       return;
     }
-    if (!hasSiteUploads(photoUrls)) {
+    if (form.status === "submitted" && !hasSiteUploads(photoUrls)) {
       toast({ title: "Missing uploads", description: "Add at least one site photo or file before submitting.", variant: "destructive" });
       return;
     }
@@ -135,15 +138,18 @@ export function TrainingReportsPanel() {
           description: form.description,
           attendeeCount: parseInt(form.attendeeCount) || 0,
           attendeeIds: [],
-          status: "submitted",
+          status: form.status,
           photoUrls,
           attachmentUrls,
         }),
       });
       if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
-      toast({ title: "Report created", description: "Training report submitted." });
+      toast({
+        title: form.status === "draft" ? "Draft saved" : "Report submitted",
+        description: form.status === "draft" ? "Training draft saved. Come back to submit when ready." : "Training report submitted.",
+      });
       setNewSheetOpen(false);
-      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "" });
+      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "", status: "draft" });
       setPhotoUrls([]);
       setAttachmentUrls([]);
       loadReports(activeTab);
@@ -537,8 +543,22 @@ export function TrainingReportsPanel() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select
+                value={form.status}
+                onValueChange={(v) => setForm((f) => ({ ...f, status: v as TrainingReportStatus }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Save as Draft</SelectItem>
+                  <SelectItem value="submitted">Submit</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full">
-              {isSubmitting ? "Submitting..." : "Submit Report"}
+              {isSubmitting ? "Saving..." : form.status === "draft" ? "Save as Draft" : "Submit Report"}
             </Button>
           </div>
         </SheetContent>

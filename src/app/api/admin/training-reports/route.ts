@@ -179,6 +179,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "clientId, trainingDate, and topic are required." }, { status: 400 });
     }
 
+    // Validate training date format
+    const parsedDate = new Date(body.trainingDate);
+    if (isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: "trainingDate must be a valid date." }, { status: 400 });
+    }
+
     if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
       return NextResponse.json({ error: "Field officer or admin access required." }, { status: 403 });
     }
@@ -186,8 +192,10 @@ export async function POST(request: Request) {
     const profile = await getFieldOfficerProfile(adminDb, decoded);
     const site = await resolveSite(adminDb, body.siteId);
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
+    const status = body.status ?? "submitted";
 
-    if (!Array.isArray(body.photoUrls) || body.photoUrls.length === 0) {
+    // Photos only required when submitting (drafts can be saved without photos)
+    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length === 0)) {
       return NextResponse.json(
         { error: "At least one site upload is required before submitting a training report." },
         { status: 400 },
@@ -218,7 +226,7 @@ export async function POST(request: Request) {
       attendeeCount: body.attendeeCount ?? 0,
       photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
       attachmentUrls: Array.isArray(body.attachmentUrls) ? body.attachmentUrls : [],
-      status: body.status ?? "submitted",
+      status,
       createdAt: FieldValue.serverTimestamp(),
     });
 
