@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck, KeyRound } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck, KeyRound, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -402,6 +402,7 @@ export default function AdminEmployeeProfilePage() {
   const [resetPin, setResetPin] = useState("");
   const [confirmResetPin, setConfirmResetPin] = useState("");
   const [isResettingPin, setIsResettingPin] = useState(false);
+  const [isResettingAttendanceState, setIsResettingAttendanceState] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -1236,7 +1237,45 @@ export default function AdminEmployeeProfilePage() {
         setIsDownloadingPdf(false);
     }
   };
-  
+
+  const handleResetAttendanceState = async () => {
+    if (!employee) return;
+    setIsResettingAttendanceState(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("Not authenticated");
+
+      const res = await fetch(
+        `/api/admin/employees/${encodeURIComponent(employee.id)}/reset-attendance-state`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+        },
+      );
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reset");
+
+      toast({
+        title: "Attendance state reset",
+        description: data.hadOpenSession
+          ? `Cleared stale IN session from ${data.previousDate}. Guard can now mark IN fresh.`
+          : "No open session was found. State cleared.",
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Reset failed",
+        description: err?.message || "Could not reset attendance state.",
+      });
+    } finally {
+      setIsResettingAttendanceState(false);
+    }
+  };
+
   if (isLoading || isAuthLoading) {
     return (
       <div className="flex flex-col justify-center items-center min-h-[calc(100vh-200px)] gap-3">
@@ -1382,6 +1421,19 @@ export default function AdminEmployeeProfilePage() {
                   Reset PIN
                 </Button>
               )}
+              <Button
+                variant="outline"
+                className="flex-1 sm:flex-none"
+                onClick={() => handleResetAttendanceState()}
+                disabled={isResettingAttendanceState}
+              >
+                {isResettingAttendanceState ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                )}
+                Reset Attendance
+              </Button>
               <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
                   <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
               </Button>
