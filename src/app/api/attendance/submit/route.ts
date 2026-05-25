@@ -333,6 +333,7 @@ export async function POST(request: NextRequest) {
       .doc(payload.employeeDocId);
     const attendanceLogRef = adminDb.collection("attendanceLogs").doc();
     let guardLocationWrite: GuardLocationWrite | null = null;
+    let staleOutAutoCloseResult: { id: string; staleDate: string } | null = null;
 
     await adminDb.runTransaction(async (transaction) => {
       const [employeeSnap, siteSnap, stateSnap] = await Promise.all([
@@ -532,6 +533,7 @@ export async function POST(request: NextRequest) {
       }
 
       let staleSessionAutoClosed = false;
+      let staleOutAutoClosed = false;
 
       if (!lastState && payload.status === "Out") {
         throw new AttendanceError(
@@ -577,26 +579,28 @@ export async function POST(request: NextRequest) {
           });
 
           if (!overnightCheckoutAllowed) {
-            throw new AttendanceError(
-              "Attendance OUT is only allowed after a valid IN mark on the same day, unless the guard is closing an overnight shift the next morning.",
-            );
+            // Guard is trying to mark OUT for a stale session from a previous date.
+            // Auto-close the stale session instead of throwing an error.
+            staleOutAutoClosed = true;
           }
         }
 
-        if (payload.status === "Out" && lastState.lastStatus !== "In") {
-          throw new AttendanceError(
-            "Attendance OUT is only allowed after a valid IN mark.",
-          );
-        }
+        if (!staleOutAutoClosed) {
+          if (payload.status === "Out" && lastState.lastStatus !== "In") {
+            throw new AttendanceError(
+              "Attendance OUT is only allowed after a valid IN mark.",
+            );
+          }
 
-        if (
-          lastState.lastAttendanceDate === attendanceDate &&
-          lastState.lastStatus !== "In" &&
-          payload.status === "Out"
-        ) {
-          throw new AttendanceError(
-            "Attendance OUT is only allowed after a valid IN mark on the same day.",
-          );
+          if (
+            lastState.lastAttendanceDate === attendanceDate &&
+            lastState.lastStatus !== "In" &&
+            payload.status === "Out"
+          ) {
+            throw new AttendanceError(
+              "Attendance OUT is only allowed after a valid IN mark on the same day.",
+            );
+          }
         }
       }
 
@@ -665,6 +669,68 @@ export async function POST(request: NextRequest) {
         attendanceReviewWarnings.push(
           "Previous session from " + staleDate + " was auto-closed (no OUT was recorded).",
         );
+      }
+
+      // Auto-close stale session via OUT attempt (guard forgot to mark OUT yesterday)
+      if (staleOutAutoClosed && lastState) {
+        const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
+        const staleDate = lastState.lastAttendanceDate ?? "unknown";
+        transaction.set(staleOutLogRef, {
+          employeeId: payload.employeeId,
+          employeeDocId: payload.employeeDocId,
+          employeeName: payload.employeeName,
+          status: "Out",
+          attendanceDate: staleDate,
+          siteId: lastState.lastSiteId ?? payload.siteId,
+          siteName: payload.siteName,
+          clientName: lastState.lastSiteClientName ?? siteClientName,
+          autoClosed: true,
+          autoClosedReason:
+            "Previous IN session from " +
+            staleDate +
+            " was never checked out. Auto-closed by OUT attempt on " +
+            submittedAttendanceDate +
+            ".",
+          reportedAt: now,
+          serverProcessedAt: now,
+          createdAt: now,
+          attendanceReviewWarnings: [
+            "Auto-closed stale session from " + staleDate + " (guard attempted late OUT).",
+          ],
+        });
+        if (lastState.openSessionId) {
+          transaction.set(
+            adminDb
+              .collection("attendanceSessions")
+              .doc(String(lastState.openSessionId)),
+            {
+              status: "closed",
+              outLogId: staleOutLogRef.id,
+              endedAt: now,
+              autoClosed: true,
+              autoClosedReason:
+                "Auto-closed by OUT attempt on " + submittedAttendanceDate,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        }
+        // Clear attendanceState so guard can start fresh
+        transaction.set(
+          attendanceStateRef,
+          {
+            lastStatus: "Out",
+            lastAttendanceDate: staleDate,
+            lastAttendanceId: staleOutLogRef.id,
+            openSessionId: FieldValue.delete(),
+            openSessionStartedAt: FieldValue.delete(),
+            lastLoggedAt: now,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+        staleOutAutoCloseResult = { id: staleOutLogRef.id, staleDate };
+        return; // Don't write today's OUT log — nothing to check out from
       }
 
       const attendanceSessionId =
@@ -866,6 +932,21 @@ export async function POST(request: NextRequest) {
           },
           { merge: true },
         );
+    }
+
+    // If we auto-closed a stale session via OUT attempt, return early
+    if (staleOutAutoCloseResult !== null) {
+      const result = staleOutAutoCloseResult as { id: string; staleDate: string };
+      await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);
+      return NextResponse.json({
+        success: true,
+        id: result.id,
+        autoClosed: true,
+        message:
+          "Previous IN session from " +
+          result.staleDate +
+          " was never checked out. Session has been auto-closed. Please mark IN to start today's attendance.",
+      });
     }
 
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);

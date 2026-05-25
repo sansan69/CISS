@@ -827,6 +827,31 @@ export default function AttendancePage() {
     setReportingStartedAt(new Date().toISOString());
     stopScanner();
     setWorkflowStep('review');
+
+    // Auto-detect the right IN/OUT status based on current attendance state.
+    // If the guard has an open IN session, default to OUT so they can close it.
+    // Otherwise default to IN.
+    if (employee.attendanceHint?.lastStatus === 'In') {
+      setSelectedStatus('Out');
+      const lastDate = employee.attendanceHint.lastAttendanceDate;
+      const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+      if (lastDate && lastDate !== todayIST) {
+        toast({
+          title: 'Previous session not closed',
+          description: `You have an open IN session from ${lastDate}. Marking OUT will auto-close it.`,
+          duration: 5000,
+        });
+      } else {
+        toast({
+          title: 'Session open',
+          description: 'You are currently marked IN. Submit OUT to end your shift.',
+          duration: 3000,
+        });
+      }
+    } else {
+      setSelectedStatus('In');
+    }
+
     toast({ title: 'Guard identified', description: employee.fullName, duration: 1600 });
   }, [stopScanner, toast]);
 
@@ -1172,6 +1197,16 @@ export default function AttendancePage() {
       throw new Error(responseBody.error || 'Could not submit attendance.');
     }
 
+    // Handle auto-closed stale session response
+    if (responseBody.autoClosed) {
+      return {
+        photoUrl,
+        recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
+        autoClosed: true,
+        message: responseBody.message || 'Previous session was auto-closed.',
+      };
+    }
+
     return {
       photoUrl,
       recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
@@ -1405,8 +1440,19 @@ export default function AttendancePage() {
       appendRecentAttendance(
         buildHistoryItem(result.recordId, payloadWithoutPhotoUrl, result.photoUrl, 'synced'),
       );
-      toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} ${selectedStatus.toLowerCase()} recorded.` });
-      resetVerificationState({ keepCenter: true, keepLocation: true });
+      if (result.autoClosed) {
+        toast({
+          title: 'Previous Session Closed',
+          description: result.message || 'Your previous open session was auto-closed. Please mark IN to start today.',
+          duration: 6000,
+        });
+        // Reset to IN for the guard's fresh start
+        setSelectedStatus('In');
+        resetVerificationState({ keepCenter: true, keepLocation: true });
+      } else {
+        toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} ${selectedStatus.toLowerCase()} recorded.` });
+        resetVerificationState({ keepCenter: true, keepLocation: true });
+      }
     } catch (e: any) {
       console.error('Submit failed', e);
       if (isRetryableAttendanceError(e)) {
