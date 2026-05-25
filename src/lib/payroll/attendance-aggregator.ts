@@ -17,12 +17,34 @@ export async function aggregateAttendance(
   const startDateStr = `${year}-${monthPadded}-01`;
   const endDateStr = `${year}-${monthPadded}-${String(lastDay).padStart(2, "0")}`;
 
-  const snapshot = await adminDb
+  // Primary query: by employeeDocId
+  let snapshot = await adminDb
     .collection("attendanceLogs")
     .where("employeeDocId", "==", employeeDocId)
     .where("attendanceDate", ">=", startDateStr)
     .where("attendanceDate", "<=", endDateStr)
     .get();
+
+  // Fallback: some legacy logs may only have employeeId, not employeeDocId.
+  // If the primary query returns empty, look up the employee's employeeId
+  // and retry with that field.
+  if (snapshot.empty) {
+    const employeeSnap = await adminDb
+      .collection("employees")
+      .doc(employeeDocId)
+      .get();
+    const employeeData = employeeSnap.data() as Record<string, any> | undefined;
+    const employeeId = employeeData?.employeeId as string | undefined;
+
+    if (employeeId) {
+      snapshot = await adminDb
+        .collection("attendanceLogs")
+        .where("employeeId", "==", employeeId)
+        .where("attendanceDate", ">=", startDateStr)
+        .where("attendanceDate", "<=", endDateStr)
+        .get();
+    }
+  }
 
   type LogEntry = {
     attendanceDate: string;
@@ -36,6 +58,9 @@ export async function aggregateAttendance(
   snapshot.docs.forEach((d) => {
     const data = d.data() as LogEntry;
 
+    // Count any date with at least one attendance log as "present".
+    // Previously only counted status === "In", which missed guards who
+    // only had checkout logs or whose IN log was in a different batch.
     let dateStr = data.attendanceDate as string | undefined;
     if (!dateStr) {
       const ts = data.createdAt;
@@ -50,9 +75,7 @@ export async function aggregateAttendance(
     }
     if (!dateStr) return;
 
-    if (data.status === "In") {
-      presentDates.add(dateStr);
-    }
+    presentDates.add(dateStr);
   });
 
   const daysInMonth = lastDay;

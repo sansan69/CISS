@@ -74,7 +74,15 @@ async function getFieldOfficerProfile(
 }
 
 function employeeKey(log: AttendanceLog) {
-  return normalizeText(log.employeeDocId || log.employeeId || log.employeeName);
+  // Use employeeDocId as the unique grouping key. Falls back to employeeId
+  // for legacy logs. Never falls back to name (names are not unique).
+  const docId = normalizeText(log.employeeDocId);
+  if (docId) return docId;
+  const empId = normalizeText(log.employeeId);
+  if (empId) return empId;
+  // Last resort: use the log's own document ID so different guards
+  // are never incorrectly merged
+  return log.id || `unknown-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export async function GET(request: Request) {
