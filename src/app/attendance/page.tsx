@@ -929,6 +929,28 @@ export default function AttendancePage() {
         setReportingStartedAt(new Date().toISOString());
         setWorkflowStep('review');
 
+        // Auto-detect IN/OUT — same logic as resolveScannedEmployee
+        if (employee.attendanceHint?.lastStatus === 'In') {
+          setSelectedStatus('Out');
+          const lastDate = employee.attendanceHint.lastAttendanceDate;
+          const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+          if (lastDate && lastDate !== todayIST) {
+            toast({
+              title: 'Previous session not closed',
+              description: `You have an open IN session from ${lastDate}. Marking OUT will auto-close it.`,
+              duration: 5000,
+            });
+          } else {
+            toast({
+              title: 'Session open',
+              description: 'You are currently marked IN. Submit OUT to end your shift.',
+              duration: 3000,
+            });
+          }
+        } else {
+          setSelectedStatus('In');
+        }
+
         if (!locationCoords && !isFetchingLocation) {
           setIsFetchingLocation(true);
           void getDeviceLocation().catch((error: any) => {

@@ -49,6 +49,10 @@ interface DashboardData {
     dutyPointName?: string;
     time: string;
   }>;
+  attendanceStatus: {
+    lastStatus: string | null;
+    lastAttendanceDate: string | null;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,6 +209,55 @@ export default function GuardDashboardPage() {
           </p>
         )}
       </div>
+
+      {/* Attendance Status Banner */}
+      {data.attendanceStatus.lastStatus && (
+        <div
+          className={`animate-slide-up stagger-2 rounded-xl border p-3 flex items-center gap-3 ${
+            data.attendanceStatus.lastStatus === "In"
+              ? "bg-green-50 border-green-200"
+              : "bg-gray-50 border-gray-200"
+          }`}
+        >
+          <div
+            className={`flex h-9 w-9 items-center justify-center rounded-full ${
+              data.attendanceStatus.lastStatus === "In"
+                ? "bg-green-100"
+                : "bg-gray-200"
+            }`}
+          >
+            <div
+              className={`h-3 w-3 rounded-full ${
+                data.attendanceStatus.lastStatus === "In"
+                  ? "bg-green-500 animate-pulse"
+                  : "bg-gray-400"
+              }`}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">
+              {data.attendanceStatus.lastStatus === "In"
+                ? "Currently Clocked IN"
+                : "Clocked OUT"}
+            </p>
+            {data.attendanceStatus.lastAttendanceDate && (
+              <p className="text-xs text-muted-foreground">
+                Since {formatDate(data.attendanceStatus.lastAttendanceDate)}
+              </p>
+            )}
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              data.attendanceStatus.lastStatus === "In"
+                ? "text-green-700 border-green-300 bg-green-50 text-xs shrink-0"
+                : "text-gray-600 border-gray-300 bg-gray-50 text-xs shrink-0"
+            }
+          >
+            {data.attendanceStatus.lastStatus}
+          </Badge>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-3 gap-2.5">
