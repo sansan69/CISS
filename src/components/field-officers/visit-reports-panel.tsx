@@ -48,12 +48,22 @@ function isPdfUrl(url: string) {
   return decodeURIComponent(url).toLowerCase().includes(".pdf");
 }
 
+async function reportErrorMessage(response: Response, fallback: string) {
+  try {
+    const data = await response.json();
+    return typeof data?.error === "string" && data.error.trim() ? data.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function VisitReportsPanel() {
   const { userRole, assignedDistricts } = useAppAuth();
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
   const isFo = userRole === "fieldOfficer";
   const { clients, isLoading: isLoadingClients } = useClients();
+  const reportEndpoint = isFo ? "/api/field-officer/visit-reports" : "/api/admin/visit-reports";
 
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [reports, setReports] = useState<FoVisitReport[]>([]);
@@ -87,15 +97,22 @@ export function VisitReportsPanel() {
       const params = new URLSearchParams();
       if (tab !== "all") params.set("status", tab);
       if (districtFilter) params.set("district", districtFilter);
-      const res = await authorizedFetch(`/api/admin/visit-reports?${params.toString()}`);
+      const res = await authorizedFetch(`${reportEndpoint}?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(await reportErrorMessage(res, "Failed to load visit reports"));
+      }
       const data = await res.json();
       setReports(data.reports ?? []);
-    } catch {
-      toast({ title: "Error", description: "Failed to load visit reports", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load visit reports",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [toast, districtFilter]);
+  }, [toast, districtFilter, reportEndpoint]);
 
   useEffect(() => { loadReports(activeTab); }, [activeTab, loadReports]);
 
@@ -110,7 +127,7 @@ export function VisitReportsPanel() {
     }
     setIsSubmitting(true);
     try {
-      const res = await authorizedFetch("/api/admin/visit-reports", {
+      const res = await authorizedFetch(reportEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,14 +146,18 @@ export function VisitReportsPanel() {
           photoUrls,
         }),
       });
-      if (!res.ok) throw new Error("Submit failed");
+      if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
       toast({ title: "Report created", description: "Visit report saved." });
       setNewSheetOpen(false);
       setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "", guardsPresentCount: "", guardsAbsentCount: "", summary: "", issuesFound: "", actionsRequired: "", status: "draft" });
       setPhotoUrls([]);
       loadReports(activeTab);
-    } catch {
-      toast({ title: "Error", description: "Failed to save report", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save report",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -424,6 +445,17 @@ export function VisitReportsPanel() {
                 urls={photoUrls}
                 onChange={setPhotoUrls}
                 folder="visitReports"
+                accept="image/*"
+                timestampImages
+                allowSelfie={false}
+                uploadLabel="Upload photo"
+                stampTitle="Visit report photo"
+                stampLines={[
+                  [form.clientName, form.siteName].filter(Boolean).join(" - "),
+                  form.district,
+                  form.visitDate ? `Visit date ${form.visitDate}` : "",
+                ]}
+                fileTypeLabel="JPG and PNG photos allowed."
                 disabled={isSubmitting}
               />
             </div>

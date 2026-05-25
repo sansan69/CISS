@@ -28,6 +28,8 @@ class FakeTimestamp {
 }
 
 class FakeCollection {
+  constructor(private readonly name = "") {}
+
   where() {
     return this;
   }
@@ -40,15 +42,32 @@ class FakeCollection {
     return { empty: true, docs: [] };
   }
 
-  async add(payload: Record<string, unknown>) {
-    mocks.addedEmployees.push(payload);
-    return { id: `employee-doc-${mocks.addedEmployees.length}` };
+  doc(id?: string) {
+    return {
+      id: id || `employee-doc-${mocks.addedEmployees.length + 1}`,
+      path: `${this.name}/${id || `employee-doc-${mocks.addedEmployees.length + 1}`}`,
+      async get() {
+        return { exists: false };
+      },
+    };
   }
 }
 
 vi.mock("@/lib/firebaseAdmin", () => ({
   db: {
-    collection: () => new FakeCollection(),
+    collection: (name: string) => new FakeCollection(name),
+    batch: () => {
+      let employeePayload: Record<string, unknown> | null = null;
+      return {
+        create: vi.fn(),
+        set: vi.fn((_ref: unknown, payload: Record<string, unknown>) => {
+          employeePayload = payload;
+        }),
+        commit: vi.fn(async () => {
+          if (employeePayload) mocks.addedEmployees.push(employeePayload);
+        }),
+      };
+    },
   },
 }));
 

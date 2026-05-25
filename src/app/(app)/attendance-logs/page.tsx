@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, limit, onSnapshot, orderBy, query, where, Timestamp } from "firebase/firestore";
+import { collection, limit, onSnapshot, orderBy, query, where, Timestamp, type DocumentData, type QuerySnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,33 @@ function getReportedAt(log: AttendanceLog) {
   return log.createdAt?.toDate ? log.createdAt.toDate() : null;
 }
 
+function normalizeClientFilterValue(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function getSiteClientName(log: AttendanceLog) {
+  return log.siteClientName || log.clientName || null;
+}
+
+function getEmployeeClientName(log: AttendanceLog) {
+  return log.employeeClientName || null;
+}
+
+function logMatchesClient(log: AttendanceLog, clientName?: string | null) {
+  const expected = normalizeClientFilterValue(clientName);
+  if (!expected) return true;
+  return [log.clientName, log.siteClientName, log.employeeClientName].some(
+    (value) => normalizeClientFilterValue(value) === expected,
+  );
+}
+
+function isCrossClientReliefLog(log: AttendanceLog) {
+  if (log.crossClientRelief === true) return true;
+  const employeeClient = normalizeClientFilterValue(log.employeeClientName);
+  const siteClient = normalizeClientFilterValue(getSiteClientName(log));
+  return Boolean(employeeClient && siteClient && employeeClient !== siteClient);
+}
+
 function downloadBlob(content: BlobPart, filename: string, type: string) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -63,58 +90,122 @@ export default function AttendanceLogsPage() {
     // Wait for auth to resolve before subscribing
     if (userRole === null) return;
 
-    let logsQuery;
     if (userRole === "client") {
       if (!clientInfo?.clientName) {
         setIsLoading(false);
         return;
       }
-      logsQuery = query(
+      const siteClientQuery = query(
         collection(db, "attendanceLogs"),
         where("clientName", "==", clientInfo.clientName),
         orderBy("createdAt", "desc"),
         limit(200)
       );
+      const employeeClientQuery = query(
+        collection(db, "attendanceLogs"),
+        where("employeeClientName", "==", clientInfo.clientName),
+        orderBy("createdAt", "desc"),
+        limit(200)
+      );
+      const siteLogs = new Map<string, AttendanceLog>();
+      const employeeLogs = new Map<string, AttendanceLog>();
+      const pending = new Set(["site", "employee"]);
+      const updateLogs = () => {
+        const mergedLogs = new Map<string, AttendanceLog>([
+          ...siteLogs,
+          ...employeeLogs,
+        ]);
+        setLogs(
+          Array.from(mergedLogs.values())
+            .filter((log) => logMatchesClient(log, clientInfo.clientName))
+            .sort((left, right) => {
+              const leftTime = getReportedAt(left)?.getTime() ?? 0;
+              const rightTime = getReportedAt(right)?.getTime() ?? 0;
+              return rightTime - leftTime;
+            })
+            .slice(0, 200)
+        );
+      };
+      const handleSnapshot = (scope: "site" | "employee") => (snapshot: QuerySnapshot<DocumentData>) => {
+        const target = scope === "site" ? siteLogs : employeeLogs;
+        target.clear();
+        for (const docSnapshot of snapshot.docs) {
+          target.set(docSnapshot.id, {
+            id: docSnapshot.id,
+            ...(docSnapshot.data() as Omit<AttendanceLog, "id">),
+          });
+        }
+        pending.delete(scope);
+        updateLogs();
+        if (pending.size === 0) setIsLoading(false);
+      };
+      const handleError = () => {
+        pending.clear();
+        setIsLoading(false);
+      };
+      const unsubscribeSite = onSnapshot(siteClientQuery, handleSnapshot("site"), handleError);
+      const unsubscribeEmployee = onSnapshot(employeeClientQuery, handleSnapshot("employee"), handleError);
+
+      return () => {
+        unsubscribeSite();
+        unsubscribeEmployee();
+      };
     } else if (userRole === "fieldOfficer") {
       if (!assignedDistricts.length) {
         setIsLoading(false);
         return;
       }
-      logsQuery = query(
+      const logsQuery = query(
         collection(db, "attendanceLogs"),
         where("district", "in", assignedDistricts),
         orderBy("createdAt", "desc"),
         limit(200)
       );
+      const unsubscribe = onSnapshot(
+        logsQuery,
+        (snapshot) => {
+          setLogs(
+            snapshot.docs.map((docSnapshot) => ({
+              id: docSnapshot.id,
+              ...(docSnapshot.data() as Omit<AttendanceLog, "id">),
+            }))
+          );
+          setIsLoading(false);
+        },
+        () => setIsLoading(false)
+      );
+
+      return () => unsubscribe();
     } else {
-      logsQuery = query(
+      const logsQuery = query(
         collection(db, "attendanceLogs"),
         orderBy("createdAt", "desc"),
         limit(200)
       );
+      const unsubscribe = onSnapshot(
+        logsQuery,
+        (snapshot) => {
+          setLogs(
+            snapshot.docs.map((docSnapshot) => ({
+              id: docSnapshot.id,
+              ...(docSnapshot.data() as Omit<AttendanceLog, "id">),
+            }))
+          );
+          setIsLoading(false);
+        },
+        () => setIsLoading(false)
+      );
+
+      return () => unsubscribe();
     }
-
-    const unsubscribe = onSnapshot(
-      logsQuery,
-      (snapshot) => {
-        setLogs(
-          snapshot.docs.map((docSnapshot) => ({
-            id: docSnapshot.id,
-            ...(docSnapshot.data() as Omit<AttendanceLog, "id">),
-          }))
-        );
-        setIsLoading(false);
-      },
-      () => setIsLoading(false)
-    );
-
-    return () => unsubscribe();
   }, [userRole, clientInfo, assignedDistricts]);
 
   const clientOptions = useMemo(() => {
     const names = new Set<string>();
     for (const log of logs) {
       if (log.clientName) names.add(log.clientName);
+      if (log.siteClientName) names.add(log.siteClientName);
+      if (log.employeeClientName) names.add(log.employeeClientName);
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [logs]);
@@ -137,19 +228,21 @@ export default function AttendanceLogsPage() {
         userRole === "fieldOfficer"
           ? assignedDistricts.some((district) => districtMatches(district, log.district))
           : userRole === "client"
-            ? !clientInfo?.clientName || log.clientName === clientInfo.clientName
+            ? logMatchesClient(log, clientInfo?.clientName)
             : true;
       const matchesStatus = statusFilter === "all" || log.status === statusFilter;
       const matchesDistrict =
         districtFilter === "all" || districtMatches(log.district, districtFilter);
-      const matchesClient = clientFilter === "all" || log.clientName === clientFilter;
+      const matchesClient = clientFilter === "all" || logMatchesClient(log, clientFilter);
       const matchesSearch =
         !term ||
         log.employeeName?.toLowerCase().includes(term) ||
         log.employeeId?.toLowerCase().includes(term) ||
         log.siteName?.toLowerCase().includes(term) ||
         log.dutyPointName?.toLowerCase().includes(term) ||
-        log.clientName?.toLowerCase().includes(term);
+        log.clientName?.toLowerCase().includes(term) ||
+        log.siteClientName?.toLowerCase().includes(term) ||
+        log.employeeClientName?.toLowerCase().includes(term);
 
       return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesSearch;
     });
@@ -352,7 +445,14 @@ export default function AttendanceLogsPage() {
                             {log.dutyPointName && (
                               <p className="text-xs text-muted-foreground">{log.dutyPointName}</p>
                             )}
-                            <p className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {getSiteClientName(log) || "Unknown client"}
+                            </p>
+                            {isCrossClientReliefLog(log) && (
+                              <Badge variant="secondary" className="mt-1 text-[10px]">
+                                Relief
+                              </Badge>
+                            )}
                           </div>
                           <div>
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">District / Shift</p>
@@ -445,7 +545,14 @@ export default function AttendanceLogsPage() {
                               {log.dutyPointName && (
                                 <div className="text-xs text-muted-foreground">{log.dutyPointName}</div>
                               )}
-                              <div className="text-xs text-muted-foreground">{log.clientName || "Unknown client"}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {getSiteClientName(log) || "Unknown client"}
+                              </div>
+                              {isCrossClientReliefLog(log) && (
+                                <div className="mt-1">
+                                  <Badge variant="secondary" className="text-[10px]">Relief</Badge>
+                                </div>
+                              )}
                               <div className="text-xs text-muted-foreground">{log.district || ""}</div>
                             </TableCell>
                             <TableCell className="hidden xl:table-cell text-sm">
@@ -574,8 +681,15 @@ export default function AttendanceLogsPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Client</p>
-                    <p className="font-medium">{selectedLog.clientName || "—"}</p>
+                    <p className="text-xs text-muted-foreground">Worked client</p>
+                    <p className="font-medium">{getSiteClientName(selectedLog) || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Home client</p>
+                    <p className="font-medium">{getEmployeeClientName(selectedLog) || "—"}</p>
+                    {isCrossClientReliefLog(selectedLog) && (
+                      <Badge variant="secondary" className="mt-1">Relief duty</Badge>
+                    )}
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">District</p>

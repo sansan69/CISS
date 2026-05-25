@@ -25,10 +25,15 @@ import {
   resolveSiteShift,
 } from '@/lib/shift-utils';
 import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
-import { parseEmployeeIdFromQrText } from '@/lib/qr/employee-qr';
+import { parseEmployeeQrText } from '@/lib/qr/employee-qr';
 import { startHybridQrScanner } from '@/lib/qr/scanner-engine';
 import { normalizeScannerError } from '@/lib/qr/scanner-support';
-import { DEFAULT_GEOFENCE_RADIUS_METERS, DEFAULT_GPS_ACCURACY_LIMIT_METERS, OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from '@/lib/constants';
+import {
+  DEFAULT_GEOFENCE_RADIUS_METERS,
+  DEFAULT_GPS_ACCURACY_LIMIT_METERS,
+  normalizeClientNameKey,
+  OFFLINE_ATTENDANCE_MAX_AGE_HOURS,
+} from '@/lib/constants';
 import type {
   AttendancePhotoCompliance,
   AttendanceSubmission,
@@ -864,9 +869,13 @@ export default function AttendancePage() {
     }
   };
 
-  const fetchEmployeeByEmployeeId = useCallback(async (empId: string) => {
+  const fetchEmployeeByEmployeeId = useCallback(async (empId: string, phoneNumber?: string | null) => {
+    const params = new URLSearchParams({ employeeId: empId });
+    if (phoneNumber) {
+      params.set('phoneNumber', phoneNumber);
+    }
     const response = await fetch(
-      `/api/public/attendance/employee?${new URLSearchParams({ employeeId: empId }).toString()}`,
+      `/api/public/attendance/employee?${params.toString()}`,
       {
         cache: 'no-store',
       },
@@ -975,7 +984,8 @@ export default function AttendancePage() {
           if (scanLockedRef.current) return;
 
           scanLockedRef.current = true;
-          const parsedId = parseEmployeeIdFromQrText(text);
+          const parsedQr = parseEmployeeQrText(text);
+          const parsedId = parsedQr.employeeId;
 
           if (!parsedId) {
             scanLockedRef.current = false;
@@ -984,7 +994,7 @@ export default function AttendancePage() {
           }
 
           try {
-            const employee = await fetchEmployeeByEmployeeId(parsedId);
+            const employee = await fetchEmployeeByEmployeeId(parsedId, parsedQr.phoneNumber);
             if (employee) {
               resolveScannedEmployee(employee, text);
               return;
@@ -1127,6 +1137,13 @@ export default function AttendancePage() {
     siteName: payload.siteName,
     dutyPointName: payload.dutyPointName,
     clientName: payload.clientName,
+    employeeClientName: payload.employeeClientName,
+    siteClientName: payload.clientName,
+    crossClientRelief: Boolean(
+      payload.employeeClientName &&
+        payload.clientName &&
+        normalizeClientNameKey(payload.employeeClientName) !== normalizeClientNameKey(payload.clientName),
+    ),
     shiftLabel: payload.shiftLabel,
     location: payload.locationText,
     locationCoords: payload.locationCoords,
@@ -1315,16 +1332,6 @@ export default function AttendancePage() {
         variant: 'destructive',
         title: 'Select shift',
         description: 'Choose the shift you are working before submitting attendance.',
-      });
-      return;
-    }
-
-    // Additional safety: ensure employee is marking attendance only for their client
-    if (scannedEmployee.clientName && selectedSite.clientName && scannedEmployee.clientName !== selectedSite.clientName) {
-      toast({
-        variant: 'destructive',
-        title: 'Invalid Site for Employee',
-        description: `This site belongs to ${selectedSite.clientName}, but you are assigned to ${scannedEmployee.clientName}.`,
       });
       return;
     }

@@ -35,12 +35,23 @@ export function matchesClientScope(
     return true;
   }
 
-  const recordClientName = normalizeClientMatch(record.clientName);
-  if (recordClientName === normalizeClientMatch(scope.clientName)) {
+  const expectedClientName = normalizeClientMatch(scope.clientName);
+  const recordClientNames = [
+    record.clientName,
+    record.siteClientName,
+    record.employeeClientName,
+  ];
+  if (
+    recordClientNames.some(
+      (clientName) => normalizeClientMatch(clientName) === expectedClientName,
+    )
+  ) {
     return true;
   }
 
-  return normalizeClientKey(record.clientName) === normalizeClientKey(scope.clientName);
+  return recordClientNames.some(
+    (clientName) => normalizeClientKey(clientName) === normalizeClientKey(scope.clientName),
+  );
 }
 
 export async function resolveClientScope(

@@ -9,6 +9,7 @@ import {
 import {
   DEFAULT_GEOFENCE_RADIUS_METERS,
   DEFAULT_GPS_ACCURACY_LIMIT_METERS,
+  normalizeClientNameKey,
   OFFLINE_ATTENDANCE_MAX_AGE_HOURS,
   OPERATIONAL_CLIENT_NAME,
 } from "@/lib/constants";
@@ -145,6 +146,9 @@ type GuardLocationWrite = {
   siteId: string;
   siteName: string;
   clientName: string;
+  employeeClientName: string | null;
+  siteClientName: string | null;
+  crossClientRelief: boolean;
   district: string;
   lat: number;
   lng: number;
@@ -198,10 +202,27 @@ function validateEmployee(
   if (
     payload.employeeClientName &&
     employeeData.clientName &&
-    payload.employeeClientName !== employeeData.clientName
+    normalizeClientNameKey(payload.employeeClientName) !==
+      normalizeClientNameKey(employeeData.clientName)
   ) {
     throw new AttendanceError("Employee client mismatch.");
   }
+}
+
+function normalizeNullableText(value: unknown) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > 0 ? text : null;
+}
+
+function isCrossClientRelief(
+  employeeClientName: string | null,
+  siteClientName: string | null,
+) {
+  return Boolean(
+    employeeClientName &&
+      siteClientName &&
+      normalizeClientNameKey(employeeClientName) !== normalizeClientNameKey(siteClientName),
+  );
 }
 
 function getAllowedRadiusMeters(siteData: Record<string, any>) {
@@ -336,13 +357,11 @@ export async function POST(request: NextRequest) {
         throw new AttendanceError("District mismatch for selected site.");
       }
 
-      if (
-        employeeData.clientName &&
-        siteData.clientName &&
-        employeeData.clientName !== siteData.clientName
-      ) {
-        throw new AttendanceError("Selected site does not belong to this employee's client.");
-      }
+      const employeeClientName = normalizeNullableText(
+        employeeData.clientName ?? payload.employeeClientName,
+      );
+      const siteClientName = normalizeNullableText(siteData.clientName ?? payload.clientName);
+      const crossClientRelief = isCrossClientRelief(employeeClientName, siteClientName);
 
       const siteCoords = parseSiteCoordinates(siteData);
       if (!siteCoords) {
@@ -611,7 +630,10 @@ export async function POST(request: NextRequest) {
         siteName: payload.siteName,
         dutyPointId: selectedDutyPointId,
         dutyPointName: selectedDutyPointName,
-        clientName: siteData.clientName || payload.clientName || null,
+        clientName: siteClientName,
+        employeeClientName,
+        siteClientName,
+        crossClientRelief,
         sourceCollection: sourceCol,
         shiftCode: selectedShiftCode,
         shiftLabel: selectedShiftLabel,
@@ -678,7 +700,10 @@ export async function POST(request: NextRequest) {
           siteName: payload.siteName,
           dutyPointId: selectedDutyPointId,
           dutyPointName: selectedDutyPointName,
-          clientName: siteData.clientName || payload.clientName || null,
+          clientName: siteClientName,
+          employeeClientName,
+          siteClientName,
+          crossClientRelief,
           sourceCollection: sourceCol,
           shiftCode: selectedShiftCode,
           shiftLabel: selectedShiftLabel,
@@ -716,6 +741,9 @@ export async function POST(request: NextRequest) {
           lastSiteId: payload.siteId,
           lastDutyPointId: selectedDutyPointId,
           lastShiftCode: selectedShiftCode,
+          employeeClientName,
+          lastSiteClientName: siteClientName,
+          lastCrossClientRelief: crossClientRelief,
           lastAttendanceDate: attendanceDate,
           lastAttendanceId: attendanceLogRef.id,
           openSessionId: payload.status === "In" ? attendanceLogRef.id : FieldValue.delete(),
@@ -731,7 +759,10 @@ export async function POST(request: NextRequest) {
         guardName: buildGuardName(employeeData, payload.employeeId),
         siteId: payload.siteId,
         siteName: String(siteData.siteName || payload.siteName || "").trim(),
-        clientName: String(siteData.clientName || payload.clientName || "").trim(),
+        clientName: siteClientName ?? "",
+        employeeClientName,
+        siteClientName,
+        crossClientRelief,
         district: normalizeDistrictName(payload.district),
         lat: payload.status === "In" ? payload.locationCoords.lat : 0,
         lng: payload.status === "In" ? payload.locationCoords.lon : 0,
@@ -760,6 +791,9 @@ export async function POST(request: NextRequest) {
             siteId: liveLocationWrite.siteId,
             siteName: liveLocationWrite.siteName,
             clientName: liveLocationWrite.clientName,
+            employeeClientName: liveLocationWrite.employeeClientName,
+            siteClientName: liveLocationWrite.siteClientName,
+            crossClientRelief: liveLocationWrite.crossClientRelief,
             district: liveLocationWrite.district,
             lat: liveLocationWrite.lat,
             lng: liveLocationWrite.lng,

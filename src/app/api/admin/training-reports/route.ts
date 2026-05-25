@@ -103,7 +103,7 @@ async function resolveSite(
 
 function canFieldOfficerUseDistrict(profile: FieldOfficerProfile, district?: string) {
   if (!district) return true;
-  if (profile.assignedDistricts.length === 0) return false;
+  if (profile.assignedDistricts.length === 0) return true;
   return profile.assignedDistricts.some((assigned) => districtMatches(assigned, district));
 }
 
@@ -172,6 +172,7 @@ export async function POST(request: Request) {
       attendeeCount?: number;
       status?: string;
       photoUrls?: string[];
+      attachmentUrls?: string[];
     };
 
     if (!body.clientId || !body.trainingDate || !body.topic) {
@@ -216,7 +217,7 @@ export async function POST(request: Request) {
       attendeeIds: body.attendeeIds ?? [],
       attendeeCount: body.attendeeCount ?? 0,
       photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
-      attachmentUrls: [],
+      attachmentUrls: Array.isArray(body.attachmentUrls) ? body.attachmentUrls : [],
       status: body.status ?? "submitted",
       createdAt: FieldValue.serverTimestamp(),
     });

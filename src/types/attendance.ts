@@ -79,6 +79,8 @@ const firestoreTimestampSchema = z.custom<
 
 export const attendanceLogSchema = attendanceSubmissionSchema.extend({
   id: z.string().optional(),
+  siteClientName: z.string().nullable().optional(),
+  crossClientRelief: z.boolean().optional(),
   attendanceDate: z.string().optional(),
   reportedAt: firestoreTimestampSchema.optional(),
   createdAt: firestoreTimestampSchema.optional(),
@@ -91,6 +93,7 @@ export interface FirestoreAttendanceLog {
   employeeId: string;
   employeeName: string;
   employeePhoneNumber?: string;
+  employeeClientName?: string | null;
   reportedAtClient?: string | null;
   status: "In" | "Out";
   district?: string;
@@ -99,6 +102,8 @@ export interface FirestoreAttendanceLog {
   dutyPointId?: string | null;
   dutyPointName?: string | null;
   clientName?: string | null;
+  siteClientName?: string | null;
+  crossClientRelief?: boolean;
   sourceCollection?: string | null;
   shiftCode?: string | null;
   shiftLabel?: string | null;
@@ -138,6 +143,9 @@ export interface DeviceAttendanceHistoryItem {
   siteName: string;
   dutyPointName?: string;
   clientName?: string;
+  employeeClientName?: string;
+  siteClientName?: string;
+  crossClientRelief?: boolean;
   shiftLabel?: string;
   location?: string;
   locationCoords?: {

@@ -4,7 +4,7 @@ import { buildShiftTemplates } from "@/lib/shift-utils";
 
 type Filter = {
   field: string;
-  op: "==" | ">=" | "<=" | "in";
+  op: "==" | ">=" | "<=" | "in" | "array-contains";
   value: unknown;
 };
 
@@ -287,6 +287,10 @@ function matchesFilter(data: Record<string, unknown>, filter: Filter) {
     return Array.isArray(filter.value) ? filter.value.includes(actual) : false;
   }
 
+  if (filter.op === "array-contains") {
+    return Array.isArray(actual) ? actual.includes(filter.value) : false;
+  }
+
   const actualMillis = toMillis(actual);
   const filterMillis = toMillis(filter.value);
 
@@ -358,6 +362,7 @@ function buildAttendancePayload(args: {
   employeeName: string;
   employeePhoneNumber: string;
   clientName: string;
+  siteClientName?: string;
   district: string;
   siteId: string;
   siteName: string;
@@ -386,7 +391,7 @@ function buildAttendancePayload(args: {
     siteName: args.siteName,
     dutyPointId: "main-duty",
     dutyPointName: "Main Duty",
-    clientName: args.clientName,
+    clientName: args.siteClientName ?? args.clientName,
     shiftCode: args.shiftCode,
     shiftLabel: args.shiftLabel,
     shiftStartTime: args.shiftStartTime,
@@ -651,6 +656,37 @@ describe("attendance flow integration", () => {
       lastStatus: "Out",
     });
 
+    db.seed("employees", "emp-legacy-canonical", {
+      employeeId: "CISS/LEGACY/2025-26/001",
+      fullName: "Canonical Guard",
+      phoneNumber: "9000000001",
+      clientName: "Acme Security",
+      district: "Ernakulam",
+      status: "Active",
+    });
+    db.seed("employees", "emp-legacy-renumbered", {
+      employeeId: "CISS/LEGACY/2025-26/999",
+      previousEmployeeIds: ["CISS/LEGACY/2025-26/001"],
+      fullName: "Renumbered Guard",
+      phoneNumber: "9000000002",
+      clientName: "Acme Security",
+      district: "Ernakulam",
+      status: "Active",
+    });
+
+    const legacyQrResponse = await getPublicEmployee(
+      new NextRequest(
+        "https://example.com/api/public/attendance/employee?employeeId=CISS%2FLEGACY%2F2025-26%2F001&phoneNumber=9000000002",
+      ),
+    );
+    expect(legacyQrResponse.status).toBe(200);
+    const legacyQrBody = await legacyQrResponse.json();
+    expect(legacyQrBody.employee).toMatchObject({
+      id: "emp-legacy-renumbered",
+      employeeCode: "CISS/LEGACY/2025-26/999",
+      fullName: "Renumbered Guard",
+    });
+
     const adminReportResponse = await getAdminAttendanceReport(
       new NextRequest("https://example.com/api/admin/reports/attendance?from=2026-05-20T00:00:00.000Z&to=2026-05-21T23:59:59.999Z", {
         headers: { Authorization: "Bearer admin" },
@@ -877,5 +913,208 @@ describe("attendance flow integration", () => {
         }),
       ]),
     );
+  });
+
+  it("accepts harmless client-name punctuation differences for attendance matching", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T13:25:00.000Z"));
+    const db = new FakeFirestore();
+
+    db.seed("employees", "emp-geodis", {
+      employeeId: "CISS/GEODIS/2026-27/001",
+      fullName: "Muhammed Shibili",
+      phoneNumber: "7777777777",
+      clientName: "Geodis India Ltd Kochi",
+      district: "Ernakulam",
+      status: "Active",
+    });
+    db.seed("sites", "site-geodis-floor-9", {
+      siteName: "Floor 9",
+      clientName: "Geodis India Ltd., Kochi",
+      district: "Ernakulam",
+      lat: 9.981,
+      lng: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn((event: string, actor: unknown, payload: unknown) => ({
+        event,
+        actor,
+        payload,
+      })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: {
+        delete: () => deleteSentinel,
+      },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+
+    const { POST } = (await import("./submit/route")) as any;
+
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildAttendancePayload({
+            employeeDocId: "emp-geodis",
+            employeeId: "CISS/GEODIS/2026-27/001",
+            employeeName: "Muhammed Shibili",
+            employeePhoneNumber: "7777777777",
+            clientName: "Geodis India Ltd Kochi",
+            district: "Ernakulam",
+            siteId: "site-geodis-floor-9",
+            siteName: "Floor 9",
+            siteCoords: { lat: 9.981, lng: 76.281 },
+            locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+            locationText: "Geodis Floor 9",
+            status: "In",
+            reportedAtClient: "2026-05-23T13:24:00.000Z",
+            shiftCode: "day",
+            shiftLabel: "Day Shift",
+            shiftStartTime: "08:00",
+            shiftEndTime: "20:00",
+          }),
+        ),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.listDocs("attendanceLogs")[0].data).toMatchObject({
+      employeeId: "CISS/GEODIS/2026-27/001",
+      clientName: "Geodis India Ltd., Kochi",
+      siteName: "Floor 9",
+      shiftLabel: "Day Shift",
+      status: "In",
+    });
+  });
+
+  it("records cross-client relieving duty without rejecting the selected site", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-24T03:30:00.000Z"));
+    const db = new FakeFirestore();
+
+    db.seed("employees", "emp-geodis-relief", {
+      employeeId: "CISS/GIL/2026-27/777",
+      fullName: "Relief Guard",
+      phoneNumber: "7777777777",
+      clientName: "Geodis India Ltd.",
+      district: "Ernakulam",
+      status: "Active",
+    });
+    db.seed("sites", "site-federal-relief", {
+      siteName: "Federal Relief Center",
+      clientName: "Federal Bank Ltd.",
+      district: "Ernakulam",
+      lat: 9.981,
+      lng: 76.281,
+      geofenceRadiusMeters: 250,
+      strictGeofence: true,
+      shiftMode: "fixed",
+      shiftPattern: "2x12",
+      shiftTemplates: buildShiftTemplates("2x12"),
+      dutyPoints: [],
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/audit", () => ({
+      buildServerAuditEvent: vi.fn((event: string, actor: unknown, payload: unknown) => ({
+        event,
+        actor,
+        payload,
+      })),
+    }));
+    vi.doMock("@/lib/server/monitoring", () => ({
+      SYSTEM_METRIC_NAMES: {
+        attendanceSubmitSuccess: "attendance_submit_success",
+        attendanceSubmitFailure: "attendance_submit_failure",
+      },
+      incrementSystemMetric: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/work-orders/assignment-match", () => ({
+      isAssignedGuardMatch: vi.fn(() => true),
+    }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: {
+        delete: () => deleteSentinel,
+      },
+      Timestamp: {
+        now: () => new FakeTimestamp(new Date(Date.now())),
+        fromDate: (date: Date) => new FakeTimestamp(date),
+      },
+    }));
+
+    const { POST } = (await import("./submit/route")) as any;
+
+    const response = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          buildAttendancePayload({
+            employeeDocId: "emp-geodis-relief",
+            employeeId: "CISS/GIL/2026-27/777",
+            employeeName: "Relief Guard",
+            employeePhoneNumber: "7777777777",
+            clientName: "Geodis India Ltd.",
+            siteClientName: "Federal Bank Ltd.",
+            district: "Ernakulam",
+            siteId: "site-federal-relief",
+            siteName: "Federal Relief Center",
+            siteCoords: { lat: 9.981, lng: 76.281 },
+            locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
+            locationText: "Federal Relief Center",
+            status: "In",
+            reportedAtClient: "2026-05-24T03:29:00.000Z",
+            shiftCode: "day",
+            shiftLabel: "Day Shift",
+            shiftStartTime: "08:00",
+            shiftEndTime: "20:00",
+          }),
+        ),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.listDocs("attendanceLogs")[0].data).toMatchObject({
+      employeeId: "CISS/GIL/2026-27/777",
+      employeeClientName: "Geodis India Ltd.",
+      siteClientName: "Federal Bank Ltd.",
+      clientName: "Federal Bank Ltd.",
+      crossClientRelief: true,
+      siteName: "Federal Relief Center",
+      status: "In",
+    });
+    expect(db.listDocs("attendanceSessions")[0].data).toMatchObject({
+      employeeClientName: "Geodis India Ltd.",
+      siteClientName: "Federal Bank Ltd.",
+      clientName: "Federal Bank Ltd.",
+      crossClientRelief: true,
+    });
   });
 });

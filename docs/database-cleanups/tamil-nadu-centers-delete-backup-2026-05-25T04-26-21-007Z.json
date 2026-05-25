@@ -1,0 +1,5260 @@
+{
+  "generatedAt": "2026-05-25T04:26:21.008Z",
+  "projectId": "ciss-workforce",
+  "writesPerformed": true,
+  "matchCount": 137,
+  "matches": [
+    {
+      "collection": "sites",
+      "id": "0GG0wENqrc5yF9Ubpz4c",
+      "path": "sites/0GG0wENqrc5yF9Ubpz4c",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Mepco Schlenk Engineering College",
+        "siteId": "2001",
+        "siteAddress": "Mepco Nagar, Sivakasi, Virudhunagar, Tamil Nadu, India, 626005",
+        "district": "Sivakasi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:21.378Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.613200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:27.016Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.381000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.381,
+          "longitude": 77.6132
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:27.016Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Mepco Schlenk Engineering College",
+        "district": "Sivakasi",
+        "state": "Tamil Nadu",
+        "address": "Mepco Nagar, Sivakasi, Virudhunagar, Tamil Nadu, India, 626005"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "0h663cGlauDwrAa4KBCs",
+      "path": "sites/0h663cGlauDwrAa4KBCs",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nandha Arts and Science College",
+        "siteId": "23751",
+        "siteAddress": "Koorapalayam Pirivu , Pitchandampalayam Post , Erode, Tamil Nadu, India, 638052",
+        "district": "Erode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:25.211Z"
+        },
+        "geolocation": {
+          "latitude": 11.2756,
+          "longitude": 77.5879
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.587900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:28.165Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.275600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:28.165Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nandha Arts and Science College",
+        "district": "Erode",
+        "state": "Tamil Nadu",
+        "address": "Koorapalayam Pirivu , Pitchandampalayam Post , Erode, Tamil Nadu, India, 638052"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "0rN0QL8oNohqthEz4hXv",
+      "path": "sites/0rN0QL8oNohqthEz4hXv",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "MUTHAYAMMAL COLLEGE OF ARTS AND SCIENCE",
+        "siteId": "4800",
+        "siteAddress": "Attur Main Road, Kakkaveri P.O. Rasipuram Taluk, Namakkal, Tamil Nadu, India, 637408",
+        "district": "Namakkal",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:19.177Z"
+        },
+        "geolocation": {
+          "latitude": 11.22126,
+          "longitude": 78.16524
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.165240",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:29.095Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.221260",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:29.095Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "MUTHAYAMMAL COLLEGE OF ARTS AND SCIENCE",
+        "district": "Namakkal",
+        "state": "Tamil Nadu",
+        "address": "Attur Main Road, Kakkaveri P.O. Rasipuram Taluk, Namakkal, Tamil Nadu, India, 637408"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "1RLz8Qmtnqkwn6wVRD2w",
+      "path": "sites/1RLz8Qmtnqkwn6wVRD2w",
+      "data": {
+        "siteName": "Dhanalakshmi Srinivasan College of Engineering and Technology",
+        "siteId": "2510",
+        "siteAddress": "Dhanalakshmi Srinivasan College of Engineering and Technology, ECR Road, Poonchery, Mamallapuram, Chennai, Tamil Nadu, India, 603104",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:31.852Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.771900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:29.374Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.484700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.4847,
+          "longitude": 78.7719
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:29.374Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Dhanalakshmi Srinivasan College of Engineering and Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Dhanalakshmi Srinivasan College of Engineering and Technology, ECR Road, Poonchery, Mamallapuram, Chennai, Tamil Nadu, India, 603104"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "1dUE4HuSutFN4wmuwt5s",
+      "path": "sites/1dUE4HuSutFN4wmuwt5s",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "P.V.P. College of Engineering and Technology For Women",
+        "siteId": "2720",
+        "siteAddress": "PVP Nagar, Old NH- 45, Nuthulapuram, Dindigul, Tamil Nadu, India, 624708",
+        "district": "Dindigul",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:17.753Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.735900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:29.634Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.723600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.7236,
+          "longitude": 77.7359
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:29.634Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "P.V.P. College of Engineering and Technology For Women",
+        "district": "Dindigul",
+        "state": "Tamil Nadu",
+        "address": "PVP Nagar, Old NH- 45, Nuthulapuram, Dindigul, Tamil Nadu, India, 624708"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "1f84JfpraWaukrQeUTHP",
+      "path": "sites/1f84JfpraWaukrQeUTHP",
+      "data": {
+        "siteName": "ION Digital Zone  IDZ KIOT-Campus",
+        "siteId": "8849",
+        "siteAddress": "Knowledge Institute of Technology KIOT-Campus, NH-47,Kakapalayam po, Salem, Tamil Nadu, India, 637504",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:25.781Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.011000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:30.095Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.567400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.5674,
+          "longitude": 78.011
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:30.095Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "ION Digital Zone  IDZ KIOT-Campus",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Knowledge Institute of Technology KIOT-Campus, NH-47,Kakapalayam po, Salem, Tamil Nadu, India, 637504"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "1iapLFV7F4IF9vHG2ep1",
+      "path": "sites/1iapLFV7F4IF9vHG2ep1",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "SNS COLLEGE OF TECHNOLOGY",
+        "siteId": "4236",
+        "siteAddress": "SNS Kalvi Nagar,Sathy Main Road NH-209, Vazhiyampalayam, Saravanampatti Post, Coimbatore, Tamil Nadu, India, 641107",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:49.697Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.027783",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:31.198Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.101828",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 11.1018279,
+          "longitude": 77.0277835
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:31.198Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "SNS COLLEGE OF TECHNOLOGY",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "SNS Kalvi Nagar,Sathy Main Road NH-209, Vazhiyampalayam, Saravanampatti Post, Coimbatore, Tamil Nadu, India, 641107"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "1tJxfL144xV6LJJbAyea",
+      "path": "sites/1tJxfL144xV6LJJbAyea",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "SNS COLLEGE OF ENGINEERING",
+        "siteId": "4235",
+        "siteAddress": "SNS Kalvi Nagar, Sathy Main Road, Opp. CRI Pumps, Kurumbapalayam P.O., S.S.Kulam, Coimbatore, Tamil Nadu, India, 641107",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:56.831Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.966120",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:31.772Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.005550",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 11.00555,
+          "longitude": 76.96612
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:31.772Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "SNS COLLEGE OF ENGINEERING",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "SNS Kalvi Nagar, Sathy Main Road, Opp. CRI Pumps, Kurumbapalayam P.O., S.S.Kulam, Coimbatore, Tamil Nadu, India, 641107"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "1tpWmJHXiLaMCRAtGgSe",
+      "path": "sites/1tpWmJHXiLaMCRAtGgSe",
+      "data": {
+        "siteName": "Blue Lotus Technologies Pvt Ltd.",
+        "siteId": "4419",
+        "siteAddress": "Plot No 194,195, First Main Road, Nehru Nagar, Kottivakkam, OMR Road, Chennai, Tamil Nadu, India, 600041",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:32.633Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.259200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:32.309Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.949500",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9495,
+          "longitude": 80.2592
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:32.309Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Blue Lotus Technologies Pvt Ltd.",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Plot No 194,195, First Main Road, Nehru Nagar, Kottivakkam, OMR Road, Chennai, Tamil Nadu, India, 600041"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "20Y3vNwz1WoUynVpQhYy",
+      "path": "sites/20Y3vNwz1WoUynVpQhYy",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "St.Joseph College of Engineering",
+        "siteId": "7927",
+        "siteAddress": "Trinity Campus, Nemili  Beemanthangal  Near by Toll palza, Sriperumbudur, Kanchipuram, Tamil Nadu, India, 602105",
+        "district": "Kanchipuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:30.053Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.700060",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:32.824Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.835150",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.83515,
+          "longitude": 79.70006
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:32.824Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "St.Joseph College of Engineering",
+        "district": "Kanchipuram",
+        "state": "Tamil Nadu",
+        "address": "Trinity Campus, Nemili  Beemanthangal  Near by Toll palza, Sriperumbudur, Kanchipuram, Tamil Nadu, India, 602105"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "2MLNEwmMDhzq5f2yrxil",
+      "path": "sites/2MLNEwmMDhzq5f2yrxil",
+      "data": {
+        "siteName": "AKT Memorial college of Engineering and Technology",
+        "siteId": "4515",
+        "siteAddress": "AKT Nagar, Neelamangalam, AKT Memorial College Rd, Kallakurichi, Viluppuram, Tamil Nadu, India, 606202",
+        "district": "Viluppuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:30.797Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.482373",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:34.486Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.941173",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 11.9411733,
+          "longitude": 79.4823733
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:34.486Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "AKT Memorial college of Engineering and Technology",
+        "district": "Viluppuram",
+        "state": "Tamil Nadu",
+        "address": "AKT Nagar, Neelamangalam, AKT Memorial College Rd, Kallakurichi, Viluppuram, Tamil Nadu, India, 606202"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "3FSiSRsm8Btg5SyQnRIc",
+      "path": "sites/3FSiSRsm8Btg5SyQnRIc",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sureya College of Engineering",
+        "siteId": "15796",
+        "siteAddress": "Trichy Chennai Trunk Road, TEC Campus, Konalai, Tiruchirappalli, Tamil Nadu, India, 621132",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:28.726Z"
+        },
+        "geolocation": {
+          "latitude": 10.8155,
+          "longitude": 78.69651
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.696510",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:35.018Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.815500",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:35.018Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sureya College of Engineering",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "Trichy Chennai Trunk Road, TEC Campus, Konalai, Tiruchirappalli, Tamil Nadu, India, 621132"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "3XdchtWNh46xWF01MtQZ",
+      "path": "sites/3XdchtWNh46xWF01MtQZ",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nehru Group of Institutions",
+        "siteId": "2044",
+        "siteAddress": "Nehru Institute of Engineering and Technology, Gate No. 3, Nehru Gardens, Thirumalayampalayam, Coimbatore, Tamil Nadu, India, 641105",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:43.992Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.964600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:35.558Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.904800",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.9048,
+          "longitude": 76.9646
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:35.558Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nehru Group of Institutions",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Nehru Institute of Engineering and Technology, Gate No. 3, Nehru Gardens, Thirumalayampalayam, Coimbatore, Tamil Nadu, India, 641105"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "4Q8GuEea9l3WLood1OlG",
+      "path": "sites/4Q8GuEea9l3WLood1OlG",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nexon Enterprises Ramanathapuram",
+        "siteId": "37405",
+        "siteAddress": "Nexon Enterprises , No. 12A ,2nd Floor,  Mohamed Sathak Complex , Government Hospital Road ,Chalai Bazaar, Ramanathapuram, Tamil Nadu, India, 623501",
+        "district": "Ramanathapuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:25.585Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.830800",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:35.944Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.371600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 9.3716,
+          "longitude": 78.8308
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:35.944Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nexon Enterprises Ramanathapuram",
+        "district": "Ramanathapuram",
+        "state": "Tamil Nadu",
+        "address": "Nexon Enterprises , No. 12A ,2nd Floor,  Mohamed Sathak Complex , Government Hospital Road ,Chalai Bazaar, Ramanathapuram, Tamil Nadu, India, 623501"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "4R2R03CvRc69p9gnSEUa",
+      "path": "sites/4R2R03CvRc69p9gnSEUa",
+      "data": {
+        "siteName": "Lord Jegannath College Of Engineering And Technology",
+        "siteId": "2380",
+        "siteAddress": "PSN Nagar, Ramanathichanputhur, Kumarapuramthoppur P.O, Kanyakumari District, Kanyakumari, Tamil Nadu, India, 629402",
+        "district": "Kanyakumari",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:34.885Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.277600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:36.176Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.990200",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.9902,
+          "longitude": 77.2776
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:36.176Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Lord Jegannath College Of Engineering And Technology",
+        "district": "Kanyakumari",
+        "state": "Tamil Nadu",
+        "address": "PSN Nagar, Ramanathichanputhur, Kumarapuramthoppur P.O, Kanyakumari District, Kanyakumari, Tamil Nadu, India, 629402"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "4iFMdeIwY6aXhHpVUSuH",
+      "path": "sites/4iFMdeIwY6aXhHpVUSuH",
+      "data": {
+        "siteName": "Jayam College of Engineering and Technology",
+        "siteId": "1563",
+        "siteAddress": "Hogenakkal Falls Main Road, Nallanur, Dharmapuri, Tamil Nadu, India, 636813",
+        "district": "Dharmapuri",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:12.713Z"
+        },
+        "geolocation": {
+          "latitude": 12.0363,
+          "longitude": 77.9093
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.909300",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:36.670Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.036300",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:36.670Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Jayam College of Engineering and Technology",
+        "district": "Dharmapuri",
+        "state": "Tamil Nadu",
+        "address": "Hogenakkal Falls Main Road, Nallanur, Dharmapuri, Tamil Nadu, India, 636813"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "4nU1sSZLLUP4rst96RU1",
+      "path": "sites/4nU1sSZLLUP4rst96RU1",
+      "data": {
+        "siteName": "Aalim Muhammed Salegh College of Engineerings",
+        "siteId": "2402",
+        "siteAddress": "Muthapudupet Avadi, IAF Tiruvallur, Chennai, Tamil Nadu, India, 600055",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:30.162Z"
+        },
+        "geolocation": {
+          "latitude": 13.1547,
+          "longitude": 80.0694
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.069400",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:36.956Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.154700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:36.956Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Aalim Muhammed Salegh College of Engineerings",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Muthapudupet Avadi, IAF Tiruvallur, Chennai, Tamil Nadu, India, 600055"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "5X33dqdgYsoMF9qvL5E3",
+      "path": "sites/5X33dqdgYsoMF9qvL5E3",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Meenakshi Matric Higher Secondary School",
+        "siteId": "31360",
+        "siteAddress": "Aachimangalam,Rayanur, Thanthonimalai Post, Karur, Tamil Nadu, India, 639005",
+        "district": "Erode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:07.434Z"
+        },
+        "geolocation": {
+          "latitude": 11.3428,
+          "longitude": 77.72741
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.727410",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:39.811Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.342800",
+        "placeAccuracy": "OpenCage confidence 6/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:39.811Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Meenakshi Matric Higher Secondary School",
+        "district": "Erode",
+        "state": "Tamil Nadu",
+        "address": "Aachimangalam,Rayanur, Thanthonimalai Post, Karur, Tamil Nadu, India, 639005"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "6zt6NJsy2KtUa0VbeaIr",
+      "path": "sites/6zt6NJsy2KtUa0VbeaIr",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "S.I.V.E.T College",
+        "siteId": "33639",
+        "siteAddress": "Velachery - Tambaram Main Rd, Gowriwakkam, Sembakkam, Chennai, Tamil Nadu, India, 600073",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:47.538Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.169700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:41.330Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.919400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9194,
+          "longitude": 80.1697
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:41.330Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "S.I.V.E.T College",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Velachery - Tambaram Main Rd, Gowriwakkam, Sembakkam, Chennai, Tamil Nadu, India, 600073"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "7BtjzgenWQvvwT4emQJZ",
+      "path": "sites/7BtjzgenWQvvwT4emQJZ",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Roever Engineering College",
+        "siteId": "9304",
+        "siteAddress": "Elambalur, Perambalur, Perambalur, Tamil Nadu, India, 621212",
+        "district": "Perambalur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:21.931Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.881680",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:41.739Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.266425",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.2664246,
+          "longitude": 78.8816804
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:41.739Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Roever Engineering College",
+        "district": "Perambalur",
+        "state": "Tamil Nadu",
+        "address": "Elambalur, Perambalur, Perambalur, Tamil Nadu, India, 621212"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "7G33qzA0B1BlHRiUqEYq",
+      "path": "sites/7G33qzA0B1BlHRiUqEYq",
+      "data": {
+        "siteName": "AGN INFOTECH",
+        "siteId": "37297",
+        "siteAddress": "No 3, Sidco Industrial Estate, Opposite to NIT - Trichy, Thuvakudi, Tiruchirappalli, Tamil Nadu, India, 620015",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:28.914Z"
+        },
+        "geolocation": {
+          "latitude": 10.8155,
+          "longitude": 78.69651
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.696510",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:42.012Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.815500",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:42.012Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "AGN INFOTECH",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "No 3, Sidco Industrial Estate, Opposite to NIT - Trichy, Thuvakudi, Tiruchirappalli, Tamil Nadu, India, 620015"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "7HgaBnsA4XrUubFTdE8k",
+      "path": "sites/7HgaBnsA4XrUubFTdE8k",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Sai Ranganathan Engineering College",
+        "siteId": "3715",
+        "siteAddress": "Sri Sai Ranganathan Engineering College, REC Kalvi Nagar, Thondamuthur,REC Kalvi Nagar, Viraliyur Post, Thondamuthur via, Coimbatore, Tamil Nadu, India, 641109",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:54.379Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.966120",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:42.700Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.005550",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 11.00555,
+          "longitude": 76.96612
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:42.700Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Sai Ranganathan Engineering College",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Sri Sai Ranganathan Engineering College, REC Kalvi Nagar, Thondamuthur,REC Kalvi Nagar, Viraliyur Post, Thondamuthur via, Coimbatore, Tamil Nadu, India, 641109"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "7ZSehdOiqA6IyAFSypGr",
+      "path": "sites/7ZSehdOiqA6IyAFSypGr",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Srinivasan Engineering College",
+        "siteId": "1961",
+        "siteAddress": "B Pallipatti, Bommidi, Pappireddipatti T.K., Dharmapuri, Tamil Nadu, India, 635301",
+        "district": "Krishnagiri",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:52.416Z"
+        },
+        "geolocation": {
+          "latitude": 11.9781,
+          "longitude": 77.8771
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.877100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:43.397Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.978100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:43.397Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Srinivasan Engineering College",
+        "district": "Krishnagiri",
+        "state": "Tamil Nadu",
+        "address": "B Pallipatti, Bommidi, Pappireddipatti T.K., Dharmapuri, Tamil Nadu, India, 635301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "7mNrOoTTtZhwYDl66mrM",
+      "path": "sites/7mNrOoTTtZhwYDl66mrM",
+      "data": {
+        "siteName": "Akshaya College of Engineering and Technology",
+        "siteId": "2981",
+        "siteAddress": "Kinathukadavu, Coimbatore, Tamil Nadu, India, 642109",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:51.816Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.014292",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:43.638Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.842607",
+        "placeAccuracy": "OpenCage confidence 10/10",
+        "geolocation": {
+          "latitude": 10.8426067,
+          "longitude": 77.0142923
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:43.638Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Akshaya College of Engineering and Technology",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Kinathukadavu, Coimbatore, Tamil Nadu, India, 642109"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "7zIGN3jsNq4TPFCrZW1f",
+      "path": "sites/7zIGN3jsNq4TPFCrZW1f",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nelliandavar Institute of Technology",
+        "siteId": "28984",
+        "siteAddress": "National Highway 227, Trichy, Cuddalore Chidambaram Hwy, Pudupalayam, ARIYALUR, Tamil Nadu, India, 621704",
+        "district": "Ariyallur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:37.308Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.075560",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:43.979Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.138490",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 11.13849,
+          "longitude": 79.07556
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:43.979Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nelliandavar Institute of Technology",
+        "district": "Ariyallur",
+        "state": "Tamil Nadu",
+        "address": "National Highway 227, Trichy, Cuddalore Chidambaram Hwy, Pudupalayam, ARIYALUR, Tamil Nadu, India, 621704"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "8MK8mlqRu43LIyWN07uZ",
+      "path": "sites/8MK8mlqRu43LIyWN07uZ",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "RRASE College of Engineering",
+        "siteId": "28928",
+        "siteAddress": "Vandalur - Oragadam - Walajabad Rd,  SH48, Vanchuvancherry, Padappai, Kanchipuram, Tamil Nadu, India, 601301",
+        "district": "Kanchipuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:10.691Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.041700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:45.467Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.917100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9171,
+          "longitude": 80.0417
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:45.467Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "RRASE College of Engineering",
+        "district": "Kanchipuram",
+        "state": "Tamil Nadu",
+        "address": "Vandalur - Oragadam - Walajabad Rd,  SH48, Vanchuvancherry, Padappai, Kanchipuram, Tamil Nadu, India, 601301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "9DuBqZqGEFdPfVWaZdIB",
+      "path": "sites/9DuBqZqGEFdPfVWaZdIB",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "R.M.K College of Engineering and Technology",
+        "siteId": "39985",
+        "siteAddress": "RSM Nagar, Gummidipoondi Taluk, Puduvoyal, Tiruvallur, Tamil Nadu, India, 601206",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:47.147Z"
+        },
+        "geolocation": {
+          "latitude": 13.3638,
+          "longitude": 80.1416
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.141600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:46.146Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.363800",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:46.146Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "R.M.K College of Engineering and Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "RSM Nagar, Gummidipoondi Taluk, Puduvoyal, Tiruvallur, Tamil Nadu, India, 601206"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "9Egr8f3j6tQp9005Oewn",
+      "path": "sites/9Egr8f3j6tQp9005Oewn",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone  IDZ Trichy II",
+        "siteId": "8774",
+        "siteAddress": "Shivani Engineering College, Trichy - Dindigul NH Road, Poolangulathupatti, NH 83, Tiruchirappalli, Tamil Nadu, India, 620009",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:25.185Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.630600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:46.440Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.664100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.6641,
+          "longitude": 78.6306
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:46.440Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone  IDZ Trichy II",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "Shivani Engineering College, Trichy - Dindigul NH Road, Poolangulathupatti, NH 83, Tiruchirappalli, Tamil Nadu, India, 620009"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "9wrI1CfDoDujUk101bmj",
+      "path": "sites/9wrI1CfDoDujUk101bmj",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "National Engineering College",
+        "siteId": "948",
+        "siteAddress": "K.R.Nagar,Kovilpatti, Nallantinputhur, Thoothukudi, Tamil Nadu, India, 628503",
+        "district": "Kovilpatti",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:47.254Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.686200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:46.986Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.208000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.208,
+          "longitude": 77.6862
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:46.986Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "National Engineering College",
+        "district": "Kovilpatti",
+        "state": "Tamil Nadu",
+        "address": "K.R.Nagar,Kovilpatti, Nallantinputhur, Thoothukudi, Tamil Nadu, India, 628503"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "A0Pp0uJmWKXpmIoR4NA6",
+      "path": "sites/A0Pp0uJmWKXpmIoR4NA6",
+      "data": {
+        "siteName": "Aarupadai veedu Institute of Technology",
+        "siteId": "3713",
+        "siteAddress": "Vinayaka Nagar, Old Mahabalipuram Road, Paiyanoor, Kancheepuram Dist., Chennai, Tamil Nadu, India, 603104",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:31.790Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.771900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:47.229Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.484700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.4847,
+          "longitude": 78.7719
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:47.229Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Aarupadai veedu Institute of Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Vinayaka Nagar, Old Mahabalipuram Road, Paiyanoor, Kancheepuram Dist., Chennai, Tamil Nadu, India, 603104"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "AENddOJPrBB6Xp2YoDXj",
+      "path": "sites/AENddOJPrBB6Xp2YoDXj",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Muthukumaran Institute of Technology",
+        "siteId": "3710",
+        "siteAddress": "Chikkarayapuram, Near Mangadu, Chennai, Tamil Nadu, India, 600069",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:41.487Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.140665",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:47.733Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.020027",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 13.0200272,
+          "longitude": 80.1406648
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:47.733Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Muthukumaran Institute of Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Chikkarayapuram, Near Mangadu, Chennai, Tamil Nadu, India, 600069"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "APZDN0GJz91iAxv8d9Gg",
+      "path": "sites/APZDN0GJz91iAxv8d9Gg",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Manimangalam",
+        "siteId": "7981",
+        "siteAddress": "Dr. VPR Nagar, Manimangalam Village,Kundrathur Taluk, Kancheepuram District, Chennai, Tamil Nadu, India, 601301",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:35.390Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.041700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:48.095Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.917100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9171,
+          "longitude": 80.0417
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:48.095Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Manimangalam",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Dr. VPR Nagar, Manimangalam Village,Kundrathur Taluk, Kancheepuram District, Chennai, Tamil Nadu, India, 601301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "Bae8fLwCfz8ORKet2Sxv",
+      "path": "sites/Bae8fLwCfz8ORKet2Sxv",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Rathinam Technical Campus",
+        "siteId": "40711",
+        "siteAddress": "Rathinam Techzone, Pollachi Rd,  Eachanari, Coimbatore, Tamil Nadu, India, 641021",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:01.195Z"
+        },
+        "geolocation": {
+          "latitude": 10.9579,
+          "longitude": 76.9882
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.988200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:48.954Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.957900",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:48.954Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Rathinam Technical Campus",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Rathinam Techzone, Pollachi Rd,  Eachanari, Coimbatore, Tamil Nadu, India, 641021"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "CPkMpOYccoBrNhpcvPJJ",
+      "path": "sites/CPkMpOYccoBrNhpcvPJJ",
+      "data": {
+        "siteName": "Jansons Institue of Technology",
+        "siteId": "16706",
+        "siteAddress": "Jansons Institue of Technology Road, Karumathampatti, Coimbatore, Tamil Nadu, India, 641659",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:55.342Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.966120",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:49.996Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.005550",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 11.00555,
+          "longitude": 76.96612
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:49.996Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Jansons Institue of Technology",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Jansons Institue of Technology Road, Karumathampatti, Coimbatore, Tamil Nadu, India, 641659"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "CdYeUZsA4clkB1M9iLeZ",
+      "path": "sites/CdYeUZsA4clkB1M9iLeZ",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "V.S.B. Engineering College",
+        "siteId": "225",
+        "siteAddress": "NH- 67, Covai Road, Karudayampalayam, Karur, Tamil Nadu, India, 639111",
+        "district": "Karur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:37.288Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.080950",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:50.226Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.957710",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 10.95771,
+          "longitude": 78.08095
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:50.226Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "V.S.B. Engineering College",
+        "district": "Karur",
+        "state": "Tamil Nadu",
+        "address": "NH- 67, Covai Road, Karudayampalayam, Karur, Tamil Nadu, India, 639111"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "Ce9kMCN07fBs1n8vUhVf",
+      "path": "sites/Ce9kMCN07fBs1n8vUhVf",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Pragya D2K technologies",
+        "siteId": "YTC_2",
+        "siteAddress": "NA",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:43.938Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.222159",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:50.820Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.052945",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 13.0529452,
+          "longitude": 80.2221586
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:50.820Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Pragya D2K technologies",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "NA"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "CiPOeBATv9wtvdGfbTMY",
+      "path": "sites/CiPOeBATv9wtvdGfbTMY",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "The New College",
+        "siteId": "39018",
+        "siteAddress": "New No. 147, Old No. 87, Peters Rd, Royapettah, Chennai, Tamil Nadu, India, 600014",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:49.641Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.264200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:51.501Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.050600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.0506,
+          "longitude": 80.2642
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:51.501Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "The New College",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "New No. 147, Old No. 87, Peters Rd, Royapettah, Chennai, Tamil Nadu, India, 600014"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ClqIHw6skgjA4kpKf4s5",
+      "path": "sites/ClqIHw6skgjA4kpKf4s5",
+      "data": {
+        "siteName": "Ambal Professional Group of Institutions",
+        "siteId": "3431",
+        "siteAddress": "K.N. Puram PO , Palladam, Tirupur, Tamil Nadu, India, 641662",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:46.846Z"
+        },
+        "geolocation": {
+          "latitude": 11.1367,
+          "longitude": 77.3661
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.366100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:51.770Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.136700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:51.770Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Ambal Professional Group of Institutions",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "K.N. Puram PO , Palladam, Tirupur, Tamil Nadu, India, 641662"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "DdUzvmT1ZYZND3Qb5Q2g",
+      "path": "sites/DdUzvmT1ZYZND3Qb5Q2g",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "VSB COLLEGE OF ENGINEERING TECHINICAL CAMPUS",
+        "siteId": "4834",
+        "siteAddress": "NH-209, Coimbatore-Pollachi Main Road, Ealur Pirivu, Solavampalayam PO, Coimbatore, Tamil Nadu, India, 642109",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:51.056Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.934700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:53.877Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.582300",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.5823,
+          "longitude": 76.9347
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:53.877Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "VSB COLLEGE OF ENGINEERING TECHINICAL CAMPUS",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "NH-209, Coimbatore-Pollachi Main Road, Ealur Pirivu, Solavampalayam PO, Coimbatore, Tamil Nadu, India, 642109"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "DhyLf7pU2CEjRFUKL6UP",
+      "path": "sites/DhyLf7pU2CEjRFUKL6UP",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone  iDZ Madurai IV",
+        "siteId": "8773",
+        "siteAddress": "Senthamarai College of Arts & Science , VRS Garden,Palkalai Nagar, Vadapalanji Village, Madurai, Tamil Nadu, India, 625021",
+        "district": "Madurai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:15.964Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.119620",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:54.533Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.917350",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 9.91735,
+          "longitude": 78.11962
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:54.533Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone  iDZ Madurai IV",
+        "district": "Madurai",
+        "state": "Tamil Nadu",
+        "address": "Senthamarai College of Arts & Science , VRS Garden,Palkalai Nagar, Vadapalanji Village, Madurai, Tamil Nadu, India, 625021"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "DmD4ygjp3f3quYAdZYqV",
+      "path": "sites/DmD4ygjp3f3quYAdZYqV",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Sivathapuram",
+        "siteId": "7959",
+        "siteAddress": "Assay Business Technology Services, 2/81A MGR Nagar, Sivathapuram, Salem, Tamil Nadu, India, 636307",
+        "district": "Salem",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:19.538Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.492200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:55.510Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.653000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.653,
+          "longitude": 78.4922
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:55.510Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Sivathapuram",
+        "district": "Salem",
+        "state": "Tamil Nadu",
+        "address": "Assay Business Technology Services, 2/81A MGR Nagar, Sivathapuram, Salem, Tamil Nadu, India, 636307"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "E1aGOQlutISAxHpeYsEI",
+      "path": "sites/E1aGOQlutISAxHpeYsEI",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sankara Polytechnic College",
+        "siteId": "28941",
+        "siteAddress": "Thudiyalur Rd, Saravanampatti, Coimbatore, Tamil Nadu, India, 641035",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:59.690Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.613000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:55.778Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.573300",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.5733,
+          "longitude": 76.613
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:55.778Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sankara Polytechnic College",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Thudiyalur Rd, Saravanampatti, Coimbatore, Tamil Nadu, India, 641035"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "EGiD6fC5bpkNsL2hrska",
+      "path": "sites/EGiD6fC5bpkNsL2hrska",
+      "data": {
+        "siteName": "CK College Of Engineering and Technology",
+        "siteId": "23729",
+        "siteAddress": "Jayaram Nagar, Chellangkuppam, Cuddalore, Tamil Nadu, India, 607003",
+        "district": "Cuddalore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:03.707Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.184200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:56.010Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.100900",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.1009,
+          "longitude": 79.1842
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:56.010Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "CK College Of Engineering and Technology",
+        "district": "Cuddalore",
+        "state": "Tamil Nadu",
+        "address": "Jayaram Nagar, Chellangkuppam, Cuddalore, Tamil Nadu, India, 607003"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "FAhWKLvdZFtG0Ij6WQzb",
+      "path": "sites/FAhWKLvdZFtG0Ij6WQzb",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Mohamed Sathak A.J. College Of Engineering",
+        "siteId": "8770",
+        "siteAddress": "No.34,Rajiv Gandhi Road OMR, IT Highway, Siruseri, Inside Sipcot IT Park, Chennai, Tamil Nadu, India, 603103",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:45.510Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:57.104Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:57.104Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Mohamed Sathak A.J. College Of Engineering",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "No.34,Rajiv Gandhi Road OMR, IT Highway, Siruseri, Inside Sipcot IT Park, Chennai, Tamil Nadu, India, 603103"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "FNpjvi3Uo8GL0HXnkqaS",
+      "path": "sites/FNpjvi3Uo8GL0HXnkqaS",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "MNSK College of Engineering",
+        "siteId": "28998",
+        "siteAddress": "Dhakshinapuram, Vallathirakottai PO, Alangudi TK, Pudukkottai, Tamil Nadu, India, 622305",
+        "district": "Pudukkottai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:25.392Z"
+        },
+        "geolocation": {
+          "latitude": 10.38128,
+          "longitude": 78.82141
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.821410",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:58.034Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.381280",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:58.034Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "MNSK College of Engineering",
+        "district": "Pudukkottai",
+        "state": "Tamil Nadu",
+        "address": "Dhakshinapuram, Vallathirakottai PO, Alangudi TK, Pudukkottai, Tamil Nadu, India, 622305"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "FfYPjUsXVWhLUa1jvTNi",
+      "path": "sites/FfYPjUsXVWhLUa1jvTNi",
+      "data": {
+        "siteName": "EGS Pillay Engineering College",
+        "siteId": "23732",
+        "siteAddress": "Old, Nagore Main Rd, Thethi village, Nagore, Nagapattinam, Tamil Nadu, India, 611002",
+        "district": "Nagapattinam",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:08.186Z"
+        },
+        "geolocation": {
+          "latitude": 10.81459,
+          "longitude": 79.83911
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.839110",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:58.482Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.814590",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:58.482Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "EGS Pillay Engineering College",
+        "district": "Nagapattinam",
+        "state": "Tamil Nadu",
+        "address": "Old, Nagore Main Rd, Thethi village, Nagore, Nagapattinam, Tamil Nadu, India, 611002"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "FuuLFY7qAzKJQc91lLM5",
+      "path": "sites/FuuLFY7qAzKJQc91lLM5",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sethu Institute of Technology",
+        "siteId": "214",
+        "siteAddress": "Madurai-Thoothukudi Highway, Pulloor, Kariapatti, Virudhunagar, Tamil Nadu, India, 626115",
+        "district": "Virudhunagar",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:31.158Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.099920",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:58.744Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.675050",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 9.67505,
+          "longitude": 78.09992
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:58.744Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sethu Institute of Technology",
+        "district": "Virudhunagar",
+        "state": "Tamil Nadu",
+        "address": "Madurai-Thoothukudi Highway, Pulloor, Kariapatti, Virudhunagar, Tamil Nadu, India, 626115"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "G1MjmrOv6ESqXsy9ETH5",
+      "path": "sites/G1MjmrOv6ESqXsy9ETH5",
+      "data": {
+        "siteName": "K.S. R College of Technology",
+        "siteId": "236",
+        "siteAddress": "KSR Kalvi Nagar, Thokkavadi, Tiruchengode, Namakkal, Tamil Nadu, India, 637215",
+        "district": "Tiruchengode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:28.014Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.894440",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:59.063Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.380160",
+        "placeAccuracy": "OpenCage confidence 8/10",
+        "geolocation": {
+          "latitude": 11.38016,
+          "longitude": 77.89444
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:59.063Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "K.S. R College of Technology",
+        "district": "Tiruchengode",
+        "state": "Tamil Nadu",
+        "address": "KSR Kalvi Nagar, Thokkavadi, Tiruchengode, Namakkal, Tamil Nadu, India, 637215"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "GR81Wxd7qStPNMGyZySO",
+      "path": "sites/GR81Wxd7qStPNMGyZySO",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nandha Engineering College",
+        "siteId": "1696",
+        "siteAddress": "Erode- Perundurai Main Road, Vaikkaalmedu, Erode, Tamil Nadu, India, 638052",
+        "district": "Erode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:02.728Z"
+        },
+        "geolocation": {
+          "latitude": 11.2756,
+          "longitude": 77.5879
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.587900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:59.410Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.275600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:59.410Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nandha Engineering College",
+        "district": "Erode",
+        "state": "Tamil Nadu",
+        "address": "Erode- Perundurai Main Road, Vaikkaalmedu, Erode, Tamil Nadu, India, 638052"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "GRHFJNPr8sXpHwyU9IHX",
+      "path": "sites/GRHFJNPr8sXpHwyU9IHX",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Thiruvalluvar Arts and Science College",
+        "siteId": "28974",
+        "siteAddress": "Kurinjipadi, Cuddalore, Tamil Nadu, India, 607302",
+        "district": "Cuddalore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:08.341Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.597710",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:59.707Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.572248",
+        "placeAccuracy": "OpenCage confidence 6/10",
+        "geolocation": {
+          "latitude": 11.5722479,
+          "longitude": 79.5977097
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:59.707Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Thiruvalluvar Arts and Science College",
+        "district": "Cuddalore",
+        "state": "Tamil Nadu",
+        "address": "Kurinjipadi, Cuddalore, Tamil Nadu, India, 607302"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "GqMhFU5AidMeWK1GRdPm",
+      "path": "sites/GqMhFU5AidMeWK1GRdPm",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "PSB Polytechnic College",
+        "siteId": "33455",
+        "siteAddress": "No. 46, Thaiyur, Rajiv Gandhi Road, Kelambakkam,Chengalpattu, Chennai, Tamil Nadu, India, 603103",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:38.369Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:00.897Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:00.897Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "PSB Polytechnic College",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "No. 46, Thaiyur, Rajiv Gandhi Road, Kelambakkam,Chengalpattu, Chennai, Tamil Nadu, India, 603103"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "IGW2EZDJjoThX5Mv8zkt",
+      "path": "sites/IGW2EZDJjoThX5Mv8zkt",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Virudhunagar Hindu Nadars' Senthikumara Nadar College",
+        "siteId": "25047",
+        "siteAddress": "3/151-1 College Road, Virudhunagar, Tamil Nadu, India, 626001",
+        "district": "Virudhunagar",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:31.339Z"
+        },
+        "geolocation": {
+          "latitude": 9.5851,
+          "longitude": 77.9579
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.957900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:02.394Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.585100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:02.394Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Virudhunagar Hindu Nadars' Senthikumara Nadar College",
+        "district": "Virudhunagar",
+        "state": "Tamil Nadu",
+        "address": "3/151-1 College Road, Virudhunagar, Tamil Nadu, India, 626001"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "IPMR7MDGC0AJbiu7OY55",
+      "path": "sites/IPMR7MDGC0AJbiu7OY55",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone  iDZ Coimbatore II",
+        "siteId": "8772",
+        "siteAddress": "PRISDHAM TECHNOLOGIES, Akshaya Institute of Management Studies, No. 209/1B, Premier Nagar, Othakkalmandapam via, Coimbatore, Tamil Nadu, India, 641032",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:53.968Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.099220",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:03.045Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "27.423970",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 27.42397,
+          "longitude": 77.09922
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:03.045Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone  iDZ Coimbatore II",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "PRISDHAM TECHNOLOGIES, Akshaya Institute of Management Studies, No. 209/1B, Premier Nagar, Othakkalmandapam via, Coimbatore, Tamil Nadu, India, 641032"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "IdxgVDBw7qpW27dJueNT",
+      "path": "sites/IdxgVDBw7qpW27dJueNT",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Thondamuthur",
+        "siteId": "7997",
+        "siteAddress": "Ranganathan Engineering College, REC Kalvi Nagar, Viraliyur Post , Thondamuthur via, Coimbatore, Tamil Nadu, India, 641109",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:52.369Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.841810",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:03.704Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.990820",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 10.99082,
+          "longitude": 76.84181
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:03.704Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Thondamuthur",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Ranganathan Engineering College, REC Kalvi Nagar, Viraliyur Post , Thondamuthur via, Coimbatore, Tamil Nadu, India, 641109"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "JFwRcZSF6uhxyKqBvYdq",
+      "path": "sites/JFwRcZSF6uhxyKqBvYdq",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Shrimathi Devkunvar Nanalal Bhatt Vaishnav College For Women",
+        "siteId": "39996",
+        "siteAddress": "Vaishnava College Rd, Lakshmi Nagar,  Shanthi Nagar, Chromepet, Chennai, Tamil Nadu, India, 600044",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:39.415Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:04.025Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:04.025Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Shrimathi Devkunvar Nanalal Bhatt Vaishnav College For Women",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Vaishnava College Rd, Lakshmi Nagar,  Shanthi Nagar, Chromepet, Chennai, Tamil Nadu, India, 600044"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "JjwkzFPZvFDf13LYHYd7",
+      "path": "sites/JjwkzFPZvFDf13LYHYd7",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Muthayammal Engineering College",
+        "siteId": "229",
+        "siteAddress": "Kakkaveri, Rasipuram, Namakkal, Tamil Nadu, India, 637408",
+        "district": "Namakkal",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:16.459Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.186350",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:04.274Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.460090",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.46009,
+          "longitude": 78.18635
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:04.274Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Muthayammal Engineering College",
+        "district": "Namakkal",
+        "state": "Tamil Nadu",
+        "address": "Kakkaveri, Rasipuram, Namakkal, Tamil Nadu, India, 637408"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "KECxBFO3NgJmxUG5JkK9",
+      "path": "sites/KECxBFO3NgJmxUG5JkK9",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Thirumalai Engineering College",
+        "siteId": "37299",
+        "siteAddress": "Krishnapuram Post, Kilambi, Kanchipuram, Tamil Nadu, India, 631551",
+        "district": "Kanchipuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:32.456Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.700060",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:05.366Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.835150",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.83515,
+          "longitude": 79.70006
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:05.366Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Thirumalai Engineering College",
+        "district": "Kanchipuram",
+        "state": "Tamil Nadu",
+        "address": "Krishnapuram Post, Kilambi, Kanchipuram, Tamil Nadu, India, 631551"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "O4xvkLMcOtP1SBgG1sYW",
+      "path": "sites/O4xvkLMcOtP1SBgG1sYW",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Tiruppur Kumaran College for Women",
+        "siteId": "23744",
+        "siteAddress": "Mangalam Road, S.R.Nagar, Tiruppur, Tirupur, Tamil Nadu, India, 641687",
+        "district": "Tirupur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:30.149Z"
+        },
+        "geolocation": {
+          "latitude": 11.2635,
+          "longitude": 77.5636
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.563600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:09.473Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.263500",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:09.473Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Tiruppur Kumaran College for Women",
+        "district": "Tirupur",
+        "state": "Tamil Nadu",
+        "address": "Mangalam Road, S.R.Nagar, Tiruppur, Tirupur, Tamil Nadu, India, 641687"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "O5jgfPfssW5kGje2qlCH",
+      "path": "sites/O5jgfPfssW5kGje2qlCH",
+      "data": {
+        "siteName": "Jayaram College of Engineering and Technology",
+        "siteId": "1535",
+        "siteAddress": "Pagalavadi, Thuraiyur, Tiruchirappalli, Tamil Nadu, India, 621014",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:28.406Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.696510",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:09.715Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.815500",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 10.8155,
+          "longitude": 78.69651
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:09.715Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Jayaram College of Engineering and Technology",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "Pagalavadi, Thuraiyur, Tiruchirappalli, Tamil Nadu, India, 621014"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "OIszQFtAf1K6YWCNHiUL",
+      "path": "sites/OIszQFtAf1K6YWCNHiUL",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Mahalakshmi Tech Campus",
+        "siteId": "40165",
+        "siteAddress": "No 1, Bharathiyar street, Prashanthi Nagar, Chromepet, Chennai, Tamil Nadu, India, 600044",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:40.614Z"
+        },
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:10.309Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:10.309Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Mahalakshmi Tech Campus",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "No 1, Bharathiyar street, Prashanthi Nagar, Chromepet, Chennai, Tamil Nadu, India, 600044"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "OlKMxcHfunY2qD0jJQw9",
+      "path": "sites/OlKMxcHfunY2qD0jJQw9",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "P.S.R Engineering College",
+        "siteId": "2238",
+        "siteAddress": "Sevalpatti, Sivakasi, Virudhunagar, Tamil Nadu, India, 626140",
+        "district": "Sivakasi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:26.534Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.797970",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:10.591Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.449990",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 9.44999,
+          "longitude": 77.79797
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:10.591Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "P.S.R Engineering College",
+        "district": "Sivakasi",
+        "state": "Tamil Nadu",
+        "address": "Sevalpatti, Sivakasi, Virudhunagar, Tamil Nadu, India, 626140"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "PTV5CwVtnwteeNOl3bmn",
+      "path": "sites/PTV5CwVtnwteeNOl3bmn",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Sai Ram Institute of Technology",
+        "siteId": "610",
+        "siteAddress": "Sai Leo Nagar,  West Tambaram, Chennai, Tamil Nadu, India, 600044",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:29.398Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:10.892Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:10.892Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Sai Ram Institute of Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Sai Leo Nagar,  West Tambaram, Chennai, Tamil Nadu, India, 600044"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "Q74ixtOJRIQBPtbH77da",
+      "path": "sites/Q74ixtOJRIQBPtbH77da",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sacred Heart College",
+        "siteId": "23748",
+        "siteAddress": "NH 179ASalem, Tirupattur-Vaniyambadi Road, Tirupattur, Tamil Nadu, India, 635601",
+        "district": "Tirupattur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:29.545Z"
+        },
+        "geolocation": {
+          "latitude": 12.4924,
+          "longitude": 78.568
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.568000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:11.963Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.492400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:11.963Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sacred Heart College",
+        "district": "Tirupattur",
+        "state": "Tamil Nadu",
+        "address": "NH 179ASalem, Tirupattur-Vaniyambadi Road, Tirupattur, Tamil Nadu, India, 635601"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "QAeFLTgn53Q7ykMxRjgP",
+      "path": "sites/QAeFLTgn53Q7ykMxRjgP",
+      "data": {
+        "siteName": "LTL - Pavendar Bharathidasan College of Engineering & Technology",
+        "siteId": "40712",
+        "siteAddress": "Thanjai Natarajan Nagar, Mathur, Pudukottai Road, Tiruchirappalli, Tamil Nadu, India, 620024",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:29.356Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.446400",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:12.286Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.248800",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.2488,
+          "longitude": 78.4464
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:12.286Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "LTL - Pavendar Bharathidasan College of Engineering & Technology",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "Thanjai Natarajan Nagar, Mathur, Pudukottai Road, Tiruchirappalli, Tamil Nadu, India, 620024"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "RZKMS4tY3S0cnhsicuoH",
+      "path": "sites/RZKMS4tY3S0cnhsicuoH",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Prince Shri Venkateshwara Padmavathy Engineering College",
+        "siteId": "4728",
+        "siteAddress": "Medavakkam - Mambakkam Road, Ponmar, Kanchipuram District, Chennai, Tamil Nadu, India, 600127",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:34.477Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:12.936Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:12.936Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Prince Shri Venkateshwara Padmavathy Engineering College",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Medavakkam - Mambakkam Road, Ponmar, Kanchipuram District, Chennai, Tamil Nadu, India, 600127"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "RgnrjmdMZal0BGl7lUUo",
+      "path": "sites/RgnrjmdMZal0BGl7lUUo",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Vivekanandha College of Engineering for Women",
+        "siteId": "234",
+        "siteAddress": "Elayampalayam, Tiruchengode Tk, Namakkal, Tamil Nadu, India, 637205",
+        "district": "Tiruchengode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:27.829Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.165240",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:13.215Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.221260",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 11.22126,
+          "longitude": 78.16524
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:13.215Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Vivekanandha College of Engineering for Women",
+        "district": "Tiruchengode",
+        "state": "Tamil Nadu",
+        "address": "Elayampalayam, Tiruchengode Tk, Namakkal, Tamil Nadu, India, 637205"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "SZwZtOKvJjNBv4CHSMWW",
+      "path": "sites/SZwZtOKvJjNBv4CHSMWW",
+      "data": {
+        "siteName": "Chevalier T. Thomas Elizabeth College for Women",
+        "siteId": "38205",
+        "siteAddress": "16, St. Marys Road, Maryland, Sembiyan, Perambur, Chennai, Tamil Nadu, India, 600011",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:42.748Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.242500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:14.293Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.110300",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.1103,
+          "longitude": 80.2425
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:14.293Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Chevalier T. Thomas Elizabeth College for Women",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "16, St. Marys Road, Maryland, Sembiyan, Perambur, Chennai, Tamil Nadu, India, 600011"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "Srs5r4CRGvyY58p86RkS",
+      "path": "sites/Srs5r4CRGvyY58p86RkS",
+      "data": {
+        "siteName": "Kovai Kalaimagal College of Arts and Science",
+        "siteId": "39997",
+        "siteAddress": "Narasipuram Road, Thondamuthur, Coimbatore, Tamil Nadu, India, 641109",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:58.920Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.807033",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:15.305Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.996329",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.9963293,
+          "longitude": 76.8070328
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:15.305Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Kovai Kalaimagal College of Arts and Science",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Narasipuram Road, Thondamuthur, Coimbatore, Tamil Nadu, India, 641109"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "T6HH9S0t1lXNgST75gRU",
+      "path": "sites/T6HH9S0t1lXNgST75gRU",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Pragya Technologies",
+        "siteId": "10625",
+        "siteAddress": "No.95,1st Floor, Chettiar Agaram Main Road, Vanagaram, Chennai, Tamil Nadu, India, 600095",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:37.314Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.279100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:15.725Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.814400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.8144,
+          "longitude": 80.2791
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:15.725Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Pragya Technologies",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "No.95,1st Floor, Chettiar Agaram Main Road, Vanagaram, Chennai, Tamil Nadu, India, 600095"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "U56cR3vRIoufHUqwvw47",
+      "path": "sites/U56cR3vRIoufHUqwvw47",
+      "data": {
+        "siteName": "Dr. Sivanthi Aditanar College of Engineering",
+        "siteId": "232",
+        "siteAddress": "Tirunelveli to Tiruchendur State Highway, Tiruchendur, Thoothukudi, Tamil Nadu, India, 628215",
+        "district": "Thoothukudi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:27.645Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.119100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:17.875Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.497200",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.4972,
+          "longitude": 78.1191
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:17.875Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Dr. Sivanthi Aditanar College of Engineering",
+        "district": "Thoothukudi",
+        "state": "Tamil Nadu",
+        "address": "Tirunelveli to Tiruchendur State Highway, Tiruchendur, Thoothukudi, Tamil Nadu, India, 628215"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "USquJ2ilGbJ07J6Hnd0O",
+      "path": "sites/USquJ2ilGbJ07J6Hnd0O",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "PA College of Engineering and Technology",
+        "siteId": "30821",
+        "siteAddress": "SH 19, Puliyampatti, Pollachi, Tamil Nadu, India, 642002",
+        "district": "Pollachi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:17.738Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.008500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:18.247Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.658250",
+        "placeAccuracy": "OpenCage confidence 6/10",
+        "geolocation": {
+          "latitude": 10.65825,
+          "longitude": 77.0085
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:18.247Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "PA College of Engineering and Technology",
+        "district": "Pollachi",
+        "state": "Tamil Nadu",
+        "address": "SH 19, Puliyampatti, Pollachi, Tamil Nadu, India, 642002"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "VgjRlKQzOXe7NJFDCGsz",
+      "path": "sites/VgjRlKQzOXe7NJFDCGsz",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone  iDZ Madurai III",
+        "siteId": "8775",
+        "siteAddress": "Vickram Teacher Training College, Sreenivasa Gardens, Madurai Sivagangai Road, Enathi, Madurai, Tamil Nadu, India, 630561",
+        "district": "Sivaganga",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:26.147Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.119620",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:19.512Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.917350",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 9.91735,
+          "longitude": 78.11962
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:19.512Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone  iDZ Madurai III",
+        "district": "Sivaganga",
+        "state": "Tamil Nadu",
+        "address": "Vickram Teacher Training College, Sreenivasa Gardens, Madurai Sivagangai Road, Enathi, Madurai, Tamil Nadu, India, 630561"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "VmlXrzwLBNtF4817aBoV",
+      "path": "sites/VmlXrzwLBNtF4817aBoV",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "MRK Institute Of Technology",
+        "siteId": "4632",
+        "siteAddress": "NATTARMANGALAM VILLAGE, KATTUMANNARKOIL, Cuddalore, Tamil Nadu, India, 608301",
+        "district": "Cuddalore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:01.341Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.274500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:19.896Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.724300",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.7243,
+          "longitude": 79.2745
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:19.896Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "MRK Institute Of Technology",
+        "district": "Cuddalore",
+        "state": "Tamil Nadu",
+        "address": "NATTARMANGALAM VILLAGE, KATTUMANNARKOIL, Cuddalore, Tamil Nadu, India, 608301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "WFkmurqvrYBYsZbfrBpB",
+      "path": "sites/WFkmurqvrYBYsZbfrBpB",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Periyar Maniammai University",
+        "siteId": "4477",
+        "siteAddress": "Periyar Nagar, Vallam, Thanjavur, Tamil Nadu, India, 613403",
+        "district": "Thanjavur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:26.909Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.059240",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:20.221Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.719660",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 10.71966,
+          "longitude": 79.05924
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:20.221Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Periyar Maniammai University",
+        "district": "Thanjavur",
+        "state": "Tamil Nadu",
+        "address": "Periyar Nagar, Vallam, Thanjavur, Tamil Nadu, India, 613403"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "Wb0GgLyPfWtSSEuQR8xG",
+      "path": "sites/Wb0GgLyPfWtSSEuQR8xG",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Surya College of Engineering",
+        "siteId": "28980",
+        "siteAddress": "Suriya Nagar Vikravandi, Viluppuram, Tamil Nadu, India, 605602",
+        "district": "Viluppuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:30.975Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.492198",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:21.228Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.938867",
+        "placeAccuracy": "OpenCage confidence 6/10",
+        "geolocation": {
+          "latitude": 11.938867,
+          "longitude": 79.492198
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:21.228Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Surya College of Engineering",
+        "district": "Viluppuram",
+        "state": "Tamil Nadu",
+        "address": "Suriya Nagar Vikravandi, Viluppuram, Tamil Nadu, India, 605602"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "XwM3C7Va2y26TkBZwdFD",
+      "path": "sites/XwM3C7Va2y26TkBZwdFD",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ Vellore",
+        "siteId": "12175",
+        "siteAddress": "Indus Infra,Ward No.2,Block No. 26,T.S.NO.1693, Ambalal Hi-Tech Towers,Ambalal Green Field,Near Green Circle, Behind New Bus Stand, Vellore, Tamil Nadu, India, 632004",
+        "district": "Vellore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:31.545Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.086600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:24.650Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.634100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.6341,
+          "longitude": 79.0866
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:24.650Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ Vellore",
+        "district": "Vellore",
+        "state": "Tamil Nadu",
+        "address": "Indus Infra,Ward No.2,Block No. 26,T.S.NO.1693, Ambalal Hi-Tech Towers,Ambalal Green Field,Near Green Circle, Behind New Bus Stand, Vellore, Tamil Nadu, India, 632004"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "YLb8dzDAKhWEDimdmGB8",
+      "path": "sites/YLb8dzDAKhWEDimdmGB8",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Tirunelveli",
+        "siteId": "8749",
+        "siteAddress": "PSN College of Engineering and Technology, PSN Nagar, Melathediyoor Post, Tharuvai via, Tirunelveli, Tamil Nadu, India, 627152",
+        "district": "Tirunelveli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:27.450Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.684520",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:25.576Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.725180",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.72518,
+          "longitude": 77.68452
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:25.576Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Tirunelveli",
+        "district": "Tirunelveli",
+        "state": "Tamil Nadu",
+        "address": "PSN College of Engineering and Technology, PSN Nagar, Melathediyoor Post, Tharuvai via, Tirunelveli, Tamil Nadu, India, 627152"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "YTIJ9gYhvZkCMOwAA5Ca",
+      "path": "sites/YTIJ9gYhvZkCMOwAA5Ca",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Meenakshi Ammal Polytechnic College",
+        "siteId": "33647",
+        "siteAddress": "Malliyankaranai,Uthiramerur, Kanchipuram, Kanchipuram, Tamil Nadu, India, 603406",
+        "district": "Kanchipuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:14.219Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.795126",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:25.973Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.635981",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.6359815,
+          "longitude": 79.7951258
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:25.973Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Meenakshi Ammal Polytechnic College",
+        "district": "Kanchipuram",
+        "state": "Tamil Nadu",
+        "address": "Malliyankaranai,Uthiramerur, Kanchipuram, Kanchipuram, Tamil Nadu, India, 603406"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "YwF7TUzSVWe1oZcuyBL5",
+      "path": "sites/YwF7TUzSVWe1oZcuyBL5",
+      "data": {
+        "siteName": "M. Kumaraswamy College of Engineering",
+        "siteId": "226",
+        "siteAddress": "Thalvapalyam, Karur, Tamil Nadu, India, 639113",
+        "district": "Karur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:39.707Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.084900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:27.190Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.074800",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.0748,
+          "longitude": 78.0849
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:27.190Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "M. Kumaraswamy College of Engineering",
+        "district": "Karur",
+        "state": "Tamil Nadu",
+        "address": "Thalvapalyam, Karur, Tamil Nadu, India, 639113"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ZJzqmMp8DNaECGOjN5JX",
+      "path": "sites/ZJzqmMp8DNaECGOjN5JX",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "PSNA College of Engineering & Technology",
+        "siteId": "222",
+        "siteAddress": "Kothandaraman Nagar, NH 209, Dindigul, Tamil Nadu, India, 624622",
+        "district": "Dindigul",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:15.239Z"
+        },
+        "geolocation": {
+          "latitude": 10.1205,
+          "longitude": 77.9314
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.931400",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:27.933Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.120500",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:27.933Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "PSNA College of Engineering & Technology",
+        "district": "Dindigul",
+        "state": "Tamil Nadu",
+        "address": "Kothandaraman Nagar, NH 209, Dindigul, Tamil Nadu, India, 624622"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ZMqnxbUjkcEG6L7VQLvA",
+      "path": "sites/ZMqnxbUjkcEG6L7VQLvA",
+      "data": {
+        "siteName": "Hajee Karutha Rowther Howdia College",
+        "siteId": "33927",
+        "siteAddress": "Kombai Road, Uthamapalayam, Theni, Tamil Nadu, India, 625533",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:27.460Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.293137",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:28.194Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.855563",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 9.855563,
+          "longitude": 77.293137
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:28.194Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Hajee Karutha Rowther Howdia College",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Kombai Road, Uthamapalayam, Theni, Tamil Nadu, India, 625533"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ZP3YVRPouphS3AiIRjgI",
+      "path": "sites/ZP3YVRPouphS3AiIRjgI",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Menakshi Academy of Higher Education & Research",
+        "siteId": "33640",
+        "siteAddress": "No.12 , Vembuliamman Koil St, Vetri Nagar, New Bangaru Colony, KK Nagar West, Virugambakkam, Chennai, Tamil Nadu, India, 600078",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:38.970Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.169700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:28.604Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.919400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9194,
+          "longitude": 80.1697
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:28.604Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Menakshi Academy of Higher Education & Research",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "No.12 , Vembuliamman Koil St, Vetri Nagar, New Bangaru Colony, KK Nagar West, Virugambakkam, Chennai, Tamil Nadu, India, 600078"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ZwgdLrKqLTHGDkC19biu",
+      "path": "sites/ZwgdLrKqLTHGDkC19biu",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "University College of Engineering Tindivanam",
+        "siteId": "30696",
+        "siteAddress": "Melpakkam, College Road, Tindivanam, Tamil Nadu, India, 604001",
+        "district": "Cuddalore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:10.588Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.655500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:30.675Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.234000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.234,
+          "longitude": 79.6555
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:30.675Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "University College of Engineering Tindivanam",
+        "district": "Cuddalore",
+        "state": "Tamil Nadu",
+        "address": "Melpakkam, College Road, Tindivanam, Tamil Nadu, India, 604001"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "an9jMRYBnaZ9loc1csMH",
+      "path": "sites/an9jMRYBnaZ9loc1csMH",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nagarathinam Angalammal Arts & Science College",
+        "siteId": "31383",
+        "siteAddress": "S.No.32/1,Valayankulam Village, Near Airport,Fourway Track, Madurai, Tamil Nadu, India, 625022",
+        "district": "Madurai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:02.885Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.119620",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:31.354Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.917350",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 9.91735,
+          "longitude": 78.11962
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:31.354Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nagarathinam Angalammal Arts & Science College",
+        "district": "Madurai",
+        "state": "Tamil Nadu",
+        "address": "S.No.32/1,Valayankulam Village, Near Airport,Fourway Track, Madurai, Tamil Nadu, India, 625022"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "b8uYkCcdPTC7nMJYhtwz",
+      "path": "sites/b8uYkCcdPTC7nMJYhtwz",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Velalar College of Engineering and Technology",
+        "siteId": "4635",
+        "siteAddress": "Thindal Post, Erode, Tamil Nadu, India, 638012",
+        "district": "Erode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:22.819Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.880900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:31.637Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.584700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.5847,
+          "longitude": 77.8809
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:31.637Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Velalar College of Engineering and Technology",
+        "district": "Erode",
+        "state": "Tamil Nadu",
+        "address": "Thindal Post, Erode, Tamil Nadu, India, 638012"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ca76mbvaync52d8c23cU",
+      "path": "sites/ca76mbvaync52d8c23cU",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Triplee A Matriculation School",
+        "siteId": "41023",
+        "siteAddress": "Government Seed Plant, Near Veerapandiyer Salai, Kuruppanaickenpalayam,  Bhavani tk, Erode, Tamil Nadu, India, 638301",
+        "district": "Erode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:05.854Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.684200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:33.404Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.447100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.4471,
+          "longitude": 77.6842
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:33.404Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Triplee A Matriculation School",
+        "district": "Erode",
+        "state": "Tamil Nadu",
+        "address": "Government Seed Plant, Near Veerapandiyer Salai, Kuruppanaickenpalayam,  Bhavani tk, Erode, Tamil Nadu, India, 638301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "chXWpA78RKrruAgPe5ii",
+      "path": "sites/chXWpA78RKrruAgPe5ii",
+      "data": {
+        "siteName": "Arjun College of Technology",
+        "siteId": "28924",
+        "siteAddress": "Chettiyakkapalayam, Thamaraikulam, Negamam Road, Kinathukkadavu, Coimbatore, Tamil Nadu, India, 642120",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:56.811Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.966120",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:34.409Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.005550",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 11.00555,
+          "longitude": 76.96612
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:34.409Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Arjun College of Technology",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Chettiyakkapalayam, Thamaraikulam, Negamam Road, Kinathukkadavu, Coimbatore, Tamil Nadu, India, 642120"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "cswQM18AHhg4rtLtfz5Z",
+      "path": "sites/cswQM18AHhg4rtLtfz5Z",
+      "data": {
+        "siteName": "GRT",
+        "siteId": "YTC_4",
+        "siteAddress": "NA",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:51.755Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.222159",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:34.976Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.052945",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 13.0529452,
+          "longitude": 80.2221586
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:34.976Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "GRT",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "NA"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "e8NQb6sPik0nrWyiVwlP",
+      "path": "sites/e8NQb6sPik0nrWyiVwlP",
+      "data": {
+        "siteName": "A.V.C. College of Engineering",
+        "siteId": "1082",
+        "siteAddress": "Mannampandal, Mayiladuthurai, Tamil Nadu, India, 609305",
+        "district": "Mayiladuthurai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:05.540Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.655000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:35.964Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.103540",
+        "geolocation": {
+          "latitude": 11.10354,
+          "longitude": 79.655
+        },
+        "updatedBy": "S3SZvCu5iqeg7ezIapq15D7whOy2",
+        "updatedByEmail": "codex.e2e.admin@ciss.app",
+        "strictGeofence": true,
+        "geofenceRadiusMeters": 150,
+        "siteType": "site",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T17:21:18.586Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "A.V.C. College of Engineering",
+        "district": "Mayiladuthurai",
+        "state": "Tamil Nadu",
+        "address": "Mannampandal, Mayiladuthurai, Tamil Nadu, India, 609305"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "fJfzVHvkmLzPDwb5ndmI",
+      "path": "sites/fJfzVHvkmLzPDwb5ndmI",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Amaraavthi College Of Arts & Science",
+        "siteId": "28937",
+        "siteAddress": "Thitumalainathanpatti, Vellianai North, Karur, Tamil Nadu, India, 639118",
+        "district": "Karur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:44.777Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.983100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:37.088Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.940700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.9407,
+          "longitude": 77.9831
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:37.088Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Amaraavthi College Of Arts & Science",
+        "district": "Karur",
+        "state": "Tamil Nadu",
+        "address": "Thitumalainathanpatti, Vellianai North, Karur, Tamil Nadu, India, 639118"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "fh85qQDQFYgW3nzmKZFB",
+      "path": "sites/fh85qQDQFYgW3nzmKZFB",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sengunthar Engineering College",
+        "siteId": "2569",
+        "siteAddress": "Sathinaickanpalayam, Kumaramangalam PO, Tiruchengode, Namakkal, Tamil Nadu, India, 637205",
+        "district": "Tiruchengode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:28.211Z"
+        },
+        "geolocation": {
+          "latitude": 11.38016,
+          "longitude": 77.89444
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.894440",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:37.905Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.380160",
+        "placeAccuracy": "OpenCage confidence 8/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:37.905Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sengunthar Engineering College",
+        "district": "Tiruchengode",
+        "state": "Tamil Nadu",
+        "address": "Sathinaickanpalayam, Kumaramangalam PO, Tiruchengode, Namakkal, Tamil Nadu, India, 637205"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "fyMvyo8a7ASPYiP7vF8h",
+      "path": "sites/fyMvyo8a7ASPYiP7vF8h",
+      "data": {
+        "siteName": "Erode Sengunthar Engineering College",
+        "siteId": "213",
+        "siteAddress": "Thudupathi, Perundurai, Erode, Tamil Nadu, India, 638057",
+        "district": "Erode",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:20.355Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.587940",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:38.531Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.275640",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.27564,
+          "longitude": 77.58794
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:38.531Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Erode Sengunthar Engineering College",
+        "district": "Erode",
+        "state": "Tamil Nadu",
+        "address": "Thudupathi, Perundurai, Erode, Tamil Nadu, India, 638057"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "g8ovWL5Hreo1qtFhJ3vD",
+      "path": "sites/g8ovWL5Hreo1qtFhJ3vD",
+      "data": {
+        "siteName": "MEENAKSHI COLLEGE OF ENGINEERING",
+        "siteId": "3705",
+        "siteAddress": "N0,12 VEMBULIAMMAN KOIL STREET, WEST KK NAGAR, Chennai, Tamil Nadu, India, 600078",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:30.988Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.169700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:39.219Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.919400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9194,
+          "longitude": 80.1697
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:39.219Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "MEENAKSHI COLLEGE OF ENGINEERING",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "N0,12 VEMBULIAMMAN KOIL STREET, WEST KK NAGAR, Chennai, Tamil Nadu, India, 600078"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "gBdcWbzt2ynShuCragTQ",
+      "path": "sites/gBdcWbzt2ynShuCragTQ",
+      "data": {
+        "siteName": "Ammaiappar Polytechnic College",
+        "siteId": "28923",
+        "siteAddress": "928-Ammaiappar Polytech College, Punelveli-Meenatchiyapuram Road ,Puthur , Rajapalayam taluka, Virudhunagar, Tamil Nadu, India, 626111",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:31.524Z"
+        },
+        "geolocation": {
+          "latitude": 9.45,
+          "longitude": 77.92
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.920000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:40.040Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.450000",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:40.040Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Ammaiappar Polytechnic College",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "928-Ammaiappar Polytech College, Punelveli-Meenatchiyapuram Road ,Puthur , Rajapalayam taluka, Virudhunagar, Tamil Nadu, India, 626111"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "glEaZPvSsVGZ75dOLJ8B",
+      "path": "sites/glEaZPvSsVGZ75dOLJ8B",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "St Joseph's College Of Engineering",
+        "siteId": "40097",
+        "siteAddress": "Old Mahabalipuram Road, Kamaraj Nagar, Semmancheri, Chennai, Tamil Nadu, India, 600119",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:40.552Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.231300",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:41.177Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.890000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.89,
+          "longitude": 80.2313
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:41.177Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "St Joseph's College Of Engineering",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Old Mahabalipuram Road, Kamaraj Nagar, Semmancheri, Chennai, Tamil Nadu, India, 600119"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "hovyGiWIrSSgYNVWRU53",
+      "path": "sites/hovyGiWIrSSgYNVWRU53",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Mookambigai College of Engineering",
+        "siteId": "37305",
+        "siteAddress": "Srinivasa Nagar, Kalamavur PO, Keeranur, Tiruchirappalli, Tamil Nadu, India, 622502",
+        "district": "Thanjavur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:27.278Z"
+        },
+        "geolocation": {
+          "latitude": 11.1154,
+          "longitude": 77.3546
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.354600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:42.235Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.115400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:42.235Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Mookambigai College of Engineering",
+        "district": "Thanjavur",
+        "state": "Tamil Nadu",
+        "address": "Srinivasa Nagar, Kalamavur PO, Keeranur, Tiruchirappalli, Tamil Nadu, India, 622502"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "iJ9JRS1cKXWyFflRNz3j",
+      "path": "sites/iJ9JRS1cKXWyFflRNz3j",
+      "data": {
+        "siteName": "Builders Engineering College",
+        "siteId": "1956",
+        "siteAddress": "Mullipuram Post, Nathakadiyur, Kangeyam Taluk, Tirupur, Tamil Nadu, India, 638108",
+        "district": "Tirupur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:29.729Z"
+        },
+        "geolocation": {
+          "latitude": 11.4449,
+          "longitude": 77.711
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.711000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:42.486Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.444900",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:42.486Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Builders Engineering College",
+        "district": "Tirupur",
+        "state": "Tamil Nadu",
+        "address": "Mullipuram Post, Nathakadiyur, Kangeyam Taluk, Tirupur, Tamil Nadu, India, 638108"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "iNfNCD7vaVu7KOn7JOTn",
+      "path": "sites/iNfNCD7vaVu7KOn7JOTn",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Rathinam College Of Arts And Science",
+        "siteId": "28940",
+        "siteAddress": "Pollachi Main Road,  KPM Nagar, Eachanari, Coimbatore, Tamil Nadu, India, 641021",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:58.199Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.988200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:42.773Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.957900",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.9579,
+          "longitude": 76.9882
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:42.773Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Rathinam College Of Arts And Science",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Pollachi Main Road,  KPM Nagar, Eachanari, Coimbatore, Tamil Nadu, India, 641021"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ifCx9mxYya9kqzZC3iuC",
+      "path": "sites/ifCx9mxYya9kqzZC3iuC",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Chandrasekharendra Saraswathi Viswa Mahavidyalaya University",
+        "siteId": "7926",
+        "siteAddress": "Sri Chandrasekharendra Saraswathi Viswa Mahavidyalaya, Sri Jayendra Saraswathi Street, Enathur, Kanchipuram, Tamil Nadu, India, 631561",
+        "district": "Kanchipuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:09.043Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.700060",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:43.351Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.835150",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.83515,
+          "longitude": 79.70006
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:43.351Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Chandrasekharendra Saraswathi Viswa Mahavidyalaya University",
+        "district": "Kanchipuram",
+        "state": "Tamil Nadu",
+        "address": "Sri Chandrasekharendra Saraswathi Viswa Mahavidyalaya, Sri Jayendra Saraswathi Street, Enathur, Kanchipuram, Tamil Nadu, India, 631561"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "j9LN76GLnEdzxMcZqEGK",
+      "path": "sites/j9LN76GLnEdzxMcZqEGK",
+      "data": {
+        "siteName": "Adhiyamaan College of Agriculture and Research",
+        "siteId": "26848",
+        "siteAddress": "Athimugam, Shoolagiri, Krishnagiri, Tamil Nadu, India, 635105",
+        "district": "Krishnagiri",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:54.996Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.981798",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:44.008Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.752790",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 12.75279,
+          "longitude": 77.981798
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:44.008Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Adhiyamaan College of Agriculture and Research",
+        "district": "Krishnagiri",
+        "state": "Tamil Nadu",
+        "address": "Athimugam, Shoolagiri, Krishnagiri, Tamil Nadu, India, 635105"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "kEhCrGJAFaGBJ7jnQvCj",
+      "path": "sites/kEhCrGJAFaGBJ7jnQvCj",
+      "data": {
+        "siteName": "Kongu Engineering College",
+        "siteId": "30825",
+        "siteAddress": "Thoppupalayam,  Kumaran Nagar, Perundurai, Erode, Tamil Nadu, India, 638060",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:04.271Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.587940",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:45.588Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.275640",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.27564,
+          "longitude": 77.58794
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:45.588Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Kongu Engineering College",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Thoppupalayam,  Kumaran Nagar, Perundurai, Erode, Tamil Nadu, India, 638060"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "kTWpW31WDfwDaOviU8lY",
+      "path": "sites/kTWpW31WDfwDaOviU8lY",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Krishna Engineering College",
+        "siteId": "30671",
+        "siteAddress": "Panapakkam Village, Near Padappai Via Tambaram , Kanchipuram, Tamil Nadu, India, 601301",
+        "district": "Kanchipuram",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:12.404Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.041700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:46.112Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.917100",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.9171,
+          "longitude": 80.0417
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:46.112Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Krishna Engineering College",
+        "district": "Kanchipuram",
+        "state": "Tamil Nadu",
+        "address": "Panapakkam Village, Near Padappai Via Tambaram , Kanchipuram, Tamil Nadu, India, 601301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "l1EAUsLT9WN0gB9HbsAQ",
+      "path": "sites/l1EAUsLT9WN0gB9HbsAQ",
+      "data": {
+        "siteName": "Kovai Kalaimagal Educational Institutions",
+        "siteId": "3698",
+        "siteAddress": "Narasipuram Road, Thondamuthur, Coimbatore, Tamil Nadu, India, 641109",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:48.258Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.807033",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:47.090Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.996329",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.9963293,
+          "longitude": 76.8070328
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:47.090Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Kovai Kalaimagal Educational Institutions",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Narasipuram Road, Thondamuthur, Coimbatore, Tamil Nadu, India, 641109"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "m4UFTHYTt1DVC90yyc5C",
+      "path": "sites/m4UFTHYTt1DVC90yyc5C",
+      "data": {
+        "siteName": "Imayam College Of Engineering",
+        "siteId": "40099",
+        "siteAddress": "Kannanur, Thuraiyur - Tiruchirappalli Main Rd, Tiruchirappalli, Tamil Nadu, India, 621206",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:29.165Z"
+        },
+        "geolocation": {
+          "latitude": 10.9239,
+          "longitude": 78.7435
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.743500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:47.629Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.923900",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:47.629Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Imayam College Of Engineering",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "Kannanur, Thuraiyur - Tiruchirappalli Main Rd, Tiruchirappalli, Tamil Nadu, India, 621206"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "mF85rVhvm1KO7oSrkJaj",
+      "path": "sites/mF85rVhvm1KO7oSrkJaj",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Kidaripatti",
+        "siteId": "7960",
+        "siteAddress": "Latha Mathavan Engineering College, Latha Mathavan Nagar, Kidaripatti, Alagarkovil, Madurai, Tamil Nadu, India, 625301",
+        "district": "Madurai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:57.545Z"
+        },
+        "geolocation": {
+          "latitude": 9.91735,
+          "longitude": 78.11962
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.119620",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:48.216Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.917350",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:48.216Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Kidaripatti",
+        "district": "Madurai",
+        "state": "Tamil Nadu",
+        "address": "Latha Mathavan Engineering College, Latha Mathavan Nagar, Kidaripatti, Alagarkovil, Madurai, Tamil Nadu, India, 625301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "mrORIAXK3tzSwV2bWJVr",
+      "path": "sites/mrORIAXK3tzSwV2bWJVr",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "St Joseph's Institute of Technology",
+        "siteId": "40094",
+        "siteAddress": "Old Mahabalipuram Road, Kamaraj Nagar, Semmancheri, Chennai, Tamil Nadu, India, 600119",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:40.490Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.231300",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:48.912Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.890000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.89,
+          "longitude": 80.2313
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:48.912Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "St Joseph's Institute of Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Old Mahabalipuram Road, Kamaraj Nagar, Semmancheri, Chennai, Tamil Nadu, India, 600119"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "nKL0XtrGqFWqNGRyVEVE",
+      "path": "sites/nKL0XtrGqFWqNGRyVEVE",
+      "data": {
+        "siteName": "Latha Mathavan Engineering College",
+        "siteId": "2216",
+        "siteAddress": "Latha Mathavan Nagar, Near Alagarkovil Perumal Temple, Kidaripatti, Madurai, Tamil Nadu, India, 625301",
+        "district": "Sivakasi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:26.338Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.797970",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:49.519Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.449990",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 9.44999,
+          "longitude": 77.79797
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:49.519Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Latha Mathavan Engineering College",
+        "district": "Sivakasi",
+        "state": "Tamil Nadu",
+        "address": "Latha Mathavan Nagar, Near Alagarkovil Perumal Temple, Kidaripatti, Madurai, Tamil Nadu, India, 625301"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "nLhAtDOfGx103G93u70h",
+      "path": "sites/nLhAtDOfGx103G93u70h",
+      "data": {
+        "siteName": "K.Ramakrishnan College of Technology",
+        "siteId": "8607",
+        "siteAddress": "Kariyamanikam Road, Samayapuram, Trichy, Tiruchirappalli, Tamil Nadu, India, 621112",
+        "district": "Tiruchirappalli",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:28.602Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.696510",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:49.782Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.815500",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 10.8155,
+          "longitude": 78.69651
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:49.782Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "K.Ramakrishnan College of Technology",
+        "district": "Tiruchirappalli",
+        "state": "Tamil Nadu",
+        "address": "Kariyamanikam Road, Samayapuram, Trichy, Tiruchirappalli, Tamil Nadu, India, 621112"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "nRFyFpoG66Acuoj6NHSb",
+      "path": "sites/nRFyFpoG66Acuoj6NHSb",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Kundrathur",
+        "siteId": "8048",
+        "siteAddress": "Chennai Institute of Technology, 2nd Floor, iON Digital Zone, Sarathy Nagar, Kundrathur, Chennai, Tamil Nadu, India, 600069",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:36.340Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.067800",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:50.103Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.978000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.978,
+          "longitude": 80.0678
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:50.103Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Kundrathur",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Chennai Institute of Technology, 2nd Floor, iON Digital Zone, Sarathy Nagar, Kundrathur, Chennai, Tamil Nadu, India, 600069"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "nSTV57tck4bvfRSo0obM",
+      "path": "sites/nSTV57tck4bvfRSo0obM",
+      "data": {
+        "siteName": "Amrita Vishwa Vidyapeetham Chennai Campus",
+        "siteId": "41533",
+        "siteAddress": "337/1A, Vengal Village, Vallal RCK Nagar, SH 50A, Vengal, Tiruvallur District, Chennai, Tamil Nadu, India, 601103",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:42.717Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.943600",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:50.541Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.242600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.2426,
+          "longitude": 79.9436
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:50.541Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Amrita Vishwa Vidyapeetham Chennai Campus",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "337/1A, Vengal Village, Vallal RCK Nagar, SH 50A, Vengal, Tiruvallur District, Chennai, Tamil Nadu, India, 601103"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "nZtnWnm0IEyods3zwzyU",
+      "path": "sites/nZtnWnm0IEyods3zwzyU",
+      "data": {
+        "siteName": "J.N.N Institute of Engineering",
+        "siteId": "2708",
+        "siteAddress": "Ushaa Garden, No 90, Kannigaipair, Chennai - Periyapalayam Highway, Tiruvallur, Tamil Nadu, India, 601102",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:29.559Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.908890",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:50.877Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.143760",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.14376,
+          "longitude": 79.90889
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:50.877Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "J.N.N Institute of Engineering",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Ushaa Garden, No 90, Kannigaipair, Chennai - Periyapalayam Highway, Tiruvallur, Tamil Nadu, India, 601102"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "oIr8LLq2yxLMe1xNb8wG",
+      "path": "sites/oIr8LLq2yxLMe1xNb8wG",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Prince Dr. K. Vasudevan College of Engineering and Technology",
+        "siteId": "40632",
+        "siteAddress": "Mambakkam - Medavakkam Main Road, Ponmar , Chengalpattu District, Chennai, Tamil Nadu, India, 600127",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:41.654Z"
+        },
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:52.261Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:52.261Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Prince Dr. K. Vasudevan College of Engineering and Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Mambakkam - Medavakkam Main Road, Ponmar , Chengalpattu District, Chennai, Tamil Nadu, India, 600127"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "oc5YqnUibRMya3zvpjxN",
+      "path": "sites/oc5YqnUibRMya3zvpjxN",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Sai Ram Engineering College",
+        "siteId": "185",
+        "siteAddress": "Sai Leo Nagar, Sairam Rd, West Tambaram, Chennai, Tamil Nadu, India, 600044",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:28.501Z"
+        },
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:52.805Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:52.805Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Sai Ram Engineering College",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Sai Leo Nagar, Sairam Rd, West Tambaram, Chennai, Tamil Nadu, India, 600044"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "opxv9uMwJlK3HT2dozWm",
+      "path": "sites/opxv9uMwJlK3HT2dozWm",
+      "data": {
+        "siteName": "Lakshmi Ammal polytechnic College",
+        "siteId": "15039",
+        "siteAddress": "Puliyangudi - Sankarankoil - Kalugumalai - Nalatinputhur Road, KR Nagar,Kovilpatti, Thoothukudi Dt, Thoothukudi, Tamil Nadu, India, 628503",
+        "district": "Kovilpatti",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:49.793Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.686200",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:53.033Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.208000",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.208,
+          "longitude": 77.6862
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:53.033Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Lakshmi Ammal polytechnic College",
+        "district": "Kovilpatti",
+        "state": "Tamil Nadu",
+        "address": "Puliyangudi - Sankarankoil - Kalugumalai - Nalatinputhur Road, KR Nagar,Kovilpatti, Thoothukudi Dt, Thoothukudi, Tamil Nadu, India, 628503"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ouXBnxoilF7gC4CeN0Ee",
+      "path": "sites/ouXBnxoilF7gC4CeN0Ee",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Nallamuthu Gounder Mahalingam College",
+        "siteId": "33920",
+        "siteAddress": "90, Pollachi Palghat Road, Pollachi, Coimbatore, Tamil Nadu, India, 642001",
+        "district": "Pollachi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:25.155Z"
+        },
+        "geolocation": {
+          "latitude": 10.6582,
+          "longitude": 77.0085
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.008500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:53.510Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.658200",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:53.510Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Nallamuthu Gounder Mahalingam College",
+        "district": "Pollachi",
+        "state": "Tamil Nadu",
+        "address": "90, Pollachi Palghat Road, Pollachi, Coimbatore, Tamil Nadu, India, 642001"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "owMQlPJxE5t8EXWy5AR7",
+      "path": "sites/owMQlPJxE5t8EXWy5AR7",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Valliammai Engineering College",
+        "siteId": "4724",
+        "siteAddress": "SRM Nagar, NH45, Potheri, Kattankulathur, Kanchipuram Dist., Chennai, Tamil Nadu, India, 603203",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:31.977Z"
+        },
+        "geolocation": {
+          "latitude": 13.08784,
+          "longitude": 80.27847
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.278470",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:53.765Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.087840",
+        "placeAccuracy": "OpenCage confidence 2/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:53.765Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Valliammai Engineering College",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "SRM Nagar, NH45, Potheri, Kattankulathur, Kanchipuram Dist., Chennai, Tamil Nadu, India, 603203"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "psOcVSpTROy8CCeo8VS8",
+      "path": "sites/psOcVSpTROy8CCeo8VS8",
+      "data": {
+        "siteName": "Arasu Engineering College",
+        "siteId": "2090",
+        "siteAddress": "Chennai Main Road, Kumbakonam, Thanjavur, Tamil Nadu, India, 612501",
+        "district": "Thanjavur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:23.272Z"
+        },
+        "geolocation": {
+          "latitude": 12.3253,
+          "longitude": 79.2259
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.225900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:54.142Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.325300",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:54.142Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Arasu Engineering College",
+        "district": "Thanjavur",
+        "state": "Tamil Nadu",
+        "address": "Chennai Main Road, Kumbakonam, Thanjavur, Tamil Nadu, India, 612501"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "rMkaGzkAQe5388KlOryn",
+      "path": "sites/rMkaGzkAQe5388KlOryn",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Meenakshi Ramaswamy Engineering College",
+        "siteId": "23737",
+        "siteAddress": "Trichy main road, MR Kalvi nagar,  Thathanur, Udayarpalayam, ARIYALUR, Tamil Nadu, India, 621804",
+        "district": "Ariyallur",
+        "state": "Tamill Nadu",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:35.217Z"
+        },
+        "lngString": "138.16936",
+        "latString": "9.54362",
+        "geolocation": {
+          "latitude": 9.54362,
+          "longitude": 138.16936
+        },
+        "updatedAt": {
+          "__timestamp": "2025-11-19T09:52:21.292Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Meenakshi Ramaswamy Engineering College",
+        "district": "Ariyallur",
+        "state": "Tamill Nadu",
+        "address": "Trichy main road, MR Kalvi nagar,  Thathanur, Udayarpalayam, ARIYALUR, Tamil Nadu, India, 621804"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "sUOqZT9v2CHIMyA3QGn6",
+      "path": "sites/sUOqZT9v2CHIMyA3QGn6",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Madurai Kamaraj University",
+        "siteId": "33452",
+        "siteAddress": "Palkalai Nagar, Madurai, Tamil Nadu, India, 625021",
+        "district": "Sivakasi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:26.715Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.797970",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:58.836Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "9.449990",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 9.44999,
+          "longitude": 77.79797
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:58.836Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Madurai Kamaraj University",
+        "district": "Sivakasi",
+        "state": "Tamil Nadu",
+        "address": "Palkalai Nagar, Madurai, Tamil Nadu, India, 625021"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "t9kWqdKULECdIptgNzXG",
+      "path": "sites/t9kWqdKULECdIptgNzXG",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Velammal Institute of Technology",
+        "siteId": "33638",
+        "siteAddress": "Vellammal Knowlede Park, Chennai-Kolkatta Highway, Panchetti, Tiruvallur, Tamil Nadu, India, 601204",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:35.415Z"
+        },
+        "geolocation": {
+          "latitude": 13.14376,
+          "longitude": 79.90889
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.908890",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:00.461Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.143760",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:00.461Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Velammal Institute of Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Vellammal Knowlede Park, Chennai-Kolkatta Highway, Panchetti, Tiruvallur, Tamil Nadu, India, 601204"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "tiAwWR80gRia6Tn3BBGT",
+      "path": "sites/tiAwWR80gRia6Tn3BBGT",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Vinayaga College Of Arts And Science",
+        "siteId": "39387",
+        "siteAddress": "Ulundurpet, Kallakurichi, Tamil Nadu, India, 606107",
+        "district": "Kallakurichi",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:27.552Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.318178",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:00.834Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.702029",
+        "placeAccuracy": "OpenCage confidence 8/10",
+        "geolocation": {
+          "latitude": 11.7020294,
+          "longitude": 79.3181777
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:00.834Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Vinayaga College Of Arts And Science",
+        "district": "Kallakurichi",
+        "state": "Tamil Nadu",
+        "address": "Ulundurpet, Kallakurichi, Tamil Nadu, India, 606107"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "tliekIlHcS1a6aVaQ7oJ",
+      "path": "sites/tliekIlHcS1a6aVaQ7oJ",
+      "data": {
+        "siteName": "Jai Shriram Engineering College",
+        "siteId": "4232",
+        "siteAddress": "Dharapuram Road, Avinashipalayam, Tirupur, Tamil Nadu, India, 638660",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:29.968Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.354560",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:01.108Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.115410",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "geolocation": {
+          "latitude": 11.11541,
+          "longitude": 77.35456
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:01.108Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Jai Shriram Engineering College",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Dharapuram Road, Avinashipalayam, Tirupur, Tamil Nadu, India, 638660"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "tva7BCOLN5YMAH96jEot",
+      "path": "sites/tva7BCOLN5YMAH96jEot",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Seshaas International Public School",
+        "siteId": "23746",
+        "siteAddress": "Yercaud Foot Hills, Kondappanaickepatti, Salem, Tamil Nadu, India, 636008",
+        "district": "Salem",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:25.966Z"
+        },
+        "geolocation": {
+          "latitude": 11.4856,
+          "longitude": 78.2949
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.294900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:02.241Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.485600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:02.241Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Seshaas International Public School",
+        "district": "Salem",
+        "state": "Tamil Nadu",
+        "address": "Yercaud Foot Hills, Kondappanaickepatti, Salem, Tamil Nadu, India, 636008"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "u5vts9465Qbb6KZF67bo",
+      "path": "sites/u5vts9465Qbb6KZF67bo",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Venkateswara College of Engineering and Technology",
+        "siteId": "4443",
+        "siteAddress": "Thirupachur, Thiruvallur Taluk and Dist, Tiruvallur, Tamil Nadu, India, 631203",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:33.594Z"
+        },
+        "geolocation": {
+          "latitude": 13.2166,
+          "longitude": 79.0795
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.079500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:02.576Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.216600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:02.576Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Venkateswara College of Engineering and Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "Thirupachur, Thiruvallur Taluk and Dist, Tiruvallur, Tamil Nadu, India, 631203"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "uRnKqDSDvXQlXJ1b8GKs",
+      "path": "sites/uRnKqDSDvXQlXJ1b8GKs",
+      "data": {
+        "siteName": "KSK College Of Engineering & Technology",
+        "siteId": "31357",
+        "siteAddress": "Thanjavur Main Road, Darasuram PO, Kumbakonam, Thanjavur, Tamil Nadu, India, 612702",
+        "district": "Thanjavur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:27.092Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.510100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:03.167Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.345200",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.3452,
+          "longitude": 78.5101
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:03.167Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "KSK College Of Engineering & Technology",
+        "district": "Thanjavur",
+        "state": "Tamil Nadu",
+        "address": "Thanjavur Main Road, Darasuram PO, Kumbakonam, Thanjavur, Tamil Nadu, India, 612702"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "uvnrSNUMEao9xMsAbevZ",
+      "path": "sites/uvnrSNUMEao9xMsAbevZ",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "N.S.N. College of Engineering and Technology",
+        "siteId": "2566",
+        "siteAddress": "N.S.N. College of Engineering and Technology, N.S.N Kalvi nagar, Manalmedu,Karur, Karur, Tamil Nadu, India, 639003",
+        "district": "Karur",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:42.267Z"
+        },
+        "geolocation": {
+          "latitude": 10.95771,
+          "longitude": 78.08095
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.080950",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:04.191Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.957710",
+        "placeAccuracy": "OpenCage confidence 5/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:04.191Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "N.S.N. College of Engineering and Technology",
+        "district": "Karur",
+        "state": "Tamil Nadu",
+        "address": "N.S.N. College of Engineering and Technology, N.S.N Kalvi nagar, Manalmedu,Karur, Karur, Tamil Nadu, India, 639003"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "vWnnglddw9Wd06QHAcqC",
+      "path": "sites/vWnnglddw9Wd06QHAcqC",
+      "data": {
+        "siteName": "KCG College of Technology",
+        "siteId": "244",
+        "siteAddress": "KCG Nagar, Rajiv Gandhi Salai, Karapakkam, Old Mahabalipuram Road, Chennai, Tamil Nadu, India, 600097",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:39.455Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "80.279100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:04.981Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.814400",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.8144,
+          "longitude": 80.2791
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:04.981Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "KCG College of Technology",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "KCG Nagar, Rajiv Gandhi Salai, Karapakkam, Old Mahabalipuram Road, Chennai, Tamil Nadu, India, 600097"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "vZu0IGY8oHR1VYOipcba",
+      "path": "sites/vZu0IGY8oHR1VYOipcba",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Maria College of Engineering and Technology",
+        "siteId": "33637",
+        "siteAddress": "Attoor, Thiruvattaru, kanyakumari District, Nagercoil, Tamil Nadu, India, 629177",
+        "district": "Nagercoil",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:13.589Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.434370",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:05.335Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.177310",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.17731,
+          "longitude": 77.43437
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:05.335Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Maria College of Engineering and Technology",
+        "district": "Nagercoil",
+        "state": "Tamil Nadu",
+        "address": "Attoor, Thiruvattaru, kanyakumari District, Nagercoil, Tamil Nadu, India, 629177"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "wrcsslPB2uZitO7uwOeS",
+      "path": "sites/wrcsslPB2uZitO7uwOeS",
+      "data": {
+        "siteName": "DMI College of Engineering",
+        "siteId": "8026",
+        "siteAddress": "Palanchur, Bangalore Trunk Road, Nazarethpet Post,Thiruvallur, Chennai, Tamil Nadu, India, 600123",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:43.539Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.771400",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:06.507Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.592600",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 13.5926,
+          "longitude": 79.7714
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:06.507Z"
+        },
+        "district": "Kottayam"
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "DMI College of Engineering",
+        "district": "Kottayam",
+        "state": "Tamil Nadu",
+        "address": "Palanchur, Bangalore Trunk Road, Nazarethpet Post,Thiruvallur, Chennai, Tamil Nadu, India, 600123"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "wsUIXnZF0GjzSqehbYSc",
+      "path": "sites/wsUIXnZF0GjzSqehbYSc",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "University College of Engineering Villupuram",
+        "siteId": "27867",
+        "siteAddress": "Kakuppam, Viluppuram, Tamil Nadu, India, 605103",
+        "district": "Cuddalore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:13:06.140Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.908500",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:06.834Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.258800",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 11.2588,
+          "longitude": 78.9085
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:06.834Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "University College of Engineering Villupuram",
+        "district": "Cuddalore",
+        "state": "Tamil Nadu",
+        "address": "Kakuppam, Viluppuram, Tamil Nadu, India, 605103"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "wvgNfIWbGmVrQ9La78oR",
+      "path": "sites/wvgNfIWbGmVrQ9La78oR",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "iON Digital Zone iDZ  Austinpatti",
+        "siteId": "7962",
+        "siteAddress": "PTR College of Engineering & Technology, Dahnapandiyan Nagar, Austinpatti, Madurai, Tamil Nadu, India, 625008",
+        "district": "Madurai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:00.165Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "78.229000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:07.061Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "10.927700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 10.9277,
+          "longitude": 78.229
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:07.061Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "iON Digital Zone iDZ  Austinpatti",
+        "district": "Madurai",
+        "state": "Tamil Nadu",
+        "address": "PTR College of Engineering & Technology, Dahnapandiyan Nagar, Austinpatti, Madurai, Tamil Nadu, India, 625008"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "xPfrlqeL7WSruUXKSGuj",
+      "path": "sites/xPfrlqeL7WSruUXKSGuj",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "St.Xaviers Catholic College of Engineering",
+        "siteId": "840",
+        "siteAddress": "Chunkankadai, Nagercoil, Kanyakumari Dist, Nagercoil, Tamil Nadu, India, 629003",
+        "district": "Nagercoil",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:10.876Z"
+        },
+        "geolocation": {
+          "latitude": 8.5387,
+          "longitude": 77.0839
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.083900",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:07.849Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "8.538700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:07.849Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "St.Xaviers Catholic College of Engineering",
+        "district": "Nagercoil",
+        "state": "Tamil Nadu",
+        "address": "Chunkankadai, Nagercoil, Kanyakumari Dist, Nagercoil, Tamil Nadu, India, 629003"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "xrwckg3UqcfVmFHZkiJn",
+      "path": "sites/xrwckg3UqcfVmFHZkiJn",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Eshwar College of Engineering",
+        "siteId": "2753",
+        "siteAddress": "Kondampatti, Vadasithur Road, Kinathukadavu, Coimbatore, Tamil Nadu, India, 641202",
+        "district": "Coimbatore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:11:45.424Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.966120",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:08.152Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "11.005550",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 11.00555,
+          "longitude": 76.96612
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:08.152Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Eshwar College of Engineering",
+        "district": "Coimbatore",
+        "state": "Tamil Nadu",
+        "address": "Kondampatti, Vadasithur Road, Kinathukadavu, Coimbatore, Tamil Nadu, India, 641202"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "yq2bxdQ3KbVeYdz2552n",
+      "path": "sites/yq2bxdQ3KbVeYdz2552n",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Sri Venkateswara Polytechnic College Vellore",
+        "siteId": "26457",
+        "siteAddress": "Arani Main Road,Next To Govt. Medical College, Adukkamparai, Sapthalipuram, Vellore, Tamil Nadu, India, 632011",
+        "district": "Vellore",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:30.603Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.673100",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:10.009Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.786200",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 12.7862,
+          "longitude": 79.6731
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:10.009Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "Sri Venkateswara Polytechnic College Vellore",
+        "district": "Vellore",
+        "state": "Tamil Nadu",
+        "address": "Arani Main Road,Next To Govt. Medical College, Adukkamparai, Sapthalipuram, Vellore, Tamil Nadu, India, 632011"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "ywRhxLxdJhR9O4LoMby6",
+      "path": "sites/ywRhxLxdJhR9O4LoMby6",
+      "data": {
+        "siteName": "Arunai Engineering College Tiruvannamalai",
+        "siteId": "2585",
+        "siteAddress": "Velu Nagar, Mathur, Tiruvannamalai, Tamil Nadu, India, 606603",
+        "district": "Tiruvannamalai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:30.378Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.090000",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:10.356Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.510000",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 12.51,
+          "longitude": 79.09
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:10.356Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Arunai Engineering College Tiruvannamalai",
+        "district": "Tiruvannamalai",
+        "state": "Tamil Nadu",
+        "address": "Velu Nagar, Mathur, Tiruvannamalai, Tamil Nadu, India, 606603"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "zNP9sjExlUoPv4JUfQlW",
+      "path": "sites/zNP9sjExlUoPv4JUfQlW",
+      "data": {
+        "siteName": "Aadhiparasakthi",
+        "siteId": "YTC_3",
+        "siteAddress": "NA",
+        "district": "Chengalpattu",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:12:35.160Z"
+        },
+        "clientId": "KAmAMS3q0fD1MRlEk0HA",
+        "clientName": "TCS",
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.869115",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:10.920Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "12.425426",
+        "placeAccuracy": "OpenCage confidence 8/10",
+        "geolocation": {
+          "latitude": 12.4254263,
+          "longitude": 79.8691151
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:10.920Z"
+        }
+      },
+      "summary": {
+        "clientName": "TCS",
+        "name": "Aadhiparasakthi",
+        "district": "Chengalpattu",
+        "state": "Tamil Nadu",
+        "address": "NA"
+      }
+    },
+    {
+      "collection": "sites",
+      "id": "zrhbykRvWDqfQtzLS6wo",
+      "path": "sites/zrhbykRvWDqfQtzLS6wo",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "R.M.D Engineering college",
+        "siteId": "39986",
+        "siteAddress": "RMD College Rd  Kavaraipettai, Gummidipoondi Taluk, Tiruvallur District, Tiruvallur, Tamil Nadu, India, 601206",
+        "district": "Chennai",
+        "createdAt": {
+          "__timestamp": "2025-10-23T07:14:47.384Z"
+        },
+        "geolocation": {
+          "latitude": 13.14376,
+          "longitude": 79.90889
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "79.908890",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:43:11.203Z"
+        },
+        "state": "Tamil Nadu",
+        "latString": "13.143760",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:43:11.203Z"
+        }
+      },
+      "summary": {
+        "clientName": "Unassigned",
+        "name": "R.M.D Engineering college",
+        "district": "Chennai",
+        "state": "Tamil Nadu",
+        "address": "RMD College Rd  Kavaraipettai, Gummidipoondi Taluk, Tiruvallur District, Tiruvallur, Tamil Nadu, India, 601206"
+      }
+    }
+  ],
+  "deletedAt": "2026-05-25T04:26:21.614Z",
+  "deletedCount": 137
+}

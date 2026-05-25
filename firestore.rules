@@ -182,7 +182,9 @@ service cloud.firestore {
       // Guards can only read their own logs; client users scoped to their clientName
       allow read: if isAdmin() || isFieldOfficer() ||
         (isClientUser() && clientUserClientName() != null &&
-          resource.data.clientName == clientUserClientName()) ||
+          (resource.data.clientName == clientUserClientName() ||
+            resource.data.siteClientName == clientUserClientName() ||
+            resource.data.employeeClientName == clientUserClientName())) ||
         (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
 
       // Only admins can modify or delete logs (audit integrity)

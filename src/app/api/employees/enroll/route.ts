@@ -9,6 +9,11 @@ import { generateQrCodeDataUrl } from "@/lib/qr";
 import { REGION_CODE } from "@/lib/runtime-config";
 import { isLngClientName, LNG_CLIENT_NAME } from "@/lib/constants";
 import {
+  buildEmployeeIdRegistryRecord,
+  employeeIdExists,
+  employeeIdRegistryRef,
+} from "@/lib/server/employee-id-registry";
+import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
 } from "@/types/enrollment";
@@ -37,13 +42,7 @@ async function generateUniqueEmployeeId(
 ) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const employeeId = generateEmployeeId(clientName);
-    const existing = await adminDb
-      .collection("employees")
-      .where("employeeId", "==", employeeId)
-      .limit(1)
-      .get();
-
-    if (existing.empty) {
+    if (!(await employeeIdExists(adminDb, employeeId))) {
       return employeeId;
     }
   }
@@ -145,13 +144,7 @@ export async function POST(request: NextRequest) {
       : undefined;
 
     if (employeeId) {
-      const existingEmployeeId = await adminDb
-        .collection("employees")
-        .where("employeeId", "==", employeeId)
-        .limit(1)
-        .get();
-
-      if (!existingEmployeeId.empty) {
+      if (await employeeIdExists(adminDb, employeeId)) {
         return NextResponse.json(
           { error: "An employee with this LNG unique ID already exists." },
           { status: 409 },
@@ -275,7 +268,21 @@ export async function POST(request: NextRequest) {
       ...(payload.termsAccepted === true && { termsAcceptedAt: now }),
     };
 
-    const docRef = await adminDb.collection("employees").add(employeeData);
+    const docRef = adminDb.collection("employees").doc();
+    const batch = adminDb.batch();
+    batch.create(
+      employeeIdRegistryRef(adminDb, employeeId),
+      buildEmployeeIdRegistryRecord({
+        employeeDocId: docRef.id,
+        employeeId,
+        clientName: canonicalClientName,
+        status: "Active",
+        source: "employee_enrollment",
+        timestamp: now,
+      }),
+    );
+    batch.set(docRef, employeeData);
+    await batch.commit();
 
     return NextResponse.json({
       id: docRef.id,

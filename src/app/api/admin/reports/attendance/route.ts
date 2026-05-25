@@ -10,7 +10,7 @@ import { matchesClientScope, resolveClientScope } from "@/lib/server/client-acce
 
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
-    return "employeeName,employeeId,status,clientName,district,siteName,dutyPointName,attendanceDate,locationText,complianceStatus,complianceWarnings,requiresLocationReview,isMockLocationSuspected,gpsAccuracyMeters,reportedAt,createdAt\n";
+    return "employeeName,employeeId,status,clientName,employeeClientName,siteClientName,crossClientRelief,district,siteName,dutyPointName,attendanceDate,locationText,complianceStatus,complianceWarnings,requiresLocationReview,isMockLocationSuspected,gpsAccuracyMeters,reportedAt,createdAt\n";
   }
 
   const headers = Object.keys(rows[0]);
@@ -58,19 +58,32 @@ export async function GET(request: NextRequest) {
     if (district && district !== "all") {
       queryRef = queryRef.where("district", "==", district);
     }
-    if (clientName && clientName !== "all") {
+    if (!isClient && clientName && clientName !== "all") {
       queryRef = queryRef.where("clientName", "==", clientName);
     }
 
+    let clientScope = null;
+    let snapshots: Array<{ size: number; docs: Array<{ id: string; data(): Record<string, any> }> }> = [];
     if (isClient) {
-      const clientScope = await resolveClientScope(adminDb, decodedToken);
+      clientScope = await resolveClientScope(adminDb, decodedToken);
       if (!clientScope) {
         return NextResponse.json({ error: "Client account is not linked to a valid client profile." }, { status: 403 });
       }
       if (clientName && clientName !== "all" && clientName !== clientScope.clientName) {
         return NextResponse.json({ error: "Access denied for that client." }, { status: 403 });
       }
-      queryRef = queryRef.where("clientName", "==", clientScope.clientName);
+      snapshots = await Promise.all([
+        queryRef
+          .where("clientName", "==", clientScope.clientName)
+          .orderBy("createdAt", "desc")
+          .limit(1000)
+          .get() as any,
+        queryRef
+          .where("employeeClientName", "==", clientScope.clientName)
+          .orderBy("createdAt", "desc")
+          .limit(1000)
+          .get() as any,
+      ]);
     } else if (!isAdmin) {
       // Field officers can only export their assigned districts
       const foDistricts: string[] = Array.isArray(decodedToken.assignedDistricts)
@@ -93,10 +106,17 @@ export async function GET(request: NextRequest) {
     }
 
     const LIMIT = 1000;
-    const snapshot = await queryRef.orderBy("createdAt", "desc").limit(LIMIT).get();
-    const truncated = snapshot.size === LIMIT;
-    const clientScope = isClient ? await resolveClientScope(adminDb, decodedToken) : null;
-    const rows = snapshot.docs
+    if (!isClient) {
+      snapshots = [await queryRef.orderBy("createdAt", "desc").limit(LIMIT).get() as any];
+    }
+    const docsById = new Map<string, { id: string; data(): Record<string, any> }>();
+    for (const snapshot of snapshots) {
+      for (const doc of snapshot.docs) {
+        docsById.set(doc.id, doc);
+      }
+    }
+    const truncated = snapshots.some((snapshot) => snapshot.size === LIMIT);
+    const rows = Array.from(docsById.values())
       .map((doc) => {
         const data = doc.data() as Record<string, any>;
         return {
@@ -104,6 +124,9 @@ export async function GET(request: NextRequest) {
           employeeId: data.employeeId || "",
           status: data.status || "",
           clientName: data.clientName || "",
+          employeeClientName: data.employeeClientName || "",
+          siteClientName: data.siteClientName || data.clientName || "",
+          crossClientRelief: data.crossClientRelief === true ? "yes" : "no",
           district: data.district || "",
           siteName: data.siteName || "",
           dutyPointName: data.dutyPointName || "",

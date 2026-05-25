@@ -7,18 +7,136 @@ import { Button } from "@/components/ui/button";
 import { Camera, User, ImageIcon, X, Loader2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  dateStyle: "medium",
+  timeStyle: "medium",
+});
+
 interface PhotoCaptureProps {
   urls: string[];
   onChange: (urls: string[]) => void;
-  /** Storage sub-folder: "visitReports" | "trainingReports" */
+  /** Storage sub-folder: "visitReports" | "trainingReports" | "trainingReportFiles" */
   folder: string;
   maxPhotos?: number;
   disabled?: boolean;
   /** Accepted formats: images and PDFs */
   accept?: string;
+  timestampImages?: boolean;
+  stampTitle?: string;
+  stampLines?: string[];
+  allowCamera?: boolean;
+  allowSelfie?: boolean;
+  uploadLabel?: string;
+  fileTypeLabel?: string;
 }
 
-export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled, accept = "image/*,.pdf" }: PhotoCaptureProps) {
+async function loadImage(file: File) {
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.src = objectUrl;
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Photo could not be prepared."));
+    });
+    return { image, objectUrl };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+async function createTimestampedPhoto(file: File, title: string, lines: string[]) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Only photos can be timestamped. Please choose an image file.");
+  }
+
+  const capturedAt = new Date();
+  const { image, objectUrl } = await loadImage(file);
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Photo canvas is unavailable.");
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const overlayX = 24;
+    const overlayWidth = canvas.width - 48;
+    const overlayHeight = Math.max(170, Math.round(canvas.height * 0.22));
+    const overlayY = canvas.height - overlayHeight - 24;
+    const radius = 24;
+
+    context.fillStyle = "rgba(8, 14, 30, 0.72)";
+    context.beginPath();
+    context.moveTo(overlayX + radius, overlayY);
+    context.lineTo(overlayX + overlayWidth - radius, overlayY);
+    context.quadraticCurveTo(overlayX + overlayWidth, overlayY, overlayX + overlayWidth, overlayY + radius);
+    context.lineTo(overlayX + overlayWidth, overlayY + overlayHeight - radius);
+    context.quadraticCurveTo(overlayX + overlayWidth, overlayY + overlayHeight, overlayX + overlayWidth - radius, overlayY + overlayHeight);
+    context.lineTo(overlayX + radius, overlayY + overlayHeight);
+    context.quadraticCurveTo(overlayX, overlayY + overlayHeight, overlayX, overlayY + overlayHeight - radius);
+    context.lineTo(overlayX, overlayY + radius);
+    context.quadraticCurveTo(overlayX, overlayY, overlayX + radius, overlayY);
+    context.closePath();
+    context.fill();
+
+    const safeLines = [
+      title,
+      ...lines.filter((line) => line.trim()),
+      `Captured at ${INDIA_DATE_TIME_FORMATTER.format(capturedAt)}`,
+      "Captured by CISS Field Officer",
+    ].slice(0, 6);
+
+    let cursorY = overlayY + 48;
+    safeLines.forEach((line, index) => {
+      context.fillStyle = index === 0 ? "#FFFFFF" : "rgba(255,255,255,0.92)";
+      context.font = `${index === 0 ? 700 : 500} ${index === 0 ? Math.max(24, Math.round(canvas.width * 0.03)) : Math.max(17, Math.round(canvas.width * 0.02))}px Arial`;
+      context.fillText(line, overlayX + 28, cursorY, overlayWidth - 56);
+      cursorY += index === 0 ? 38 : 29;
+    });
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((nextBlob) => {
+        if (nextBlob) {
+          resolve(nextBlob);
+        } else {
+          reject(new Error("Photo timestamp could not be applied."));
+        }
+      }, "image/jpeg", 0.92);
+    });
+
+    const baseName = file.name.includes(".") ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name;
+    return new File([blob], `${baseName}_timestamped.jpg`, {
+      type: "image/jpeg",
+      lastModified: capturedAt.getTime(),
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+export function PhotoCapture({
+  urls,
+  onChange,
+  folder,
+  maxPhotos = 10,
+  disabled,
+  accept = "image/*,.pdf",
+  timestampImages = false,
+  stampTitle = "Field officer photo",
+  stampLines = [],
+  allowCamera = true,
+  allowSelfie = true,
+  uploadLabel = "Upload",
+  fileTypeLabel = "JPG, PNG, PDF allowed.",
+}: PhotoCaptureProps) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
 
@@ -47,11 +165,14 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled,
     const added: string[] = [];
     try {
       for (const file of Array.from(files).slice(0, slotsLeft)) {
-        // Embed timestamp in filename: {timestamp}_{originalname}
         const timestamp = Date.now();
-        const ext = file.name.split('.').pop() || 'jpg';
-        const path = `foReports/${folder}/${user.uid}/${timestamp}_${file.name.replace(/\s+/g, "_")}`;
-        const snap = await uploadBytes(ref(storage, path), file);
+        const uploadFile = timestampImages
+          ? await createTimestampedPhoto(file, stampTitle, stampLines)
+          : file;
+        const path = `foReports/${folder}/${user.uid}/${timestamp}_${uploadFile.name.replace(/\s+/g, "_")}`;
+        const snap = await uploadBytes(ref(storage, path), uploadFile, {
+          contentType: uploadFile.type || undefined,
+        });
         added.push(await getDownloadURL(snap.ref));
       }
       onChange([...urls, ...added]);
@@ -77,14 +198,18 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled,
 
 {canAdd && (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => cameraRef.current?.click()}>
-            <Camera className="h-4 w-4 mr-1.5" /> Camera
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => selfieRef.current?.click()}>
-            <User className="h-4 w-4 mr-1.5" /> Selfie
-          </Button>
+          {allowCamera && (
+            <Button type="button" variant="outline" size="sm" onClick={() => cameraRef.current?.click()}>
+              <Camera className="h-4 w-4 mr-1.5" /> Camera
+            </Button>
+          )}
+          {allowSelfie && (
+            <Button type="button" variant="outline" size="sm" onClick={() => selfieRef.current?.click()}>
+              <User className="h-4 w-4 mr-1.5" /> Selfie
+            </Button>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={() => galleryRef.current?.click()}>
-            <ImageIcon className="h-4 w-4 mr-1.5" /> Upload
+            <ImageIcon className="h-4 w-4 mr-1.5" /> {uploadLabel}
           </Button>
         </div>
       )}
@@ -128,7 +253,7 @@ export function PhotoCapture({ urls, onChange, folder, maxPhotos = 10, disabled,
       )}
 
       <p className="text-xs text-muted-foreground">
-        {urls.length}/{maxPhotos} files. JPG, PNG, PDF allowed. Timestamp embedded automatically.
+        {urls.length}/{maxPhotos} files. {fileTypeLabel} {timestampImages ? "Photos are timestamped automatically." : ""}
       </p>
     </div>
   );

@@ -16,7 +16,7 @@ import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon, FileText } from "luc
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
-import { getSiteUploadHint, hasSiteUploads } from "@/components/field-officers/site-report-upload";
+import { hasSiteUploads } from "@/components/field-officers/site-report-upload";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -46,12 +46,22 @@ function isPdfUrl(url: string) {
   return decodeURIComponent(url).toLowerCase().includes(".pdf");
 }
 
+async function reportErrorMessage(response: Response, fallback: string) {
+  try {
+    const data = await response.json();
+    return typeof data?.error === "string" && data.error.trim() ? data.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function TrainingReportsPanel() {
   const { userRole, assignedDistricts } = useAppAuth();
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
   const isFo = userRole === "fieldOfficer";
   const { clients, isLoading: isLoadingClients } = useClients();
+  const reportEndpoint = isFo ? "/api/field-officer/training-reports" : "/api/admin/training-reports";
 
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [reports, setReports] = useState<FoTrainingReport[]>([]);
@@ -64,6 +74,7 @@ export function TrainingReportsPanel() {
     durationMinutes: "60", topic: "", description: "", attendeeCount: "",
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
   const visibleSites = sites.filter((site) => {
     if (!isFo || assignedDistricts.length === 0) return true;
@@ -79,15 +90,22 @@ export function TrainingReportsPanel() {
     try {
       const params = new URLSearchParams();
       if (tab !== "all") params.set("status", tab);
-      const res = await authorizedFetch(`/api/admin/training-reports?${params.toString()}`);
+      const res = await authorizedFetch(`${reportEndpoint}?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(await reportErrorMessage(res, "Failed to load training reports"));
+      }
       const data = await res.json();
       setReports(data.reports ?? []);
-    } catch {
-      toast({ title: "Error", description: "Failed to load training reports", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load training reports",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, reportEndpoint]);
 
   useEffect(() => { loadReports(activeTab); }, [activeTab, loadReports]);
 
@@ -102,7 +120,7 @@ export function TrainingReportsPanel() {
     }
     setIsSubmitting(true);
     try {
-      const res = await authorizedFetch("/api/admin/training-reports", {
+      const res = await authorizedFetch(reportEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -119,16 +137,22 @@ export function TrainingReportsPanel() {
           attendeeIds: [],
           status: "submitted",
           photoUrls,
+          attachmentUrls,
         }),
       });
-      if (!res.ok) throw new Error("Submit failed");
+      if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
       toast({ title: "Report created", description: "Training report submitted." });
       setNewSheetOpen(false);
       setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "" });
       setPhotoUrls([]);
+      setAttachmentUrls([]);
       loadReports(activeTab);
-    } catch {
-      toast({ title: "Error", description: "Failed to save report", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save report",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -286,7 +310,7 @@ export function TrainingReportsPanel() {
               {detailReport.photoUrls?.length > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Site Uploads ({detailReport.photoUrls.length})
+                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Training Photos ({detailReport.photoUrls.length})
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {detailReport.photoUrls.map((url, i) => (
@@ -301,6 +325,22 @@ export function TrainingReportsPanel() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
                         )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {detailReport.attachmentUrls?.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                    <FileText className="inline h-3.5 w-3.5 mr-1" />Training Report Uploads ({detailReport.attachmentUrls.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {detailReport.attachmentUrls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:opacity-80 transition-opacity">
+                        <FileText className="h-6 w-6" />
+                        File {i + 1}
                       </a>
                     ))}
                   </div>
@@ -453,14 +493,46 @@ export function TrainingReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Site Uploads *</Label>
+              <Label>Training Photos *</Label>
               <p className="text-xs text-muted-foreground">
-                {getSiteUploadHint("training")}
+                Add timestamped training photos. Multiple photos are supported.
               </p>
               <PhotoCapture
                 urls={photoUrls}
                 onChange={setPhotoUrls}
                 folder="trainingReports"
+                accept="image/*"
+                timestampImages
+                allowSelfie={false}
+                uploadLabel="Upload photo"
+                stampTitle="Training photo"
+                stampLines={[
+                  [form.clientName, form.siteName].filter(Boolean).join(" - "),
+                  form.district,
+                  form.topic,
+                  form.trainingDate ? `Training date ${form.trainingDate}` : "",
+                ]}
+                maxPhotos={30}
+                fileTypeLabel="JPG and PNG photos allowed."
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Training Report Upload</Label>
+              <p className="text-xs text-muted-foreground">
+                Upload the report file separately. These files are not timestamped.
+              </p>
+              <PhotoCapture
+                urls={attachmentUrls}
+                onChange={setAttachmentUrls}
+                folder="trainingReportFiles"
+                accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,image/*"
+                allowCamera={false}
+                allowSelfie={false}
+                uploadLabel="Upload report"
+                maxPhotos={5}
+                fileTypeLabel="PDF, Word, JPG, and PNG files allowed."
                 disabled={isSubmitting}
               />
             </div>

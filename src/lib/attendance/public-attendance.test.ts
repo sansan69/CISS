@@ -56,6 +56,39 @@ describe("buildPublicAttendanceSiteOption", () => {
       sourceCollection: "sites",
     });
   });
+
+  it("defaults strict geofence the same way as the attendance submit API", () => {
+    expect(
+      buildPublicAttendanceSiteOption(
+        "site-1",
+        {
+          siteName: "Geodis Kochi",
+          clientName: "Geodis India Ltd., Kochi",
+          district: "Ernakulam",
+          latString: "9.98",
+          lngString: "76.28",
+        },
+        "sites",
+      ).strictGeofence,
+    ).toBe(true);
+  });
+
+  it("preserves explicit soft geofence settings", () => {
+    expect(
+      buildPublicAttendanceSiteOption(
+        "site-1",
+        {
+          siteName: "Geodis Kochi",
+          clientName: "Geodis India Ltd., Kochi",
+          district: "Ernakulam",
+          latString: "9.98",
+          lngString: "76.28",
+          strictGeofence: false,
+        },
+        "sites",
+      ).strictGeofence,
+    ).toBe(false);
+  });
 });
 
 describe("buildPublicAttendanceEmployee", () => {

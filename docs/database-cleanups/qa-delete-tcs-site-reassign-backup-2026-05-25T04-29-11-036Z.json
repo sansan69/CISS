@@ -1,0 +1,243 @@
+{
+  "generatedAt": "2026-05-25T04:29:11.036Z",
+  "projectId": "ciss-workforce",
+  "writesPerformed": true,
+  "tcsClient": {
+    "id": "KAmAMS3q0fD1MRlEk0HA",
+    "name": "TCS",
+    "createdAt": {
+      "__timestamp": "2025-05-23T07:25:02.893Z"
+    }
+  },
+  "sites": [
+    {
+      "path": "sites/qa-site-mobile-1",
+      "id": "qa-site-mobile-1",
+      "data": {
+        "clientId": "qa-client",
+        "coordinateSource": "manual",
+        "coordinateStatus": "verified",
+        "clientName": "QA Client",
+        "shiftTemplates": [
+          {
+            "code": "day",
+            "label": "Day Shift",
+            "startTime": "08:00",
+            "endTime": "20:00",
+            "hours": 12,
+            "crossesMidnight": false
+          },
+          {
+            "code": "night",
+            "label": "Night Shift",
+            "startTime": "20:00",
+            "endTime": "08:00",
+            "hours": 12,
+            "crossesMidnight": true
+          }
+        ],
+        "siteName": "QA Mobile Site",
+        "createdAt": {
+          "__timestamp": "2026-04-30T03:59:23.130Z"
+        },
+        "district": "QA District",
+        "shiftMode": "fixed",
+        "dutyPoints": [
+          {
+            "id": "main-gate",
+            "name": "Main Gate",
+            "active": true,
+            "coverageMode": "roundClock",
+            "dutyHours": "12",
+            "shiftMode": "fixed",
+            "shiftTemplates": [
+              {
+                "code": "day",
+                "label": "Day Shift",
+                "startTime": "08:00",
+                "endTime": "20:00",
+                "hours": 12,
+                "crossesMidnight": false
+              },
+              {
+                "code": "night",
+                "label": "Night Shift",
+                "startTime": "20:00",
+                "endTime": "08:00",
+                "hours": 12,
+                "crossesMidnight": true
+              }
+            ]
+          },
+          {
+            "id": "rear-gate",
+            "name": "Rear Gate",
+            "active": true,
+            "coverageMode": "roundClock",
+            "dutyHours": "12",
+            "shiftMode": "fixed",
+            "shiftTemplates": [
+              {
+                "code": "day",
+                "label": "Day Shift",
+                "startTime": "08:00",
+                "endTime": "20:00",
+                "hours": 12,
+                "crossesMidnight": false
+              },
+              {
+                "code": "night",
+                "label": "Night Shift",
+                "startTime": "20:00",
+                "endTime": "08:00",
+                "hours": 12,
+                "crossesMidnight": true
+              }
+            ]
+          }
+        ],
+        "strictGeofence": false,
+        "geofenceRadiusMeters": 500,
+        "shiftPattern": "2x12",
+        "siteType": "site",
+        "updatedAt": {
+          "__timestamp": "2026-04-30T03:59:23.130Z"
+        },
+        "geolocation": {
+          "latitude": 10.015,
+          "longitude": 76.315
+        }
+      }
+    },
+    {
+      "path": "sites/g8sjgftLq4f8q8oQChBN",
+      "id": "g8sjgftLq4f8q8oQChBN",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Orphanage Polytechnic College",
+        "siteId": "23754",
+        "siteAddress": "Company Parambu Rd 2, Edavanna, Malappuram, Kerala, India, 676541",
+        "district": "Malappuram",
+        "state": "Kerala",
+        "createdAt": {
+          "__timestamp": "2025-12-29T12:01:03.227Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.136281",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:39.787Z"
+        },
+        "latString": "11.215165",
+        "placeAccuracy": "OpenCage confidence 9/10",
+        "geolocation": {
+          "latitude": 11.2151653,
+          "longitude": 76.1362812
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:39.787Z"
+        }
+      }
+    },
+    {
+      "path": "sites/5koqyPmiHubP20Avx9nD",
+      "id": "5koqyPmiHubP20Avx9nD",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "SAFI Institute of Advanced Study",
+        "siteId": "33931",
+        "siteAddress": "Rasia Nagar, Vazhayoor East PO, Vazhayur Ramanattukara Via, Malappuram, Kerala, India, 673633",
+        "district": "Malappuram",
+        "state": "Kerala",
+        "createdAt": {
+          "__timestamp": "2025-12-29T12:01:06.740Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "76.082370",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:41:40.667Z"
+        },
+        "latString": "11.040190",
+        "placeAccuracy": "OpenCage confidence 3/10",
+        "geolocation": {
+          "latitude": 11.04019,
+          "longitude": 76.08237
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:41:40.667Z"
+        }
+      }
+    },
+    {
+      "path": "sites/GTy8yfkp92pJJb8PQqY6",
+      "id": "GTy8yfkp92pJJb8PQqY6",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "St Thomas College of Engineering and Technology",
+        "siteId": "9542",
+        "siteAddress": "Sivapuram P.O. Mattannur, Kannur, Kerala, India, 670702",
+        "district": "Kannur",
+        "state": "Kerala",
+        "createdAt": {
+          "__timestamp": "2026-01-12T14:17:52.988Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "75.333330",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:00.168Z"
+        },
+        "latString": "12.166670",
+        "placeAccuracy": "OpenCage confidence 1/10",
+        "geolocation": {
+          "latitude": 12.16667,
+          "longitude": 75.33333
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:00.168Z"
+        }
+      }
+    },
+    {
+      "path": "sites/ZFgEzfy4XriGQtVKGLBb",
+      "id": "ZFgEzfy4XriGQtVKGLBb",
+      "data": {
+        "clientName": "Unassigned",
+        "siteName": "Trinity College of Engineering",
+        "siteId": "3563",
+        "siteAddress": "Trinity Hills, Naruvamoodu P.O, Thiruvananthapuram, Kerala, India, 695528",
+        "district": "Thiruvananthapuram",
+        "state": "Kerala",
+        "createdAt": {
+          "__timestamp": "2025-12-29T12:01:12.707Z"
+        },
+        "coordinateSource": "geocode",
+        "coordinateStatus": "geocoded",
+        "lngString": "77.028700",
+        "geocodedAt": {
+          "__timestamp": "2026-04-11T16:42:27.562Z"
+        },
+        "latString": "8.348700",
+        "placeAccuracy": "OpenCage confidence 7/10",
+        "geolocation": {
+          "latitude": 8.3487,
+          "longitude": 77.0287
+        },
+        "updatedAt": {
+          "__timestamp": "2026-04-11T16:42:27.562Z"
+        }
+      }
+    }
+  ],
+  "completedAt": "2026-05-25T04:29:11.197Z",
+  "deleted": [
+    "sites/qa-site-mobile-1"
+  ],
+  "updated": [
+    "sites/g8sjgftLq4f8q8oQChBN",
+    "sites/5koqyPmiHubP20Avx9nD",
+    "sites/GTy8yfkp92pJJb8PQqY6",
+    "sites/ZFgEzfy4XriGQtVKGLBb"
+  ]
+}

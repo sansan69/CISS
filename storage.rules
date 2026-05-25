@@ -33,6 +33,8 @@ service firebase.storage {
     function isTrainingContent() {
       return isImage()
         || request.resource.contentType == 'application/pdf'
+        || request.resource.contentType == 'application/msword'
+        || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
     }
 
@@ -55,7 +57,10 @@ service firebase.storage {
     // F-01: Field officer report photo uploads
     match /foReports/{folder}/{uid}/{fileName} {
       allow read: if isSignedIn();
-      allow create: if isFieldOfficer() && request.auth.uid == uid && isAllowedSize() && isDocument();
+      allow create: if isFieldOfficer() && request.auth.uid == uid && (
+        (folder == 'trainingReportFiles' && isAllowedTrainingSize() && isTrainingContent()) ||
+        (folder != 'trainingReportFiles' && isAllowedSize() && isDocument())
+      );
       allow update, delete: if isAdmin();
     }
 

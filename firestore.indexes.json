@@ -228,6 +228,14 @@
       "collectionGroup": "attendanceLogs",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "employeeClientName", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "district", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -433,6 +441,15 @@
       "collectionGroup": "attendanceLogs",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "employeeClientName", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "clientName", "order": "ASCENDING" },
         { "fieldPath": "district", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
@@ -442,7 +459,26 @@
       "collectionGroup": "attendanceLogs",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "employeeClientName", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "clientName", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeClientName", "order": "ASCENDING" },
         { "fieldPath": "district", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }

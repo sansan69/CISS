@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const employeeId = request.nextUrl.searchParams.get("employeeId")?.trim() || "";
+    const phoneNumber =
+      request.nextUrl.searchParams.get("phoneNumber")?.replace(/\D/g, "").slice(-10) || "";
 
     if (!employeeId) {
       return NextResponse.json(
@@ -15,17 +17,56 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const snapshot = await db
+    let snapshot = await db
       .collection("employees")
       .where("employeeId", "==", employeeId)
-      .limit(1)
+      .limit(phoneNumber ? 5 : 1)
       .get();
+
+    let matchingDocs = phoneNumber
+      ? snapshot.docs.filter((candidate) => {
+          const data = candidate.data() as Record<string, unknown>;
+          const phone = String(data.phoneNumber ?? data.phone ?? data.mobile ?? "")
+            .replace(/\D/g, "")
+            .slice(-10);
+          return phone === phoneNumber;
+        })
+      : snapshot.docs;
+
+    if (snapshot.empty || (phoneNumber && matchingDocs.length === 0)) {
+      snapshot = await db
+        .collection("employees")
+        .where("previousEmployeeIds", "array-contains", employeeId)
+        .limit(phoneNumber ? 5 : 2)
+        .get();
+      matchingDocs = phoneNumber
+        ? snapshot.docs.filter((candidate) => {
+            const data = candidate.data() as Record<string, unknown>;
+            const phone = String(data.phoneNumber ?? data.phone ?? data.mobile ?? "")
+              .replace(/\D/g, "")
+              .slice(-10);
+            return phone === phoneNumber;
+          })
+        : snapshot.docs;
+    }
 
     if (snapshot.empty) {
       return NextResponse.json({ found: false, employee: null });
     }
 
-    const doc = snapshot.docs[0];
+    if (matchingDocs.length !== 1) {
+      return NextResponse.json(
+        {
+          error:
+            "This employee ID is not unique. Please scan an updated QR code or enter the current employee ID.",
+          found: false,
+          employee: null,
+        },
+        { status: 409 },
+      );
+    }
+
+    const doc = matchingDocs[0];
     const attendanceStateSnap = await db.collection("attendanceState").doc(doc.id).get();
     const attendanceState = attendanceStateSnap.exists
       ? (attendanceStateSnap.data() as Record<string, unknown>)

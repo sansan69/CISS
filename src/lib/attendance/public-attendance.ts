@@ -95,7 +95,7 @@ export function buildPublicAttendanceSiteOption(
     clientId: typeof data.clientId === "string" ? data.clientId : "",
     district: typeof data.district === "string" ? data.district : "",
     geofenceRadiusMeters: toFiniteNumber(data.geofenceRadiusMeters) ?? DEFAULT_GEOFENCE_RADIUS_METERS,
-    strictGeofence: data.strictGeofence === true,
+    strictGeofence: data.strictGeofence !== false,
     shiftMode: typeof data.shiftMode === "string" ? data.shiftMode : "none",
     shiftPattern: typeof data.shiftPattern === "string" ? data.shiftPattern : null,
     shiftTemplates: Array.isArray(data.shiftTemplates) ? data.shiftTemplates : [],

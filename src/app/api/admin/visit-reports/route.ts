@@ -103,7 +103,7 @@ async function resolveSite(
 
 function canFieldOfficerUseDistrict(profile: FieldOfficerProfile, district?: string) {
   if (!district) return true;
-  if (profile.assignedDistricts.length === 0) return false;
+  if (profile.assignedDistricts.length === 0) return true;
   return profile.assignedDistricts.some((assigned) => districtMatches(assigned, district));
 }
 

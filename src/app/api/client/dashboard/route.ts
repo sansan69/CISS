@@ -111,9 +111,14 @@ export async function GET(request: Request) {
       .collection("employees")
       .where("clientName", "==", scope.clientName)
       .get();
-    const attendancePromise = adminDb
+    const siteAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("clientName", "==", scope.clientName)
+      .limit(500)
+      .get();
+    const employeeAttendancePromise = adminDb
+      .collection("attendanceLogs")
+      .where("employeeClientName", "==", scope.clientName)
       .limit(500)
       .get();
     const workOrdersPromise: Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }> =
@@ -135,7 +140,8 @@ export async function GET(request: Request) {
 
     const [
       employeesSnapshot,
-      attendanceSnapshot,
+      siteAttendanceSnapshot,
+      employeeAttendanceSnapshot,
       workOrdersSnapshot,
       sitesSnapshot,
       visitReportsSnapshot,
@@ -143,7 +149,8 @@ export async function GET(request: Request) {
       patrolActivitiesSnapshot,
     ] = await Promise.all([
       employeesPromise,
-      attendancePromise,
+      siteAttendancePromise,
+      employeeAttendancePromise,
       workOrdersPromise,
       sitesPromise,
       visitReportsPromise,
@@ -175,7 +182,12 @@ export async function GET(request: Request) {
       .sort((left, right) => left.fullName.localeCompare(right.fullName))
       .slice(0, 6);
 
-    const attendanceLogs = attendanceSnapshot.docs
+    const attendanceDocsById = new Map<string, { id: string; data(): Record<string, unknown> }>();
+    for (const doc of [...siteAttendanceSnapshot.docs, ...employeeAttendanceSnapshot.docs]) {
+      attendanceDocsById.set(doc.id, doc as { id: string; data(): Record<string, unknown> });
+    }
+
+    const attendanceLogs = Array.from(attendanceDocsById.values())
       .map((doc) => ({
         id: doc.id,
         ...(doc.data() as Record<string, unknown>),
