@@ -1833,3 +1833,28 @@ Draft-specific fields are stripped before saving to Firestore.
   - `replace`: update matching active site/date work orders with the uploaded row while preserving assigned guards.
   - `omit`: skip matching active site/date rows and import only genuinely new rows.
 - Revision imports keep their existing behavior: update matching rows and cancel missing active rows.
+
+---
+
+## [2026-05-22] — Session: Stale attendance session auto-close (3 fixes)
+
+Fixes the "guards stuck in IN state" problem where guards who forgot to mark OUT get blocked.
+
+### Fix 1: Late OUT now auto-closes stale sessions (`src/app/api/attendance/submit/route.ts`)
+- Previously: guard trying to mark OUT for yesterday's session got hard error.
+- Now: server auto-closes the stale session (writes auto-closed OUT log, closes session, clears attendanceState) and returns `{ autoClosed: true, message: "..." }`.
+- Guard gets a clear message: "Session auto-closed. Please mark IN to start today."
+
+### Fix 2: Batch stale session cleanup endpoint (`src/app/api/admin/attendance-state/stale/route.ts`)
+- Added `POST` method with `{ minAgeHours: 24, dryRun?: boolean, limit?: number }` body.
+- `GET` now supports `minAgeHours` and `limit` query params.
+- `POST` auto-closes all `attendanceState` docs where `lastStatus === "In"` and `lastAttendanceDate` is at least `minAgeHours` old.
+- `dryRun: true` returns what would be closed without touching data.
+- Can be called via cron for autonomous cleanup.
+
+### Fix 3: App-side state awareness (`src/app/attendance/page.tsx`)
+- `resolveScannedEmployee()` now checks `attendanceHint.lastStatus`:
+  - If "In": auto-selects "Out" toggle, shows toast ("Session open" or "Previous session not closed from {date}")
+  - If "Out" or null: defaults to "In"
+- `submitAttendanceOnline()` now propagates `autoClosed` flag from server response.
+- Submit handler shows "Previous Session Closed" toast with server message and resets toggle to "In" for fresh start.
