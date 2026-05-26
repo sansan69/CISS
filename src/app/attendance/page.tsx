@@ -1382,18 +1382,12 @@ export default function AttendancePage() {
       });
       return;
     }
-    if (distance > allowedRadius && selectedSite.strictGeofence !== false) {
+    if (distance > allowedRadius) {
+      // Never block attendance — warn and let it through for admin review
       toast({
-        variant: 'destructive',
-        title: 'Outside Allowed Radius',
-        description: `You are approximately ${Math.round(distance)} meters away from the selected site. You must be within ${allowedRadius} meters to mark attendance.`,
-      });
-      return;
-    }
-    if (distance > allowedRadius && selectedSite.strictGeofence === false) {
-      toast({
-        title: 'Outside site radius',
-        description: `This site is using soft geofence mode. Attendance can still be submitted, but admin review will be required.`,
+        title: 'Outside Site Radius',
+        description: `You are ${Math.round(distance)}m from the site (limit: ${allowedRadius}m). Your attendance will be recorded but flagged for supervisor review.`,
+        duration: 5000,
       });
     }
 
