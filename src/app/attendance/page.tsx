@@ -130,7 +130,7 @@ function buildLocationAccessError(error: GeolocationPositionError) {
 export default function AttendancePage() {
   const router = useRouter();
   const { user } = useAppAuth();
-  const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
+  const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo' | 'done'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [watermarkedPhoto, setWatermarkedPhoto] = useState<string | null>(null);
@@ -150,6 +150,7 @@ export default function AttendancePage() {
   const [hasScanned, setHasScanned] = useState(false);
   const [hasManualCenterOverride, setHasManualCenterOverride] = useState(false);
   const [hasManualShiftOverride, setHasManualShiftOverride] = useState(false);
+  const [lastSubmitted, setLastSubmitted] = useState<{ status: string; name: string; time: string } | null>(null);
   const [autoDetectedSite, setAutoDetectedSite] = useState<SuggestedSite | null>(null);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   
@@ -1462,12 +1463,14 @@ export default function AttendancePage() {
           description: result.message || 'Your previous open session was auto-closed. Please mark IN to start today.',
           duration: 6000,
         });
-        // Reset to IN for the guard's fresh start
         setSelectedStatus('In');
         resetVerificationState({ keepCenter: true, keepLocation: true });
       } else {
-        toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} ${selectedStatus.toLowerCase()} recorded.` });
-        resetVerificationState({ keepCenter: true, keepLocation: true });
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        setLastSubmitted({ status: selectedStatus, name: scannedEmployee.fullName, time: timeStr });
+        setWorkflowStep('done');
+        toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} — ${selectedStatus} recorded at ${timeStr}.` });
       }
     } catch (e: any) {
       console.error('Submit failed', e);
@@ -2173,6 +2176,43 @@ export default function AttendancePage() {
                 </div>
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {workflowStep === 'done' && lastSubmitted && (
+        <Card className="rounded-3xl border-green-200 bg-green-50/50">
+          <CardContent className="space-y-5 p-6 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
+              <CheckCircle className="h-8 w-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold text-green-800">
+                {lastSubmitted.status === 'In' ? 'IN Recorded' : 'OUT Recorded'}
+              </h2>
+              <p className="text-lg font-medium">{lastSubmitted.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {lastSubmitted.status} at {lastSubmitted.time}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-green-200 bg-white p-4 text-left text-sm">
+              <p className="font-medium text-green-700">Attendance submitted successfully</p>
+              <p className="mt-1 text-muted-foreground">
+                {lastSubmitted.status === 'In'
+                  ? 'Guard is now clocked IN. Mark OUT when the shift ends.'
+                  : 'Guard is now clocked OUT. Shift completed.'}
+              </p>
+            </div>
+            <Button
+              size="lg"
+              className="h-14 w-full text-base"
+              onClick={() => {
+                setLastSubmitted(null);
+                resetVerificationState({ keepCenter: true, keepLocation: true });
+              }}
+            >
+              Record Another
+            </Button>
           </CardContent>
         </Card>
       )}
