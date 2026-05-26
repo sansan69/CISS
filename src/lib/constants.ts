@@ -89,7 +89,7 @@ export function requiresLngServiceBook(designation?: string | null) {
 export function requiresLngArmsLicense(designation?: string | null) {
   return Boolean(designation && LNG_ARMS_LICENSE_REQUIRED_SET.has(designation));
 }
-export const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
+export const DEFAULT_GEOFENCE_RADIUS_METERS = 50;
 export const DEFAULT_GPS_ACCURACY_LIMIT_METERS = 100;
 export const OFFLINE_ATTENDANCE_MAX_AGE_HOURS = 4;
 
