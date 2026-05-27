@@ -16,7 +16,7 @@ import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon, FileText } from "luc
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
-import { hasSiteUploads } from "@/components/field-officers/site-report-upload";
+import { getSiteUploadHint, hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -499,9 +499,9 @@ export function TrainingReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Training Photos *</Label>
+              <Label>Training Photos {isSiteUploadRequired("training", form.status) ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                Add timestamped training photos. Multiple photos are supported.
+                {getSiteUploadHint("training", form.status)}
               </p>
               <PhotoCapture
                 urls={photoUrls}
