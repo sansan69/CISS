@@ -16,7 +16,7 @@ import { Plus, GraduationCap, CheckCircle2, Eye, ImageIcon, FileText } from "luc
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
-import { getSiteUploadHint, hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
+import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -78,6 +78,7 @@ export function TrainingReportsPanel() {
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
+  const [clientReportUrl, setClientReportUrl] = useState<string[]>([]);
   const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
   const visibleSites = sites.filter((site) => {
     if (!isFo || assignedDistricts.length === 0) return true;
@@ -118,7 +119,11 @@ export function TrainingReportsPanel() {
       return;
     }
     if (form.status === "submitted" && !hasSiteUploads(photoUrls)) {
-      toast({ title: "Missing uploads", description: "Add at least one site photo or file before submitting.", variant: "destructive" });
+      toast({ title: "Missing photos", description: "Add at least one training photo before submitting.", variant: "destructive" });
+      return;
+    }
+    if (form.status === "submitted" && clientReportUrl.length === 0) {
+      toast({ title: "Missing report", description: "Upload the client-signed training report or certificate before submitting.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -141,6 +146,7 @@ export function TrainingReportsPanel() {
           status: form.status,
           photoUrls,
           attachmentUrls,
+          clientReportUrl: clientReportUrl[0] ?? null,
         }),
       });
       if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
@@ -152,6 +158,7 @@ export function TrainingReportsPanel() {
       setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "", status: "draft" });
       setPhotoUrls([]);
       setAttachmentUrls([]);
+      setClientReportUrl([]);
       loadReports(activeTab);
     } catch (error) {
       toast({
@@ -501,7 +508,7 @@ export function TrainingReportsPanel() {
             <div className="space-y-1.5">
               <Label>Training Photos {isSiteUploadRequired("training", form.status) ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                {getSiteUploadHint("training", form.status)}
+                Capture the training session. Photos are timestamped with date and time.
               </p>
               <PhotoCapture
                 urls={photoUrls}
@@ -509,15 +516,15 @@ export function TrainingReportsPanel() {
                 folder="trainingReports"
                 accept="image/*"
                 timestampImages
-                allowSelfie={false}
+                allowSelfie={true}
                 uploadLabel="Upload photo"
-                stampTitle="Training photo"
+                stampTitle="Training Session"
                 stampLines={[
                   [form.clientName, form.siteName].filter(Boolean).join(" - "),
                   form.district,
-                  form.topic,
-                  form.trainingDate ? `Training date ${form.trainingDate}` : "",
-                ]}
+                  form.topic ? `Topic: ${form.topic}` : "",
+                  form.trainingDate ? `Date: ${form.trainingDate}` : "",
+                ].filter(Boolean)}
                 maxPhotos={30}
                 fileTypeLabel="JPG and PNG photos allowed."
                 disabled={isSubmitting}
@@ -525,20 +532,20 @@ export function TrainingReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Training Report Upload</Label>
+              <Label>Client Report {form.status === "submitted" ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                Upload the report file separately. These files are not timestamped.
+                Upload the client-signed training report or certificate. Accepts PDF, JPG, and PNG files.
               </p>
               <PhotoCapture
-                urls={attachmentUrls}
-                onChange={setAttachmentUrls}
+                urls={clientReportUrl}
+                onChange={setClientReportUrl}
                 folder="trainingReportFiles"
-                accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,image/*"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
+                maxPhotos={1}
                 allowCamera={false}
                 allowSelfie={false}
                 uploadLabel="Upload report"
-                maxPhotos={5}
-                fileTypeLabel="PDF, Word, JPG, and PNG files allowed."
+                fileTypeLabel="PDF or image files allowed."
                 disabled={isSubmitting}
               />
             </div>

@@ -24,6 +24,7 @@ export interface FoVisitReport {
   guardsPresentCount: number;
   guardsAbsentCount: number;
   photoUrls: string[];
+  visitLocation?: { lat: number; lng: number };
   status: VisitReportStatus;
   reviewedBy?: string;
   reviewedAt?: Timestamp;
@@ -49,6 +50,7 @@ export interface FoTrainingReport {
   attendeeCount: number;
   photoUrls: string[];
   attachmentUrls: string[];
+  clientReportUrl?: string;
   status: TrainingReportStatus;
   acknowledgedBy?: string;
   acknowledgedAt?: Timestamp;

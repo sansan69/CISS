@@ -29,6 +29,27 @@ interface PhotoCaptureProps {
   allowSelfie?: boolean;
   uploadLabel?: string;
   fileTypeLabel?: string;
+  /** Capture device GPS location and include in timestamp overlay */
+  captureLocation?: boolean;
+}
+
+async function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return null;
+  try {
+    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 30000,
+      });
+    });
+    return {
+      lat: Math.round(pos.coords.latitude * 10000) / 10000,
+      lng: Math.round(pos.coords.longitude * 10000) / 10000,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function loadImage(file: File) {
@@ -48,7 +69,7 @@ async function loadImage(file: File) {
   }
 }
 
-async function createTimestampedPhoto(file: File, title: string, lines: string[]) {
+async function createTimestampedPhoto(file: File, title: string, lines: string[], locationLines?: string[]) {
   if (!file.type.startsWith("image/")) {
     throw new Error("Only photos can be timestamped. Please choose an image file.");
   }
@@ -90,9 +111,10 @@ async function createTimestampedPhoto(file: File, title: string, lines: string[]
     const safeLines = [
       title,
       ...lines.filter((line) => line.trim()),
+      ...(locationLines ?? []).filter((line) => line.trim()),
       `Captured at ${INDIA_DATE_TIME_FORMATTER.format(capturedAt)}`,
       "Captured by CISS Field Officer",
-    ].slice(0, 6);
+    ].slice(0, 8);
 
     let cursorY = overlayY + 48;
     safeLines.forEach((line, index) => {
@@ -136,6 +158,7 @@ export function PhotoCapture({
   allowSelfie = true,
   uploadLabel = "Upload",
   fileTypeLabel = "JPG, PNG, PDF allowed.",
+  captureLocation = false,
 }: PhotoCaptureProps) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
@@ -164,12 +187,17 @@ export function PhotoCapture({
     setUploading(true);
     const added: string[] = [];
     const errors: string[] = [];
+
+    // Capture GPS location once for all photos in this batch (if enabled)
+    const pos = captureLocation ? await getCurrentPosition() : null;
+    const locationLines = pos ? [`GPS ${pos.lat}, ${pos.lng}`] : undefined;
+
     try {
       for (const file of Array.from(files).slice(0, slotsLeft)) {
         try {
           const timestamp = Date.now();
           const uploadFile = timestampImages
-            ? await createTimestampedPhoto(file, stampTitle, stampLines)
+            ? await createTimestampedPhoto(file, stampTitle, stampLines, locationLines)
             : file;
           const path = `foReports/${folder}/${user.uid}/${timestamp}_${uploadFile.name.replace(/\s+/g, "_")}`;
           const snap = await uploadBytes(ref(storage, path), uploadFile, {

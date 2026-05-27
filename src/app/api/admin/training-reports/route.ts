@@ -173,6 +173,7 @@ export async function POST(request: Request) {
       status?: string;
       photoUrls?: string[];
       attachmentUrls?: string[];
+      clientReportUrl?: string;
     };
 
     if (!body.clientId || !body.trainingDate || !body.topic) {
@@ -197,7 +198,14 @@ export async function POST(request: Request) {
     // Photos only required when submitting (drafts can be saved without photos)
     if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length === 0)) {
       return NextResponse.json(
-        { error: "At least one site upload is required before submitting a training report." },
+        { error: "At least one training photo is required before submitting." },
+        { status: 400 },
+      );
+    }
+
+    if (status === "submitted" && (!body.clientReportUrl || !body.clientReportUrl.trim())) {
+      return NextResponse.json(
+        { error: "A client-signed training report or certificate is required before submitting." },
         { status: 400 },
       );
     }
@@ -226,6 +234,7 @@ export async function POST(request: Request) {
       attendeeCount: body.attendeeCount ?? 0,
       photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
       attachmentUrls: Array.isArray(body.attachmentUrls) ? body.attachmentUrls : [],
+      clientReportUrl: body.clientReportUrl ?? null,
       status,
       createdAt: FieldValue.serverTimestamp(),
     });

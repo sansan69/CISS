@@ -16,7 +16,7 @@ export function isSiteUploadRequired(kind: SiteReportKind, status?: ReportStatus
 
 export function getSiteUploadHint(kind: SiteReportKind, status?: ReportStatus): string {
   if (kind === "training") {
-    return "Add one or more photos or files for this site report. Multiple uploads are supported and no duty-point-specific upload is needed.";
+    return "Capture the training session in progress. Timestamped photos help verify the session took place.";
   }
 
   if (status === "submitted") {

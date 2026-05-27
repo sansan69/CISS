@@ -16,7 +16,7 @@ import { Plus, FileText, CheckCircle2, Clock, Eye, ImageIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
-import { getSiteUploadHint, hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
+import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -437,9 +437,9 @@ export function VisitReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Site Uploads {isSiteUploadRequired("visit", form.status) ? "*" : ""}</Label>
+              <Label>Visit Photos {isSiteUploadRequired("visit", form.status) ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                {getSiteUploadHint("visit", form.status)}
+                Take a photo with the guards at the site. Use camera or selfie mode. Photos are timestamped with date, time and GPS location.
               </p>
               <PhotoCapture
                 urls={photoUrls}
@@ -447,15 +447,16 @@ export function VisitReportsPanel() {
                 folder="visitReports"
                 accept="image/*"
                 timestampImages
-                allowSelfie={false}
+                allowSelfie={true}
+                captureLocation
                 uploadLabel="Upload photo"
-                stampTitle="Visit report photo"
+                stampTitle="Site Visit"
                 stampLines={[
                   [form.clientName, form.siteName].filter(Boolean).join(" - "),
                   form.district,
-                  form.visitDate ? `Visit date ${form.visitDate}` : "",
-                ]}
-                fileTypeLabel="JPG and PNG photos allowed."
+                  form.visitDate ? `Visit: ${form.visitDate}` : "",
+                ].filter(Boolean)}
+                fileTypeLabel="JPG and PNG photos allowed. Photos include GPS location stamp."
                 disabled={isSubmitting}
               />
             </div>
