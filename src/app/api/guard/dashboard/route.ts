@@ -166,16 +166,7 @@ export async function GET(request: Request) {
     const presentDays = presentDates.size;
     const workingDays = workingDaysInMonth(year, month);
     const absentDays = Math.max(0, workingDays - presentDays);
-
-    let leaveBalance: Record<string, unknown> | null = null;
-    try {
-      const balanceRefs = Array.from(new Set([guard.employeeDocId, guard.employeeId].filter(Boolean)))
-        .map((id) => adminDb.collection("leaveBalances").doc(`${id}_${year}`));
-      const balanceDocs = balanceRefs.length ? await adminDb.getAll(...balanceRefs) : [];
-      leaveBalance = balanceDocs.find((doc) => doc.exists)?.data() ?? null;
-    } catch {
-      leaveBalance = null;
-    }
+    const leaveBalance = null;
 
     // Recent 5 logs
     const recentAttendance = filteredLogs.slice(0, 5).map((l) => ({
