@@ -130,7 +130,7 @@ function buildLocationAccessError(error: GeolocationPositionError) {
 export default function AttendancePage() {
   const router = useRouter();
   const { user } = useAppAuth();
-  const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo'>('idle');
+  const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo' | 'done'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [watermarkedPhoto, setWatermarkedPhoto] = useState<string | null>(null);
@@ -150,6 +150,7 @@ export default function AttendancePage() {
   const [hasScanned, setHasScanned] = useState(false);
   const [hasManualCenterOverride, setHasManualCenterOverride] = useState(false);
   const [hasManualShiftOverride, setHasManualShiftOverride] = useState(false);
+  const [lastSubmitted, setLastSubmitted] = useState<{ status: string; name: string; time: string } | null>(null);
   const [autoDetectedSite, setAutoDetectedSite] = useState<SuggestedSite | null>(null);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   
@@ -653,7 +654,7 @@ export default function AttendancePage() {
       'Uniform review is pending manual verification.',
       'Retake the photo if shoes, ID card, or full body are not clearly visible.',
     ],
-    summary: 'Attendance can continue now. Admin will review the photo for shoes, ID card, and uniform compliance.',
+    summary: 'Photo captured successfully. Admin may review it later for compliance.',
     missingShoes: false,
     missingIdCard: false,
     uniformIssue: false,
@@ -805,29 +806,7 @@ export default function AttendancePage() {
         description: 'Attendance can continue. Admin will review the photo, or you can retake it now.',
       });
 
-      const analyzePhotoCompliance = async () => {
-        try {
-          const response = await fetch('/api/attendance/analyze-photo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              photoDataUrl,
-              employeeName: scannedEmployee?.fullName,
-              employeeId: scannedEmployee?.employeeCode || scannedEmployee?.id,
-              siteName: selectedSite?.siteName,
-              district: selectedDistrict,
-              clientName: selectedSite?.clientName || scannedEmployee?.clientName,
-            }),
-          });
-          const result = await response.json();
-          if (result.compliance) {
-            setPhotoCompliance(result.compliance);
-          }
-        } catch {
-          // AI analysis failed, manual review compliance already set
-        }
-      };
-      void analyzePhotoCompliance();
+
     } catch (error: any) {
       setWatermarkedPhoto(photoDataUrl);
       setPhotoCompliance(manualReviewCompliance);
@@ -849,6 +828,31 @@ export default function AttendancePage() {
     setReportingStartedAt(new Date().toISOString());
     stopScanner();
     setWorkflowStep('review');
+
+    // Auto-detect the right IN/OUT status based on current attendance state.
+    // If the guard has an open IN session, default to OUT so they can close it.
+    // Otherwise default to IN.
+    if (employee.attendanceHint?.lastStatus === 'In') {
+      setSelectedStatus('Out');
+      const lastDate = employee.attendanceHint.lastAttendanceDate;
+      const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+      if (lastDate && lastDate !== todayIST) {
+        toast({
+          title: 'Previous session not closed',
+          description: `You have an open IN session from ${lastDate}. Marking OUT will auto-close it.`,
+          duration: 5000,
+        });
+      } else {
+        toast({
+          title: 'Session open',
+          description: 'You are currently marked IN. Submit OUT to end your shift.',
+          duration: 3000,
+        });
+      }
+    } else {
+      setSelectedStatus('In');
+    }
+
     toast({ title: 'Guard identified', description: employee.fullName, duration: 1600 });
   }, [stopScanner, toast]);
 
@@ -925,6 +929,28 @@ export default function AttendancePage() {
         setHasScanned(true);
         setReportingStartedAt(new Date().toISOString());
         setWorkflowStep('review');
+
+        // Auto-detect IN/OUT — same logic as resolveScannedEmployee
+        if (employee.attendanceHint?.lastStatus === 'In') {
+          setSelectedStatus('Out');
+          const lastDate = employee.attendanceHint.lastAttendanceDate;
+          const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+          if (lastDate && lastDate !== todayIST) {
+            toast({
+              title: 'Previous session not closed',
+              description: `You have an open IN session from ${lastDate}. Marking OUT will auto-close it.`,
+              duration: 5000,
+            });
+          } else {
+            toast({
+              title: 'Session open',
+              description: 'You are currently marked IN. Submit OUT to end your shift.',
+              duration: 3000,
+            });
+          }
+        } else {
+          setSelectedStatus('In');
+        }
 
         if (!locationCoords && !isFetchingLocation) {
           setIsFetchingLocation(true);
@@ -1194,6 +1220,16 @@ export default function AttendancePage() {
       throw new Error(responseBody.error || 'Could not submit attendance.');
     }
 
+    // Handle auto-closed stale session response
+    if (responseBody.autoClosed) {
+      return {
+        photoUrl,
+        recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
+        autoClosed: true,
+        message: responseBody.message || 'Previous session was auto-closed.',
+      };
+    }
+
     return {
       photoUrl,
       recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
@@ -1347,18 +1383,12 @@ export default function AttendancePage() {
       });
       return;
     }
-    if (distance > allowedRadius && selectedSite.strictGeofence !== false) {
+    if (distance > allowedRadius) {
+      // Never block attendance — warn and let it through for admin review
       toast({
-        variant: 'destructive',
-        title: 'Outside Allowed Radius',
-        description: `You are approximately ${Math.round(distance)} meters away from the selected site. You must be within ${allowedRadius} meters to mark attendance.`,
-      });
-      return;
-    }
-    if (distance > allowedRadius && selectedSite.strictGeofence === false) {
-      toast({
-        title: 'Outside site radius',
-        description: `This site is using soft geofence mode. Attendance can still be submitted, but admin review will be required.`,
+        title: 'Outside Site Radius',
+        description: `You are ${Math.round(distance)}m from the site (limit: ${allowedRadius}m). Your attendance will be recorded but flagged for supervisor review.`,
+        duration: 5000,
       });
     }
 
@@ -1427,8 +1457,21 @@ export default function AttendancePage() {
       appendRecentAttendance(
         buildHistoryItem(result.recordId, payloadWithoutPhotoUrl, result.photoUrl, 'synced'),
       );
-      toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} ${selectedStatus.toLowerCase()} recorded.` });
-      resetVerificationState({ keepCenter: true, keepLocation: true });
+      if (result.autoClosed) {
+        toast({
+          title: 'Previous Session Closed',
+          description: result.message || 'Your previous open session was auto-closed. Please mark IN to start today.',
+          duration: 6000,
+        });
+        setSelectedStatus('In');
+        resetVerificationState({ keepCenter: true, keepLocation: true });
+      } else {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        setLastSubmitted({ status: selectedStatus, name: scannedEmployee.fullName, time: timeStr });
+        setWorkflowStep('done');
+        toast({ title: 'Attendance Submitted', description: `${scannedEmployee.fullName} — ${selectedStatus} recorded at ${timeStr}.` });
+      }
     } catch (e: any) {
       console.error('Submit failed', e);
       if (isRetryableAttendanceError(e)) {
@@ -2082,8 +2125,8 @@ export default function AttendancePage() {
                             </Badge>
                           </div>
                           {photoCompliance.adminFlag && (
-                            <p className="text-sm font-medium">
-                              This record will be marked for admin review even if you submit now.
+                            <p className="text-sm text-muted-foreground">
+                              Photo saved for records. You can submit now.
                             </p>
                           )}
                         </AlertDescription>
@@ -2133,6 +2176,43 @@ export default function AttendancePage() {
                 </div>
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {workflowStep === 'done' && lastSubmitted && (
+        <Card className="rounded-3xl border-green-200 bg-green-50/50">
+          <CardContent className="space-y-5 p-6 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
+              <CheckCircle className="h-8 w-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold text-green-800">
+                {lastSubmitted.status === 'In' ? 'IN Recorded' : 'OUT Recorded'}
+              </h2>
+              <p className="text-lg font-medium">{lastSubmitted.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {lastSubmitted.status} at {lastSubmitted.time}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-green-200 bg-white p-4 text-left text-sm">
+              <p className="font-medium text-green-700">Attendance submitted successfully</p>
+              <p className="mt-1 text-muted-foreground">
+                {lastSubmitted.status === 'In'
+                  ? 'Guard is now clocked IN. Mark OUT when the shift ends.'
+                  : 'Guard is now clocked OUT. Shift completed.'}
+              </p>
+            </div>
+            <Button
+              size="lg"
+              className="h-14 w-full text-base"
+              onClick={() => {
+                setLastSubmitted(null);
+                resetVerificationState({ keepCenter: true, keepLocation: true });
+              }}
+            >
+              Record Another
+            </Button>
           </CardContent>
         </Card>
       )}

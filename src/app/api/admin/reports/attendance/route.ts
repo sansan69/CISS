@@ -37,20 +37,20 @@ export async function GET(request: NextRequest) {
     const format = request.nextUrl.searchParams.get("format") || "json";
 
     // Validate date strings before passing to Firestore
-    if (from && isNaN(Date.parse(from))) {
-      return NextResponse.json({ error: "Invalid 'from' date." }, { status: 400 });
+    if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      return NextResponse.json({ error: "Invalid 'from' date. Use YYYY-MM-DD." }, { status: 400 });
     }
-    if (to && isNaN(Date.parse(to))) {
-      return NextResponse.json({ error: "Invalid 'to' date." }, { status: 400 });
+    if (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return NextResponse.json({ error: "Invalid 'to' date. Use YYYY-MM-DD." }, { status: 400 });
     }
 
     let queryRef: FirebaseFirestore.Query = adminDb.collection("attendanceLogs");
 
     if (from) {
-      queryRef = queryRef.where("createdAt", ">=", new Date(from));
+      queryRef = queryRef.where("attendanceDate", ">=", from);
     }
     if (to) {
-      queryRef = queryRef.where("createdAt", "<=", new Date(to));
+      queryRef = queryRef.where("attendanceDate", "<=", to);
     }
     if (status && status !== "all") {
       queryRef = queryRef.where("status", "==", status);
@@ -75,12 +75,12 @@ export async function GET(request: NextRequest) {
       snapshots = await Promise.all([
         queryRef
           .where("clientName", "==", clientScope.clientName)
-          .orderBy("createdAt", "desc")
+          .orderBy("attendanceDate", "desc")
           .limit(1000)
           .get() as any,
         queryRef
           .where("employeeClientName", "==", clientScope.clientName)
-          .orderBy("createdAt", "desc")
+          .orderBy("attendanceDate", "desc")
           .limit(1000)
           .get() as any,
       ]);
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 
     const LIMIT = 1000;
     if (!isClient) {
-      snapshots = [await queryRef.orderBy("createdAt", "desc").limit(LIMIT).get() as any];
+      snapshots = [await queryRef.orderBy("attendanceDate", "desc").limit(LIMIT).get() as any];
     }
     const docsById = new Map<string, { id: string; data(): Record<string, any> }>();
     for (const snapshot of snapshots) {

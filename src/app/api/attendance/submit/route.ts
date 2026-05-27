@@ -192,11 +192,11 @@ function validateEmployee(
   employeeData: Record<string, any>,
 ) {
   if (employeeData.employeeId !== payload.employeeId) {
-    throw new AttendanceError("Employee ID mismatch.");
+    throw new AttendanceError("Employee verification failed. Please contact your supervisor.");
   }
 
   if (employeeData.status && employeeData.status !== "Active") {
-    throw new AttendanceError("Attendance can only be recorded for active employees.");
+    throw new AttendanceError("Your account is currently inactive. Please contact your supervisor.");
   }
 
   if (
@@ -205,7 +205,7 @@ function validateEmployee(
     normalizeClientNameKey(payload.employeeClientName) !==
       normalizeClientNameKey(employeeData.clientName)
   ) {
-    throw new AttendanceError("Employee client mismatch.");
+    throw new AttendanceError("Employee verification failed. Please contact your supervisor.");
   }
 }
 
@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
       OFFLINE_ATTENDANCE_MAX_AGE_HOURS * 60 * 60 * 1000;
     if (Date.now() - reportedAtDate.getTime() > oldestAllowedMs) {
       throw new AttendanceError(
-        `Queued attendance older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours cannot be submitted. Please record attendance again.`,
+        `Queued attendance older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours cannot be submitted. Please record a fresh attendance entry.`,
       );
     }
     const submittedAttendanceDate = INDIA_DATE_FORMATTER.format(reportedAtDate);
@@ -333,6 +333,7 @@ export async function POST(request: NextRequest) {
       .doc(payload.employeeDocId);
     const attendanceLogRef = adminDb.collection("attendanceLogs").doc();
     let guardLocationWrite: GuardLocationWrite | null = null;
+    let staleOutAutoCloseResult: { id: string; staleDate: string } | null = null;
 
     await adminDb.runTransaction(async (transaction) => {
       const [employeeSnap, siteSnap, stateSnap] = await Promise.all([
@@ -342,11 +343,11 @@ export async function POST(request: NextRequest) {
       ]);
 
       if (!employeeSnap.exists) {
-        throw new AttendanceError("Employee not found.");
+        throw new AttendanceError("Employee record not found. Please verify your ID and try again.");
       }
 
       if (!siteSnap.exists) {
-        throw new AttendanceError("Selected site not found.");
+        throw new AttendanceError("The selected site is no longer available. Please select a different site.");
       }
 
       const employeeData = employeeSnap.data() as Record<string, any>;
@@ -354,7 +355,7 @@ export async function POST(request: NextRequest) {
       validateEmployee(payload, employeeData);
 
       if (!districtMatches(siteData.district, payload.district)) {
-        throw new AttendanceError("District mismatch for selected site.");
+        throw new AttendanceError("The selected site does not belong to your district. Please choose a different site.");
       }
 
       const employeeClientName = normalizeNullableText(
@@ -365,7 +366,7 @@ export async function POST(request: NextRequest) {
 
       const siteCoords = parseSiteCoordinates(siteData);
       if (!siteCoords) {
-        throw new AttendanceError("Selected site does not have valid coordinates configured.");
+        throw new AttendanceError("This site's location has not been configured yet. Please ask your supervisor to set it up.");
       }
 
       const isTcsSite =
@@ -379,7 +380,7 @@ export async function POST(request: NextRequest) {
         (configuredDutyPoints.length === 1 ? configuredDutyPoints[0] : null);
 
       if (!isTcsSite && configuredDutyPoints.length > 0 && !selectedDutyPoint) {
-        throw new AttendanceError("Select a valid duty point for this site.");
+        throw new AttendanceError("Please select a duty point for this site before submitting.");
       }
 
       const activeShiftSource: {
@@ -459,7 +460,7 @@ export async function POST(request: NextRequest) {
           if (payload.status === "Out" && submissionWindow.closingOpenSession) {
             workOrderReviewWarning = "Checkout was accepted for an open session even though no active work order was found for the session date.";
           } else {
-            throw new AttendanceError("No active work order exists for the selected site today.");
+            throw new AttendanceError("No work order has been assigned for this site today. Attendance cannot be recorded.");
           }
         }
 
@@ -483,7 +484,7 @@ export async function POST(request: NextRequest) {
             workOrderReviewWarning = "Checkout was accepted for an open session even though the guard was not matched to the work order for the session date.";
           } else {
             throw new AttendanceError(
-              "This employee is not assigned to the selected site for today's work order.",
+              "You are not assigned to this site for today's work order. Please contact your supervisor.",
             );
           }
         }
@@ -491,8 +492,8 @@ export async function POST(request: NextRequest) {
         if (activeShiftSource.shiftMode === "fixed" && !effectiveShift) {
           throw new AttendanceError(
             selectedDutyPoint
-              ? `Select a valid shift configured for duty point "${selectedDutyPoint.name}".`
-              : "Select a valid shift configured for this site before submitting attendance.",
+              ? `Please select a shift for duty point "${selectedDutyPoint.name}" before submitting.`
+              : "Please select a shift before submitting attendance.",
           );
         }
       }
@@ -521,27 +522,38 @@ export async function POST(request: NextRequest) {
         gpsAccuracyMeters > gpsAccuracyLimitMeters
       ) {
         throw new AttendanceError(
-          `GPS accuracy is too weak (±${Math.round(gpsAccuracyMeters)}m). Please move outdoors or wait for a better fix before submitting attendance.`,
+          `GPS signal is too weak (±${Math.round(gpsAccuracyMeters)}m). Please move to an open area and try again.`,
         );
       }
 
-      if (actualDistance > effectiveRadiusMeters && siteIsStrictGeofence) {
-        throw new AttendanceError(
-          `Attendance can only be recorded within ${effectiveRadiusMeters} meters of the site. Current distance: ${Math.round(actualDistance)} meters.`,
-        );
-      }
+      // Strict geofence: never block attendance — flag for admin review instead.
+      const geofenceViolation = actualDistance > effectiveRadiusMeters;
+      const geofenceWarning =
+        geofenceViolation
+          ? `Guard was ${Math.round(actualDistance)}m from the site (limit: ${effectiveRadiusMeters}m). Attendance recorded but flagged for review.`
+          : null;
+
+      let staleSessionAutoClosed = false;
+      let staleOutAutoClosed = false;
 
       if (!lastState && payload.status === "Out") {
         throw new AttendanceError(
-          "Attendance OUT is only allowed after a valid IN mark.",
+          "You haven't marked IN yet today. Please mark IN first before recording OUT.",
         );
       }
 
       if (lastState) {
         if (payload.status === "In" && lastState.lastStatus === "In") {
-          throw new AttendanceError(
-            "Attendance IN is already open. Please submit OUT before marking IN again.",
-          );
+          // Guard is checking IN while a previous IN session is still open.
+          // Allow if the open session is stale (from a different date);
+          // block only for same-day duplicates (likely a double-tap).
+          if (lastState.lastAttendanceDate === submittedAttendanceDate) {
+            throw new AttendanceError(
+              "You're already clocked IN today. Please mark OUT before marking IN again.",
+            );
+          }
+          // Stale session from a previous date — will auto-close below
+          staleSessionAutoClosed = true;
         }
 
         if (
@@ -549,7 +561,7 @@ export async function POST(request: NextRequest) {
           lastState.lastStatus === payload.status
         ) {
           throw new AttendanceError(
-            `Duplicate ${payload.status.toLowerCase()} attendance is not allowed on the same day.`,
+            `Duplicate ${payload.status.toLowerCase()} entry is not allowed. You've already recorded attendance for today.`,
           );
         }
 
@@ -568,26 +580,28 @@ export async function POST(request: NextRequest) {
           });
 
           if (!overnightCheckoutAllowed) {
-            throw new AttendanceError(
-              "Attendance OUT is only allowed after a valid IN mark on the same day, unless the guard is closing an overnight shift the next morning.",
-            );
+            // Guard is trying to mark OUT for a stale session from a previous date.
+            // Auto-close the stale session instead of throwing an error.
+            staleOutAutoClosed = true;
           }
         }
 
-        if (payload.status === "Out" && lastState.lastStatus !== "In") {
-          throw new AttendanceError(
-            "Attendance OUT is only allowed after a valid IN mark.",
-          );
-        }
+        if (!staleOutAutoClosed) {
+          if (payload.status === "Out" && lastState.lastStatus !== "In") {
+            throw new AttendanceError(
+              "You haven't marked IN yet. Please mark IN first before recording OUT.",
+            );
+          }
 
-        if (
-          lastState.lastAttendanceDate === attendanceDate &&
-          lastState.lastStatus !== "In" &&
-          payload.status === "Out"
-        ) {
-          throw new AttendanceError(
-            "Attendance OUT is only allowed after a valid IN mark on the same day.",
-          );
+          if (
+            lastState.lastAttendanceDate === attendanceDate &&
+            lastState.lastStatus !== "In" &&
+            payload.status === "Out"
+          ) {
+            throw new AttendanceError(
+              "You haven't marked IN yet today. Please mark IN first before recording OUT.",
+            );
+          }
         }
       }
 
@@ -596,7 +610,7 @@ export async function POST(request: NextRequest) {
         (typeof payload.mockLocationReason === "string" &&
           payload.mockLocationReason.trim().length > 0);
       const locationReviewWarning =
-        actualDistance > effectiveRadiusMeters && !siteIsStrictGeofence
+        geofenceViolation
           ? `Location is ${Math.round(actualDistance)}m away from the configured site radius of ${effectiveRadiusMeters}m.`
           : isMockLocationSuspected
             ? payload.mockLocationReason?.trim() ||
@@ -609,6 +623,117 @@ export async function POST(request: NextRequest) {
           ? "Checkout context differed from the original IN session and requires admin review."
           : null,
       ].filter(Boolean) as string[];
+
+      // Auto-close stale open session from a previous date
+      if (staleSessionAutoClosed && lastState) {
+        const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
+        const staleDate = lastState.lastAttendanceDate ?? "unknown";
+        transaction.set(staleOutLogRef, {
+          employeeId: payload.employeeId,
+          employeeDocId: payload.employeeDocId,
+          employeeName: payload.employeeName,
+          status: "Out",
+          attendanceDate: staleDate,
+          siteId: lastState.lastSiteId ?? payload.siteId,
+          siteName: payload.siteName,
+          clientName: lastState.lastSiteClientName ?? siteClientName,
+          autoClosed: true,
+          autoClosedReason:
+            "Previous IN session from " +
+            staleDate +
+            " was never checked out. Auto-closed by new IN on " +
+            submittedAttendanceDate +
+            ".",
+          reportedAt: now,
+          serverProcessedAt: now,
+          createdAt: now,
+          attendanceReviewWarnings: [
+            "Auto-closed stale session from " + staleDate + ".",
+          ],
+        });
+        if (lastState.openSessionId) {
+          transaction.set(
+            adminDb
+              .collection("attendanceSessions")
+              .doc(String(lastState.openSessionId)),
+            {
+              status: "closed",
+              outLogId: staleOutLogRef.id,
+              endedAt: now,
+              autoClosed: true,
+              autoClosedReason: "Auto-closed by new IN on " + submittedAttendanceDate,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        }
+        attendanceReviewWarnings.push(
+          "Previous session from " + staleDate + " was auto-closed (no OUT was recorded).",
+        );
+      }
+
+      // Auto-close stale session via OUT attempt (guard forgot to mark OUT yesterday)
+      if (staleOutAutoClosed && lastState) {
+        const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
+        const staleDate = lastState.lastAttendanceDate ?? "unknown";
+        transaction.set(staleOutLogRef, {
+          employeeId: payload.employeeId,
+          employeeDocId: payload.employeeDocId,
+          employeeName: payload.employeeName,
+          status: "Out",
+          attendanceDate: staleDate,
+          siteId: lastState.lastSiteId ?? payload.siteId,
+          siteName: payload.siteName,
+          clientName: lastState.lastSiteClientName ?? siteClientName,
+          autoClosed: true,
+          autoClosedReason:
+            "Previous IN session from " +
+            staleDate +
+            " was never checked out. Auto-closed by OUT attempt on " +
+            submittedAttendanceDate +
+            ".",
+          reportedAt: now,
+          serverProcessedAt: now,
+          createdAt: now,
+          attendanceReviewWarnings: [
+            "Auto-closed stale session from " + staleDate + " (guard attempted late OUT).",
+          ],
+        });
+        if (lastState.openSessionId) {
+          transaction.set(
+            adminDb
+              .collection("attendanceSessions")
+              .doc(String(lastState.openSessionId)),
+            {
+              status: "closed",
+              outLogId: staleOutLogRef.id,
+              endedAt: now,
+              autoClosed: true,
+              autoClosedReason:
+                "Auto-closed by OUT attempt on " + submittedAttendanceDate,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        }
+        // Clear attendanceState so guard can start fresh
+        transaction.set(
+          attendanceStateRef,
+          {
+            lastStatus: "Out",
+            lastAttendanceDate: staleDate,
+            lastAttendanceId: staleOutLogRef.id,
+            openSessionId: FieldValue.delete(),
+            openSessionStartedAt: FieldValue.delete(),
+            lastLoggedAt: now,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+        staleOutAutoCloseResult = { id: staleOutLogRef.id, staleDate };
+        return; // Don't write today's OUT log — nothing to check out from
+      }
+
       const attendanceSessionId =
         payload.status === "In"
           ? attendanceLogRef.id
@@ -810,6 +935,21 @@ export async function POST(request: NextRequest) {
         );
     }
 
+    // If we auto-closed a stale session via OUT attempt, return early
+    if (staleOutAutoCloseResult !== null) {
+      const result = staleOutAutoCloseResult as { id: string; staleDate: string };
+      await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);
+      return NextResponse.json({
+        success: true,
+        id: result.id,
+        autoClosed: true,
+        message:
+          "Previous IN session from " +
+          result.staleDate +
+          " was never checked out. Session has been auto-closed. Please mark IN to start today's attendance.",
+      });
+    }
+
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);
 
     return NextResponse.json({
@@ -821,7 +961,7 @@ export async function POST(request: NextRequest) {
       await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitFailure);
       return NextResponse.json(
         {
-          error: "Invalid attendance submission.",
+          error: "Something went wrong with your submission. Please try again.",
           details: error.flatten(),
         },
         { status: 400 },

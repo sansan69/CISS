@@ -650,6 +650,22 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "clientName", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "attendanceDate", "order": "ASCENDING" },
+        { "fieldPath": "district", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeDocId", "order": "ASCENDING" },
+        { "fieldPath": "attendanceDate", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -114,6 +114,27 @@ export async function GET(request: Request) {
     const district: string = empData.district ?? "";
     const profilePhotoUrl: string | null = empData.profilePhotoUrl ?? null;
 
+    // ─── Current attendance status ──────────────────────────────────────────
+    let attendanceStatus: { lastStatus: string | null; lastAttendanceDate: string | null } = {
+      lastStatus: null,
+      lastAttendanceDate: null,
+    };
+    try {
+      const stateSnap = await adminDb
+        .collection("attendanceState")
+        .doc(guard.employeeDocId)
+        .get();
+      if (stateSnap.exists) {
+        const stateData = stateSnap.data()!;
+        attendanceStatus = {
+          lastStatus: stateData.lastStatus ?? null,
+          lastAttendanceDate: stateData.lastAttendanceDate ?? null,
+        };
+      }
+    } catch {
+      // attendanceState may not exist yet — guard has never marked attendance
+    }
+
     // ─── This month's attendance ───────────────────────────────────────────
     const now = new Date();
     const year = now.getFullYear();
@@ -159,9 +180,11 @@ export async function GET(request: Request) {
       )
       .sort((a, b) => (b.attendanceDate || "").localeCompare(a.attendanceDate || ""));
 
-    // Count unique present days (days with at least one "In" log)
+    // Count unique present days — match aggregator: count any date with at least
+    // one attendance log regardless of In/Out status. Auto-closed sessions still
+    // count as present since the guard was on duty.
     const presentDates = new Set(
-      filteredLogs.filter((l) => l.status === "In").map((l) => l.attendanceDate)
+      filteredLogs.map((l) => l.attendanceDate),
     );
     const presentDays = presentDates.size;
     const workingDays = workingDaysInMonth(year, month);
@@ -271,6 +294,7 @@ export async function GET(request: Request) {
       nextShift,
       nextShiftUnavailable,
       recentAttendance,
+      attendanceStatus,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Internal server error.";

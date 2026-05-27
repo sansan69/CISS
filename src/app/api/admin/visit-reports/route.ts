@@ -178,6 +178,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "clientId, visitDate, and summary are required." }, { status: 400 });
     }
 
+    // Validate visit date format
+    const parsedDate = new Date(body.visitDate);
+    if (isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: "visitDate must be a valid date." }, { status: 400 });
+    }
+
     if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
       return NextResponse.json({ error: "Field officer or admin access required." }, { status: 403 });
     }
