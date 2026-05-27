@@ -31,6 +31,8 @@ interface PhotoCaptureProps {
   fileTypeLabel?: string;
   /** Capture device GPS location and include in timestamp overlay */
   captureLocation?: boolean;
+  /** Called with GPS coordinates after they are captured */
+  onLocationCaptured?: (pos: { lat: number; lng: number } | null) => void;
 }
 
 async function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
@@ -159,6 +161,7 @@ export function PhotoCapture({
   uploadLabel = "Upload",
   fileTypeLabel = "JPG, PNG, PDF allowed.",
   captureLocation = false,
+  onLocationCaptured,
 }: PhotoCaptureProps) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
@@ -190,6 +193,7 @@ export function PhotoCapture({
 
     // Capture GPS location once for all photos in this batch (if enabled)
     const pos = captureLocation ? await getCurrentPosition() : null;
+    if (pos) onLocationCaptured?.(pos);
     const locationLines = pos ? [`GPS ${pos.lat}, ${pos.lng}`] : undefined;
 
     try {

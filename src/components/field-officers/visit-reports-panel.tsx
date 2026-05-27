@@ -79,6 +79,7 @@ export function VisitReportsPanel() {
     issuesFound: "", actionsRequired: "", status: "draft" as VisitReportStatus,
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [visitLocation, setVisitLocation] = useState<{ lat: number; lng: number } | null>(null);
   const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
   const visibleSites = sites.filter((site) => {
     if (!isFo || assignedDistricts.length === 0) return true;
@@ -144,6 +145,7 @@ export function VisitReportsPanel() {
           actionsRequired: form.actionsRequired,
           status: form.status,
           photoUrls,
+          visitLocation,
         }),
       });
       if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
@@ -151,6 +153,7 @@ export function VisitReportsPanel() {
       setNewSheetOpen(false);
       setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "", guardsPresentCount: "", guardsAbsentCount: "", summary: "", issuesFound: "", actionsRequired: "", status: "draft" });
       setPhotoUrls([]);
+      setVisitLocation(null);
       loadReports(activeTab);
     } catch (error) {
       toast({
@@ -448,6 +451,7 @@ export function VisitReportsPanel() {
                 accept="image/*"
                 timestampImages
                 allowSelfie={true}
+                onLocationCaptured={setVisitLocation}
                 captureLocation
                 uploadLabel="Upload photo"
                 stampTitle="Site Visit"

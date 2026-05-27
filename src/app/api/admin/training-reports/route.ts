@@ -124,9 +124,9 @@ export async function GET(request: Request) {
     if (isClient) {
       q = q.orderBy("createdAt", "desc");
     } else if (!isAdmin) {
-      q = q.where("fieldOfficerId", "==", decoded.uid);
+      q = q.where("fieldOfficerId", "==", decoded.uid).orderBy("createdAt", "desc");
     } else if (fieldOfficerId) {
-      q = q.where("fieldOfficerId", "==", fieldOfficerId);
+      q = q.where("fieldOfficerId", "==", fieldOfficerId).orderBy("createdAt", "desc");
     } else {
       q = q.orderBy("createdAt", "desc");
     }
@@ -174,6 +174,7 @@ export async function POST(request: Request) {
       photoUrls?: string[];
       attachmentUrls?: string[];
       clientReportUrl?: string;
+      visitLocation?: { lat: number; lng: number };
     };
 
     if (!body.clientId || !body.trainingDate || !body.topic) {
@@ -235,6 +236,7 @@ export async function POST(request: Request) {
       photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
       attachmentUrls: Array.isArray(body.attachmentUrls) ? body.attachmentUrls : [],
       clientReportUrl: body.clientReportUrl ?? null,
+      visitLocation: body.visitLocation ?? null,
       status,
       createdAt: FieldValue.serverTimestamp(),
     });

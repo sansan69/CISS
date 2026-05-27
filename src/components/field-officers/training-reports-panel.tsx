@@ -79,6 +79,7 @@ export function TrainingReportsPanel() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [clientReportUrl, setClientReportUrl] = useState<string[]>([]);
+  const [visitLocation, setVisitLocation] = useState<{ lat: number; lng: number } | null>(null);
   const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
   const visibleSites = sites.filter((site) => {
     if (!isFo || assignedDistricts.length === 0) return true;
@@ -147,6 +148,7 @@ export function TrainingReportsPanel() {
           photoUrls,
           attachmentUrls,
           clientReportUrl: clientReportUrl[0] ?? null,
+          visitLocation,
         }),
       });
       if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
@@ -159,6 +161,7 @@ export function TrainingReportsPanel() {
       setPhotoUrls([]);
       setAttachmentUrls([]);
       setClientReportUrl([]);
+      setVisitLocation(null);
       loadReports(activeTab);
     } catch (error) {
       toast({
@@ -517,6 +520,8 @@ export function TrainingReportsPanel() {
                 accept="image/*"
                 timestampImages
                 allowSelfie={true}
+                onLocationCaptured={setVisitLocation}
+                captureLocation
                 uploadLabel="Upload photo"
                 stampTitle="Training Session"
                 stampLines={[

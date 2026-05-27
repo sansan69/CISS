@@ -124,9 +124,9 @@ export async function GET(request: Request) {
     if (isClient) {
       q = q.orderBy("createdAt", "desc");
     } else if (!isAdmin) {
-      q = q.where("fieldOfficerId", "==", decoded.uid);
+      q = q.where("fieldOfficerId", "==", decoded.uid).orderBy("createdAt", "desc");
     } else if (fieldOfficerId) {
-      q = q.where("fieldOfficerId", "==", fieldOfficerId);
+      q = q.where("fieldOfficerId", "==", fieldOfficerId).orderBy("createdAt", "desc");
     } else {
       q = q.orderBy("createdAt", "desc");
     }
@@ -172,6 +172,7 @@ export async function POST(request: Request) {
       guardsAbsentCount?: number;
       status?: string;
       photoUrls?: string[];
+      visitLocation?: { lat: number; lng: number };
     };
 
     if (!body.clientId || !body.visitDate || !body.summary) {
@@ -223,6 +224,7 @@ export async function POST(request: Request) {
       guardsPresentCount: body.guardsPresentCount ?? 0,
       guardsAbsentCount: body.guardsAbsentCount ?? 0,
       photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
+      visitLocation: body.visitLocation ?? null,
       status,
       createdAt: FieldValue.serverTimestamp(),
     });

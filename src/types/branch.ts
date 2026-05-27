@@ -51,6 +51,7 @@ export interface FoTrainingReport {
   photoUrls: string[];
   attachmentUrls: string[];
   clientReportUrl?: string;
+  visitLocation?: { lat: number; lng: number };
   status: TrainingReportStatus;
   acknowledgedBy?: string;
   acknowledgedAt?: Timestamp;
