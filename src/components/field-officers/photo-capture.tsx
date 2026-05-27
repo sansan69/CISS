@@ -163,19 +163,46 @@ export function PhotoCapture({
 
     setUploading(true);
     const added: string[] = [];
+    const errors: string[] = [];
     try {
       for (const file of Array.from(files).slice(0, slotsLeft)) {
-        const timestamp = Date.now();
-        const uploadFile = timestampImages
-          ? await createTimestampedPhoto(file, stampTitle, stampLines)
-          : file;
-        const path = `foReports/${folder}/${user.uid}/${timestamp}_${uploadFile.name.replace(/\s+/g, "_")}`;
-        const snap = await uploadBytes(ref(storage, path), uploadFile, {
-          contentType: uploadFile.type || undefined,
-        });
-        added.push(await getDownloadURL(snap.ref));
+        try {
+          const timestamp = Date.now();
+          const uploadFile = timestampImages
+            ? await createTimestampedPhoto(file, stampTitle, stampLines)
+            : file;
+          const path = `foReports/${folder}/${user.uid}/${timestamp}_${uploadFile.name.replace(/\s+/g, "_")}`;
+          const snap = await uploadBytes(ref(storage, path), uploadFile, {
+            contentType: uploadFile.type || undefined,
+          });
+          // Retry getDownloadURL up to 3 times (transient token/network issues)
+          let url: string | null = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              url = await getDownloadURL(snap.ref);
+              break;
+            } catch (e) {
+              if (attempt === 2) throw e;
+              await new Promise(r => setTimeout(r, 1000));
+            }
+          }
+          if (url) added.push(url);
+        } catch (fileErr: any) {
+          console.error('File upload failed:', fileErr);
+          errors.push(fileErr?.message || 'Upload failed');
+        }
       }
-      onChange([...urls, ...added]);
+      // Persist successfully uploaded URLs even if some files failed
+      if (added.length > 0) {
+        onChange([...urls, ...added]);
+      }
+      if (errors.length > 0) {
+        toast({
+          title: errors.length === 1 ? "1 file failed" : `${errors.length} files failed`,
+          description: `${added.length} uploaded. ${errors.join('; ')}`,
+          variant: "destructive",
+        });
+      }
     } catch (err) {
       console.error('Upload failed:', err);
       toast({ title: "Upload failed", description: "Could not upload file.", variant: "destructive" });
