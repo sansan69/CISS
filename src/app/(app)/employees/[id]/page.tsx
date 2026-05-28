@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck, KeyRound, RotateCcw } from 'lucide-react';
+import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck, KeyRound, RotateCcw, MoreHorizontal, Phone, MapPin, CheckCircle, AlertTriangle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
 import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
@@ -1394,7 +1395,24 @@ export default function AdminEmployeeProfilePage() {
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
               <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
-              <Badge variant={getStatusBadgeVariant(employee.status)} className="mt-1">{employee.status}</Badge>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <Badge variant={getStatusBadgeVariant(employee.status)}>{employee.status}</Badge>
+                {employee.phoneNumber && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                    <Phone size={10} /> {employee.phoneNumber}
+                  </span>
+                )}
+                {employee.district && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                    <MapPin size={10} /> {employee.district}
+                  </span>
+                )}
+                {employee.joiningDate && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                    <CalendarIcon size={10} /> Joined {employee.joiningDate?.toDate ? format(employee.joiningDate.toDate(), "MMM yyyy") : "—"}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
@@ -1407,36 +1425,39 @@ export default function AdminEmployeeProfilePage() {
             </Button>
             {isAdminView && (
               <>
-              <Button onClick={handleDownloadProfile} variant="outline" className="flex-1 sm:flex-none" disabled={isDownloadingPdf}>
-                  {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Download Profile Kit
-              </Button>
-              {canResetPin && (
-                <Button
-                  variant="outline"
-                  className="flex-1 sm:flex-none"
-                  onClick={() => setIsResetPinDialogOpen(true)}
-                >
-                  <KeyRound className="mr-2 h-4 w-4" />
-                  Reset PIN
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                className="flex-1 sm:flex-none"
-                onClick={() => handleResetAttendanceState()}
-                disabled={isResettingAttendanceState}
-              >
-                {isResettingAttendanceState ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                )}
-                Reset Attendance
-              </Button>
               <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
-                  <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit Profile"}
+                  <Edit3 className="mr-2 h-4 w-4" /> {isEditing ? "Cancel" : "Edit"}
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="shrink-0">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleDownloadProfile} disabled={isDownloadingPdf}>
+                    <Download className="mr-2 h-4 w-4" />
+                    {isDownloadingPdf ? "Generating PDF..." : "Download Profile Kit"}
+                  </DropdownMenuItem>
+                  {canResetPin && (
+                    <DropdownMenuItem onClick={() => setIsResetPinDialogOpen(true)}>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Reset PIN
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() => handleResetAttendanceState()}
+                    disabled={isResettingAttendanceState}
+                  >
+                    {isResettingAttendanceState ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                    )}
+                    Reset Attendance
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               </>
             )}
           </div>
