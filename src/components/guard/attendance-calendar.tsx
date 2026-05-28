@@ -16,6 +16,7 @@ export interface CalendarAttendanceEntry {
   time: string;
   distanceMeters?: number;
   shiftLabel?: string;
+  photoUrl?: string | null;
 }
 
 interface AttendanceCalendarProps {

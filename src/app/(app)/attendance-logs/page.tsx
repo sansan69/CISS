@@ -711,6 +711,90 @@ export default function AttendanceLogsPage() {
                     </div>
                   )}
                 </div>
+
+                <Separator />
+
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" /> GPS &amp; Location
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Guard GPS</p>
+                    <p className="font-medium">
+                      {selectedLog.locationCoords
+                        ? `${selectedLog.locationCoords.lat.toFixed(5)}, ${selectedLog.locationCoords.lon.toFixed(5)}`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Distance from site</p>
+                    <p className={`font-medium ${selectedLog.distanceMeters != null && selectedLog.distanceMeters > (selectedLog.geofenceRadiusAtTime ?? 200) ? "text-red-600" : ""}`}>
+                      {selectedLog.distanceMeters != null
+                        ? selectedLog.distanceMeters < 1000
+                          ? `${Math.round(selectedLog.distanceMeters)} m`
+                          : `${(selectedLog.distanceMeters / 1000).toFixed(1)} km`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">GPS accuracy</p>
+                    <p className="font-medium">
+                      {selectedLog.gpsAccuracyMeters != null
+                        ? `${Math.round(selectedLog.gpsAccuracyMeters)} m`
+                        : selectedLog.locationAccuracyMeters != null
+                          ? `${Math.round(selectedLog.locationAccuracyMeters)} m`
+                          : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Geofence radius</p>
+                    <p className="font-medium">
+                      {selectedLog.geofenceRadiusAtTime != null
+                        ? `${selectedLog.geofenceRadiusAtTime} m`
+                        : "—"}
+                    </p>
+                  </div>
+                  {selectedLog.isMockLocationSuspected && (
+                    <div className="sm:col-span-2">
+                      <Badge variant="destructive">Mock location suspected</Badge>
+                      {selectedLog.mockLocationReason && (
+                        <p className="text-xs text-muted-foreground mt-1">{selectedLog.mockLocationReason}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {selectedLog.photoCompliance && (
+                  <>
+                    <Separator />
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Uniform & Photo Review
+                    </h3>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={selectedLog.photoCompliance.overallStatus === "clear" ? "outline" : "destructive"\}>
+                          {selectedLog.photoCompliance.overallStatus === "clear" ? "Clear" : selectedLog.photoCompliance.overallStatus === "warning" ? "Review required" : "AI check unavailable"}
+                        </Badge>
+                        {selectedLog.photoCompliance.adminFlag && <Badge variant="secondary">Admin flag</Badge>}
+                      </div>
+                      {selectedLog.photoCompliance.warnings.length > 0 && (
+                        <div className="rounded-lg border bg-muted/20 p-3">
+                          <ul className="list-disc list-inside text-sm space-y-1">
+                            {selectedLog.photoCompliance.warnings.map((w, i) => (
+                              <li key={i} className="text-muted-foreground">{w}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>Shoes: {selectedLog.photoCompliance.missingShoes ? "❌ Missing" : "✅ OK"}</div>
+                        <div>ID Card: {selectedLog.photoCompliance.missingIdCard ? "❌ Missing" : "✅ OK"}</div>
+                        <div>Uniform: {selectedLog.photoCompliance.uniformIssue ? "❌ Issue" : "✅ OK"}</div>
+                        <div>Full body: {selectedLog.photoCompliance.fullBodyVisible ? "✅ Visible" : "❌ Not visible"}</div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}

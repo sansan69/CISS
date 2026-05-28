@@ -99,6 +99,7 @@ export async function GET(request: Request) {
         distanceMeters?: number;
         shiftLabel?: string;
         createdAt?: FirebaseFirestore.Timestamp;
+        photoUrl?: string;
       };
       return {
         id: d.id,
@@ -109,6 +110,7 @@ export async function GET(request: Request) {
         time: toISTTimeString(data.reportedAt ?? data.createdAt),
         distanceMeters: data.distanceMeters,
         shiftLabel: data.shiftLabel,
+        photoUrl: data.photoUrl ?? null,
         reportedAtMillis: timestampToMillis(data.reportedAt ?? data.createdAt),
       };
     }).sort((left, right) => {
@@ -124,10 +126,21 @@ export async function GET(request: Request) {
     );
     const presentDays = presentDates.size;
 
+    // Working days in month (exclude Sundays)
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let workingDays = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const day = new Date(year, month, d).getDay();
+      if (day !== 0) workingDays++;
+    }
+    const absentDays = Math.max(0, workingDays - presentDays);
+
     return NextResponse.json({
       month: monthStr,
       logs: rawLogs,
       presentDays,
+      workingDays,
+      absentDays,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Internal server error.";

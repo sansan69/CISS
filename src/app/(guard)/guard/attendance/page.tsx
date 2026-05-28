@@ -19,6 +19,8 @@ interface AttendanceResponse {
   month: string;
   logs: CalendarAttendanceEntry[];
   presentDays: number;
+  workingDays?: number;
+  absentDays?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,10 +158,18 @@ export default function GuardAttendancePage() {
       />
 
       {/* Summary */}
-      <div className="grid grid-cols-1 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-green-600">{presentDays}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Present this month</p>
+          <p className="text-xs text-gray-500 mt-0.5">Present</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold text-red-500">{data?.absentDays ?? 0}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Absent</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+          <p className="text-2xl font-bold" style={{ color: BRAND_BLUE }}>{data?.workingDays ?? data?.absentDays != null ? (presentDays + (data?.absentDays ?? 0)) : presentDays}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Working days</p>
         </div>
       </div>
 
@@ -211,9 +221,35 @@ export default function GuardAttendancePage() {
                 {log.shiftLabel && (
                   <p className="text-[9px] text-gray-400">{log.shiftLabel}</p>
                 )}
+                {log.distanceMeters != null && (
+                  <p className="text-[9px] text-gray-400">
+                    {log.distanceMeters < 1000
+                      ? `${Math.round(log.distanceMeters)} m`
+                      : `${(log.distanceMeters / 1000).toFixed(1)} km`}
+                    {log.distanceMeters > 200 && (
+                      <span className="text-red-400 ml-1">• Outside fence</span>
+                    )}
+                  </p>
+                )}
               </div>
 
-              <Badge
+              <div className="flex items-center gap-2 shrink-0">
+                {(log as any).photoUrl && (
+                  <a
+                    href={(log as any).photoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-10 w-10 rounded-lg overflow-hidden border bg-muted shrink-0"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={(log as any).photoUrl}
+                      alt="Attendance"
+                      className="h-full w-full object-cover"
+                    />
+                  </a>
+                )}
+                <Badge
                 variant="outline"
                 className={
                   log.status === "In"
@@ -223,6 +259,7 @@ export default function GuardAttendancePage() {
               >
                 {log.status}
               </Badge>
+              </div>
             </div>
           ))}
         </div>
