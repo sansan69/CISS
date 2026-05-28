@@ -580,8 +580,13 @@ export default function EmployeeDirectoryPage() {
                                                     <Badge variant={getStatusBadgeVariant(emp.status)} className="w-fit shrink-0">{emp.status}</Badge>
                                                 </div>
                                                 <div className="mt-1 break-words text-xs text-muted-foreground">
-                                                    {[emp.regionName, emp.clientName, emp.employeeId].filter(Boolean).join(' • ')}
+                                                    {[emp.regionName, emp.clientName, emp.employeeId, emp.district].filter(Boolean).join(' • ')}
                                                 </div>
+                                                {emp.phoneNumber && (
+                                                    <div className="mt-0.5 break-words text-xs text-muted-foreground">
+                                                        📞 {emp.phoneNumber}
+                                                    </div>
+                                                )}
                                                 {emp.createdAt && (() => {
                                                     const d = emp.createdAt?.toDate ? emp.createdAt.toDate() : new Date(emp.createdAt);
                                                     const isNew = (Date.now() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
@@ -595,7 +600,10 @@ export default function EmployeeDirectoryPage() {
                                                 {pendingItems.length === 0 ? (
                                                     <div className="mt-1 text-xs text-green-600">Complete</div>
                                                 ) : (
-                                                    <div className="mt-1 text-xs text-amber-600">{pendingItems.length} Pending</div>
+                                                    <div className="mt-1 text-xs text-amber-600">
+                                                        {pendingItems.slice(0, 2).join(', ')}
+                                                        {pendingItems.length > 2 ? ` +${pendingItems.length - 2} more` : ''}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

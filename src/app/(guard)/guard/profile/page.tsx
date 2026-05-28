@@ -1,141 +1,246 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { KeyRound, Phone, User2 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import React, { useEffect, useState, useCallback } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { useAppAuth } from "@/context/auth-context";
+import {
+  User,
+  Phone,
+  MapPin,
+  Building2,
+  Calendar,
+  IdCard,
+  Shield,
+  Mail,
+} from "lucide-react";
 
-type ProfileData = {
-  id: string;
-  employeeId?: string;
-  fullName?: string;
-  phoneNumber?: string;
-  emailAddress?: string;
-  clientName?: string;
-  district?: string;
-  resourceIdNumber?: string;
+const BRAND_BLUE = "#014c85";
+
+interface GuardProfileData {
+  fullName: string;
+  employeeId: string;
+  clientName: string;
+  district: string;
+  phoneNumber: string;
+  status: string;
+  gender?: string;
   joiningDate?: string;
-  status?: string;
+  resourceIdNumber?: string;
   profilePhotoUrl?: string | null;
   address?: string;
-};
+  emailAddress?: string;
+}
 
-function initials(name?: string) {
-  return (name || "Guard")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("");
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-16 w-16 rounded-full" />
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      </div>
+      <Skeleton className="h-48 rounded-xl" />
+    </div>
+  );
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 py-3">
+      <div
+        className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
+        style={{ backgroundColor: `${BRAND_BLUE}10` }}
+      >
+        <Icon size={16} style={{ color: BRAND_BLUE }} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+          {label}
+        </p>
+        <p className="text-sm font-medium text-gray-800 break-words">
+          {value || "—"}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default function GuardProfilePage() {
   const { user } = useAppAuth();
-  const { toast } = useToast();
+  const [data, setData] = useState<GuardProfileData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
     try {
+      setLoading(true);
+      setError(null);
       const token = await user.getIdToken();
       const res = await fetch("/api/guard/profile", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load profile.");
-      setProfile(data.employee ?? null);
-    } catch (error: any) {
-      toast({
-        title: "Could not load profile",
-        description: error?.message || "Please try again.",
-        variant: "destructive",
-      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const json: GuardProfileData = await res.json();
+      setData(json);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load profile."
+      );
     } finally {
       setLoading(false);
     }
-  }, [toast, user]);
+  }, [user]);
 
   useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
+    fetchProfile();
+  }, [fetchProfile]);
+
+  if (loading) return <ProfileSkeleton />;
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+          <p className="text-red-600 text-sm font-medium">Failed to load</p>
+          <p className="text-red-500 text-xs mt-1">{error}</p>
+          <button
+            onClick={fetchProfile}
+            className="mt-3 text-xs font-semibold text-red-600 underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
-    <div className="space-y-4 p-4 pb-6">
-      <div>
-        <p className="text-sm text-gray-500">Personal details</p>
-        <h1 className="text-lg font-bold text-gray-900">My Profile</h1>
+    <div className="p-4 space-y-4 pb-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        {data.profilePhotoUrl ? (
+          <div className="relative h-16 w-16 rounded-full overflow-hidden ring-2 ring-white shadow-md shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={data.profilePhotoUrl}
+              alt={data.fullName}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-blue/10 shrink-0">
+            <span className="text-2xl font-bold text-brand-blue">
+              {(data.fullName || "G").charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold text-gray-900 leading-tight">
+            {data.fullName}
+          </h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {data.employeeId}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge
+              variant={data.status === "Active" ? "default" : "secondary"}
+              className="text-[10px]"
+            >
+              {data.status}
+            </Badge>
+            <span className="text-[10px] text-gray-400">
+              {data.clientName}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-40 rounded-2xl" />
-          <Skeleton className="h-32 rounded-2xl" />
-        </div>
-      ) : profile ? (
-        <>
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardContent className="flex items-center gap-4 p-4">
-              <Avatar className="h-16 w-16">
-                <AvatarImage src={profile.profilePhotoUrl || undefined} />
-                <AvatarFallback>{initials(profile.fullName)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="text-lg font-semibold text-gray-900">{profile.fullName || "Guard"}</p>
-                <p className="text-sm text-gray-500">{profile.employeeId || "—"}</p>
-                <p className="text-xs text-gray-500">
-                  {profile.clientName || "No client"}{profile.district ? ` · ${profile.district}` : ""}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardContent className="space-y-4 p-4">
-              <div className="flex items-start gap-3">
-                <User2 className="mt-0.5 h-4 w-4 text-[#014c85]" />
-                <div className="text-sm">
-                  <p className="font-medium text-gray-900">Resource ID</p>
-                  <p className="text-gray-600">{profile.resourceIdNumber || "—"}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Phone className="mt-0.5 h-4 w-4 text-[#014c85]" />
-                <div className="text-sm">
-                  <p className="font-medium text-gray-900">Contact</p>
-                  <p className="text-gray-600">{profile.phoneNumber || "—"}</p>
-                  <p className="text-gray-600">{profile.emailAddress || "—"}</p>
-                </div>
-              </div>
-              <div className="text-sm">
-                <p className="font-medium text-gray-900">Address</p>
-                <p className="text-gray-600">{profile.address || "—"}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                  Status: {profile.status || "—"}
-                </span>
-                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                  Joined: {profile.joiningDate || "—"}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Button asChild className="w-full rounded-xl bg-[#014c85] hover:bg-[#013a6b]">
-            <Link href="/guard-login/reset">
-              <KeyRound className="mr-1.5 h-4 w-4" />
-              Change PIN
-            </Link>
-          </Button>
-        </>
-      ) : null}
+      {/* Details Card */}
+      <Card className="rounded-xl shadow-sm border-0">
+        <CardContent className="p-2">
+          <InfoRow
+            icon={Phone}
+            label="Phone Number"
+            value={data.phoneNumber}
+          />
+          <Separator />
+          <InfoRow
+            icon={Mail}
+            label="Email"
+            value={data.emailAddress || "—"}
+          />
+          <Separator />
+          <InfoRow
+            icon={User}
+            label="Gender"
+            value={data.gender || "—"}
+          />
+          <Separator />
+          <InfoRow
+            icon={Calendar}
+            label="Joining Date"
+            value={data.joiningDate ? formatDate(data.joiningDate) : "—"}
+          />
+          <Separator />
+          <InfoRow
+            icon={IdCard}
+            label="Resource ID"
+            value={data.resourceIdNumber || "—"}
+          />
+          <Separator />
+          <InfoRow
+            icon={Building2}
+            label="Client"
+            value={data.clientName}
+          />
+          <Separator />
+          <InfoRow
+            icon={MapPin}
+            label="District"
+            value={data.district}
+          />
+          {data.address && (
+            <>
+              <Separator />
+              <InfoRow
+                icon={MapPin}
+                label="Address"
+                value={data.address}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
