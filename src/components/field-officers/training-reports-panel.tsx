@@ -68,6 +68,9 @@ export function TrainingReportsPanel() {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [reports, setReports] = useState<FoTrainingReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [districtFilter, setDistrictFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   const [newSheetOpen, setNewSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -95,6 +98,14 @@ export function TrainingReportsPanel() {
     try {
       const params = new URLSearchParams();
       if (tab !== "all") params.set("status", tab);
+      if (districtFilter) params.set("district", districtFilter);
+      if (clientFilter) params.set("clientId", clientFilter);
+      if (monthFilter) {
+        const [year, month] = monthFilter.split("-");
+        params.set("startDate", `${year}-${month}-01`);
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        params.set("endDate", `${year}-${month}-${String(lastDay).padStart(2, "0")}`);
+      }
       const res = await authorizedFetch(`${reportEndpoint}?${params.toString()}`);
       if (!res.ok) {
         throw new Error(await reportErrorMessage(res, "Failed to load training reports"));
@@ -110,7 +121,7 @@ export function TrainingReportsPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast, reportEndpoint]);
+  }, [toast, districtFilter, clientFilter, monthFilter, reportEndpoint]);
 
   useEffect(() => { loadReports(activeTab); }, [activeTab, loadReports]);
 
@@ -201,6 +212,43 @@ export function TrainingReportsPanel() {
           </Button>
         </div>
       )}
+
+      {/* Filter bar — visible to all roles */}
+      <div className="flex gap-3 items-end flex-wrap">
+        <div className="w-36 space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Month/Year</Label>
+          <Input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+          />
+        </div>
+        {isAdmin && (
+          <>
+            <div className="w-48 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">District</Label>
+              <Input
+                placeholder="e.g. Ernakulam"
+                value={districtFilter}
+                onChange={(e) => setDistrictFilter(e.target.value)}
+              />
+            </div>
+            <div className="w-64 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Client</Label>
+              <Select value={clientFilter} onValueChange={(v) => setClientFilter(v === "__all__" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="All clients" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All clients</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+        <Button variant="outline" size="sm" onClick={() => loadReports(activeTab)}>Apply</Button>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">

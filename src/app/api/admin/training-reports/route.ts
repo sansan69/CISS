@@ -116,6 +116,8 @@ export async function GET(request: Request) {
     const fieldOfficerId = url.searchParams.get("fieldOfficerId");
     const clientId = url.searchParams.get("clientId");
     const district = url.searchParams.get("district");
+    const startDate = url.searchParams.get("startDate");
+    const endDate = url.searchParams.get("endDate");
     const isAdmin = hasAdminAccess(decoded);
     const isClient = hasClientAccess(decoded);
 
@@ -143,6 +145,15 @@ export async function GET(request: Request) {
       .filter((report) => !status || report.status === status)
       .filter((report) => !clientId || report.clientId === clientId)
       .filter((report) => !district || districtMatches(String(report.district ?? ""), district))
+      .filter((report) => {
+        if (!startDate && !endDate) return true;
+        const dateStr = serializeDate((report as Record<string, unknown>).trainingDate);
+        if (!dateStr) return false;
+        const d = dateStr.slice(0, 10); // YYYY-MM-DD
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      })
       .sort((left, right) => createdAtMillis(right) - createdAtMillis(left))
       .slice(0, 200);
     return NextResponse.json({ reports });
