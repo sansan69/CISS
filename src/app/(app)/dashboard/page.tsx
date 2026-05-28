@@ -42,7 +42,7 @@ import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 interface DashboardStats  { total: number; active: number; inactiveOrExited: number; }
 interface NewHiresData    { month: string; hires: number; }
 interface RecentActivity  { id: string; text: string; subtext: string; timestamp: Date; }
-interface UpcomingDuty    { id: string; siteName: string; clientName: string; date: Date; totalManpower: number; }
+interface UpcomingDuty    { id: string; siteName: string; clientName: string; district: string; date: Date; totalManpower: number; }
 interface ClientCoverage  {
   clientName: string;
   totalGuards: number;
@@ -772,13 +772,23 @@ export default function DashboardPage() {
           </div>
           {/* Active badge */}
           {userRole !== 'client' && !isLoading && stats && (
-            <div className="flex flex-col items-end shrink-0">
-              <span className="text-2xl font-bold text-emerald-600 tabular-nums leading-none">
-                {stats.active}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
-                on duty
-              </span>
+            <div className="flex items-center gap-6 shrink-0">
+              <div className="flex flex-col items-end">
+                <span className="text-2xl font-bold text-emerald-600 tabular-nums leading-none">
+                  {stats.active}
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
+                  active guards
+                </span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-2xl font-bold text-brand-blue tabular-nums leading-none">
+                  {todayAttendanceDocs.length}
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
+                  checks today
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -788,6 +798,17 @@ export default function DashboardPage() {
         <ClientOperationsDashboard />
       ) : (
         <>
+      {userRole === 'fieldOfficer' && assignedDistricts.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {assignedDistricts.map((d) => (
+            <span key={d} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-0.5 text-[10px] font-semibold text-brand-blue">
+              <MapPin className="h-3 w-3" />
+              {d}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* ── Stat Cards 2×2 ───────────────────────────────────────────────── */}
       {stats && (
         <DashboardStats 
@@ -837,7 +858,7 @@ export default function DashboardPage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold truncate">{duty.siteName}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {duty.clientName} · {format(duty.date, "EEE dd MMM")}
+                          {duty.clientName} · {duty.district} · {format(duty.date, "EEE dd MMM")}
                         </p>
                       </div>
                       <Badge variant="brand-outline" className="shrink-0 tabular-nums">
@@ -866,11 +887,53 @@ export default function DashboardPage() {
 
       {/* ── Admin: Charts + Recent Activity ───────────────────────────────── */}
       {userRole !== 'fieldOfficer' && userRole !== 'client' && (
+        <>
         <DashboardCharts 
           role={userRole as any}
           newHiresData={newHiresData}
           clientCoverage={clientCoverage}
         />
+
+        {/* ── Recent Activity ───────────────────────────────────────────── */}
+        {recentActivity.length > 0 && (
+          <div>
+            <p className="section-label mb-3">Recent Activity</p>
+            <Card>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border/60">
+                  {recentActivity.map((activity) => (
+                    <Link
+                      key={activity.id}
+                      href={`/employees/${activity.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
+                    >
+                      <Avatar className="h-10 w-10 shrink-0">
+                        <AvatarFallback className="bg-brand-blue/10 text-brand-blue text-xs">
+                          {activity.text.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">{activity.text}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {activity.subtext} · {format(activity.timestamp, "dd MMM yyyy")}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="pt-0">
+                <Button asChild size="sm" variant="ghost-brand" className="w-full">
+                  <Link href="/employees">
+                    View all employees <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        )}
+        </>
       )}
 
         </>
