@@ -768,11 +768,11 @@ export default function AttendanceLogsPage() {
                   <>
                     <Separator />
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Uniform & Photo Review
+                      Uniform &amp; Photo Review
                     </h3>
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant={selectedLog.photoCompliance.overallStatus === "clear" ? "outline" : "destructive"\}>
+                        <Badge variant={selectedLog.photoCompliance.overallStatus === "clear" ? "outline" : "destructive"}>
                           {selectedLog.photoCompliance.overallStatus === "clear" ? "Clear" : selectedLog.photoCompliance.overallStatus === "warning" ? "Review required" : "AI check unavailable"}
                         </Badge>
                         {selectedLog.photoCompliance.adminFlag && <Badge variant="secondary">Admin flag</Badge>}
