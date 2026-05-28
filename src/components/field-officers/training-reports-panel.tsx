@@ -371,6 +371,14 @@ export function TrainingReportsPanel() {
                   <p className="text-sm">{detailReport.description}</p>
                 </div>
               )}
+              {detailReport.visitLocation && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">GPS Location</p>
+                  <p className="text-sm text-muted-foreground">
+                    {detailReport.visitLocation.lat.toFixed(5)}, {detailReport.visitLocation.lng.toFixed(5)}
+                  </p>
+                </div>
+              )}
               {detailReport.photoUrls?.length > 0 && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">

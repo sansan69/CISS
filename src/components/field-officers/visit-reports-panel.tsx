@@ -547,6 +547,14 @@ export function VisitReportsPanel() {
                   <p className="text-sm">{selectedReport.issuesFound}</p>
                 </div>
               )}
+              {selectedReport.visitLocation && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">GPS Location</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedReport.visitLocation.lat.toFixed(5)}, {selectedReport.visitLocation.lng.toFixed(5)}
+                  </p>
+                </div>
+              )}
               {selectedReport.actionsRequired && (
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Actions Required</p>

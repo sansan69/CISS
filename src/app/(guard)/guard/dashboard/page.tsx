@@ -31,6 +31,7 @@ interface DashboardData {
   profilePhotoUrl: string | null;
   attendanceStats: {
     presentDays: number;
+    absentDays: number;
     workingDays: number;
   };
   latestEvalScore: number | null;
@@ -197,17 +198,37 @@ export default function GuardDashboardPage() {
     <div className="p-4 space-y-4 pb-6">
       {/* Greeting */}
       <div className="animate-slide-up stagger-1">
-        <p className="text-muted-foreground text-sm">{getGreeting()},</p>
-        <h1 className="text-xl font-bold text-foreground leading-tight font-exo2 tracking-tight">
-          {data.employeeName || "Guard"}
-        </h1>
-        {data.clientName && (
-          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-            <Building2 size={11} />
-            {data.clientName}
-            {data.district ? ` · ${data.district}` : ""}
-          </p>
-        )}
+        <div className="flex items-center gap-4">
+          {data.profilePhotoUrl ? (
+            <div className="relative h-14 w-14 rounded-full overflow-hidden ring-2 ring-white shadow-md shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={data.profilePhotoUrl}
+                alt={data.employeeName}
+                className="h-full w-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 shrink-0">
+              <span className="text-xl font-bold text-brand-blue">
+                {(data.employeeName || "G").charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-muted-foreground text-sm">{getGreeting()},</p>
+            <h1 className="text-xl font-bold text-foreground leading-tight font-exo2 tracking-tight">
+              {data.employeeName || "Guard"}
+            </h1>
+            {data.clientName && (
+              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <Building2 size={11} />
+                {data.clientName}
+                {data.district ? ` · ${data.district}` : ""}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Attendance Status Banner */}
@@ -260,7 +281,7 @@ export default function GuardDashboardPage() {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <StatCard
           label="Present this month"
           value={data.attendanceStats.presentDays}
@@ -269,11 +290,18 @@ export default function GuardDashboardPage() {
           index={0}
         />
         <StatCard
+          label="Absent this month"
+          value={data.attendanceStats.absentDays}
+          icon={Clock}
+          color="#ef4444"
+          index={1}
+        />
+        <StatCard
           label="Working days"
           value={data.attendanceStats.workingDays}
           icon={Clock}
           color={BRAND_GOLD}
-          index={1}
+          index={2}
         />
         <StatCard
           label={data.latestEvalScore !== null ? "Eval score" : "Eval"}
@@ -282,7 +310,7 @@ export default function GuardDashboardPage() {
           }
           icon={Star}
           color={BRAND_BLUE}
-          index={2}
+          index={3}
         />
       </div>
 
