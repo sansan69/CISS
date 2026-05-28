@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, FileText, CheckCircle2, Clock, Eye, ImageIcon } from "lucide-react";
+import { Plus, FileText, CheckCircle2, Eye, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
@@ -69,6 +69,7 @@ export function VisitReportsPanel() {
   const [reports, setReports] = useState<FoVisitReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [districtFilter, setDistrictFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
 
   // New report sheet
   const [newSheetOpen, setNewSheetOpen] = useState(false);
@@ -98,6 +99,7 @@ export function VisitReportsPanel() {
       const params = new URLSearchParams();
       if (tab !== "all") params.set("status", tab);
       if (districtFilter) params.set("district", districtFilter);
+      if (clientFilter) params.set("clientId", clientFilter);
       const res = await authorizedFetch(`${reportEndpoint}?${params.toString()}`);
       if (!res.ok) {
         throw new Error(await reportErrorMessage(res, "Failed to load visit reports"));
@@ -199,7 +201,7 @@ export function VisitReportsPanel() {
       )}
 
       {isAdmin && (
-        <div className="flex gap-3 items-end">
+        <div className="flex gap-3 items-end flex-wrap">
           <div className="w-48 space-y-1.5">
             <Label className="text-xs text-muted-foreground">Filter by District</Label>
             <Input
@@ -207,6 +209,18 @@ export function VisitReportsPanel() {
               value={districtFilter}
               onChange={(e) => setDistrictFilter(e.target.value)}
             />
+          </div>
+          <div className="w-64 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Filter by Client</Label>
+            <Select value={clientFilter} onValueChange={(v) => setClientFilter(v === "__all__" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="All clients" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All clients</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button variant="outline" size="sm" onClick={() => loadReports(activeTab)}>Apply</Button>
         </div>
@@ -247,8 +261,8 @@ export function VisitReportsPanel() {
           {reports.map((report) => {
             const sc = STATUS_CONFIG[report.status];
             return (
-              <Card key={report.id} className="overflow-hidden">
-                <CardContent className="p-4">
+              <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="p-4" onClick={() => { setSelectedReport(report); setReviewNotes(""); setReviewSheetOpen(true); }}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -272,27 +286,15 @@ export function VisitReportsPanel() {
                         <p className="text-sm text-foreground/80 line-clamp-2 mt-1">{report.summary}</p>
                       )}
                     </div>
-                    <div className="shrink-0">
-                      {isAdmin && report.status === "submitted" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => { setSelectedReport(report); setReviewNotes(""); setReviewSheetOpen(true); }}
-                        >
-                          <Eye className="h-3.5 w-3.5 mr-1" />
-                          Review
-                        </Button>
-                      )}
-                      {isAdmin && report.status === "reviewed" && (
-                        <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Reviewed
-                        </span>
-                      )}
-                      {isAdmin && report.status === "draft" && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3.5 w-3.5" /> Draft
-                        </span>
-                      )}
+                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setSelectedReport(report); setReviewNotes(""); setReviewSheetOpen(true); }}
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1" />
+                        View
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -497,6 +499,12 @@ export function VisitReportsPanel() {
           </SheetHeader>
           {selectedReport && (
             <div className="space-y-4 mt-6">
+              <div className="flex items-center gap-2">
+                <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", STATUS_CONFIG[selectedReport.status].className)}>
+                  {STATUS_CONFIG[selectedReport.status].label}
+                </span>
+                {selectedReport.district && <span className="text-xs text-muted-foreground">{selectedReport.district}</span>}
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Client / Site</p>
                 <p className="text-sm">{selectedReport.clientName}{selectedReport.siteName ? ` — ${selectedReport.siteName}` : ""}</p>
@@ -559,10 +567,12 @@ export function VisitReportsPanel() {
                   placeholder="Add review comments..."
                 />
               </div>
-              <Button onClick={handleMarkReviewed} disabled={isReviewing} className="w-full">
-                <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                {isReviewing ? "Saving..." : "Mark as Reviewed"}
-              </Button>
+              {selectedReport.status === "submitted" && (
+                <Button onClick={handleMarkReviewed} disabled={isReviewing} className="w-full">
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  {isReviewing ? "Saving..." : "Mark as Reviewed"}
+                </Button>
+              )}
             </div>
           )}
         </SheetContent>

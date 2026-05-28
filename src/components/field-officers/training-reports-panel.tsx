@@ -238,8 +238,8 @@ export function TrainingReportsPanel() {
             const sc = STATUS_CONFIG[report.status];
             const isAcknowledging = acknowledgingId === report.id;
             return (
-              <Card key={report.id} className="overflow-hidden">
-                <CardContent className="p-4">
+              <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="p-4" onClick={() => { setDetailReport(report); setDetailSheetOpen(true); }}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -260,7 +260,7 @@ export function TrainingReportsPanel() {
                         <span className="ml-3">Attendees: {report.attendeeCount}</span>
                       </p>
                     </div>
-                    <div className="shrink-0 flex flex-col gap-1.5">
+                    <div className="shrink-0 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="sm"
                         variant="outline"
@@ -360,6 +360,17 @@ export function TrainingReportsPanel() {
                       </a>
                     ))}
                   </div>
+                </div>
+              )}
+              {detailReport.clientReportUrl && (
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                    <FileText className="inline h-3.5 w-3.5 mr-1" />Client Report
+                  </p>
+                  <a href={detailReport.clientReportUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-sm text-brand-blue hover:underline break-all">
+                    {detailReport.clientReportUrl}
+                  </a>
                 </div>
               )}
               {isAdmin && detailReport.status === "submitted" && (
