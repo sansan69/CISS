@@ -35,7 +35,7 @@ export default function DownloadPage() {
           ))}
         </div>
 
-        {/* Download Button */}
+        {/* Download Button — Release APK (AOT compiled, optimized) */}
         <a
           href="https://github.com/sansan69/CISS-Mobile/releases/download/v1.0.6/app-arm64-v8a-release.apk"
           download
