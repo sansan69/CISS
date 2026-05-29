@@ -60,4 +60,5 @@ streamvault/
 .env*.local
 ciss-workforce.apk
 zilliz-cloud-Free-01-username-password.txt
-public/releases/
+public/releases/*.apk
+!public/releases/*.apk.part*
