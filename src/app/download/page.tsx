@@ -37,7 +37,7 @@ export default function DownloadPage() {
 
         {/* Download Button */}
         <a
-          href="/api/download/apk"
+          href="https://github.com/sansan69/CISS-Mobile/releases/download/v1.0.6/app-arm64-v8a-debug.apk"
           download
           className="inline-flex items-center gap-2 px-8 py-4 bg-[#bd9c55] text-[#014c85] font-bold text-lg rounded-2xl hover:bg-[#d4b368] transition-colors shadow-lg shadow-black/20"
         >
