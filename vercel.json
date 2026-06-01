@@ -11,7 +11,7 @@
   "crons": [
     {
       "path": "/api/attendance/auto-checkout",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
