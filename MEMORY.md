@@ -2050,3 +2050,69 @@ But `app_router.dart` has **no `/field-officer` route**. GoRouter throws an exce
 - `flutter analyze` clean.
 - `flutter build apk` clean.
 - Committed to CISS-Mobile `main` as `e2e764f`.
+
+---
+
+## [2026-06-01] — Session: Comprehensive Android app audit and critical fixes
+
+### Audit Scope
+4 parallel agents audited: auth/session, attendance/QR, field officer screens, sync/network/offline.
+
+### Critical Fixes Applied (3 commits: `4463d65`, `a4d11b0`, `8c2847c`)
+
+**Auth & Session (`auth_controller.dart`, `auth_gate_screen.dart`)**
+- Added `dispose()` override to `AuthSessionNotifier` to cancel Firebase `idTokenChanges()` subscription
+- Awaited subscription cancellation to prevent duplicate listeners on rebuild
+- Added `_disposed` guard to prevent post-disposal `state = ...` writes
+- Fixed unsafe forced unwraps on `_cachedSession` class field (Dart doesn't promote fields)
+- Fixed auth gate error state from dead-end text to actionable screen with Retry + Sign-out buttons
+- Added mounted guards and user-facing error feedback to biometric check (was silently swallowing failures)
+- Fixed permission check error handling with catchError
+- Reset `_permissionsChecked` and biometric flags when session user changes
+- Fixed `_authHeaders()` to throw `StateError('Not authenticated')` instead of sending empty headers
+- Fixed `resolveCurrentSession` empty catch to log errors via `debugPrint`
+
+**Network (`mobile_repository.dart`)**
+- Fixed `_getJson`, `_postJson`, `_patchJson` to validate `response.data is Map` before casting
+- Added safe null/type handling instead of bare `as Map` casts that crashed on 204/null/HTML responses
+- Fixed `_isOfflineDioError` to include `unknown` and `badCertificate` types
+- Fixed `_getJson` to rethrow offline errors (was swallowing them, preventing queueing)
+
+**Sync (`sync_service.dart`, `providers.dart`)**
+- Fixed `SyncService.start()` to call `processQueue()` immediately on startup
+- Added retry eviction after 20 failed attempts (was empty no-op body)
+- Added try/catch around `_queue.removeRequest()` to prevent duplicate submissions on removal failure
+- Validated photo upload `result['url']` before using (was blindly assigning null)
+- Fixed FO report upload path to use `currentUser?.uid ?? 'unknown'` instead of `currentUser!.uid`
+- Added response body validation (`{success: false}` rejection detection)
+- Fixed `syncServiceProvider` to use `ref.read` + `onDispose` to prevent leaks and duplicate connectivity listeners
+
+**Offline Queue (`offline_queue.dart`, `offline_request.dart`)**
+- Fixed `getEncryptionCipher()` to catch `FlutterSecureStorage` and `base64Url.decode` errors
+- Fixed `getQueuedRequests()` to skip corrupted Hive entries instead of crashing entire queue
+- Fixed `OfflineRequest.fromJson()` to handle null/malformed fields gracefully with fallbacks
+
+**Attendance (`qr_attendance_flow.dart`, `guard_attendance_screen.dart`)**
+- Fixed QR flow `_employee!` and `_selectedSite!` forced unwraps with null checks + error UI
+- Fixed guard attendance GPS to use 10s timeout with `TimeoutException` handling
+- Fixed guard attendance silent return when position is null — now shows actionable error message
+- Added `mounted` guards to all `setState` calls after async GPS operations
+
+**Field Officer Screens**
+- Fixed reports screen `TextEditingController` recreation on every build — added persistent controllers in `initState`/`dispose`
+- Fixed attendance screen `firstWhere` without `orElse` crash when selected site disappears from list
+- Fixed work orders screen shared `ScrollController` across `TabBarView` tabs (caused assertion errors)
+- Fixed reports screen `FirebaseAuth.instance.currentUser!.uid` crash in 2 locations
+- Fixed dashboard `.clamp(0, 1)` missing `.toDouble()` in 3 locations
+
+**Refresh Controller & Draft Service**
+- Fixed `refreshControllerProvider` to start/stop with `ref.onDispose`
+- Fixed `draftServiceProvider` to use `ChangeNotifierProvider` (was plain `Provider`, so `notifyListeners()` never triggered rebuilds)
+
+**Security**
+- Removed unauthenticated QR attendance bypass from login hub (`onLongPress` on Guard Operations card navigated to `/qr-attendance` without any auth check)
+
+### Verification
+- `flutter analyze` clean.
+- `flutter build apk` clean.
+- All 3 commits pushed to CISS-Mobile `main`.
