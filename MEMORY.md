@@ -502,3 +502,45 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Both enforce 3+ training photos
 - Both allow visit reports without photos at submission time (with warning)
 - Both support PDF client reports
+
+---
+
+## [2026-06-01] — Session: Set up private APK distribution infrastructure
+
+### Problem
+- `CISS-Mobile` repo is private on GitHub, so GitHub Releases cannot be used for public APK downloads
+- The `/download` page was linking to GitHub releases which won't work for a private repo
+- No local APK hosting infrastructure existed
+
+### Solution
+- Re-created `public/downloads/` directory with README and `.gitkeep`
+- Removed GitHub releases fallback link from `/download` page
+- APK will now be served directly from `/downloads/ciss-workforce-latest.apk`
+- Added instructions in `public/downloads/README.md` for building from the private `CISS-Mobile` repo
+
+### What the user needs to do
+1. Build the APK from the private `CISS-Mobile` repo:
+   ```bash
+   cd CISS-Mobile
+   flutter build apk --release --split-per-abi
+   ```
+
+2. Copy to the webapp:
+   ```bash
+   cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk CISS/public/downloads/ciss-workforce-latest.apk
+   ```
+
+3. Commit and push:
+   ```bash
+   cd CISS
+   git add public/downloads/ciss-workforce-latest.apk
+   git commit -m "release: mobile app v1.0.8"
+   git push origin main
+   ```
+
+4. Vercel will auto-deploy and the APK will be live at `https://your-domain/downloads/ciss-workforce-latest.apk`
+
+### Note
+- The APK file will be stored in the git repo (required for Vercel to serve it from `public/`)
+- This is the standard approach for static file hosting on Vercel
+- The `CISS-Mobile` repo remains private — only the built APK is distributed through the webapp
