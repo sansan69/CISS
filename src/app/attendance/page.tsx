@@ -1451,8 +1451,9 @@ export default function AttendancePage() {
           createdAt: new Date().toISOString(),
           payload: {
             ...payloadWithoutPhotoUrl,
-            photoDataUrl: watermarkedPhoto || capturedPhoto,
+            photoDataUrl: undefined,
           },
+          photoStripped: true,
         };
         queueAttendanceSubmission(queuedItem);
         appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
@@ -1494,8 +1495,9 @@ export default function AttendancePage() {
           createdAt: new Date().toISOString(),
           payload: {
             ...payloadWithoutPhotoUrl,
-            photoDataUrl: watermarkedPhoto || capturedPhoto,
+            photoDataUrl: undefined,
           },
+          photoStripped: true,
         };
         queueAttendanceSubmission(queuedItem);
         appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));

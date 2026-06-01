@@ -482,6 +482,7 @@ function MobileMoreSheet({
           </Link>
           <button
             onClick={close}
+            aria-label="Close menu"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="h-4 w-4" />

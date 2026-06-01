@@ -185,6 +185,11 @@ export interface QueuedAttendanceSubmission {
   id: string;
   createdAt: string;
   payload: Omit<AttendanceSubmission, "photoUrl"> & {
-    photoDataUrl: string;
+    photoDataUrl?: string;
   };
+  /**
+   * When true, the photo was stripped before persisting to local storage.
+   * The UI should re-capture or skip the photo when retrying.
+   */
+  photoStripped?: boolean;
 }

@@ -207,17 +207,19 @@ export async function POST(request: Request) {
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
     const status = body.status ?? "submitted";
 
-    // Training reports require at least 3 photos when submitting
-    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 3)) {
+    // Training reports require at least 1 photo when submitting
+    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 1)) {
       return NextResponse.json(
-        { error: `Training reports require at least 3 photos. You have uploaded ${Array.isArray(body.photoUrls) ? body.photoUrls.length : 0}. Please add more training session photos before submitting.` },
+        { error: "At least one training session photo is required before submitting." },
         { status: 400 },
       );
     }
 
-    if (status === "submitted" && (!body.clientReportUrl || !body.clientReportUrl.trim())) {
+    const hasAttachment = (body.clientReportUrl && body.clientReportUrl.trim()) ||
+                          (Array.isArray(body.attachmentUrls) && body.attachmentUrls.length > 0);
+    if (status === "submitted" && !hasAttachment) {
       return NextResponse.json(
-        { error: "A client-signed training report or certificate is required before submitting." },
+        { error: "A client-signed training report, certificate, or supporting attachment is required before submitting." },
         { status: 400 },
       );
     }

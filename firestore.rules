@@ -214,33 +214,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ── leaveRequests ────────────────────────────────────────────────────────
-    // Guards submit leave requests from authenticated guard clients.
-    // Admins/HR approve or reject.
-
-    match /leaveRequests/{requestId} {
-      // Guards can create their own leave requests
-      allow create: if (isGuard() &&
-        (request.resource.data.employeeDocId == guardEmployeeDocId() ||
-          request.resource.data.employeeId == guardEmployeeDocId()) &&
-        request.resource.data.status == 'pending') || isStaff();
-
-      // Guards can read their own requests; staff reads all
-      allow read: if isStaff() ||
-        (isGuard() && (resource.data.employeeDocId == guardEmployeeDocId() ||
-          resource.data.employeeId == guardEmployeeDocId()));
-
-      // Admins/HR can approve/reject (update status); guards cannot change status
-      allow update: if isAdmin() || isHR() ||
-        // Guard can only cancel a pending request (their own)
-        (isGuard() &&
-          resource.data.employeeDocId == guardEmployeeDocId() &&
-          resource.data.status == 'pending' &&
-          request.resource.data.status == 'cancelled');
-
-      allow delete: if isAdmin();
-    }
-
     // ── payrollEntries ───────────────────────────────────────────────────────
     // Guards can read their own payslips. Accounts/Admin write all.
 
@@ -335,13 +308,6 @@ service cloud.firestore {
     match /payrollCycles/{runId} {
       allow read: if isAdmin() || isAccounts() || isHR();
       allow write: if isAdmin() || isAccounts();
-    }
-
-    match /leaveBalances/{balanceId} {
-      // Guards can read their own leave balance.
-      allow read: if isAdmin() || isAccounts() || isHR() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
-      allow write: if isAdmin() || isAccounts() || isHR();
     }
 
     // ── System & internal ───────────────────────────────────────────────────

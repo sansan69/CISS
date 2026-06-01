@@ -6,6 +6,7 @@ import {
   buildRateLimitKey,
   getClientIp,
 } from "@/lib/server/rate-limit";
+import { verifyUploadToken } from "@/lib/server/upload-token";
 
 export const runtime = "nodejs";
 
@@ -54,10 +55,24 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => null)) as {
       path?: unknown;
       photoDataUrl?: unknown;
+      uploadToken?: unknown;
     } | null;
 
     const path = typeof body?.path === "string" ? body.path : "";
     const photoDataUrl = typeof body?.photoDataUrl === "string" ? body.photoDataUrl : "";
+    const uploadToken = typeof body?.uploadToken === "string" ? body.uploadToken : "";
+
+    const tokenPayload = verifyUploadToken(uploadToken);
+    if (!tokenPayload) {
+      return NextResponse.json(
+        { error: "Invalid or expired upload token. Please restart attendance." },
+        { status: 401 },
+      );
+    }
+
+    if (!path.startsWith("employees/" + tokenPayload.employeeId + "/")) {
+      return NextResponse.json({ error: "Upload path does not match session." }, { status: 403 });
+    }
 
     if (!isSafeAttendancePath(path)) {
       return NextResponse.json({ error: "Invalid attendance upload path." }, { status: 400 });

@@ -140,7 +140,7 @@ export default function RecordAttendancePage() {
       toast({ variant: "destructive", title: "Camera error", description: err.message });
       setScanning(false);
     }
-  }, [toast]);
+  }, [toast, handleQrScanned]);
 
   const stopScanning = useCallback(() => {
     if (scannerSessionRef.current) {
@@ -154,8 +154,24 @@ export default function RecordAttendancePage() {
     return () => stopScanning();
   }, [stopScanning]);
 
+  // ── Fetch Sites ──────────────────────────────────────────────────────────
+  const fetchSites = useCallback(async () => {
+    setSitesLoading(true);
+    try {
+      const res = await fetch("/api/public/attendance");
+      const json = await res.json();
+      if (json.options) {
+        setSites(json.options);
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Could not load sites" });
+    } finally {
+      setSitesLoading(false);
+    }
+  }, [toast]);
+
   // ── Handle QR Scanned ────────────────────────────────────────────────────
-  const handleQrScanned = async (text: string) => {
+  const handleQrScanned = useCallback(async (text: string) => {
     setStep("verify");
     try {
       const res = await fetch("/api/public/attendance/verify-qr", {
@@ -176,23 +192,7 @@ export default function RecordAttendancePage() {
       toast({ variant: "destructive", title: "QR Verification Failed", description: err.message });
       setStep("scan");
     }
-  };
-
-  // ── Fetch Sites ──────────────────────────────────────────────────────────
-  const fetchSites = async () => {
-    setSitesLoading(true);
-    try {
-      const res = await fetch("/api/public/attendance");
-      const json = await res.json();
-      if (json.options) {
-        setSites(json.options);
-      }
-    } catch {
-      toast({ variant: "destructive", title: "Could not load sites" });
-    } finally {
-      setSitesLoading(false);
-    }
-  };
+  }, [fetchSites, toast]);
 
   // ── GPS ──────────────────────────────────────────────────────────────────
   const captureGps = useCallback(() => {

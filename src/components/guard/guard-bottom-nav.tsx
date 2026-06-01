@@ -106,6 +106,7 @@ export function GuardBottomNav() {
           {/* More button */}
           <button
             onClick={() => setMoreOpen(true)}
+            aria-label="More options"
             className={cn(
               "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
               "transition-all duration-150 ease-out",
