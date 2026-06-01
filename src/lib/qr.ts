@@ -10,7 +10,7 @@ export async function generateQrCodeDataUrl(
   fullName: string,
   phoneNumber: string
 ): Promise<string> {
-  const dataString = buildQrContent(employeeId, fullName, phoneNumber);
+  const dataString = await buildQrContent(employeeId, fullName, phoneNumber);
 
   return QRCode.toDataURL(dataString, {
     errorCorrectionLevel: "H",

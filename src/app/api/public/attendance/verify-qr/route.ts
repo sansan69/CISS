@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     // Verify QR token if present
     let tokenValid = false;
     if (parsed.token && parsed.phoneNumber) {
-      tokenValid = verifyQrToken(
+      tokenValid = await verifyQrToken(
         parsed.employeeId,
         parsed.phoneNumber,
         parsed.token,

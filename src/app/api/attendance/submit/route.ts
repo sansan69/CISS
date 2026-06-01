@@ -337,7 +337,7 @@ export async function POST(request: NextRequest) {
 
     // ── 4. QR token validation (if provided) ──────────────────────────────
     if (payload.qrToken && payload.employeePhoneNumber) {
-      const tokenValid = verifyQrToken(
+      const tokenValid = await verifyQrToken(
         payload.employeeId,
         payload.employeePhoneNumber,
         payload.qrToken,
