@@ -130,8 +130,8 @@ export function TrainingReportsPanel() {
       toast({ title: "Missing fields", description: "Client, training date, and topic are required.", variant: "destructive" });
       return;
     }
-    if (form.status === "submitted" && !hasSiteUploads(photoUrls)) {
-      toast({ title: "Missing photos", description: "Add at least one training photo before submitting.", variant: "destructive" });
+    if (form.status === "submitted" && photoUrls.length < 3) {
+      toast({ title: "Missing photos", description: `Training reports require at least 3 photos. You have ${photoUrls.length}. Please add more training session photos before submitting.`, variant: "destructive" });
       return;
     }
     if (form.status === "submitted" && clientReportUrl.length === 0) {

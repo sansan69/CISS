@@ -33,17 +33,29 @@ export async function PATCH(
       attendeeIds?: string[];
       photoUrls?: string[];
       attachmentUrls?: string[];
+      clientReportUrl?: string;
     };
 
     const updates: Record<string, unknown> = {};
 
-    if (body.topic !== undefined) updates.topic = body.topic;
-    if (body.description !== undefined) updates.description = body.description;
-    if (body.durationMinutes !== undefined) updates.durationMinutes = body.durationMinutes;
-    if (body.attendeeCount !== undefined) updates.attendeeCount = body.attendeeCount;
-    if (body.attendeeIds !== undefined) updates.attendeeIds = body.attendeeIds;
-    if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
-    if (Array.isArray(body.attachmentUrls)) updates.attachmentUrls = body.attachmentUrls;
+    // Admins can update everything; field officers can only update photos/attachments on submitted reports
+    const isFoEditingSubmitted = !admin && data.status !== "draft";
+    if (isFoEditingSubmitted) {
+      // Only allow adding/updating photos, attachments, and client report for submitted reports
+      if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
+      if (Array.isArray(body.attachmentUrls)) updates.attachmentUrls = body.attachmentUrls;
+      if (body.clientReportUrl !== undefined) updates.clientReportUrl = body.clientReportUrl;
+    } else {
+      // Draft or admin: allow all fields
+      if (body.topic !== undefined) updates.topic = body.topic;
+      if (body.description !== undefined) updates.description = body.description;
+      if (body.durationMinutes !== undefined) updates.durationMinutes = body.durationMinutes;
+      if (body.attendeeCount !== undefined) updates.attendeeCount = body.attendeeCount;
+      if (body.attendeeIds !== undefined) updates.attendeeIds = body.attendeeIds;
+      if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
+      if (Array.isArray(body.attachmentUrls)) updates.attachmentUrls = body.attachmentUrls;
+      if (body.clientReportUrl !== undefined) updates.clientReportUrl = body.clientReportUrl;
+    }
 
     if (body.status === "acknowledged" && admin) {
       updates.status = "acknowledged";

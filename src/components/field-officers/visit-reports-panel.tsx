@@ -132,8 +132,7 @@ export function VisitReportsPanel() {
       return;
     }
     if (isSiteUploadRequired("visit", form.status) && !hasSiteUploads(photoUrls)) {
-      toast({ title: "Missing uploads", description: "Add at least one site photo or file before submitting.", variant: "destructive" });
-      return;
+      toast({ title: "Missing uploads", description: "No photos attached. You can still submit and add photos later by editing this report.", variant: "default" });
     }
     setIsSubmitting(true);
     try {

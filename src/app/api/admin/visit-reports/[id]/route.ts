@@ -47,12 +47,9 @@ export async function PATCH(
     const data = doc.data()!;
     const admin = hasAdminAccess(decoded);
 
-    // FO can only update own draft
+    // FO can only update own reports
     if (!admin && data.fieldOfficerId !== decoded.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (!admin && data.status !== "draft") {
-      return NextResponse.json({ error: "Cannot edit submitted report" }, { status: 403 });
     }
 
     const body = (await request.json()) as {
@@ -68,12 +65,20 @@ export async function PATCH(
 
     const updates: Record<string, unknown> = {};
 
-    if (body.summary !== undefined) updates.summary = body.summary;
-    if (body.issuesFound !== undefined) updates.issuesFound = body.issuesFound;
-    if (body.actionsRequired !== undefined) updates.actionsRequired = body.actionsRequired;
-    if (body.guardsPresentCount !== undefined) updates.guardsPresentCount = body.guardsPresentCount;
-    if (body.guardsAbsentCount !== undefined) updates.guardsAbsentCount = body.guardsAbsentCount;
-    if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
+    // Admins can update everything; field officers can only update photos on submitted reports
+    const isFoEditingSubmitted = !admin && data.status !== "draft";
+    if (isFoEditingSubmitted) {
+      // Only allow adding/updating photos for submitted reports
+      if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
+    } else {
+      // Draft or admin: allow all fields
+      if (body.summary !== undefined) updates.summary = body.summary;
+      if (body.issuesFound !== undefined) updates.issuesFound = body.issuesFound;
+      if (body.actionsRequired !== undefined) updates.actionsRequired = body.actionsRequired;
+      if (body.guardsPresentCount !== undefined) updates.guardsPresentCount = body.guardsPresentCount;
+      if (body.guardsAbsentCount !== undefined) updates.guardsAbsentCount = body.guardsAbsentCount;
+      if (Array.isArray(body.photoUrls)) updates.photoUrls = body.photoUrls;
+    }
 
     if (body.status !== undefined) {
       if (!admin && body.status === "reviewed") {

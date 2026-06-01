@@ -205,13 +205,6 @@ export async function POST(request: Request) {
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
     const status = body.status ?? "draft";
 
-    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length === 0)) {
-      return NextResponse.json(
-        { error: "At least one site upload is required before submitting a visit report." },
-        { status: 400 },
-      );
-    }
-
     if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
       return NextResponse.json(
         { error: "This site is outside your assigned districts." },

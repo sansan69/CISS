@@ -401,3 +401,62 @@ Ran full test suite. Confirmed 3 failures are **pre-existing** and unrelated to 
 - Verify cron job runs by checking Vercel Functions logs
 - Test scheduled auto-checkout on staging with real open sessions
 - Regenerate employee QR codes via `/settings/qr-management` page (already uses HMAC tokens)
+
+---
+
+## [2026-06-01] — Session: Fix visit reports and training reports photo/upload requirements
+
+### Problem
+Field officers were getting blocked when submitting visit and training reports:
+- **Visit reports**: Error "Add at least one site photo or file before submitting" — even when the officer had photos on his phone (taken with another app) and wanted to upload later or submit from home
+- **Training reports**: Only required 1 photo, but the business needs at least 3 training session photos. Also needed the ability to upload client-signed report documents and photos taken with other phones.
+
+### Root cause
+The backend and frontend had hard validation blocking submission if photos were missing at submit time. This was too restrictive for real-world field officer workflows where:
+- Photos are taken with the app's camera OR another phone/app
+- Reports are submitted from the site OR after reaching home
+- Photos are uploaded immediately OR attached later
+
+### Changes made
+
+#### 1. Visit Reports — Relax photo requirement
+**Backend (`src/app/api/admin/visit-reports/route.ts`):**
+- Removed the hard block that rejected submitted reports without photos (lines 208-213)
+- Visit reports can now be submitted without photos
+
+**Frontend (`src/components/field-officers/visit-reports-panel.tsx`):**
+- Changed the photo validation from a blocking error toast to a non-blocking warning toast
+- Message now says: "No photos attached. You can still submit and add photos later by editing this report."
+
+**PATCH endpoint (`src/app/api/admin/visit-reports/[id]/route.ts`):**
+- Field officers can now update their own **submitted** reports to add photos
+- Admin can still update all fields
+- Field officers editing submitted reports can only update `photoUrls`, not summary/issues/etc.
+
+#### 2. Training Reports — Enforce 3+ photos
+**Backend (`src/app/api/admin/training-reports/route.ts`):**
+- Changed minimum photo requirement from `photoUrls.length === 0` to `photoUrls.length < 3`
+- Error message now tells the officer exactly how many photos they have and need
+
+**Frontend (`src/components/field-officers/training-reports-panel.tsx`):**
+- Changed validation from `!hasSiteUploads(photoUrls)` to `photoUrls.length < 3`
+- Error message: "Training reports require at least 3 photos. You have X. Please add more training session photos before submitting."
+
+**PATCH endpoint (`src/app/api/admin/training-reports/[id]/route.ts`):**
+- Field officers can now update their own **submitted** reports to add photos, attachments, and client report URL
+- Admin can still update all fields
+- Field officers editing submitted reports can only update `photoUrls`, `attachmentUrls`, and `clientReportUrl`
+
+#### 3. Helper updates (`src/components/field-officers/site-report-upload.ts`)
+- `isSiteUploadRequired`: Now only returns `true` for training reports (not visit reports)
+- `getSiteUploadHint`: Updated messages to explain the new flexible workflows
+
+### Verification
+- `npx tsc --noEmit` — 0 errors across entire project
+- All changed files compile cleanly
+
+### Notes for field officers
+- **Visit reports**: Photos are now optional at submission time. You can submit the report and add photos later by opening the report and clicking edit.
+- **Training reports**: You MUST upload at least 3 training session photos before submitting. You can use the app's camera, selfie mode, or upload from your phone's gallery (photos taken with another camera or shared by colleagues).
+- **Client report**: Training reports still require a client-signed report or certificate. Upload it in the "Client Report" section.
+- All uploads support gallery/files — not just the in-app camera.
