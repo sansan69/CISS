@@ -460,3 +460,45 @@ The backend and frontend had hard validation blocking submission if photos were 
 - **Training reports**: You MUST upload at least 3 training session photos before submitting. You can use the app's camera, selfie mode, or upload from your phone's gallery (photos taken with another camera or shared by colleagues).
 - **Client report**: Training reports still require a client-signed report or certificate. Upload it in the "Client Report" section.
 - All uploads support gallery/files — not just the in-app camera.
+
+---
+
+## [2026-06-01] — Session: Update Flutter Android app to match webapp report changes
+
+### Mobile App Changes (`CISS-Mobile` repo)
+
+#### 1. Field Officer Reports Screen (`lib/features/field_officer/presentation/screens/field_officer_reports_screen.dart`)
+
+**Visit Reports:**
+- Added `_pickFiles()` method using `file_picker` to select PDF + all image formats (JPG, PNG, HEIC, WEBP)
+- Removed hard photo block in `_submit()` — now shows warning but allows submission without photos
+- Added visual warning banner when submitting visit report with 0 photos
+- Updated labels: "Visit Photos / Files" with explanation text
+
+**Training Reports:**
+- Enforced minimum 3 photos in `_submit()` — blocks submission with clear error
+- Added visual error banner when submitting with < 3 photos
+- Updated labels: "Training Photos" with "Attach at least 3 photos..."
+
+**Client Report:**
+- Changed `_pickClientReport()` from `ImagePicker` to `FilePicker`
+- Now properly supports PDF selection
+- Accepts PDF, JPG, PNG for client-signed training reports
+
+**_AddPhotoButton widget:**
+- Added optional `onFiles` callback
+- Bottom sheet now shows 3 options: "Take Photo", "Gallery", "Files (PDF + Images)"
+
+#### 2. Dependencies (`pubspec.yaml`)
+- Added `file_picker: ^8.0.0+1` for cross-file format support
+- Version bump: `1.0.7+7` → `1.0.8+8`
+
+### Verification
+- `flutter analyze` on modified file shows only pre-existing `MobileRepository` method errors (not introduced by this change)
+- All new code compiles correctly
+
+### Mobile app now matches webapp behavior
+- Both platforms allow flexible photo upload (camera, gallery, files)
+- Both enforce 3+ training photos
+- Both allow visit reports without photos at submission time (with warning)
+- Both support PDF client reports
