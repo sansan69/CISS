@@ -18,26 +18,41 @@ export type AttendancePhotoCompliance = z.infer<
   typeof attendancePhotoComplianceSchema
 >;
 
+const optionalStringFromNull = z.preprocess(
+  (value) => (value === null ? undefined : value),
+  z.string().optional(),
+);
+const optionalDateTimeStringFromNull = z.preprocess(
+  (value) => (value === null ? undefined : value),
+  z.string().datetime().optional(),
+);
+const optionalUuidFromNull = z.preprocess(
+  (value) => (value === null ? undefined : value),
+  z.string().uuid().optional(),
+);
+const optionalBoundedStringFromNull = (schema: z.ZodString) =>
+  z.preprocess((value) => (value === null ? undefined : value), schema.optional());
+
 export const attendanceSubmissionSchema = z.object({
   employeeId: z.string().min(1),
   employeeName: z.string().min(1),
   employeeDocId: z.string().min(1),
-  reportedAtClient: z.string().datetime().optional(),
-  employeePhoneNumber: z.string().optional(),
-  employeeClientName: z.string().optional(),
+  reportedAtClient: optionalDateTimeStringFromNull,
+  employeePhoneNumber: optionalStringFromNull,
+  employeeClientName: optionalStringFromNull,
   status: attendanceStatusSchema,
   district: z.string().min(1),
   siteId: z.string().min(1),
   siteName: z.string().min(1),
-  dutyPointId: z.string().optional(),
-  dutyPointName: z.string().optional(),
-  clientName: z.string().optional(),
-  shiftCode: z.string().optional(),
-  shiftLabel: z.string().optional(),
-  shiftStartTime: z.string().optional(),
-  shiftEndTime: z.string().optional(),
-  nextShiftCode: z.string().optional(),
-  nextShiftStartsAt: z.string().optional(),
+  dutyPointId: optionalStringFromNull,
+  dutyPointName: optionalStringFromNull,
+  clientName: optionalStringFromNull,
+  shiftCode: optionalStringFromNull,
+  shiftLabel: optionalStringFromNull,
+  shiftStartTime: optionalStringFromNull,
+  shiftEndTime: optionalStringFromNull,
+  nextShiftCode: optionalStringFromNull,
+  nextShiftStartsAt: optionalStringFromNull,
   siteCoords: z.object({
     lat: z.number(),
     lng: z.number(),
@@ -56,17 +71,17 @@ export const attendanceSubmissionSchema = z.object({
   mockLocationReason: z.string().nullable().optional(),
   sourceCollection: z.enum(['sites', 'clientLocations']).optional(),
   photoUrl: z.string().url(),
-  photoCapturedAt: z.string().datetime().optional(),
+  photoCapturedAt: optionalDateTimeStringFromNull,
   photoCompliance: attendancePhotoComplianceSchema.optional(),
   deviceInfo: z.object({
     userAgent: z.string(),
   }),
   // Industry-standard idempotency key (UUID v4) — prevents duplicate submissions on retries
-  clientRequestId: z.string().uuid().optional(),
+  clientRequestId: optionalUuidFromNull,
   // Optional override reason when guard is outside geofence but has legitimate cause
-  overrideReason: z.string().min(1).max(500).optional(),
+  overrideReason: optionalBoundedStringFromNull(z.string().min(1).max(500)),
   // QR token for verification when scanning another guard's QR code
-  qrToken: z.string().optional(),
+  qrToken: optionalStringFromNull,
 });
 
 export type AttendanceSubmission = z.infer<typeof attendanceSubmissionSchema>;

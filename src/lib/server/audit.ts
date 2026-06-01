@@ -43,6 +43,8 @@ export function buildServerAuditEvent(
     at: new Date(),
     by: resolvedActor.uid,
     byEmail: resolvedActor.email,
-    ...details,
+    ...Object.fromEntries(
+      Object.entries(details).filter(([, value]) => value !== undefined),
+    ),
   };
 }

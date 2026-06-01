@@ -1236,6 +1236,19 @@ export default function AttendancePage() {
     };
   }, [user]);
 
+  const createClientRequestId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (char) => {
+      const randomValue =
+        typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function'
+          ? crypto.getRandomValues(new Uint8Array(1))[0]
+          : Math.floor(Math.random() * 256);
+      return (Number(char) ^ (randomValue & (15 >> (Number(char) / 4)))).toString(16);
+    });
+  };
+
   const flushQueuedAttendance = useCallback(async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     if (isSyncingQueue || queuedAttendance.length === 0) return;
@@ -1427,6 +1440,7 @@ export default function AttendancePage() {
       photoCapturedAt: photoCapturedAt || new Date().toISOString(),
       photoCompliance: photoCompliance ?? undefined,
       deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
+      clientRequestId: createClientRequestId(),
     };
 
     setIsSubmittingAttendance(true);

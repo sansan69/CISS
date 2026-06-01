@@ -20,6 +20,14 @@ function toCsv(rows: Record<string, unknown>[]) {
   return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header])).join(","))].join("\n");
 }
 
+function normalizeAttendanceDateParam(value: string | null) {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const decodedToken = await verifyRequestAuth(request);
@@ -29,19 +37,21 @@ export async function GET(request: NextRequest) {
       requireAdminOrFieldOfficer(decodedToken);
     }
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const from = request.nextUrl.searchParams.get("from");
-    const to = request.nextUrl.searchParams.get("to");
+    const rawFrom = request.nextUrl.searchParams.get("from");
+    const rawTo = request.nextUrl.searchParams.get("to");
+    const from = normalizeAttendanceDateParam(rawFrom);
+    const to = normalizeAttendanceDateParam(rawTo);
     const status = request.nextUrl.searchParams.get("status");
     const district = request.nextUrl.searchParams.get("district");
     const clientName = request.nextUrl.searchParams.get("clientName");
     const format = request.nextUrl.searchParams.get("format") || "json";
 
     // Validate date strings before passing to Firestore
-    if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-      return NextResponse.json({ error: "Invalid 'from' date. Use YYYY-MM-DD." }, { status: 400 });
+    if (rawFrom && !from) {
+      return NextResponse.json({ error: "Invalid 'from' date. Use YYYY-MM-DD or ISO date-time." }, { status: 400 });
     }
-    if (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-      return NextResponse.json({ error: "Invalid 'to' date. Use YYYY-MM-DD." }, { status: 400 });
+    if (rawTo && !to) {
+      return NextResponse.json({ error: "Invalid 'to' date. Use YYYY-MM-DD or ISO date-time." }, { status: 400 });
     }
 
     let queryRef: FirebaseFirestore.Query = adminDb.collection("attendanceLogs");

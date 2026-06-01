@@ -5,6 +5,20 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-06-01] — Session: Attendance submit idempotency fix
+
+### Web attendance submit
+- Added client-side `clientRequestId` generation on `/attendance` before uploading/submitting attendance.
+- Hardened server audit events to omit `undefined` detail values so Firestore writes do not fail on older clients that omit optional fields.
+- Attendance submission validation now accepts `null` for optional mobile string fields and normalizes them as omitted.
+- Admin attendance report date filters accept both `YYYY-MM-DD` and ISO date-time query values.
+- Added regression coverage for audit event sanitization.
+
+### Mobile attendance submit
+- Updated Flutter guard and QR attendance payloads to include `clientRequestId`.
+- QR attendance now requires configured site coordinates, GPS, and a captured photo before submit; offline queue stores the full validated payload plus `photoDataUrl`.
+- Guard attendance now submits actual GPS distance and uses current `DropdownButtonFormField.initialValue` API.
+
 ## [2026-05-02] — Session: Remove overtime, LOP, and leave from entire app
 
 Overtime and leave are not part of the CISS workforce model. All related code removed.
