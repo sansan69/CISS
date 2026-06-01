@@ -2025,3 +2025,28 @@ After filtering, logs are grouped by `getLogClientName()` (prefers `siteClientNa
 ### Verification
 - `tsc --noEmit` clean.
 - `eslint` clean.
+
+---
+
+## [2026-06-01] — Session: Fix field officer login crash on Android
+
+### Bug
+After successful field officer login, the app threw a GoRouter exception. Pressing the Android home button and reopening the app showed the user already logged in (because the Firebase session was persisted, and AuthGate routed correctly on cold start).
+
+### Root Cause
+`RoleLoginScreen._submit()` navigated to `/field-officer` after successful FO login:
+```dart
+context.go(session.role == AppRole.fieldOfficer ? '/field-officer' : '/');
+```
+
+But `app_router.dart` has **no `/field-officer` route**. GoRouter throws an exception when asked to navigate to a non-existent route.
+
+### Fix
+`lib/features/auth/presentation/role_login_screen.dart`
+- Changed post-login navigation to always go to `'/'` for both guard and field officer.
+- AuthGate already routes to the correct shell (`GuardShell` or `FieldOfficerShell`) based on `session.role`.
+
+### Verification
+- `flutter analyze` clean.
+- `flutter build apk` clean.
+- Committed to CISS-Mobile `main` as `e2e764f`.
