@@ -50,7 +50,7 @@ export default function DownloadPage() {
         </a>
 
         <p className="text-xs text-white/40 mt-4">
-          Latest release · Android 7.0+ (API 24)
+          Version 1.0.8 · Latest release · Android 7.0+ (API 24)
         </p>
 
         <p className="text-xs text-white/30 mt-6">
