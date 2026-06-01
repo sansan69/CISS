@@ -74,8 +74,8 @@ export default function GuardTrainingPage() {
   return (
     <div className="space-y-4 p-4 pb-6">
       <div>
-        <p className="text-sm text-gray-500">Growth & learning</p>
-        <h1 className="text-lg font-bold text-gray-900">My Training</h1>
+        <p className="text-sm text-muted-foreground">Growth & learning</p>
+        <h1 className="text-lg font-bold text-foreground">My Training</h1>
       </div>
 
       {loading ? (
@@ -97,8 +97,8 @@ export default function GuardTrainingPage() {
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{assignment.moduleName || "Training module"}</p>
-                    <p className="text-xs text-gray-500 capitalize">
+                    <p className="text-sm font-semibold text-foreground">{assignment.moduleName || "Training module"}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
                       {assignment.moduleCategory || "General"} · Assigned {formatTs(assignment.assignedAt)}
                     </p>
                   </div>
@@ -106,14 +106,14 @@ export default function GuardTrainingPage() {
                     {assignment.status || "assigned"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Due: {formatTs(assignment.dueDate)}</span>
                   <span>Score: {typeof assignment.score === "number" ? `${assignment.score}%` : "—"}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={`/guard/training/quiz/${assignment.id}`}
-                    className="inline-flex h-8 items-center rounded-md bg-[#bd9c55] px-3 text-xs font-medium text-white hover:bg-[#a8884a]"
+                    className="inline-flex h-8 items-center rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90"
                   >
                     {assignment.status === "completed" || assignment.status === "failed" ? "Retake Quiz" : "Start Quiz"}
                   </Link>
@@ -122,7 +122,7 @@ export default function GuardTrainingPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="h-8 gap-1.5 bg-[#014c85] text-white hover:bg-[#013963]"
+                        className="h-8 gap-1.5 bg-primary text-white hover:bg-primary/90"
                         onClick={() => setViewer(assignment)}
                       >
                         {assignment.contentType === "pptx" ? (
@@ -139,7 +139,7 @@ export default function GuardTrainingPage() {
                       <Link
                         href={assignment.contentUrl}
                         target="_blank"
-                        className="inline-flex items-center text-xs font-medium text-gray-500"
+                        className="inline-flex items-center text-xs font-medium text-muted-foreground"
                       >
                         Download
                         <ExternalLink className="ml-1 h-3 w-3" />

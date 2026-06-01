@@ -9,7 +9,6 @@ import {
 } from "@/components/guard/attendance-calendar";
 import { useAppAuth } from "@/context/auth-context";
 
-const BRAND_BLUE = "#014c85";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -148,7 +147,7 @@ export default function GuardAttendancePage() {
 
   return (
     <div className="p-4 space-y-4 pb-6">
-      <h1 className="text-base font-bold text-gray-900">Attendance</h1>
+      <h1 className="text-base font-bold text-foreground">Attendance</h1>
 
       {/* Calendar */}
       <AttendanceCalendar
@@ -161,22 +160,22 @@ export default function GuardAttendancePage() {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-green-600">{presentDays}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Present</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Present</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-red-500">{data?.absentDays ?? 0}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Absent</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Absent</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-          <p className="text-2xl font-bold" style={{ color: BRAND_BLUE }}>{data?.workingDays ?? data?.absentDays != null ? (presentDays + (data?.absentDays ?? 0)) : presentDays}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Working days</p>
+          <p className="text-2xl font-bold" className="text-primary">{data?.workingDays ?? data?.absentDays != null ? (presentDays + (data?.absentDays ?? 0)) : presentDays}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Working days</p>
         </div>
       </div>
 
       {/* Log list */}
       {logs.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             No attendance records for this month
           </p>
         </div>
@@ -193,15 +192,15 @@ export default function GuardAttendancePage() {
               {/* Date badge */}
               <div
                 className="flex flex-col items-center justify-center h-11 w-11 rounded-xl shrink-0 text-center"
-                style={{ backgroundColor: `${BRAND_BLUE}10` }}
+                className="bg-primary/10"
               >
                 <span
                   className="text-sm font-bold leading-none"
-                  style={{ color: BRAND_BLUE }}
+                  className="text-primary"
                 >
                   {log.date.slice(8, 10)}
                 </span>
-                <span className="text-[8px] text-gray-500 leading-none mt-0.5">
+                <span className="text-[11px] text-muted-foreground leading-none mt-0.5">
                   {new Date(`${log.date}T00:00:00`).toLocaleDateString(
                     "en-IN",
                     { month: "short" }
@@ -210,19 +209,19 @@ export default function GuardAttendancePage() {
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-800 truncate">
+                <p className="text-xs font-semibold text-foreground truncate">
                   {formatLogDate(log.date)}
                 </p>
-                <p className="text-[10px] text-gray-500 truncate">
+                <p className="text-[11px] text-muted-foreground truncate">
                   {log.siteName || "—"}
                   {log.dutyPointName ? ` • ${log.dutyPointName}` : ""}
                   {log.time ? ` · ${log.time}` : ""}
                 </p>
                 {log.shiftLabel && (
-                  <p className="text-[9px] text-gray-400">{log.shiftLabel}</p>
+                  <p className="text-[11px] text-muted-foreground">{log.shiftLabel}</p>
                 )}
                 {log.distanceMeters != null && (
-                  <p className="text-[9px] text-gray-400">
+                  <p className="text-[11px] text-muted-foreground">
                     {log.distanceMeters < 1000
                       ? `${Math.round(log.distanceMeters)} m`
                       : `${(log.distanceMeters / 1000).toFixed(1)} km`}
@@ -253,8 +252,8 @@ export default function GuardAttendancePage() {
                 variant="outline"
                 className={
                   log.status === "In"
-                    ? "text-green-700 border-green-300 bg-green-50 text-[10px] px-2 py-0.5 shrink-0"
-                    : "text-orange-700 border-orange-300 bg-orange-50 text-[10px] px-2 py-0.5 shrink-0"
+                    ? "text-green-700 border-green-300 bg-green-50 text-[11px] px-2 py-0.5 shrink-0"
+                    : "text-orange-700 border-orange-300 bg-orange-50 text-[11px] px-2 py-0.5 shrink-0"
                 }
               >
                 {log.status}

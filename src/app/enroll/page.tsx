@@ -1817,7 +1817,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         )}
                         onClick={() => void goToStep(index)}
                       >
-                        <span className="block text-[9px] uppercase tracking-[0.16em] opacity-80">
+                        <span className="block text-[11px] uppercase tracking-[0.16em] opacity-80">
                           {isComplete
                             ? "Done"
                             : stepErrorCount > 0

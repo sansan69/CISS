@@ -76,8 +76,8 @@ export function GuardBottomNav() {
                 className={cn(
                   "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
                   "transition-all duration-150 ease-out",
-                  "active:scale-[0.94] select-none rounded-xl",
-                  active ? "text-[#014c85]" : "text-muted-foreground/60"
+                  "active:brightness-[0.92] select-none rounded-xl",
+                  active ? "text-primary" : "text-muted-foreground/60"
                 )}
               >
                 {/* Active dot beneath icon */}
@@ -85,14 +85,13 @@ export function GuardBottomNav() {
                   <tab.icon size={active ? 22 : 20} strokeWidth={active ? 2.2 : 1.8} />
                   {active && (
                     <span
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full"
-                      style={{ backgroundColor: "#bd9c55" }}
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-accent"
                       aria-hidden
                     />
                   )}
                 </div>
                 <span
-                  className="text-[10px] leading-none tracking-wide"
+                  className="text-[11px] leading-none tracking-wide"
                   style={{ fontWeight: active ? 700 : 500 }}
                 >
                   {tab.label}
@@ -110,22 +109,21 @@ export function GuardBottomNav() {
             className={cn(
               "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
               "transition-all duration-150 ease-out",
-              "active:scale-[0.94] select-none rounded-xl",
-              isMoreActive ? "text-[#014c85]" : "text-muted-foreground/60"
+              "active:brightness-[0.92] select-none rounded-xl",
+              isMoreActive ? "text-primary" : "text-muted-foreground/60"
             )}
           >
             <div className="relative">
               <MoreHorizontal size={isMoreActive ? 22 : 20} strokeWidth={isMoreActive ? 2.2 : 1.8} />
               {isMoreActive && (
                 <span
-                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full"
-                  style={{ backgroundColor: "#bd9c55" }}
+                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-accent"
                   aria-hidden
                 />
               )}
             </div>
             <span
-              className="text-[9px] leading-none tracking-wide"
+              className="text-[11px] leading-none tracking-wide"
               style={{ fontWeight: isMoreActive ? 700 : 500 }}
             >
               More
@@ -145,8 +143,7 @@ export function GuardBottomNav() {
           </div>
 
           <div className="px-4 pb-6">
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-3 mt-1 px-1"
-               style={{ color: "#bd9c55" }}>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3 mt-1 px-1 text-accent">
               More Options
             </p>
 
@@ -156,14 +153,13 @@ export function GuardBottomNav() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:scale-[0.98] hover:bg-muted/60 animate-slide-up"
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:brightness-[0.92] hover:bg-muted/60 animate-slide-up"
                   style={{ animationDelay: `${i * 50}ms` }}
                 >
                   <span
-                    className="flex items-center justify-center h-10 w-10 rounded-lg shrink-0"
-                    style={{ backgroundColor: "hsl(206 98% 26% / 0.09)" }}
+                    className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 shrink-0"
                   >
-                    <item.icon size={18} style={{ color: "#014c85" }} />
+                    <item.icon size={18} className="text-primary" />
                   </span>
                   <span className="text-sm font-semibold text-foreground">
                     {item.label}
@@ -173,12 +169,12 @@ export function GuardBottomNav() {
 
               <button
                 onClick={() => { setMoreOpen(false); handleSignOut(); }}
-                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:scale-[0.98] hover:bg-red-50/80"
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:brightness-[0.92] hover:bg-destructive/15"
               >
-                <span className="flex items-center justify-center h-10 w-10 rounded-lg bg-red-50 shrink-0">
-                  <LogOut size={18} className="text-red-500" />
+                <span className="flex items-center justify-center h-10 w-10 rounded-lg bg-destructive/10 shrink-0">
+                  <LogOut size={18} className="text-destructive" />
                 </span>
-                <span className="text-sm font-semibold text-red-600">
+                <span className="text-sm font-semibold text-destructive">
                   Sign Out
                 </span>
               </button>

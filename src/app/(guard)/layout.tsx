@@ -17,13 +17,11 @@ import { GuardBottomNav } from "@/components/guard/guard-bottom-nav";
 function GuardLoadingScreen() {
   return (
     <div
-      className="flex min-h-[100dvh] w-full flex-col items-center justify-center"
-      style={{ background: "linear-gradient(160deg, #014c85 0%, #012f52 100%)" }}
+      className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/80"
     >
       <div className="flex flex-col items-center gap-3">
         <div
-          className="flex h-16 w-16 items-center justify-center rounded-2xl"
-          style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15"
         >
           <Image src="/ciss-logo.png" alt="CISS" width={40} height={40} unoptimized />
         </div>
@@ -37,9 +35,8 @@ function GuardLoadingScreen() {
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="w-1.5 h-1.5 rounded-full animate-bounce"
+              className="w-1.5 h-1.5 rounded-full animate-bounce bg-accent"
               style={{
-                backgroundColor: "#bd9c55",
                 animationDelay: `${i * 160}ms`,
               }}
             />
@@ -133,8 +130,10 @@ export default function GuardLayout({ children }: { children: ReactNode }) {
         {/* Sticky header */}
         <GuardHeader employeeName={displayName} />
 
-        {/* Main content — padded for floating pill nav */}
-        <main className="flex-1 overflow-y-auto pb-[88px]">{children}</main>
+        {/* Main content — padded for floating pill nav, max-width constrained for tablets */}
+        <main className="flex-1 overflow-y-auto pb-[88px]">
+          <div className="mx-auto max-w-md">{children}</div>
+        </main>
 
         {/* Fixed bottom navigation */}
         <GuardBottomNav />

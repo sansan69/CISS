@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Loader2, FileDown, Search, MapPin, CalendarIcon, ChevronRight, Users, Building2 } from "lucide-react";
+import { Loader2, FileDown, Search, MapPin, CalendarIcon, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
 import { format, parseISO, isAfter, isBefore, isEqual } from "date-fns";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -920,10 +920,10 @@ export default function AttendanceLogsPage() {
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div>Shoes: {selectedLog.photoCompliance.missingShoes ? "❌ Missing" : "✅ OK"}</div>
-                        <div>ID Card: {selectedLog.photoCompliance.missingIdCard ? "❌ Missing" : "✅ OK"}</div>
-                        <div>Uniform: {selectedLog.photoCompliance.uniformIssue ? "❌ Issue" : "✅ OK"}</div>
-                        <div>Full body: {selectedLog.photoCompliance.fullBodyVisible ? "✅ Visible" : "❌ Not visible"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingShoes ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}Shoes: {selectedLog.photoCompliance.missingShoes ? "Missing" : "OK"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingIdCard ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}ID Card: {selectedLog.photoCompliance.missingIdCard ? "Missing" : "OK"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.uniformIssue ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}Uniform: {selectedLog.photoCompliance.uniformIssue ? "Issue" : "OK"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.fullBodyVisible ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <XCircle className="h-3.5 w-3.5 text-destructive" />}Full body: {selectedLog.photoCompliance.fullBodyVisible ? "Visible" : "Not visible"}</div>
                       </div>
                     </div>
                   </>

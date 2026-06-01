@@ -291,7 +291,7 @@ export default function GuardLoginPage() {
   return (
     <div
       className="min-h-[100dvh] w-full flex flex-col md:flex-row text-foreground"
-      style={{ background: "linear-gradient(160deg, hsl(206 98% 26%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 10%) 100%)" }}
+      style={{ background: `linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 10%) 100%)` }}
     >
       {/* Desktop brand panel — hidden on mobile */}
       <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
@@ -367,8 +367,7 @@ export default function GuardLoginPage() {
           {/* Card — bottom-sheet on mobile, centered card on desktop */}
           <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
             <div
-              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl bg-card text-card-foreground md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] md:ring-1 md:ring-white/10 px-6 pt-7 pb-8 sm:px-8 md:p-10"
-              style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 2rem)" }}
+              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl bg-card text-card-foreground md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] md:ring-1 md:ring-white/10 px-6 pt-7 pb-[max(env(safe-area-inset-bottom,0px),2rem)] sm:px-8 md:p-10"
             >
               <div className="text-center md:text-left mb-6">
                 <h2 className="text-2xl font-bold font-exo2 tracking-tight">Welcome back</h2>

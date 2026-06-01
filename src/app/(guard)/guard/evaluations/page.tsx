@@ -61,8 +61,8 @@ export default function GuardEvaluationsPage() {
   return (
     <div className="space-y-4 p-4 pb-6">
       <div>
-        <p className="text-sm text-gray-500">Performance review</p>
-        <h1 className="text-lg font-bold text-gray-900">My Evaluations</h1>
+        <p className="text-sm text-muted-foreground">Performance review</p>
+        <h1 className="text-lg font-bold text-foreground">My Evaluations</h1>
       </div>
 
       {loading ? (
@@ -84,27 +84,27 @@ export default function GuardEvaluationsPage() {
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{evaluation.period || "Evaluation"}</p>
-                    <p className="text-xs text-gray-500">Recorded {formatTs(evaluation.createdAt)}</p>
+                    <p className="text-sm font-semibold text-foreground">{evaluation.period || "Evaluation"}</p>
+                    <p className="text-xs text-muted-foreground">Recorded {formatTs(evaluation.createdAt)}</p>
                   </div>
-                  <span className="rounded-full bg-[#014c85]/10 px-2.5 py-1 text-xs font-semibold text-[#014c85]">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                     {typeof evaluation.normalizedScore === "number" ? `${evaluation.normalizedScore}%` : "—"}
                   </span>
                 </div>
                 {evaluation.criteria ? (
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                     {Object.entries(evaluation.criteria).map(([key, value]) => (
-                      <div key={key} className="rounded-xl bg-gray-50 px-3 py-2">
+                      <div key={key} className="rounded-xl bg-muted/50 px-3 py-2">
                         <p className="capitalize">{key.replace(/([A-Z])/g, " $1")}</p>
-                        <p className="mt-1 font-semibold text-gray-900">{value}/10</p>
+                        <p className="mt-1 font-semibold text-foreground">{value}/10</p>
                       </div>
                     ))}
                   </div>
                 ) : null}
                 {evaluation.comments ? (
-                  <p className="rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-700">{evaluation.comments}</p>
+                  <p className="rounded-xl bg-muted/50 px-3 py-3 text-sm text-gray-700">{evaluation.comments}</p>
                 ) : (
-                  <p className="inline-flex items-center text-xs text-gray-500">
+                  <p className="inline-flex items-center text-xs text-muted-foreground">
                     <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />
                     No comments added
                   </p>

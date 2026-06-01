@@ -13,7 +13,7 @@ const buttonVariants = cva(
     "transition-[transform,box-shadow,background-color,opacity,filter] duration-150 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
-    "active:scale-[0.97]",
+    "active:brightness-[0.92]",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     "select-none",
   ].join(" "),

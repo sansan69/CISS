@@ -8,11 +8,11 @@ export const metadata: Metadata = {
 
 export default function DownloadPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#06243E] to-[#014c85] px-4 py-12">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/40 to-primary px-4 py-12">
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <div className="mx-auto w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center mb-6 ring-1 ring-white/10">
-          <span className="text-3xl font-black text-[#bd9c55]">C</span>
+          <span className="text-3xl font-black text-accent">C</span>
         </div>
 
         <h1 className="text-2xl font-bold text-white mb-2">CISS Workforce</h1>
@@ -41,7 +41,7 @@ export default function DownloadPage() {
         <a
           href="/downloads/ciss-workforce-latest.apk"
           download
-          className="inline-flex items-center gap-2 px-8 py-4 bg-[#bd9c55] text-[#014c85] font-bold text-lg rounded-2xl hover:bg-[#d4b368] transition-colors shadow-lg shadow-black/20"
+          className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-primary font-bold text-lg rounded-2xl hover:bg-accent/90 transition-colors shadow-lg shadow-black/20"
         >
           <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 13.5v-6h2v6l3-3 1.41 1.41L12 18.59l-5.41-5.41L8 11.83l3 3z"/>

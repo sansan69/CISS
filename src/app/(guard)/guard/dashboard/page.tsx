@@ -16,8 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppAuth } from "@/context/auth-context";
 
-const BRAND_BLUE = "#014c85";
-const BRAND_GOLD = "#bd9c55";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -109,13 +107,13 @@ function StatCard({
   label,
   value,
   icon: Icon,
-  color,
+  colorClass,
   index = 0,
 }: {
   label: string;
   value: string | number;
   icon: React.ElementType;
-  color: string;
+  colorClass: string;
   index?: number;
 }) {
   const stagger = ["stagger-1","stagger-2","stagger-3"][index] ?? "stagger-3";
@@ -123,14 +121,13 @@ function StatCard({
     <div className={`bezel animate-slide-up ${stagger}`}>
       <div className="bg-card rounded-[calc(var(--radius)-1px)] inset-highlight overflow-hidden p-3 flex flex-col gap-2">
         <div
-          className="flex items-center justify-center h-9 w-9 rounded-xl shrink-0"
-          style={{ backgroundColor: `${color}18` }}
+          className={`flex items-center justify-center h-9 w-9 rounded-xl shrink-0 ${colorClass}`}
         >
-          <Icon size={18} style={{ color }} />
+          <Icon size={18} />
         </div>
         <div>
           <p className="text-xl font-bold font-exo2 tabular-nums text-foreground leading-none">{value}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{label}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{label}</p>
         </div>
       </div>
     </div>
@@ -237,7 +234,7 @@ export default function GuardDashboardPage() {
           className={`animate-slide-up stagger-2 rounded-xl border p-3 flex items-center gap-3 ${
             data.attendanceStatus.lastStatus === "In"
               ? "bg-green-50 border-green-200"
-              : "bg-gray-50 border-gray-200"
+              : "bg-muted/50 border-border"
           }`}
         >
           <div
@@ -272,7 +269,7 @@ export default function GuardDashboardPage() {
             className={
               data.attendanceStatus.lastStatus === "In"
                 ? "text-green-700 border-green-300 bg-green-50 text-xs shrink-0"
-                : "text-gray-600 border-gray-300 bg-gray-50 text-xs shrink-0"
+                : "text-gray-600 border-gray-300 bg-muted/50 text-xs shrink-0"
             }
           >
             {data.attendanceStatus.lastStatus}
@@ -286,21 +283,21 @@ export default function GuardDashboardPage() {
           label="Present this month"
           value={data.attendanceStats.presentDays}
           icon={CalendarCheck}
-          color="#22c55e"
+          colorClass="bg-green-500/10 text-green-500"
           index={0}
         />
         <StatCard
           label="Absent this month"
           value={data.attendanceStats.absentDays}
           icon={Clock}
-          color="#ef4444"
+          colorClass="bg-red-500/10 text-red-500"
           index={1}
         />
         <StatCard
           label="Working days"
           value={data.attendanceStats.workingDays}
           icon={Clock}
-          color={BRAND_GOLD}
+          colorClass="bg-accent/10 text-accent"
           index={2}
         />
         <StatCard
@@ -309,7 +306,7 @@ export default function GuardDashboardPage() {
             data.latestEvalScore !== null ? `${data.latestEvalScore}%` : "—"
           }
           icon={Star}
-          color={BRAND_BLUE}
+          colorClass="bg-primary/10 text-primary"
           index={3}
         />
       </div>
@@ -325,7 +322,7 @@ export default function GuardDashboardPage() {
           {data.nextShift ? (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <MapPin size={14} style={{ color: BRAND_BLUE }} />
+                <MapPin size={14} className="text-primary" />
                 {data.nextShift.siteName || data.nextShift.clientName}
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -347,11 +344,7 @@ export default function GuardDashboardPage() {
         className="block animate-slide-up stagger-4"
       >
         <div
-          className="rounded-xl p-4 text-white transition-all duration-150 ease-out active:scale-[0.985]"
-          style={{
-            background: "linear-gradient(135deg, #014c85 0%, #0b67ad 100%)",
-            boxShadow: "0 10px 24px hsl(206 98% 26% / 0.22)",
-          }}
+          className="rounded-xl p-4 text-white transition-all duration-150 ease-out active:brightness-[0.92] bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
@@ -374,34 +367,30 @@ export default function GuardDashboardPage() {
       <div className="grid grid-cols-2 gap-2.5 animate-slide-up stagger-4">
         <Link
           href="/guard/attendance"
-          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
-          style={{ boxShadow: "0 1px 4px hsl(0 0% 0% / 0.06)" }}
+          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:brightness-[0.92] hover:border-primary/30 hover:shadow-sm select-none shadow-sm"
         >
           <div
-            className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0"
-            style={{ backgroundColor: `${BRAND_BLUE}12` }}
+            className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0 bg-primary/10"
           >
-            <CalendarCheck size={20} style={{ color: BRAND_BLUE }} />
+            <CalendarCheck size={20} className="text-primary" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">Attendance History</p>
-            <p className="text-[10px] text-muted-foreground">View records</p>
+            <p className="text-[11px] text-muted-foreground">View records</p>
           </div>
         </Link>
         <Link
           href="/guard/training"
-          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:scale-[0.97] hover:border-primary/30 hover:shadow-sm select-none"
-          style={{ boxShadow: "0 1px 4px hsl(0 0% 0% / 0.06)" }}
+          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:brightness-[0.92] hover:border-primary/30 hover:shadow-sm select-none shadow-sm"
         >
           <div
-            className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0"
-            style={{ backgroundColor: `${BRAND_GOLD}12` }}
+            className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0 bg-accent/10"
           >
-            <CalendarCheck size={20} style={{ color: BRAND_GOLD }} />
+            <CalendarCheck size={20} className="text-accent" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">Training</p>
-            <p className="text-[10px] text-muted-foreground">View assignments</p>
+            <p className="text-[11px] text-muted-foreground">View assignments</p>
           </div>
         </Link>
       </div>
@@ -415,8 +404,7 @@ export default function GuardDashboardPage() {
             </h2>
             <Link
               href="/guard/attendance"
-              className="flex items-center gap-1 text-xs font-medium"
-              style={{ color: BRAND_BLUE }}
+              className="flex items-center gap-1 text-xs font-medium text-primary"
             >
               View all
               <ArrowRight size={12} />
@@ -437,15 +425,15 @@ export default function GuardDashboardPage() {
                   {/* Date badge */}
                   <div
                     className="flex flex-col items-center justify-center h-10 w-10 rounded-xl shrink-0 text-center"
-                    style={{ backgroundColor: `${BRAND_BLUE}10` }}
+                    className="bg-primary/10"
                   >
                     <span
                       className="text-xs font-bold leading-none"
-                      style={{ color: BRAND_BLUE }}
+                      className="text-primary"
                     >
                       {log.date.slice(8, 10)}
                     </span>
-                    <span className="text-[10px] text-muted-foreground leading-none mt-0.5">
+                    <span className="text-[11px] text-muted-foreground leading-none mt-0.5">
                       {new Date(`${log.date}T00:00:00`).toLocaleDateString(
                         "en-IN",
                         { month: "short" }
@@ -458,15 +446,15 @@ export default function GuardDashboardPage() {
                       {log.siteName || "—"}
                       {log.dutyPointName ? ` • ${log.dutyPointName}` : ""}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">{log.time}</p>
+                    <p className="text-[11px] text-muted-foreground">{log.time}</p>
                   </div>
 
                   <Badge
                     variant="outline"
                     className={
                       log.status === "In"
-                        ? "text-green-700 border-green-300 bg-green-50 text-[10px] px-2 py-0.5"
-                        : "text-orange-700 border-orange-300 bg-orange-50 text-[10px] px-2 py-0.5"
+                        ? "text-green-700 border-green-300 bg-green-50 text-[11px] px-2 py-0.5"
+                        : "text-orange-700 border-orange-300 bg-orange-50 text-[11px] px-2 py-0.5"
                     }
                   >
                     {log.status}

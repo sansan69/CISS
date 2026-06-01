@@ -17,7 +17,6 @@ import {
   Mail,
 } from "lucide-react";
 
-const BRAND_BLUE = "#014c85";
 
 interface GuardProfileData {
   fullName: string;
@@ -73,15 +72,15 @@ function InfoRow({
     <div className="flex items-start gap-3 py-3">
       <div
         className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
-        style={{ backgroundColor: `${BRAND_BLUE}10` }}
+        className="bg-primary/10"
       >
-        <Icon size={16} style={{ color: BRAND_BLUE }} />
+        <Icon size={16} className="text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
           {label}
         </p>
-        <p className="text-sm font-medium text-gray-800 break-words">
+        <p className="text-sm font-medium text-foreground break-words">
           {value || "—"}
         </p>
       </div>
@@ -165,20 +164,20 @@ export default function GuardProfilePage() {
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-lg font-bold text-gray-900 leading-tight">
+          <h1 className="text-lg font-bold text-foreground leading-tight">
             {data.fullName}
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {data.employeeId}
           </p>
           <div className="flex items-center gap-2 mt-1">
             <Badge
               variant={data.status === "Active" ? "default" : "secondary"}
-              className="text-[10px]"
+              className="text-[11px]"
             >
               {data.status}
             </Badge>
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[11px] text-muted-foreground">
               {data.clientName}
             </span>
           </div>

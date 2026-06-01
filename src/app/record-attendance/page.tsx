@@ -20,8 +20,6 @@ import { useToast } from "@/hooks/use-toast";
 import { startHybridQrScanner } from "@/lib/qr/scanner-engine";
 import { parseQrContent } from "@/lib/qr/qr-token";
 
-const BRAND_BLUE = "#014c85";
-const BRAND_GOLD = "#bd9c55";
 
 interface SiteOption {
   id: string;
@@ -455,8 +453,8 @@ export default function RecordAttendancePage() {
           <Card className="border-l-4 border-l-brand-gold">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-brand-blue/10 flex items-center justify-center shrink-0">
-                  <ShieldCheck size={22} style={{ color: BRAND_BLUE }} />
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={22} className="text-primary" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-foreground">{employee.fullName}</p>
@@ -623,7 +621,7 @@ export default function RecordAttendancePage() {
             onClick={handleSubmit}
             disabled={submitting || !gps || !photoDataUrl || (isOutOfZone && !overrideReason)}
             className="w-full h-14 text-base font-semibold"
-            style={{ background: BRAND_BLUE }}
+            className="bg-primary"
           >
             {submitting ? (
               <Loader2 className="h-5 w-5 animate-spin" />

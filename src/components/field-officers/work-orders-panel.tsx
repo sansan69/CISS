@@ -229,7 +229,7 @@ const AssignGuardsDialog: React.FC<{
                             key={guard.id}
                             type="button"
                             onClick={() => handleToggle(guard)}
-                            className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-all active:scale-[0.98] ${
+                            className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-all active:brightness-[0.92] ${
                               isSelected ? "bg-primary/5 border-primary/30" : "bg-card border-border"
                             }`}
                           >

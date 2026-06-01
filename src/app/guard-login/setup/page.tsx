@@ -89,7 +89,7 @@ export default function GuardSetupPage() {
           className="mx-auto"
           data-ai-hint="company logo"
         />
-        <h1 className="text-2xl font-bold mt-4" style={{ color: "#014c85" }}>
+        <h1 className="text-2xl font-bold mt-4" className="text-primary">
           Guard Portal Setup
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Set up your PIN to get started</p>
@@ -103,7 +103,7 @@ export default function GuardSetupPage() {
             <p className="text-sm text-muted-foreground">
               You can now sign in to the Guard Portal using your phone number and PIN.
             </p>
-            <Button className="w-full" style={{ backgroundColor: "#014c85" }} asChild>
+            <Button className="w-full" className="bg-primary hover:bg-primary/90" asChild>
               <Link href="/guard-login">Go to Login</Link>
             </Button>
           </CardContent>
@@ -151,7 +151,7 @@ export default function GuardSetupPage() {
                 </div>
                 <Button
                   className="w-full h-12 font-semibold"
-                  style={{ backgroundColor: "#014c85" }}
+                  className="bg-primary hover:bg-primary/90"
                   onClick={handleStep1Next}
                 >
                   Next <ChevronRight className="ml-2 h-4 w-4" />
@@ -203,7 +203,7 @@ export default function GuardSetupPage() {
                   </Button>
                   <Button
                     className="flex-1 h-12 font-semibold"
-                    style={{ backgroundColor: "#014c85" }}
+                    className="bg-primary hover:bg-primary/90"
                     onClick={handleSubmit}
                     disabled={isLoading || pin.length < 4 || confirmPin.length < 4}
                   >
@@ -223,7 +223,7 @@ export default function GuardSetupPage() {
                 <Link
                   href="/guard-login"
                   className="font-medium hover:underline"
-                  style={{ color: "#014c85" }}
+                  className="text-primary"
                 >
                   Go to Login
                 </Link>

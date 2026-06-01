@@ -53,8 +53,8 @@ export default function GuardPayslipsPage() {
   return (
     <div className="space-y-4 p-4 pb-6">
       <div>
-        <p className="text-sm text-gray-500">Salary records</p>
-        <h1 className="text-lg font-bold text-gray-900">My Payslips</h1>
+        <p className="text-sm text-muted-foreground">Salary records</p>
+        <h1 className="text-lg font-bold text-foreground">My Payslips</h1>
       </div>
 
       {loading ? (
@@ -75,13 +75,13 @@ export default function GuardPayslipsPage() {
             <Card key={payslip.id} className="rounded-2xl border-0 shadow-sm">
               <CardContent className="flex items-center justify-between gap-3 p-4">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{payslip.period || "Payslip"}</p>
-                  <p className="text-xs text-gray-500 capitalize">
+                  <p className="text-sm font-semibold text-foreground">{payslip.period || "Payslip"}</p>
+                  <p className="text-xs text-muted-foreground capitalize">
                     {payslip.status || "pending"} · Net Pay {typeof payslip.netPay === "number" ? `₹${payslip.netPay.toLocaleString("en-IN")}` : "—"}
                   </p>
                 </div>
                 {(payslip.payslipUrl || payslip.downloadUrl) ? (
-                  <Link href={payslip.payslipUrl || payslip.downloadUrl || "#"} target="_blank" className="inline-flex items-center rounded-xl bg-[#014c85] px-3 py-2 text-sm font-medium text-white">
+                  <Link href={payslip.payslipUrl || payslip.downloadUrl || "#"} target="_blank" className="inline-flex items-center rounded-xl bg-primary px-3 py-2 text-sm font-medium text-white">
                     <Download className="mr-1.5 h-4 w-4" />
                     Open
                   </Link>

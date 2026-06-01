@@ -134,7 +134,7 @@ export default function GuardQuizPage() {
                 {result.passed ? "Passed" : "Did not pass"} · Passing {result.passingScore}%
               </p>
             </div>
-            <Button onClick={() => router.push("/guard/training")} className="bg-[#014c85] text-white hover:bg-[#013963]">
+            <Button onClick={() => router.push("/guard/training")} className="bg-primary text-white hover:bg-primary/90">
               Back to Training
             </Button>
           </CardContent>
@@ -150,7 +150,7 @@ export default function GuardQuizPage() {
     <div className="flex flex-col gap-3 p-4 pb-10">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-500">{quiz.assignment.moduleName}</p>
+          <p className="text-xs text-muted-foreground">{quiz.assignment.moduleName}</p>
           <p className="text-sm font-semibold">Question {current + 1} / {quiz.questions.length}</p>
         </div>
         {remainingSec !== null && (
@@ -173,7 +173,7 @@ export default function GuardQuizPage() {
                   type="button"
                   onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))}
                   className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
-                    selected ? "border-[#014c85] bg-[#014c85]/5 font-medium text-[#014c85]" : "border-gray-200 bg-white hover:bg-gray-50"
+                    selected ? "border-primary bg-primary/5 font-medium text-primary" : "border-border bg-white hover:bg-muted/50"
                   }`}
                 >
                   <span className="mr-2 font-semibold">{String.fromCharCode(65 + i)}.</span>
@@ -187,13 +187,13 @@ export default function GuardQuizPage() {
 
       <div className="flex items-center justify-between gap-2">
         <Button variant="outline" disabled={current === 0} onClick={() => setCurrent((c) => c - 1)}>Previous</Button>
-        <p className="text-xs text-gray-500">{answered} / {quiz.questions.length} answered</p>
+        <p className="text-xs text-muted-foreground">{answered} / {quiz.questions.length} answered</p>
         {isLast ? (
-          <Button onClick={handleSubmit} disabled={submitting} className="bg-[#014c85] text-white hover:bg-[#013963]">
+          <Button onClick={handleSubmit} disabled={submitting} className="bg-primary text-white hover:bg-primary/90">
             {submitting ? "Submitting..." : "Submit Quiz"}
           </Button>
         ) : (
-          <Button onClick={() => setCurrent((c) => c + 1)} className="bg-[#014c85] text-white hover:bg-[#013963]">Next</Button>
+          <Button onClick={() => setCurrent((c) => c + 1)} className="bg-primary text-white hover:bg-primary/90">Next</Button>
         )}
       </div>
     </div>

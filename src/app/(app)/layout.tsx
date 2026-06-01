@@ -370,7 +370,7 @@ function MobileBottomNav({
               className={cn(
                 "bottom-nav-item relative",
                 "transition-all duration-150 ease-out",
-                "active:scale-[0.94] select-none rounded-xl",
+                "active:brightness-[0.92] select-none rounded-xl",
                 active ? "text-brand-blue" : "text-muted-foreground/60"
               )}
             >
@@ -402,7 +402,7 @@ function MobileBottomNav({
           className={cn(
             "bottom-nav-item relative",
             "transition-all duration-150 ease-out",
-            "active:scale-[0.94] select-none rounded-xl",
+            "active:brightness-[0.92] select-none rounded-xl",
             moreActive ? "text-brand-blue" : "text-muted-foreground/60"
           )}
         >
@@ -418,7 +418,7 @@ function MobileBottomNav({
               />
             )}
           </div>
-          <span className={cn("text-[9px] leading-none tracking-wide transition-all duration-150", moreActive ? "font-bold" : "font-medium")}>
+          <span className={cn("text-[11px] leading-none tracking-wide transition-all duration-150", moreActive ? "font-bold" : "font-medium")}>
             More
           </span>
         </button>

@@ -4,9 +4,6 @@ import React, { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const BRAND_BLUE = "hsl(206 98% 26%)";
-const BRAND_GOLD = "hsl(41 44% 54%)";
-
 export interface CalendarAttendanceEntry {
   id: string;
   date: string;       // YYYY-MM-DD
@@ -112,14 +109,10 @@ export function AttendanceCalendar({
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       {/* Month header */}
-      <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ backgroundColor: BRAND_BLUE }}
-      >
+      <div className="flex items-center justify-between px-4 py-3 bg-primary">
         <button
           onClick={() => onMonthChange("prev")}
-          className="flex items-center justify-center h-8 w-8 rounded-full transition-colors"
-          style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+          className="flex items-center justify-center h-8 w-8 rounded-full transition-colors bg-white/15"
         >
           <ChevronLeft size={18} className="text-white" />
         </button>
@@ -170,34 +163,23 @@ export function AttendanceCalendar({
               const future = isFutureDate(cell.dateStr);
               const sunday = isSunday(cell.dateStr);
 
-              let bgColor = "transparent";
-              let textColor = future ? "#d1d5db" : sunday ? "#ef4444" : "#374151";
-              let ringStyle = {};
-
-              if (isPresent) {
-                bgColor = "#22c55e";
-                textColor = "white";
-              } else if (isOut) {
-                bgColor = "#f97316";
-                textColor = "white";
-              }
-
-              if (todayCell && !isPresent && !isOut) {
-                ringStyle = {
-                  outline: `2px solid ${BRAND_GOLD}`,
-                  outlineOffset: "-2px",
-                };
-              }
-
               return (
                 <div
                   key={cell.dateStr}
-                  className="h-9 flex items-center justify-center rounded-full text-xs font-medium transition-all"
-                  style={{
-                    backgroundColor: bgColor,
-                    color: textColor,
-                    ...ringStyle,
-                  }}
+                  className={cn(
+                    "h-9 flex items-center justify-center rounded-full text-xs font-medium transition-all",
+                    isPresent && "bg-green-500 text-white",
+                    isOut && "bg-orange-500 text-white",
+                    !isPresent && !isOut && future && "text-muted-foreground/60",
+                    !isPresent && !isOut && sunday && "text-destructive",
+                    !isPresent && !isOut && !future && !sunday && "text-foreground",
+                    todayCell && !isPresent && !isOut && "outline outline-2 outline-accent"
+                  )}
+                  style={
+                    todayCell && !isPresent && !isOut
+                      ? { outlineOffset: "-2px" }
+                      : undefined
+                  }
                 >
                   {cell.dayNum}
                 </div>
@@ -211,18 +193,15 @@ export function AttendanceCalendar({
       <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-100">
         <div className="flex items-center gap-1.5">
           <div className="h-3 w-3 rounded-full bg-green-500" />
-          <span className="text-[10px] text-gray-500">Present</span>
+          <span className="text-[11px] text-muted-foreground">Present</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="h-3 w-3 rounded-full bg-orange-500" />
-          <span className="text-[10px] text-gray-500">Out</span>
+          <span className="text-[11px] text-muted-foreground">Out</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div
-            className="h-3 w-3 rounded-full border-2"
-            style={{ borderColor: BRAND_GOLD }}
-          />
-          <span className="text-[10px] text-gray-500">Today</span>
+          <div className="h-3 w-3 rounded-full border-2 border-accent" />
+          <span className="text-[11px] text-muted-foreground">Today</span>
         </div>
       </div>
     </div>
