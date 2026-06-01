@@ -167,7 +167,7 @@ export default function GuardAttendancePage() {
           <p className="text-xs text-muted-foreground mt-0.5">Absent</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-          <p className="text-2xl font-bold" className="text-primary">{data?.workingDays ?? data?.absentDays != null ? (presentDays + (data?.absentDays ?? 0)) : presentDays}</p>
+          <p className="text-2xl font-bold text-primary">{data?.workingDays ?? data?.absentDays != null ? (presentDays + (data?.absentDays ?? 0)) : presentDays}</p>
           <p className="text-xs text-muted-foreground mt-0.5">Working days</p>
         </div>
       </div>
@@ -191,12 +191,10 @@ export default function GuardAttendancePage() {
             >
               {/* Date badge */}
               <div
-                className="flex flex-col items-center justify-center h-11 w-11 rounded-xl shrink-0 text-center"
-                className="bg-primary/10"
+                className="flex flex-col items-center justify-center h-11 w-11 rounded-xl shrink-0 text-center bg-primary/10"
               >
                 <span
-                  className="text-sm font-bold leading-none"
-                  className="text-primary"
+                  className="text-sm font-bold leading-none text-primary"
                 >
                   {log.date.slice(8, 10)}
                 </span>

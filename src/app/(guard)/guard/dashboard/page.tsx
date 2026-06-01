@@ -424,12 +424,10 @@ export default function GuardDashboardPage() {
                 >
                   {/* Date badge */}
                   <div
-                    className="flex flex-col items-center justify-center h-10 w-10 rounded-xl shrink-0 text-center"
-                    className="bg-primary/10"
+                    className="flex flex-col items-center justify-center h-10 w-10 rounded-xl shrink-0 text-center bg-primary/10"
                   >
                     <span
-                      className="text-xs font-bold leading-none"
-                      className="text-primary"
+                      className="text-xs font-bold leading-none text-primary"
                     >
                       {log.date.slice(8, 10)}
                     </span>

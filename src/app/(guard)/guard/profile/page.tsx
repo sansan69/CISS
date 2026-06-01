@@ -71,8 +71,7 @@ function InfoRow({
   return (
     <div className="flex items-start gap-3 py-3">
       <div
-        className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
-        className="bg-primary/10"
+        className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 bg-primary/10"
       >
         <Icon size={16} className="text-primary" />
       </div>

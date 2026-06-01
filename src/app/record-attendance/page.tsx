@@ -620,8 +620,7 @@ export default function RecordAttendancePage() {
           <Button
             onClick={handleSubmit}
             disabled={submitting || !gps || !photoDataUrl || (isOutOfZone && !overrideReason)}
-            className="w-full h-14 text-base font-semibold"
-            className="bg-primary"
+            className="w-full h-14 text-base font-semibold bg-primary"
           >
             {submitting ? (
               <Loader2 className="h-5 w-5 animate-spin" />
