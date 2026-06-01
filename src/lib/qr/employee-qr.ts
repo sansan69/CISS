@@ -6,6 +6,11 @@ function normalizeQrText(text: string): string {
   return text.replace(/\u0000/g, "").trim();
 }
 
+/**
+ * Parse employee ID and phone from QR text.
+ * Supports both old plain-text format and new signed format.
+ * @deprecated Use parseQrContent from ./qr-token for full parsing including token verification.
+ */
 export function parseEmployeeQrText(text: string): {
   employeeId: string | null;
   phoneNumber: string | null;

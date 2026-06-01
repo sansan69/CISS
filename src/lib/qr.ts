@@ -1,11 +1,16 @@
 import QRCode from "qrcode";
+import { buildQrContent } from "./qr/qr-token";
 
+/**
+ * Generate a signed QR code data URL for an employee.
+ * The QR includes an HMAC token to prevent tampering and forgery.
+ */
 export async function generateQrCodeDataUrl(
   employeeId: string,
   fullName: string,
   phoneNumber: string
 ): Promise<string> {
-  const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
+  const dataString = buildQrContent(employeeId, fullName, phoneNumber);
 
   return QRCode.toDataURL(dataString, {
     errorCorrectionLevel: "H",

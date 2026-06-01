@@ -10,8 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileDown, Search, MapPin, Clock, Smartphone, ShieldAlert, Image as ImageIcon, ChevronRight } from "lucide-react";
-import { format } from "date-fns";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Loader2, FileDown, Search, MapPin, CalendarIcon, ChevronRight, Users, Building2 } from "lucide-react";
+import { format, parseISO, isAfter, isBefore, isEqual } from "date-fns";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import type { AttendancePhotoCompliance, FirestoreAttendanceLog } from "@/types/attendance";
@@ -26,6 +29,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 
 type AttendanceLog = FirestoreAttendanceLog;
+
+type DateRange = { from: Date; to: Date };
 
 function getReportedAt(log: AttendanceLog) {
   if (log.reportedAt?.toDate) return log.reportedAt.toDate();
@@ -63,6 +68,10 @@ function isCrossClientReliefLog(log: AttendanceLog) {
   return Boolean(employeeClient && siteClient && employeeClient !== siteClient);
 }
 
+function getLogClientName(log: AttendanceLog): string {
+  return getSiteClientName(log) || getEmployeeClientName(log) || "Unknown Client";
+}
+
 function downloadBlob(content: BlobPart, filename: string, type: string) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -71,6 +80,14 @@ function downloadBlob(content: BlobPart, filename: string, type: string) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function isDateInRange(dateStr: string, range?: DateRange) {
+  if (!range?.from && !range?.to) return true;
+  const d = parseISO(dateStr);
+  if (range.from && isBefore(d, range.from) && !isEqual(d, range.from)) return false;
+  if (range.to && isAfter(d, range.to) && !isEqual(d, range.to)) return false;
+  return true;
 }
 
 export default function AttendanceLogsPage() {
@@ -82,12 +99,13 @@ export default function AttendanceLogsPage() {
   const [districtFilter, setDistrictFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AttendanceLog | null>(null);
+  const [expandedClients, setExpandedClients] = useState<string[]>(["all"]);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Wait for auth to resolve before subscribing
     if (userRole === null) return;
 
     if (userRole === "client") {
@@ -234,6 +252,7 @@ export default function AttendanceLogsPage() {
       const matchesDistrict =
         districtFilter === "all" || districtMatches(log.district, districtFilter);
       const matchesClient = clientFilter === "all" || logMatchesClient(log, clientFilter);
+      const matchesDate = !dateRange || isDateInRange(log.attendanceDate ?? "", dateRange);
       const matchesSearch =
         !term ||
         log.employeeName?.toLowerCase().includes(term) ||
@@ -244,16 +263,53 @@ export default function AttendanceLogsPage() {
         log.siteClientName?.toLowerCase().includes(term) ||
         log.employeeClientName?.toLowerCase().includes(term);
 
-      return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesSearch;
+      return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesDate && matchesSearch;
     });
-  }, [assignedDistricts, clientFilter, clientInfo?.clientName, districtFilter, logs, searchTerm, statusFilter, userRole]);
+  }, [assignedDistricts, clientFilter, clientInfo?.clientName, dateRange, districtFilter, logs, searchTerm, statusFilter, userRole]);
+
+  const groupedByClient = useMemo(() => {
+    const groups = new Map<string, AttendanceLog[]>();
+    for (const log of filteredLogs) {
+      const clientName = getLogClientName(log);
+      if (!groups.has(clientName)) {
+        groups.set(clientName, []);
+      }
+      groups.get(clientName)!.push(log);
+    }
+    // Sort each group's logs by date descending
+    for (const [, groupLogs] of groups) {
+      groupLogs.sort((a, b) => {
+        const aDate = (a.attendanceDate ?? "").localeCompare(b.attendanceDate ?? "");
+        if (aDate !== 0) return -aDate;
+        const aTime = getReportedAt(a)?.getTime() ?? 0;
+        const bTime = getReportedAt(b)?.getTime() ?? 0;
+        return bTime - aTime;
+      });
+    }
+    // Sort groups by client name
+    return new Map([...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+  }, [filteredLogs]);
+
+  const clientStats = useMemo(() => {
+    const stats = new Map<string, { total: number; inCount: number; outCount: number; uniqueEmployees: number }>();
+    for (const [clientName, clientLogs] of groupedByClient) {
+      stats.set(clientName, {
+        total: clientLogs.length,
+        inCount: clientLogs.filter((l) => l.status === "In").length,
+        outCount: clientLogs.filter((l) => l.status === "Out").length,
+        uniqueEmployees: new Set(clientLogs.map((l) => l.employeeId)).size,
+      });
+    }
+    return stats;
+  }, [groupedByClient]);
 
   const totals = useMemo(() => {
     const inCount = filteredLogs.filter((log) => log.status === "In").length;
     const outCount = filteredLogs.filter((log) => log.status === "Out").length;
     const uniqueEmployees = new Set(filteredLogs.map((log) => log.employeeId)).size;
-    return { total: filteredLogs.length, inCount, outCount, uniqueEmployees };
-  }, [filteredLogs]);
+    const uniqueClients = groupedByClient.size;
+    return { total: filteredLogs.length, inCount, outCount, uniqueEmployees, uniqueClients };
+  }, [filteredLogs, groupedByClient]);
 
   const handleExport = async () => {
     try {
@@ -263,6 +319,8 @@ export default function AttendanceLogsPage() {
         status: statusFilter,
         district: districtFilter,
       });
+      if (dateRange?.from) params.set("from", format(dateRange.from, "yyyy-MM-dd"));
+      if (dateRange?.to) params.set("to", format(dateRange.to, "yyyy-MM-dd"));
 
       const response = await authorizedFetch(`/api/admin/reports/attendance?${params.toString()}`);
       if (!response.ok) {
@@ -282,12 +340,212 @@ export default function AttendanceLogsPage() {
     }
   };
 
+  const renderLogCard = (log: AttendanceLog) => (
+    <div key={log.id} className="rounded-lg border p-3 cursor-pointer hover:bg-muted/40" onClick={() => setSelectedLog(log)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium break-words">{log.employeeName || "Unknown employee"}</p>
+          <p className="text-xs text-muted-foreground break-all">{log.employeeId}{log.employeePhoneNumber ? ` · ${log.employeePhoneNumber}` : ""}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Reported at</p>
+          <p>{getReportedAt(log) ? format(getReportedAt(log)!, "dd MMM yyyy, hh:mm a") : "Pending"}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Distance</p>
+          <p className={log.distanceMeters != null ? (log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600") : ""}>
+            {log.distanceMeters != null
+              ? (log.distanceMeters < 1000 ? `${Math.round(log.distanceMeters)} m` : `${(log.distanceMeters / 1000).toFixed(1)} km`)
+              : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Site</p>
+          <p className="flex items-center gap-1">
+            {log.siteName || "Unknown site"}
+            {log.sourceCollection === "clientLocations" && (
+              <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
+            )}
+          </p>
+          {log.dutyPointName && (
+            <p className="text-xs text-muted-foreground">{log.dutyPointName}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {getSiteClientName(log) || "Unknown client"}
+          </p>
+          {isCrossClientReliefLog(log) && (
+            <Badge variant="secondary" className="mt-1 text-[10px]">
+              Relief
+            </Badge>
+          )}
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">District / Shift</p>
+          <p>{log.district || "N/A"}</p>
+          {(log.shiftLabel || log.shiftCode) && <p className="text-xs text-muted-foreground">{log.shiftLabel || log.shiftCode}</p>}
+        </div>
+        {log.photoCompliance && (
+          <div className="col-span-2">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Uniform review</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <Badge
+                variant={
+                  log.photoCompliance.overallStatus === "clear"
+                    ? "outline"
+                    : "destructive"
+                }
+              >
+                {log.photoCompliance.overallStatus === "clear"
+                  ? "Clear"
+                  : log.photoCompliance.overallStatus === "warning"
+                    ? "Review required"
+                    : "AI check unavailable"}
+              </Badge>
+              {log.photoCompliance.adminFlag && (
+                <Badge variant="secondary">Admin flag</Badge>
+              )}
+              {log.requiresLocationReview && (
+                <Badge variant="secondary">Location review</Badge>
+              )}
+              {log.isMockLocationSuspected && (
+                <Badge variant="destructive">Mock location suspected</Badge>
+              )}
+            </div>
+            {log.photoCompliance.warnings.length > 0 && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {log.photoCompliance.warnings.join(" • ")}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderLogTable = (logs: AttendanceLog[]) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Employee</TableHead>
+          <TableHead>Reported at</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Site / District</TableHead>
+          <TableHead className="hidden xl:table-cell">Shift</TableHead>
+          <TableHead className="hidden lg:table-cell">Distance</TableHead>
+          <TableHead>Compliance</TableHead>
+          <TableHead className="w-8"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {logs.map((log) => (
+          <TableRow
+            key={log.id}
+            className="cursor-pointer hover:bg-muted/50"
+            onClick={() => setSelectedLog(log)}
+          >
+            <TableCell>
+              <div className="font-medium">{log.employeeName || "Unknown employee"}</div>
+              <div className="text-xs text-muted-foreground">{log.employeeId}</div>
+              {log.employeePhoneNumber && (
+                <div className="text-xs text-muted-foreground">{log.employeePhoneNumber}</div>
+              )}
+            </TableCell>
+            <TableCell className="whitespace-nowrap text-sm">
+              {getReportedAt(log) ? format(getReportedAt(log)!, "dd MMM yyyy") : "—"}
+              <div className="text-xs text-muted-foreground">
+                {getReportedAt(log) ? format(getReportedAt(log)!, "hh:mm a") : "Pending"}
+              </div>
+            </TableCell>
+            <TableCell>
+              <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
+            </TableCell>
+            <TableCell>
+              <div className="flex items-center gap-1 text-sm">
+                {log.siteName || "Unknown site"}
+                {log.sourceCollection === "clientLocations" && (
+                  <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
+                )}
+              </div>
+              {log.dutyPointName && (
+                <div className="text-xs text-muted-foreground">{log.dutyPointName}</div>
+              )}
+              <div className="text-xs text-muted-foreground">
+                {getSiteClientName(log) || "Unknown client"}
+              </div>
+              {isCrossClientReliefLog(log) && (
+                <div className="mt-1">
+                  <Badge variant="secondary" className="text-[10px]">Relief</Badge>
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground">{log.district || ""}</div>
+            </TableCell>
+            <TableCell className="hidden xl:table-cell text-sm">
+              {log.shiftLabel || log.shiftCode ? (
+                <div>
+                  <div>{log.shiftLabel || log.shiftCode}</div>
+                  {log.shiftStartTime && log.shiftEndTime && (
+                    <div className="text-xs text-muted-foreground">{log.shiftStartTime} – {log.shiftEndTime}</div>
+                  )}
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">—</span>
+              )}
+            </TableCell>
+            <TableCell className="hidden lg:table-cell text-sm">
+              {log.distanceMeters != null ? (
+                <div>
+                  <span className={log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600"}>
+                    {log.distanceMeters < 1000
+                      ? `${Math.round(log.distanceMeters)} m`
+                      : `${(log.distanceMeters / 1000).toFixed(1)} km`}
+                  </span>
+                  {log.geofenceRadiusAtTime && (
+                    <div className="text-xs text-muted-foreground">fence: {log.geofenceRadiusAtTime} m</div>
+                  )}
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">—</span>
+              )}
+            </TableCell>
+            <TableCell>
+              <div className="flex flex-wrap gap-1">
+                {log.photoCompliance ? (
+                  <Badge
+                    variant={log.photoCompliance.overallStatus === "clear" ? "outline" : "destructive"}
+                    className="text-[10px]"
+                  >
+                    {log.photoCompliance.overallStatus === "clear" ? "Clear" : log.photoCompliance.overallStatus === "warning" ? "Review" : "N/A"}
+                  </Badge>
+                ) : null}
+                {log.isMockLocationSuspected && <Badge variant="destructive" className="text-[10px]">Mock GPS</Badge>}
+                {log.requiresLocationReview && <Badge variant="secondary" className="text-[10px]">Location</Badge>}
+                {log.photoCompliance?.adminFlag && <Badge variant="secondary" className="text-[10px]">Flagged</Badge>}
+                {!log.photoCompliance && !log.isMockLocationSuspected && (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
+            </TableCell>
+            <TableCell>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
       <PageHeader
         eyebrow="Workforce"
         title="Attendance Logs"
-        description="Live attendance activity from the latest 200 records."
+        description="Live attendance activity grouped by client with date and district filters."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Attendance Logs" },
@@ -300,7 +558,7 @@ export default function AttendanceLogsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total records</CardDescription>
@@ -325,14 +583,20 @@ export default function AttendanceLogsPage() {
             <CardTitle>{totals.uniqueEmployees}</CardTitle>
           </CardHeader>
         </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Clients</CardDescription>
+            <CardTitle>{totals.uniqueClients}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
-          <CardDescription>Search by employee, site, or client and narrow the live log stream.</CardDescription>
+          <CardDescription>Search by employee, site, or client and narrow by date range and district.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -382,8 +646,42 @@ export default function AttendanceLogsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="justify-start text-left font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "dd MMM")} - {format(dateRange.to, "dd MMM")}
+                    </>
+                  ) : (
+                    format(dateRange.from, "dd MMM")
+                  )
+                ) : (
+                  <span>Pick date range</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={new Date()}
+                selected={dateRange}
+                onSelect={(range) => {
+                  if (range?.from) {
+                    setDateRange({ from: range.from, to: range.to ?? range.from });
+                  } else {
+                    setDateRange(undefined);
+                  }
+                }}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
           {isClientView && (
-            <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-4">
+            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-5">
               Client filter is locked to your account scope.
             </p>
           )}
@@ -392,226 +690,61 @@ export default function AttendanceLogsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent activity</CardTitle>
-          <CardDescription>The list updates automatically as new attendance records arrive.</CardDescription>
+          <CardTitle>Attendance by Client</CardTitle>
+          <CardDescription>
+            {filteredLogs.length === 0
+              ? "No records match the current filters."
+              : `${filteredLogs.length} records across ${groupedByClient.size} client(s).`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex h-40 items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+              No attendance records match the current filters.
+            </div>
           ) : (
-            <>
-              {filteredLogs.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-                  No attendance records match the current filters.
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-3 md:hidden">
-                    {filteredLogs.map((log) => (
-                      <div key={log.id} className="rounded-lg border p-3 cursor-pointer hover:bg-muted/40" onClick={() => setSelectedLog(log)}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-medium break-words">{log.employeeName || "Unknown employee"}</p>
-                            <p className="text-xs text-muted-foreground break-all">{log.employeeId}{log.employeePhoneNumber ? ` · ${log.employeePhoneNumber}` : ""}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Reported at</p>
-                            <p>{getReportedAt(log) ? format(getReportedAt(log)!, "dd MMM yyyy, hh:mm a") : "Pending"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Distance</p>
-                            <p className={log.distanceMeters != null ? (log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600") : ""}>
-                              {log.distanceMeters != null
-                                ? (log.distanceMeters < 1000 ? `${Math.round(log.distanceMeters)} m` : `${(log.distanceMeters / 1000).toFixed(1)} km`)
-                                : "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Site</p>
-                            <p className="flex items-center gap-1">
-                              {log.siteName || "Unknown site"}
-                              {log.sourceCollection === "clientLocations" && (
-                                <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
-                              )}
-                            </p>
-                            {log.dutyPointName && (
-                              <p className="text-xs text-muted-foreground">{log.dutyPointName}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                              {getSiteClientName(log) || "Unknown client"}
-                            </p>
-                            {isCrossClientReliefLog(log) && (
-                              <Badge variant="secondary" className="mt-1 text-[10px]">
-                                Relief
-                              </Badge>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">District / Shift</p>
-                            <p>{log.district || "N/A"}</p>
-                            {(log.shiftLabel || log.shiftCode) && <p className="text-xs text-muted-foreground">{log.shiftLabel || log.shiftCode}</p>}
-                          </div>
-                          {log.photoCompliance && (
-                            <div className="col-span-2">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Uniform review</p>
-                              <div className="mt-1 flex flex-wrap gap-2">
-                                <Badge
-                                  variant={
-                                    log.photoCompliance.overallStatus === "clear"
-                                      ? "outline"
-                                      : "destructive"
-                                  }
-                                >
-                                  {log.photoCompliance.overallStatus === "clear"
-                                    ? "Clear"
-                                    : log.photoCompliance.overallStatus === "warning"
-                                      ? "Review required"
-                                      : "AI check unavailable"}
-                                </Badge>
-                                {log.photoCompliance.adminFlag && (
-                                  <Badge variant="secondary">Admin flag</Badge>
-                                )}
-                                {log.requiresLocationReview && (
-                                  <Badge variant="secondary">Location review</Badge>
-                                )}
-                                {log.isMockLocationSuspected && (
-                                  <Badge variant="destructive">Mock location suspected</Badge>
-                                )}
-                              </div>
-                              {log.photoCompliance.warnings.length > 0 && (
-                                <p className="mt-2 text-sm text-muted-foreground">
-                                  {log.photoCompliance.warnings.join(" • ")}
-                                </p>
-                              )}
-                            </div>
-                          )}
+            <Accordion
+              type="multiple"
+              value={expandedClients}
+              onValueChange={setExpandedClients}
+              className="space-y-3"
+            >
+              {Array.from(groupedByClient.entries()).map(([clientName, clientLogs]) => {
+                const stats = clientStats.get(clientName)!;
+                const itemValue = `client-${clientName}`;
+                return (
+                  <AccordionItem key={itemValue} value={itemValue} className="border rounded-lg px-4 data-[state=open]:bg-muted/20">
+                    <AccordionTrigger className="hover:no-underline py-3">
+                      <div className="flex items-center gap-3 text-left w-full pr-4">
+                        <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm">{clientName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {stats.total} records · {stats.inCount} IN · {stats.outCount} OUT · {stats.uniqueEmployees} employees
+                          </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="hidden md:block">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Employee</TableHead>
-                          <TableHead>Reported at</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Site / District</TableHead>
-                          <TableHead className="hidden xl:table-cell">Shift</TableHead>
-                          <TableHead className="hidden lg:table-cell">Distance</TableHead>
-                          <TableHead>Compliance</TableHead>
-                          <TableHead className="w-8"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredLogs.map((log) => (
-                          <TableRow
-                            key={log.id}
-                            className="cursor-pointer hover:bg-muted/50"
-                            onClick={() => setSelectedLog(log)}
-                          >
-                            <TableCell>
-                              <div className="font-medium">{log.employeeName || "Unknown employee"}</div>
-                              <div className="text-xs text-muted-foreground">{log.employeeId}</div>
-                              {log.employeePhoneNumber && (
-                                <div className="text-xs text-muted-foreground">{log.employeePhoneNumber}</div>
-                              )}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-sm">
-                              {getReportedAt(log) ? format(getReportedAt(log)!, "dd MMM yyyy") : "—"}
-                              <div className="text-xs text-muted-foreground">
-                                {getReportedAt(log) ? format(getReportedAt(log)!, "hh:mm a") : "Pending"}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={log.status === "In" ? "default" : "secondary"}>{log.status}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1 text-sm">
-                                {log.siteName || "Unknown site"}
-                                {log.sourceCollection === "clientLocations" && (
-                                  <span className="text-[10px] bg-muted rounded px-1 py-0.5 font-medium">Office</span>
-                                )}
-                              </div>
-                              {log.dutyPointName && (
-                                <div className="text-xs text-muted-foreground">{log.dutyPointName}</div>
-                              )}
-                              <div className="text-xs text-muted-foreground">
-                                {getSiteClientName(log) || "Unknown client"}
-                              </div>
-                              {isCrossClientReliefLog(log) && (
-                                <div className="mt-1">
-                                  <Badge variant="secondary" className="text-[10px]">Relief</Badge>
-                                </div>
-                              )}
-                              <div className="text-xs text-muted-foreground">{log.district || ""}</div>
-                            </TableCell>
-                            <TableCell className="hidden xl:table-cell text-sm">
-                              {log.shiftLabel || log.shiftCode ? (
-                                <div>
-                                  <div>{log.shiftLabel || log.shiftCode}</div>
-                                  {log.shiftStartTime && log.shiftEndTime && (
-                                    <div className="text-xs text-muted-foreground">{log.shiftStartTime} – {log.shiftEndTime}</div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell text-sm">
-                              {log.distanceMeters != null ? (
-                                <div>
-                                  <span className={log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600"}>
-                                    {log.distanceMeters < 1000
-                                      ? `${Math.round(log.distanceMeters)} m`
-                                      : `${(log.distanceMeters / 1000).toFixed(1)} km`}
-                                  </span>
-                                  {log.geofenceRadiusAtTime && (
-                                    <div className="text-xs text-muted-foreground">fence: {log.geofenceRadiusAtTime} m</div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {log.photoCompliance ? (
-                                  <Badge
-                                    variant={log.photoCompliance.overallStatus === "clear" ? "outline" : "destructive"}
-                                    className="text-[10px]"
-                                  >
-                                    {log.photoCompliance.overallStatus === "clear" ? "Clear" : log.photoCompliance.overallStatus === "warning" ? "Review" : "N/A"}
-                                  </Badge>
-                                ) : null}
-                                {log.isMockLocationSuspected && <Badge variant="destructive" className="text-[10px]">Mock GPS</Badge>}
-                                {log.requiresLocationReview && <Badge variant="secondary" className="text-[10px]">Location</Badge>}
-                                {log.photoCompliance?.adminFlag && <Badge variant="secondary" className="text-[10px]">Flagged</Badge>}
-                                {!log.photoCompliance && !log.isMockLocationSuspected && (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </>
-              )}
-            </>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pb-2">
+                        {/* Mobile card view */}
+                        <div className="grid gap-3 md:hidden">
+                          {clientLogs.map(renderLogCard)}
+                        </div>
+                        {/* Desktop table view */}
+                        <div className="hidden md:block overflow-x-auto">
+                          {renderLogTable(clientLogs)}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
           )}
         </CardContent>
       </Card>

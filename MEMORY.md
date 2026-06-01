@@ -1858,3 +1858,170 @@ Fixes the "guards stuck in IN state" problem where guards who forgot to mark OUT
   - If "Out" or null: defaults to "In"
 - `submitAttendanceOnline()` now propagates `autoClosed` flag from server response.
 - Submit handler shows "Previous Session Closed" toast with server message and resets toggle to "In" for fresh start.
+
+---
+
+## [2026-06-01] — Session: Robust attendance system — idempotency, QR security, geofence enforcement, dual-path marking
+
+**Goal:** Fix all failure points in attendance marking and build an industry-standard, fail-proof dual-path system: (1) Guard Portal (logged-in guard marks own attendance), (2) QR Record Attendance (scan guard QR to identify and mark In/Out). Both paths work from Next.js webapp and Flutter Android app.
+
+### New Files (Webapp)
+
+**`src/lib/server/rate-limit.ts`**
+- Firestore-based distributed rate limiter using atomic transactions.
+- Replaces in-memory `Map` that was useless on serverless (Vercel).
+- `checkRateLimit(key, config)` with windowed counters stored in `rateLimits` collection.
+
+**`src/lib/qr/qr-token.ts`**
+- HMAC-SHA256 QR token generation and verification.
+- `generateQrToken(employeeId, phoneNumber)` creates a tamper-proof token bound to employee identity.
+- `buildQrContent(...)` generates the full QR text with `CISS-ATTENDANCE` header.
+- `parseQrContent(...)` extracts employeeId, name, phone, and token from scanned text.
+- Backward compatible with legacy plain-text QRs (token is optional).
+
+**`src/app/api/public/attendance/verify-qr/route.ts`**
+- `POST /api/public/attendance/verify-qr` — validates a scanned QR code.
+- Parses QR text, looks up employee, verifies HMAC token if present.
+- Returns employee details + attendance hint (lastStatus, openSessionId, recommendedStatus).
+- Used by both web and mobile before showing the attendance form.
+
+**`src/app/api/attendance/validate/route.ts`**
+- `POST /api/attendance/validate` — pre-flight check before submission.
+- Validates employee active status, district match, site GPS config, shift resolution.
+- Returns `canSubmit`, `warnings` (outOfZone, stateConflict), and `resolved` shift/duty-point.
+- Prevents wasted submissions and gives early UX feedback.
+
+**`src/app/record-attendance/page.tsx`**
+- New public page: `/record-attendance` — standalone QR-scan → mark attendance flow.
+- Designed for admins, field officers, or shared devices.
+- Steps: QR scan → employee verification → site/duty-point/shift selection → photo capture → submit.
+- Shows override reason field when guard is outside geofence.
+- Uses hybrid QR scanner (native BarcodeDetector + ZXing fallback).
+
+### Modified Files (Webapp)
+
+**`src/lib/qr.ts`**
+- `generateQrCodeDataUrl()` now uses `buildQrContent()` from `qr-token.ts`.
+- New QR format includes signed HMAC token for anti-tamper / anti-forgery.
+
+**`src/lib/qr/employee-qr.ts`**
+- Marked as `@deprecated`; `parseQrContent` from `qr-token.ts` is the new canonical parser.
+- Still works for backward compatibility with old QRs.
+
+**`src/types/attendance.ts`**
+- Added `clientRequestId: z.string().uuid().optional()` — idempotency key (UUID v4).
+- Added `overrideReason: z.string().min(1).max(500).optional()` — out-of-zone justification.
+- Added `qrToken: z.string().optional()` — HMAC token from QR scan.
+- Added `processedClientRequestId` to `attendanceLogSchema` for server-side deduplication tracking.
+
+**`src/app/api/attendance/submit/route.ts`** (major hardening)
+- **Rate limiting:** replaced in-memory `rateLimitMap` with Firestore-based `checkRateLimit()`.
+- **Idempotency:** added `findDuplicateSubmission()` query on `attendanceLogs.processedClientRequestId`. If duplicate `clientRequestId` found, returns existing log (idempotent, no double-write).
+- **QR token validation:** if `payload.qrToken` present, verifies HMAC against employeeId + phoneNumber.
+- **Geofence enforcement:** added `GEOFENCE_ENFORCEMENT_MODE` env var (`strict` | `warn` | `loose`).
+  - `strict`: blocks attendance if outside geofence UNLESS `overrideReason` is provided.
+  - `warn`: current behavior (flags for review, default).
+  - `loose`: logs only, never flags.
+- **Override reason:** when provided, included in `attendanceReviewWarnings` and sets `requiresAdminReview=true`.
+- **Audit trail:** `clientRequestId` and `qrToken` logged in audit trail metadata.
+- All existing transaction logic, stale session auto-close, work order validation, and state machine preserved.
+
+**`src/app/api/public/attendance/upload/route.ts`**
+- Added Firestore-based rate limiting (10 uploads/min per IP).
+- Prevents anonymous photo upload abuse.
+
+### Modified Files (Mobile App — CISS-Mobile)
+
+**`lib/core/qr/qr_parser.dart`**
+- Rewritten to mirror `qr-token.ts`.
+- `parseQrContent()` returns `{employeeId, name, phoneNumber, token}`.
+- Supports both new signed format (`Token: ...`) and legacy plain-text QRs.
+
+**`lib/features/attendance_qr/qr_attendance_flow.dart`**
+- **Duty point bug fixed:** UI now displays the *resolved* duty point (`_resolvedDutyPoint`) instead of always showing `site.dutyPoints.first`. The resolved duty point is computed immediately after QR scan and updated when status toggles.
+- **Shift resolution:** `_resolvedShift` is computed at scan time and kept in state.
+- **Idempotency:** every submission generates `const Uuid().v4()` as `clientRequestId` and sends it in the payload. Offline queue also includes it.
+- **QR token:** extracted from scanned QR and sent in payload for server validation.
+- **Override reason:** expandable "Outside geofence? Request override" button reveals a text field. Reason is sent to server.
+- **Location timeout:** increased from 5s to 10s for more reliable GPS fix.
+- **UUID import:** added `package:uuid/uuid.dart`.
+
+**`lib/features/guard/presentation/screens/guard_attendance_screen.dart`**
+- **Idempotency:** `clientRequestId` generated with `const Uuid().v4()` and included in every submission payload. Offline queue also includes it.
+- **Override reason:** expandable out-of-zone override text field added before submit button.
+- **Location timeout:** added `timeLimit: Duration(seconds: 10)` to `Geolocator.getCurrentPosition()`.
+
+**`lib/core/offline/offline_queue.dart`**
+- Added `_maxQueueSize = 100`.
+- `enqueue()` now drops oldest items when queue exceeds the limit, preventing unbounded storage growth.
+
+### Behavioral Changes
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Rate limiting | In-memory Map (broken on serverless) | Firestore transaction-based |
+| Duplicate submissions | Could create duplicate logs on retry | Blocked by `clientRequestId` dedup |
+| QR security | Plain text, easily copied/forged | HMAC-signed token, server-verified |
+| Geofence | Client-side warn only | Server-side `strict`/`warn`/`loose` mode |
+| Out-of-zone | Hard block or silent flag | Override reason field + supervisor review |
+| Mobile QR duty point | Always showed first duty point | Shows resolved duty point for current status |
+| Mobile queue | Unbounded growth | Max 100 items, oldest dropped |
+| Mobile location timeout | 5s (QR), no timeout (Guard) | 10s for both |
+
+### Verification
+- `tsc --noEmit` clean (webapp).
+- `flutter analyze` clean (mobile app).
+- `eslint` clean (only 1 pre-existing warning unrelated to these changes).
+
+### Deployment Notes
+- Set `GEOFENCE_ENFORCEMENT_MODE=warn` in Vercel env (default). Change to `strict` when ready to enforce server-side geofence blocking.
+- Firestore composite index NOT required for `rateLimits` (single-field writes only).
+- New QR codes generated after this deploy will include the HMAC token. Old QRs without tokens still work (backward compatible).
+
+---
+
+## [2026-06-01] — Session: Attendance Logs — client grouping, date & district filtering
+
+**Goal:** Attendance logs are now grouped by client and support date-range + district filtering for admin, field officer, and client views.
+
+### Modified Files
+
+**`src/app/(app)/attendance-logs/page.tsx`** (rewritten)
+- **Client grouping:** logs are displayed inside collapsible `Accordion` sections — one per client.
+  - Each section shows: client name, total records, IN count, OUT count, unique employee count.
+  - Accordion is multi-select and defaults to all sections expanded.
+  - Mobile card view and desktop table view are both rendered inside each client group.
+- **Date range filtering:** added a `Popover` + `Calendar` (mode="range", 2 months visible) for picking `from`/`to` dates.
+  - Filters on the `attendanceDate` field (YYYY-MM-DD string).
+  - Uses `date-fns` `isBefore`/`isAfter`/`isEqual` for inclusive range matching.
+- **District filtering:** existing dropdown preserved. Works alongside date and client filters.
+- **Stats cards:** added a 5th card showing unique client count.
+- **Export:** `handleExport` now passes `from` and `to` date params to the CSV API.
+- **Search:** full-text search across employee name, ID, site, duty point, and all client fields.
+- **Role scoping preserved:**
+  - Admin sees all logs, all districts, all clients.
+  - Field Officer sees only their `assignedDistricts`.
+  - Client sees only logs matching their `clientName` (locked filter).
+
+### Filtering Logic
+All filters are AND-combined:
+1. Role scope (district for FO, client for client user)
+2. Status filter (`all` | `In` | `Out`)
+3. District filter (`all` or exact match via `districtMatches()`)
+4. Client filter (`all` or `logMatchesClient()`)
+5. **Date range** (`attendanceDate` within selected range, inclusive)
+6. Search term (substring match on employee/site/client fields)
+
+### Grouping Logic
+After filtering, logs are grouped by `getLogClientName()` (prefers `siteClientName` → `clientName` → `employeeClientName` → "Unknown Client").
+- Each group's logs are sorted by `attendanceDate` descending, then `reportedAt` descending.
+- Groups themselves are sorted alphabetically by client name.
+- Per-client stats (total, IN, OUT, unique employees) are computed with `useMemo`.
+
+### API Compatibility
+- The existing `/api/admin/reports/attendance` API already supports `from`/`to` date params (YYYY-MM-DD).
+- No API changes were required — the page now passes date params during CSV export.
+
+### Verification
+- `tsc --noEmit` clean.
+- `eslint` clean.

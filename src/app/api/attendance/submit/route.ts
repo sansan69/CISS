@@ -31,45 +31,21 @@ import {
 } from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 import type { AppDecodedToken } from "@/lib/server/auth";
+import {
+  checkRateLimit,
+  buildRateLimitKey,
+  getClientIp,
+} from "@/lib/server/rate-limit";
+import { verifyQrToken } from "@/lib/qr/qr-token";
 
 export const runtime = "nodejs";
 
-// Rate limiting: in-memory per-IP limiter.
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_AUTH_MAX = 30;
-const RATE_LIMIT_ANON_MAX = 5;
-
-function getClientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
-
-function checkRateLimit(ip: string, max: number): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= max) {
-    return false;
-  }
-  entry.count += 1;
-  return true;
-}
-
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [ip, entry] of rateLimitMap.entries()) {
-      if (now > entry.resetAt) rateLimitMap.delete(ip);
-    }
-  }, RATE_LIMIT_WINDOW_MS * 5);
-}
+// Firestore-based distributed rate limiting config
+const RATE_LIMIT_CONFIG = {
+  authenticated: { maxRequests: 30, windowMs: 60_000 },
+  anonymous: { maxRequests: 5, windowMs: 60_000 },
+  upload: { maxRequests: 10, windowMs: 60_000 },
+};
 
 /**
  * Verify the caller's identity when a Bearer token is present.
@@ -95,12 +71,10 @@ async function verifyCallerOwnership(
   decoded: AppDecodedToken,
   employeeDocId: string,
 ): Promise<void> {
-  // Fast path: token has the employeeDocId claim (set by mobile-session repair).
   if (decoded.employeeDocId && decoded.employeeDocId === employeeDocId) {
     return;
   }
 
-  // Fallback: look up the employee and check guardAuthUid matches the caller.
   const { db: adminDb } = await import("@/lib/firebaseAdmin");
   const employeeSnap = await adminDb
     .collection("employees")
@@ -170,7 +144,7 @@ function parseSiteCoordinates(siteData: Record<string, any>) {
         ? geolocation.lat
         : typeof siteData.lat === "number"
           ? siteData.lat
-        : Number(siteData.latString);
+          : Number(siteData.latString);
   const lng =
     typeof geolocation?.longitude === "number"
       ? geolocation.longitude
@@ -178,7 +152,7 @@ function parseSiteCoordinates(siteData: Record<string, any>) {
         ? geolocation.lng
         : typeof siteData.lng === "number"
           ? siteData.lng
-        : Number(siteData.lngString);
+          : Number(siteData.lngString);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return null;
@@ -282,23 +256,59 @@ function buildGuardName(employeeData: Record<string, any>, fallbackEmployeeId: s
   ).trim();
 }
 
+/**
+ * Check for duplicate submission using clientRequestId.
+ * Returns the existing log if found, null otherwise.
+ */
+async function findDuplicateSubmission(
+  adminDb: FirebaseFirestore.Firestore,
+  clientRequestId: string,
+  employeeDocId: string,
+): Promise<{ id: string; attendanceDate: string; status: string } | null> {
+  if (!clientRequestId) return null;
+
+  const snap = await adminDb
+    .collection("attendanceLogs")
+    .where("employeeDocId", "==", employeeDocId)
+    .where("processedClientRequestId", "==", clientRequestId)
+    .limit(1)
+    .get();
+
+  if (snap.empty) return null;
+
+  const doc = snap.docs[0];
+  const data = doc.data() as Record<string, any>;
+  return {
+    id: doc.id,
+    attendanceDate: data.attendanceDate ?? "",
+    status: data.status ?? "In",
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting.
+    // ── 1. Rate limiting (Firestore-based, distributed) ─────────────────
     const ip = getClientIp(request);
     const decoded = await tryVerifyAuth(request);
     const isAuthenticated = decoded !== null;
-    const rateLimit = isAuthenticated ? RATE_LIMIT_AUTH_MAX : RATE_LIMIT_ANON_MAX;
-    if (!checkRateLimit(ip, rateLimit)) {
+    const rateLimitConfig = isAuthenticated
+      ? RATE_LIMIT_CONFIG.authenticated
+      : RATE_LIMIT_CONFIG.anonymous;
+    const rateLimitKey = buildRateLimitKey(
+      "attendance-submit",
+      isAuthenticated ? decoded.uid : ip,
+    );
+    const rateLimit = await checkRateLimit(rateLimitKey, rateLimitConfig);
+    if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment and try again." },
-        { status: 429 },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(rateLimitConfig.windowMs / 1000)) } },
       );
     }
 
     const payload = attendanceSubmissionSchema.parse(await request.json());
 
-    // Ownership check: authenticated callers can only submit for themselves.
+    // ── 2. Ownership check ────────────────────────────────────────────────
     if (isAuthenticated) {
       await verifyCallerOwnership(decoded, payload.employeeDocId);
     }
@@ -307,6 +317,36 @@ export async function POST(request: NextRequest) {
     const { FieldValue, Timestamp } = await import("firebase-admin/firestore");
     const now = Timestamp.now();
     const serverNow = now.toDate();
+
+    // ── 3. Idempotency check ──────────────────────────────────────────────
+    if (payload.clientRequestId) {
+      const duplicate = await findDuplicateSubmission(
+        adminDb,
+        payload.clientRequestId,
+        payload.employeeDocId,
+      );
+      if (duplicate) {
+        return NextResponse.json({
+          success: true,
+          id: duplicate.id,
+          duplicate: true,
+          message: "Attendance already recorded for this request.",
+        });
+      }
+    }
+
+    // ── 4. QR token validation (if provided) ──────────────────────────────
+    if (payload.qrToken && payload.employeePhoneNumber) {
+      const tokenValid = verifyQrToken(
+        payload.employeeId,
+        payload.employeePhoneNumber,
+        payload.qrToken,
+      );
+      if (!tokenValid) {
+        throw new AttendanceError("Invalid QR code. The code may be tampered with or expired.");
+      }
+    }
+
     const reportedAt = payload.reportedAtClient
       ? Timestamp.fromDate(new Date(payload.reportedAtClient))
       : now;
@@ -526,12 +566,25 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Strict geofence: never block attendance — flag for admin review instead.
+      // ── Geofence enforcement ────────────────────────────────────────────
       const geofenceViolation = actualDistance > effectiveRadiusMeters;
+      const geofenceEnforcementMode =
+        process.env.GEOFENCE_ENFORCEMENT_MODE || "warn"; // strict | warn | loose
       const geofenceWarning =
         geofenceViolation
           ? `Guard was ${Math.round(actualDistance)}m from the site (limit: ${effectiveRadiusMeters}m). Attendance recorded but flagged for review.`
           : null;
+
+      // Strict mode: block attendance if outside geofence unless override reason provided
+      if (
+        geofenceViolation &&
+        geofenceEnforcementMode === "strict" &&
+        !payload.overrideReason
+      ) {
+        throw new AttendanceError(
+          `You are outside the allowed radius (${Math.round(actualDistance)}m / limit: ${effectiveRadiusMeters}m). Please move closer to the site or contact your supervisor for an override.`,
+        );
+      }
 
       let staleSessionAutoClosed = false;
       let staleOutAutoClosed = false;
@@ -544,15 +597,11 @@ export async function POST(request: NextRequest) {
 
       if (lastState) {
         if (payload.status === "In" && lastState.lastStatus === "In") {
-          // Guard is checking IN while a previous IN session is still open.
-          // Allow if the open session is stale (from a different date);
-          // block only for same-day duplicates (likely a double-tap).
           if (lastState.lastAttendanceDate === submittedAttendanceDate) {
             throw new AttendanceError(
               "You're already clocked IN today. Please mark OUT before marking IN again.",
             );
           }
-          // Stale session from a previous date — will auto-close below
           staleSessionAutoClosed = true;
         }
 
@@ -580,8 +629,6 @@ export async function POST(request: NextRequest) {
           });
 
           if (!overnightCheckoutAllowed) {
-            // Guard is trying to mark OUT for a stale session from a previous date.
-            // Auto-close the stale session instead of throwing an error.
             staleOutAutoClosed = true;
           }
         }
@@ -621,6 +668,9 @@ export async function POST(request: NextRequest) {
         workOrderReviewWarning,
         submissionWindow.contextChanged
           ? "Checkout context differed from the original IN session and requires admin review."
+          : null,
+        payload.overrideReason
+          ? `Geofence override requested: ${payload.overrideReason}`
           : null,
       ].filter(Boolean) as string[];
 
@@ -672,7 +722,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Auto-close stale session via OUT attempt (guard forgot to mark OUT yesterday)
+      // Auto-close stale session via OUT attempt
       if (staleOutAutoClosed && lastState) {
         const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
         const staleDate = lastState.lastAttendanceDate ?? "unknown";
@@ -716,7 +766,6 @@ export async function POST(request: NextRequest) {
             { merge: true },
           );
         }
-        // Clear attendanceState so guard can start fresh
         transaction.set(
           attendanceStateRef,
           {
@@ -731,7 +780,7 @@ export async function POST(request: NextRequest) {
           { merge: true },
         );
         staleOutAutoCloseResult = { id: staleOutLogRef.id, staleDate };
-        return; // Don't write today's OUT log — nothing to check out from
+        return;
       }
 
       const attendanceSessionId =
@@ -790,7 +839,8 @@ export async function POST(request: NextRequest) {
           Boolean(locationReviewWarning) ||
           Boolean(clockDriftWarning) ||
           isMockLocationSuspected ||
-          (typeof payload.photoCompliance?.adminFlag === "boolean" && payload.photoCompliance.adminFlag),
+          (typeof payload.photoCompliance?.adminFlag === "boolean" && payload.photoCompliance.adminFlag) ||
+          Boolean(payload.overrideReason),
         photoUrl: payload.photoUrl,
         photoCapturedAt: payload.photoCapturedAt ?? null,
         photoCompliance: locationReviewWarning
@@ -801,6 +851,10 @@ export async function POST(request: NextRequest) {
         createdAt: now,
         submittedByUid: decoded?.uid ?? null,
         submittedByRole: decoded?.role ?? null,
+        // Robustness fields
+        processedClientRequestId: payload.clientRequestId ?? null,
+        overrideReason: payload.overrideReason ?? null,
+        qrToken: payload.qrToken ?? null,
         auditTrail: [
           buildServerAuditEvent(
             "attendance_submitted",
@@ -809,6 +863,7 @@ export async function POST(request: NextRequest) {
               employeeDocId: payload.employeeDocId,
               siteId: payload.siteId,
               status: payload.status,
+              clientRequestId: payload.clientRequestId,
             },
           ),
         ],
@@ -935,7 +990,6 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // If we auto-closed a stale session via OUT attempt, return early
     if (staleOutAutoCloseResult !== null) {
       const result = staleOutAutoCloseResult as { id: string; staleDate: string };
       await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);

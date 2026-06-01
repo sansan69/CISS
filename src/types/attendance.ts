@@ -61,6 +61,12 @@ export const attendanceSubmissionSchema = z.object({
   deviceInfo: z.object({
     userAgent: z.string(),
   }),
+  // Industry-standard idempotency key (UUID v4) — prevents duplicate submissions on retries
+  clientRequestId: z.string().uuid().optional(),
+  // Optional override reason when guard is outside geofence but has legitimate cause
+  overrideReason: z.string().min(1).max(500).optional(),
+  // QR token for verification when scanning another guard's QR code
+  qrToken: z.string().optional(),
 });
 
 export type AttendanceSubmission = z.infer<typeof attendanceSubmissionSchema>;
@@ -84,6 +90,8 @@ export const attendanceLogSchema = attendanceSubmissionSchema.extend({
   attendanceDate: z.string().optional(),
   reportedAt: firestoreTimestampSchema.optional(),
   createdAt: firestoreTimestampSchema.optional(),
+  // Server-populated deduplication marker
+  processedClientRequestId: z.string().optional(),
 });
 
 export type AttendanceLog = z.infer<typeof attendanceLogSchema>;
