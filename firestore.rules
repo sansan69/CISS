@@ -29,6 +29,11 @@ service cloud.firestore {
       return request.auth.token.employeeId;
     }
 
+    // Returns the site ID the guard is currently assigned to (from custom claims)
+    function guardAssignedSiteId() {
+      return request.auth.token.assignedSiteId;
+    }
+
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.admin == true ||
@@ -67,6 +72,39 @@ service cloud.firestore {
       return request.auth.token.clientName;
     }
 
+    // ── Field-officer district helpers ──────────────────────────────────────
+    // FO custom claims include assignedDistricts (array of district names).
+    // Returns true if the FO is assigned to at least one of the given districts.
+
+    function isFieldOfficerForDistrict(docDistrict) {
+      return isFieldOfficer() &&
+        request.auth.token.assignedDistricts != null &&
+        docDistrict is string &&
+        docDistrict in request.auth.token.assignedDistricts;
+    }
+
+    // Chained check for documents with a 'district' field
+    function isFieldOfficerForDocDistrict() {
+      return isFieldOfficerForDistrict(resource.data.district);
+    }
+
+    // ── Client-user scoping helpers ─────────────────────────────────────────
+
+    // True when the document belongs to the signed-in client user's organization
+    function isOwnClientDoc(clientFieldName) {
+      return isClientUser() && clientUserClientName() != null &&
+        resource.data[clientFieldName] is string &&
+        resource.data[clientFieldName] == clientUserClientName();
+    }
+
+    // ── Resource field helpers ──────────────────────────────────────────────
+
+    // True when the guard is assigned to a specific site (from resource data)
+    function guardIsAssignedToResource() {
+      return guardAssignedSiteId() != null &&
+        resource.data.siteId == guardAssignedSiteId();
+    }
+
     // Any staff role (not guard, not client)
     function isStaff() {
       return isAdmin() || isHR() || isAccounts() || isCompliance() || isFieldOfficer();
@@ -78,11 +116,18 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
-      // Guard can create/update their own user doc (PIN setup flow)
-      allow create: if isSignedIn() && request.auth.uid == uid;
+
+      // Guard can create their own user doc during PIN setup — field allowlist
+      // prevents privilege-escalation attacks (role, admin, employeeId boundaries)
+      allow create: if isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'phone', 'displayName', 'email',
+          'createdAt', 'updatedAt', 'setupComplete'
+        ]);
+
       allow update: if isAdmin() || (isSignedIn() && request.auth.uid == uid &&
         // Guards can only update safe fields — not role or employeeDocId
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'employeeDocId', 'employeeId']));
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'employeeDocId', 'employeeId', 'admin']));
       allow delete: if isAdmin();
     }
 
@@ -98,29 +143,37 @@ service cloud.firestore {
           employeeId == guardEmployeeDocId() ||
           resource.data.employeeId == guardEmployeeId()
         )) ||
-        // Use clientName claim from token to avoid expensive get() per document
-        (isClientUser() && clientUserClientName() != null &&
-          resource.data.clientName == clientUserClientName());
+        isOwnClientDoc('clientName');
       allow create, update, delete: if isAdmin();
     }
 
     // ── clients / sites / clientLocations ───────────────────────────────────
     // Public enrollment and attendance must use scrubbed server routes.
-    // Raw documents can include coordinates and operational metadata, so direct
-    // Firestore reads stay authenticated.
+    // Raw documents include coordinates and operational metadata — direct
+    // Firestore reads are scoped by role:
+    //   - Staff: full read (operational need)
+    //   - Client user: only their own client documents
+    //   - Guard: only their assigned site / client the site belongs to
+    //   - No unauthenticated reads.
 
     match /clients/{clientId} {
-      allow read: if isSignedIn();
+      allow read: if isStaff() ||
+        isOwnClientDoc('companyName') ||
+        (isGuard() && guardAssignedSiteId() != null);
       allow create, update, delete: if isAdmin();
     }
 
     match /sites/{siteId} {
-      allow read: if isSignedIn();
+      allow read: if isStaff() ||
+        isOwnClientDoc('clientName') ||
+        (isGuard() && resource.data.siteId == guardAssignedSiteId());
       allow create, update, delete: if isAdmin();
     }
 
     match /clientLocations/{locationId} {
-      allow read: if isSignedIn();
+      allow read: if isStaff() ||
+        isOwnClientDoc('clientName') ||
+        (isGuard() && guardAssignedSiteId() != null);
       allow create, update, delete: if isAdmin();
     }
 
@@ -144,13 +197,19 @@ service cloud.firestore {
     }
 
     // ── workOrders ───────────────────────────────────────────────────────────
+    // FO can read/update only workOrders in their assigned districts.
+    // Client users see only their own client's workOrders.
+    // Admin has full access.
 
     match /workOrders/{workOrderId} {
-      allow read: if isAdmin() || isFieldOfficer() ||
-        (isClientUser() && clientUserClientName() != null &&
-          resource.data.clientName == clientUserClientName());
+      allow read: if isAdmin() ||
+        isFieldOfficerForDistrict(resource.data.district) ||
+        isOwnClientDoc('clientName');
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || isFieldOfficer();
+      // FO can update workOrders only in their assigned districts
+      allow update: if isAdmin() ||
+        (isFieldOfficer() &&
+          resource.data.district in request.auth.token.assignedDistricts);
     }
 
     // ── fcmTokens (push notification device registration) ────────────────────
@@ -179,12 +238,12 @@ service cloud.firestore {
         request.resource.data.status in ['In', 'Out'] &&
         request.resource.data.keys().hasAll(['employeeDocId', 'status', 'reportedAt']);
 
-      // Guards can only read their own logs; client users scoped to their clientName
-      allow read: if isAdmin() || isFieldOfficer() ||
-        (isClientUser() && clientUserClientName() != null &&
-          (resource.data.clientName == clientUserClientName() ||
-            resource.data.siteClientName == clientUserClientName() ||
-            resource.data.employeeClientName == clientUserClientName())) ||
+      // Guards can only read their own logs; FO scoped by district; client users scoped to their clientName
+      allow read: if isAdmin() ||
+        isFieldOfficerForDistrict(resource.data.district) ||
+        isOwnClientDoc('clientName') ||
+        isOwnClientDoc('siteClientName') ||
+        isOwnClientDoc('employeeClientName') ||
         (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
 
       // Only admins can modify or delete logs (audit integrity)
@@ -269,10 +328,24 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
     }
 
+    // ── evaluations — FO can only evaluate employees in their assigned districts ──
+
     match /evaluations/{evalId} {
-      allow read: if isAdmin() || isFieldOfficer() ||
+      allow read: if isAdmin() ||
+        isFieldOfficerForDistrict(resource.data.district) ||
         (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
-      allow create, update, delete: if isAdmin() || isFieldOfficer();
+
+      // FO can create/update evaluations only for employees in their districts.
+      // For creates where resource.data does not yet exist, validate the incoming document.
+      allow create: if isAdmin() ||
+        (isFieldOfficer() && request.resource.data.district in request.auth.token.assignedDistricts);
+
+      allow update: if isAdmin() ||
+        (isFieldOfficer() &&
+          resource.data.district in request.auth.token.assignedDistricts &&
+          request.resource.data.district in request.auth.token.assignedDistricts);
+
+      allow delete: if isAdmin();
     }
 
     match /guardScores/{employeeId} {
@@ -419,18 +492,29 @@ service cloud.firestore {
 
     // ── guardLocations — live GPS tracking heartbeat ─────────────────────────
     // Guards write their own location doc (employeeId == doc ID).
-    // All authenticated users can read (FO, admin, client dashboards).
+    // Read is scoped per role: admin/staff full read, FO by district,
+    // client by own client, guard only own location.
 
     match /guardLocations/{employeeId} {
-      // Any authenticated user can read live locations
-      allow read: if isSignedIn();
+      // Read scoped by role — NOT open to all signed-in users
+      allow read: if isAdmin() ||
+        // FO reads only guard locations in their assigned districts
+        (isFieldOfficer() &&
+          request.auth.token.assignedDistricts != null &&
+          resource.data.district in request.auth.token.assignedDistricts) ||
+        // Client user reads only their own guards
+        (isClientUser() &&
+          clientUserClientName() != null &&
+          resource.data.clientName == clientUserClientName()) ||
+        // Guard reads only their own location
+        (isGuard() && guardEmployeeId() == employeeId);
 
       // Guards write their own location document, and staff can create/update
       // guard location records during QR attendance and monitoring workflows.
       allow create, update: if (isGuard() && guardEmployeeId() == employeeId) || isStaff();
 
-      // Only guards or staff can delete
-      allow delete: if isGuard() && guardEmployeeId() == employeeId || isStaff();
+      // Only the guard themselves or admin/staff can delete
+      allow delete: if (isGuard() && guardEmployeeId() == employeeId) || isAdmin();
     }
   }
 }

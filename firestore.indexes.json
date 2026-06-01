@@ -325,22 +325,6 @@
       ]
     },
     {
-      "collectionGroup": "leaveRequests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "employeeDocId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "leaveRequests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "trainingAssignments",
       "queryScope": "COLLECTION",
       "fields": [
@@ -418,14 +402,6 @@
       "fields": [
         { "fieldPath": "recipientUid", "order": "ASCENDING" },
         { "fieldPath": "read", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "workOrderImports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "clientName", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
@@ -657,14 +633,6 @@
       "fields": [
         { "fieldPath": "attendanceDate", "order": "ASCENDING" },
         { "fieldPath": "district", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "attendanceLogs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "employeeDocId", "order": "ASCENDING" },
-        { "fieldPath": "attendanceDate", "order": "ASCENDING" }
       ]
     },
     {
