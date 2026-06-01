@@ -401,3 +401,49 @@ Ran full test suite. Confirmed 3 failures are **pre-existing** and unrelated to 
 - Verify cron job runs by checking Vercel Functions logs
 - Test scheduled auto-checkout on staging with real open sessions
 - Regenerate employee QR codes via `/settings/qr-management` page (already uses HMAC tokens)
+
+---
+
+## [2026-06-01] — Session: APK download page + hosting infrastructure
+
+### 1. Download page overhaul (`src/app/download/page.tsx`)
+- Updated to serve APK directly from `/downloads/ciss-workforce-latest.apk` (hosted within the webapp)
+- Added 6 feature highlights (including biometric login and night shift support)
+- Added troubleshooting section (install blocked, storage space, login issues)
+- Added fallback link to GitHub releases page for older versions
+- Improved responsive layout and visual hierarchy
+
+### 2. Downloads directory (`public/downloads/`)
+- Created `public/downloads/` directory with `README.md` explaining:
+  - How to build the APK from `CISS-Mobile` Flutter project
+  - Naming convention: `ciss-workforce-latest.apk`
+  - How to commit and push a new release
+- Added `.gitignore` to ignore `*.apk` files (they should be committed intentionally)
+- Added `.gitkeep` to preserve empty directory in git
+
+### 3. Vercel serving configuration
+- `vercel.json` already has correct headers for `/downloads/*.apk`:
+  - `Content-Type: application/vnd.android.package-archive`
+  - `Cache-Control: public, max-age=86400, immutable`
+
+### How to release a new APK
+1. Build release APK from `CISS-Mobile` repo:
+   ```bash
+   flutter build apk --release --split-per-abi
+   ```
+2. Copy to webapp:
+   ```bash
+   cp app-arm64-v8a-release.apk public/downloads/ciss-workforce-latest.apk
+   ```
+3. Commit and push:
+   ```bash
+   git add public/downloads/ciss-workforce-latest.apk
+   git commit -m "release: mobile app vX.Y.Z"
+   git push origin main
+   ```
+4. APK will be live at `https://<domain>/downloads/ciss-workforce-latest.apk`
+
+### Note
+- No APK file is currently present in the repository (it lives in CISS-Mobile repo)
+- The download page is ready to serve it once placed in `public/downloads/`
+- Guards and field officers can access the download page at `/download`

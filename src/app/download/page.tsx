@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function DownloadPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#06243E] to-[#014c85] px-4">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#06243E] to-[#014c85] px-4 py-12">
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <div className="mx-auto w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center mb-6 ring-1 ring-white/10">
@@ -27,6 +27,8 @@ export default function DownloadPage() {
             { icon: "📸", text: "In-app photo capture" },
             { icon: "📋", text: "Work orders & duty tracking" },
             { icon: "📊", text: "Reports & dashboards" },
+            { icon: "🔐", text: "Biometric login" },
+            { icon: "🌙", text: "Night shift support" },
           ].map((f) => (
             <div key={f.text} className="bg-white/5 rounded-xl px-3 py-2.5 flex items-center gap-2">
               <span className="text-lg">{f.icon}</span>
@@ -35,9 +37,9 @@ export default function DownloadPage() {
           ))}
         </div>
 
-        {/* Download Button — Release APK (AOT compiled, optimized) */}
+        {/* Primary Download Button — Local APK */}
         <a
-          href="https://github.com/sansan69/CISS-Mobile/releases/download/v1.0.11/app-arm64-v8a-release.apk"
+          href="/downloads/ciss-workforce-latest.apk"
           download
           className="inline-flex items-center gap-2 px-8 py-4 bg-[#bd9c55] text-[#014c85] font-bold text-lg rounded-2xl hover:bg-[#d4b368] transition-colors shadow-lg shadow-black/20"
         >
@@ -48,11 +50,23 @@ export default function DownloadPage() {
         </a>
 
         <p className="text-xs text-white/40 mt-4">
-          Version 1.0.11 · ~28 MB · Android 7.0+
+          Latest release · Android 7.0+ (API 24)
         </p>
 
+        {/* Alternative: GitHub Releases */}
+        <div className="mt-4">
+          <a
+            href="https://github.com/sansan69/CISS-Mobile/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-white/30 hover:text-white/50 underline"
+          >
+            Or browse all releases on GitHub
+          </a>
+        </div>
+
         <p className="text-xs text-white/30 mt-6">
-          You may need to enable "Install from unknown sources" in your device settings.
+          You may need to enable &quot;Install from unknown sources&quot; in your device settings.
         </p>
 
         {/* Instructions */}
@@ -65,6 +79,22 @@ export default function DownloadPage() {
             <li>Tap <strong className="text-white/70">Install</strong> and open the app</li>
             <li>Log in with your guard or field officer credentials</li>
           </ol>
+        </div>
+
+        {/* Troubleshooting */}
+        <div className="mt-4 bg-white/5 rounded-2xl p-4 text-left">
+          <h3 className="text-sm font-semibold text-white/80 mb-3">Troubleshooting</h3>
+          <ul className="text-xs text-white/50 space-y-2 list-disc list-inside">
+            <li>
+              <strong className="text-white/70">Install blocked?</strong> Go to Settings → Security → Enable &quot;Unknown sources&quot;
+            </li>
+            <li>
+              <strong className="text-white/70">App not installing?</strong> Make sure you have enough storage space (at least 50MB free)
+            </li>
+            <li>
+              <strong className="text-white/70">Login issues?</strong> Contact your supervisor to verify your account is active
+            </li>
+          </ul>
         </div>
 
         <div className="mt-6">
