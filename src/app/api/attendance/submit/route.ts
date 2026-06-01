@@ -4,7 +4,7 @@ import {
   getNextShift,
   resolveShiftByCode,
   resolveSiteDutyPoints,
-  resolveSiteShift,
+  resolveAttendanceShift,
 } from "@/lib/shift-utils";
 import {
   DEFAULT_GEOFENCE_RADIUS_METERS,
@@ -26,7 +26,9 @@ import {
   incrementSystemMetric,
 } from "@/lib/server/monitoring";
 import {
-  canRecordNextDayCheckout,
+  canRecordIn,
+  canRecordOut,
+  computeAutoCheckoutTime,
   resolveAttendanceSubmissionWindow,
 } from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
@@ -437,11 +439,16 @@ export async function POST(request: NextRequest) {
               ? (siteData.shiftTemplates as ShiftTemplate[])
               : [],
           };
-      const resolvedShift = resolveSiteShift(
-        activeShiftSource.shiftMode,
-        activeShiftSource.shiftTemplates,
-        reportedAtDate,
-      );
+      const lastState = stateSnap.exists
+        ? (stateSnap.data() as Record<string, any>)
+        : null;
+      const resolvedShift = resolveAttendanceShift({
+        shiftTemplates: activeShiftSource.shiftTemplates,
+        punchAt: reportedAtDate,
+        status: payload.status,
+        explicitShiftCode: payload.shiftCode ?? null,
+        lastShiftCode: lastState?.lastShiftCode ?? null,
+      });
       const selectedShift = resolveShiftByCode(
         activeShiftSource.shiftMode,
         activeShiftSource.shiftTemplates,
@@ -454,9 +461,6 @@ export async function POST(request: NextRequest) {
         effectiveShift?.code,
       );
 
-      const lastState = stateSnap.exists
-        ? (stateSnap.data() as Record<string, any>)
-        : null;
       const lastRecordedShift = lastState?.lastShiftCode
         ? resolveShiftByCode(
             activeShiftSource.shiftMode,
@@ -586,69 +590,42 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // ── State machine validation using canRecordIn / canRecordOut ────────────
       let staleSessionAutoClosed = false;
       let staleOutAutoClosed = false;
 
-      if (!lastState && payload.status === "Out") {
-        throw new AttendanceError(
-          "You haven't marked IN yet today. Please mark IN first before recording OUT.",
-        );
-      }
+      if (payload.status === "In") {
+        const inCheck = canRecordIn({
+          lastState,
+          attendanceDate,
+          siteId: payload.siteId,
+          dutyPointId: selectedDutyPointId,
+          shift: effectiveShift,
+          employeeDocId: payload.employeeDocId,
+        });
 
-      if (lastState) {
-        if (payload.status === "In" && lastState.lastStatus === "In") {
-          if (lastState.lastAttendanceDate === submittedAttendanceDate) {
-            throw new AttendanceError(
-              "You're already clocked IN today. Please mark OUT before marking IN again.",
-            );
-          }
+        if (!inCheck.ok) {
+          throw new AttendanceError(inCheck.reason || "Cannot record IN at this time.");
+        }
+
+        if (inCheck.action === "autoClosePrevious" && lastState) {
           staleSessionAutoClosed = true;
         }
+      } else {
+        const outCheck = canRecordOut({
+          lastState,
+          attendanceDate,
+          siteId: payload.siteId,
+          dutyPointId: selectedDutyPointId,
+          shift: effectiveShift,
+        });
 
-        if (
-          lastState.lastAttendanceDate === attendanceDate &&
-          lastState.lastStatus === payload.status
-        ) {
-          throw new AttendanceError(
-            `Duplicate ${payload.status.toLowerCase()} entry is not allowed. You've already recorded attendance for today.`,
-          );
+        if (!outCheck.ok) {
+          throw new AttendanceError(outCheck.reason || "Cannot record OUT at this time.");
         }
 
-        if (
-          lastState.lastAttendanceDate !== attendanceDate &&
-          payload.status === "Out"
-        ) {
-          const overnightCheckoutAllowed = canRecordNextDayCheckout({
-            attendanceDate,
-            status: payload.status,
-            siteId: payload.siteId,
-            dutyPointId: selectedDutyPoint?.id ?? payload.dutyPointId ?? null,
-            shift: effectiveShift,
-            lastShift: lastRecordedShift,
-            lastState,
-          });
-
-          if (!overnightCheckoutAllowed) {
-            staleOutAutoClosed = true;
-          }
-        }
-
-        if (!staleOutAutoClosed) {
-          if (payload.status === "Out" && lastState.lastStatus !== "In") {
-            throw new AttendanceError(
-              "You haven't marked IN yet. Please mark IN first before recording OUT.",
-            );
-          }
-
-          if (
-            lastState.lastAttendanceDate === attendanceDate &&
-            lastState.lastStatus !== "In" &&
-            payload.status === "Out"
-          ) {
-            throw new AttendanceError(
-              "You haven't marked IN yet today. Please mark IN first before recording OUT.",
-            );
-          }
+        if (outCheck.action === "autoCloseStale" && lastState) {
+          staleOutAutoClosed = true;
         }
       }
 
@@ -912,6 +889,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Compute auto-checkout time for IN punches so stale sessions can be detected
+      const autoCheckoutAt =
+        payload.status === "In" && effectiveShift
+          ? computeAutoCheckoutTime({
+              sessionStartDate: attendanceDate,
+              shift: effectiveShift,
+            })
+          : null;
+
       transaction.set(
         attendanceStateRef,
         {
@@ -928,6 +914,7 @@ export async function POST(request: NextRequest) {
           lastAttendanceId: attendanceLogRef.id,
           openSessionId: payload.status === "In" ? attendanceLogRef.id : FieldValue.delete(),
           openSessionStartedAt: payload.status === "In" ? reportedAt : FieldValue.delete(),
+          autoCheckoutAt: payload.status === "In" && autoCheckoutAt ? autoCheckoutAt : FieldValue.delete(),
           lastLoggedAt: now,
           updatedAt: now,
         },

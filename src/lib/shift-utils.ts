@@ -284,6 +284,92 @@ export function resolveShiftByCode(
   return shiftTemplates.find((shift) => shift.code === shiftCode) ?? null;
 }
 
+/**
+ * Resolve the shift a guard is reporting for based on punch time and attendance status.
+ *
+ * This is DIFFERENT from `resolveSiteShift()` which answers "what shift is currently active?".
+ * This function answers "which shift is the guard reporting for?" considering early/late
+ * arrivals, shift handoff windows, and the guard's open session state.
+ *
+ * Industry-standard rules applied:
+ * - IN punches: match to nearest shift start within tolerance (early arrival window)
+ * - OUT punches: use the shift from the open IN session
+ * - Handoff window: during the last ~2h of a shift, a new IN is assumed for the NEXT shift
+ *   (prevents guards punching in at 06:45 being assigned to night shift ending at 08:00)
+ */
+export function resolveAttendanceShift({
+  shiftTemplates,
+  punchAt,
+  status,
+  explicitShiftCode,
+  lastShiftCode,
+  timeZone = DEFAULT_SHIFT_TIME_ZONE,
+  toleranceMinutesBefore = 120,
+  toleranceMinutesAfter = 60,
+  handoffWindowMinutes = 120,
+}: {
+  shiftTemplates: ShiftTemplate[];
+  punchAt: Date;
+  status: "In" | "Out";
+  explicitShiftCode?: string | null;
+  lastShiftCode?: string | null;
+  timeZone?: string;
+  toleranceMinutesBefore?: number;
+  toleranceMinutesAfter?: number;
+  handoffWindowMinutes?: number;
+}): ShiftTemplate | null {
+  // 1. Explicit shift selection always wins
+  if (explicitShiftCode) {
+    return resolveShiftByCode("fixed", shiftTemplates, explicitShiftCode);
+  }
+
+  // 2. OUT punches use the shift from the open session
+  if (status === "Out" && lastShiftCode) {
+    return resolveShiftByCode("fixed", shiftTemplates, lastShiftCode);
+  }
+
+  if (!shiftTemplates.length) return null;
+
+  const punchMinutes = getMinutesInTimeZone(punchAt, timeZone);
+  let bestShift: ShiftTemplate | null = null;
+  let bestScore = Infinity;
+
+  for (const shift of shiftTemplates) {
+    const start = timeToMinutes(shift.startTime);
+    const duration = shift.hours * 60;
+
+    // Minutes until this shift starts (0–1439)
+    const forwardDistance = (start - punchMinutes + 24 * 60) % (24 * 60);
+
+    // Minutes since this shift started (0–1439)
+    const timeInShift = (punchMinutes - start + 24 * 60) % (24 * 60);
+
+    let score: number;
+
+    if (forwardDistance > 0 && forwardDistance <= toleranceMinutesBefore) {
+      // Punch is before shift start — early arrival
+      score = forwardDistance;
+    } else if (timeInShift <= toleranceMinutesAfter) {
+      // Punch is at or right after shift start — late arrival
+      score = timeInShift + 0.5;
+    } else if (timeInShift < duration - handoffWindowMinutes) {
+      // Punch is well into the shift — guard is working this shift
+      score = timeInShift + toleranceMinutesBefore;
+    } else {
+      // Punch is in the tail-end handoff window.
+      // A new IN here is almost certainly for the NEXT shift.
+      continue;
+    }
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestShift = shift;
+    }
+  }
+
+  return bestShift;
+}
+
 export function getNextShift(
   shiftMode?: SiteShiftMode,
   shiftTemplates?: ShiftTemplate[] | null,

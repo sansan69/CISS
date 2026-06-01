@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import {
   resolveSiteDutyPoints,
-  resolveSiteShift,
+  resolveAttendanceShift,
 } from "@/lib/shift-utils";
 import { districtMatches } from "@/lib/districts";
 import { DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
@@ -109,11 +109,12 @@ export async function POST(request: NextRequest) {
         ? siteData.shiftTemplates
         : [];
 
-    const resolvedShift = resolveSiteShift(
-      shiftMode,
+    const resolvedShift = resolveAttendanceShift({
       shiftTemplates,
-      new Date(),
-    );
+      punchAt: new Date(),
+      status: status as "In" | "Out",
+      lastShiftCode: stateData?.lastShiftCode ?? null,
+    });
 
     // Geofence check
     const distance = haversineDistanceMeters(lat, lon, siteLat, siteLng);
