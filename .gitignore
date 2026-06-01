@@ -61,3 +61,8 @@ streamvault/
 ciss-workforce.apk
 zilliz-cloud-Free-01-username-password.txt
 public/releases/
+
+# ai tool artifacts
+.opencode/
+.playwright-mcp/
+.superpowers/
