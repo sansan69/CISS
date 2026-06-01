@@ -126,9 +126,9 @@ export async function GET(request: Request) {
     if (isClient) {
       q = q.orderBy("createdAt", "desc");
     } else if (!isAdmin) {
-      q = q.where("fieldOfficerId", "==", decoded.uid).orderBy("createdAt", "desc");
+      q = q.where("fieldOfficerId", "==", decoded.uid);
     } else if (fieldOfficerId) {
-      q = q.where("fieldOfficerId", "==", fieldOfficerId).orderBy("createdAt", "desc");
+      q = q.where("fieldOfficerId", "==", fieldOfficerId);
     } else {
       q = q.orderBy("createdAt", "desc");
     }
