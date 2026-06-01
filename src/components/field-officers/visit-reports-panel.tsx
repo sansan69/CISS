@@ -132,7 +132,7 @@ export function VisitReportsPanel() {
       return;
     }
     if (isSiteUploadRequired("visit", form.status) && !hasSiteUploads(photoUrls)) {
-      toast({ title: "Missing uploads", description: "No photos attached. You can still submit and add photos later by editing this report.", variant: "default" });
+      toast({ title: "Photos required", description: "Visit reports require at least one photo or file. You can still submit now and add them later by editing this report.", variant: "default" });
     }
     setIsSubmitting(true);
     try {
@@ -459,27 +459,27 @@ export function VisitReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Visit Photos {isSiteUploadRequired("visit", form.status) ? "*" : ""}</Label>
+              <Label>Visit Photos / Files {isSiteUploadRequired("visit", form.status) ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                Take a photo with the guards at the site. Use camera or selfie mode. Photos are timestamped with date, time and GPS location.
+                Attach at least one photo or file. Use the in-app camera, upload from your gallery (including HEIC, WEBP, etc.), or attach a PDF. Photos are timestamped with date, time and GPS location.
               </p>
               <PhotoCapture
                 urls={photoUrls}
                 onChange={setPhotoUrls}
                 folder="visitReports"
-                accept="image/*"
+                accept="image/*,.pdf"
                 timestampImages
                 allowSelfie={true}
                 onLocationCaptured={setVisitLocation}
                 captureLocation
-                uploadLabel="Upload photo"
+                uploadLabel="Upload photo / file"
                 stampTitle="Site Visit"
                 stampLines={[
                   [form.clientName, form.siteName].filter(Boolean).join(" - "),
                   form.district,
                   form.visitDate ? `Visit: ${form.visitDate}` : "",
                 ].filter(Boolean)}
-                fileTypeLabel="JPG and PNG photos allowed. Photos include GPS location stamp."
+                fileTypeLabel="All image formats (JPG, PNG, HEIC, WEBP) and PDF files accepted. Photos include GPS location stamp."
                 disabled={isSubmitting}
               />
             </div>

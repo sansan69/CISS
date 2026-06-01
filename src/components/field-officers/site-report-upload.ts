@@ -11,8 +11,8 @@ export function hasSiteUploads(urls: unknown[]): boolean {
 export function isSiteUploadRequired(kind: SiteReportKind, status?: ReportStatus): boolean {
   // Drafts never require uploads
   if (status === "draft" || !status) return false;
-  // Training reports require photos; visit reports are optional
-  return kind === "training";
+  // Both visit and training reports require uploads when submitting
+  return status === "submitted";
 }
 
 export function getSiteUploadHint(kind: SiteReportKind, status?: ReportStatus): string {
@@ -21,7 +21,7 @@ export function getSiteUploadHint(kind: SiteReportKind, status?: ReportStatus): 
   }
 
   if (status === "submitted") {
-    return "Add one or more photos or files for this site report. Photos are recommended but not required — you can submit without them and add later. Multiple uploads are supported.";
+    return "Visit reports require at least one photo or file. You can use the in-app camera, upload from your gallery, or attach a PDF. If you don't have them now, you can still submit and add them later by editing this report.";
   }
 
   return "Add one or more photos or files for this site report. Drafts can be saved without uploads. Multiple uploads are supported.";

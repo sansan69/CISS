@@ -578,18 +578,18 @@ export function TrainingReportsPanel() {
             <div className="space-y-1.5">
               <Label>Training Photos {isSiteUploadRequired("training", form.status) ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                Capture the training session. Photos are timestamped with date and time.
+                Attach at least 3 photos of the training session. Use the in-app camera, upload from your gallery (including HEIC, WEBP, etc.), or attach PDFs. Photos are timestamped with date and time.
               </p>
               <PhotoCapture
                 urls={photoUrls}
                 onChange={setPhotoUrls}
                 folder="trainingReports"
-                accept="image/*"
+                accept="image/*,.pdf"
                 timestampImages
                 allowSelfie={true}
                 onLocationCaptured={setVisitLocation}
                 captureLocation
-                uploadLabel="Upload photo"
+                uploadLabel="Upload photo / file"
                 stampTitle="Training Session"
                 stampLines={[
                   [form.clientName, form.siteName].filter(Boolean).join(" - "),
@@ -598,7 +598,7 @@ export function TrainingReportsPanel() {
                   form.trainingDate ? `Date: ${form.trainingDate}` : "",
                 ].filter(Boolean)}
                 maxPhotos={30}
-                fileTypeLabel="JPG and PNG photos allowed."
+                fileTypeLabel="All image formats (JPG, PNG, HEIC, WEBP) and PDF files accepted."
                 disabled={isSubmitting}
               />
             </div>
