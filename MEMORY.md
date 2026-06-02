@@ -5,6 +5,14 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-06-02] — Session: Attendance upload-token repair
+
+### Web public attendance
+- Fixed `/attendance` photo upload failures caused by the protected `/api/public/attendance/upload` endpoint now requiring `uploadToken`.
+- Photo uploads now request `/api/public/attendance/upload-token` and use an `employees/{employeeDocId}/attendance/...` path that matches the signed token.
+- Attendance submits refresh the guard's current attendance hint before posting, preventing stale OUT defaults from creating repeated failed local entries.
+- Offline queued attendance now keeps the captured photo data so queued records can replay after reconnect.
+
 ## [2026-06-01] — Session: Attendance submit idempotency fix
 
 ### Web attendance submit

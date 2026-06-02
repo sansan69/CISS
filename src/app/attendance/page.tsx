@@ -69,6 +69,7 @@ type ScannedEmployee = {
 	  attendanceHint?: {
 	    lastAttendanceDate?: string;
 	    lastStatus?: 'In' | 'Out';
+	    lastSiteId?: string;
 	    lastDutyPointId?: string;
 	    lastShiftCode?: string;
 	    openSessionId?: string;
@@ -1183,18 +1184,41 @@ export default function AttendancePage() {
     return /failed to fetch|network|fetch|timeout|offline/i.test(message);
   };
 
+  const buildAttendancePhotoOwnerKey = (payload: Pick<AttendanceSubmission, 'employeeDocId' | 'employeePhoneNumber' | 'employeeId'>) => {
+    const rawOwner = payload.employeeDocId || payload.employeePhoneNumber || payload.employeeId;
+    return rawOwner.replace(/[^0-9A-Za-z_-]/g, '_') || 'unknown';
+  };
+
+  const fetchAttendanceUploadToken = useCallback(async (ownerKey: string, siteId: string) => {
+    const response = await fetch('/api/public/attendance/upload-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: ownerKey, siteId }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || typeof body.uploadToken !== 'string') {
+      throw new Error(body.error || 'Could not prepare attendance photo upload.');
+    }
+    return body.uploadToken as string;
+  }, []);
+
   const submitAttendanceOnline = useCallback(async (
     payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'>,
     photoDataUrl: string,
   ) => {
+    if (!photoDataUrl) {
+      throw new Error('Attendance photo is missing. Please retake the photo before submitting.');
+    }
+
     const ts = Date.now();
-    const phone = payloadWithoutPhotoUrl.employeePhoneNumber || 'unknown';
-    const path = `employees/${phone}/attendance/${ts}_attendance.jpg`;
+    const ownerKey = buildAttendancePhotoOwnerKey(payloadWithoutPhotoUrl);
+    const path = `employees/${ownerKey}/attendance/${ts}_attendance.jpg`;
+    const uploadToken = await fetchAttendanceUploadToken(ownerKey, payloadWithoutPhotoUrl.siteId);
 
     const uploadResponse = await withRetry(() => fetch('/api/public/attendance/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, photoDataUrl }),
+      body: JSON.stringify({ path, photoDataUrl, uploadToken }),
     }));
     const uploadBody = await uploadResponse.json().catch(() => ({}));
     if (!uploadResponse.ok || !uploadBody.url) {
@@ -1234,7 +1258,7 @@ export default function AttendancePage() {
       photoUrl,
       recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
     };
-  }, [user]);
+  }, [fetchAttendanceUploadToken, user]);
 
   const createClientRequestId = () => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -1406,14 +1430,38 @@ export default function AttendancePage() {
     }
 
     const mockLocationRisk = detectMockLocationRisk();
+    const latestEmployee = await fetchEmployeeByEmployeeId(
+      scannedEmployee.employeeCode || scannedEmployee.id,
+      scannedEmployee.phoneNumber,
+    ).catch(() => null);
+    if (latestEmployee) {
+      setScannedEmployee(latestEmployee);
+      if (selectedStatus === 'Out' && latestEmployee.attendanceHint?.lastStatus !== 'In') {
+        setSelectedStatus('In');
+        toast({
+          variant: 'destructive',
+          title: 'No open IN session',
+          description: 'This guard is not currently marked IN. Please submit IN first.',
+        });
+        return;
+      }
+      if (selectedStatus === 'In' && latestEmployee.attendanceHint?.lastStatus === 'In') {
+        setSelectedStatus('Out');
+        toast({
+          title: 'Session already open',
+          description: 'This guard is already marked IN. Submit OUT to close the shift.',
+        });
+        return;
+      }
+    }
 
     const payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'> = {
-      employeeId: scannedEmployee.employeeCode || scannedEmployee.id,
-      employeeDocId: scannedEmployee.id,
-      employeeName: scannedEmployee.fullName,
+      employeeId: (latestEmployee ?? scannedEmployee).employeeCode || (latestEmployee ?? scannedEmployee).id,
+      employeeDocId: (latestEmployee ?? scannedEmployee).id,
+      employeeName: (latestEmployee ?? scannedEmployee).fullName,
       reportedAtClient: reportingStartedAt || new Date().toISOString(),
-      employeePhoneNumber: scannedEmployee.phoneNumber,
-      employeeClientName: scannedEmployee.clientName,
+      employeePhoneNumber: (latestEmployee ?? scannedEmployee).phoneNumber,
+      employeeClientName: (latestEmployee ?? scannedEmployee).clientName,
       status: selectedStatus,
       district: selectedDistrict,
       siteId: selectedSiteId,
@@ -1451,9 +1499,9 @@ export default function AttendancePage() {
           createdAt: new Date().toISOString(),
           payload: {
             ...payloadWithoutPhotoUrl,
-            photoDataUrl: undefined,
+            photoDataUrl: watermarkedPhoto || capturedPhoto,
           },
-          photoStripped: true,
+          photoStripped: false,
         };
         queueAttendanceSubmission(queuedItem);
         appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
@@ -1495,9 +1543,9 @@ export default function AttendancePage() {
           createdAt: new Date().toISOString(),
           payload: {
             ...payloadWithoutPhotoUrl,
-            photoDataUrl: undefined,
+            photoDataUrl: watermarkedPhoto || capturedPhoto,
           },
-          photoStripped: true,
+          photoStripped: false,
         };
         queueAttendanceSubmission(queuedItem);
         appendRecentAttendance(buildHistoryItem(queuedItem.id, payloadWithoutPhotoUrl, undefined, 'queued'));
