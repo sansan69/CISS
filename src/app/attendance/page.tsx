@@ -1271,7 +1271,7 @@ export default function AttendancePage() {
         }
         try {
           const { photoDataUrl, ...payloadWithoutPhotoUrl } = queuedItem.payload;
-          const result = await submitAttendanceOnline(payloadWithoutPhotoUrl, photoDataUrl);
+          const result = await submitAttendanceOnline(payloadWithoutPhotoUrl, photoDataUrl ?? '');
           updateRecentAttendance(queuedItem.id, {
             syncStatus: 'synced',
             photoUrl: result.photoUrl,
