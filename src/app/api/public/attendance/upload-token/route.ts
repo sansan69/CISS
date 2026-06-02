@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
     const key = buildRateLimitKey("public-attendance-token", ip);
-    const { allowed } = await checkRateLimit(key, { limit: 10, windowSeconds: 60 });
+    const { allowed } = await checkRateLimit(key, { maxRequests: 10, windowMs: 60_000 });
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait." },
