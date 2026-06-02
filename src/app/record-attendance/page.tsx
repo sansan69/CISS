@@ -112,6 +112,46 @@ export default function RecordAttendancePage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ id: string; autoClosed?: boolean; message?: string } | null>(null);
 
+  // ── Fetch Sites ──────────────────────────────────────────────────────────
+  const fetchSites = useCallback(async () => {
+    setSitesLoading(true);
+    try {
+      const res = await fetch("/api/public/attendance");
+      const json = await res.json();
+      if (json.options) {
+        setSites(json.options);
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Could not load sites" });
+    } finally {
+      setSitesLoading(false);
+    }
+  }, [toast]);
+
+  // ── Handle QR Scanned ────────────────────────────────────────────────────
+  const handleQrScanned = useCallback(async (text: string) => {
+    setStep("verify");
+    try {
+      const res = await fetch("/api/public/attendance/verify-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qrText: text }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Verification failed");
+      }
+      setEmployee(json.employee);
+      setHint(json.attendanceHint);
+      setStatus(json.attendanceHint?.recommendedStatus === "Out" ? "Out" : "In");
+      fetchSites();
+      setStep("form");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "QR Verification Failed", description: err.message });
+      setStep("scan");
+    }
+  }, [fetchSites, toast]);
+
   // ── QR Scanner ───────────────────────────────────────────────────────────
   const startScanning = useCallback(async () => {
     if (!videoRef.current) return;
@@ -153,46 +193,6 @@ export default function RecordAttendancePage() {
   useEffect(() => {
     return () => stopScanning();
   }, [stopScanning]);
-
-  // ── Fetch Sites ──────────────────────────────────────────────────────────
-  const fetchSites = useCallback(async () => {
-    setSitesLoading(true);
-    try {
-      const res = await fetch("/api/public/attendance");
-      const json = await res.json();
-      if (json.options) {
-        setSites(json.options);
-      }
-    } catch {
-      toast({ variant: "destructive", title: "Could not load sites" });
-    } finally {
-      setSitesLoading(false);
-    }
-  }, [toast]);
-
-  // ── Handle QR Scanned ────────────────────────────────────────────────────
-  const handleQrScanned = useCallback(async (text: string) => {
-    setStep("verify");
-    try {
-      const res = await fetch("/api/public/attendance/verify-qr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qrText: text }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Verification failed");
-      }
-      setEmployee(json.employee);
-      setHint(json.attendanceHint);
-      setStatus(json.attendanceHint?.recommendedStatus === "Out" ? "Out" : "In");
-      fetchSites();
-      setStep("form");
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "QR Verification Failed", description: err.message });
-      setStep("scan");
-    }
-  }, [fetchSites, toast]);
 
   // ── GPS ──────────────────────────────────────────────────────────────────
   const captureGps = useCallback(() => {
