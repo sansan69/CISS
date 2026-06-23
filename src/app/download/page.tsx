@@ -37,7 +37,7 @@ export default function DownloadPage() {
           ))}
         </div>
 
-        {/* Download Button — Local APK */}
+        {/* Primary Download — Direct APK */}
         <a
           href="/downloads/ciss-workforce-latest.apk"
           download
@@ -50,10 +50,24 @@ export default function DownloadPage() {
         </a>
 
         <p className="text-xs text-white/40 mt-4">
-          Version 1.0.12 · Latest release · Android 7.0+ (API 24)
+          Version 1.0.13 · Latest release · Android 7.0+ (API 24)
         </p>
 
-        <p className="text-xs text-white/30 mt-6">
+        {/* Alternative download — GitHub Release */}
+        <p className="text-xs text-white/30 mt-3">
+          Also available on{" "}
+          <a
+            href="https://github.com/sansan69/CISS-Mobile/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/50 underline hover:text-white/70"
+          >
+            GitHub Releases
+          </a>
+          {" "}(ARM64 · ARMv7)
+        </p>
+
+        <p className="text-xs text-white/30 mt-3">
           You may need to enable &quot;Install from unknown sources&quot; in your device settings.
         </p>
 
