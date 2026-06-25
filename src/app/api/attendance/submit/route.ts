@@ -487,49 +487,58 @@ export async function POST(request: NextRequest) {
       let workOrderReviewWarning: string | null = null;
 
       if (isTcsSite) {
-        const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
-        const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
-        const workOrdersSnapshot = await adminDb
-          .collection("workOrders")
-          .where("siteId", "==", payload.siteId)
-          .where("date", ">=", startOfDay)
-          .where("date", "<=", endOfDay)
-          .get();
+        const guardIsPermanentTcs =
+          normalizeClientNameKey(employeeClientName) ===
+          normalizeClientNameKey(siteClientName);
 
-        const activeWorkOrders = workOrdersSnapshot.docs
-          .map((doc) => doc.data() as Record<string, any>)
-          .filter(isActiveWorkOrderRecord);
+        if (guardIsPermanentTcs) {
+          // Permanent TCS guards do not require a work order to mark attendance.
+          // They are always assigned to their site — skip the work order check.
+        } else {
+          const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
+          const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
+          const workOrdersSnapshot = await adminDb
+            .collection("workOrders")
+            .where("siteId", "==", payload.siteId)
+            .where("date", ">=", startOfDay)
+            .where("date", "<=", endOfDay)
+            .get();
 
-        if (activeWorkOrders.length === 0) {
-          if (payload.status === "Out" && submissionWindow.closingOpenSession) {
-            workOrderReviewWarning = "Checkout was accepted for an open session even though no active work order was found for the session date.";
-          } else {
-            throw new AttendanceError("No work order has been assigned for this site today. Attendance cannot be recorded.");
+          const activeWorkOrders = workOrdersSnapshot.docs
+            .map((doc) => doc.data() as Record<string, any>)
+            .filter(isActiveWorkOrderRecord);
+
+          if (activeWorkOrders.length === 0) {
+            if (payload.status === "Out" && submissionWindow.closingOpenSession) {
+              workOrderReviewWarning = "Checkout was accepted for an open session even though no active work order was found for the session date.";
+            } else {
+              throw new AttendanceError("No work order has been assigned for this site today. Attendance cannot be recorded.");
+            }
           }
-        }
 
-        const matchingWorkOrder = activeWorkOrders
-          .find((workOrder) => {
-            const assignedGuards = Array.isArray(workOrder.assignedGuards)
-              ? workOrder.assignedGuards
-              : [];
-            return (
-              assignedGuards.length === 0 ||
-              isAssignedGuardMatch(
-                assignedGuards,
-                payload.employeeDocId,
-                payload.employeeId,
-              )
-            );
-          });
+          const matchingWorkOrder = activeWorkOrders
+            .find((workOrder) => {
+              const assignedGuards = Array.isArray(workOrder.assignedGuards)
+                ? workOrder.assignedGuards
+                : [];
+              return (
+                assignedGuards.length === 0 ||
+                isAssignedGuardMatch(
+                  assignedGuards,
+                  payload.employeeDocId,
+                  payload.employeeId,
+                )
+              );
+            });
 
-        if (!matchingWorkOrder && !workOrderReviewWarning) {
-          if (payload.status === "Out" && submissionWindow.closingOpenSession) {
-            workOrderReviewWarning = "Checkout was accepted for an open session even though the guard was not matched to the work order for the session date.";
-          } else {
-            throw new AttendanceError(
-              "You are not assigned to this site for today's work order. Please contact your supervisor.",
-            );
+          if (!matchingWorkOrder && !workOrderReviewWarning) {
+            if (payload.status === "Out" && submissionWindow.closingOpenSession) {
+              workOrderReviewWarning = "Checkout was accepted for an open session even though the guard was not matched to the work order for the session date.";
+            } else {
+              throw new AttendanceError(
+                "You are not assigned to this site for today's work order. Please contact your supervisor.",
+              );
+            }
           }
         }
       } else {
