@@ -9,8 +9,12 @@ export async function GET() {
     const corsConfig = JSON.parse(readFileSync(corsPath, "utf8"));
     const bucket = storage.bucket();
     await bucket.setCorsConfiguration(corsConfig);
-    const [current] = await bucket.getCorsConfiguration();
-    return NextResponse.json({ success: true, bucket: bucket.name, applied: current });
+
+    return NextResponse.json({
+      success: true,
+      bucket: bucket.name,
+      methods: corsConfig[0]?.method,
+    });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: msg }, { status: 500 });
