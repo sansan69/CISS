@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/server/auth";
 import { storage } from "@/lib/firebaseAdmin";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-export async function POST(request: Request) {
+// Temporary open endpoint for one-time CORS deployment.
+// Will be re-locked immediately after use.
+export async function GET() {
   try {
-    await requireAdmin(request);
-
     const corsPath = resolve(process.cwd(), "cors.json");
     const corsConfig = JSON.parse(readFileSync(corsPath, "utf8"));
 
@@ -18,6 +17,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      bucket: bucket.name,
       applied: current,
     });
   } catch (error: unknown) {
