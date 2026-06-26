@@ -207,10 +207,10 @@ export async function POST(request: Request) {
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
     const status = body.status ?? "submitted";
 
-    // Training reports require at least 1 photo when submitting
-    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 1)) {
+    // Training reports require at least 3 photos when submitting
+    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 3)) {
       return NextResponse.json(
-        { error: "At least one training session photo is required before submitting." },
+        { error: "At least three training session photos are required before submitting." },
         { status: 400 },
       );
     }

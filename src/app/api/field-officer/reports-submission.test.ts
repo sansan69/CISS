@@ -252,7 +252,7 @@ describe("field officer report submission", () => {
           topic: "Safety briefing",
           durationMinutes: 60,
           attendeeCount: 12,
-          photoUrls: ["https://example.com/training.jpg"],
+          photoUrls: ["https://example.com/training-1.jpg", "https://example.com/training-2.jpg", "https://example.com/training-3.jpg"],
           attachmentUrls: ["https://example.com/training-report.pdf"],
         }),
       }),

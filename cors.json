@@ -10,7 +10,7 @@
       "https://fo.cisskerala.site",
       "https://ciss-id9zwfa0i-sansan69s-projects.vercel.app"
     ],
-    "method": ["GET"],
+    "method": ["GET", "POST", "PUT", "OPTIONS"],
     "maxAgeSeconds": 3600
   }
 ]
