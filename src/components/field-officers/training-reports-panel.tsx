@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
 import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
+import { TrainingReportDetailSheet } from "@/components/field-officers/training-report-detail-sheet";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -89,7 +90,6 @@ export function TrainingReportsPanel() {
     return assignedDistricts.some((district) => districtMatches(district, site.district));
   });
 
-  const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
   const [detailReport, setDetailReport] = useState<FoTrainingReport | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
@@ -185,24 +185,6 @@ export function TrainingReportsPanel() {
     }
   };
 
-  const handleAcknowledge = async (id: string) => {
-    setAcknowledgingId(id);
-    try {
-      const res = await authorizedFetch(`/api/admin/training-reports/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "acknowledged" }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      toast({ title: "Acknowledged", description: "Training report acknowledged." });
-      loadReports(activeTab);
-    } catch {
-      toast({ title: "Error", description: "Failed to acknowledge", variant: "destructive" });
-    } finally {
-      setAcknowledgingId(null);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-6">
       {isFo && (
@@ -284,7 +266,6 @@ export function TrainingReportsPanel() {
         <div className="space-y-3">
           {reports.map((report) => {
             const sc = STATUS_CONFIG[report.status];
-            const isAcknowledging = acknowledgingId === report.id;
             return (
               <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
                 <CardContent className="p-4" onClick={() => { setDetailReport(report); setDetailSheetOpen(true); }}>
@@ -316,17 +297,6 @@ export function TrainingReportsPanel() {
                       >
                         <Eye className="h-3.5 w-3.5 mr-1" /> View
                       </Button>
-                      {isAdmin && report.status === "submitted" && (
-                        <Button
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700"
-                          disabled={isAcknowledging}
-                          onClick={() => handleAcknowledge(report.id)}
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          {isAcknowledging ? "..." : "Acknowledge"}
-                        </Button>
-                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -336,116 +306,13 @@ export function TrainingReportsPanel() {
         </div>
       )}
 
-      {/* Detail Sheet */}
-      <Sheet open={detailSheetOpen} onOpenChange={setDetailSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Training Report</SheetTitle>
-            <SheetDescription>
-              {detailReport?.fieldOfficerName} · {formatDate(detailReport?.trainingDate as unknown as { seconds: number })}
-            </SheetDescription>
-          </SheetHeader>
-          {detailReport && (
-            <div className="space-y-4 mt-6">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Client</p>
-                <p className="text-sm">{detailReport.clientName}{detailReport.siteName ? ` - ${detailReport.siteName}` : ""}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Topic</p>
-                <p className="text-sm font-semibold">{detailReport.topic}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Duration</p>
-                  <p className="text-sm">{detailReport.durationMinutes} min</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Attendees</p>
-                  <p className="text-sm">{detailReport.attendeeCount}</p>
-                </div>
-              </div>
-              {detailReport.description && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Description</p>
-                  <p className="text-sm">{detailReport.description}</p>
-                </div>
-              )}
-              {detailReport.visitLocation && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">GPS Location</p>
-                  <p className="text-sm text-muted-foreground">
-                    {detailReport.visitLocation.lat.toFixed(5)}, {detailReport.visitLocation.lng.toFixed(5)}
-                  </p>
-                </div>
-              )}
-              {detailReport.photoUrls?.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Training Photos ({detailReport.photoUrls.length})
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {detailReport.photoUrls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center hover:opacity-80 transition-opacity">
-                        {isPdfUrl(url) ? (
-                          <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-                            <FileText className="h-6 w-6" />
-                            PDF
-                          </span>
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {detailReport.attachmentUrls?.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <FileText className="inline h-3.5 w-3.5 mr-1" />Training Report Uploads ({detailReport.attachmentUrls.length})
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {detailReport.attachmentUrls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:opacity-80 transition-opacity">
-                        <FileText className="h-6 w-6" />
-                        File {i + 1}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {detailReport.clientReportUrl && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <FileText className="inline h-3.5 w-3.5 mr-1" />Client Report
-                  </p>
-                  <a href={detailReport.clientReportUrl} target="_blank" rel="noopener noreferrer"
-                    className="text-sm text-brand-blue hover:underline break-all">
-                    {detailReport.clientReportUrl}
-                  </a>
-                </div>
-              )}
-              {isAdmin && detailReport.status === "submitted" && (
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  disabled={acknowledgingId === detailReport.id}
-                  onClick={async () => {
-                    await handleAcknowledge(detailReport.id);
-                    setDetailSheetOpen(false);
-                  }}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                  {acknowledgingId === detailReport.id ? "Saving..." : "Acknowledge"}
-                </Button>
-              )}
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Detail / Edit / Acknowledge Sheet */}
+      <TrainingReportDetailSheet
+        open={detailSheetOpen}
+        onOpenChange={(o) => { setDetailSheetOpen(o); if (!o) setDetailReport(null); }}
+        report={detailReport}
+        onUpdated={() => loadReports(activeTab)}
+      />
 
       {/* New Training Report Sheet */}
       <Sheet open={newSheetOpen} onOpenChange={setNewSheetOpen}>

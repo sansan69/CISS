@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
 import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
+import { VisitReportDetailSheet } from "@/components/field-officers/visit-report-detail-sheet";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -88,11 +89,9 @@ export function VisitReportsPanel() {
     return assignedDistricts.some((district) => districtMatches(district, site.district));
   });
 
-  // Review sheet
+  // Review / Detail sheet
   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<FoVisitReport | null>(null);
-  const [reviewNotes, setReviewNotes] = useState("");
-  const [isReviewing, setIsReviewing] = useState(false);
 
   const loadReports = useCallback(async (tab: Tab) => {
     setIsLoading(true);
@@ -171,28 +170,6 @@ export function VisitReportsPanel() {
       });
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleMarkReviewed = async () => {
-    if (!selectedReport) return;
-    setIsReviewing(true);
-    try {
-      const res = await authorizedFetch(`/api/admin/visit-reports/${selectedReport.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "reviewed", reviewNotes }),
-      });
-      if (!res.ok) throw new Error("Review failed");
-      toast({ title: "Reviewed", description: "Report marked as reviewed." });
-      setReviewSheetOpen(false);
-      setSelectedReport(null);
-      setReviewNotes("");
-      loadReports(activeTab);
-    } catch {
-      toast({ title: "Error", description: "Failed to update report", variant: "destructive" });
-    } finally {
-      setIsReviewing(false);
     }
   };
 
@@ -279,7 +256,7 @@ export function VisitReportsPanel() {
             const sc = STATUS_CONFIG[report.status];
             return (
               <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4" onClick={() => { setSelectedReport(report); setReviewNotes(""); setReviewSheetOpen(true); }}>
+                <CardContent className="p-4" onClick={() => { setSelectedReport(report); setReviewSheetOpen(true); }}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -307,7 +284,7 @@ export function VisitReportsPanel() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => { setSelectedReport(report); setReviewNotes(""); setReviewSheetOpen(true); }}
+                        onClick={() => { setSelectedReport(report); setReviewSheetOpen(true); }}
                       >
                         <Eye className="h-3.5 w-3.5 mr-1" />
                         View
@@ -505,103 +482,13 @@ export function VisitReportsPanel() {
         </SheetContent>
       </Sheet>
 
-      {/* Review Sheet (Admin) */}
-      <Sheet open={reviewSheetOpen} onOpenChange={setReviewSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Review Visit Report</SheetTitle>
-            <SheetDescription>
-              {selectedReport?.fieldOfficerName} · {formatDate(selectedReport?.visitDate as unknown as { seconds: number })}
-            </SheetDescription>
-          </SheetHeader>
-          {selectedReport && (
-            <div className="space-y-4 mt-6">
-              <div className="flex items-center gap-2">
-                <span className={cn("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", STATUS_CONFIG[selectedReport.status].className)}>
-                  {STATUS_CONFIG[selectedReport.status].label}
-                </span>
-                {selectedReport.district && <span className="text-xs text-muted-foreground">{selectedReport.district}</span>}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Client / Site</p>
-                <p className="text-sm">{selectedReport.clientName}{selectedReport.siteName ? ` — ${selectedReport.siteName}` : ""}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Guards Present</p>
-                  <p className="text-sm font-semibold">{selectedReport.guardsPresentCount}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Guards Absent</p>
-                  <p className="text-sm font-semibold">{selectedReport.guardsAbsentCount}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Summary</p>
-                <p className="text-sm">{selectedReport.summary}</p>
-              </div>
-              {selectedReport.issuesFound && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Issues Found</p>
-                  <p className="text-sm">{selectedReport.issuesFound}</p>
-                </div>
-              )}
-              {selectedReport.visitLocation && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">GPS Location</p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedReport.visitLocation.lat.toFixed(5)}, {selectedReport.visitLocation.lng.toFixed(5)}
-                  </p>
-                </div>
-              )}
-              {selectedReport.actionsRequired && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Actions Required</p>
-                  <p className="text-sm">{selectedReport.actionsRequired}</p>
-                </div>
-              )}
-              {selectedReport.photoUrls?.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
-                    <ImageIcon className="inline h-3.5 w-3.5 mr-1" />Site Uploads ({selectedReport.photoUrls.length})
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedReport.photoUrls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                        className="h-20 w-20 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center hover:opacity-80 transition-opacity">
-                        {isPdfUrl(url) ? (
-                          <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-                            <FileText className="h-6 w-6" />
-                            PDF
-                          </span>
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label>Review Notes</Label>
-                <Textarea
-                  rows={3}
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
-                  placeholder="Add review comments..."
-                />
-              </div>
-              {selectedReport.status === "submitted" && (
-                <Button onClick={handleMarkReviewed} disabled={isReviewing} className="w-full">
-                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                  {isReviewing ? "Saving..." : "Mark as Reviewed"}
-                </Button>
-              )}
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Detail / Edit / Review Sheet */}
+      <VisitReportDetailSheet
+        open={reviewSheetOpen}
+        onOpenChange={(o) => { setReviewSheetOpen(o); if (!o) setSelectedReport(null); }}
+        report={selectedReport}
+        onUpdated={() => loadReports(activeTab)}
+      />
     </div>
   );
 }
