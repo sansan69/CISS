@@ -590,3 +590,9 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Fixed `guardLocations` document ID from `employeeId` (contains slashes like `CISS/TCS/.../871`) to `employeeDocId` in attendance submit route.
 - Added `resourceIdNumber` lookup to `/api/public/attendance/employee` endpoint.
 - Enhanced web `/attendance` manual ID section: now accepts employee ID, phone number, or resource ID with OR dividers.
+
+### [2026-06-28] — Auto-checkout reliability, configurable shift timings, UI simplification
+
+- Phase 1: Rewrote auto-checkout cron with paginated queries, chunked batches (50 sessions per batch), and `lastAutoClosedAt` tracking on attendance state.
+- Phase 2: Created `src/lib/attendance/auto-detect.ts` — Haversine distance, shift detection, IN/OUT detection utilities. Simplified attendance page: stripped duty point/shift detail noise from confirm card, replaced IN/OUT radio group with auto-detected badge + tap-to-flip.
+- Phase 3: Made shift start/end times editable in admin site management form. `normalizeDutyPoint` now auto-computes `crossesMidnight` from custom start/end times.

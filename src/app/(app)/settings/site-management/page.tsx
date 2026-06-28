@@ -415,11 +415,55 @@ const SiteEditForm: React.FC<SiteEditFormProps> = ({ site, onSave, isSaving, onC
                                         />
                                     </div>
                                 </div>
-                                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                                    {point.shiftTemplates.map((shift) => (
-                                        <div key={shift.code} className="rounded-md border bg-background p-2 text-xs">
-                                            <p className="font-medium">{shift.label}</p>
-                                            <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                    {point.shiftTemplates.map((shift, shiftIdx) => (
+                                        <div key={shift.code} className="rounded-md border bg-background p-2">
+                                            <p className="text-xs font-medium mb-1.5">{shift.label}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                <Input
+                                                    type="time"
+                                                    className="h-7 text-xs px-1.5"
+                                                    value={shift.startTime}
+                                                    onChange={(e) => {
+                                                        const newTime = e.target.value;
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            dutyPoints: (prev.dutyPoints ?? []).map((dp, dpIdx) =>
+                                                                dpIdx === index
+                                                                    ? {
+                                                                        ...dp,
+                                                                        shiftTemplates: dp.shiftTemplates.map((st, stIdx) =>
+                                                                            stIdx === shiftIdx ? { ...st, startTime: newTime } : st
+                                                                        ),
+                                                                    }
+                                                                    : dp,
+                                                            ),
+                                                        }));
+                                                    }}
+                                                />
+                                                <span className="text-xs text-muted-foreground">-</span>
+                                                <Input
+                                                    type="time"
+                                                    className="h-7 text-xs px-1.5"
+                                                    value={shift.endTime}
+                                                    onChange={(e) => {
+                                                        const newTime = e.target.value;
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            dutyPoints: (prev.dutyPoints ?? []).map((dp, dpIdx) =>
+                                                                dpIdx === index
+                                                                    ? {
+                                                                        ...dp,
+                                                                        shiftTemplates: dp.shiftTemplates.map((st, stIdx) =>
+                                                                            stIdx === shiftIdx ? { ...st, endTime: newTime } : st
+                                                                        ),
+                                                                    }
+                                                                    : dp,
+                                                            ),
+                                                        }));
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1608,11 +1652,55 @@ export default function SiteManagementPage() {
                                                     />
                                                 </div>
                                             </div>
-                                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                                                {point.shiftTemplates.map((shift) => (
-                                                    <div key={shift.code} className="rounded-md border bg-background p-2 text-xs">
-                                                        <p className="font-medium">{shift.label}</p>
-                                                        <p className="text-muted-foreground">{shift.startTime} - {shift.endTime}</p>
+                                            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                                {point.shiftTemplates.map((shift, shiftIdx) => (
+                                                    <div key={shift.code} className="rounded-md border bg-background p-2">
+                                                        <p className="text-xs font-medium mb-1.5">{shift.label}</p>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Input
+                                                                type="time"
+                                                                className="h-7 text-xs px-1.5"
+                                                                value={shift.startTime}
+                                                                onChange={(e) => {
+                                                                    const newTime = e.target.value;
+                                                                    setCreateData((current) => ({
+                                                                        ...current,
+                                                                        dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((dp, dpIdx) =>
+                                                                            dpIdx === index
+                                                                                ? {
+                                                                                    ...dp,
+                                                                                    shiftTemplates: dp.shiftTemplates.map((st, stIdx) =>
+                                                                                        stIdx === shiftIdx ? { ...st, startTime: newTime } : st
+                                                                                    ),
+                                                                                }
+                                                                                : dp,
+                                                                        ),
+                                                                    }));
+                                                                }}
+                                                            />
+                                                            <span className="text-xs text-muted-foreground">-</span>
+                                                            <Input
+                                                                type="time"
+                                                                className="h-7 text-xs px-1.5"
+                                                                value={shift.endTime}
+                                                                onChange={(e) => {
+                                                                    const newTime = e.target.value;
+                                                                    setCreateData((current) => ({
+                                                                        ...current,
+                                                                        dutyPoints: ((current.dutyPoints as DutyPoint[] | undefined) ?? []).map((dp, dpIdx) =>
+                                                                            dpIdx === index
+                                                                                ? {
+                                                                                    ...dp,
+                                                                                    shiftTemplates: dp.shiftTemplates.map((st, stIdx) =>
+                                                                                        stIdx === shiftIdx ? { ...st, endTime: newTime } : st
+                                                                                    ),
+                                                                                }
+                                                                                : dp,
+                                                                        ),
+                                                                    }));
+                                                                }}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>

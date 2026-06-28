@@ -1842,75 +1842,41 @@ export default function AttendancePage() {
 
             <div className="rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Center</p>
-                  <p className="mt-2 text-base font-semibold">{selectedSite ? selectedSite.siteName : 'Waiting for location'}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedSite ? `${selectedSite.clientName} • ${selectedDistrict}` : 'Auto-detect will choose the nearest center.'}
-                  </p>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Site</p>
+                    <p className="mt-1 text-base font-semibold">{selectedSite ? selectedSite.siteName : 'Waiting for location...'}</p>
+                    {selectedSite && (
+                      <p className="text-sm text-muted-foreground">
+                        {selectedSite.clientName} · {selectedDistrict}
+                        {selectedSiteDistance != null && ` · ${Math.round(selectedSiteDistance)}m`}
+                      </p>
+                    )}
+                  </div>
                   {selectedDutyPoint && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Duty point: <span className="font-medium text-foreground">{selectedDutyPoint.name}</span> · {DUTY_POINT_COVERAGE_LABELS[selectedDutyPoint.coverageMode]} · {DUTY_POINT_HOURS_LABELS[selectedDutyPoint.dutyHours]}
+                    <p className="text-sm text-muted-foreground">
+                      {selectedDutyPoint.name}
                     </p>
                   )}
                   {selectedShift && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Selected shift: <span className="font-medium text-foreground">{selectedShift.label}</span> ({selectedShift.startTime} - {selectedShift.endTime})
+                    <p className="text-sm text-muted-foreground">
+                      {selectedShift.label} · {selectedShift.startTime}-{selectedShift.endTime}
                     </p>
-                  )}
-                  {dutyPointOptions.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {dutyPointOptions.map((point) => {
-                        const isSelectedPoint = point.id === selectedDutyPointId;
-                        return (
-                          <span
-                            key={point.id}
-                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
-                              isSelectedPoint
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border bg-muted/40 text-muted-foreground"
-                            }`}
-                          >
-                            <span className="max-w-[12rem] truncate">{point.name}</span>
-                            <span className="opacity-70">·</span>
-                            <span>{DUTY_POINT_COVERAGE_LABELS[point.coverageMode]}</span>
-                            <span className="opacity-70">·</span>
-                            <span>{DUTY_POINT_HOURS_LABELS[point.dutyHours]}</span>
-                          </span>
-                        );
-                      })}
-                    </div>
                   )}
                   {!selectedShift && autoDetectedShift && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Suggested shift: <span className="font-medium text-foreground">{autoDetectedShift.label}</span> ({autoDetectedShift.startTime} - {autoDetectedShift.endTime})
+                    <p className="text-sm text-muted-foreground">
+                      {autoDetectedShift.label} · {autoDetectedShift.startTime}-{autoDetectedShift.endTime}
                     </p>
-                  )}
-                  {!selectedShift && !autoDetectedShift && shiftMode === 'fixed' && (
-                    <p className="mt-1 text-sm text-amber-700">
-                      No shift matched the current time automatically. Choose the correct shift below before submitting.
-                    </p>
-                  )}
-                  {resolvedShift && nextResolvedShift && (
-                    <p className="mt-1 text-xs text-muted-foreground">Next shift expected after this window: {nextResolvedShift.label} from {nextResolvedShift.startTime}</p>
-                  )}
-                  {selectedSiteDistance != null && (
-                    <p className="mt-1 text-xs text-muted-foreground">About {Math.round(selectedSiteDistance)} meters away</p>
                   )}
                   {locationCapturedAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Location captured at {new Date(locationCapturedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
-                    </p>
-                  )}
-                  {selectedSiteDistance != null && selectedSite?.strictGeofence === false && selectedSiteDistance > selectedSiteRadius && (
-                    <p className="mt-1 text-xs text-amber-700">
-                      This site allows soft geofence warnings. Attendance can continue, but admin review will be required.
+                    <p className="text-xs text-muted-foreground">
+                      Location at {new Date(locationCapturedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}
                     </p>
                   )}
                 </div>
                 {autoDetectedSite && (
-                  <Badge variant="outline">
-                    {hasManualCenterOverride ? 'Changed manually' : 'Auto selected'}
+                  <Badge variant="outline" className="shrink-0">
+                    {hasManualCenterOverride ? 'Changed' : 'Auto'}
                   </Badge>
                 )}
               </div>
@@ -2122,20 +2088,29 @@ export default function AttendancePage() {
             </div>
 
             <div className="rounded-2xl border p-4">
-              <Label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Attendance status</Label>
-              <RadioGroup value={selectedStatus} onValueChange={(value) => {
-                setSelectedStatus(value as 'In' | 'Out');
-                setHasManualShiftOverride(false);
-              }} className="mt-3 grid grid-cols-2 gap-2">
-                <Label htmlFor="status-in" className={`flex cursor-pointer items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'In' ? 'border-primary bg-primary text-primary-foreground' : ''}`}>
-                  <RadioGroupItem value="In" id="status-in" className="sr-only" />
-                  Mark IN
-                </Label>
-                <Label htmlFor="status-out" className={`flex cursor-pointer items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${selectedStatus === 'Out' ? 'border-primary bg-primary text-primary-foreground' : ''}`}>
-                  <RadioGroupItem value="Out" id="status-out" className="sr-only" />
-                  Mark OUT
-                </Label>
-              </RadioGroup>
+              <Label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Attendance</Label>
+              <div className="mt-3 flex items-center gap-3">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold ${
+                  selectedStatus === 'In'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  <span className={`h-2 w-2 rounded-full ${
+                    selectedStatus === 'In' ? 'bg-green-600' : 'bg-amber-600'
+                  }`} />
+                  {selectedStatus === 'In' ? 'CHECK IN' : 'CHECK OUT'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStatus(selectedStatus === 'In' ? 'Out' : 'In');
+                    setHasManualShiftOverride(false);
+                  }}
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Wrong? Tap to flip
+                </button>
+              </div>
             </div>
 
             {workflowStep === 'photo' ? (

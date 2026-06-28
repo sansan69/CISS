@@ -159,6 +159,11 @@ export function normalizeDutyPoint(input: Partial<DutyPoint>, fallbackIndex = 0)
         ? buildDutyPointShiftTemplates(coverageMode, dutyHours)
         : [];
 
+  const computedShiftTemplates = shiftTemplates.map((st) => ({
+    ...st,
+    crossesMidnight: timeToMinutes(st.startTime) >= timeToMinutes(st.endTime),
+  }));
+
   const dutyPoint: DutyPoint = {
     id: String(input.id ?? "").trim() || slugifyDutyPointId(name),
     name,
@@ -166,7 +171,7 @@ export function normalizeDutyPoint(input: Partial<DutyPoint>, fallbackIndex = 0)
     coverageMode,
     dutyHours,
     shiftMode,
-    shiftTemplates,
+    shiftTemplates: computedShiftTemplates,
     patrolPoints: normalizePatrolPoints(input.patrolPoints),
   };
 

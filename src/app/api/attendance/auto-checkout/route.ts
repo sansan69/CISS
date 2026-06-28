@@ -5,6 +5,9 @@ import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
 
+const CHUNK_SIZE = 50;
+const PAGE_LIMIT = 100;
+
 async function verifyVercelCronSignature(request: NextRequest): Promise<boolean> {
   const signatureHeader = request.headers.get("x-vercel-signature");
   const secret = process.env.CRON_SECRET;
@@ -18,13 +21,10 @@ async function verifyVercelCronSignature(request: NextRequest): Promise<boolean>
   const timestamp = tPart.slice(2);
   const signature = v1Part.slice(3);
 
-  // Vercel sends the body; for empty body use empty string
   let body = "";
   try {
     body = await request.clone().text();
-  } catch {
-    /* empty body */
-  }
+  } catch {}
 
   const payload = `${timestamp}.${body}`;
   const encoder = new TextEncoder();
@@ -49,13 +49,128 @@ async function verifyVercelCronSignature(request: NextRequest): Promise<boolean>
   return result === 0;
 }
 
-/**
- * POST /api/attendance/auto-checkout
- * Scheduled job (Vercel Cron every 30 minutes) that auto-closes
- * attendance sessions that have exceeded their shift end + buffer time.
- *
- * Auth: Vercel cron signature header (x-vercel-signature) OR query param ?key=<CRON_SECRET>
- */
+function computeFallbackAutoCheckout(
+  state: Record<string, any>,
+  session: Record<string, any> | undefined,
+): string | null {
+  if (state.autoCheckoutAt) return state.autoCheckoutAt;
+  if (!session?.shiftEndTime || !session?.shiftStartTime) return null;
+
+  const sessionStartDate = String(state.lastAttendanceDate ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionStartDate)) return null;
+
+  const endTime = String(session.shiftEndTime);
+  const startTime = String(session.shiftStartTime);
+  const [endH, endM] = endTime.split(":").map(Number);
+  const [startH, startM] = startTime.split(":").map(Number);
+  const crossesMidnight = startH * 60 + startM >= endH * 60 + endM;
+  const [y, m, d] = sessionStartDate.split("-").map(Number);
+  const sessionStart = Date.UTC(y, m - 1, d);
+  const shiftEndTimestamp = crossesMidnight
+    ? sessionStart + 24 * 60 * 60 * 1000
+    : sessionStart;
+  const bufferMinutes = 120;
+  return new Date(
+    shiftEndTimestamp + (endH * 60 + endM + bufferMinutes) * 60 * 1000,
+  ).toISOString();
+}
+
+async function processStaleSession(
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+  state: Record<string, any>,
+  session: Record<string, any> | undefined,
+  now: Date,
+): Promise<{
+  employeeDocId: string;
+  attendanceDate: string;
+  reason: string;
+  writes: Array<{
+    ref: FirebaseFirestore.DocumentReference;
+    data: Record<string, any>;
+    merge?: boolean;
+  }>;
+} | null> {
+  const autoCheckoutAt = computeFallbackAutoCheckout(state, session);
+  const staleCheck = isSessionStale({
+    lastState: {
+      lastStatus: "In",
+      lastAttendanceDate: state.lastAttendanceDate,
+      autoCheckoutAt,
+    },
+    now,
+  });
+
+  if (!staleCheck.stale) return null;
+
+  const employeeDocId = doc.id;
+  const staleDate = state.lastAttendanceDate ?? "unknown";
+  const writes: Array<{
+    ref: FirebaseFirestore.DocumentReference;
+    data: Record<string, any>;
+    merge?: boolean;
+  }> = [];
+
+  const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
+  writes.push({
+    ref: staleOutLogRef,
+    data: {
+      employeeId: state.employeeId ?? employeeDocId,
+      employeeDocId,
+      employeeName: state.employeeName ?? "",
+      status: "Out",
+      attendanceDate: staleDate,
+      siteId: state.lastSiteId ?? "",
+      siteName: state.lastSiteName ?? "",
+      dutyPointId: state.lastDutyPointId ?? null,
+      dutyPointName: state.lastDutyPointName ?? null,
+      clientName: state.lastSiteClientName ?? "",
+      employeeClientName: state.employeeClientName ?? "",
+      autoClosed: true,
+      autoClosedReason: "Session auto-closed by scheduled job. " + staleCheck.reason,
+      reportedAt: now,
+      serverProcessedAt: now,
+      createdAt: now,
+      attendanceReviewWarnings: [
+        "Auto-closed stale session: " + staleCheck.reason,
+      ],
+    },
+  });
+
+  if (state.openSessionId) {
+    writes.push({
+      ref: adminDb.collection("attendanceSessions").doc(String(state.openSessionId)),
+      data: {
+        status: "closed",
+        outLogId: staleOutLogRef.id,
+        endedAt: now,
+        autoClosed: true,
+        autoClosedReason: "Scheduled auto-checkout: " + staleCheck.reason,
+        updatedAt: now,
+      },
+      merge: true,
+    });
+  }
+
+  writes.push({
+    ref: doc.ref,
+    data: {
+      lastStatus: "Out",
+      lastAttendanceDate: staleDate,
+      lastAttendanceId: staleOutLogRef.id,
+      openSessionId: FieldValue.delete(),
+      openSessionStartedAt: FieldValue.delete(),
+      autoCheckoutAt: FieldValue.delete(),
+      lastLoggedAt: now,
+      updatedAt: now,
+      lastAutoClosedAt: now,
+      lastAutoCloseReason: staleCheck.reason,
+    },
+    merge: true,
+  });
+
+  return { employeeDocId, attendanceDate: staleDate, reason: staleCheck.reason, writes };
+}
+
 export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const key = searchParams.get("key");
@@ -72,8 +187,8 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date();
-  const batch = adminDb.batch();
-  let closedCount = 0;
+  let totalClosed = 0;
+  let totalPages = 0;
   const closedSessions: Array<{
     employeeDocId: string;
     attendanceDate: string;
@@ -81,151 +196,105 @@ export async function POST(request: NextRequest) {
   }> = [];
 
   try {
-    // Find all attendance states with open sessions
-    const statesSnapshot = await adminDb
-      .collection("attendanceState")
-      .where("lastStatus", "==", "In")
-      .limit(500)
-      .get();
+    let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    let hasMore = true;
 
-    // Pre-fetch open session docs to compute autoCheckoutAt for old sessions
-    // Firestore 'in' queries are limited to 10 values per query
-    const sessionIds = statesSnapshot.docs
-      .map((d) => (d.data() as Record<string, any>).openSessionId)
-      .filter((id): id is string => typeof id === "string");
+    while (hasMore) {
+      let query = adminDb
+        .collection("attendanceState")
+        .where("lastStatus", "==", "In")
+        .limit(PAGE_LIMIT);
 
-    const sessionById = new Map<string, Record<string, any>>();
-    if (sessionIds.length > 0) {
-      for (let i = 0; i < sessionIds.length; i += 10) {
-        const idBatch = sessionIds.slice(i, i + 10);
-        const snap = await adminDb
-          .collection("attendanceSessions")
-          .where("__name__", "in", idBatch)
-          .get();
-        for (const sDoc of snap.docs) {
-          sessionById.set(sDoc.id, sDoc.data());
-        }
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
       }
-    }
 
-    for (const doc of statesSnapshot.docs) {
-      const state = doc.data() as Record<string, any>;
+      const statesSnapshot = await query.get();
+      if (statesSnapshot.empty) {
+        hasMore = false;
+        break;
+      }
 
-      // If autoCheckoutAt is missing, try to compute it from the session's shift
-      let autoCheckoutAt: string | null = state.autoCheckoutAt ?? null;
-      if (!autoCheckoutAt && state.openSessionId) {
-        const session = sessionById.get(String(state.openSessionId));
-        if (session?.shiftEndTime && session?.shiftStartTime) {
-          const sessionStartDate = String(state.lastAttendanceDate ?? "");
-          if (/^\d{4}-\d{2}-\d{2}$/.test(sessionStartDate)) {
-            const endTime = String(session.shiftEndTime);
-            const startTime = String(session.shiftStartTime);
-            const [endH, endM] = endTime.split(":").map(Number);
-            const [startH, startM] = startTime.split(":").map(Number);
-            const crossesMidnight = startH * 60 + startM >= endH * 60 + endM;
-            const [y, m, d] = sessionStartDate.split("-").map(Number);
-            const sessionStart = Date.UTC(y, m - 1, d);
-            const shiftEndTimestamp = crossesMidnight
-              ? sessionStart + 24 * 60 * 60 * 1000
-              : sessionStart;
-            const bufferMinutes = 120;
-            autoCheckoutAt = new Date(
-              shiftEndTimestamp + (endH * 60 + endM + bufferMinutes) * 60 * 1000,
-            ).toISOString();
+      totalPages++;
+
+      // Pre-fetch session docs for this page
+      const sessionIds = statesSnapshot.docs
+        .map((d) => (d.data() as Record<string, any>).openSessionId)
+        .filter((id): id is string => typeof id === "string");
+
+      const sessionById = new Map<string, Record<string, any>>();
+      if (sessionIds.length > 0) {
+        for (let i = 0; i < sessionIds.length; i += 10) {
+          const idBatch = sessionIds.slice(i, i + 10);
+          const snap = await adminDb
+            .collection("attendanceSessions")
+            .where("__name__", "in", idBatch)
+            .get();
+          for (const sDoc of snap.docs) {
+            sessionById.set(sDoc.id, sDoc.data());
           }
         }
       }
 
-      const staleCheck = isSessionStale({
-        lastState: {
-          lastStatus: "In",
-          lastAttendanceDate: state.lastAttendanceDate,
-          autoCheckoutAt,
-        },
-        now,
-      });
+      // Collect all stale sessions for this page
+      const pageResults: Array<{
+        employeeDocId: string;
+        attendanceDate: string;
+        reason: string;
+        writes: Array<{
+          ref: FirebaseFirestore.DocumentReference;
+          data: Record<string, any>;
+          merge?: boolean;
+        }>;
+      }> = [];
 
-      if (!staleCheck.stale) continue;
-
-      const employeeDocId = doc.id;
-      const staleDate = state.lastAttendanceDate ?? "unknown";
-
-      // Create auto-closed OUT log
-      const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
-      batch.set(staleOutLogRef, {
-        employeeId: state.employeeId ?? employeeDocId,
-        employeeDocId,
-        employeeName: state.employeeName ?? "",
-        status: "Out",
-        attendanceDate: staleDate,
-        siteId: state.lastSiteId ?? "",
-        siteName: state.lastSiteName ?? "",
-        dutyPointId: state.lastDutyPointId ?? null,
-        dutyPointName: state.lastDutyPointName ?? null,
-        clientName: state.lastSiteClientName ?? "",
-        employeeClientName: state.employeeClientName ?? "",
-        autoClosed: true,
-        autoClosedReason:
-          "Session auto-closed by scheduled job. " + staleCheck.reason,
-        reportedAt: now,
-        serverProcessedAt: now,
-        createdAt: now,
-        attendanceReviewWarnings: [
-          "Auto-closed stale session: " + staleCheck.reason,
-        ],
-      });
-
-      // Update the open session document
-      if (state.openSessionId) {
-        const sessionRef = adminDb
-          .collection("attendanceSessions")
-          .doc(String(state.openSessionId));
-        batch.set(
-          sessionRef,
-          {
-            status: "closed",
-            outLogId: staleOutLogRef.id,
-            endedAt: now,
-            autoClosed: true,
-            autoClosedReason: "Scheduled auto-checkout: " + staleCheck.reason,
-            updatedAt: now,
-          },
-          { merge: true },
-        );
+      for (const doc of statesSnapshot.docs) {
+        const state = doc.data() as Record<string, any>;
+        const session = state.openSessionId
+          ? sessionById.get(String(state.openSessionId))
+          : undefined;
+        const result = await processStaleSession(doc, state, session, now);
+        if (result) {
+          pageResults.push(result);
+        }
       }
 
-      // Update attendance state
-      batch.set(
-        doc.ref,
-        {
-          lastStatus: "Out",
-          lastAttendanceDate: staleDate,
-          lastAttendanceId: staleOutLogRef.id,
-          openSessionId: FieldValue.delete(),
-          openSessionStartedAt: FieldValue.delete(),
-          autoCheckoutAt: FieldValue.delete(),
-          lastLoggedAt: now,
-          updatedAt: now,
-        },
-        { merge: true },
-      );
+      lastDoc = statesSnapshot.docs[statesSnapshot.docs.length - 1];
+      hasMore = statesSnapshot.docs.length >= PAGE_LIMIT;
 
-      closedCount++;
-      closedSessions.push({
-        employeeDocId,
-        attendanceDate: staleDate,
-        reason: staleCheck.reason,
-      });
-    }
+      // Commit chunks of 50 stale sessions per batch
+      if (pageResults.length > 0) {
+        for (let i = 0; i < pageResults.length; i += CHUNK_SIZE) {
+          const chunk = pageResults.slice(i, i + CHUNK_SIZE);
+          const batch = adminDb.batch();
+          for (const result of chunk) {
+            for (const write of result.writes) {
+              if (write.merge) {
+                batch.set(write.ref, write.data, { merge: true });
+              } else {
+                batch.set(write.ref, write.data);
+              }
+            }
+          }
+          await batch.commit();
+        }
 
-    if (closedCount > 0) {
-      await batch.commit();
+        totalClosed += pageResults.length;
+        for (const r of pageResults) {
+          closedSessions.push({
+            employeeDocId: r.employeeDocId,
+            attendanceDate: r.attendanceDate,
+            reason: r.reason,
+          });
+        }
+      }
     }
 
     return NextResponse.json({
       success: true,
-      closedCount,
-      closedSessions: closedSessions.slice(0, 20), // Limit response size
+      closedCount: totalClosed,
+      pagesScanned: totalPages,
+      closedSessions: closedSessions.slice(0, 20),
       checkedAt: now.toISOString(),
     });
   } catch (error: any) {
