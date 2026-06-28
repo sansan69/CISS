@@ -14,7 +14,7 @@ const MAX_ATTENDANCE_PHOTO_BYTES = 5 * 1024 * 1024;
 const UPLOAD_RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 };
 
 function isSafeAttendancePath(path: string) {
-  return /^employees\/[0-9A-Za-z_-]+\/attendance\/[A-Za-z0-9._-]+$/.test(path);
+  return /^employees\/[0-9A-Za-z_\/-]+\/attendance\/[A-Za-z0-9._-]+$/.test(path);
 }
 
 function parseImageDataUrl(dataUrl: string) {

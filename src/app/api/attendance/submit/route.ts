@@ -118,6 +118,7 @@ type FirestoreGeoPointLike = {
 
 type GuardLocationWrite = {
   employeeId: string;
+  employeeDocId: string;
   guardName: string;
   siteId: string;
   siteName: string;
@@ -932,6 +933,7 @@ export async function POST(request: NextRequest) {
 
       guardLocationWrite = {
         employeeId: payload.employeeId,
+        employeeDocId: payload.employeeDocId,
         guardName: buildGuardName(employeeData, payload.employeeId),
         siteId: payload.siteId,
         siteName: String(siteData.siteName || payload.siteName || "").trim(),
@@ -959,9 +961,10 @@ export async function POST(request: NextRequest) {
     if (liveLocationWrite) {
       await adminDb
         .collection("guardLocations")
-        .doc(liveLocationWrite.employeeId)
+        .doc(liveLocationWrite.employeeDocId)
         .set(
           {
+            employeeDocId: liveLocationWrite.employeeDocId,
             employeeId: liveLocationWrite.employeeId,
             guardName: liveLocationWrite.guardName,
             siteId: liveLocationWrite.siteId,
