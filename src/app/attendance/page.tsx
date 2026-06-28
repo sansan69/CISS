@@ -161,6 +161,9 @@ export default function AttendancePage() {
   const [isWatermarking, setIsWatermarking] = useState(false);
   const [isSubmittingAttendance, setIsSubmittingAttendance] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
+  const [manualPhone, setManualPhone] = useState('');
+  const [manualResourceId, setManualResourceId] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
   const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
   const [photoCompliance, setPhotoCompliance] = useState<AttendancePhotoCompliance | null>(null);
   const [photoComplianceError, setPhotoComplianceError] = useState<string | null>(null);
@@ -1708,30 +1711,58 @@ export default function AttendancePage() {
 
             <Accordion type="single" collapsible className="rounded-2xl border px-4">
               <AccordionItem value="manual-id" className="border-none">
-                <AccordionTrigger>QR not working? Use manual employee ID</AccordionTrigger>
+                <AccordionTrigger>QR not working? Use employee ID / phone / resource ID</AccordionTrigger>
                 <AccordionContent>
-                  <div className="grid gap-2 pb-1">
-                    <Input placeholder="Enter employee ID" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
+                  <div className="grid gap-3 pb-1">
+                    <Input placeholder="Employee ID (e.g. CISS/TCS/...)" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-xs text-muted-foreground">OR</span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                    <Input placeholder="Phone number (10 digits)" value={manualPhone} onChange={(e) => setManualPhone(e.target.value)} type="tel" maxLength={10} />
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-xs text-muted-foreground">OR</span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                    <Input placeholder="Resource ID" value={manualResourceId} onChange={(e) => setManualResourceId(e.target.value)} />
                     <Button
                       variant="outline"
                       onClick={async () => {
-                        if (!manualEmployeeId.trim()) {
-                          toast({ variant: 'destructive', title: 'Enter employee ID' });
+                        const id = manualEmployeeId.trim();
+                        const phone = manualPhone.trim();
+                        const rid = manualResourceId.trim();
+                        if (!id && !phone && !rid) {
+                          toast({ variant: 'destructive', title: 'Enter an employee ID, phone number, or resource ID' });
                           return;
                         }
-                        const emp = await fetchEmployeeByEmployeeId(manualEmployeeId.trim());
-                        if (emp) {
-                          resolveScannedEmployee(emp, `Manual:${manualEmployeeId.trim()}`);
-                          if (!locationCoords && !isFetchingLocation) {
-                            setIsFetchingLocation(true);
-                            void getDeviceLocation().catch((error: any) => setLocationError(error.message || 'Location could not be captured.'));
+                        const params = new URLSearchParams();
+                        if (id) params.set('employeeId', id);
+                        if (phone) params.set('phoneNumber', phone);
+                        if (rid) params.set('resourceId', rid);
+                        setLookupLoading(true);
+                        try {
+                          const res = await fetch(`/api/public/attendance/employee?${params.toString()}`);
+                          const data = await res.json();
+                          if (data.found && data.employee) {
+                            resolveScannedEmployee(data.employee, `Manual:${id || phone || rid}`);
+                            if (!locationCoords && !isFetchingLocation) {
+                              setIsFetchingLocation(true);
+                              void getDeviceLocation().catch((error: any) => setLocationError(error.message || 'Location could not be captured.'));
+                            }
+                          } else {
+                            toast({ variant: 'destructive', title: 'Not found', description: data.error || 'No employee found with that information.' });
                           }
-                        } else {
-                          toast({ variant: 'destructive', title: 'Not found', description: 'No employee with that ID.' });
+                        } catch {
+                          toast({ variant: 'destructive', title: 'Lookup failed', description: 'Could not verify information. Try again.' });
+                        } finally {
+                          setLookupLoading(false);
                         }
                       }}
+                      disabled={lookupLoading}
                     >
-                      Continue with manual ID
+                      {lookupLoading ? 'Looking up...' : 'Continue'}
                     </Button>
                   </div>
                 </AccordionContent>

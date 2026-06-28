@@ -584,3 +584,9 @@ The backend and frontend had hard validation blocking submission if photos were 
 - The APK file will be stored in the git repo (required for Vercel to serve it from `public/`)
 - This is the standard approach for static file hosting on Vercel
 - The `CISS-Mobile` repo remains private — only the built APK is distributed through the webapp
+
+### [2026-06-28] — Attendance bugfixes: guardLocations doc ID, employee lookup by phone/resourceId
+
+- Fixed `guardLocations` document ID from `employeeId` (contains slashes like `CISS/TCS/.../871`) to `employeeDocId` in attendance submit route.
+- Added `resourceIdNumber` lookup to `/api/public/attendance/employee` endpoint.
+- Enhanced web `/attendance` manual ID section: now accepts employee ID, phone number, or resource ID with OR dividers.

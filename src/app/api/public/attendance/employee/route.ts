@@ -6,13 +6,48 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const employeeId = request.nextUrl.searchParams.get("employeeId")?.trim() || "";
+    let employeeId = request.nextUrl.searchParams.get("employeeId")?.trim() || "";
     const phoneNumber =
       request.nextUrl.searchParams.get("phoneNumber")?.replace(/\D/g, "").slice(-10) || "";
+    const resourceId =
+      request.nextUrl.searchParams.get("resourceId")?.trim() || "";
+
+    // If no employeeId but phone or resourceId given, look up by those
+    if (!employeeId && phoneNumber) {
+      const phoneSnap = await db
+        .collection("employees")
+        .where("phoneNumber", "==", phoneNumber)
+        .limit(1)
+        .get();
+      if (!phoneSnap.empty) {
+        employeeId = (phoneSnap.docs[0].data() as Record<string, unknown>).employeeId as string || "";
+      } else {
+        // Try alternate phone fields
+        const altSnap = await db
+          .collection("employees")
+          .where("phone", "==", phoneNumber)
+          .limit(1)
+          .get();
+        if (!altSnap.empty) {
+          employeeId = (altSnap.docs[0].data() as Record<string, unknown>).employeeId as string || "";
+        }
+      }
+    }
+
+    if (!employeeId && resourceId) {
+      const resIdSnap = await db
+        .collection("employees")
+        .where("resourceIdNumber", "==", resourceId)
+        .limit(1)
+        .get();
+      if (!resIdSnap.empty) {
+        employeeId = (resIdSnap.docs[0].data() as Record<string, unknown>).employeeId as string || "";
+      }
+    }
 
     if (!employeeId) {
       return NextResponse.json(
-        { error: "employeeId is required.", found: false },
+        { error: "employeeId, phoneNumber, or resourceId is required.", found: false },
         { status: 400 },
       );
     }
