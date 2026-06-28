@@ -367,22 +367,22 @@ export default function GuardLoginPage() {
           {/* Card — bottom-sheet on mobile, centered card on desktop */}
           <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
             <div
-              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl bg-card text-card-foreground md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] md:ring-1 md:ring-white/10 px-6 pt-7 pb-[max(env(safe-area-inset-bottom,0px),2rem)] sm:px-8 md:p-10"
+              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl border border-white/10 bg-black/15 text-white backdrop-blur md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] px-6 pt-7 pb-[max(env(safe-area-inset-bottom,0px),2rem)] sm:px-8 md:p-10"
             >
               <div className="text-center md:text-left mb-6">
                 <h2 className="text-2xl font-bold font-exo2 tracking-tight">Welcome back</h2>
-                <p className="text-base text-muted-foreground mt-1">
+                <p className="text-base text-white/60 mt-1">
                   Sign in to continue.
                 </p>
               </div>
 
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="w-full h-12 p-1 mb-6">
-                  <TabsTrigger value="phone" className="flex-1 gap-2 h-10 text-sm font-semibold">
+                <TabsList className="w-full h-12 p-1 mb-6 bg-white/10 border border-white/10">
+                  <TabsTrigger value="phone" className="flex-1 gap-2 h-10 text-sm font-semibold data-[state=active]:bg-brand-gold data-[state=active]:text-black">
                     <Phone className="h-4 w-4" />
                     Phone + PIN
                   </TabsTrigger>
-                  <TabsTrigger value="qr" className="flex-1 gap-2 h-10 text-sm font-semibold">
+                  <TabsTrigger value="qr" className="flex-1 gap-2 h-10 text-sm font-semibold data-[state=active]:bg-brand-gold data-[state=active]:text-black">
                     <QrCode className="h-4 w-4" />
                     QR Login
                   </TabsTrigger>
@@ -393,11 +393,11 @@ export default function GuardLoginPage() {
                   {phoneStep === "phone" ? (
                     <>
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-foreground" htmlFor="guard-phone">
+                        <label className="text-sm font-semibold text-white" htmlFor="guard-phone">
                           Phone Number
                         </label>
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-base font-medium select-none">+91</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 text-base font-medium select-none">+91</span>
                           <Input
                             id="guard-phone"
                             type="tel"
@@ -407,19 +407,19 @@ export default function GuardLoginPage() {
                             onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
                             maxLength={10}
                             disabled={isLoading}
-                            className="h-14 text-lg pl-14 tracking-wide"
+                            className="h-14 text-lg pl-14 tracking-wide bg-white text-foreground"
                             placeholder="10-digit mobile"
                             autoFocus
                             onKeyDown={(e) => { if (e.key === "Enter") handlePhoneContinue(); }}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-white/50">
                           Use the mobile number registered by your admin.
                         </p>
                       </div>
 
                       <Button
-                        className="w-full h-14 text-base font-semibold rounded-xl"
+                        className="w-full h-14 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
                         onClick={handlePhoneContinue}
                         disabled={isLoading || phoneNumber.replace(/\D/g, "").length < 10}
                       >
@@ -428,10 +428,10 @@ export default function GuardLoginPage() {
                     </>
                   ) : (
                     <>
-                      <div className="rounded-xl border bg-muted/50 px-4 py-3 flex items-center justify-between">
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-muted-foreground">Signing in as</p>
-                          <p className="text-base font-semibold tabular-nums">+91 {phoneNumber}</p>
+                          <p className="text-xs text-white/50">Signing in as</p>
+                          <p className="text-base font-semibold tabular-nums text-white">+91 {phoneNumber}</p>
                         </div>
                         <Button
                           variant="ghost"
@@ -445,7 +445,7 @@ export default function GuardLoginPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-foreground" htmlFor="guard-pin">
+                        <label className="text-sm font-semibold text-white" htmlFor="guard-pin">
                           Enter PIN
                         </label>
                         <Input
@@ -458,21 +458,21 @@ export default function GuardLoginPage() {
                           onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           maxLength={6}
                           disabled={isLoading}
-                          className="h-14 text-2xl text-center tracking-[0.5em] font-semibold"
+                          className="h-14 text-2xl text-center tracking-[0.5em] font-semibold bg-white text-foreground"
                           placeholder="••••"
                           autoFocus
                           onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
                         />
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground">4 to 6 digit PIN</p>
-                          <Link href="/guard-login/reset" className="text-xs font-medium text-primary hover:underline">
+                          <p className="text-xs text-white/50">4 to 6 digit PIN</p>
+                          <Link href="/guard-login/reset" className="text-xs font-medium text-brand-gold hover:underline">
                             Forgot PIN?
                           </Link>
                         </div>
                       </div>
 
                       <Button
-                        className="w-full h-14 text-base font-semibold rounded-xl"
+                        className="w-full h-14 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
                         onClick={handleLogin}
                         disabled={isLoading || pin.length < 4}
                       >
@@ -509,7 +509,7 @@ export default function GuardLoginPage() {
                       </div>
 
                       <Button
-                        className="w-full h-14 text-base font-semibold rounded-xl"
+                        className="w-full h-14 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
                         onClick={startScanner}
                         disabled={isScanning}
                       >
@@ -517,24 +517,24 @@ export default function GuardLoginPage() {
                           ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scanning…</>
                           : <><QrCode className="mr-2 h-4 w-4" /> Scan QR Card</>}
                       </Button>
-                      <p className="text-xs text-center text-muted-foreground">
+                      <p className="text-xs text-center text-white/50">
                         Hold your CISS QR card in front of the camera
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-5">
-                      <div className="rounded-xl border bg-muted/50 px-4 py-3">
-                        <p className="text-xs text-muted-foreground">Employee</p>
-                        <p className="text-base font-semibold truncate">
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <p className="text-xs text-white/50">Employee</p>
+                        <p className="text-base font-semibold truncate text-white">
                           {scannedEmployeeName || scannedEmployeeId}
                         </p>
                         {scannedEmployeeName && (
-                          <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{scannedEmployeeId}</p>
+                          <p className="text-xs text-white/50 mt-0.5 tabular-nums">{scannedEmployeeId}</p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-foreground" htmlFor="qr-pin">
+                        <label className="text-sm font-semibold text-white" htmlFor="qr-pin">
                           Enter your PIN
                         </label>
                         <Input
@@ -546,16 +546,16 @@ export default function GuardLoginPage() {
                           onChange={(e) => setQrPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           maxLength={6}
                           disabled={isQrLoading}
-                          className="h-14 text-2xl text-center tracking-[0.5em] font-semibold"
+                          className="h-14 text-2xl text-center tracking-[0.5em] font-semibold bg-white text-foreground"
                           placeholder="••••"
                           autoFocus
                           onKeyDown={(e) => { if (e.key === "Enter") handleQrLogin(); }}
                         />
-                        <p className="text-xs text-muted-foreground">4 to 6 digit PIN</p>
+                        <p className="text-xs text-white/50">4 to 6 digit PIN</p>
                       </div>
 
                       <Button
-                        className="w-full h-14 text-base font-semibold rounded-xl"
+                        className="w-full h-14 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
                         onClick={handleQrLogin}
                         disabled={isQrLoading || qrPin.length < 4}
                       >
@@ -564,7 +564,7 @@ export default function GuardLoginPage() {
 
                       <Button
                         variant="ghost"
-                        className="w-full h-11 text-sm"
+                        className="w-full h-11 text-sm text-white/60 hover:text-white"
                         onClick={resetQrFlow}
                         disabled={isQrLoading}
                       >
@@ -575,15 +575,15 @@ export default function GuardLoginPage() {
                 </TabsContent>
               </Tabs>
 
-              <div className="divider-text mt-7 text-xs uppercase tracking-widest text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-accent" />
+              <div className="divider-text mt-7 text-xs uppercase tracking-widest text-white/40">
+                <Sparkles className="h-3.5 w-3.5 text-brand-gold" />
               </div>
 
               <Link
                 href="/guard-login/setup"
-                className="mt-5 w-full flex items-center justify-center gap-2 h-12 rounded-xl border border-border bg-background hover:bg-muted text-sm font-semibold text-foreground transition-colors"
+                className="mt-5 w-full flex items-center justify-center gap-2 h-12 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-white/70 hover:bg-white/10 hover:text-white transition-colors"
               >
-                <KeyRound className="h-4 w-4 text-primary" />
+                <KeyRound className="h-4 w-4 text-brand-gold" />
                 First time? Set up PIN
               </Link>
             </div>

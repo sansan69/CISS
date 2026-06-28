@@ -197,7 +197,7 @@ export default function AdminLoginPage() {
   return (
     <div
       className="min-h-[100dvh] w-full flex flex-col md:flex-row text-foreground"
-      style={{ background: "linear-gradient(160deg, hsl(206 98% 26%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 10%) 100%)" }}
+      style={{ background: "linear-gradient(160deg, hsl(206 98% 10%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 14%) 100%)" }}
     >
       {/* Home link */}
       <div className="absolute top-4 right-4 z-10">
@@ -306,12 +306,12 @@ export default function AdminLoginPage() {
           {/* Card */}
           <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
             <div
-              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl bg-card text-card-foreground md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] md:ring-1 md:ring-white/10 px-6 pt-8 pb-8 sm:px-8 md:p-10"
+              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl border border-white/10 bg-black/15 text-white backdrop-blur md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] px-6 pt-8 pb-8 sm:px-8 md:p-10"
               style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 2rem)" }}
             >
               <div className="text-center md:text-left mb-7">
                 <h2 className="text-2xl font-bold font-exo2 tracking-tight">Sign in</h2>
-                <p className="text-base text-muted-foreground mt-1">
+                <p className="text-base text-white/60 mt-1">
                   {portalContext?.isClientPortal && portalContext.client
                     ? `Sign in to ${portalContext.client.name}. Admin oversight is still allowed here.`
                     : "Enter your admin credentials to continue."}
@@ -320,7 +320,7 @@ export default function AdminLoginPage() {
 
               <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-semibold text-foreground">
+                  <Label htmlFor="email" className="text-sm font-semibold text-white">
                     {portalContext?.isClientPortal ? "Email or Login ID" : "Email"}
                   </Label>
                   <Input
@@ -332,12 +332,12 @@ export default function AdminLoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading}
-                    className="h-12 text-base"
+                    className="h-12 text-base bg-white text-foreground"
                     autoFocus
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-semibold text-foreground">
+                  <Label htmlFor="password" className="text-sm font-semibold text-white">
                     Password
                   </Label>
                   <Input
@@ -349,12 +349,12 @@ export default function AdminLoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    className="h-12 text-base"
+                    className="h-12 text-base bg-white text-foreground"
                   />
                 </div>
                 <Button
                   type="submit"
-                  className="w-full h-12 text-base font-semibold rounded-xl"
+                  className="w-full h-12 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -369,7 +369,7 @@ export default function AdminLoginPage() {
                 </Button>
               </form>
 
-              <p className="mt-6 text-center text-xs text-muted-foreground md:hidden">
+              <p className="mt-6 text-center text-xs text-white/40 md:hidden">
                 &copy; {new Date().getFullYear()} CISS Workforce
               </p>
             </div>

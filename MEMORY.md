@@ -3,6 +3,34 @@
 This file is the authoritative log of all changes made to the codebase.
 **Read this before implementing anything.** Update it after every change.
 
+## [2026-06-28] — Session: Mobile-first landing & login redesign (Bold & Industrial)
+
+### Overview
+Redesigned the landing page (`/`), guard-login (`/guard-login`), and admin-login (`/admin-login`) pages with a dark navy + gold "Bold & Industrial" theme, optimized for mobile. Added QR scan for direct attendance from the landing page.
+
+### Files Created
+- `src/components/qr-scanner-dialog.tsx` — Reusable QR scanner Dialog component using `startHybridQrScanner`. Opens a full-screen camera feed with scan overlay, emits scan result on success.
+
+### Files Modified
+- `src/app/page.tsx` — Landing page overhaul:
+  - Background changed from light (#f5f8fc) with blurred blobs to deep navy gradient + subtle diagonal security-grid overlay
+  - Removed all decoration divs (blobs, grid pattern, radial gradients)
+  - Header simplified to logo + "CISS Workforce" (no subtitle/badge)
+  - Verification card restyled as dark glass (`bg-black/15 backdrop-blur`, white border, gold accents)
+  - Added QR scan icon button next to the phone input → opens `QrScannerDialog`
+  - QR scan → `/api/public/attendance/employee` lookup → routes to `/attendance?employeeId=XXX` or error toast
+  - Removed "Quick access" card section; replaced with two ghost links below: "New guard? Enroll here" and "Guard Portal"
+  - Footer simplified: "Admin" + "Download App" links + copyright in `text-white/40`
+  - Desktop brand panel restyled to match dark theme (white/10 backgrounds, gold chip)
+  - PWA install prompt restyled in dark glass
+
+- `src/app/guard-login/page.tsx` — Card changed from white (`bg-card`) to dark glass (`bg-black/15 border-white/10 text-white`); tabs, labels, inputs, buttons, and links updated with dark theme + gold accents
+
+- `src/app/admin-login/page.tsx` — Same card dark-glass treatment; background gradient matched to landing page; labels/inputs/buttons restyled consistently
+
+### Spec
+- `docs/superpowers/specs/2026-06-28-landing-login-redesign.md`
+
 ---
 
 ## [2026-06-28] — Session: Reports redesign — preview, photo validation, Firebase config deploy
