@@ -606,3 +606,12 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Updated CSC Academy state from "Lakshadweep" to "Kerala".
 - Restored admin config (geofenceRadiusMeters, strictGeofence, shiftMode) on 26 bulk-import kept records.
 - 3 remaining Purushu records (Carmel, Amarjyothy, Welkin) have admin config but wrong addresses — flagged for manual review.
+
+### [2026-06-28] — NEET spreadsheet cross-reference, added 13 missing sites
+
+- Cross-referenced all 281 sites in `/Downloads/NEET 2026 TC Details.xlsx` against database.
+- Deleted 108 accidentally duplicated sites from the first bulk-add attempt.
+- Added 13 genuinely missing Kerala/Puducherry sites from the spreadsheet.
+- Fixed Amarjyothy Academy Online Exam Center name to match spreadsheet.
+- Zero Tamil Nadu sites remain in database (confirmed zero).
+- Final count: 145 sites (141 TCS, 2 J&K Bank, 1 Logiware, 1 Geodis).
