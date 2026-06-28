@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck, Clock } from 'lucide-react';
+import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck, Clock, Search } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -164,6 +164,7 @@ export default function AttendancePage() {
   const [manualPhone, setManualPhone] = useState('');
   const [manualResourceId, setManualResourceId] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [siteSearchQuery, setSiteSearchQuery] = useState('');
   const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
   const [photoCompliance, setPhotoCompliance] = useState<AttendancePhotoCompliance | null>(null);
   const [photoComplianceError, setPhotoComplianceError] = useState<string | null>(null);
@@ -293,6 +294,18 @@ export default function AttendancePage() {
       return calcDist(a) - calcDist(b);
     });
   }, [allSites, locationCoords, selectedDistrict, scannedEmployee?.clientName]);
+
+  const filteredSiteOptions = useMemo(() => {
+    if (!selectedDistrict) return [];
+    const search = siteSearchQuery.toLowerCase().trim();
+    return districtSiteOptions.filter((site) => {
+      if (!search) return true;
+      return (
+        site.siteName.toLowerCase().includes(search) ||
+        (site.clientName && site.clientName.toLowerCase().includes(search))
+      );
+    });
+  }, [districtSiteOptions, siteSearchQuery]);
 
   const appendRecentAttendance = useCallback((item: DeviceAttendanceHistoryItem) => {
     setRecentAttendance((previous) => {
@@ -1947,7 +1960,20 @@ export default function AttendancePage() {
                 </Alert>
               )}
 
-              <Accordion type="single" collapsible className="mt-4">
+              {/* Site search input — visible at all times */}
+              <div className="mt-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search site by name..."
+                    value={siteSearchQuery}
+                    onChange={(e) => setSiteSearchQuery(e.target.value)}
+                    className="pl-9 h-10"
+                  />
+                </div>
+              </div>
+
+              <Accordion type="single" collapsible className="mt-2">
                 <AccordionItem value="change-center">
                   <AccordionTrigger>Change center if this is wrong</AccordionTrigger>
                   <AccordionContent>
@@ -1977,19 +2003,21 @@ export default function AttendancePage() {
                         </Select>
                       </div>
 
-                      {/* Site card list — all centers in district, sorted by distance */}
+                      {/* Site card list — all centers, filtered by search + district, sorted by distance */}
                       {selectedDistrict && (
                         <div className="grid gap-2">
                           <Label>
                             Centers in {selectedDistrict}
                             {scannedEmployee?.clientName ? ` · ${scannedEmployee.clientName} first` : ''}
-                            <span className="ml-1 text-xs font-normal text-muted-foreground">({districtSiteOptions.length})</span>
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">({filteredSiteOptions.length})</span>
                           </Label>
-                          {districtSiteOptions.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No centers found in this district.</p>
+                          {filteredSiteOptions.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              {siteSearchQuery ? 'No centers match your search.' : 'No centers found in this district.'}
+                            </p>
                           ) : (
                             <div className="max-h-64 overflow-y-auto space-y-1.5 pr-0.5">
-                              {districtSiteOptions.map((site) => {
+                              {filteredSiteOptions.map((site) => {
                                 const dist = locationCoords && typeof site.lat === 'number' && typeof site.lng === 'number'
                                   ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, site.lat, site.lng)
                                   : null;
