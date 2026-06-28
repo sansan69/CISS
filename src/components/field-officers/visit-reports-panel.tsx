@@ -18,6 +18,7 @@ import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
 import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { VisitReportDetailSheet } from "@/components/field-officers/visit-report-detail-sheet";
+import { ReportPreview } from "@/components/field-officers/report-preview";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -76,6 +77,7 @@ export function VisitReportsPanel() {
   // New report sheet
   const [newSheetOpen, setNewSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [form, setForm] = useState({
     clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "",
     guardsPresentCount: "", guardsAbsentCount: "", summary: "",
@@ -125,39 +127,47 @@ export function VisitReportsPanel() {
 
   useEffect(() => { loadReports(activeTab); }, [activeTab, loadReports]);
 
-  const handleSubmit = async () => {
+  const buildPayload = () => ({
+    clientId: form.clientId,
+    clientName: form.clientName,
+    siteId: form.siteId,
+    siteName: form.siteName,
+    district: form.district,
+    visitDate: form.visitDate,
+    guardsPresentCount: parseInt(form.guardsPresentCount) || 0,
+    guardsAbsentCount: parseInt(form.guardsAbsentCount) || 0,
+    summary: form.summary,
+    issuesFound: form.issuesFound,
+    actionsRequired: form.actionsRequired,
+    status: form.status,
+    photoUrls,
+    visitLocation,
+  });
+
+  const handleInitialSubmit = () => {
     if (!form.clientId || !form.visitDate || !form.summary) {
       toast({ title: "Missing fields", description: "Client, visit date, and summary are required.", variant: "destructive" });
       return;
     }
-    if (isSiteUploadRequired("visit", form.status) && !hasSiteUploads(photoUrls)) {
-      toast({ title: "Photos required", description: "Visit reports require at least one photo or file. You can still submit now and add them later by editing this report.", variant: "default" });
+    if (form.status === "submitted" && photoUrls.length === 0) {
+      toast({ title: "Photos required", description: "Visit reports require at least one photo (guard photo or selfie with guards).", variant: "destructive" });
+      return;
     }
+    setShowPreview(true);
+  };
+
+  const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
     try {
       const res = await authorizedFetch(reportEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: form.clientId,
-          clientName: form.clientName,
-          siteId: form.siteId,
-          siteName: form.siteName,
-          district: form.district,
-          visitDate: form.visitDate,
-          guardsPresentCount: parseInt(form.guardsPresentCount) || 0,
-          guardsAbsentCount: parseInt(form.guardsAbsentCount) || 0,
-          summary: form.summary,
-          issuesFound: form.issuesFound,
-          actionsRequired: form.actionsRequired,
-          status: form.status,
-          photoUrls,
-          visitLocation,
-        }),
+        body: JSON.stringify(buildPayload()),
       });
       if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
       toast({ title: "Report created", description: "Visit report saved." });
       setNewSheetOpen(false);
+      setShowPreview(false);
       setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "", guardsPresentCount: "", guardsAbsentCount: "", summary: "", issuesFound: "", actionsRequired: "", status: "draft" });
       setPhotoUrls([]);
       setVisitLocation(null);
@@ -299,12 +309,35 @@ export function VisitReportsPanel() {
       )}
 
       {/* New Report Sheet (FO) */}
-      <Sheet open={newSheetOpen} onOpenChange={setNewSheetOpen}>
+      <Sheet open={newSheetOpen} onOpenChange={(o) => { setNewSheetOpen(o); if (!o) setShowPreview(false); }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>New Visit Report</SheetTitle>
-            <SheetDescription>Log a field officer site visit</SheetDescription>
+            <SheetTitle>{showPreview ? "Preview" : "New Visit Report"}</SheetTitle>
+            <SheetDescription>{showPreview ? "Review your report before submitting" : "Log a field officer site visit"}</SheetDescription>
           </SheetHeader>
+          {showPreview ? (
+            <div className="mt-6">
+              <ReportPreview
+                data={{
+                  type: "visit",
+                  clientName: form.clientName || form.clientId,
+                  siteName: form.siteName || undefined,
+                  district: form.district || undefined,
+                  visitDate: form.visitDate,
+                  guardsPresentCount: parseInt(form.guardsPresentCount) || 0,
+                  guardsAbsentCount: parseInt(form.guardsAbsentCount) || 0,
+                  summary: form.summary,
+                  issuesFound: form.issuesFound || undefined,
+                  actionsRequired: form.actionsRequired || undefined,
+                }}
+                photoUrls={photoUrls}
+                visitLocation={visitLocation}
+                onEdit={() => setShowPreview(false)}
+                onSubmit={handleConfirmSubmit}
+                isSubmitting={isSubmitting}
+              />
+            </div>
+          ) : (
           <div className="space-y-4 mt-6">
             <div className="space-y-1.5">
               <Label>Client *</Label>
@@ -436,9 +469,9 @@ export function VisitReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Visit Photos / Files {isSiteUploadRequired("visit", form.status) ? "*" : ""}</Label>
+              <Label>Photos {form.status === "submitted" ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                Attach at least one photo or file. Use the in-app camera, upload from your gallery (including HEIC, WEBP, etc.), or attach a PDF. Photos are timestamped with date, time and GPS location.
+                Take a guard photo (back camera) or a selfie with guards (front camera). At least one is required for submission. Photos are timestamped with date, time and GPS location.
               </p>
               <PhotoCapture
                 urls={photoUrls}
@@ -446,10 +479,13 @@ export function VisitReportsPanel() {
                 folder="visitReports"
                 accept="image/*,.pdf"
                 timestampImages
+                allowCamera={true}
                 allowSelfie={true}
+                cameraLabel="Guard Photo"
+                selfieLabel="Selfie with Guards"
                 onLocationCaptured={setVisitLocation}
                 captureLocation
-                uploadLabel="Upload photo / file"
+                uploadLabel="Gallery"
                 stampTitle="Site Visit"
                 stampLines={[
                   [form.clientName, form.siteName].filter(Boolean).join(" - "),
@@ -475,10 +511,11 @@ export function VisitReportsPanel() {
               </Select>
             </div>
 
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full">
-              {isSubmitting ? "Saving..." : "Save Report"}
+            <Button onClick={handleInitialSubmit} disabled={isSubmitting} className="w-full">
+              {isSubmitting ? "Saving..." : form.status === "draft" ? "Save as Draft" : "Preview & Submit"}
             </Button>
           </div>
+          )}
         </SheetContent>
       </Sheet>
 

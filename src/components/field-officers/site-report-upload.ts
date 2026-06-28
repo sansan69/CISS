@@ -17,12 +17,12 @@ export function isSiteUploadRequired(kind: SiteReportKind, status?: ReportStatus
 
 export function getSiteUploadHint(kind: SiteReportKind, status?: ReportStatus): string {
   if (kind === "training") {
-    return "Training reports require at least 3 photos of the session. You can snap photos from the app or upload from your gallery (photos taken with another phone or shared by others).";
+    return "Training reports require at least 1 training photo and a client-signed report. Photos are timestamped with date, time and GPS location.";
   }
 
   if (status === "submitted") {
-    return "Visit reports require at least one photo or file. You can use the in-app camera, upload from your gallery, or attach a PDF. If you don't have them now, you can still submit and add them later by editing this report.";
+    return "Visit reports require at least one photo (guard photo or selfie with guards). Photos are timestamped with date, time and GPS location.";
   }
 
-  return "Add one or more photos or files for this site report. Drafts can be saved without uploads. Multiple uploads are supported.";
+  return "Add photos or files for this report. Drafts can be saved without uploads.";
 }

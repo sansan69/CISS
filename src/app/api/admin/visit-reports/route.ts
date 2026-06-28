@@ -205,6 +205,14 @@ export async function POST(request: Request) {
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
     const status = body.status ?? "draft";
 
+    // Visit reports require at least 1 photo when submitting
+    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 1)) {
+      return NextResponse.json(
+        { error: "At least one photo (guard photo or selfie with guards) is required before submitting." },
+        { status: 400 },
+      );
+    }
+
     if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
       return NextResponse.json(
         { error: "This site is outside your assigned districts." },

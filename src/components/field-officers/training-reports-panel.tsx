@@ -18,6 +18,7 @@ import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
 import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { TrainingReportDetailSheet } from "@/components/field-officers/training-report-detail-sheet";
+import { ReportPreview } from "@/components/field-officers/report-preview";
 import { useClients } from "@/lib/hooks/use-clients";
 import { useSites } from "@/lib/hooks/use-sites";
 import { districtMatches } from "@/lib/districts";
@@ -75,6 +76,7 @@ export function TrainingReportsPanel() {
 
   const [newSheetOpen, setNewSheetOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [form, setForm] = useState({
     clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "",
     durationMinutes: "60", topic: "", description: "", attendeeCount: "",
@@ -125,42 +127,50 @@ export function TrainingReportsPanel() {
 
   useEffect(() => { loadReports(activeTab); }, [activeTab, loadReports]);
 
-  const handleSubmit = async () => {
+  const buildPayload = () => ({
+    clientId: form.clientId,
+    clientName: form.clientName,
+    siteId: form.siteId,
+    siteName: form.siteName,
+    district: form.district,
+    trainingDate: form.trainingDate,
+    durationMinutes: parseInt(form.durationMinutes) || 60,
+    topic: form.topic,
+    description: form.description,
+    attendeeCount: parseInt(form.attendeeCount) || 0,
+    attendeeIds: [],
+    status: form.status,
+    photoUrls,
+    attachmentUrls,
+    clientReportUrl: clientReportUrl[0] ?? null,
+    visitLocation,
+  });
+
+  const handleInitialSubmit = () => {
     if (!form.clientId || !form.trainingDate || !form.topic) {
       toast({ title: "Missing fields", description: "Client, training date, and topic are required.", variant: "destructive" });
       return;
     }
-    if (form.status === "submitted" && photoUrls.length < 3) {
-      toast({ title: "Missing photos", description: `Training reports require at least 3 photos. You have ${photoUrls.length}. Please add more training session photos before submitting.`, variant: "destructive" });
-      return;
+    if (form.status === "submitted") {
+      if (photoUrls.length === 0) {
+        toast({ title: "Missing photos", description: "Training reports require at least 1 training session photo.", variant: "destructive" });
+        return;
+      }
+      if (clientReportUrl.length === 0) {
+        toast({ title: "Missing report", description: "Upload the client-signed training report before submitting.", variant: "destructive" });
+        return;
+      }
     }
-    if (form.status === "submitted" && clientReportUrl.length === 0) {
-      toast({ title: "Missing report", description: "Upload the client-signed training report or certificate before submitting.", variant: "destructive" });
-      return;
-    }
+    setShowPreview(true);
+  };
+
+  const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
     try {
       const res = await authorizedFetch(reportEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: form.clientId,
-          clientName: form.clientName,
-          siteId: form.siteId,
-          siteName: form.siteName,
-          district: form.district,
-          trainingDate: form.trainingDate,
-          durationMinutes: parseInt(form.durationMinutes) || 60,
-          topic: form.topic,
-          description: form.description,
-          attendeeCount: parseInt(form.attendeeCount) || 0,
-          attendeeIds: [],
-          status: form.status,
-          photoUrls,
-          attachmentUrls,
-          clientReportUrl: clientReportUrl[0] ?? null,
-          visitLocation,
-        }),
+        body: JSON.stringify(buildPayload()),
       });
       if (!res.ok) throw new Error(await reportErrorMessage(res, "Failed to save report"));
       toast({
@@ -168,6 +178,7 @@ export function TrainingReportsPanel() {
         description: form.status === "draft" ? "Training draft saved. Come back to submit when ready." : "Training report submitted.",
       });
       setNewSheetOpen(false);
+      setShowPreview(false);
       setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "", status: "draft" });
       setPhotoUrls([]);
       setAttachmentUrls([]);
@@ -315,12 +326,35 @@ export function TrainingReportsPanel() {
       />
 
       {/* New Training Report Sheet */}
-      <Sheet open={newSheetOpen} onOpenChange={setNewSheetOpen}>
+      <Sheet open={newSheetOpen} onOpenChange={(o) => { setNewSheetOpen(o); if (!o) setShowPreview(false); }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>New Training Report</SheetTitle>
-            <SheetDescription>Log a training session with guards</SheetDescription>
+            <SheetTitle>{showPreview ? "Preview" : "New Training Report"}</SheetTitle>
+            <SheetDescription>{showPreview ? "Review your report before submitting" : "Log a training session with guards"}</SheetDescription>
           </SheetHeader>
+          {showPreview ? (
+            <div className="mt-6">
+              <ReportPreview
+                data={{
+                  type: "training",
+                  clientName: form.clientName || form.clientId,
+                  siteName: form.siteName || undefined,
+                  district: form.district || undefined,
+                  trainingDate: form.trainingDate,
+                  topic: form.topic,
+                  durationMinutes: parseInt(form.durationMinutes) || 60,
+                  attendeeCount: parseInt(form.attendeeCount) || 0,
+                  description: form.description || undefined,
+                }}
+                photoUrls={photoUrls}
+                clientReportUrl={clientReportUrl[0]}
+                visitLocation={visitLocation}
+                onEdit={() => setShowPreview(false)}
+                onSubmit={handleConfirmSubmit}
+                isSubmitting={isSubmitting}
+              />
+            </div>
+          ) : (
           <div className="space-y-4 mt-6">
             <div className="space-y-1.5">
               <Label>Client *</Label>
@@ -443,9 +477,9 @@ export function TrainingReportsPanel() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Training Photos {isSiteUploadRequired("training", form.status) ? "*" : ""}</Label>
+              <Label>Training Photos {form.status === "submitted" ? "*" : ""}</Label>
               <p className="text-xs text-muted-foreground">
-                Attach at least 3 photos of the training session. Use the in-app camera, upload from your gallery (including HEIC, WEBP, etc.), or attach PDFs. Photos are timestamped with date and time.
+                Take training session photos (back camera) or a selfie with attendees (front camera). At least 1 photo is required for submission. Photos are timestamped with date, time and GPS location.
               </p>
               <PhotoCapture
                 urls={photoUrls}
@@ -453,10 +487,13 @@ export function TrainingReportsPanel() {
                 folder="trainingReports"
                 accept="image/*,.pdf"
                 timestampImages
+                allowCamera={true}
                 allowSelfie={true}
+                cameraLabel="Training Photo"
+                selfieLabel="Selfie with Attendees"
                 onLocationCaptured={setVisitLocation}
                 captureLocation
-                uploadLabel="Upload photo / file"
+                uploadLabel="Gallery"
                 stampTitle="Training Session"
                 stampLines={[
                   [form.clientName, form.siteName].filter(Boolean).join(" - "),
@@ -503,10 +540,11 @@ export function TrainingReportsPanel() {
               </Select>
             </div>
 
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full">
-              {isSubmitting ? "Saving..." : form.status === "draft" ? "Save as Draft" : "Submit Report"}
+            <Button onClick={handleInitialSubmit} disabled={isSubmitting} className="w-full">
+              {isSubmitting ? "Saving..." : form.status === "draft" ? "Save as Draft" : "Preview & Submit"}
             </Button>
           </div>
+          )}
         </SheetContent>
       </Sheet>
     </div>

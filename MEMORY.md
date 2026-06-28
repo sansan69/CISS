@@ -5,6 +5,24 @@ This file is the authoritative log of all changes made to the codebase.
 
 ---
 
+## [2026-06-28] — Session: Reports redesign — preview, photo validation, Firebase config deploy
+
+### Firebase deployment
+- Installed `firebase-tools` globally; deployed current `firestore.rules`, `firestore.indexes.json`, and `storage.rules` to production (significant drift repaired).
+- Added missing composite indexes for `foVisitReports` (`clientId ASC, createdAt DESC`) and `foTrainingReports` (`clientId ASC, createdAt DESC`) for client dashboard queries.
+
+### Web (CISS) — Visit & Training Reports
+- **Photo minimum enforcement**: Visit reports block submission with zero photos; training reports require >=1 photo + client report.
+- **Preview step**: New `ReportPreview` component shows a read-only summary card (client/site, date, guards/attendees, remarks, photo grid, GPS) with Edit/Submit buttons before final submission.
+- **Photo categorization**: Camera button labeled "Guard Photo" (back), Selfie button labeled "Selfie with Guards" (front), Gallery button unchanged. Added `cameraLabel`/`selfieLabel` props to `PhotoCapture`.
+- `site-report-upload.ts` hints updated to reflect 1-photo minimum.
+
+### Mobile (CISS-Mobile) — Visit & Training Reports
+- **Photo timestamp stamping**: New `_stampPhoto` method applies canvas overlay (dark bottom bar with timestamp, GPS, title, "Captured by CISS Field Officer") before upload.
+- **Photo minimum enforcement**: Same as web — 1 photo minimum for both report types.
+- **Preview step**: `_NewReportSheet` now shows a read-only preview (client/site, date, GPS, fields, photos) with Edit/Submit before final submission.
+- **Model fixes**: Added `toJson()` to `VisitReportModel` and `TrainingReportModel`. Included `fieldOfficerName` in submit payload.
+
 ## [2026-06-02] — Session: Attendance upload-token repair
 
 ### Web public attendance

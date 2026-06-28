@@ -27,6 +27,8 @@ interface PhotoCaptureProps {
   stampLines?: string[];
   allowCamera?: boolean;
   allowSelfie?: boolean;
+  cameraLabel?: string;
+  selfieLabel?: string;
   uploadLabel?: string;
   fileTypeLabel?: string;
   /** Capture device GPS location and include in timestamp overlay */
@@ -158,6 +160,8 @@ export function PhotoCapture({
   stampLines = [],
   allowCamera = true,
   allowSelfie = true,
+  cameraLabel,
+  selfieLabel,
   uploadLabel = "Upload",
   fileTypeLabel = "JPG, PNG, PDF allowed.",
   captureLocation = false,
@@ -259,12 +263,12 @@ export function PhotoCapture({
         <div className="flex flex-wrap gap-2">
           {allowCamera && (
             <Button type="button" variant="outline" size="sm" onClick={() => cameraRef.current?.click()}>
-              <Camera className="h-4 w-4 mr-1.5" /> Camera
+              <Camera className="h-4 w-4 mr-1.5" /> {cameraLabel || "Camera"}
             </Button>
           )}
           {allowSelfie && (
             <Button type="button" variant="outline" size="sm" onClick={() => selfieRef.current?.click()}>
-              <User className="h-4 w-4 mr-1.5" /> Selfie
+              <User className="h-4 w-4 mr-1.5" /> {selfieLabel || "Selfie"}
             </Button>
           )}
           <Button type="button" variant="outline" size="sm" onClick={() => galleryRef.current?.click()}>
