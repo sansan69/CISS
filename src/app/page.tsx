@@ -361,13 +361,13 @@ export default function LandingPage() {
                 </label>
                 <div className="flex gap-2.5">
                   <div className="relative flex-1">
-                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/30" />
+                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                     <Input
                       id="employee-phone"
                       type="tel"
                       inputMode="numeric"
                       autoComplete="tel"
-                      placeholder="10-digit mobile number"
+                      placeholder="Mobile number"
                       value={phoneNumber}
                       onChange={(event) =>
                         setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))

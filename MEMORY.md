@@ -670,3 +670,8 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Fixed Amarjyothy Academy Online Exam Center name to match spreadsheet.
 - Zero Tamil Nadu sites remain in database (confirmed zero).
 - Final count: 145 sites (141 TCS, 2 J&K Bank, 1 Logiware, 1 Geodis).
+
+### [2026-06-29] — Fix "Site not found" on work order assign page
+- Made site detail page (`/work-orders/[siteId]`) gracefully handle missing site documents.
+- Instead of throwing "Site not found" error, sets `site` to null, shows warning toast, and loads work orders via `where("siteId", ...)` which works regardless of site doc existence.
+- Affects admin and FO assign guard flow from the main work-orders page.

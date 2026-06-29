@@ -528,23 +528,30 @@ export default function AssignGuardsPage() {
             try {
                 const siteDocRef = doc(db, "sites", siteId);
                 const siteDoc = await getDoc(siteDocRef);
-                if (!siteDoc.exists()) throw new Error("Site not found.");
-
-                const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
-                const resolvedDistrict = siteData.district || siteData.districtName || "";
-                if (!isOperationalWorkOrderClientName((siteData as { clientName?: string }).clientName)) {
-                    throw new Error("Work orders are only available for TCS sites.");
+                let resolvedDistrict = "";
+                if (!siteDoc.exists()) {
+                    setSite(null);
+                    toast({
+                        title: "Site record deleted",
+                        description: "This site document no longer exists. Update or restore it to fix site metadata.",
+                    });
+                } else {
+                    const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
+                    resolvedDistrict = siteData.district || siteData.districtName || "";
+                    if (!isOperationalWorkOrderClientName((siteData as { clientName?: string }).clientName)) {
+                        throw new Error("Work orders are only available for TCS sites.");
+                    }
+                    if (
+                        userRole === 'fieldOfficer' &&
+                        !assignedDistricts.some((district) => districtMatches(district, resolvedDistrict))
+                    ) {
+                        throw new Error("You do not have permission to view this site's work orders.");
+                    }
+                    setSite({
+                        ...siteData,
+                        district: resolvedDistrict,
+                    });
                 }
-                if (
-                    userRole === 'fieldOfficer' &&
-                    !assignedDistricts.some((district) => districtMatches(district, resolvedDistrict))
-                ) {
-                    throw new Error("You do not have permission to view this site's work orders.");
-                }
-                setSite({
-                    ...siteData,
-                    district: resolvedDistrict,
-                });
 
                 const q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
                 unsubscribe = onSnapshot(q, (snapshot) => {
