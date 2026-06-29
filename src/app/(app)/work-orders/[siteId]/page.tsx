@@ -529,6 +529,7 @@ export default function AssignGuardsPage() {
                 const siteDocRef = doc(db, "sites", siteId);
                 const siteDoc = await getDoc(siteDocRef);
                 let resolvedDistrict = "";
+                let districtFilter = "";
                 if (!siteDoc.exists()) {
                     setSite(null);
                     toast({
@@ -538,6 +539,7 @@ export default function AssignGuardsPage() {
                 } else {
                     const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
                     resolvedDistrict = siteData.district || siteData.districtName || "";
+                    districtFilter = resolvedDistrict;
                     if (!isOperationalWorkOrderClientName((siteData as { clientName?: string }).clientName)) {
                         throw new Error("Work orders are only available for TCS sites.");
                     }
@@ -553,7 +555,17 @@ export default function AssignGuardsPage() {
                     });
                 }
 
-                const q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
+                let q;
+                if (userRole === 'fieldOfficer') {
+                    const scope = districtFilter ? [districtFilter] : assignedDistricts.slice(0, 10);
+                    q = query(
+                        collection(db, "workOrders"),
+                        where("siteId", "==", siteId),
+                        where("district", "in", scope),
+                    );
+                } else {
+                    q = query(collection(db, "workOrders"), where("siteId", "==", siteId));
+                }
                 unsubscribe = onSnapshot(q, (snapshot) => {
                     const todayMs = startOfToday().getTime();
                     const orders = snapshot.docs
