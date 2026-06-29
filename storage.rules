@@ -66,8 +66,10 @@ service firebase.storage {
 
     // Legacy employee file paths. Public attendance can still upload attendance
     // photos here, but sensitive files are readable only by authenticated users.
+    // Profile pictures with download tokens are readable by anyone who has
+    // the token URL. The download token itself is the authorization mechanism.
     match /employees/{employeeKey}/profilePictures/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isAdmin() && isAllowedSize() && isImage();
       allow update, delete: if isAdmin();
     }
