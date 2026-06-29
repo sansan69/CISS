@@ -264,12 +264,12 @@ export default function LandingPage() {
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
 
         {/* Mobile header */}
-        <section className="flex items-center gap-3 px-1 py-2 sm:px-0 lg:hidden">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
+        <section className="flex items-center gap-3 px-1 py-3 sm:px-0 lg:hidden">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
             <Image src="/ciss-logo.png" alt="CISS Workforce Logo" width={28} height={28} priority className="h-7 w-7" />
           </div>
-          <div className="min-w-0">
-            <p className="text-base font-bold tracking-tight font-exo2">CISS Workforce</p>
+          <div>
+            <p className="text-base font-bold tracking-tight font-exo2 text-white">CISS Workforce</p>
           </div>
         </section>
 
@@ -327,11 +327,11 @@ export default function LandingPage() {
             </div>
           </section>
 
-          <div className="flex flex-col gap-3 lg:self-center">
+          <div className="flex flex-col gap-4 lg:self-center">
             {/* Main card */}
             <section
               data-mobile-section="verification"
-              className="flex flex-col rounded-[2rem] border border-white/10 bg-black/15 p-5 backdrop-blur sm:p-6 lg:p-8 animate-slide-up stagger-1"
+              className="flex flex-col rounded-3xl border border-white/10 bg-black/15 p-5 backdrop-blur shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:p-6 lg:p-8 animate-slide-up stagger-1"
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-gold">
                 Guard attendance
@@ -339,31 +339,31 @@ export default function LandingPage() {
               <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl font-exo2">
                 Enter phone or scan QR.
               </h2>
-              <p className="mt-1.5 text-sm leading-6 text-white/60 sm:text-base">
+              <p className="mt-1.5 text-sm leading-6 text-white/50 sm:text-base">
                 Mark attendance or open the guard portal.
               </p>
 
-              <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 sm:p-5">
                 <label
                   htmlFor="employee-phone"
-                  className="mb-3 block text-sm font-semibold text-white"
+                  className="mb-2.5 block text-sm font-semibold text-white/90"
                 >
                   Mobile number
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-2.5">
                   <div className="relative flex-1">
-                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40" />
+                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/30" />
                     <Input
                       id="employee-phone"
                       type="tel"
                       inputMode="numeric"
                       autoComplete="tel"
-                      placeholder="Enter your 10-digit number"
+                      placeholder="10-digit mobile number"
                       value={phoneNumber}
                       onChange={(event) =>
                         setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
                       }
-                      className="h-14 rounded-2xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-muted-foreground"
+                      className="h-14 rounded-2xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand-gold/60"
                       maxLength={10}
                       disabled={isLoading}
                       onKeyDown={(event) => {
@@ -371,30 +371,29 @@ export default function LandingPage() {
                       }}
                     />
                   </div>
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
-                    size="icon"
                     onClick={() => setQrDialogOpen(true)}
-                    className="h-14 w-14 shrink-0 rounded-2xl border-2 border-dashed border-white/20 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                    aria-label="Scan QR code"
+                    className="h-14 w-14 shrink-0 rounded-2xl border border-white/[0.15] bg-white/[0.04] flex items-center justify-center text-white/50 transition-all duration-200 hover:bg-white/[0.1] hover:text-white hover:border-white/30 active:scale-[0.95]"
                   >
                     <QrCode className="h-6 w-6" />
-                  </Button>
+                  </button>
                 </div>
 
                 <Button
                   onClick={handleContinue}
-                  className="mt-4 h-14 w-full rounded-2xl text-base font-semibold bg-brand-gold text-black hover:bg-brand-gold-dark"
+                  className="mt-4 h-14 w-full rounded-2xl text-base font-bold bg-brand-gold text-black shadow-lg shadow-brand-gold/20 hover:bg-brand-gold-dark hover:shadow-xl hover:shadow-brand-gold/25 active:scale-[0.98] transition-all duration-200"
                   disabled={isLoading || normalizedPhone.length < 10}
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
+                      Verifying...
                     </>
                   ) : (
                     <>
-                      Verify Employee
+                      Continue
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}
@@ -403,20 +402,20 @@ export default function LandingPage() {
             </section>
 
             {/* Secondary links */}
-            <div className="flex flex-col items-center gap-2 text-center text-sm animate-slide-up stagger-2">
-              <Link href="/enroll" className="font-medium text-white/70 hover:text-white transition-colors">
+            <div className="flex flex-col items-center gap-2.5 text-center text-sm animate-slide-up stagger-2">
+              <Link href="/enroll" className="font-medium text-white/60 hover:text-white transition-colors">
                 New guard? Enroll here
               </Link>
-              <Link href="/guard-login" className="font-medium text-white/70 hover:text-white transition-colors">
+              <Link href="/guard-login" className="font-medium text-white/60 hover:text-white transition-colors">
                 Guard Portal
               </Link>
             </div>
 
             {/* Footer */}
-            <footer className="mt-1 text-center text-xs text-white/40">
-              <Link href="/admin-login" className="hover:text-white/60 transition-colors">Admin</Link>
+            <footer className="mt-2 text-center text-xs text-white/30">
+              <Link href="/admin-login" className="hover:text-white/50 transition-colors">Admin</Link>
               <span className="mx-2">·</span>
-              <Link href="/download" className="hover:text-white/60 transition-colors">Download App</Link>
+              <Link href="/download" className="hover:text-white/50 transition-colors">Download App</Link>
               <br />
               &copy; {new Date().getFullYear()} CISS Workforce
             </footer>
@@ -431,30 +430,36 @@ export default function LandingPage() {
       />
 
       {showInstallPrompt && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom)]">
-          <div className="mx-auto max-w-md rounded-2xl border border-white/15 bg-black/85 p-4 backdrop-blur animate-slide-up">
+        <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom)] animate-slide-up">
+          <div className="mx-auto max-w-md rounded-2xl border border-white/[0.12] bg-black/90 p-4 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
             <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-gold/20 text-brand-gold">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gold/15 text-brand-gold">
                 <DownloadCloud className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-white">Install CISS Workforce</p>
-                <p className="mt-1 text-xs text-white/50">
+                <p className="mt-0.5 text-xs text-white/45">
                   Add the app to your device for faster access.
                 </p>
                 {showFallbackGuidance && (
-                  <p className="mt-2 text-xs text-white/40">
-                    On iOS, open Share and choose &ldquo;Add to Home Screen&rdquo;.
+                  <p className="mt-1.5 text-xs text-white/35">
+                    On iOS, tap Share and choose &ldquo;Add to Home Screen&rdquo;.
                   </p>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={handleDismissInstall} className="h-10 border-white/20 text-white/70 hover:bg-white/10 hover:text-white">
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={handleDismissInstall}
+                  className="h-9 rounded-lg border border-white/[0.12] bg-white/[0.04] px-3 text-xs font-medium text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
+                >
                   Not now
-                </Button>
-                <Button size="sm" onClick={handleInstallClick} className="h-10 bg-brand-gold text-black hover:bg-brand-gold-dark">
+                </button>
+                <button
+                  onClick={handleInstallClick}
+                  className="h-9 rounded-lg bg-brand-gold px-3 text-xs font-semibold text-black transition-all duration-200 hover:bg-brand-gold-dark active:scale-[0.97]"
+                >
                   {deferredPromptRef.current ? "Install" : "Got it"}
-                </Button>
+                </button>
               </div>
             </div>
           </div>

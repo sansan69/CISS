@@ -34,6 +34,23 @@ Redesigned the landing page (`/`), guard-login (`/guard-login`), and admin-login
 ### Bugfix
 - `src/components/field-officers/work-orders-panel.tsx` — FO work orders query lacked a `where("district", "in", ...)` filter, causing Firestore security rules to deny reads for work orders outside the FO's assigned districts. Added district-scoped query for non-admin users; admins continue to fetch all.
 
+### Polish (landing page + QR scanner)
+- `src/components/qr-scanner-dialog.tsx` — Rewritten: camera now starts via Dialog's `onOpenAutoFocus` instead of `useEffect`, ensuring the video element is mounted before accessing it. Added proper error states (camera denied, unavailable, unsupported) with user-facing messages and a "Try again" button.
+- `src/app/page.tsx` — Visual polish pass:
+  - Border-radii standardized to ShadCN tokens (`rounded-3xl` for card, `rounded-2xl` for inner sections)
+  - Added `inset-highlight` shadow on glass surfaces for depth
+  - Gold focus ring on phone input (`focus-visible:ring-2 ring-brand-gold/60`)
+  - QR button changed from Button component to plain `<button>` with consistent border styling, aria-label, and hover/active states
+  - CTA button changed from `font-semibold` to `font-bold`, added gold-tinted shadow and active scale
+  - "Verify Employee" → "Continue" (shorter, clearer)
+  - "Processing..." → "Verifying..."
+  - Placeholder text: "Enter your 10-digit number" → "10-digit mobile number"
+  - Link hover states improved with `hover:underline` offset approach
+  - Spacing tightened between card sections, links, and footer
+  - PWA install prompt restyled with cleaner borders, smaller buttons, smoother animation
+  - Icon colors softened in glass containers
+  - Secondary links and footer text opacity refined for visual hierarchy
+
 ---
 
 ## [2026-06-28] — Session: Reports redesign — preview, photo validation, Firebase config deploy
