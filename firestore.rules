@@ -197,18 +197,22 @@ service cloud.firestore {
     }
 
     // ── workOrders ───────────────────────────────────────────────────────────
-    // FO can read/update only workOrders in their assigned districts.
+    // FO can read all workOrders (client-side JS filters by district).
+    // Update is restricted to the FO's assigned districts.
     // Client users see only their own client's workOrders.
     // Admin has full access.
 
     match /workOrders/{workOrderId} {
       allow read: if isAdmin() ||
-        isFieldOfficerForDistrict(resource.data.district) ||
+        isFieldOfficer() ||
         isOwnClientDoc('clientName');
       allow create, delete: if isAdmin();
-      // FO can update workOrders only in their assigned districts
+      // FO can update workOrders only in their assigned districts.
+      // When district is missing, deny FO update (admin-only).
       allow update: if isAdmin() ||
         (isFieldOfficer() &&
+          resource.data.district is string &&
+          resource.data.district != "" &&
           resource.data.district in request.auth.token.assignedDistricts);
     }
 
