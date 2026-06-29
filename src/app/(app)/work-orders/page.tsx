@@ -362,7 +362,7 @@ export default function WorkOrderPage() {
         // Fetch upcoming work orders starting from today's midnight to include today's duties.
         // Field officers can read work orders, then we normalize district matching
         // client-side so minor casing/spacing differences do not hide centers.
-        let q = query(collection(db, "workOrders"), where("date", ">=", Timestamp.fromDate(startOfToday())));
+        let q;
 
         if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
             // Field officer has no assigned districts, so they see nothing.
@@ -375,6 +375,18 @@ export default function WorkOrderPage() {
             setIsLoading(false);
             setWorkOrdersBySite({});
             return;
+        }
+
+        const todayTs = Timestamp.fromDate(startOfToday());
+
+        if (userRole === 'fieldOfficer') {
+            q = query(
+                collection(db, "workOrders"),
+                where("district", "in", assignedDistricts.slice(0, 10)),
+                where("date", ">=", todayTs),
+            );
+        } else {
+            q = query(collection(db, "workOrders"), where("date", ">=", todayTs));
         }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {

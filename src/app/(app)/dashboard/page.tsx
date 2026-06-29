@@ -652,6 +652,7 @@ export default function DashboardPage() {
       const unsub2 = onSnapshot(
         query(
           collection(db, "workOrders"),
+          where("district", "in", assignedDistricts.slice(0, 10)),
           where("date", ">=", Timestamp.fromDate(startOfToday())),
           where("date", "<=", Timestamp.fromDate(endOfDay(addDays(new Date(), 6)))),
           orderBy("date", "asc"), limit(10)
