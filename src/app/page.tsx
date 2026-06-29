@@ -261,18 +261,29 @@ export default function LandingPage() {
     <main className="relative min-h-[100dvh] overflow-hidden text-white" data-slot="landing-shell" style={{ background: "linear-gradient(160deg, hsl(206 98% 10%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 14%) 100%)" }}>
       <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:repeating-linear-gradient(45deg,transparent,transparent_12px,rgba(255,255,255,0.03)_12px,rgba(255,255,255,0.03)_13px)]" />
 
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-5 py-4 sm:px-6 lg:px-8 lg:py-8">
 
-        {/* Mobile header */}
-        <section className="flex items-center gap-3 px-1 py-2 sm:px-0 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-            <Image src="/ciss-logo.png" alt="CISS Workforce" width={22} height={22} priority className="h-5 w-5" />
+        {/* Mobile hero */}
+        <section className="flex flex-col gap-4 py-5 lg:hidden animate-slide-up">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
+              <Image src="/ciss-logo.png" alt="CISS Workforce Logo" width={32} height={32} priority className="h-8 w-8" />
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight font-exo2 text-white">CISS Workforce</p>
+              <p className="text-xs text-white/50">Security workforce platform</p>
+            </div>
           </div>
-          <p className="text-sm font-bold tracking-tight font-exo2">CISS Workforce</p>
+          <h1 className="text-3xl font-bold leading-[1.05] tracking-[-0.04em] font-exo2 text-white">
+            Fast verification for daily workforce access.
+          </h1>
+          <p className="text-sm leading-6 text-white/55">
+            Mark attendance with your phone number or scan your QR card for instant check-in.
+          </p>
         </section>
 
         {portalContext?.isClientPortal && portalContext.client ? (
-          <section className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 backdrop-blur sm:p-5 lg:mt-0">
+          <section className="mt-3 rounded-[1.75rem] border border-white/10 bg-black/20 p-4 backdrop-blur sm:p-5 lg:mt-0">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-xl">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-gold">
@@ -292,7 +303,7 @@ export default function LandingPage() {
           </section>
         ) : null}
 
-        <div className="flex-1 grid items-start gap-6 lg:mt-8 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-12">
+        <div className="mt-4 grid items-start gap-6 lg:mt-8 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-12">
           <section
             data-desktop-section="brand"
             className="hidden flex-col justify-center gap-6 px-1 py-2 lg:flex lg:px-1 lg:py-6 animate-slide-up"
@@ -329,89 +340,104 @@ export default function LandingPage() {
             {/* Main card */}
             <section
               data-mobile-section="verification"
-              className="flex flex-col rounded-2xl border border-white/10 bg-black/20 p-5 backdrop-blur-xl animate-slide-up stagger-1 sm:p-6 lg:p-8"
+              className="flex flex-col rounded-3xl border border-white/10 bg-black/15 p-5 backdrop-blur shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:p-6 lg:p-8 animate-slide-up stagger-1"
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-gold">
                 Guard attendance
               </p>
-              <h2 className="mt-2 text-xl font-bold tracking-tight font-exo2 sm:text-2xl">
-                Enter your mobile number
+              <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl font-exo2">
+                Enter phone or scan QR.
               </h2>
-              <p className="mt-1 text-sm text-white/50">
-                Mark attendance or access your guard portal.
+              <p className="mt-1.5 text-sm leading-6 text-white/50 sm:text-base">
+                Mark attendance or open the guard portal.
               </p>
 
-              <div className="mt-5 flex gap-2.5">
-                <div className="relative flex-1">
-                  <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                  <Input
-                    id="employee-phone"
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel"
-                    placeholder="10-digit mobile number"
-                    value={phoneNumber}
-                    onChange={(event) =>
-                      setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
-                    }
-                    className="h-14 rounded-xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-brand-gold/60"
-                    maxLength={10}
-                    disabled={isLoading}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") handleContinue();
-                    }}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setQrDialogOpen(true)}
-                  aria-label="Scan QR code"
-                  className="h-14 w-14 shrink-0 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center text-white/50 transition-all duration-200 hover:bg-white/10 hover:text-white active:scale-95"
+              <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 sm:p-5">
+                <label
+                  htmlFor="employee-phone"
+                  className="mb-2.5 block text-sm font-semibold text-white/90"
                 >
-                  <QrCode className="h-6 w-6" />
-                </button>
-              </div>
+                  Mobile number
+                </label>
+                <div className="flex gap-2.5">
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/30" />
+                    <Input
+                      id="employee-phone"
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      placeholder="10-digit mobile number"
+                      value={phoneNumber}
+                      onChange={(event) =>
+                        setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
+                      }
+                      className="h-14 rounded-2xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-brand-gold/60"
+                      maxLength={10}
+                      disabled={isLoading}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") handleContinue();
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQrDialogOpen(true)}
+                    aria-label="Scan QR code"
+                    className="h-14 w-14 shrink-0 rounded-2xl border border-white/[0.15] bg-white/[0.04] flex items-center justify-center text-white/50 transition-all duration-200 hover:bg-white/[0.1] hover:text-white hover:border-white/30 active:scale-[0.95]"
+                  >
+                    <QrCode className="h-6 w-6" />
+                  </button>
+                </div>
 
-              <Button
-                onClick={handleContinue}
-                className="mt-3 h-14 w-full rounded-xl text-base font-bold bg-brand-gold text-black shadow-lg shadow-brand-gold/25 hover:bg-brand-gold-dark active:scale-[0.98] transition-all duration-200"
-                disabled={isLoading || normalizedPhone.length < 10}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    Continue
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </>
-                )}
-              </Button>
+                <Button
+                  onClick={handleContinue}
+                  className="mt-4 h-14 w-full rounded-2xl text-base font-bold bg-brand-gold text-black shadow-lg shadow-brand-gold/20 hover:bg-brand-gold-dark hover:shadow-xl hover:shadow-brand-gold/25 active:scale-[0.98] transition-all duration-200"
+                  disabled={isLoading || normalizedPhone.length < 10}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      Continue
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </section>
 
             {/* Secondary links */}
-            <div className="flex flex-col items-center gap-2 text-sm animate-slide-up stagger-2">
-              <div className="w-16 border-t border-white/10" />
-              <div className="flex items-center gap-4 pt-1">
-                <Link href="/enroll" className="text-white/50 hover:text-white transition-colors">
-                  Enroll
-                </Link>
-                <Link href="/guard-login" className="text-white/50 hover:text-white transition-colors">
-                  Guard Portal
-                </Link>
-                <Link href="/admin-login" className="text-white/50 hover:text-white transition-colors">
-                  Admin
-                </Link>
-              </div>
+            <div className="flex flex-col items-center gap-3 text-sm animate-slide-up stagger-2">
+              <Link
+                href="/enroll"
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"
+              >
+                New guard? <span className="text-brand-gold font-semibold">Enroll here</span>
+              </Link>
+              <Link
+                href="/guard-login"
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"
+              >
+                Guard Portal
+              </Link>
             </div>
 
             {/* Footer */}
-            <footer className="text-center text-xs text-white/25">
-              <Link href="/download" className="hover:text-white/40 transition-colors">Download App</Link>
-              <span className="mx-1.5">·</span>
-              &copy; {new Date().getFullYear()} CISS
+            <footer className="mt-4 flex flex-col items-center gap-2 text-center text-xs text-white/30">
+              <div className="flex items-center gap-3">
+                <Link href="/admin-login" className="rounded-lg px-3 py-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
+                  Admin
+                </Link>
+                <span className="text-white/15">|</span>
+                <Link href="/download" className="rounded-lg px-3 py-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
+                  Download App
+                </Link>
+              </div>
+              <p className="text-white/20">&copy; {new Date().getFullYear()} CISS Workforce</p>
             </footer>
           </div>
         </div>
