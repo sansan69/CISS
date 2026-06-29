@@ -363,7 +363,7 @@ export default function LandingPage() {
                       onChange={(event) =>
                         setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
                       }
-                      className="h-14 rounded-2xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand-gold/60"
+                      className="h-14 rounded-2xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-brand-gold/60"
                       maxLength={10}
                       disabled={isLoading}
                       onKeyDown={(event) => {
