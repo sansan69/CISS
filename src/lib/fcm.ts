@@ -58,7 +58,7 @@ export async function registerFCMToken(uid: string, token: string): Promise<void
   if (!db) return;
   await setDoc(
     doc(db, 'fcmTokens', uid),
-    { token, platform: 'web', updatedAt: new Date() },
+    { uid, token, platform: 'web', updatedAt: new Date() },
     { merge: true },
   );
 }

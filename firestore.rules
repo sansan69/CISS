@@ -219,7 +219,7 @@ service cloud.firestore {
     match /fcmTokens/{tokenId} {
       allow read: if isAdmin();
       allow write: if isSignedIn() &&
-        request.resource.data.uid == request.auth.uid &&
+        tokenId == request.auth.uid &&
         request.resource.data.token is string &&
         request.resource.data.platform is string;
     }

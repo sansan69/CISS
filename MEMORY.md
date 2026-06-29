@@ -51,6 +51,13 @@ Redesigned the landing page (`/`), guard-login (`/guard-login`), and admin-login
   - Icon colors softened in glass containers
   - Secondary links and footer text opacity refined for visual hierarchy
 
+### Firebase deploy
+- Deployed Firestore indexes (including `workOrders district ASC, date ASC` for FO-scoped queries) and security rules.
+
+### Bugfix: FCM token registration
+- `src/lib/fcm.ts` — `registerFCMToken` did not include `uid` in the written data, causing security rule `request.resource.data.uid == request.auth.uid` to fail. Added `uid` field to the payload.
+- `firestore.rules` — Changed `fcmTokens` write rule from field check to document ID match (`tokenId == request.auth.uid`), which is more reliable since the doc ID is already the user UID.
+
 ---
 
 ## [2026-06-28] — Session: Reports redesign — preview, photo validation, Firebase config deploy
