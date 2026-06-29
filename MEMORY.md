@@ -679,3 +679,15 @@ The backend and frontend had hard validation blocking submission if photos were 
 ### [2026-06-29] — Fix FO district filter on site detail work orders query
 - Added `where("district", "in", ...)` clause to FO work order query on site detail page so Firestore rules don't reject the read.
 - Uses the site's resolved district or falls back to `assignedDistricts` when site doc is missing.
+
+### [2026-06-29] — Restore 3 missing site docs and fix storage rules for profile pictures
+- Restored `4BsEmbJLo5wxyNPqanVV` — College of Engineering Trikaripur (Kasaragod)
+- Restored `4YtcBlmfRVECVaDeqWNc` — Mookambika Technical Campus (Ernakulam)
+- Restored `PwK2CGoDNED5ZzU7iRQs` — iON Digital Zone iDZ Aluva (Ernakulam)
+- Changed storage rule for `profilePictures` from `allow read: if isSignedIn()` to `allow read: if true` (download token is the auth mechanism; `<img>` tags can't send Firebase auth headers).
+- Deployed updated storage rules live.
+
+### [2026-06-29] — Fix FO "Missing or insufficient permissions" on work orders
+- Root cause: PATCH `/api/admin/field-officers/[id]` updated Firestore doc but never synced `assignedDistricts` to Firebase Auth custom claims. Security rules check `request.auth.token.assignedDistricts` (stale token) while client queries use the Firestore doc (latest). Any mismatch causes Firestore to reject the read.
+- Fix: PATCH route now reads the officer's `uid` from the doc and calls `adminAuth.setCustomUserClaims()` to sync `assignedDistricts` to the token claims.
+- Reverted the unnecessary `orderBy("date")` from the main FO work order query (page already sorts client-side).

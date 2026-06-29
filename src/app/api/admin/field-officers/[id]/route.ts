@@ -11,7 +11,7 @@ export async function PATCH(
 ) {
   try {
     const adminUser = await requireAdmin(request);
-    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { auth: adminAuth, db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
     const { id } = await params;
     const body = (await request.json()) as {
@@ -40,6 +40,25 @@ export async function PATCH(
         ),
       ),
     });
+
+    // Sync assignedDistricts to Firebase Auth custom claims so the security
+    // rules (which check request.auth.token.assignedDistricts) match the
+    // updated Firestore data. Without this, FO queries with the latest
+    // districts get "Missing or insufficient permissions" because the
+    // token claims are stale.
+    if (body.assignedDistricts) {
+      const officerSnap = await adminDb.collection("fieldOfficers").doc(id).get();
+      if (officerSnap.exists) {
+        const officerData = officerSnap.data() as { uid?: string } | undefined;
+        if (officerData?.uid) {
+          const existingClaims = (await adminAuth.getUser(officerData.uid)).customClaims || {};
+          await adminAuth.setCustomUserClaims(officerData.uid, {
+            ...existingClaims,
+            assignedDistricts: body.assignedDistricts,
+          });
+        }
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {

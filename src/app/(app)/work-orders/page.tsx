@@ -20,7 +20,7 @@ import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, Fi
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, getDocs, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, Timestamp } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -384,7 +384,6 @@ export default function WorkOrderPage() {
                 collection(db, "workOrders"),
                 where("district", "in", assignedDistricts.slice(0, 10)),
                 where("date", ">=", todayTs),
-                orderBy("date", "asc"),
             );
         } else {
             q = query(collection(db, "workOrders"), where("date", ">=", todayTs));
