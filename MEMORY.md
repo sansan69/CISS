@@ -675,3 +675,7 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Made site detail page (`/work-orders/[siteId]`) gracefully handle missing site documents.
 - Instead of throwing "Site not found" error, sets `site` to null, shows warning toast, and loads work orders via `where("siteId", ...)` which works regardless of site doc existence.
 - Affects admin and FO assign guard flow from the main work-orders page.
+
+### [2026-06-29] — Fix FO district filter on site detail work orders query
+- Added `where("district", "in", ...)` clause to FO work order query on site detail page so Firestore rules don't reject the read.
+- Uses the site's resolved district or falls back to `assignedDistricts` when site doc is missing.
