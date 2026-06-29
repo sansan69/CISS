@@ -31,6 +31,9 @@ Redesigned the landing page (`/`), guard-login (`/guard-login`), and admin-login
 ### Spec
 - `docs/superpowers/specs/2026-06-28-landing-login-redesign.md`
 
+### Bugfix
+- `src/components/field-officers/work-orders-panel.tsx` — FO work orders query lacked a `where("district", "in", ...)` filter, causing Firestore security rules to deny reads for work orders outside the FO's assigned districts. Added district-scoped query for non-admin users; admins continue to fetch all.
+
 ---
 
 ## [2026-06-28] — Session: Reports redesign — preview, photo validation, Firebase config deploy

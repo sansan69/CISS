@@ -469,11 +469,18 @@ export function WorkOrdersPanel() {
 
     const today = startOfToday();
 
-    const q = query(
-      collection(db, "workOrders"),
-      where("date", ">=", today),
-      orderBy("date", "asc"),
-    );
+    const q = isAdmin
+      ? query(
+          collection(db, "workOrders"),
+          where("date", ">=", today),
+          orderBy("date", "asc"),
+        )
+      : query(
+          collection(db, "workOrders"),
+          where("district", "in", assignedDistricts.slice(0, 10)),
+          where("date", ">=", today),
+          orderBy("date", "asc"),
+        );
 
     const unsub = onSnapshot(
       q,
