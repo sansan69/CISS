@@ -750,6 +750,21 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Created `GET /api/super-admin/regions/[id]/automate`: polls current automation job status
 - Created `GET /api/super-admin/regions/[id]/check`: runs readiness checks (Firestore/Auth/Storage reachable, Vercel URL reachable, admin email configured, region status)
 - `stateCode` field already present on employee enrollment documents
+
+### [2026-06-30] — Phase 2: Regional admin setup wizard + district dataset
+- Created `src/lib/region-wizard.ts`:
+  - `DEFAULT_ENROLLMENT_FORM_CONFIG` with all sections and fields (personal, documents, bank, details)
+  - `DEFAULT_SETUP_PROGRESS` and `WIZARD_STEPS` definitions
+  - `getCurrentWizardStep()` helper for resumable wizard progress
+  - `INDIA_STATE_DISTRICTS` — comprehensive India districts dataset (36 states/UTs, ~750 districts)
+- Created wizard API routes (all under `/api/wizard/`):
+  - `profile` — GET current state profile + setup progress; PATCH state name/timezone
+  - `districts` — GET stored districts or defaults; POST save districts with stateCode
+  - `enrollment-config` — GET current enrollment config or defaults; PUT save config
+  - `clients` — POST create first client + optional sites
+  - `field-officers` — POST create field officers with Auth users + claims + Firestore doc
+  - `verify` — POST run setup verification checks (districts, clients, FOs, configs)
+  - `complete` — POST mark setup complete, unlock dashboard
 - Replaced `public/downloads/ciss-workforce-latest.apk` with latest arm64-v8a release build (29MB, Android 7.0+)
 - APK built from CISS-Mobile commit `659416b` (includes biometric registration, enrollment form, admin screens, tracking consistency)
 
