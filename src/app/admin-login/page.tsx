@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LogIn, HomeIcon, Loader2, BarChart3, Users, ShieldCheck } from 'lucide-react';
@@ -39,6 +40,12 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [portalContext, setPortalContext] = useState<PortalContext | null>(null);
+  const [rememberEmail, setRememberEmail] = useState(true);
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem('admin_remembered_email');
+    if (saved) setEmail(saved);
+  }, []);
 
   React.useEffect(() => {
     let active = true;
@@ -155,6 +162,12 @@ export default function AdminLoginPage() {
         } catch (error) {
           console.warn('Failed to register FCM token:', error);
         }
+      }
+
+      if (rememberEmail) {
+        localStorage.setItem('admin_remembered_email', email.trim());
+      } else {
+        localStorage.removeItem('admin_remembered_email');
       }
 
       toast({
@@ -351,6 +364,17 @@ export default function AdminLoginPage() {
                     disabled={isLoading}
                     className="h-12 text-base bg-white text-foreground"
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="remember-email"
+                    checked={rememberEmail}
+                    onCheckedChange={(checked) => setRememberEmail(checked === true)}
+                    className="border-white/30 data-[state=checked]:bg-brand-gold data-[state=checked]:border-brand-gold"
+                  />
+                  <Label htmlFor="remember-email" className="text-sm text-white/60 cursor-pointer select-none">
+                    Remember email
+                  </Label>
                 </div>
                 <Button
                   type="submit"

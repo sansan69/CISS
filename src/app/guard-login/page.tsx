@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, QrCode, Phone, ScanLine, RotateCcw, ArrowRight, KeyRound, ShieldCheck, Sparkles, Home } from "lucide-react";
@@ -27,7 +28,13 @@ export default function GuardLoginPage() {
   const [pin, setPin] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("phone");
+  const [rememberPhone, setRememberPhone] = useState(true);
   const pinInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem('guard_remembered_phone');
+    if (saved) setPhoneNumber(saved);
+  }, []);
 
   const [qrStep, setQrStep] = useState<"scan" | "pin">("scan");
   const [scannedEmployeeId, setScannedEmployeeId] = useState("");
@@ -91,6 +98,12 @@ export default function GuardLoginPage() {
         return;
       }
       await signInWithCustomToken(auth, data.token as string);
+
+      if (rememberPhone) {
+        localStorage.setItem('guard_remembered_phone', phoneNumber.replace(/\D/g, ''));
+      } else {
+        localStorage.removeItem('guard_remembered_phone');
+      }
 
       if (auth.currentUser) {
         try {
@@ -416,6 +429,18 @@ export default function GuardLoginPage() {
                         <p className="text-xs text-white/50">
                           Use the mobile number registered by your admin.
                         </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="remember-phone"
+                          checked={rememberPhone}
+                          onCheckedChange={(checked) => setRememberPhone(checked === true)}
+                          className="border-white/30 data-[state=checked]:bg-brand-gold data-[state=checked]:border-brand-gold"
+                        />
+                        <label htmlFor="remember-phone" className="text-sm text-white/60 cursor-pointer select-none">
+                          Remember phone
+                        </label>
                       </div>
 
                       <Button
