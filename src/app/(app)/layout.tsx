@@ -831,6 +831,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           } catch {
             // FCM registration optional — non-fatal
           }
+
+          // Regional setup wizard: redirect admin users if setup not complete
+          if (appUser.role === 'admin' && !isSuperAdmin && pathname !== '/wizard' && pathname !== '/admin-login') {
+            try {
+              const adminToken = await user.getIdToken();
+              const wizardRes = await fetch('/api/wizard/profile', {
+                headers: { Authorization: `Bearer ${adminToken}` },
+              });
+              if (wizardRes.ok) {
+                const wizardData = await wizardRes.json();
+                if (!wizardData.setupComplete) {
+                  router.replace('/wizard');
+                }
+              }
+            } catch {
+              // Non-critical — if wizard check fails, let dashboard load
+            }
+          }
         } catch {
           setUserRole('user');
           setAssignedDistricts([]);

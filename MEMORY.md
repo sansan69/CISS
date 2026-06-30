@@ -775,6 +775,23 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Added `normalizeDistrictForFirestore()` to `src/lib/districts.ts` — slug-based Firestore doc ID generation
 - Added `stateCode: REGION_CODE` to client creation route (`/api/admin/clients`)
 - Updated wizard district route to use shared `normalizeDistrictForFirestore`
+
+### [2026-06-30] — Phase B+E: Firebase Management API, Vercel provisioning, custom domain API
+- Created `src/lib/server/firebase-management-client.ts`: full Firebase Management REST API client (create project, add Firebase, enable APIs, provision Firestore, enable Auth, create Android/Web apps, get configs, create service account keys, deploy rules, list indexes)
+- Created `src/lib/server/region-preflight.ts`: GCP OAuth token check, Firebase API reachability, Vercel token validation, encryption secret check, Admin SDK config, project ID and region code format validation
+- Created `src/lib/server/vercel-provisioner.ts`: Vercel REST API client (ensure project exists, set env vars, deploy, get health, add custom domain, build env config)
+- Created `POST/GET /api/super-admin/regions/[id]/provision-vercel`: create Vercel project, set region-specific env vars, poll health
+- Created `POST /api/super-admin/regions/[id]/domain`: add custom CNAME domain to Vercel project, returns DNS setup instruction
+- Updated `src/app/(app)/layout.tsx`: admin users with incomplete setup redirect to `/wizard`
+
+### [2026-06-30] — Phase C: Wizard UI
+- Created `src/app/(app)/wizard/page.tsx`: 6-step React wizard UI (profile, districts, enrollment config, clients, field officers, verification) with progress indicator, save buttons, step navigation
+- Step 0: Confirm state name and timezone
+- Step 1: Add districts with tag-style remove
+- Step 2: Accept default enrollment config
+- Step 3: Create first client
+- Step 4: Add field officers with name/email
+- Step 5: Run verification checks and complete setup
 - Replaced `public/downloads/ciss-workforce-latest.apk` with latest arm64-v8a release build (29MB, Android 7.0+)
 - APK built from CISS-Mobile commit `659416b` (includes biometric registration, enrollment form, admin screens, tracking consistency)
 
