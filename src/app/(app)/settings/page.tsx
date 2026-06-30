@@ -7,10 +7,9 @@ import { onAuthStateChanged } from "firebase/auth";
 import { resolveAppUser } from "@/lib/auth/roles";
 import { useAppAuth } from "@/context/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, BarChart3, Briefcase, ChevronRight, FileEdit, Globe, Loader2, Wallet, Wrench } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, ChevronRight, Briefcase, Wallet, Globe, Wrench } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -20,6 +19,12 @@ const settingsOptions = [
     description: "Manage clients, office locations, and duty sites from one workspace.",
     icon: Briefcase,
     href: "/settings/clients",
+  },
+  {
+    title: "Enrollment Form",
+    description: "Customize guard enrollment fields — toggle visibility, mark required, reorder.",
+    icon: FileEdit,
+    href: "/settings/enrollment-form",
   },
   {
     title: "Admin Tools",

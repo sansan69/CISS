@@ -25,13 +25,17 @@ import { APP_MODE, REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import type { RegionRecord, RegionValidationChecks } from "@/types/region";
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   Database,
   Globe,
   KeyRound,
+  Link2,
   Loader2,
+  Play,
   Plus,
+  RefreshCw,
   Rocket,
   Save,
   ShieldCheck,
@@ -172,6 +176,18 @@ export default function RegionOnboardingPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
+  const [isAutomating, setIsAutomating] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [isAddingDomain, setIsAddingDomain] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const [automationJob, setAutomationJob] = useState<any>(null);
+  const [automationError, setAutomationError] = useState<string | null>(null);
+  const [readinessResult, setReadinessResult] = useState<any>(null);
+  const [showDomainDialog, setShowDomainDialog] = useState(false);
+  const [domainInput, setDomainInput] = useState("");
+  const [domainResult, setDomainResult] = useState<any>(null);
+  const [handoffPanel, setHandoffPanel] = useState<any>(null);
 
   const loadRegions = useCallback(async () => {
     setIsLoading(true);
@@ -441,6 +457,108 @@ export default function RegionOnboardingPage() {
       });
     } finally {
       setIsCreatingAdmin(false);
+    }
+  };
+
+  const handleAutomate = async () => {
+    if (!selectedRegion || selectedRegion.isSynthetic) return;
+    setIsAutomating(true);
+    setAutomationJob(null);
+    setAutomationError(null);
+    try {
+      const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}/automate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Automation failed to start.");
+      setAutomationJob(data.job);
+      toast({ title: "Automation started", description: "Job running in the background." });
+    } catch (error: any) {
+      setAutomationError(error?.message || "Automation failed.");
+      toast({ title: "Automation Error", description: error?.message, variant: "destructive" });
+    } finally {
+      setIsAutomating(false);
+    }
+  };
+
+  const handlePollAutomation = async () => {
+    if (!selectedRegion || selectedRegion.isSynthetic) return;
+    setIsPolling(true);
+    try {
+      const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}/automate`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to poll status.");
+      setAutomationJob(data.job);
+      toast({ title: "Status updated" });
+    } catch (error: any) {
+      toast({ title: "Poll failed", description: error?.message, variant: "destructive" });
+    } finally {
+      setIsPolling(false);
+    }
+  };
+
+  const handleCheckReadiness = async () => {
+    if (!selectedRegion || selectedRegion.isSynthetic) return;
+    setIsChecking(true);
+    setReadinessResult(null);
+    try {
+      const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}/check`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Readiness check failed.");
+      setReadinessResult(data.summary);
+      toast({ title: data.summary.healthy ? "Region is healthy" : "Issues found", description: data.summary.healthy ? "All checks passed." : "Some checks failed." });
+    } catch (error: any) {
+      toast({ title: "Check failed", description: error?.message, variant: "destructive" });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleProvisionVercel = async () => {
+    if (!selectedRegion || selectedRegion.isSynthetic) return;
+    setIsProvisioning(true);
+    setAutomationError(null);
+    try {
+      const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}/provision-vercel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Vercel provisioning failed.");
+      toast({ title: "Vercel provisioned", description: `Project: ${data.project?.name}` });
+      await refreshSelectedRegion();
+      if (data.project?.productionUrl) {
+        setHandoffPanel({
+          url: data.project.productionUrl,
+          email: adminForm.adminEmail || selectedRegion.regionAdminEmail || "",
+          resetLink: `${data.project.productionUrl}/admin-login`,
+        });
+      }
+    } catch (error: any) {
+      setAutomationError(error?.message || "Vercel provisioning failed.");
+      toast({ title: "Vercel Error", description: error?.message, variant: "destructive" });
+    } finally {
+      setIsProvisioning(false);
+    }
+  };
+
+  const handleAddDomain = async () => {
+    setShowDomainDialog(!showDomainDialog);
+    setDomainResult(null);
+    setDomainInput("");
+  };
+
+  const handleConfirmDomain = async () => {
+    if (!selectedRegion || selectedRegion.isSynthetic || !domainInput.trim()) return;
+    setIsAddingDomain(true);
+    try {
+      const res = await authorizedFetch(`/api/super-admin/regions/${selectedRegion.id}/domain`, {
+        method: "POST",
+        body: JSON.stringify({ domain: domainInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add domain.");
+      setDomainResult(data);
+      toast({ title: "Domain added", description: data.dnsInstruction });
+    } catch (error: any) {
+      toast({ title: "Domain error", description: error?.message, variant: "destructive" });
+    } finally {
+      setIsAddingDomain(false);
     }
   };
 
@@ -861,48 +979,165 @@ export default function RegionOnboardingPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">5. Ready-To-Go Checklist</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Rocket className="h-4 w-4 text-brand-blue" />
+                  5. Automate Provisioning
+                </CardTitle>
                 <CardDescription>
-                  Each region gets a dedicated Vercel project and public regional app link. Once that is provisioned, the region can start with clients, field officers, work orders, guard enrollment, and attendance.
+                  Run automated provisioning steps or check region readiness. Each step is idempotent and retryable.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="rounded-xl border p-4 bg-muted/20">
-                  <p className="font-medium text-foreground">Regional App Link</p>
-                  {selectedRegion.vercelProductionUrl ? (
-                    <div className="mt-2 space-y-2">
-                      <a
-                        href={selectedRegion.vercelProductionUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 text-brand-blue hover:underline"
-                      >
-                        {selectedRegion.vercelProductionUrl}
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                      {selectedRegion.vercelProjectUrl ? (
-                        <a
-                          href={selectedRegion.vercelProjectUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-xs text-muted-foreground hover:text-foreground hover:underline"
-                        >
-                          Open Vercel project
-                        </a>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm">
-                      Run the regional Vercel provisioning script once to create the dedicated project, copy shared envs, and publish the regional app link here automatically.
-                    </p>
-                  )}
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAutomate}
+                    disabled={isAutomating || selectedRegion.isSynthetic}
+                  >
+                    {isAutomating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                    Full Automation
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCheckReadiness}
+                    disabled={isChecking || selectedRegion.isSynthetic}
+                  >
+                    {isChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                    Check Readiness
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleProvisionVercel}
+                    disabled={isProvisioning || selectedRegion.isSynthetic}
+                  >
+                    {isProvisioning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+                    Provision Vercel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddDomain}
+                    disabled={isAddingDomain || selectedRegion.isSynthetic}
+                  >
+                    {isAddingDomain ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
+                    Add Domain
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePollAutomation}
+                    disabled={isPolling || selectedRegion.isSynthetic}
+                  >
+                    {isPolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Poll Status
+                  </Button>
                 </div>
-                <p>Recommended next steps after this wizard says the region is ready:</p>
-                <ol className="list-decimal pl-5 space-y-1">
-                  <li>Run `node scripts/provision-region-vercel.mjs {selectedRegion.regionCode}` from the HQ workspace to create the dedicated regional Vercel app.</li>
-                  <li>The script copies shared CISS envs, injects the region Firebase/runtime identity, deploys the same codebase, and writes the link back here.</li>
-                  <li>Use the new region admin account to sign in and create clients, field officers, sites, work orders, and guard records.</li>
-                </ol>
+
+                {/* Automation Job Status */}
+                {automationJob && (
+                  <div className="rounded-xl border p-4 space-y-3">
+                    <p className="text-sm font-medium">Automation Job: <Badge variant={automationJob.status === "completed" ? "default" : automationJob.status === "failed" ? "destructive" : "secondary"}>{automationJob.status}</Badge></p>
+                    <div className="space-y-1.5">
+                      {automationJob.steps?.map((step: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <span className={`h-2 w-2 rounded-full ${step.status === "completed" ? "bg-green-500" : step.status === "failed" ? "bg-red-500" : step.status === "running" ? "bg-amber-500 animate-pulse" : "bg-gray-300"}`} />
+                          <span className="flex-1">{step.stepId}</span>
+                          {step.status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                          {step.status === "failed" && <span className="text-red-500 text-xs">{step.error}</span>}
+                          {step.status === "skipped" && <span className="text-gray-400 text-xs">Skipped</span>}
+                          {step.elapsedMs ? <span className="text-xs text-muted-foreground">{(step.elapsedMs / 1000).toFixed(1)}s</span> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Automation Error */}
+                {automationError && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Automation Error</AlertTitle>
+                    <AlertDescription>{automationError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Readiness Results */}
+                {readinessResult && (
+                  <div className="rounded-xl border p-4 space-y-2">
+                    <p className="text-sm font-medium">Readiness: <Badge variant={readinessResult.healthy ? "default" : "destructive"}>{readinessResult.healthy ? "Healthy" : "Issues Found"}</Badge></p>
+                    <div className="space-y-1.5">
+                      {readinessResult.checks?.map((check: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          {check.passed ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
+                          <span className="flex-1">{check.label}</span>
+                          <span className="text-xs text-muted-foreground">{check.passed ? "OK" : check.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Domain dialog */}
+                {showDomainDialog && (
+                  <div className="rounded-xl border p-4 space-y-3">
+                    <p className="text-sm font-medium">Add Custom Domain</p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={domainInput}
+                        onChange={(e) => setDomainInput(e.target.value)}
+                        placeholder="karnataka.cisskerala.app"
+                      />
+                      <Button onClick={handleConfirmDomain} disabled={isAddingDomain}>
+                        {isAddingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                      </Button>
+                    </div>
+                    {domainResult && (
+                      <div className="text-sm space-y-1 text-muted-foreground">
+                        <p className="text-green-600 font-medium">Domain added: {domainResult.domain}</p>
+                        <p className="text-xs">{domainResult.dnsInstruction}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Handoff Panel */}
+                {handoffPanel && (
+                  <Alert className="border-brand-gold bg-brand-gold/5">
+                    <ShieldCheck className="h-4 w-4 text-brand-gold" />
+                    <AlertTitle>Admin Handoff Panel</AlertTitle>
+                    <AlertDescription className="space-y-1 mt-2">
+                      <p>Share these with the new state admin securely:</p>
+                      <div className="text-xs space-y-1 mt-2">
+                        <p><strong>URL:</strong> {handoffPanel.url}</p>
+                        <p><strong>Email:</strong> {handoffPanel.email}</p>
+                        <p><strong>Password Reset Link:</strong> {handoffPanel.resetLink}</p>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {selectedRegion.vercelProductionUrl ? (
+                  <div className="text-sm">
+                    <span className="font-medium">Regional App:</span>{" "}
+                    <a href={selectedRegion.vercelProductionUrl} target="_blank" rel="noreferrer" className="text-brand-blue hover:underline">
+                      {selectedRegion.vercelProductionUrl}
+                    </a>
+                    {selectedRegion.vercelProjectUrl && (
+                      <span className="ml-2">
+                        <a href={selectedRegion.vercelProjectUrl} target="_blank" rel="noreferrer" className="text-xs text-muted-foreground hover:underline">
+                          (Vercel project)
+                        </a>
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No Vercel project yet. Click &quot;Provision Vercel&quot; to create one.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
