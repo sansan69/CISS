@@ -1,29 +1,18 @@
-/**
- * PIN utility functions for Guard Self-Service Portal.
- * Uses Web Crypto SHA-256 (works in both Node.js 18+ and browser).
- */
+import { createHash, randomUUID } from "crypto";
 
-export async function hashPin(pin: string, salt?: string): Promise<string> {
-  const actualSalt = salt ?? crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-  const encoder = new TextEncoder();
-  const data = encoder.encode(actualSalt + pin);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `${actualSalt}:${hex}`;
+export function hashPin(pin: string, salt?: string): string {
+  const actualSalt = salt ?? randomUUID().replace(/-/g, "").slice(0, 16);
+  const hash = createHash("sha256").update(actualSalt + pin).digest("hex");
+  return `${actualSalt}:${hash}`;
 }
 
-export async function verifyPin(pin: string, storedHash: string): Promise<boolean> {
+export function verifyPin(pin: string, storedHash: string): boolean {
   if (!storedHash.includes(":")) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(pin);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const legacyHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    const legacyHash = createHash("sha256").update(pin).digest("hex");
     if (legacyHash === storedHash) return true;
   }
   const [salt] = storedHash.split(":", 2);
-  const newHash = await hashPin(pin, salt);
+  const newHash = hashPin(pin, salt);
   return newHash === storedHash;
 }
 
