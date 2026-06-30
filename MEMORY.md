@@ -743,7 +743,13 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Replaced with Node.js native `crypto.createHash("sha256")` which is available in every Node.js version.
 - Made `hashPin` and `verifyPin` synchronous (no change needed for callers — `await` on non-promise is a no-op).
 
-### [2026-06-30] — Updated Android APK to latest build
+### [2026-06-30] — Phase 1: Multi-state region automation infrastructure
+- Extended `src/types/region.ts`: added `AutomationStep`, `AutomationStepResult`, `AutomationJob`, `PreflightCheckResult`, `ReadinessCheckResult`, `EnrollmentFormFieldConfig`, `EnrollmentFormConfig`, `RegionSetupProgress` types
+- Created `src/lib/server/region-automator.ts`: queue-based automation runner with 14-step provisioning pipeline, idempotent step execution, concurrent lock, retry-from-failed-step, and audit logging
+- Created `POST /api/super-admin/regions/[id]/automate`: triggers full automation job in background and returns job ID
+- Created `GET /api/super-admin/regions/[id]/automate`: polls current automation job status
+- Created `GET /api/super-admin/regions/[id]/check`: runs readiness checks (Firestore/Auth/Storage reachable, Vercel URL reachable, admin email configured, region status)
+- `stateCode` field already present on employee enrollment documents
 - Replaced `public/downloads/ciss-workforce-latest.apk` with latest arm64-v8a release build (29MB, Android 7.0+)
 - APK built from CISS-Mobile commit `659416b` (includes biometric registration, enrollment form, admin screens, tracking consistency)
 

@@ -32,6 +32,104 @@ export interface RegionValidationSummary {
   validatedAt?: unknown;
 }
 
+export type AutomationStepId =
+  | "preflight"
+  | "create_gcp_project"
+  | "enable_apis"
+  | "add_firebase"
+  | "provision_firestore"
+  | "enable_auth"
+  | "create_apps"
+  | "collect_sdk_configs"
+  | "deploy_rules"
+  | "seed_defaults"
+  | "generate_service_account"
+  | "create_admin"
+  | "provision_vercel"
+  | "verify_ready";
+
+export interface AutomationStepResult {
+  stepId: AutomationStepId;
+  status: "running" | "completed" | "failed" | "skipped";
+  startedAt: string;
+  completedAt?: string;
+  elapsedMs?: number;
+  error?: string;
+  result?: Record<string, unknown>;
+}
+
+export interface AutomationJob {
+  id: string;
+  regionCode: string;
+  status: "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt?: string;
+  currentStepIndex: number;
+  steps: AutomationStepResult[];
+  error?: string;
+}
+
+export interface PreflightCheckResult {
+  checkId: string;
+  label: string;
+  passed: boolean;
+  message: string;
+}
+
+export interface PreflightSummary {
+  allPassed: boolean;
+  checks: PreflightCheckResult[];
+  validatedAt: string;
+}
+
+export interface ReadinessCheckResult {
+  checkId: string;
+  label: string;
+  passed: boolean;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ReadinessSummary {
+  healthy: boolean;
+  regionCode: string;
+  checks: ReadinessCheckResult[];
+  checkedAt: string;
+}
+
+export interface EnrollmentFormFieldConfig {
+  key: string;
+  label: string;
+  enabled: boolean;
+  required: boolean;
+  order: number;
+}
+
+export interface EnrollmentFormSectionConfig {
+  label: string;
+  fields: EnrollmentFormFieldConfig[];
+}
+
+export interface EnrollmentFormConfig {
+  sections: Record<string, EnrollmentFormSectionConfig>;
+  clientOverrides?: Record<string, Record<string, Record<string, Partial<EnrollmentFormFieldConfig>>>>;
+}
+
+export interface RegionSetupProgress {
+  setupComplete: boolean;
+  startedAt?: string;
+  completedAt?: string;
+  currentStep: number;
+  steps: {
+    profile: boolean;
+    districts: boolean;
+    enrollmentConfig: boolean;
+    clients: boolean;
+    fieldOfficers: boolean;
+    verify: boolean;
+  };
+}
+
 export interface RegionRecord {
   id: string;
   regionCode: string;
@@ -57,8 +155,15 @@ export interface RegionRecord {
   vercelProductionUrl?: string | null;
   vercelTeamSlug?: string | null;
   lastVercelProvisionedAt?: unknown;
+  androidApiKey?: string | null;
+  androidAppId?: string | null;
+  webApiKey?: string | null;
+  webAppId?: string | null;
   isCurrentRegion?: boolean;
   isSynthetic?: boolean;
+  automationJobId?: string | null;
+  preflightSummary?: PreflightSummary | null;
+  readonlySummary?: ReadinessSummary | null;
   createdAt?: unknown;
   createdBy?: string | null;
   updatedAt?: unknown;
