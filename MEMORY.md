@@ -743,6 +743,10 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Replaced with Node.js native `crypto.createHash("sha256")` which is available in every Node.js version.
 - Made `hashPin` and `verifyPin` synchronous (no change needed for callers — `await` on non-promise is a no-op).
 
+### [2026-06-30] — Updated Android APK to latest build
+- Replaced `public/downloads/ciss-workforce-latest.apk` with latest arm64-v8a release build (29MB, Android 7.0+)
+- APK built from CISS-Mobile commit `659416b` (includes biometric registration, enrollment form, admin screens, tracking consistency)
+
 ### [2026-06-29] — Landing page phone input routes to attendance instead of guard-login
 - Phone number input on landing page now redirects found guards directly to `/attendance?employeeId=XXX` for quick attendance marking, instead of requiring PIN login.
 - "Guard Portal" link below remains for full portal access (requires PIN).
