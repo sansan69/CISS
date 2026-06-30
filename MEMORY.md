@@ -692,7 +692,40 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Fix: PATCH route now reads the officer's `uid` from the doc and calls `adminAuth.setCustomUserClaims()` to sync `assignedDistricts` to the token claims.
 - Reverted the unnecessary `orderBy("date")` from the main FO work order query (page already sorts client-side).
 
-### [2026-06-29] — Fix guard login: replace Web Crypto API with Node.js native crypto
+### [2026-06-29] — Live guard tracking system upgrade (Phase 1-7)
+
+**Phase 1: Infrastructure fixes**
+- Fixed `GuardLocation` type: added `employeeDocId`, `employeeClientName`, `siteClientName`, `crossClientRelief`, `batteryLevel`, `speed`, `bearing`
+- Fixed heartbeat route doc key: changed from `employeeId` (employee code) to `employeeDocId` (Firestore doc ID) for consistency with attendance submit
+- Added missing fields to heartbeat write: `employeeClientName`, `siteClientName`, `crossClientRelief`, `employeeDocId`
+- Added auto `isOutOfZone` computation when `distanceFromSite > geofenceRadius`
+
+**Phase 2: Location history**
+- Heartbeat now writes `locationHistory` subcollection docs (batch write with parent doc)
+- Each history doc stores: lat, lng, accuracy, distanceFromSite, speed, batteryLevel, recordedAt
+- Enables breadcrumb trail rendering on admin map
+
+**Phase 3: Guard PWA heartbeat loop**
+- Created `useGuardHeartbeat` React hook (`src/lib/hooks/use-guard-heartbeat.ts`)
+- Integrated into guard dashboard — starts when status is "In", polls `watchPosition` every 60s
+- Added `siteId` to guard dashboard API response for heartbeat target
+- Sends lat/lng/accuracy/speed/heartbeat to backend
+
+**Phase 4: Admin map dashboard**
+- Installed `react-leaflet` for map rendering
+- Created `LiveGuardMap` component — OpenStreetMap tiles, color-coded guard markers (green=in zone, orange=slight stale, red=out of zone, gray=stale), geofence circles, tooltip on hover
+- Redesigned `LiveGuardsSection` with Map/List toggle, KPI bar (in zone, on duty, out of zone, stale counts), searchable guard sidebar, split-panel layout
+- KPI bar with live color-coded badges
+
+**Phase 5-6: Flutter app consistency**
+- Fixed `background_tracking_service.dart`: doc key from `employeeId` to `employeeDocId`, added `employeeDocId`/`guardName`/`employeeCode` to context and Firestore writes
+- Renamed `movementTrace` subcollection to `locationHistory` to match web naming
+- Added `guardName`, `employeeDocId`, `district`, `clientName` to tracking start call
+- Pushed to `sansan69/CISS-Mobile` repo
+
+**Phase 7: APK version bump**
+- Updated download page version to 1.1.0
+- APK must be built locally: `cd CISS-Mobile && flutter build apk --release` then copy to `CISS/public/downloads/ciss-workforce-latest.apk`
 - `pin-utils.ts` was using `crypto.subtle.digest("SHA-256")` (Web Crypto API) which may not be available in all serverless Node.js runtimes on Vercel.
 - Replaced with Node.js native `crypto.createHash("sha256")` which is available in every Node.js version.
 - Made `hashPin` and `verifyPin` synchronous (no change needed for callers — `await` on non-promise is a no-op).
