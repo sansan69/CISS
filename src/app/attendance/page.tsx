@@ -168,6 +168,7 @@ export default function AttendancePage() {
   const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
   const [photoCompliance, setPhotoCompliance] = useState<AttendancePhotoCompliance | null>(null);
   const [photoComplianceError, setPhotoComplianceError] = useState<string | null>(null);
+  const [isPrefillingEmployee, setIsPrefillingEmployee] = useState(false);
 
   const [recentAttendance, setRecentAttendance] = useState<DeviceAttendanceHistoryItem[]>([]);
   const [queuedAttendance, setQueuedAttendance] = useState<QueuedAttendanceSubmission[]>([]);
@@ -923,6 +924,7 @@ export default function AttendancePage() {
     let cancelled = false;
 
     const prefillEmployeeFromProfile = async () => {
+      setIsPrefillingEmployee(true);
       setManualEmployeeId(prefilledEmployeeId);
 
       try {
@@ -990,6 +992,8 @@ export default function AttendancePage() {
           });
           router.replace('/attendance', { scroll: false });
         }
+      } finally {
+        if (!cancelled) setIsPrefillingEmployee(false);
       }
     };
 
@@ -1648,7 +1652,18 @@ export default function AttendancePage() {
         )}
       </div>
 
-      {workflowStep === 'idle' && (
+      {isPrefillingEmployee && (
+        <Card className="rounded-3xl">
+          <CardContent className="flex items-center justify-center p-12">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading guard profile…</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {workflowStep === 'idle' && !isPrefillingEmployee && (
         <Card className="rounded-3xl">
           <CardContent className="space-y-5 p-6 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
