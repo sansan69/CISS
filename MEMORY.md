@@ -733,6 +733,12 @@ The backend and frontend had hard validation blocking submission if photos were 
 - Replaced admin "Coming Soon" placeholders with functional views referencing web dashboard
 - All sign-out handlers now show confirmation dialog (guard, FO, admin, client)
 - Firestore rules and indexes deployed for `locationHistory` subcollection
+
+### [2026-06-30] — Device-level biometric registration for all roles (Flutter)
+- Added `signInAsAdminOrClient()` to AuthController with `saveForBiometric` support (previously only guard and FO had it)
+- Rewrote `admin_login_screen.dart`: added saved accounts horizontal chip list with biometric quick-login, biometric registration toggle per account
+- All three auth methods (guard, FO, admin/client) now enable the global biometric setting when registering
+- Biometric flow: register on login → credentials encrypted in FlutterSecureStorage → app resume prompts biometric verify → auto-fills credentials → silent sign-in
 - `pin-utils.ts` was using `crypto.subtle.digest("SHA-256")` (Web Crypto API) which may not be available in all serverless Node.js runtimes on Vercel.
 - Replaced with Node.js native `crypto.createHash("sha256")` which is available in every Node.js version.
 - Made `hashPin` and `verifyPin` synchronous (no change needed for callers — `await` on non-promise is a no-op).
