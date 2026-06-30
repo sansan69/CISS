@@ -38,6 +38,7 @@ import { canonicalizeDistrictList } from '@/lib/districts';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { resolveAppUser } from '@/lib/auth/roles';
 import { useHaptics } from '@/hooks/use-haptics';
+import { LogoutDialog } from '@/components/common/logout-dialog';
 import { AuthContext } from '@/context/auth-context';
 import {
   bottomNavItems,
@@ -772,6 +773,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const prevPathname = useRef(pathname);
 
   // Restore sidebar preference from localStorage
@@ -854,13 +856,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [router]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      router.push('/admin-login');
-    } catch {
-      router.push('/admin-login');
-    }
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
   };
 
   const authContextValue = useMemo(
@@ -881,9 +878,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   );
 
   return (
+    <>
     <AuthContext.Provider value={authContextValue}>
-    <div className="flex min-h-[100dvh] w-full app-shell-surface">
-      {/* ── Desktop Sidebar ── */}
+      <div className="flex min-h-[100dvh] w-full app-shell-surface">
+        {/* ── Desktop Sidebar ── */}
       <div
         className={cn(
           "hidden md:flex shrink-0 flex-col h-screen sticky top-0 z-10",
@@ -952,5 +950,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       )}
     </div>
     </AuthContext.Provider>
+
+    <LogoutDialog
+      open={showLogoutConfirm}
+      onOpenChange={setShowLogoutConfirm}
+      redirectTo="/admin-login"
+    />
+    </>
   );
 }

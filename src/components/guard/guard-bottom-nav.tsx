@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { cn } from "@/lib/utils";
+import { LogoutDialog } from "@/components/common/logout-dialog";
 
 interface NavTab {
   href: string;
@@ -42,17 +43,14 @@ export function GuardBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const isActive = (href: string) => pathname.startsWith(href);
   const isMoreActive = moreOpen || moreItems.some(i => pathname.startsWith(i.href));
 
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      router.push("/guard-login");
-    } catch {
-      router.push("/guard-login");
-    }
+  const handleSignOut = () => {
+    setMoreOpen(false);
+    setShowLogoutConfirm(true);
   };
 
   return (
@@ -183,6 +181,12 @@ export function GuardBottomNav() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <LogoutDialog
+        open={showLogoutConfirm}
+        onOpenChange={setShowLogoutConfirm}
+        redirectTo="/guard-login"
+      />
     </>
   );
 }
