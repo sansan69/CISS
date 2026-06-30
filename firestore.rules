@@ -519,6 +519,20 @@ service cloud.firestore {
 
       // Only the guard themselves or admin/staff can delete
       allow delete: if (isGuard() && guardEmployeeId() == employeeId) || isAdmin();
+
+      // ── guardLocations/{docId}/locationHistory — immutable breadcrumb trail ─
+      match /locationHistory/{historyId} {
+        allow read: if isAdmin() || isHR() || isAccounts() || isCompliance() ||
+          (isFieldOfficer() &&
+            request.auth.token.assignedDistricts != null &&
+            resource.data.district in request.auth.token.assignedDistricts) ||
+          (isClientUser() &&
+            clientUserClientName() != null &&
+            resource.data.clientName == clientUserClientName());
+        allow create: if (isGuard() && guardEmployeeId() == employeeId) || isStaff();
+        // History is immutable — only admins can delete for cleanup
+        allow delete: if isAdmin();
+      }
     }
   }
 }
