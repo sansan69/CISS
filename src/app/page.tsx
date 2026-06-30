@@ -228,14 +228,11 @@ export default function LandingPage() {
         throw new Error((body as any).error || "Could not verify phone number.");
       }
 
-      const data = (await response.json()) as { found: boolean; id?: string };
+      const data = (await response.json()) as { found: boolean; id?: string; fullName?: string; employeeId?: string };
 
-      if (data.found && data.id) {
-        toast({ title: "Welcome Back!", description: "Redirecting to Guard Portal." });
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem("enroll_phone", normalizedPhone);
-        }
-        router.push("/guard-login");
+      if (data.found && data.employeeId) {
+        toast({ title: "Welcome!", description: "Opening attendance..." });
+        router.push(`/attendance?employeeId=${encodeURIComponent(data.employeeId)}`);
       } else {
         toast({ title: "New User", description: "Redirecting to enrollment form." });
         if (typeof window !== "undefined") {

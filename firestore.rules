@@ -501,7 +501,7 @@ service cloud.firestore {
 
     match /guardLocations/{employeeId} {
       // Read scoped by role — NOT open to all signed-in users
-      allow read: if isAdmin() ||
+      allow read: if isAdmin() || isHR() || isAccounts() || isCompliance() ||
         // FO reads only guard locations in their assigned districts
         (isFieldOfficer() &&
           request.auth.token.assignedDistricts != null &&

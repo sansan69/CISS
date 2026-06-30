@@ -509,6 +509,13 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
   const { user: currentUser, userRole, assignedDistricts, isSuperAdmin } = useAppAuth();
+  const canViewLiveGuards =
+    userRole === 'admin' ||
+    userRole === 'superAdmin' ||
+    userRole === 'hr' ||
+    userRole === 'accounts' ||
+    userRole === 'compliance' ||
+    userRole === 'fieldOfficer';
 
   // Client coverage: computed reactively from both live data sources
   const clientCoverage = useMemo<ClientCoverage[]>(() => {
@@ -822,7 +829,7 @@ export default function DashboardPage() {
       {userRole !== 'client' && <DashboardActions role={userRole as any} />}
 
       {/* ── Live Guard Locations (admin + FO) ────────────────────────────── */}
-      {userRole !== 'client' && (
+      {canViewLiveGuards && (
         <LiveGuardsSection
           district={
             userRole === 'fieldOfficer' && assignedDistricts?.length

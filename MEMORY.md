@@ -696,3 +696,7 @@ The backend and frontend had hard validation blocking submission if photos were 
 - `pin-utils.ts` was using `crypto.subtle.digest("SHA-256")` (Web Crypto API) which may not be available in all serverless Node.js runtimes on Vercel.
 - Replaced with Node.js native `crypto.createHash("sha256")` which is available in every Node.js version.
 - Made `hashPin` and `verifyPin` synchronous (no change needed for callers — `await` on non-promise is a no-op).
+
+### [2026-06-29] — Landing page phone input routes to attendance instead of guard-login
+- Phone number input on landing page now redirects found guards directly to `/attendance?employeeId=XXX` for quick attendance marking, instead of requiring PIN login.
+- "Guard Portal" link below remains for full portal access (requires PIN).
