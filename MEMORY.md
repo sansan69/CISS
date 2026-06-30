@@ -765,6 +765,16 @@ The backend and frontend had hard validation blocking submission if photos were 
   - `field-officers` — POST create field officers with Auth users + claims + Firestore doc
   - `verify` — POST run setup verification checks (districts, clients, FOs, configs)
   - `complete` — POST mark setup complete, unlock dashboard
+
+### [2026-06-30] — Phase 3+4: Enrollment config resolver, district utility, stateCode on client writes
+- Created `src/lib/enrollment-config.ts`:
+  - `fetchEnrollmentConfig()` — loads config from Firestore or returns defaults
+  - `getEnabledFields()` — returns sorted, client-override-resolved fields
+  - `getEnabledSections()` — returns sections with only enabled fields
+  - `validateEnrollmentField()` — validates a single field against config
+- Added `normalizeDistrictForFirestore()` to `src/lib/districts.ts` — slug-based Firestore doc ID generation
+- Added `stateCode: REGION_CODE` to client creation route (`/api/admin/clients`)
+- Updated wizard district route to use shared `normalizeDistrictForFirestore`
 - Replaced `public/downloads/ciss-workforce-latest.apk` with latest arm64-v8a release build (29MB, Android 7.0+)
 - APK built from CISS-Mobile commit `659416b` (includes biometric registration, enrollment form, admin screens, tracking consistency)
 

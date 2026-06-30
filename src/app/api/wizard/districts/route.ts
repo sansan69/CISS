@@ -3,10 +3,7 @@ import { requireAdminLike, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
 import { REGION_CODE } from "@/lib/runtime-config";
 import { INDIA_STATE_DISTRICTS } from "@/lib/region-wizard";
-
-function slugifyDistrict(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
+import { normalizeDistrictForFirestore } from "@/lib/districts";
 
 export async function GET() {
   try {
@@ -42,7 +39,7 @@ export async function POST(request: Request) {
 
     const batch = adminDb.batch();
     for (const district of body.districts) {
-      const id = slugifyDistrict(district.name);
+      const id = normalizeDistrictForFirestore(district.name);
       const ref = adminDb.collection("districts").doc(id);
       batch.set(ref, {
         name: district.name.trim(),

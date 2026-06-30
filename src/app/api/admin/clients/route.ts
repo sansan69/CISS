@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
+import { REGION_CODE } from "@/lib/runtime-config";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
 import { resolvePatrolSettings } from "@/lib/patrol";
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
 
     const docRef = await adminDb.collection("clients").add({
       name,
+      stateCode: REGION_CODE,
       portalSubdomain,
       portalEnabled: body.portalEnabled !== false,
       nationalHolidayList: Array.isArray(body.nationalHolidayList)

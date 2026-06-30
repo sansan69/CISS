@@ -396,3 +396,12 @@ export function mergeDistrictOptions(
     left.localeCompare(right),
   );
 }
+
+export function normalizeDistrictForFirestore(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
