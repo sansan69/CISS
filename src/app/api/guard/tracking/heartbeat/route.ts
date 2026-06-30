@@ -49,6 +49,8 @@ export async function POST(request: Request) {
       accuracy?: number;
       distanceFromSite?: number;
       isOutOfZone?: boolean;
+      batteryLevel?: number;
+      speed?: number;
     };
 
     const siteId = normalizeText(body.siteId);
@@ -102,39 +104,59 @@ export async function POST(request: Request) {
     const accuracy = Number(body.accuracy);
     const geofenceRadius = Number(site.geofenceRadiusMeters ?? site.allowedRadiusMeters ?? 150);
     const siteCoords = parseSiteCoordinates(site);
+    const distanceFromSite = Number.isFinite(Number(body.distanceFromSite))
+      ? Number(body.distanceFromSite)
+      : null;
 
-    await db.collection("guardLocations").doc(guard.employeeId).set(
-      {
-        employeeId: guard.employeeId,
-        guardName: normalizeText(
-          employee.fullName ||
-            employee.name ||
-            [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
-            guard.employeeId,
-        ),
-        siteId,
-        siteName: normalizeText(site.siteName),
-        clientName: normalizeText(site.clientName || employee.clientName),
-        district: normalizeText(site.district || employee.district),
-        lat,
-        lng,
-        accuracy: Number.isFinite(accuracy) ? accuracy : 0,
-        isOutOfZone: body.isOutOfZone === true,
-        distanceFromSite: Number.isFinite(Number(body.distanceFromSite))
-          ? Number(body.distanceFromSite)
-          : null,
-        status: "In",
-        attendanceId:
-          normalizeText(attendanceState?.lastAttendanceId) ||
-          normalizeText(attendanceState?.attendanceId) ||
-          null,
-        siteLat: siteCoords?.lat ?? null,
-        siteLng: siteCoords?.lng ?? null,
-        geofenceRadius: Number.isFinite(geofenceRadius) ? geofenceRadius : 150,
-        updatedAt: Timestamp.now(),
-      },
-      { merge: true },
-    );
+    const locationData: Record<string, unknown> = {
+      employeeDocId: guard.employeeDocId,
+      employeeId: guard.employeeId,
+      guardName: normalizeText(
+        employee.fullName ||
+          employee.name ||
+          [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
+          guard.employeeId,
+      ),
+      siteId,
+      siteName: normalizeText(site.siteName),
+      clientName: normalizeText(site.clientName || employee.clientName),
+      employeeClientName: normalizeText(employee.clientName) || null,
+      siteClientName: normalizeText(site.clientName) || null,
+      district: normalizeText(site.district || employee.district),
+      lat,
+      lng,
+      accuracy: Number.isFinite(accuracy) ? accuracy : 0,
+      distanceFromSite,
+      isOutOfZone: body.isOutOfZone === true || (distanceFromSite !== null && geofenceRadius > 0 && distanceFromSite > geofenceRadius),
+      status: "In",
+      attendanceId:
+        normalizeText(attendanceState?.lastAttendanceId) ||
+        normalizeText(attendanceState?.attendanceId) ||
+        null,
+      siteLat: siteCoords?.lat ?? null,
+      siteLng: siteCoords?.lng ?? null,
+      geofenceRadius: Number.isFinite(geofenceRadius) ? geofenceRadius : 150,
+      batteryLevel: Number.isFinite(Number(body.batteryLevel)) ? Number(body.batteryLevel) : null,
+    };
+
+    const now = Timestamp.now();
+    locationData.updatedAt = now;
+    const speed = Number.isFinite(Number(body.speed)) ? Number(body.speed) : 0;
+
+    const guardLocRef = db.collection("guardLocations").doc(guard.employeeDocId);
+    const batch = db.batch();
+    batch.set(guardLocRef, locationData, { merge: true });
+    batch.set(guardLocRef.collection("locationHistory").doc(), {
+      lat,
+      lng,
+      accuracy: Number.isFinite(accuracy) ? accuracy : 0,
+      distanceFromSite,
+      isOutOfZone: locationData.isOutOfZone,
+      speed,
+      batteryLevel: locationData.batteryLevel,
+      recordedAt: now,
+    });
+    await batch.commit();
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

@@ -239,7 +239,7 @@ export async function GET(request: Request) {
     }
 
     // ─── Next shift ────────────────────────────────────────────────────────
-    let nextShift: { date: string; siteName: string; clientName: string; shiftLabel?: string } | null = null;
+    let nextShift: { date: string; siteId: string; siteName: string; clientName: string; shiftLabel?: string } | null = null;
     let nextShiftUnavailable = false;
     if (isOperationalWorkOrderClientName(clientName)) {
       try {
@@ -270,6 +270,7 @@ export async function GET(request: Request) {
             date: Number.isFinite(workOrderDate)
               ? new Date(workOrderDate).toISOString()
               : "",
+            siteId: nextActiveWorkOrder.siteId ?? "",
             siteName: nextActiveWorkOrder.siteName ?? "",
             clientName: nextActiveWorkOrder.clientName ?? clientName,
             shiftLabel: nextActiveWorkOrder.shiftLabel ?? undefined,
