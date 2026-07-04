@@ -29,7 +29,7 @@
     },
     {
       "path": "/api/internal/automation-worker",
-      "schedule": "*/5 * * * *"
+      "schedule": "15 3 * * *"
     }
   ]
 }
