@@ -10,21 +10,24 @@ This directory contains the latest Android APK for field officers and guards.
    flutter build apk --release --split-per-abi
    ```
 
-2. Copy the arm64 APK to this directory:
+2. Copy the universal APK to a versioned file and update the latest compatibility copy:
    ```bash
-   cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk public/downloads/ciss-workforce-latest.apk
+   cp build/app/outputs/flutter-apk/app-release.apk public/downloads/ciss-workforce-X.Y.Z.apk
+   cp build/app/outputs/flutter-apk/app-release.apk public/downloads/ciss-workforce-latest.apk
    ```
 
-3. Commit and push (Vercel will auto-deploy):
+3. Update `public/downloads/ciss-workforce-android.json` with the versioned APK path, size, and SHA-256.
+
+4. Commit and push (Vercel will auto-deploy):
    ```bash
-   git add public/downloads/ciss-workforce-latest.apk
+   git add public/downloads/
    git commit -m "release: mobile app vX.Y.Z"
    git push origin main
    ```
 
-4. The APK will be live at:
+5. The public download page uses a non-cached redirect at:
    ```
-   https://your-domain/downloads/ciss-workforce-latest.apk
+   https://your-domain/api/public/download/android
    ```
 
 ## Notes

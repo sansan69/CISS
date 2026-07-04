@@ -39,7 +39,7 @@ export default function DownloadPage() {
 
         {/* Primary Download — Direct APK */}
         <a
-          href="/downloads/ciss-workforce-latest.apk"
+          href="/api/public/download/android"
           download
           className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-primary font-bold text-lg rounded-2xl hover:bg-accent/90 transition-colors shadow-lg shadow-black/20"
         >
