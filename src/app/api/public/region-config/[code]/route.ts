@@ -41,21 +41,33 @@ export async function GET(
     }
 
     const region = regionSnap.data() as Record<string, unknown>;
+    const status = typeof region.status === "string" ? region.status : "draft";
+    if (!["ready", "live"].includes(status)) {
+      return NextResponse.json({ error: "Region is not available yet." }, { status: 404 });
+    }
+
+    const missingConfig =
+      !region.firebaseProjectId ||
+      !(region.firebaseApiKey || region.webApiKey) ||
+      !(region.firebaseWebAppId || region.webAppId);
+    if (missingConfig) {
+      return NextResponse.json({ error: "Region configuration is incomplete." }, { status: 503 });
+    }
 
     return NextResponse.json({
       regionCode: region.regionCode,
       regionName: region.regionName,
       apiUrl: region.vercelProductionUrl || `https://ciss-${regionCode.toLowerCase()}.vercel.app`,
       android: {
-        apiKey: region.firebaseApiKey || region.androidApiKey || "",
-        appId: region.firebaseWebAppId || region.androidAppId || "",
+        apiKey: region.androidApiKey || region.firebaseApiKey || region.webApiKey || "",
+        appId: region.androidAppId || region.firebaseWebAppId || region.webAppId || "",
         projectId: region.firebaseProjectId || "",
         messagingSenderId: region.messagingSenderId || "",
         storageBucket: region.storageBucket || "",
       },
       web: {
-        apiKey: region.firebaseApiKey || "",
-        appId: region.firebaseWebAppId || "",
+        apiKey: region.firebaseApiKey || region.webApiKey || "",
+        appId: region.firebaseWebAppId || region.webAppId || "",
         projectId: region.firebaseProjectId || "",
         messagingSenderId: region.messagingSenderId || "",
         storageBucket: region.storageBucket || "",

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAdminLike, unauthorizedResponse } from "@/lib/server/auth";
+import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
-import { REGION_CODE } from "@/lib/runtime-config";
+import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import { INDIA_STATE_DISTRICTS } from "@/lib/region-wizard";
 import { normalizeDistrictForFirestore } from "@/lib/districts";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const districtSnap = await adminDb.collection("districts").orderBy("name").get();
 
@@ -15,9 +16,13 @@ export async function GET() {
       return NextResponse.json({ districts, source: "firestore" });
     }
 
-    const keralaDistricts = INDIA_STATE_DISTRICTS[REGION_CODE === "KL" ? "Kerala" : "Kerala"] ?? [];
+    const defaultDistricts =
+      INDIA_STATE_DISTRICTS[REGION_NAME] ??
+      INDIA_STATE_DISTRICTS[REGION_CODE] ??
+      INDIA_STATE_DISTRICTS.Kerala ??
+      [];
     return NextResponse.json({
-      districts: keralaDistricts.map((name: string) => ({ name, active: true })),
+      districts: defaultDistricts.map((name: string) => ({ name, active: true })),
       source: "defaults",
     });
   } catch (error: any) {
@@ -27,7 +32,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const actor = await requireAdminLike(await (await import("@/lib/server/auth")).verifyRequestAuth(request));
+    const actor = await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const body = (await request.json()) as {
       districts: Array<{ name: string; active?: boolean; aliases?: string[] }>;
@@ -52,7 +57,7 @@ export async function POST(request: Request) {
     await batch.commit();
 
     await adminDb.collection("regionSetupProgress").doc("default").set(
-      { steps: { districts: true } },
+      { steps: { districts: true }, currentStep: 2 },
       { merge: true },
     );
 

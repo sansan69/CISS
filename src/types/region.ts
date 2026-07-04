@@ -50,7 +50,7 @@ export type AutomationStepId =
 
 export interface AutomationStepResult {
   stepId: AutomationStepId;
-  status: "running" | "completed" | "failed" | "skipped";
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
   startedAt: string;
   completedAt?: string;
   elapsedMs?: number;
@@ -61,12 +61,15 @@ export interface AutomationStepResult {
 export interface AutomationJob {
   id: string;
   regionCode: string;
-  status: "running" | "completed" | "failed";
+  status: "queued" | "running" | "completed" | "failed";
   startedAt: string;
   completedAt?: string;
   currentStepIndex: number;
   steps: AutomationStepResult[];
   error?: string;
+  queuedAt?: string;
+  claimedAt?: string;
+  workerId?: string;
 }
 
 export interface PreflightCheckResult {

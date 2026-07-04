@@ -70,22 +70,6 @@ export const enrollmentSubmissionSchema = z
     termsAccepted: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.clientName === "TCS" && !data.resourceIdNumber) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Resource ID number is required for TCS client.",
-        path: ["resourceIdNumber"],
-      });
-    }
-
-    if (data.maritalStatus === "Married" && !data.spouseName) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Spouse name is required if married.",
-        path: ["spouseName"],
-      });
-    }
-
     if (
       data.educationalQualification === "Any Other Qualification" &&
       !data.otherQualification

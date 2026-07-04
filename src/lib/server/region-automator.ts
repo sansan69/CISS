@@ -2,6 +2,22 @@ import crypto from "crypto";
 import type { Firestore } from "firebase-admin/firestore";
 
 import {
+  addFirebaseToProject,
+  createAndroidApp,
+  createGcpProject,
+  createServiceAccountKey,
+  createWebApp,
+  deployFirestoreIndexes,
+  deployFirestoreRules,
+  deployStorageRules,
+  enableIdentityPlatform,
+  enableRequiredApis,
+  getAndroidAppConfig,
+  getWebAppConfig,
+  provisionFirestore,
+  buildDefaultStorageBucket,
+} from "@/lib/server/firebase-management-client";
+import {
   buildServerAuditEvent,
   buildServerUpdateAudit,
 } from "@/lib/server/audit";
@@ -10,8 +26,14 @@ import {
   seedRegionDefaults,
   validateRegionFirebaseConnection,
 } from "@/lib/server/region-onboarding";
-import { saveRegionConnection } from "@/lib/server/region-connections";
-import { buildRegionVercelProjectName } from "@/lib/vercel-region";
+import { getRegionConnection, saveRegionConnection } from "@/lib/server/region-connections";
+import {
+  buildRegionEnvConfig,
+  deployRegionProject,
+  ensureVercelProject,
+  getVercelProjectHealth,
+  setVercelEnvVars,
+} from "@/lib/server/vercel-provisioner";
 import type {
   AutomationJob,
   AutomationStepId,
@@ -23,6 +45,14 @@ import type {
 const AUTOMATION_COLLECTION = "automationJobs";
 const CONCURRENT_LOCK_KEY = "region_automation_lock";
 const CONCURRENT_LOCK_TTL_MS = 30 * 60 * 1000;
+const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
+
+type AutomationContext = {
+  db: Firestore;
+  region: RegionRecord;
+  serviceAccountJson: string | null;
+  actor?: { uid?: string | null; email?: string | null };
+};
 
 function now() {
   return new Date().toISOString();
@@ -41,13 +71,17 @@ export const AUTOMATION_STEPS: { stepId: AutomationStepId; label: string }[] = [
   { stepId: "enable_auth", label: "Enable Authentication" },
   { stepId: "create_apps", label: "Create Android + Web apps" },
   { stepId: "collect_sdk_configs", label: "Collect SDK configurations" },
+  { stepId: "generate_service_account", label: "Generate service account" },
   { stepId: "deploy_rules", label: "Deploy security rules & indexes" },
   { stepId: "seed_defaults", label: "Seed default configurations" },
-  { stepId: "generate_service_account", label: "Generate service account" },
   { stepId: "create_admin", label: "Create region admin account" },
   { stepId: "provision_vercel", label: "Provision Vercel project & deploy" },
   { stepId: "verify_ready", label: "Verify region readiness" },
 ];
+
+function makePendingStepResult(stepId: AutomationStepId): AutomationStepResult {
+  return { stepId, status: "pending", startedAt: now() };
+}
 
 function makeStepResult(stepId: AutomationStepId): AutomationStepResult {
   return { stepId, status: "running", startedAt: now() };
@@ -62,10 +96,6 @@ function completeStep(
 
 function failStep(step: AutomationStepResult, error: string): AutomationStepResult {
   return { ...step, status: "failed", completedAt: now(), elapsedMs: elapsedMs(step.startedAt), error };
-}
-
-function skipStep(step: AutomationStepResult, reason: string): AutomationStepResult {
-  return { ...step, status: "skipped", completedAt: now(), elapsedMs: elapsedMs(step.startedAt), error: reason };
 }
 
 async function acquireLock(adminDb: Firestore): Promise<boolean> {
@@ -104,51 +134,52 @@ function findCurrentStep(job: AutomationJob): number {
 export async function startAutomation(
   db: Firestore,
   region: RegionRecord,
-  serviceAccountJson: string | null,
+  _serviceAccountJson: string | null,
   actor?: { uid?: string | null; email?: string | null },
 ): Promise<AutomationJob> {
   const jobId = crypto.randomUUID();
-  const steps = AUTOMATION_STEPS.map((s) => makeStepResult(s.stepId));
+  const timestamp = now();
+  const steps = AUTOMATION_STEPS.map((s) => makePendingStepResult(s.stepId));
 
   const job: AutomationJob = {
     id: jobId,
     regionCode: region.regionCode,
-    status: "running",
-    startedAt: now(),
+    status: "queued",
+    startedAt: timestamp,
+    queuedAt: timestamp,
     currentStepIndex: 0,
     steps,
   };
 
   await db.collection(AUTOMATION_COLLECTION).doc(jobId).set({
     ...job,
-    auditTrail: [buildServerAuditEvent("automation_started", actor, { regionCode: region.regionCode })],
+    auditTrail: [buildServerAuditEvent("automation_queued", actor, { regionCode: region.regionCode })],
   });
-
-  updateJobInBackground(db, jobId, region, serviceAccountJson, actor);
 
   return job;
 }
 
-async function updateJobInBackground(
+async function runClaimedJob(
   db: Firestore,
   jobId: string,
   region: RegionRecord,
   serviceAccountJson: string | null,
   actor?: { uid?: string | null; email?: string | null },
+  startStepIndex = 0,
 ): Promise<void> {
   const lockAcquired = await acquireLock(db);
   if (!lockAcquired) {
     const jobDoc = db.collection(AUTOMATION_COLLECTION).doc(jobId);
     await jobDoc.update({
-      status: "failed",
-      error: "Another automation job is already in progress. Wait for it to complete or expire.",
-      completedAt: now(),
+      status: "queued",
+      error: "Another automation job is already in progress. This job has been returned to the queue.",
+      queuedAt: now(),
     });
     return;
   }
 
   try {
-    await executeSteps(db, jobId, region, serviceAccountJson, actor);
+    await executeSteps(db, jobId, region, serviceAccountJson, actor, startStepIndex);
   } finally {
     await releaseLock(db);
   }
@@ -160,10 +191,12 @@ async function executeSteps(
   region: RegionRecord,
   serviceAccountJson: string | null,
   actor?: { uid?: string | null; email?: string | null },
+  startStepIndex = 0,
 ): Promise<void> {
   const jobRef = db.collection(AUTOMATION_COLLECTION).doc(jobId);
+  const context: AutomationContext = { db, region, serviceAccountJson, actor };
 
-  for (let i = 0; i < AUTOMATION_STEPS.length; i++) {
+  for (let i = startStepIndex; i < AUTOMATION_STEPS.length; i++) {
     const stepDef = AUTOMATION_STEPS[i];
 
     await jobRef.update({
@@ -175,10 +208,7 @@ async function executeSteps(
     try {
       const result = await executeStep(
         stepDef.stepId,
-        db,
-        region,
-        serviceAccountJson,
-        actor,
+        context,
       );
 
       await jobRef.update({
@@ -217,45 +247,43 @@ async function executeSteps(
 
 async function executeStep(
   stepId: AutomationStepId,
-  db: Firestore,
-  region: RegionRecord,
-  serviceAccountJson: string | null,
-  actor?: { uid?: string | null; email?: string | null },
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
   const step = makeStepResult(stepId);
+  const { db, region, serviceAccountJson, actor } = context;
 
   try {
     switch (stepId) {
       case "preflight":
         return await executePreflight(step, region);
       case "create_gcp_project":
-        return await executeCreateGcpProject(step, region);
+        return await executeCreateGcpProject(step, context);
       case "enable_apis":
-        return await executeEnableApis(step, region);
+        return await executeEnableApis(step, context);
       case "add_firebase":
-        return await executeAddFirebase(step, region);
+        return await executeAddFirebase(step, context);
       case "provision_firestore":
-        return await executeProvisionFirestore(step, region);
+        return await executeProvisionFirestore(step, context);
       case "enable_auth":
-        return await executeEnableAuth(step, region);
+        return await executeEnableAuth(step, context);
       case "create_apps":
-        return await executeCreateApps(step, region);
+        return await executeCreateApps(step, context);
       case "collect_sdk_configs":
-        return await executeCollectSdkConfigs(step, region);
+        return await executeCollectSdkConfigs(step, context);
       case "deploy_rules":
-        return await executeDeployRules(step, db, region, serviceAccountJson);
+        return await executeDeployRules(step, context);
       case "seed_defaults":
-        return await executeSeedDefaults(step, db, region, serviceAccountJson, actor);
+        return await executeSeedDefaults(step, context);
       case "generate_service_account":
-        return await executeGenerateServiceAccount(step, db, region, actor);
+        return await executeGenerateServiceAccount(step, context);
       case "create_admin":
-        return await executeCreateAdmin(step, db, region, serviceAccountJson, actor);
+        return await executeCreateAdmin(step, context);
       case "provision_vercel":
-        return await executeProvisionVercel(step, db, region, actor);
+        return await executeProvisionVercel(step, context);
       case "verify_ready":
-        return await executeVerifyReady(step, db, region, serviceAccountJson);
+        return await executeVerifyReady(step, context);
       default:
-        return skipStep(step, `Unknown step: ${stepId}`);
+        return failStep(step, `Unknown step: ${stepId}`);
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -314,76 +342,141 @@ async function executePreflight(
 
 async function executeCreateGcpProject(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "GCP project creation requires the Google Cloud Resource Manager API. Implement after obtaining HQ service account with resourcemanager.projectCreator role.");
+  const result = await createGcpProject(context.region.firebaseProjectId, `CISS ${context.region.regionName}`);
+  return completeStep(step, result);
 }
 
 async function executeEnableApis(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "API enablement requires Service Usage API access. Configure in the Firebase Console or implement via Service Usage REST API.");
+  const result = await enableRequiredApis(context.region.firebaseProjectId);
+  return completeStep(step, result);
 }
 
 async function executeAddFirebase(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Firebase project linking requires Firebase Management API. Implement after configuring HQ service account with firebase.managementServiceAgent role.");
+  const result = await addFirebaseToProject(context.region.firebaseProjectId);
+  return completeStep(step, result);
 }
 
 async function executeProvisionFirestore(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Firestore provisioning requires Firestore Admin REST API. Deploy via firebase-tools CLI or implement via FirestoreAdmin REST API.");
+  const result = await provisionFirestore(context.region.firebaseProjectId);
+  return completeStep(step, result);
 }
 
 async function executeEnableAuth(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Auth provider setup requires Identity Toolkit API. Implement after obtaining credentials.");
+  const result = await enableIdentityPlatform(context.region.firebaseProjectId);
+  return completeStep(step, result);
 }
 
 async function executeCreateApps(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Android/Web app creation requires Firebase Management API. Implement after credentials are configured.");
+  const packageName = process.env.ANDROID_PACKAGE_NAME || "com.ciss.workforce";
+  const androidApp = await createAndroidApp(
+    context.region.firebaseProjectId,
+    `CISS Workforce ${context.region.regionCode}`,
+    packageName,
+  );
+  const webApp = await createWebApp(
+    context.region.firebaseProjectId,
+    `CISS Workforce ${context.region.regionCode} Web`,
+  );
+
+  await context.db.collection("regions").doc(context.region.regionCode).set(
+    {
+      androidAppId: androidApp.appId,
+      firebaseWebAppId: webApp.appId,
+      webAppId: webApp.appId,
+      storageBucket: context.region.storageBucket || buildDefaultStorageBucket(context.region.firebaseProjectId),
+      ...buildServerUpdateAudit(context.actor),
+    },
+    { merge: true },
+  );
+
+  context.region = {
+    ...context.region,
+    androidAppId: androidApp.appId,
+    firebaseWebAppId: webApp.appId,
+    webAppId: webApp.appId,
+    storageBucket: context.region.storageBucket || buildDefaultStorageBucket(context.region.firebaseProjectId),
+  };
+
+  return completeStep(step, { androidApp, webApp, packageName });
 }
 
 async function executeCollectSdkConfigs(
   step: AutomationStepResult,
-  region: RegionRecord,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "SDK config collection requires Firebase Management API. Implement after apps are created.");
+  const androidAppId = context.region.androidAppId;
+  const webAppId = context.region.firebaseWebAppId || context.region.webAppId;
+  if (!androidAppId || !webAppId) {
+    return failStep(step, "Android/Web app IDs are missing. Run create_apps first.");
+  }
+
+  const [androidConfig, webConfig] = await Promise.all([
+    getAndroidAppConfig(context.region.firebaseProjectId, androidAppId),
+    getWebAppConfig(context.region.firebaseProjectId, webAppId),
+  ]);
+
+  const update = {
+    androidApiKey: androidConfig.apiKey || null,
+    androidAppId: androidConfig.appId || androidAppId,
+    firebaseApiKey: webConfig.apiKey || null,
+    webApiKey: webConfig.apiKey || null,
+    firebaseWebAppId: webConfig.appId || webAppId,
+    webAppId: webConfig.appId || webAppId,
+    authDomain: webConfig.authDomain || `${context.region.firebaseProjectId}.firebaseapp.com`,
+    messagingSenderId: webConfig.messagingSenderId || androidConfig.messagingSenderId || null,
+    storageBucket: webConfig.storageBucket || androidConfig.storageBucket || context.region.storageBucket || buildDefaultStorageBucket(context.region.firebaseProjectId),
+    measurementId: webConfig.measurementId || null,
+    ...buildServerUpdateAudit(context.actor),
+  };
+
+  await context.db.collection("regions").doc(context.region.regionCode).set(update, { merge: true });
+  context.region = { ...context.region, ...update };
+
+  return completeStep(step, {
+    androidAppId: update.androidAppId,
+    webAppId: update.firebaseWebAppId,
+    hasAndroidApiKey: Boolean(update.androidApiKey),
+    hasWebApiKey: Boolean(update.firebaseApiKey),
+  });
 }
 
 async function executeDeployRules(
   step: AutomationStepResult,
-  db: Firestore,
-  region: RegionRecord,
-  serviceAccountJson: string | null,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  if (!serviceAccountJson) {
-    return skipStep(step, "Service account JSON not provided. Upload the service account in the state management UI first.");
+  if (!context.serviceAccountJson) {
+    return failStep(step, "Service account JSON is required before rules and indexes can be deployed.");
   }
 
   try {
-    const credentials = {
-      firebaseProjectId: region.firebaseProjectId,
-      storageBucket: region.storageBucket || undefined,
-      serviceAccountJson,
-    };
+    const fs = await import("fs/promises");
+    const [firestoreRules, storageRules] = await Promise.all([
+      fs.readFile("firestore.rules", "utf8"),
+      fs.readFile("storage.rules", "utf8"),
+    ]);
 
-    const result = await validateRegionFirebaseConnection(credentials);
-    if (!result.success) {
-      return failStep(step, `Firebase connection validation failed: ${result.messages.join("; ")}`);
-    }
+    await deployFirestoreRules(context.region.firebaseProjectId, firestoreRules, context.serviceAccountJson);
+    await deployStorageRules(context.region.firebaseProjectId, storageRules, context.serviceAccountJson);
+    const indexes = await deployFirestoreIndexes(context.region.firebaseProjectId);
 
-    return completeStep(step, { validationMessages: result.messages });
+    return completeStep(step, { firestoreRules: true, storageRules: true, indexes });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return failStep(step, `Rules deployment failed: ${message}`);
@@ -392,24 +485,25 @@ async function executeDeployRules(
 
 async function executeSeedDefaults(
   step: AutomationStepResult,
-  db: Firestore,
-  region: RegionRecord,
-  serviceAccountJson: string | null,
-  actor?: { uid?: string | null; email?: string | null },
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  if (!serviceAccountJson) {
-    return skipStep(step, "Service account JSON not provided.");
+  if (!context.serviceAccountJson) {
+    return failStep(step, "Service account JSON is required before regional defaults can be seeded.");
   }
 
   try {
     const credentials = {
-      firebaseProjectId: region.firebaseProjectId,
-      storageBucket: region.storageBucket || undefined,
-      serviceAccountJson,
+      firebaseProjectId: context.region.firebaseProjectId,
+      storageBucket: context.region.storageBucket || undefined,
+      serviceAccountJson: context.serviceAccountJson,
     };
 
-    const regionInfo = { regionCode: region.regionCode, regionName: region.regionName, firebaseProjectId: region.firebaseProjectId };
-    await seedRegionDefaults(credentials, regionInfo, actor || undefined);
+    const regionInfo = {
+      regionCode: context.region.regionCode,
+      regionName: context.region.regionName,
+      firebaseProjectId: context.region.firebaseProjectId,
+    };
+    await seedRegionDefaults(credentials, regionInfo, context.actor || undefined);
 
     return completeStep(step, { seeded: true });
   } catch (error: unknown) {
@@ -420,43 +514,80 @@ async function executeSeedDefaults(
 
 async function executeGenerateServiceAccount(
   step: AutomationStepResult,
-  db: Firestore,
-  region: RegionRecord,
-  actor?: { uid?: string | null; email?: string | null },
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Service account key generation requires IAM API. Generate from Firebase Console or implement via IAM REST API.");
+  const result = await createServiceAccountKey(context.region.firebaseProjectId);
+  context.serviceAccountJson = result.serviceAccountJson;
+
+  const storageBucket = context.region.storageBucket || buildDefaultStorageBucket(context.region.firebaseProjectId);
+  await saveRegionConnection(
+    context.db,
+    {
+      regionCode: context.region.regionCode,
+      firebaseProjectId: context.region.firebaseProjectId,
+      storageBucket,
+      serviceAccountJson: result.serviceAccountJson,
+    },
+    context.actor,
+  );
+
+  await context.db.collection("regions").doc(context.region.regionCode).set(
+    {
+      persistentConnectionReady: true,
+      lastConnectionSavedAt: new Date().toISOString(),
+      storageBucket,
+      ...buildServerUpdateAudit(context.actor),
+    },
+    { merge: true },
+  );
+
+  context.region = { ...context.region, persistentConnectionReady: true, storageBucket };
+
+  return completeStep(step, {
+    serviceAccountEmail: result.serviceAccountEmail,
+    keyStored: true,
+  });
 }
 
 async function executeCreateAdmin(
   step: AutomationStepResult,
-  db: Firestore,
-  region: RegionRecord,
-  serviceAccountJson: string | null,
-  actor?: { uid?: string | null; email?: string | null },
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  if (!serviceAccountJson || !region.regionAdminEmail) {
-    return skipStep(step, "Service account JSON or admin email not provided.");
+  if (!context.serviceAccountJson || !context.region.regionAdminEmail) {
+    return failStep(step, "Service account JSON and region admin email are required.");
   }
 
   try {
     const tempPassword = crypto.randomUUID().slice(0, 16) + "Aa1!";
     const credentials = {
-      firebaseProjectId: region.firebaseProjectId,
-      storageBucket: region.storageBucket || undefined,
-      serviceAccountJson,
+      firebaseProjectId: context.region.firebaseProjectId,
+      storageBucket: context.region.storageBucket || undefined,
+      serviceAccountJson: context.serviceAccountJson,
     };
 
     const result = await createRegionAdminAccount(
       credentials,
-      { regionCode: region.regionCode, regionName: region.regionName },
-      { email: region.regionAdminEmail, password: tempPassword },
+      { regionCode: context.region.regionCode, regionName: context.region.regionName },
+      { email: context.region.regionAdminEmail, password: tempPassword },
+    );
+
+    await context.db.collection("regions").doc(context.region.regionCode).set(
+      {
+        lastRegionAdminUid: result.uid,
+        onboardingChecklist: {
+          regionAdminCreated: true,
+          lastAdminCreatedAt: new Date().toISOString(),
+        },
+        ...buildServerUpdateAudit(context.actor),
+      },
+      { merge: true },
     );
 
     return completeStep(step, {
       uid: result.uid,
       email: result.email,
       created: result.created,
-      tempPassword: tempPassword,
+      handoff: "Send a Firebase password reset link from the region admin panel. Temporary passwords are not stored in automation results.",
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -466,20 +597,105 @@ async function executeCreateAdmin(
 
 async function executeProvisionVercel(
   step: AutomationStepResult,
-  db: Firestore,
-  region: RegionRecord,
-  actor?: { uid?: string | null; email?: string | null },
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Vercel provisioning requires the provision-region-vercel.mjs script to be invoked. Run it manually or integrate as a workflow step.");
+  const project = await ensureVercelProject(context.region);
+  const env = await buildRegionEnvConfig(context.region);
+  if (context.serviceAccountJson) {
+    env.FIREBASE_ADMIN_SDK_CONFIG_BASE64 = Buffer.from(context.serviceAccountJson, "utf8").toString("base64");
+  }
+  await setVercelEnvVars(project.projectName, env);
+
+  let deployment: { url: string; alias: string[] } | null = null;
+  try {
+    deployment = await deployRegionProject(project.projectName);
+  } catch {
+    deployment = null;
+  }
+
+  const health = await getVercelProjectHealth(project.projectName);
+  const productionUrl = deployment?.url ? `https://${deployment.url}` : project.productionUrl;
+  await context.db.collection("regions").doc(context.region.regionCode).set(
+    {
+      vercelProjectName: project.projectName,
+      vercelProjectUrl: project.projectUrl,
+      vercelProductionUrl: productionUrl,
+      onboardingChecklist: { vercelConfigured: true },
+      ...buildServerUpdateAudit(context.actor),
+    },
+    { merge: true },
+  );
+
+  context.region = {
+    ...context.region,
+    vercelProjectName: project.projectName,
+    vercelProjectUrl: project.projectUrl,
+    vercelProductionUrl: productionUrl,
+  };
+
+  return completeStep(step, {
+    projectName: project.projectName,
+    projectUrl: project.projectUrl,
+    productionUrl,
+    deploymentTriggered: Boolean(deployment),
+    health,
+  });
 }
 
 async function executeVerifyReady(
   step: AutomationStepResult,
-  db: Firestore,
-  region: RegionRecord,
-  serviceAccountJson: string | null,
+  context: AutomationContext,
 ): Promise<AutomationStepResult> {
-  return skipStep(step, "Readiness verification checks not yet automated. Use the readiness checker API route.");
+  if (!context.serviceAccountJson) {
+    return failStep(step, "Service account JSON is required for readiness verification.");
+  }
+
+  const credentials = {
+    firebaseProjectId: context.region.firebaseProjectId,
+    storageBucket: context.region.storageBucket || undefined,
+    serviceAccountJson: context.serviceAccountJson,
+  };
+  const result = await validateRegionFirebaseConnection(credentials);
+  if (!result.success) {
+    return failStep(step, `Firebase readiness failed: ${result.messages.join("; ")}`);
+  }
+
+  const requiredConfig = [
+    context.region.firebaseProjectId,
+    context.region.firebaseApiKey || context.region.webApiKey,
+    context.region.firebaseWebAppId || context.region.webAppId,
+    context.region.androidAppId,
+    context.region.storageBucket,
+  ];
+  if (requiredConfig.some((value) => !value)) {
+    return failStep(step, "Region Firebase SDK configuration is incomplete.");
+  }
+
+  await context.db.collection("regions").doc(context.region.regionCode).set(
+    {
+      status: "ready",
+      onboardingChecklist: {
+        firebaseValidated: true,
+        defaultsSeeded: true,
+        regionAdminCreated: true,
+        vercelConfigured: Boolean(context.region.vercelProjectName),
+      },
+      validationSummary: {
+        checks: {
+          projectIdMatches: true,
+          firestoreReachable: true,
+          authReachable: true,
+          storageReachable: true,
+        },
+        messages: result.messages,
+        validatedAt: new Date().toISOString(),
+      },
+      ...buildServerUpdateAudit(context.actor),
+    },
+    { merge: true },
+  );
+
+  return completeStep(step, { ready: true, messages: result.messages });
 }
 
 export async function getAutomationJob(
@@ -491,30 +707,138 @@ export async function getAutomationJob(
   return snap.data() as AutomationJob;
 }
 
+async function claimNextAutomationJob(db: Firestore, workerId: string): Promise<AutomationJob | null> {
+  const queuedSnap = await db
+    .collection(AUTOMATION_COLLECTION)
+    .where("status", "==", "queued")
+    .limit(10)
+    .get();
+
+  const staleCutoff = Date.now() - STALE_RUNNING_JOB_MS;
+  const runningSnap = queuedSnap.empty
+    ? await db.collection(AUTOMATION_COLLECTION).where("status", "==", "running").limit(10).get()
+    : null;
+
+  const candidates = queuedSnap.empty
+    ? (runningSnap?.docs || []).filter((doc) => {
+        const data = doc.data() as AutomationJob;
+        return !data.claimedAt || new Date(data.claimedAt).getTime() < staleCutoff;
+      })
+    : queuedSnap.docs;
+
+  const candidate = candidates
+    .map((doc) => ({ doc, data: doc.data() as AutomationJob }))
+    .sort((a, b) => (a.data.queuedAt || a.data.startedAt).localeCompare(b.data.queuedAt || b.data.startedAt))[0];
+
+  if (!candidate) return null;
+
+  return db.runTransaction(async (transaction) => {
+    const ref = candidate.doc.ref;
+    const fresh = await transaction.get(ref);
+    if (!fresh.exists) return null;
+
+    const job = fresh.data() as AutomationJob;
+    const isQueued = job.status === "queued";
+    const isStaleRunning =
+      job.status === "running" &&
+      (!job.claimedAt || new Date(job.claimedAt).getTime() < staleCutoff);
+
+    if (!isQueued && !isStaleRunning) return null;
+
+    const claimedAt = now();
+    transaction.update(ref, {
+      status: "running",
+      claimedAt,
+      workerId,
+      error: null,
+    });
+
+    return { ...job, status: "running", claimedAt, workerId };
+  });
+}
+
+export async function processNextAutomationJob(db: Firestore): Promise<{
+  processed: boolean;
+  jobId?: string;
+  regionCode?: string;
+  status?: AutomationJob["status"];
+  message?: string;
+}> {
+  const workerId = `worker-${crypto.randomUUID()}`;
+  const job = await claimNextAutomationJob(db, workerId);
+  if (!job) {
+    return { processed: false, message: "No queued automation jobs." };
+  }
+
+  const regionSnap = await db.collection("regions").doc(job.regionCode).get();
+  if (!regionSnap.exists) {
+    await db.collection(AUTOMATION_COLLECTION).doc(job.id).update({
+      status: "failed",
+      error: `Region ${job.regionCode} no longer exists.`,
+      completedAt: now(),
+    });
+    return { processed: true, jobId: job.id, regionCode: job.regionCode, status: "failed" };
+  }
+
+  const region = {
+    ...(regionSnap.data() as RegionRecord),
+    id: job.regionCode,
+    regionCode: job.regionCode,
+  };
+  const connection = await getRegionConnection(db, job.regionCode).catch(() => null);
+  const startStepIndex = findCurrentStep(job);
+
+  await runClaimedJob(
+    db,
+    job.id,
+    region,
+    connection?.serviceAccountJson || null,
+    { uid: job.workerId || workerId, email: "automation-worker@ciss.local" },
+    startStepIndex,
+  );
+
+  const refreshed = await getAutomationJob(db, job.id);
+  return {
+    processed: true,
+    jobId: job.id,
+    regionCode: job.regionCode,
+    status: refreshed?.status,
+  };
+}
+
 export async function retryAutomationStep(
   db: Firestore,
   jobId: string,
   region: RegionRecord,
-  serviceAccountJson: string | null,
+  _serviceAccountJson: string | null,
   stepIndex: number,
   actor?: { uid?: string | null; email?: string | null },
 ): Promise<AutomationJob | null> {
   const job = await getAutomationJob(db, jobId);
   if (!job) return null;
+  if (stepIndex < 0 || stepIndex >= AUTOMATION_STEPS.length) {
+    throw new Error(`Invalid automation step index: ${stepIndex}`);
+  }
 
   const updatedSteps = [...job.steps];
-  updatedSteps[stepIndex] = makeStepResult(AUTOMATION_STEPS[stepIndex].stepId);
+  for (let i = stepIndex; i < updatedSteps.length; i++) {
+    updatedSteps[i] = makePendingStepResult(AUTOMATION_STEPS[i].stepId);
+  }
 
   const updatedJob: AutomationJob = {
     ...job,
-    status: "running",
+    status: "queued",
     currentStepIndex: stepIndex,
     steps: updatedSteps,
+    queuedAt: now(),
+    completedAt: undefined,
+    error: undefined,
   };
 
-  await db.collection(AUTOMATION_COLLECTION).doc(jobId).set(updatedJob);
-
-  updateJobInBackground(db, jobId, region, serviceAccountJson, actor);
+  await db.collection(AUTOMATION_COLLECTION).doc(jobId).set({
+    ...updatedJob,
+    auditTrail: [buildServerAuditEvent("automation_retried", actor, { regionCode: region.regionCode, stepIndex })],
+  }, { merge: true });
 
   return updatedJob;
 }

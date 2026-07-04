@@ -28,7 +28,7 @@ import { AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleI
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import React, { Suspense, useCallback, useEffect, useState, useRef } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -66,6 +66,7 @@ import {
   isRecognizedDistrictName,
 } from "@/lib/districts";
 import { REGION_CODE } from "@/lib/runtime-config";
+import type { EnrollmentFormConfig } from "@/types/region";
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
   .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 5MB are allowed.");
@@ -820,6 +821,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     joiningDate?: string;
   } | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [enrollmentConfig, setEnrollmentConfig] = useState<EnrollmentFormConfig | null>(null);
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
@@ -839,6 +841,37 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const isLngClient = isLngClientName(watchClientName);
   const requiresServiceBook = requiresLngServiceBook(watchLngJobDesignation);
   const requiresArmsLicense = requiresLngArmsLicense(watchLngJobDesignation);
+  const configuredFields = useMemo(() => {
+    if (!enrollmentConfig) return null;
+    const enabled = new Set<keyof EnrollmentFormValues>();
+    const required = new Set<keyof EnrollmentFormValues>();
+    for (const section of Object.values(enrollmentConfig.sections)) {
+      for (const field of section.fields) {
+        if (!field.enabled) continue;
+        enabled.add(field.key as keyof EnrollmentFormValues);
+        if (field.required) required.add(field.key as keyof EnrollmentFormValues);
+      }
+    }
+    enabled.add("termsAndConditions");
+    required.add("termsAndConditions");
+    return { enabled, required };
+  }, [enrollmentConfig]);
+
+  useEffect(() => {
+    const loadEnrollmentConfig = async () => {
+      try {
+        const response = await fetch("/api/public/enrollment-config", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.config?.sections) {
+          setEnrollmentConfig(data.config as EnrollmentFormConfig);
+        }
+      } catch {
+        // Keep embedded defaults when public config cannot be loaded.
+      }
+    };
+    loadEnrollmentConfig();
+  }, []);
 
   useEffect(() => {
     if (!fullAddress || fullAddress.length < 15) { 
@@ -1527,7 +1560,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     return issues;
   })();
   const applicableRequiredFields = (() => {
-    let fields = [...BASE_REQUIRED_FIELDS];
+    let fields = configuredFields ? Array.from(configuredFields.required) : [...BASE_REQUIRED_FIELDS];
 
     if (isLngClientName(formValues.clientName)) {
       fields = fields.filter(
@@ -1584,7 +1617,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       fields.push("otherQualification");
     }
 
-    return fields;
+    return Array.from(new Set(fields)).filter((fieldName) => !configuredFields || configuredFields.enabled.has(fieldName));
   })();
   const completedRequiredCount = applicableRequiredFields.filter(
     (fieldName) =>
@@ -1610,6 +1643,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const getStepIssues = () =>
     ENROLLMENT_STEPS.map((step, stepIndex) => {
       const fields = step.fields
+        .filter((fieldName) => !configuredFields || configuredFields.enabled.has(fieldName))
         .filter((fieldName) => Boolean(form.getFieldState(fieldName).error))
         .map((fieldName) => FIELD_LABELS[fieldName] || step.title);
 

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import * as admin from "firebase-admin";
+import crypto from "crypto";
 
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { validateRegionFirebaseConnection } from "@/lib/server/region-onboarding";
@@ -12,6 +14,43 @@ async function probeUrl(url: string): Promise<boolean> {
     return res.status >= 200 && res.status < 400;
   } catch {
     return false;
+  }
+}
+
+async function runDiagnosticFirestoreWrite(credentials: {
+  firebaseProjectId: string;
+  storageBucket?: string | null;
+  serviceAccountJson: string;
+}) {
+  const serviceAccount = JSON.parse(credentials.serviceAccountJson) as admin.ServiceAccount;
+  const appName = `readiness-diagnostic-${credentials.firebaseProjectId}-${crypto.randomUUID()}`;
+  const app = admin.initializeApp(
+    {
+      credential: admin.credential.cert({
+        ...serviceAccount,
+        privateKey: serviceAccount.privateKey?.replace(/\\n/g, "\n"),
+      }),
+      projectId: credentials.firebaseProjectId,
+      storageBucket: credentials.storageBucket || undefined,
+    },
+    appName,
+  );
+
+  try {
+    const db = app.firestore();
+    const docRef = db.collection("_diagnostics").doc(`readiness-${crypto.randomUUID()}`);
+    const payload = {
+      check: "region_readiness",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await docRef.set(payload);
+    const snap = await docRef.get();
+    await docRef.delete();
+
+    return snap.exists;
+  } finally {
+    await app.delete().catch(() => undefined);
   }
 }
 
@@ -72,6 +111,29 @@ export async function GET(
           passed: storageReachable,
           message: storageReachable ? "Storage is reachable" : "Storage is not reachable or not configured.",
         });
+
+        try {
+          const diagnosticPassed = await runDiagnosticFirestoreWrite({
+            firebaseProjectId: connection.firebaseProjectId,
+            storageBucket: connection.storageBucket,
+            serviceAccountJson: connection.serviceAccountJson,
+          });
+          checks.push({
+            checkId: "diagnostic_write",
+            label: "Diagnostic Firestore write/read/delete",
+            passed: diagnosticPassed,
+            message: diagnosticPassed
+              ? "Regional Firestore accepted a diagnostic write/read/delete."
+              : "Diagnostic write did not round-trip successfully.",
+          });
+        } catch (error: unknown) {
+          checks.push({
+            checkId: "diagnostic_write",
+            label: "Diagnostic Firestore write/read/delete",
+            passed: false,
+            message: `Diagnostic write failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          });
+        }
       } else {
         checks.push({
           checkId: "connection",

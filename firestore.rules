@@ -29,6 +29,13 @@ service cloud.firestore {
       return request.auth.token.employeeId;
     }
 
+    function guardOwnsEmployeePath(employeePathId) {
+      return isGuard() && (
+        guardEmployeeDocId() == employeePathId ||
+        guardEmployeeId() == employeePathId
+      );
+    }
+
     // Returns the site ID the guard is currently assigned to (from custom claims)
     function guardAssignedSiteId() {
       return request.auth.token.assignedSiteId;
@@ -67,6 +74,29 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.role == 'client';
     }
 
+    // ── Region/state helpers ────────────────────────────────────────────────
+    // Regional projects are isolated, but documents and claims can still carry
+    // stateCode. These helpers enforce stateCode when it is present while
+    // keeping legacy Kerala documents without stateCode readable during rollout.
+
+    function userStateCode() {
+      return request.auth.token.stateCode;
+    }
+
+    function readStateMatches() {
+      return !('stateCode' in resource.data) ||
+        userStateCode() == null ||
+        resource.data.stateCode == userStateCode() ||
+        isSuperAdmin();
+    }
+
+    function writeStateMatches() {
+      return !('stateCode' in request.resource.data) ||
+        userStateCode() == null ||
+        request.resource.data.stateCode == userStateCode() ||
+        isSuperAdmin();
+    }
+
     // Returns the clientName claim for the signed-in client user (set at login via custom claims)
     function clientUserClientName() {
       return request.auth.token.clientName;
@@ -83,27 +113,17 @@ service cloud.firestore {
         docDistrict in request.auth.token.assignedDistricts;
     }
 
-    // Chained check for documents with a 'district' field
-    function isFieldOfficerForDocDistrict() {
-      return isFieldOfficerForDistrict(resource.data.district);
-    }
-
     // ── Client-user scoping helpers ─────────────────────────────────────────
 
     // True when the document belongs to the signed-in client user's organization
     function isOwnClientDoc(clientFieldName) {
       return isClientUser() && clientUserClientName() != null &&
         resource.data[clientFieldName] is string &&
-        resource.data[clientFieldName] == clientUserClientName();
+        resource.data[clientFieldName] == clientUserClientName() &&
+        readStateMatches();
     }
 
     // ── Resource field helpers ──────────────────────────────────────────────
-
-    // True when the guard is assigned to a specific site (from resource data)
-    function guardIsAssignedToResource() {
-      return guardAssignedSiteId() != null &&
-        resource.data.siteId == guardAssignedSiteId();
-    }
 
     // Any staff role (not guard, not client)
     function isStaff() {
@@ -138,13 +158,14 @@ service cloud.firestore {
     // client users can read employees for their mapped client.
 
     match /employees/{employeeId} {
-      allow read: if isStaff() ||
+      allow read: if readStateMatches() && (isStaff() ||
         (isGuard() && (
           employeeId == guardEmployeeDocId() ||
           resource.data.employeeId == guardEmployeeId()
         )) ||
-        isOwnClientDoc('clientName');
-      allow create, update, delete: if isAdmin();
+        isOwnClientDoc('clientName'));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── clients / sites / clientLocations ───────────────────────────────────
@@ -157,38 +178,43 @@ service cloud.firestore {
     //   - No unauthenticated reads.
 
     match /clients/{clientId} {
-      allow read: if isStaff() ||
+      allow read: if readStateMatches() && (isStaff() ||
         isOwnClientDoc('companyName') ||
-        (isGuard() && guardAssignedSiteId() != null);
-      allow create, update, delete: if isAdmin();
+        (isGuard() && guardAssignedSiteId() != null));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     match /sites/{siteId} {
-      allow read: if isStaff() ||
+      allow read: if readStateMatches() && (isStaff() ||
         isOwnClientDoc('clientName') ||
-        (isGuard() && resource.data.siteId == guardAssignedSiteId());
-      allow create, update, delete: if isAdmin();
+        (isGuard() && resource.data.siteId == guardAssignedSiteId()));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     match /clientLocations/{locationId} {
-      allow read: if isStaff() ||
+      allow read: if readStateMatches() && (isStaff() ||
         isOwnClientDoc('clientName') ||
-        (isGuard() && guardAssignedSiteId() != null);
-      allow create, update, delete: if isAdmin();
+        (isGuard() && guardAssignedSiteId() != null));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── fieldOfficers ────────────────────────────────────────────────────────
 
     match /fieldOfficers/{officerId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+      allow read: if readStateMatches() && (isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── clientUsers / clientUsersByUid ───────────────────────────────────────
 
     match /clientUsers/{mappingId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+      allow read: if readStateMatches() && (isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     match /clientUsersByUid/{uid} {
@@ -203,14 +229,17 @@ service cloud.firestore {
     // Admin has full access.
 
     match /workOrders/{workOrderId} {
-      allow read: if isAdmin() ||
+      allow read: if readStateMatches() && (isAdmin() ||
         isFieldOfficer() ||
-        isOwnClientDoc('clientName');
-      allow create, delete: if isAdmin();
+        isOwnClientDoc('clientName'));
+      allow create: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
       // FO can update workOrders only in their assigned districts.
       // When district is missing, deny FO update (admin-only).
-      allow update: if isAdmin() ||
+      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
         (isFieldOfficer() &&
+          readStateMatches() &&
+          writeStateMatches() &&
           resource.data.district is string &&
           resource.data.district != "" &&
           resource.data.district in request.auth.token.assignedDistricts);
@@ -223,7 +252,8 @@ service cloud.firestore {
     match /fcmTokens/{tokenId} {
       allow read: if isAdmin();
       allow write: if isSignedIn() &&
-        tokenId == request.auth.uid &&
+        (tokenId == request.auth.uid || tokenId.matches(request.auth.uid + '_.*')) &&
+        request.resource.data.uid == request.auth.uid &&
         request.resource.data.token is string &&
         request.resource.data.platform is string;
     }
@@ -243,38 +273,40 @@ service cloud.firestore {
         request.resource.data.keys().hasAll(['employeeDocId', 'status', 'reportedAt']);
 
       // Guards can only read their own logs; FO scoped by district; client users scoped to their clientName
-      allow read: if isAdmin() ||
+      allow read: if readStateMatches() && (isAdmin() ||
         isFieldOfficerForDistrict(resource.data.district) ||
         isOwnClientDoc('clientName') ||
         isOwnClientDoc('siteClientName') ||
         isOwnClientDoc('employeeClientName') ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId()));
 
       // Only admins can modify or delete logs (audit integrity)
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && readStateMatches() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // attendanceState — hot doc per guard tracking last check-in status, shift, duty point
     // This is the active collection used by the submit route and employee lookup API.
     match /attendanceState/{employeeId} {
-      allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
-      allow create, update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
-      allow delete: if isAdmin();
+      allow read: if readStateMatches() && (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId));
+      allow create, update: if (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId)) && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // attendanceSessions — durable IN/OUT pairing used to close the exact
     // open duty session even if roster, shift, or duty point metadata changes.
     match /attendanceSessions/{sessionId} {
-      allow read: if isStaff() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
-      allow create, update, delete: if isAdmin();
+      allow read: if readStateMatches() && (isStaff() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId()));
+      allow create, update: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // Legacy plural collection — retained for backwards-compatibility only
     match /attendanceStates/{employeeId} {
-      allow read: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
-      allow create, update: if isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId);
-      allow delete: if isAdmin();
+      allow read: if readStateMatches() && (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId));
+      allow create, update: if (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId)) && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── payrollEntries ───────────────────────────────────────────────────────
@@ -282,12 +314,13 @@ service cloud.firestore {
 
     match /payrollEntries/{entryId} {
       // Guards can read their own payslips — matched by either Firestore doc ID or employee code
-      allow read: if isAdmin() || isAccounts() || isHR() ||
+      allow read: if readStateMatches() && (isAdmin() || isAccounts() || isHR() ||
         (isGuard() && (
           resource.data.employeeDocId == guardEmployeeDocId() ||
           resource.data.employeeId == guardEmployeeId()
-        ));
-      allow create, update, delete: if isAdmin() || isAccounts();
+        )));
+      allow create, update: if (isAdmin() || isAccounts()) && writeStateMatches();
+      allow delete: if (isAdmin() || isAccounts()) && readStateMatches();
     }
 
     // ── Training & Evaluation ────────────────────────────────────────────────
@@ -319,37 +352,43 @@ service cloud.firestore {
 
     match /trainingAssignments/{assignmentId} {
       // Guards can read their own training assignments and update progress
-      allow read: if isAdmin() || isFieldOfficer() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+      allow read: if readStateMatches() && (isAdmin() || isFieldOfficer() ||
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId()));
 
       // Guards can update their own assignment progress (progressPercent, status, completedAt)
-      allow update: if isAdmin() ||
+      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
         (isGuard() &&
+          readStateMatches() &&
+          writeStateMatches() &&
           resource.data.employeeDocId == guardEmployeeDocId() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['progressPercent', 'status', 'startedAt', 'completedAt']));
 
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin() && writeStateMatches();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── evaluations — FO can only evaluate employees in their assigned districts ──
 
     match /evaluations/{evalId} {
-      allow read: if isAdmin() ||
+      allow read: if readStateMatches() && (isAdmin() ||
         isFieldOfficerForDistrict(resource.data.district) ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
+        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId()));
 
       // FO can create/update evaluations only for employees in their districts.
       // For creates where resource.data does not yet exist, validate the incoming document.
-      allow create: if isAdmin() ||
-        (isFieldOfficer() && request.resource.data.district in request.auth.token.assignedDistricts);
+      allow create: if (isAdmin() ||
+        (isFieldOfficer() && request.resource.data.district in request.auth.token.assignedDistricts)) &&
+        writeStateMatches();
 
-      allow update: if isAdmin() ||
+      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
         (isFieldOfficer() &&
+          readStateMatches() &&
+          writeStateMatches() &&
           resource.data.district in request.auth.token.assignedDistricts &&
           request.resource.data.district in request.auth.token.assignedDistricts);
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     match /guardScores/{employeeId} {
@@ -410,13 +449,15 @@ service cloud.firestore {
 
     match /notifications/{notifId} {
       // Each user can read their own notifications
-      allow read: if isAdmin() ||
-        (isSignedIn() && resource.data.recipientUid == request.auth.uid);
-      allow create: if isAdmin() || isFieldOfficer();
-      allow update: if isAdmin() ||
+      allow read: if readStateMatches() && (isAdmin() ||
+        (isSignedIn() && resource.data.recipientUid == request.auth.uid));
+      allow create: if (isAdmin() || isFieldOfficer()) && writeStateMatches();
+      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
         (isSignedIn() && resource.data.recipientUid == request.auth.uid &&
+         readStateMatches() &&
+         writeStateMatches() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']));
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── resetOtps (PIN recovery) ───────────────────────────────────────────
@@ -437,7 +478,8 @@ service cloud.firestore {
 
     match /districts/{districtId} {
       allow read: if true;
-      allow write: if isSuperAdmin() || isAdmin();
+      allow create, update: if (isSuperAdmin() || isAdmin()) && writeStateMatches();
+      allow delete: if (isSuperAdmin() || isAdmin()) && readStateMatches();
     }
 
     match /states/{stateId} {
@@ -456,6 +498,18 @@ service cloud.firestore {
     match /systemConfig/{docId} {
       allow read: if isAdmin();
       allow write: if isSuperAdmin();
+    }
+
+    match /enrollmentFormConfig/{docId} {
+      allow read: if true;
+      allow create, update: if (isAdmin() || isSuperAdmin()) && writeStateMatches();
+      allow delete: if isSuperAdmin() && readStateMatches();
+    }
+
+    match /regionSetupProgress/{docId} {
+      allow read: if isAdmin();
+      allow create, update: if (isAdmin() || isSuperAdmin()) && writeStateMatches();
+      allow delete: if isSuperAdmin() && readStateMatches();
     }
 
     // ── Server-only collections (Admin SDK only — explicit client deny) ─────
@@ -501,7 +555,7 @@ service cloud.firestore {
 
     match /guardLocations/{employeeId} {
       // Read scoped by role — NOT open to all signed-in users
-      allow read: if isAdmin() || isHR() || isAccounts() || isCompliance() ||
+      allow read: if readStateMatches() && (isAdmin() || isHR() || isAccounts() || isCompliance() ||
         // FO reads only guard locations in their assigned districts
         (isFieldOfficer() &&
           request.auth.token.assignedDistricts != null &&
@@ -511,27 +565,29 @@ service cloud.firestore {
           clientUserClientName() != null &&
           resource.data.clientName == clientUserClientName()) ||
         // Guard reads only their own location
-        (isGuard() && guardEmployeeId() == employeeId);
+        guardOwnsEmployeePath(employeeId));
 
       // Guards write their own location document, and staff can create/update
       // guard location records during QR attendance and monitoring workflows.
-      allow create, update: if (isGuard() && guardEmployeeId() == employeeId) || isStaff();
+      allow create, update: if (guardOwnsEmployeePath(employeeId) || isStaff()) &&
+        writeStateMatches();
 
       // Only the guard themselves or admin/staff can delete
-      allow delete: if (isGuard() && guardEmployeeId() == employeeId) || isAdmin();
+      allow delete: if readStateMatches() && (guardOwnsEmployeePath(employeeId) || isAdmin());
 
       // ── guardLocations/{docId}/locationHistory — immutable breadcrumb trail ─
       match /locationHistory/{historyId} {
-        allow read: if isAdmin() || isHR() || isAccounts() || isCompliance() ||
+        allow read: if readStateMatches() && (isAdmin() || isHR() || isAccounts() || isCompliance() ||
           (isFieldOfficer() &&
             request.auth.token.assignedDistricts != null &&
             resource.data.district in request.auth.token.assignedDistricts) ||
           (isClientUser() &&
             clientUserClientName() != null &&
-            resource.data.clientName == clientUserClientName());
-        allow create: if (isGuard() && guardEmployeeId() == employeeId) || isStaff();
+            resource.data.clientName == clientUserClientName()));
+        allow create: if (guardOwnsEmployeePath(employeeId) || isStaff()) &&
+          writeStateMatches();
         // History is immutable — only admins can delete for cleanup
-        allow delete: if isAdmin();
+        allow delete: if isAdmin() && readStateMatches();
       }
     }
   }

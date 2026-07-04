@@ -592,7 +592,7 @@ export default function AssignGuardsPage() {
         return () => {
             if (unsubscribe) unsubscribe();
         };
-    }, [siteId, userRole, assignedDistricts]);
+    }, [siteId, userRole, assignedDistricts, toast]);
 
     const handleOpenAssignDialog = async (workOrder: WorkOrder) => {
         setSelectedWorkOrder(workOrder);

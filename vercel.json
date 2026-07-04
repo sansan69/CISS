@@ -12,6 +12,10 @@
     {
       "path": "/api/attendance/auto-checkout",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/internal/automation-worker",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

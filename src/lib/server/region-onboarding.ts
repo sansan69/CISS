@@ -4,6 +4,10 @@ import {
   buildServerAuditEvent,
   buildServerCreateAudit,
 } from "@/lib/server/audit";
+import {
+  DEFAULT_ENROLLMENT_FORM_CONFIG,
+  DEFAULT_SETUP_PROGRESS,
+} from "@/lib/region-wizard";
 import type {
   RegionCredentialInput,
   RegionOnboardingChecklist,
@@ -291,6 +295,8 @@ export async function seedRegionDefaults(
 
     const complianceRef = db.collection("complianceSettings").doc("global");
     const systemConfigRef = db.collection("systemConfig").doc("runtime");
+    const enrollmentConfigRef = db.collection("enrollmentFormConfig").doc("global");
+    const setupProgressRef = db.collection("regionSetupProgress").doc("default");
 
     batch.set(
       complianceRef,
@@ -313,6 +319,30 @@ export async function seedRegionDefaults(
         firebaseProjectId: region.firebaseProjectId,
         seededAt: new Date(),
         onboardingReady: true,
+        setupComplete: false,
+        setupCompletedAt: null,
+        ...buildServerCreateAudit(actor),
+      },
+      { merge: true },
+    );
+
+    batch.set(
+      enrollmentConfigRef,
+      {
+        ...DEFAULT_ENROLLMENT_FORM_CONFIG,
+        regionCode: region.regionCode,
+        regionName: region.regionName,
+        ...buildServerCreateAudit(actor),
+      },
+      { merge: true },
+    );
+
+    batch.set(
+      setupProgressRef,
+      {
+        ...DEFAULT_SETUP_PROGRESS,
+        regionCode: region.regionCode,
+        regionName: region.regionName,
         ...buildServerCreateAudit(actor),
       },
       { merge: true },
@@ -321,7 +351,12 @@ export async function seedRegionDefaults(
     await batch.commit();
 
     return {
-      seededDocs: ["complianceSettings/global", "systemConfig/runtime"],
+      seededDocs: [
+        "complianceSettings/global",
+        "systemConfig/runtime",
+        "enrollmentFormConfig/global",
+        "regionSetupProgress/default",
+      ],
     };
   });
 }

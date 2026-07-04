@@ -31,16 +31,7 @@ export default function WizardPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (userRole === undefined || userRole === null) return;
-    if (userRole !== "admin") {
-      router.replace("/dashboard");
-      return;
-    }
-    fetchWizardStatus();
-  }, [userRole, router]);
-
-  const fetchWizardStatus = async () => {
+  const fetchWizardStatus = useCallback(async () => {
     try {
       const res = await authorizedFetch("/api/wizard/profile");
       const data = await res.json();
@@ -54,7 +45,16 @@ export default function WizardPage() {
     } catch {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (userRole === undefined || userRole === null) return;
+    if (userRole !== "admin") {
+      router.replace("/dashboard");
+      return;
+    }
+    fetchWizardStatus();
+  }, [userRole, router, fetchWizardStatus]);
 
   const saveStep = useCallback(async (stepKey: string, endpoint: string, body: Record<string, unknown>) => {
     setSubmitting(true);
@@ -196,6 +196,25 @@ function StepDistricts({ onSave, submitting }: any) {
   const [districts, setDistricts] = useState<string[]>([]);
   const [input, setInput] = useState("");
 
+  useEffect(() => {
+    let active = true;
+    authorizedFetch("/api/wizard/districts")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active || !Array.isArray(data.districts)) return;
+        setDistricts(
+          data.districts
+            .filter((district: any) => district.active !== false)
+            .map((district: any) => String(district.name || "").trim())
+            .filter(Boolean),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const addDistrict = () => {
     if (input.trim() && !districts.includes(input.trim())) {
       setDistricts([...districts, input.trim()]);
@@ -251,7 +270,7 @@ function StepEnrollmentConfig({ onSave, submitting }: any) {
           </div>
         </div>
       ))}
-      <Button onClick={() => onSave({ config })} disabled={submitting} className="w-full">
+      <Button onClick={() => onSave({})} disabled={submitting} className="w-full">
         {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
         Accept Defaults &amp; Continue
       </Button>

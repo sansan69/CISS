@@ -79,6 +79,36 @@ export function validateEnrollmentField(
   return null;
 }
 
+const SUBMISSION_FIELD_ALIASES: Record<string, string> = {
+  profilePicture: "profilePictureUrl",
+  identityProofFront: "identityProofUrlFront",
+  identityProofBack: "identityProofUrlBack",
+  addressProofFront: "addressProofUrlFront",
+  addressProofBack: "addressProofUrlBack",
+  signature: "signatureUrl",
+  bankPassbookStatement: "bankPassbookStatementUrl",
+  serviceBookDocument: "serviceBookDocumentUrl",
+  armsLicenseDocument: "armsLicenseDocumentUrl",
+  passportDocument: "passportDocumentUrl",
+  aadharCardDocument: "aadharCardDocumentUrl",
+  panCardDocument: "panCardDocumentUrl",
+  policeClearanceCertificate: "policeClearanceCertificateUrl",
+};
+
+function getSubmissionValue(payload: Record<string, unknown>, key: string) {
+  return payload[key] ?? payload[SUBMISSION_FIELD_ALIASES[key]];
+}
+
+export function validateEnrollmentSubmissionAgainstConfig(
+  config: EnrollmentFormConfig,
+  payload: Record<string, unknown>,
+  clientName?: string,
+): string[] {
+  return getEnabledFields(config, clientName)
+    .map((field) => validateEnrollmentField(field, getSubmissionValue(payload, field.key)))
+    .filter((message): message is string => Boolean(message));
+}
+
 export function getDefaultEnrollmentConfig(): EnrollmentFormConfig {
   return JSON.parse(JSON.stringify(DEFAULT_ENROLLMENT_FORM_CONFIG));
 }

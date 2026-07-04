@@ -272,14 +272,18 @@ async function findDuplicateSubmission(
 
   const snap = await adminDb
     .collection("attendanceLogs")
-    .where("employeeDocId", "==", employeeDocId)
     .where("processedClientRequestId", "==", clientRequestId)
-    .limit(1)
+    .limit(5)
     .get();
 
   if (snap.empty) return null;
 
-  const doc = snap.docs[0];
+  const doc = snap.docs.find((candidate) => {
+    const data = candidate.data() as Record<string, any>;
+    return data.employeeDocId === employeeDocId;
+  });
+  if (!doc) return null;
+
   const data = doc.data() as Record<string, any>;
   return {
     id: doc.id,

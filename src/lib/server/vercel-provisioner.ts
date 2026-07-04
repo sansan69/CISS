@@ -84,8 +84,24 @@ export async function ensureVercelProject(region: RegionRecord): Promise<{
 }
 
 export async function setVercelEnvVars(projectName: string, envVars: Record<string, string>, target = "production"): Promise<void> {
+  let existingKeys = new Set<string>();
+  try {
+    const existing = await vercelApi(`/v10/projects/${projectName}/env?limit=100`);
+    existingKeys = new Set(
+      (existing.envs || [])
+        .filter((env: { key?: unknown; target?: unknown }) => {
+          if (typeof env.key !== "string") return false;
+          return !Array.isArray(env.target) || env.target.includes(target);
+        })
+        .map((env: { key: string }) => env.key),
+    );
+  } catch {
+    existingKeys = new Set<string>();
+  }
+
   for (const [key, value] of Object.entries(envVars)) {
     if (!value) continue;
+    if (existingKeys.has(key)) continue;
     await vercelApi(`/v10/projects/${projectName}/env`, {
       method: "POST",
       body: JSON.stringify({

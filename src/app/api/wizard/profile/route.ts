@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAdminLike, unauthorizedResponse } from "@/lib/server/auth";
+import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import { DEFAULT_SETUP_PROGRESS } from "@/lib/region-wizard";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const configSnap = await adminDb.collection("systemConfig").doc("runtime").get();
     if (!configSnap.exists) {
@@ -29,9 +30,9 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: Request) {
+async function saveProfile(request: Request) {
   try {
-    const actor = await requireAdminLike(await (await import("@/lib/server/auth")).verifyRequestAuth(request));
+    const actor = await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const body = (await request.json()) as {
       regionName?: string;
@@ -47,7 +48,7 @@ export async function PATCH(request: Request) {
     }
 
     await adminDb.collection("regionSetupProgress").doc("default").set(
-      { steps: { profile: true }, startedAt: new Date().toISOString() },
+      { steps: { profile: true }, currentStep: 1, startedAt: new Date().toISOString() },
       { merge: true },
     );
 
@@ -55,4 +56,12 @@ export async function PATCH(request: Request) {
   } catch (error: any) {
     return unauthorizedResponse(error?.message || "Unauthorized");
   }
+}
+
+export async function PATCH(request: Request) {
+  return saveProfile(request);
+}
+
+export async function POST(request: Request) {
+  return saveProfile(request);
 }

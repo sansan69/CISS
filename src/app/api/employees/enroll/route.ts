@@ -5,6 +5,10 @@ import {
   isRecognizedDistrictName,
 } from "@/lib/districts";
 import { generateEmployeeId } from "@/lib/employee-id";
+import {
+  fetchEnrollmentConfig,
+  validateEnrollmentSubmissionAgainstConfig,
+} from "@/lib/enrollment-config";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import { REGION_CODE } from "@/lib/runtime-config";
 import { isLngClientName, LNG_CLIENT_NAME } from "@/lib/constants";
@@ -99,6 +103,22 @@ export async function POST(request: NextRequest) {
       (payload.emailAddress?.trim() || "").toLowerCase() ||
       (isLngEnrollment ? buildLngFallbackEmail(payload) : "");
     const normalizedFullNameInput = payload.fullNameInput?.trim() || "";
+    const enrollmentConfig = await fetchEnrollmentConfig(adminDb);
+    const configErrors = validateEnrollmentSubmissionAgainstConfig(
+      enrollmentConfig,
+      payload as unknown as Record<string, unknown>,
+      canonicalClientName,
+    );
+    if (configErrors.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Enrollment form requirements are not satisfied.",
+          details: configErrors,
+        },
+        { status: 400 },
+      );
+    }
+
     const nameParts =
       isLngEnrollment && normalizedFullNameInput
         ? splitFullNameForStorage(normalizedFullNameInput)

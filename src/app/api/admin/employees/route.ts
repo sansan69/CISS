@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
+import { normalizeText } from "@/lib/server/mobile-api-utils";
 
 export async function GET(request: Request) {
   try {
@@ -15,9 +16,7 @@ export async function GET(request: Request) {
     if (status) {
       query = query.where("status", "==", status);
     }
-    if (clientId) {
-      query = query.where("clientName", "==", clientId);
-    }
+    if (clientId) query = query.where("clientId", "==", clientId);
 
     const snapshot = await query.get();
     const employees = snapshot.docs
@@ -27,24 +26,37 @@ export async function GET(request: Request) {
           firstName?: string;
           lastName?: string;
           employeeCode?: string;
+          employeeId?: string;
           guardId?: string;
           clientId?: string;
           clientName?: string;
           district?: string;
           status?: string;
+          phoneNumber?: string;
+          mobileNumber?: string;
+          phone?: string;
+          siteName?: string;
+          assignedSiteName?: string;
         };
+
+        const fullName =
+          normalizeText(data.name) ||
+          normalizeText([data.firstName, data.lastName].filter(Boolean).join(" ")) ||
+          "Unnamed employee";
+        const employeeId = normalizeText(data.employeeId || data.employeeCode || data.guardId || doc.id);
 
         return {
           id: doc.id,
-          name:
-            data.name ||
-            [data.firstName, data.lastName].filter(Boolean).join(" ") ||
-            "Unnamed employee",
-          employeeCode: data.employeeCode || data.guardId || "",
-          clientId: data.clientId || "",
-          clientName: data.clientName || "",
-          district: data.district || "",
-          status: data.status || "",
+          name: fullName,
+          fullName,
+          employeeId,
+          employeeCode: normalizeText(data.employeeCode || data.guardId || data.employeeId),
+          phoneNumber: normalizeText(data.phoneNumber || data.mobileNumber || data.phone),
+          clientId: normalizeText(data.clientId),
+          clientName: normalizeText(data.clientName),
+          district: normalizeText(data.district),
+          siteName: normalizeText(data.siteName || data.assignedSiteName),
+          status: normalizeText(data.status),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));

@@ -50,7 +50,7 @@ export default function DownloadPage() {
         </a>
 
         <p className="text-xs text-white/40 mt-4">
-          Version 1.1.0 · Latest release · Android 7.0+ (API 24)
+          Version 1.0.14 · Latest release · Android 7.0+ (API 24)
         </p>
 
         {/* Alternative download — GitHub Release */}
@@ -77,7 +77,7 @@ export default function DownloadPage() {
           <ol className="text-xs text-white/50 space-y-2 list-decimal list-inside">
             <li>Tap the <strong className="text-white/70">Download APK</strong> button above</li>
             <li>Open the downloaded file from notifications</li>
-            <li>If prompted, allow installation from your browser</li>
+            <li>If prompted, allow installation from your browser or CISS Workforce</li>
             <li>Tap <strong className="text-white/70">Install</strong> and open the app</li>
             <li>Log in with your guard or field officer credentials</li>
           </ol>

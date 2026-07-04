@@ -23,9 +23,7 @@ export async function POST(
     const project = await ensureVercelProject(region as any);
     const envVars = await buildRegionEnvConfig(region as any);
 
-    if (!project.alreadyExisted) {
-      await setVercelEnvVars(project.projectName, envVars);
-    }
+    await setVercelEnvVars(project.projectName, envVars);
 
     const health = await getVercelProjectHealth(project.projectName);
 

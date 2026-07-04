@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -22,16 +22,7 @@ export default function EnrollmentFormSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (userRole === null) return;
-    if (userRole !== "admin" && userRole !== "superAdmin") {
-      router.replace("/dashboard");
-      return;
-    }
-    loadConfig();
-  }, [userRole, router]);
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       const res = await authorizedFetch("/api/wizard/enrollment-config");
       const data = await res.json();
@@ -41,7 +32,16 @@ export default function EnrollmentFormSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    if (userRole === null) return;
+    if (userRole !== "admin" && userRole !== "superAdmin") {
+      router.replace("/dashboard");
+      return;
+    }
+    loadConfig();
+  }, [userRole, router, loadConfig]);
 
   const updateField = (sectionKey: string, fieldIndex: number, patch: Partial<EnrollmentFormFieldConfig>) => {
     if (!config) return;

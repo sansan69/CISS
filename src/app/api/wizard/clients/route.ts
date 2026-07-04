@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAdminLike, unauthorizedResponse } from "@/lib/server/auth";
+import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
 import { REGION_CODE } from "@/lib/runtime-config";
 
 export async function POST(request: Request) {
   try {
-    const actor = await requireAdminLike(await (await import("@/lib/server/auth")).verifyRequestAuth(request));
+    const actor = await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const body = (await request.json()) as {
       clientName: string;
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     await adminDb.collection("regionSetupProgress").doc("default").set(
-      { steps: { clients: true } },
+      { steps: { clients: true }, currentStep: 4 },
       { merge: true },
     );
 

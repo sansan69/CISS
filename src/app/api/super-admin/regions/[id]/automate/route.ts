@@ -28,7 +28,7 @@ export async function POST(
         serviceAccountJson = connection.serviceAccountJson;
       }
     } catch {
-      // Service account not available — some steps will be skipped
+      // Service account not available yet. Automation can generate and persist one.
     }
 
     const job = await startAutomation(

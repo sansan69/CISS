@@ -306,7 +306,7 @@ export default function AttendancePage() {
         (site.clientName && site.clientName.toLowerCase().includes(search))
       );
     });
-  }, [districtSiteOptions, siteSearchQuery]);
+  }, [districtSiteOptions, selectedDistrict, siteSearchQuery]);
 
   const appendRecentAttendance = useCallback((item: DeviceAttendanceHistoryItem) => {
     setRecentAttendance((previous) => {

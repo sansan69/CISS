@@ -872,7 +872,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, isSuperAdmin, pathname]);
 
   const handleLogout = () => {
     setShowLogoutConfirm(true);

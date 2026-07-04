@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireAdminLike, unauthorizedResponse } from "@/lib/server/auth";
-import { REGION_CODE } from "@/lib/runtime-config";
+import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
     const checks: Record<string, boolean> = {};
@@ -37,6 +37,13 @@ export async function POST() {
     const errors = Object.entries(checks)
       .filter(([, passed]) => !passed)
       .map(([key]) => key);
+
+    if (allPassed) {
+      await adminDb.collection("regionSetupProgress").doc("default").set(
+        { steps: { verify: true }, currentStep: 5 },
+        { merge: true },
+      );
+    }
 
     return NextResponse.json({
       passed: allPassed,
