@@ -1,15 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { QrCode, UserPlus, Briefcase, Star, FileText, DollarSign, GraduationCap, Users, Footprints } from "lucide-react";
+import {
+  Briefcase,
+  DollarSign,
+  FileText,
+  Footprints,
+  GraduationCap,
+  QrCode,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type UserRole = 'admin' | 'superAdmin' | 'hr' | 'accounts' | 'compliance' | 'fieldOfficer' | 'client';
 
 interface QuickAction {
   label: string;
   href: string;
-  icon: any;
+  icon: LucideIcon;
   color: string;
 }
 
@@ -56,15 +66,24 @@ export function DashboardActions({ role }: DashboardActionsProps) {
   const actions = roleActions[role] || roleActions.admin;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
       {actions.map((action) => (
-        <Link key={action.href} href={action.href}>
-          <Button variant="outline" className="w-full h-auto py-3 flex flex-col items-center gap-2">
-            <div className={`p-2 rounded-lg ${action.color}`}>
-              <action.icon className="h-5 w-5" />
-            </div>
-            <span className="text-sm">{action.label}</span>
-          </Button>
+        <Link
+          key={action.href}
+          href={action.href}
+          className="group flex min-h-[116px] flex-col items-center justify-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-5 text-center shadow-brand-xs transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-brand-blue/30 hover:bg-card/95 hover:shadow-brand-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-0"
+        >
+          <span
+            className={cn(
+              "flex h-12 w-12 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105",
+              action.color,
+            )}
+          >
+            <action.icon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="text-sm font-semibold leading-snug text-foreground text-balance">
+            {action.label}
+          </span>
         </Link>
       ))}
     </div>

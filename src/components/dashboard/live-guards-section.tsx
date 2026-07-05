@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
@@ -34,7 +34,9 @@ export default function LiveGuardsSection({
   clientName?: string;
 }) {
   const [locations, setLocations] = useState<GuardLocation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeGuardIds, setActiveGuardIds] = useState<Set<string> | null>(null);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGuard, setSelectedGuard] = useState<GuardLocation | null>(null);
@@ -56,7 +58,11 @@ export default function LiveGuardsSection({
       (snap) => {
         const locs: GuardLocation[] = [];
         snap.forEach((doc) => {
-          locs.push(doc.data() as GuardLocation);
+          const data = doc.data() as GuardLocation;
+          locs.push({
+            ...data,
+            employeeDocId: data.employeeDocId || doc.id,
+          });
         });
         locs.sort((a, b) => {
           const aTime = a.updatedAt?.toDate?.()?.getTime() ?? 0;
@@ -64,33 +70,76 @@ export default function LiveGuardsSection({
           return bTime - aTime;
         });
         setLocations(locs);
-        setLoading(false);
+        setLocationsLoading(false);
       },
       (err) => {
         console.error("LiveGuardsSection error:", err);
-        setLoading(false);
+        setLocationsLoading(false);
       }
     );
 
     return () => unsub();
   }, [district, clientName]);
 
-  const onDuty = locations.filter((l) => l.status === "In").length;
-  const outOfZone = locations.filter((l) => l.isOutOfZone).length;
-  const stale = locations.filter((l) => {
+  useEffect(() => {
+    const q = query(
+      collection(db, "attendanceState"),
+      where("lastStatus", "==", "In"),
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setActiveGuardIds(new Set(snap.docs.map((doc) => doc.id)));
+        setAttendanceLoading(false);
+      },
+      (err) => {
+        console.error("LiveGuardsSection attendance state error:", err);
+        setActiveGuardIds(new Set());
+        setAttendanceLoading(false);
+      },
+    );
+
+    return () => unsub();
+  }, []);
+
+  const loading = locationsLoading || attendanceLoading;
+
+  const markedInLocations = useMemo(() => {
+    if (!activeGuardIds) return [];
+    return locations.filter(
+      (location) =>
+        location.status === "In" &&
+        Boolean(location.employeeDocId) &&
+        activeGuardIds.has(location.employeeDocId),
+    );
+  }, [activeGuardIds, locations]);
+
+  useEffect(() => {
+    if (
+      selectedGuard &&
+      !markedInLocations.some((location) => location.employeeDocId === selectedGuard.employeeDocId)
+    ) {
+      setSelectedGuard(null);
+    }
+  }, [markedInLocations, selectedGuard]);
+
+  const onDuty = markedInLocations.length;
+  const outOfZone = markedInLocations.filter((l) => l.isOutOfZone).length;
+  const stale = markedInLocations.filter((l) => {
     const updated = l.updatedAt?.toDate?.();
     return updated && Date.now() - updated.getTime() > 10 * 60 * 1000;
   }).length;
   const inZone = onDuty - outOfZone - stale;
 
   const filteredLocations = searchTerm
-    ? locations.filter(
+    ? markedInLocations.filter(
         (l) =>
           l.guardName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           l.siteName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           l.district?.toLowerCase().includes(searchTerm.toLowerCase()),
       )
-    : locations;
+    : markedInLocations;
 
   return (
     <Card>
@@ -151,7 +200,7 @@ export default function LiveGuardsSection({
               <div key={i} className="h-48 rounded-lg bg-muted/50 animate-pulse" />
             ))}
           </div>
-        ) : locations.length === 0 ? (
+        ) : markedInLocations.length === 0 ? (
           <div className="px-6 pb-6 text-center text-sm text-muted-foreground py-8">
             <MapPin className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p>No guards currently on duty with live tracking.</p>

@@ -11,10 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Loader2, FileDown, Search, MapPin, CalendarIcon, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
-import { format, parseISO, isAfter, isBefore, isEqual } from "date-fns";
+import { Loader2, FileDown, Search, MapPin, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
+import { format } from "date-fns";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import type { AttendancePhotoCompliance, FirestoreAttendanceLog } from "@/types/attendance";
@@ -30,7 +28,16 @@ import { Separator } from "@/components/ui/separator";
 
 type AttendanceLog = FirestoreAttendanceLog;
 
-type DateRange = { from: Date; to: Date };
+const INDIA_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function getTodayAttendanceDate() {
+  return INDIA_DATE_FORMATTER.format(new Date());
+}
 
 function getReportedAt(log: AttendanceLog) {
   if (log.reportedAt?.toDate) return log.reportedAt.toDate();
@@ -82,24 +89,16 @@ function downloadBlob(content: BlobPart, filename: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-function isDateInRange(dateStr: string, range?: DateRange) {
-  if (!range?.from && !range?.to) return true;
-  const d = parseISO(dateStr);
-  if (range.from && isBefore(d, range.from) && !isEqual(d, range.from)) return false;
-  if (range.to && isAfter(d, range.to) && !isEqual(d, range.to)) return false;
-  return true;
-}
-
 export default function AttendanceLogsPage() {
   const { userRole, assignedDistricts, clientInfo, stateCode } = useAppAuth();
   const isClientView = userRole === "client";
+  const todayAttendanceDate = useMemo(() => getTodayAttendanceDate(), []);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [districtFilter, setDistrictFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AttendanceLog | null>(null);
   const [expandedClients, setExpandedClients] = useState<string[]>(["all"]);
@@ -116,12 +115,14 @@ export default function AttendanceLogsPage() {
       const siteClientQuery = query(
         collection(db, "attendanceLogs"),
         where("clientName", "==", clientInfo.clientName),
+        where("attendanceDate", "==", todayAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
       const employeeClientQuery = query(
         collection(db, "attendanceLogs"),
         where("employeeClientName", "==", clientInfo.clientName),
+        where("attendanceDate", "==", todayAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
@@ -176,6 +177,7 @@ export default function AttendanceLogsPage() {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
         where("district", "in", assignedDistricts),
+        where("attendanceDate", "==", todayAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
@@ -197,6 +199,7 @@ export default function AttendanceLogsPage() {
     } else {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
+        where("attendanceDate", "==", todayAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
@@ -216,7 +219,7 @@ export default function AttendanceLogsPage() {
 
       return () => unsubscribe();
     }
-  }, [userRole, clientInfo, assignedDistricts]);
+  }, [userRole, clientInfo, assignedDistricts, todayAttendanceDate]);
 
   const clientOptions = useMemo(() => {
     const names = new Set<string>();
@@ -252,7 +255,7 @@ export default function AttendanceLogsPage() {
       const matchesDistrict =
         districtFilter === "all" || districtMatches(log.district, districtFilter);
       const matchesClient = clientFilter === "all" || logMatchesClient(log, clientFilter);
-      const matchesDate = !dateRange || isDateInRange(log.attendanceDate ?? "", dateRange);
+      const matchesDate = log.attendanceDate === todayAttendanceDate;
       const matchesSearch =
         !term ||
         log.employeeName?.toLowerCase().includes(term) ||
@@ -265,7 +268,7 @@ export default function AttendanceLogsPage() {
 
       return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesDate && matchesSearch;
     });
-  }, [assignedDistricts, clientFilter, clientInfo?.clientName, dateRange, districtFilter, logs, searchTerm, statusFilter, userRole]);
+  }, [assignedDistricts, clientFilter, clientInfo?.clientName, districtFilter, logs, searchTerm, statusFilter, todayAttendanceDate, userRole]);
 
   const groupedByClient = useMemo(() => {
     const groups = new Map<string, AttendanceLog[]>();
@@ -318,9 +321,9 @@ export default function AttendanceLogsPage() {
         format: "csv",
         status: statusFilter,
         district: districtFilter,
+        from: todayAttendanceDate,
+        to: todayAttendanceDate,
       });
-      if (dateRange?.from) params.set("from", format(dateRange.from, "yyyy-MM-dd"));
-      if (dateRange?.to) params.set("to", format(dateRange.to, "yyyy-MM-dd"));
 
       const response = await authorizedFetch(`/api/admin/reports/attendance?${params.toString()}`);
       if (!response.ok) {
@@ -545,7 +548,7 @@ export default function AttendanceLogsPage() {
       <PageHeader
         eyebrow="Workforce"
         title="Attendance Logs"
-        description="Live attendance activity grouped by client with date and district filters."
+        description={`Current attendance for ${todayAttendanceDate}, grouped by client.`}
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Attendance Logs" },
@@ -594,9 +597,9 @@ export default function AttendanceLogsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
-          <CardDescription>Search by employee, site, or client and narrow by date range and district.</CardDescription>
+          <CardDescription>Showing only today&apos;s attendance date: {todayAttendanceDate}.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -646,42 +649,8 @@ export default function AttendanceLogsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="justify-start text-left font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, "dd MMM")} - {format(dateRange.to, "dd MMM")}
-                    </>
-                  ) : (
-                    format(dateRange.from, "dd MMM")
-                  )
-                ) : (
-                  <span>Pick date range</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={new Date()}
-                selected={dateRange}
-                onSelect={(range) => {
-                  if (range?.from) {
-                    setDateRange({ from: range.from, to: range.to ?? range.from });
-                  } else {
-                    setDateRange(undefined);
-                  }
-                }}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
           {isClientView && (
-            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-5">
+            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
               Client filter is locked to your account scope.
             </p>
           )}
@@ -693,8 +662,8 @@ export default function AttendanceLogsPage() {
           <CardTitle>Attendance by Client</CardTitle>
           <CardDescription>
             {filteredLogs.length === 0
-              ? "No records match the current filters."
-              : `${filteredLogs.length} records across ${groupedByClient.size} client(s).`}
+              ? `No records found for ${todayAttendanceDate}.`
+              : `${filteredLogs.length} records for ${todayAttendanceDate} across ${groupedByClient.size} client(s).`}
           </CardDescription>
         </CardHeader>
         <CardContent>
