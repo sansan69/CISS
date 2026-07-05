@@ -1,7 +1,7 @@
 // A robust, production-ready service worker.
 // See: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
 
-const CACHE_NAME = 'ciss-workforce-cache-v4'; // Increment version to force update
+const CACHE_NAME = 'ciss-workforce-cache-v5'; // Increment version to force update
 const APP_SHELL_URLS = [
   '/',
   '/guard/dashboard',
@@ -60,6 +60,17 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   // We only want to cache GET requests.
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Never cache APK downloads or update metadata. APKs are large, version
+  // sensitive, and may be fetched by browsers already controlled by this SW.
+  if (
+    event.request.url.includes('/downloads/') ||
+    event.request.url.includes('/api/public/download/android') ||
+    event.request.url.includes('/api/public/app-update')
+  ) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
     return;
   }
   
