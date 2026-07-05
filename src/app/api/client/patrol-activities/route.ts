@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { hasClientAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { parseDate, resolvePatrolSettings, toGuardPatrolActivityRow } from "@/lib/patrol";
+export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { REGION_CODE } from "@/lib/runtime-config";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {

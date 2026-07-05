@@ -112,6 +112,8 @@ export default {
       spacing: {
         "safe-bottom": "max(env(safe-area-inset-bottom), 8px)",
         "safe-top":    "env(safe-area-inset-top)",
+        // WCAG 2.5.5 touch-target minimum (44px). Use via `min-h-touch` / `h-touch`.
+        "touch":       "2.75rem",
         "18":  "4.5rem",
         "22":  "5.5rem",
         "88":  "22rem",

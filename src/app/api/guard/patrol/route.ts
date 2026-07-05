@@ -12,6 +12,7 @@ import {
   toGuardPatrolActivityRow,
 } from "@/lib/patrol";
 import { buildServerCreateAudit } from "@/lib/server/audit";
+export const runtime = "nodejs";
 
 type AttendanceRecord = Record<string, unknown> & { id: string };
 

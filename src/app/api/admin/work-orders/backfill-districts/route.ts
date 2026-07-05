@@ -12,6 +12,7 @@ import { buildLocationIdentity } from "@/lib/location-utils";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 function normalizeStoredDistrict(value: unknown): string {
   // Strip operational-zone wrapping (e.g. "South 2" → "Ernakulam") then

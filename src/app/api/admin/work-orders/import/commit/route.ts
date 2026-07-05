@@ -32,6 +32,9 @@ import type {
 import { GeoPoint } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
+
+const BATCH_MAX_OPS = 450;
 
 const IST_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",
@@ -57,6 +60,42 @@ type SiteRecord = {
   district: string;
 };
 
+// ── Batch write accumulator ─────────────────────────────────────────────
+
+type WriteOp = {
+  ref: FirebaseFirestore.DocumentReference;
+  data: Record<string, unknown>;
+  merge?: boolean;
+};
+
+function commitWritesInChunks(
+  db: FirebaseFirestore.Firestore,
+  writes: WriteOp[],
+): Promise<void> {
+  return commitWritesInChunksInternal(db, writes, BATCH_MAX_OPS);
+}
+
+async function commitWritesInChunksInternal(
+  db: FirebaseFirestore.Firestore,
+  writes: WriteOp[],
+  maxOps: number,
+): Promise<void> {
+  for (let i = 0; i < writes.length; i += maxOps) {
+    const chunk = writes.slice(i, i + maxOps);
+    const batch = db.batch();
+    for (const w of chunk) {
+      if (w.merge) {
+        batch.set(w.ref, w.data, { merge: true });
+      } else {
+        batch.set(w.ref, w.data);
+      }
+    }
+    await batch.commit();
+  }
+}
+
+// ── Normalization helpers ───────────────────────────────────────────────
+
 function normalizeMode(value: unknown): WorkOrderImportMode {
   return value === "revision" ? "revision" : "new";
 }
@@ -81,10 +120,6 @@ function normalizeSegment(value: string | number | undefined | null): string {
 }
 
 function normalizeTcsDistrict(value: unknown): string {
-  // Run every district through the shared resolver so TCS imports always
-  // store one of the canonical Kerala district names. Operational zone
-  // labels (e.g. "South 2") are mapped first; aliases (Trivandrum, Cochin,
-  // …) are then canonicalised to the field-officer-facing district name.
   const zoneNormalized = normalizeOperationalZoneLabel(value as string | null | undefined);
   if (!zoneNormalized) return "";
   if (isCanonicalKeralaDistrict(zoneNormalized)) {
@@ -93,9 +128,7 @@ function normalizeTcsDistrict(value: unknown): string {
   return zoneNormalized;
 }
 
-function hasConcreteSiteId(row: {
-  siteId?: string;
-}) {
+function hasConcreteSiteId(row: { siteId?: string }) {
   return normalizeSegment(row.siteId) !== "";
 }
 
@@ -103,29 +136,24 @@ function toDateValue(value: unknown): Date | null {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value;
   }
-
   if (value && typeof (value as FirestoreTimestampLike).toDate === "function") {
     const converted = (value as FirestoreTimestampLike).toDate?.();
     if (converted instanceof Date && !Number.isNaN(converted.getTime())) {
       return converted;
     }
   }
-
   if (typeof value === "string" || typeof value === "number") {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed;
     }
   }
-
   return null;
 }
 
 function toIsoDate(value: unknown): string {
   const parsed = toDateValue(value);
-  if (!parsed) {
-    return "";
-  }
+  if (!parsed) return "";
   return IST_DATE_FORMATTER.format(parsed);
 }
 
@@ -151,11 +179,7 @@ function getIdentityKey(row: {
   const siteKey = hasConcreteSiteId(row)
     ? `site-id:${normalizeSegment(row.siteId)}`
     : `site-fallback:${normalizeSegment(row.siteName)}|district:${normalizeSegment(row.district)}`;
-  return `${siteKey}|date:${row.date.trim().toLowerCase()}|exam:${String(
-    row.examCode ?? "",
-  )
-    .trim()
-    .toLowerCase()}`;
+  return `${siteKey}|date:${row.date.trim().toLowerCase()}|exam:${String(row.examCode ?? "").trim().toLowerCase()}`;
 }
 
 function getFallbackIdentityKey(row: {
@@ -164,9 +188,7 @@ function getFallbackIdentityKey(row: {
   date: string;
   examCode?: string;
 }) {
-  return `site-fallback:${normalizeSegment(row.siteName)}|district:${normalizeSegment(
-    row.district,
-  )}|date:${normalizeSegment(row.date)}|exam:${normalizeSegment(row.examCode)}`;
+  return `site-fallback:${normalizeSegment(row.siteName)}|district:${normalizeSegment(row.district)}|date:${normalizeSegment(row.date)}|exam:${normalizeSegment(row.examCode)}`;
 }
 
 function findMatchingExistingRow(
@@ -177,16 +199,11 @@ function findMatchingExistingRow(
     const exactMatch = existingRows.find(
       (row) => hasConcreteSiteId(row) && getIdentityKey(row) === getIdentityKey(parsedRow),
     );
-    if (exactMatch) {
-      return exactMatch;
-    }
+    if (exactMatch) return exactMatch;
   }
-
   const fallbackKey = getFallbackIdentityKey(parsedRow);
   return existingRows.find((row) => {
-    if (hasConcreteSiteId(parsedRow) && hasConcreteSiteId(row)) {
-      return false;
-    }
+    if (hasConcreteSiteId(parsedRow) && hasConcreteSiteId(row)) return false;
     return getFallbackIdentityKey(row) === fallbackKey;
   });
 }
@@ -208,10 +225,7 @@ function buildWorkOrderDocId(row: TcsExamSourceRow) {
 }
 
 function buildWorkOrderDocIdForExam(row: TcsExamSourceRow, examCode: string) {
-  return buildWorkOrderDocId({
-    ...row,
-    examCode,
-  });
+  return buildWorkOrderDocId({ ...row, examCode });
 }
 
 function buildFallbackSiteKey(siteName: string, district: string) {
@@ -251,57 +265,90 @@ function validatePayload(body: unknown): TcsExamImportCommitPayload {
   return payload as TcsExamImportCommitPayload;
 }
 
+// ── Paginated / filtered Firestore reads ────────────────────────────────
+
 async function fetchExistingRows(
-  adminDb: {
-    collection: (name: string) => {
-      get: () => Promise<{
-        docs: Array<{ id: string; data: () => Record<string, unknown> }>;
-      }>;
-    };
-  },
+  adminDb: FirebaseFirestore.Firestore,
   parsedRows: readonly TcsExamSourceRow[],
 ): Promise<ExistingWorkOrderRecord[]> {
-  const relevantExamCodes = new Set(parsedRows.map((row) => row.examCode ?? "").filter(Boolean));
-  const snapshot = await adminDb.collection("workOrders").get();
+  const relevantExamCodes = Array.from(
+    new Set(parsedRows.map((row) => row.examCode ?? "").filter(Boolean)),
+  );
 
-  return snapshot.docs
-    .map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        clientName: typeof data.clientName === "string" ? data.clientName : "",
-        siteId: typeof data.siteId === "string" ? data.siteId : undefined,
-        siteName: String(data.siteName ?? ""),
-        district: String(data.district ?? ""),
-        date: toIsoDate(data.date),
-        examName: typeof data.examName === "string" ? data.examName : undefined,
-        examCode: String(data.examCode ?? ""),
-        maleGuardsRequired: Number(data.maleGuardsRequired ?? 0),
-        femaleGuardsRequired: Number(data.femaleGuardsRequired ?? 0),
-        totalManpower: Number(data.totalManpower ?? 0),
-        recordStatus: normalizeRecordStatus(data.recordStatus),
-        assignedGuards: Array.isArray(data.assignedGuards) ? data.assignedGuards : [],
-        sourceFileName:
-          typeof data.sourceFileName === "string" ? data.sourceFileName : undefined,
-        sourceSheetName:
-          typeof data.sourceSheetName === "string" ? data.sourceSheetName : undefined,
-        binaryFileHash:
-          typeof data.binaryFileHash === "string" ? data.binaryFileHash : undefined,
-        contentHash: typeof data.contentHash === "string" ? data.contentHash : undefined,
-      } satisfies ExistingWorkOrderRecord;
-    })
+  if (relevantExamCodes.length === 0) return [];
+
+  const allResults: ExistingWorkOrderRecord[] = [];
+
+  // Firestore "in" supports up to 10 values; paginate if needed
+  for (let i = 0; i < relevantExamCodes.length; i += 10) {
+    const codeBatch = relevantExamCodes.slice(i, i + 10);
+    let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      let query = adminDb
+        .collection("workOrders")
+        .where("examCode", "in", codeBatch)
+        .limit(300);
+
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
+      }
+
+      const snapshot = await query.get();
+      if (snapshot.empty) break;
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        allResults.push({
+          id: doc.id,
+          clientName: typeof data.clientName === "string" ? data.clientName : "",
+          siteId: typeof data.siteId === "string" ? data.siteId : undefined,
+          siteName: String(data.siteName ?? ""),
+          district: String(data.district ?? ""),
+          date: toIsoDate(data.date),
+          examName: typeof data.examName === "string" ? data.examName : undefined,
+          examCode: String(data.examCode ?? ""),
+          maleGuardsRequired: Number(data.maleGuardsRequired ?? 0),
+          femaleGuardsRequired: Number(data.femaleGuardsRequired ?? 0),
+          totalManpower: Number(data.totalManpower ?? 0),
+          recordStatus: normalizeRecordStatus(data.recordStatus),
+          assignedGuards: Array.isArray(data.assignedGuards) ? data.assignedGuards : [],
+          sourceFileName: typeof data.sourceFileName === "string" ? data.sourceFileName : undefined,
+          sourceSheetName: typeof data.sourceSheetName === "string" ? data.sourceSheetName : undefined,
+          binaryFileHash: typeof data.binaryFileHash === "string" ? data.binaryFileHash : undefined,
+          contentHash: typeof data.contentHash === "string" ? data.contentHash : undefined,
+        } satisfies ExistingWorkOrderRecord);
+      }
+
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      hasMore = snapshot.docs.length >= 300;
+    }
+  }
+
+  // Apply the same memory-level filters as before
+  return allResults
     .filter((row) => isOperationalWorkOrderClientName(row.clientName))
     .filter((row) => row.date !== "")
     .filter((row) =>
-      relevantExamCodes.size === 0 ? true : relevantExamCodes.has(row.examCode),
+      relevantExamCodes.length === 0 ? true : relevantExamCodes.includes(row.examCode),
     );
 }
 
 async function fetchSites(
-  adminDb: any,
+  adminDb: FirebaseFirestore.Firestore,
   tcsClientId: string | null,
-) {
-  const snapshot = await adminDb.collection("sites").get();
+): Promise<{
+  byCodeDistrict: Map<string, SiteRecord>;
+  byFallback: Map<string, SiteRecord>;
+  byCode: Map<string, SiteRecord>;
+  byName: Map<string, SiteRecord>;
+}> {
+  const snapshot = await adminDb
+    .collection("sites")
+    .where("clientName", "==", OPERATIONAL_CLIENT_NAME)
+    .get();
+
   const byCodeDistrict = new Map<string, SiteRecord>();
   const byFallback = new Map<string, SiteRecord>();
   const byCode = new Map<string, SiteRecord>();
@@ -311,15 +358,11 @@ async function fetchSites(
     const data = doc.data();
     const clientNameValue = typeof data.clientName === "string" ? data.clientName : "";
     const clientIdValue = typeof data.clientId === "string" ? data.clientId : "";
-    // Accept the canonical TCS client AND any pre-existing TCS variants linked
-    // via clientId. This prevents the importer from creating duplicate sites
-    // for legacy records whose clientName drifted from the strict constant.
     const isTcsClient =
       isOperationalWorkOrderClientName(clientNameValue) ||
       (Boolean(tcsClientId) && clientIdValue === tcsClientId);
-    if (!isTcsClient) {
-      continue;
-    }
+    if (!isTcsClient) continue;
+
     const site: SiteRecord = {
       id: doc.id,
       siteId: typeof data.siteId === "string" ? data.siteId : null,
@@ -347,9 +390,11 @@ async function fetchSites(
   return { byCodeDistrict, byFallback, byCode, byName };
 }
 
+// ── Site resolution & creation ──────────────────────────────────────────
+
 async function resolveCommitRows(
-  adminDb: any,
-  batch: any,
+  adminDb: FirebaseFirestore.Firestore,
+  writes: WriteOp[],
   rows: readonly TcsExamSourceRow[],
   adminUser: { uid: string; email?: string | null },
   existingRows: readonly ExistingWorkOrderRecord[] = [],
@@ -380,13 +425,7 @@ async function resolveCommitRows(
     const fallbackKey = buildFallbackSiteKey(row.siteName, row.district);
     const codeKey = buildSiteCodeKey(row.siteId);
     const nameKey = buildSiteNameKey(row.siteName);
-    // Lookup priority:
-    //   1. Exact (siteId + district) match — same site, same district.
-    //   2. Exact (siteName + district) fallback for files without site IDs.
-    //   3. siteId-only — same TC code but the existing record has a stale
-    //      district (e.g. "South 2" → "Ernakulam"). Update in place rather
-    //      than creating a duplicate.
-    //   4. siteName-only — same fallback story when there is no siteId at all.
+
     let site =
       (codeDistrictKey && sites.byCodeDistrict.get(codeDistrictKey)) ||
       sites.byFallback.get(fallbackKey) ||
@@ -394,15 +433,19 @@ async function resolveCommitRows(
       (nameKey ? sites.byName.get(nameKey) : undefined);
 
     if (site && row.district && !districtMatches(row.district, site.district)) {
-      batch.update(adminDb.collection("sites").doc(site.id), {
-        district: row.district,
-        clientName: OPERATIONAL_CLIENT_NAME,
-        clientId: tcsClientId,
-        locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
-        ...buildServerUpdateAudit({
-          uid: adminUser.uid,
-          email: adminUser.email ?? undefined,
-        }),
+      writes.push({
+        ref: adminDb.collection("sites").doc(site.id),
+        data: {
+          district: row.district,
+          clientName: OPERATIONAL_CLIENT_NAME,
+          clientId: tcsClientId,
+          locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
+          ...buildServerUpdateAudit({
+            uid: adminUser.uid,
+            email: adminUser.email ?? undefined,
+          }),
+        },
+        merge: true,
       });
       site.district = row.district;
     }
@@ -457,7 +500,12 @@ async function resolveCommitRows(
           email: adminUser.email ?? undefined,
         }),
       };
-      batch.set(siteRef, sitePayload);
+
+      writes.push({
+        ref: siteRef,
+        data: sitePayload,
+      });
+
       site = {
         id: siteRef.id,
         siteId: sitePayload.siteId,
@@ -465,16 +513,10 @@ async function resolveCommitRows(
         district: row.district,
       };
       createdSites += 1;
-      if (codeDistrictKey) {
-        sites.byCodeDistrict.set(codeDistrictKey, site);
-      }
+      if (codeDistrictKey) sites.byCodeDistrict.set(codeDistrictKey, site);
       sites.byFallback.set(fallbackKey, site);
-      if (codeKey) {
-        sites.byCode.set(codeKey, site);
-      }
-      if (nameKey) {
-        sites.byName.set(nameKey, site);
-      }
+      if (codeKey) sites.byCode.set(codeKey, site);
+      if (nameKey) sites.byName.set(nameKey, site);
     }
 
     resolvedRows.push({
@@ -487,6 +529,111 @@ async function resolveCommitRows(
 
   return { resolvedRows, createdSites };
 }
+
+// ── Build work-order writes from diff rows ──────────────────────────────
+
+function buildWorkOrderWrites(
+  adminDb: FirebaseFirestore.Firestore,
+  diffRows: ReturnType<typeof buildTcsExamDiff>,
+  commitDiffKeys: Set<string>,
+  parsedByKey: Map<string, TcsExamSourceRow>,
+  parsedByResolvedKey: Map<string, TcsExamSourceRow>,
+  originalKeyByResolvedKey: Map<string, string>,
+  resolvedByOriginalKey: Map<string, TcsExamSourceRow>,
+  resolvedByResolvedKey: Map<string, TcsExamSourceRow>,
+  activeExistingRows: readonly ExistingWorkOrderRecord[],
+  adminUser: { uid: string; email?: string | null },
+  importId: string,
+  payload: TcsExamImportCommitPayload,
+): { writes: WriteOp[]; committedRows: number; cancelledRows: number } {
+  const writes: WriteOp[] = [];
+  let committedRows = 0;
+  let cancelledRows = 0;
+
+  for (const diffRow of diffRows) {
+    if (diffRow.status === "cancelled") {
+      const existing = activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key);
+      if (!existing) continue;
+      cancelledRows += 1;
+      writes.push({
+        ref: adminDb.collection("workOrders").doc(existing.id),
+        data: {
+          recordStatus: "cancelled",
+          cancelledByImportId: importId,
+          ...buildServerUpdateAudit({ uid: adminUser.uid, email: adminUser.email }),
+        },
+        merge: true,
+      });
+      continue;
+    }
+
+    if (!commitDiffKeys.has(diffRow.key)) continue;
+
+    const originalKey = originalKeyByResolvedKey.get(diffRow.key) ?? diffRow.key;
+    const originalRow = parsedByKey.get(originalKey) ?? null;
+    const parsedRow =
+      resolvedByResolvedKey.get(diffRow.key) ??
+      (originalRow ? resolvedByOriginalKey.get(getIdentityKey(originalRow)) : undefined) ??
+      parsedByResolvedKey.get(diffRow.key) ??
+      originalRow ??
+      null;
+
+    if (!parsedRow) continue;
+
+    const existing =
+      activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
+      (originalRow ? findMatchingExistingRow(originalRow, activeExistingRows) : null) ??
+      null;
+
+    committedRows += 1;
+    const targetId = existing?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);
+    const workOrderRef = adminDb.collection("workOrders").doc(targetId);
+    const basePayload = {
+      siteId: parsedRow.siteId,
+      siteName: parsedRow.siteName,
+      clientName: OPERATIONAL_CLIENT_NAME,
+      district: parsedRow.district,
+      date: createStoredDate(parsedRow.date),
+      maleGuardsRequired: parsedRow.maleGuardsRequired,
+      femaleGuardsRequired: parsedRow.femaleGuardsRequired,
+      totalManpower:
+        Number(parsedRow.maleGuardsRequired) + Number(parsedRow.femaleGuardsRequired),
+      assignedGuards: Array.isArray(existing?.assignedGuards) ? existing.assignedGuards : [],
+      examName: payload.examName,
+      examCode: payload.examCode,
+      recordStatus: "active",
+      importId,
+      sourceFileName: payload.fileName,
+      sourceSheetName: parsedRow.sourceSheetName,
+      binaryFileHash: payload.binaryFileHash,
+      contentHash: payload.contentHash,
+    };
+
+    if (existing) {
+      writes.push({
+        ref: workOrderRef,
+        data: {
+          ...basePayload,
+          ...buildServerUpdateAudit({ uid: adminUser.uid, email: adminUser.email }),
+        },
+        merge: true,
+      });
+    } else {
+      writes.push({
+        ref: workOrderRef,
+        data: {
+          id: targetId,
+          ...basePayload,
+          ...buildServerCreateAudit({ uid: adminUser.uid, email: adminUser.email }),
+        },
+      });
+    }
+  }
+
+  return { writes, committedRows, cancelledRows };
+}
+
+// ── POST handler ────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
   try {
@@ -523,16 +670,9 @@ export async function POST(request: Request) {
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-    // Resolve TC centre codes → Firestore site document IDs so that diff
-    // identity keys match the `siteId` stored on existing work orders.
     const siteLookupMaps = await buildSiteLookupMaps(adminDb);
-    const resolvedCanonicalRows = resolveParsedRowSiteIds(
-      canonicalRows,
-      siteLookupMaps,
-    );
+    const resolvedCanonicalRows = resolveParsedRowSiteIds(canonicalRows, siteLookupMaps);
 
-    // Build key maps for bridging between original (TC-code) keys and
-    // resolved (Firestore-doc-ID) keys.
     const parsedByKey = new Map(
       canonicalRows.map((row) => [getIdentityKey(row), row]),
     );
@@ -548,9 +688,7 @@ export async function POST(request: Request) {
     }
 
     const existingRows = await fetchExistingRows(adminDb, resolvedCanonicalRows);
-    const activeExistingRows = existingRows.filter(
-      (row) => isActiveRecordStatus(row.recordStatus),
-    );
+    const activeExistingRows = existingRows.filter((row) => isActiveRecordStatus(row.recordStatus));
 
     if (
       mode === "new" &&
@@ -572,24 +710,13 @@ export async function POST(request: Request) {
       mode,
     });
 
-    // Resolve original rows for the diff entries that will be committed.
-    // diffRows use resolved (Firestore-doc-ID) keys; we bridge back to
-    // original TC-code keys so that resolveCommitRows can look up sites.
     const commitDiffRows = diffRows.filter((diffRow) => {
-      if (diffRow.status === "cancelled") {
-        return false;
-      }
+      if (diffRow.status === "cancelled") return false;
       const originalRow = parsedByKey.get(diffRow.key);
       const comparisonRow = parsedByResolvedKey.get(diffRow.key) ?? originalRow;
-      if (!comparisonRow) {
-        return false;
-      }
+      if (!comparisonRow) return false;
       const existing = findMatchingExistingRow(
-        {
-          ...comparisonRow,
-          examName: payload.examName,
-          examCode: payload.examCode,
-        },
+        { ...comparisonRow, examName: payload.examName, examCode: payload.examCode },
         activeExistingRows,
       );
       return !(existing && duplicateResolution === "omit");
@@ -597,191 +724,110 @@ export async function POST(request: Request) {
 
     const commitDiffKeys = new Set(commitDiffRows.map((row) => row.key));
 
-    // Build the list of *original* rows to pass to resolveCommitRows (which
-    // needs TC codes for site lookup/creation).
     const rowsToResolve: TcsExamSourceRow[] = [];
     for (const diffRow of commitDiffRows) {
       const originalKey = originalKeyByResolvedKey.get(diffRow.key);
       const originalRow =
         (originalKey ? parsedByKey.get(originalKey) : undefined) ??
         parsedByKey.get(diffRow.key);
-      if (originalRow) {
-        rowsToResolve.push(originalRow);
-      }
+      if (originalRow) rowsToResolve.push(originalRow);
     }
 
-    const importRef = adminDb.collection("workOrderImports").doc();
-    const importId = importRef.id;
-    const batch = adminDb.batch();
+    // ── Phase 1: Commit site writes ──
+    const siteWrites: WriteOp[] = [];
     const { resolvedRows, createdSites } = await resolveCommitRows(
       adminDb,
-      batch,
+      siteWrites,
       rowsToResolve,
       adminUser,
       activeExistingRows,
     );
 
-    // Build a lookup from *resolved* identity key to the row returned by
-    // resolveCommitRows (which carries the definitive Firestore doc ID).
+    // Commit site writes immediately (typically small, <450 ops)
+    if (siteWrites.length > 0) {
+      await commitWritesInChunks(adminDb, siteWrites);
+    }
+
+    // ── Phase 2: Build resolved lookups for work order phase ──
     const resolvedByOriginalKey = new Map<string, TcsExamSourceRow>();
     const resolvedByResolvedKey = new Map<string, TcsExamSourceRow>();
     for (let index = 0; index < rowsToResolve.length; index += 1) {
       const originalKey = getIdentityKey(rowsToResolve[index]);
       const resolved = resolvedRows[index];
       resolvedByOriginalKey.set(originalKey, resolved);
-      // Also compute the resolved key from the resolved row (its siteId is
-      // now a Firestore doc ID) so we can do a direct O(1) lookup.
       resolvedByResolvedKey.set(getIdentityKey(resolved), resolved);
     }
 
-    let committedRows = 0;
-    let cancelledRows = 0;
+    // ── Phase 3: Build & commit work-order writes in chunks ──
+    const importRef = adminDb.collection("workOrderImports").doc();
+    const importId = importRef.id;
 
-    for (const diffRow of diffRows) {
-      if (diffRow.status === "cancelled") {
-        // diffRow.key already uses Firestore doc IDs (from existingRows),
-        // so it matches getIdentityKey(existingRow) directly.
-        const existing = activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key);
-        if (!existing) {
-          continue;
-        }
+    // Pre-compute all work-order writes
+    const { writes: woWrites, committedRows, cancelledRows } = buildWorkOrderWrites(
+      adminDb,
+      diffRows,
+      commitDiffKeys,
+      parsedByKey,
+      parsedByResolvedKey,
+      originalKeyByResolvedKey,
+      resolvedByOriginalKey,
+      resolvedByResolvedKey,
+      activeExistingRows,
+      adminUser,
+      importId,
+      payload,
+    );
 
-        cancelledRows += 1;
-        batch.update(adminDb.collection("workOrders").doc(existing.id), {
-          recordStatus: "cancelled",
-          cancelledByImportId: importId,
-          ...buildServerUpdateAudit({
-            uid: adminUser.uid,
-            email: adminUser.email,
-          }),
-        });
-        continue;
-      }
-
-      if (!commitDiffKeys.has(diffRow.key)) {
-        continue;
-      }
-
-      // Resolved row: prefer the row from resolveCommitRows (which may
-      // have created a new site), falling back to the pre-resolved row.
-      const originalKey = originalKeyByResolvedKey.get(diffRow.key) ?? diffRow.key;
-      const originalRow = parsedByKey.get(originalKey) ?? null;
-      const parsedRow =
-        resolvedByResolvedKey.get(diffRow.key) ??
-        (originalRow ? resolvedByOriginalKey.get(getIdentityKey(originalRow)) : undefined) ??
-        parsedByResolvedKey.get(diffRow.key) ??
-        originalRow ??
-        null;
-
-      if (!parsedRow) {
-        continue;
-      }
-
-      // Look up the existing work order using the resolved identity key
-      // (which uses Firestore doc IDs), then fall back to the original
-      // imported row so legacy rows without concrete site IDs can still
-      // update an existing active work order.
-      const existing =
-        activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
-        (originalRow ? findMatchingExistingRow(originalRow, activeExistingRows) : null) ??
-        null;
-
-      committedRows += 1;
-      const targetId = existing?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);
-      const workOrderRef = adminDb.collection("workOrders").doc(targetId);
-      const basePayload = {
-        siteId: parsedRow.siteId,
-        siteName: parsedRow.siteName,
-        clientName: OPERATIONAL_CLIENT_NAME,
-        district: parsedRow.district,
-        date: createStoredDate(parsedRow.date),
-        maleGuardsRequired: parsedRow.maleGuardsRequired,
-        femaleGuardsRequired: parsedRow.femaleGuardsRequired,
-        totalManpower:
-          Number(parsedRow.maleGuardsRequired) + Number(parsedRow.femaleGuardsRequired),
-        assignedGuards: Array.isArray(existing?.assignedGuards)
-          ? existing.assignedGuards
-          : [],
-        examName: payload.examName,
-        examCode: payload.examCode,
-        recordStatus: "active",
-        importId,
-        sourceFileName: payload.fileName,
-        sourceSheetName: parsedRow.sourceSheetName,
-        binaryFileHash: payload.binaryFileHash,
-        contentHash: payload.contentHash,
-      };
-
-      if (existing) {
-        batch.set(
-          workOrderRef,
-          {
-            ...basePayload,
-            ...buildServerUpdateAudit({
-              uid: adminUser.uid,
-              email: adminUser.email,
-            }),
-          },
-          { merge: true },
-        );
-      } else {
-        batch.set(workOrderRef, {
-          id: targetId,
-          ...basePayload,
-          ...buildServerCreateAudit({
-            uid: adminUser.uid,
-            email: adminUser.email,
-          }),
-        });
-      }
-    }
-
+    // Build import doc write (included in last batch)
     const uniqueSites = new Set(
       rowsToResolve.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
     ).size;
     const sortedDates = rowsToResolve.map((row) => row.date).filter(Boolean).sort();
-    batch.set(importRef, {
-      id: importId,
-      clientName: OPERATIONAL_CLIENT_NAME,
-      fileName: payload.fileName,
-      binaryFileHash: payload.binaryFileHash,
-      contentHash: payload.contentHash,
-      examName: payload.examName,
-      examCode: payload.examCode,
-      parserMode: payload.parserMode,
-      mode,
-      status: "committed",
-      dateRange: {
-        from: sortedDates[0] ?? "",
-        to: sortedDates[sortedDates.length - 1] ?? "",
+    const importDocWrite: WriteOp = {
+      ref: importRef,
+      data: {
+        id: importId,
+        clientName: OPERATIONAL_CLIENT_NAME,
+        fileName: payload.fileName,
+        binaryFileHash: payload.binaryFileHash,
+        contentHash: payload.contentHash,
+        examName: payload.examName,
+        examCode: payload.examCode,
+        parserMode: payload.parserMode,
+        mode,
+        status: "committed",
+        dateRange: {
+          from: sortedDates[0] ?? "",
+          to: sortedDates[sortedDates.length - 1] ?? "",
+        },
+        siteCount: uniqueSites,
+        rowCount: rowsToResolve.length,
+        totalMale: rowsToResolve.reduce<number>(
+          (sum, row) => sum + Number(row.maleGuardsRequired ?? 0),
+          0,
+        ),
+        totalFemale: rowsToResolve.reduce<number>(
+          (sum, row) => sum + Number(row.femaleGuardsRequired ?? 0),
+          0,
+        ),
+        committedRows,
+        cancelledRows,
+        warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+        auditTrail: [
+          buildServerAuditEvent("work_order_import_committed", adminUser, {
+            committedRows,
+            cancelledRows,
+            mode,
+          }),
+        ],
+        ...buildServerCreateAudit({ uid: adminUser.uid, email: adminUser.email }),
       },
-      siteCount: uniqueSites,
-      rowCount: rowsToResolve.length,
-      totalMale: rowsToResolve.reduce<number>(
-        (sum, row) => sum + Number(row.maleGuardsRequired ?? 0),
-        0,
-      ),
-      totalFemale: rowsToResolve.reduce<number>(
-        (sum, row) => sum + Number(row.femaleGuardsRequired ?? 0),
-        0,
-      ),
-      committedRows,
-      cancelledRows,
-      warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
-      auditTrail: [
-        buildServerAuditEvent("work_order_import_committed", adminUser, {
-          committedRows,
-          cancelledRows,
-          mode,
-        }),
-      ],
-      ...buildServerCreateAudit({
-        uid: adminUser.uid,
-        email: adminUser.email,
-      }),
-    });
+    };
 
-    await batch.commit();
+    // Commit all writes in chunks of max BATCH_MAX_OPS (450)
+    // to stay within Firestore's batch-operation limit.
+    const allWrites = [...woWrites, importDocWrite];
+    await commitWritesInChunks(adminDb, allWrites);
 
     return NextResponse.json({
       importId,
@@ -794,10 +840,7 @@ export async function POST(request: Request) {
     if (error?.message?.includes("access required")) {
       return unauthorizedResponse(error.message, 403);
     }
-    if (
-      error?.message?.includes("Missing bearer") ||
-      error?.message?.includes("token")
-    ) {
+    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
       return unauthorizedResponse(error.message, 401);
     }
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import { verifyQrToken, parseQrContent } from "@/lib/qr/qr-token";
+import { checkRateLimit, getClientIp, buildRateLimitKey } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,24 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   try {
+    // IP-based rate limiting
+    const ip = getClientIp(request);
+    const rateKey = buildRateLimitKey("verify-qr", ip);
+    const rateResult = await checkRateLimit(rateKey, {
+      maxRequests: 60,
+      windowMs: 60 * 1000, // 60 requests per minute per IP
+      failClosed: false,
+    });
+    if (!rateResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        },
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const qrText = typeof body.qrText === "string" ? body.qrText.trim() : "";
 
@@ -67,7 +86,7 @@ export async function POST(request: Request) {
     const employeeDoc = candidates[0];
     const employeeData = employeeDoc.data();
 
-    // Verify QR token if present
+    // Verify QR token if present — undocumented QRs are NOT reported as verified
     let tokenValid = false;
     if (parsed.token && parsed.phoneNumber) {
       tokenValid = await verifyQrToken(
@@ -84,25 +103,36 @@ export async function POST(request: Request) {
       .get();
     const stateData = stateSnap.exists ? stateSnap.data() : null;
 
+    // Check if caller is authenticated (has a valid bearer token)
+    // to decide whether to include PII fields
+    const authHeader = request.headers.get("authorization") || "";
+    const callerIsAuthenticated = authHeader.startsWith("Bearer ");
+
+    const employee: Record<string, unknown> = {
+      id: employeeDoc.id,
+      employeeId: employeeData.employeeId ?? "",
+      fullName:
+        employeeData.fullName ||
+        employeeData.name ||
+        [
+          employeeData.firstName ?? "",
+          employeeData.lastName ?? "",
+        ]
+          .join(" ")
+          .trim(),
+      clientName: employeeData.clientName ?? "",
+      district: employeeData.district ?? "",
+    };
+
+    // Only include PII fields (phoneNumber, status) for authenticated callers
+    if (callerIsAuthenticated) {
+      employee.phoneNumber = employeeData.phoneNumber ?? "";
+      employee.status = employeeData.status ?? "";
+    }
+
     return NextResponse.json({
-      verified: tokenValid || !parsed.token, // Allow old QRs without token for backward compat
-      employee: {
-        id: employeeDoc.id,
-        employeeId: employeeData.employeeId ?? "",
-        fullName:
-          employeeData.fullName ||
-          employeeData.name ||
-          [
-            employeeData.firstName ?? "",
-            employeeData.lastName ?? "",
-          ]
-            .join(" ")
-            .trim(),
-        phoneNumber: employeeData.phoneNumber ?? "",
-        clientName: employeeData.clientName ?? "",
-        district: employeeData.district ?? "",
-        status: employeeData.status ?? "",
-      },
+      verified: tokenValid, // Tokenless QRs must NOT be reported as verified
+      employee,
       attendanceHint: stateData
         ? {
             lastAttendanceDate: stateData.lastAttendanceDate ?? null,

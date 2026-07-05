@@ -3,6 +3,7 @@ import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
 import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
 import { resolvePatrolSettings } from "@/lib/patrol";
+export const runtime = "nodejs";
 
 export async function PATCH(
   request: Request,

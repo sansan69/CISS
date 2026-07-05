@@ -40,6 +40,7 @@ import { resolveAppUser } from '@/lib/auth/roles';
 import { useHaptics } from '@/hooks/use-haptics';
 import { LogoutDialog } from '@/components/common/logout-dialog';
 import { AuthContext } from '@/context/auth-context';
+import { toast } from '@/hooks/use-toast';
 import {
   bottomNavItems,
   getVisibleGroups,
@@ -800,7 +801,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
   }, [pathname]);
 
+  // Use refs for values that should not cause re-subscription on every nav
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const isSuperAdminRef = useRef(isSuperAdmin);
+  isSuperAdminRef.current = isSuperAdmin;
+
   useEffect(() => {
+    const currentPathname = pathnameRef.current;
+    const currentIsSuperAdmin = isSuperAdminRef.current;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setIsLoadingAuth(true);
       if (user) {
@@ -833,7 +843,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           }
 
           // Regional setup wizard: redirect admin users if setup not complete
-          if (appUser.role === 'admin' && !isSuperAdmin && pathname !== '/wizard' && pathname !== '/admin-login') {
+          if (appUser.role === 'admin' && !currentIsSuperAdmin && currentPathname !== '/wizard' && currentPathname !== '/admin-login') {
             try {
               const adminToken = await user.getIdToken();
               const wizardRes = await fetch('/api/wizard/profile', {
@@ -849,14 +859,31 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               // Non-critical — if wizard check fails, let dashboard load
             }
           }
-        } catch {
-          setUserRole('user');
+        } catch (err) {
+          // Distinguish network/auth errors from "no role" case
+          const isNetworkError = err instanceof TypeError ||
+            (err instanceof Error && (
+              err.message.includes('network') ||
+              err.message.includes('fetch') ||
+              err.message.includes('offline') ||
+              err.message.includes('ERR_NAME_NOT_RESOLVED')
+            ));
+
+          setUserRole(isNetworkError ? null : 'user');
           setAssignedDistricts([]);
           setClientInfo(null);
           setStateCode(null);
           setIsSuperAdmin(false);
           setEmployeeId(undefined);
           setEmployeeDocId(undefined);
+
+          if (isNetworkError) {
+            toast({
+              title: "Connection Error",
+              description: "Could not verify your session. Please check your connection and try again.",
+              variant: "destructive",
+            });
+          }
         }
       } else {
         setAuthUser(null);
@@ -872,7 +899,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [router, isSuperAdmin, pathname]);
+  }, [router]);
 
   const handleLogout = () => {
     setShowLogoutConfirm(true);

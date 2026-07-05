@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

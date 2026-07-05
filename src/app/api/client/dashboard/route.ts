@@ -21,6 +21,7 @@ import type {
 } from "@/types/client-dashboard";
 import { resolveClientModules } from "@/types/client-permissions";
 import type { ClientDashboardModulesConfig } from "@/types/client-permissions";
+export const runtime = "nodejs";
 
 type DashboardRecord = Record<string, unknown> & { id: string };
 

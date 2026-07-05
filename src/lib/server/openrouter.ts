@@ -58,6 +58,20 @@ export async function requestOpenRouterJson<T>({
     throw new Error("OPENROUTER_API_KEY is not configured.");
   }
 
+  // Validate that a real model id is configured (the literal "openrouter/free"
+  // default will 4xx on first use).
+  const effectiveModel = imageDataUrl ? DEFAULT_VISION_MODEL : model;
+  if (
+    effectiveModel === "openrouter/free" &&
+    !process.env.OPENROUTER_DEFAULT_MODEL &&
+    !process.env.OPENROUTER_WAGE_MODEL &&
+    !process.env.OPENROUTER_VISION_MODEL
+  ) {
+    throw new Error(
+      "No OpenRouter model configured. Set OPENROUTER_DEFAULT_MODEL, OPENROUTER_WAGE_MODEL, or OPENROUTER_VISION_MODEL to a valid model identifier.",
+    );
+  }
+
   const userContent: OpenRouterContentPart[] = [{ type: "text", text: prompt }];
   if (imageDataUrl) {
     userContent.push({
@@ -67,6 +81,7 @@ export async function requestOpenRouterJson<T>({
   }
 
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    signal: AbortSignal.timeout(30_000),
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -74,7 +89,7 @@ export async function requestOpenRouterJson<T>({
       ...getOptionalHeaders(),
     },
     body: JSON.stringify({
-      model: imageDataUrl ? DEFAULT_VISION_MODEL : model,
+      model: effectiveModel,
       temperature,
       max_tokens: maxTokens,
       messages: [

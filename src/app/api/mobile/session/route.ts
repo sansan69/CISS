@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { resolveMobileSession } from "@/lib/server/mobile-session";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

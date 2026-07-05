@@ -97,7 +97,8 @@ export async function POST(request: NextRequest) {
       url: buildDownloadUrl(bucket.name, path, downloadToken),
     });
   } catch (error: any) {
-    console.error("Public attendance photo upload failed:", error);
+    const { log } = await import("@/lib/server/log");
+    log("error", "attendance-upload", "Public attendance photo upload failed", { error: error?.message });
     return NextResponse.json(
       { error: error?.message || "Could not upload attendance photo." },
       { status: 500 },

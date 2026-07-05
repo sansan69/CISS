@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 
+export const dynamic = "force-dynamic";
+
 function startOfTodayIst() {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-CA", {

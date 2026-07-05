@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { GeoPoint } from "firebase/firestore";
 import { Loader2, LocateFixed, MapPinned, Navigation, ShieldCheck } from "lucide-react";
 
@@ -28,7 +29,11 @@ import type {
   CoordinateStatus,
   GeoPointLike,
 } from "@/types/location";
-import { LocationPickerMap } from "@/components/location/location-picker-map";
+
+const LocationPickerMap = dynamic(
+  () => import("@/components/location/location-picker-map").then((mod) => ({ default: mod.LocationPickerMap })),
+  { ssr: false },
+);
 
 type LocationEditorValue = {
   address: string;

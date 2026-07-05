@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

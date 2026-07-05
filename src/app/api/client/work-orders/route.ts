@@ -5,6 +5,7 @@ import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import { hasClientAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { formatDateLabel, normalizeText, serializeDate, sortByDateDesc, toInt } from "@/lib/server/mobile-api-utils";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

@@ -426,11 +426,11 @@ export default function LandingPage() {
             {/* Footer */}
             <footer className="mt-4 flex flex-col items-center gap-2 text-center text-xs text-white/30">
               <div className="flex items-center gap-3">
-                <Link href="/admin-login" className="rounded-lg px-3 py-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
+                <Link href="/admin-login" className="rounded-lg px-3 py-2.5 min-h-11 inline-flex items-center text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
                   Admin
                 </Link>
                 <span className="text-white/15">|</span>
-                <Link href="/download" className="rounded-lg px-3 py-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
+                <Link href="/download" className="rounded-lg px-3 py-2.5 min-h-11 inline-flex items-center text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
                   Download App
                 </Link>
               </div>

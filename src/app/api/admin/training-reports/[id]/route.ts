@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasAdminAccess, verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 export async function PATCH(
   request: Request,

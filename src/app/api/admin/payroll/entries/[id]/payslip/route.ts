@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import { generatePayslipPdf } from "@/lib/payroll/payslip";
 import type { PayrollCycle, PayrollEntry } from "@/types/payroll";
+export const runtime = "nodejs";
 
 export async function GET(
   request: Request,

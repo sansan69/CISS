@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { parseDate, resolvePatrolSettings, toGuardPatrolActivityRow } from "@/lib/patrol";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();

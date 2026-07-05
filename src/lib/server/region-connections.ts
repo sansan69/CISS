@@ -12,15 +12,33 @@ const REGION_CONNECTIONS_COLLECTION = "regionConnections";
 // Rotating the fallback env var will make previously encrypted region connections undecryptable.
 // Set REGION_CONNECTIONS_SECRET explicitly to decouple encryption from Firebase credential rotation.
 function getRegionConnectionsSecret() {
-  const secret =
-    process.env.REGION_CONNECTIONS_SECRET ||
-    process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64 ||
-    process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+  const secret = process.env.REGION_CONNECTIONS_SECRET;
 
   if (!secret) {
-    throw new Error(
-      "Region connection secret is not configured. Set REGION_CONNECTIONS_SECRET to enable persistent cross-region access.",
-    );
+    if (
+      process.env.VERCEL_ENV === "production" ||
+      process.env.NODE_ENV === "production"
+    ) {
+      throw new Error(
+        "REGION_CONNECTIONS_SECRET is required in production. Set it to a unique, stable encryption key.",
+      );
+    }
+
+    // Fallback for development only — uses the Firebase private key so dev
+    // environments work without extra configuration. Do NOT rely on this in
+    // production, as rotating the Firebase credentials would render all
+    // encrypted region connections undecryptable.
+    const devFallback =
+      process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64 ||
+      process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+
+    if (!devFallback) {
+      throw new Error(
+        "Region connection secret is not configured. Set REGION_CONNECTIONS_SECRET to enable persistent cross-region access.",
+      );
+    }
+
+    return crypto.createHash("sha256").update(devFallback).digest();
   }
 
   return crypto.createHash("sha256").update(secret).digest();

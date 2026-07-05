@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import { cloneComplianceSettings } from "@/lib/payroll/defaults";
 import type { ComplianceSettings } from "@/types/payroll";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

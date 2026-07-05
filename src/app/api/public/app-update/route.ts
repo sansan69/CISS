@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { NextResponse } from "next/server";
+export const runtime = "nodejs";
 
 type AppUpdateManifest = {
   platform: "android";
@@ -37,6 +38,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ...manifest,
       apkUrl: absoluteUrl(request, manifest.apkUrl || manifest.apkPath),
+    }, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to read Android update manifest.";

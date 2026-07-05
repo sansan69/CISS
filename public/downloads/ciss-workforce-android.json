@@ -5,9 +5,9 @@
   "latestVersionCode": 14,
   "minimumSupportedVersionCode": 13,
   "apkPath": "/downloads/ciss-workforce-1.0.14.apk",
-  "sha256": "a46bc49d61ece1b4866b54b50c804f99c05f377a6bc93baaf3eeab7f5a33e192",
-  "sizeBytes": 80886284,
-  "releaseDate": "2026-07-04",
+  "sha256": "43dd1750215809b65f6c1d102a1d81349159f9a4642ff6af53e5f91fcce51a53",
+  "sizeBytes": 84829312,
+  "releaseDate": "2026-07-05",
   "releaseNotes": [
     "Adds automatic update alerts when a newer Android APK is available.",
     "Uses the universal Android APK from the web download section for direct updates.",

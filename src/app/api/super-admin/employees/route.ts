@@ -7,6 +7,7 @@ import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { db as keralaDb } from "@/lib/firebaseAdmin";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import { getRegionConnection } from "@/lib/server/region-connections";
+export const runtime = "nodejs";
 
 type RegionTarget = {
   regionCode: string;

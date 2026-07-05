@@ -5,6 +5,7 @@ import {
   buildClientPortalAuthEmail,
   normalizeClientLoginId,
 } from "@/lib/client-portal";
+export const runtime = "nodejs";
 
 type UpdateClientUserRequest = {
   name?: string;

@@ -5,6 +5,7 @@ import { REGION_CODE } from "@/lib/runtime-config";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { buildClientPortalUrl, slugifyPortalSubdomain } from "@/lib/client-portal";
 import { resolvePatrolSettings } from "@/lib/patrol";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

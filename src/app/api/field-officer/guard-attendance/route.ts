@@ -7,6 +7,7 @@ import {
   type AppDecodedToken,
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+export const runtime = "nodejs";
 
 type FieldOfficerProfile = {
   assignedDistricts: string[];

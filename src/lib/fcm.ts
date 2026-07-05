@@ -56,11 +56,23 @@ export async function requestNotificationPermission(): Promise<string | null> {
 
 export async function registerFCMToken(uid: string, token: string): Promise<void> {
   if (!db) return;
-  await setDoc(
-    doc(db, 'fcmTokens', uid),
-    { uid, token, platform: 'web', updatedAt: new Date() },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      doc(db, 'fcmTokens', uid),
+      { uid, token, platform: 'web', updatedAt: new Date() },
+      { merge: true },
+    );
+  } catch (error) {
+    console.warn('[fcm] Failed to register FCM token — notifications may not work:', error);
+    // Surface a one-time warning if it persistently fails
+    if (typeof window !== 'undefined' && !sessionStorage.getItem('fcm-warned')) {
+      sessionStorage.setItem('fcm-warned', 'true');
+      console.warn(
+        '[fcm] Push notification registration is failing persistently. ' +
+        'Check Firebase config and messaging sender ID.',
+      );
+    }
+  }
 }
 
 export function onForegroundMessage(callback: (payload: any) => void): () => void {

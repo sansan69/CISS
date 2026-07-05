@@ -18,7 +18,6 @@ import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, 
 import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import QRCode from 'qrcode';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 
@@ -38,7 +37,7 @@ import { compressImage, uploadFileToStorage, dataURLtoFile, deleteFileFromStorag
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
+import type { PDFFont } from 'pdf-lib';
 import { EDUCATION_OPTIONS } from "@/lib/constants";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { useAppAuth } from "@/context/auth-context";
@@ -309,7 +308,7 @@ const generateEmployeeId = (clientName: string): string => {
 const generateQrCodeDataUrl = async (employeeId: string, fullName: string, phoneNumber: string): Promise<string> => {
     const dataString = `Employee ID: ${employeeId}\nName: ${fullName}\nPhone: ${phoneNumber}`;
     try {
-        // Use correct QRCode.toDataURL overload (text, options)
+        const QRCode = await import('qrcode');
         const url = await QRCode.toDataURL(dataString, {
             errorCorrectionLevel: 'H',
             margin: 1,
@@ -894,6 +893,7 @@ export default function AdminEmployeeProfilePage() {
     if (!employee) return;
     setIsDownloadingPdf(true);
     toast({ title: "Generating PDF...", description: "Please wait, this may take a moment." });
+    const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
     const legacy = employee as any;
 
     try {

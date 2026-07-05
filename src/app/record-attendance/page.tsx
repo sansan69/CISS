@@ -546,7 +546,7 @@ export default function RecordAttendancePage() {
               <label className="text-sm font-medium flex items-center gap-1">
                 <MapPin size={14} /> Location
               </label>
-              <button onClick={captureGps} className="text-xs text-brand-blue font-medium">
+              <button onClick={captureGps} className="text-xs text-brand-blue font-medium min-h-11 px-2 rounded-md inline-flex items-center">
                 Refresh
               </button>
             </div>
@@ -603,7 +603,7 @@ export default function RecordAttendancePage() {
                 <img src={photoDataUrl} alt="Attendance" className="w-full h-48 object-cover" />
                 <button
                   onClick={() => setPhotoDataUrl(null)}
-                  className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-md"
+                  className="absolute top-2 right-2 bg-black/50 text-white text-xs min-h-11 px-3 rounded-md inline-flex items-center"
                 >
                   Retake
                 </button>

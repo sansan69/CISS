@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { DEFAULT_ENROLLMENT_FORM_CONFIG } from "@/lib/region-wizard";
 import type { EnrollmentFormConfig } from "@/types/region";
+export const runtime = "nodejs";
 
 function isEnrollmentFormConfig(value: unknown): value is EnrollmentFormConfig {
   if (!value || typeof value !== "object") return false;

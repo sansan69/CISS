@@ -4,6 +4,7 @@ import { buildServerCreateAudit } from "@/lib/server/audit";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import { INDIA_STATE_DISTRICTS } from "@/lib/region-wizard";
 import { normalizeDistrictForFirestore } from "@/lib/districts";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

@@ -11,6 +11,7 @@ import {
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { districtMatches } from "@/lib/districts";
 import type FirebaseFirestore from "@google-cloud/firestore";
+export const runtime = "nodejs";
 
 type FieldOfficerProfile = {
   name: string;

@@ -14,6 +14,7 @@ import {
   looksLikeEmail,
   normalizeClientLoginId,
 } from "@/lib/client-portal";
+export const runtime = "nodejs";
 
 type ClientUserRequest = {
   mode: "existing" | "create";

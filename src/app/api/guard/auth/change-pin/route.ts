@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyPin, hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
 import { requireGuard } from "@/lib/server/guard-auth";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {

@@ -13,6 +13,7 @@ import {
 } from "@/lib/vercel-region";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import type { RegionRecord } from "@/types/region";
+export const runtime = "nodejs";
 
 function buildSyntheticKeralaRegion(): RegionRecord {
   const vercelTeamSlug = getVercelTeamSlug();

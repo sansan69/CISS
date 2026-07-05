@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
+
+export const dynamic = "force-dynamic";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 

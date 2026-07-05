@@ -57,11 +57,12 @@ const buttonVariants = cva(
           "text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        default: "h-10 min-h-10 px-4 py-2",
-        sm:      "h-9  min-h-9  px-3 py-1.5 text-xs",
+        // Mobile-first touch targets (44px WCAG 2.5.5); desktop steps down to 40px.
+        default: "h-11 min-h-11 md:h-10 md:min-h-10 px-4 py-2",
+        sm:      "h-10 min-h-10 md:h-9  md:min-h-9  px-3 py-1.5 text-xs",
         lg:      "h-11 min-h-11 px-6 py-2.5 text-base",
         xl:      "h-12 min-h-12 px-8 py-3  text-base",
-        icon:    "h-10 w-10",
+        icon:    "h-11 w-11 md:h-10 md:w-10",
         "icon-sm": "h-8 w-8",
         "icon-lg": "h-11 w-11",
       },

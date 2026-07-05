@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { normalizeGuardPhone } from "@/lib/guard/identity-utils";
 import { validatePinFormat, verifyPin } from "@/lib/guard/pin-utils";
+import { checkRateLimit, getClientIp, buildRateLimitKey } from "@/lib/server/rate-limit";
+export const runtime = "nodejs";
 
 function normalizePhone(phone: string): string {
   return normalizeGuardPhone(phone);
@@ -50,6 +52,21 @@ async function fallbackToProductionLogin(
 
 export async function POST(request: Request) {
   try {
+    // IP-based rate limiting (independent of per-user lockout) bounds enumeration/credential-stuffing
+    const ip = getClientIp(request);
+    const ipRateKey = buildRateLimitKey("guard-login", ip);
+    const ipRateResult = await checkRateLimit(ipRateKey, {
+      maxRequests: 20,
+      windowMs: 60 * 1000, // 20 requests per minute per IP
+      failClosed: true,     // Fail closed for security-critical endpoint
+    });
+    if (!ipRateResult.allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please wait and try again." },
+        { status: 429 },
+      );
+    }
+
     const body = await request.json();
     const { phoneNumber, employeeId, pin } = body as {
       phoneNumber?: string;

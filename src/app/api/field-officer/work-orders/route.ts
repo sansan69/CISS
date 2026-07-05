@@ -4,6 +4,7 @@ import { startOfToday } from "date-fns";
 import { hasAdminAccess, hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
+export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();

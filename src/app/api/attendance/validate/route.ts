@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     // Resolve duty point and shift
     const configuredDutyPoints =
-      sourceCol === "sites" ? resolveSiteDutyPoints(siteData as any) : [];
+      sourceCol === "sites" ? resolveSiteDutyPoints(siteData) : [];
     const selectedDutyPoint = dutyPointId
       ? configuredDutyPoints.find((p) => p.id === dutyPointId)
       : configuredDutyPoints.length === 1

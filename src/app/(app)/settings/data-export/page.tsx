@@ -16,10 +16,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { Label } from '@/components/ui/label';
-import * as XLSX from 'xlsx';
 import type { Employee } from '@/types/employee';
+import type { PDFFont } from 'pdf-lib';
 import Link from 'next/link';
-import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
 import { PageHeader } from '@/components/layout/page-header';
 import { dedupeClientOptions } from '@/lib/client-options';
@@ -179,6 +178,7 @@ export default function DataExportPage() {
                 return { id: doc.id, ...processedRecord };
             });
             
+            const XLSX = await import('xlsx');
             const workbook = XLSX.utils.book_new();
             const worksheet = XLSX.utils.json_to_sheet(employeesData);
             XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
@@ -195,6 +195,8 @@ export default function DataExportPage() {
     };
     
     const handlePdfExport = async () => {
+        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+
         if (selectedClient === 'all') {
             toast({ variant: 'destructive', title: "Client Not Selected", description: "Please select a specific client to export Profile Kits." });
             setGenerationStatus('idle');

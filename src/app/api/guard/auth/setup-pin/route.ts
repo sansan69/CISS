@@ -5,6 +5,7 @@ import {
 } from "@/lib/guard/identity-utils";
 import { hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
 import { GUARD_AUTH_EMAIL_DOMAIN } from "@/lib/runtime-config";
+export const runtime = "nodejs";
 
 function buildSetupRateLimitKey(
   phoneNumber: string,

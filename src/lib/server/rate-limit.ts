@@ -4,6 +4,8 @@ import { Timestamp } from "firebase-admin/firestore";
 export interface RateLimitConfig {
   maxRequests: number;
   windowMs: number;
+  /** When true, deny the request on limiter error instead of allowing through (fail closed). */
+  failClosed?: boolean;
 }
 
 export interface RateLimitResult {
@@ -69,6 +71,15 @@ export async function checkRateLimit(
     return result;
   } catch (error) {
     console.error(`[rateLimit] Transaction failed for key ${key}:`, error);
+    if (config.failClosed) {
+      // Fail closed — deny request on limiter error for security-critical endpoints
+      return {
+        allowed: false,
+        remaining: 0,
+        resetAt: new Date(Date.now() + config.windowMs),
+        totalAttempts: 0,
+      };
+    }
     // Fail open — allow request but log error
     return {
       allowed: true,
@@ -91,11 +102,23 @@ export function buildRateLimitKey(
 
 /**
  * Get client IP from request headers.
+ * Sanitizes x-forwarded-for per Vercel guidance: only the leftmost IP is the client.
+ * Strips port and IPv6 brackets for consistency.
  */
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? "unknown";
+    // Vercel/cloud proxies append to the right; the leftmost is the original client
+    const raw = forwarded.split(",")[0]?.trim() ?? "";
+    // Remove port suffix (e.g. "192.168.1.1:12345" -> "192.168.1.1")
+    const withoutPort = raw.replace(/:\d+$/, "");
+    // Strip IPv6 brackets (e.g. "[::1]" -> "::1")
+    const clean = withoutPort.replace(/^\[|\]$/g, "");
+    return clean || "unknown";
   }
-  return request.headers.get("x-real-ip") ?? "unknown";
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) {
+    return realIp.replace(/:\d+$/, "").replace(/^\[|\]$/g, "") || "unknown";
+  }
+  return "unknown";
 }

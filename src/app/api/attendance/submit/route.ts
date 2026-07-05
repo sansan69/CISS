@@ -420,7 +420,7 @@ export async function POST(request: NextRequest) {
         String(siteData.clientName || "").trim().toLowerCase() ===
         OPERATIONAL_CLIENT_NAME.toLowerCase();
       const configuredDutyPoints =
-        sourceCol === "sites" ? resolveSiteDutyPoints(siteData as any) : [];
+        sourceCol === "sites" ? resolveSiteDutyPoints(siteData) : [];
       const selectedDutyPoint =
         configuredDutyPoints.find((point) => point.id === payload.dutyPointId) ??
         configuredDutyPoints.find((point) => point.name === payload.dutyPointName) ??
@@ -1028,7 +1028,8 @@ export async function POST(request: NextRequest) {
     await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitFailure);
     const status = error instanceof AttendanceError ? 400 : 500;
 
-    console.error("Attendance submit failed:", error);
+    const { log } = await import("@/lib/server/log");
+    log("error", "attendance", "Attendance submit failed", { error: error?.message });
     return NextResponse.json(
       { error: error?.message || "Could not submit attendance." },
       { status },

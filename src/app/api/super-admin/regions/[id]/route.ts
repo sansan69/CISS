@@ -13,6 +13,7 @@ import {
   getVercelTeamSlug,
 } from "@/lib/vercel-region";
 import type { RegionRecord } from "@/types/region";
+export const runtime = "nodejs";
 
 export async function GET(
   request: Request,

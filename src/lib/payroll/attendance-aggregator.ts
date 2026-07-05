@@ -28,6 +28,11 @@ export async function aggregateAttendance(
   // Fallback: some legacy logs may only have employeeId, not employeeDocId.
   // If the primary query returns empty, look up the employee's employeeId
   // and retry with that field.
+  //
+  // NOTE: This fallback is redundant — it performs an extra query per employee
+  // when employeeDocId is missing. Backfilling employeeDocId on legacy logs
+  // (via a one-time migration that copies employeeId → employeeDocId on each
+  // attendanceLog document) would eliminate this branch entirely.
   if (snapshot.empty) {
     const employeeSnap = await adminDb
       .collection("employees")

@@ -17,9 +17,8 @@ import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
+import type { PDFFont } from 'pdf-lib';
 import { getBytes, ref } from 'firebase/storage';
-import QRCode from 'qrcode';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 // #region PDF Text Helper Functions
@@ -136,7 +135,7 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
             </div>
         </div>
         {url ? (
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" asChild>
                 <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
                     <Download className="mr-2 h-4 w-4" /> View/Download
                 </a>
@@ -229,6 +228,7 @@ export default function PublicEmployeeProfilePage() {
     if (!employee) return;
     setIsDownloadingPdf(true);
     toast({ title: "Generating PDF...", description: "Please wait, this may take a moment." });
+    const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
     const legacy = employee as any;
 
     try {

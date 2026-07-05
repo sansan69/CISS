@@ -36,13 +36,14 @@ self.addEventListener('install', event => {
 });
 
 // Activate: Cleans up old caches and takes control
+// Any cache matching the pattern ciss-workforce-cache-* (except the current one)
+// is deleted, so the version doesn't need to be bumped manually.
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          if (cacheName.startsWith('ciss-workforce-cache-') && cacheName !== CACHE_NAME) {
             console.log('Service Worker: Deleting old cache', cacheName);
             return caches.delete(cacheName);
           }
@@ -87,7 +88,29 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // For all other requests (JS, CSS, images, etc.), use a stale-while-revalidate strategy.
+  // For _next/static chunks (hashed filenames), use network-first to prevent
+  // serving stale JS bundles after deploys.
+  if (event.request.url.includes('/_next/static/')) {
+    event.respondWith(
+      (async () => {
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch (err) {
+          const cache = await caches.open(CACHE_NAME);
+          const cached = await cache.match(event.request);
+          return cached || new Response('Offline', { status: 503 });
+        }
+      })()
+    );
+    return;
+  }
+
+  // For all other requests (CSS, images, etc.), use a stale-while-revalidate strategy.
   event.respondWith(
     caches.open(CACHE_NAME).then(cache => {
       return cache.match(event.request).then(response => {

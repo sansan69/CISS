@@ -5,6 +5,7 @@ import { canonicalizeDistrictList, canonicalizeDistrictName, districtMatches } f
 import { db } from "@/lib/firebaseAdmin";
 import { unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { resolveMobileSession } from "@/lib/server/mobile-session";
+export const runtime = "nodejs";
 
 type NotificationAudience = "guard" | "fieldOfficer" | "all";
 

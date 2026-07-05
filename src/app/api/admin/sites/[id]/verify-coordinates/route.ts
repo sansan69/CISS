@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerAuditEvent, buildServerUpdateAudit } from "@/lib/server/audit";
+export const runtime = "nodejs";
 
 export async function PATCH(
   request: Request,

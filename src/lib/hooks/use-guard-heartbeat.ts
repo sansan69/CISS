@@ -60,8 +60,17 @@ export function useGuardHeartbeat(
         (pos) => {
           lastPositionRef.current = pos;
         },
-        () => {
+        (err) => {
           // Location permission denied or unavailable
+          if (!sessionStorage.getItem('heartbeat-location-warned')) {
+            sessionStorage.setItem('heartbeat-location-warned', 'true');
+            console.warn(
+              '[heartbeat] Location tracking is unavailable — ' +
+              (err.code === err.PERMISSION_DENIED
+                ? 'permission denied. Enable location access in browser settings.'
+                : `error code ${err.code}: ${err.message}`),
+            );
+          }
         },
         {
           enableHighAccuracy: true,
@@ -78,7 +87,17 @@ export function useGuardHeartbeat(
           lastPositionRef.current = pos;
           sendHeartbeat(pos);
         },
-        () => {},
+        (err) => {
+          if (!sessionStorage.getItem('heartbeat-location-warned')) {
+            sessionStorage.setItem('heartbeat-location-warned', 'true');
+            console.warn(
+              '[heartbeat] Could not get current position — ' +
+              (err.code === err.PERMISSION_DENIED
+                ? 'location permission denied.'
+                : `error code ${err.code}: ${err.message}`),
+            );
+          }
+        },
         { enableHighAccuracy: true, timeout: 15_000 },
       );
     }
@@ -90,7 +109,18 @@ export function useGuardHeartbeat(
             lastPositionRef.current = pos;
             sendHeartbeat(pos);
           },
-          () => sendHeartbeat(),
+          (err) => {
+            if (!sessionStorage.getItem('heartbeat-location-warned')) {
+              sessionStorage.setItem('heartbeat-location-warned', 'true');
+              console.warn(
+                '[heartbeat] Interval position lookup failed — ' +
+                (err.code === err.PERMISSION_DENIED
+                  ? 'location permission denied.'
+                  : `error code ${err.code}: ${err.message}`),
+              );
+            }
+            sendHeartbeat();
+          },
           { enableHighAccuracy: true, timeout: 15_000 },
         );
       } else {

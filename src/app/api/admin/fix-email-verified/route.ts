@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {

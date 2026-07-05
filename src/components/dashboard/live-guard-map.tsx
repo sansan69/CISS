@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, Circle, Popup, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import type { GuardLocation } from "@/types/guard-location";

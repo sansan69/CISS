@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { getAutomationJob } from "@/lib/server/region-automator";
+export const runtime = "nodejs";
 
 export async function GET(
   request: Request,

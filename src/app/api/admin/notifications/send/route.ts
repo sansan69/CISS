@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { canonicalizeDistrictList, canonicalizeDistrictName, districtMatches } from "@/lib/districts";
 import { resolveEmployeeDistrict } from "@/lib/employees/visibility";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 type NotificationType = "work_order" | "attendance_marked" | "leave_approved" | "training_assigned" | "broadcast" | "report_review";
 type NotificationAudience = "guard" | "fieldOfficer" | "all";

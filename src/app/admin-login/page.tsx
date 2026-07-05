@@ -217,8 +217,8 @@ export default function AdminLoginPage() {
         <Button
           variant="ghost"
           asChild
-          size="sm"
-          className="h-10 px-3 text-white/80 hover:text-white hover:bg-white/10"
+          size="default"
+          className="px-3 text-white/80 hover:text-white hover:bg-white/10"
         >
           <Link href="/">
             <HomeIcon className="mr-2 h-4 w-4" /> Home
@@ -368,6 +368,7 @@ export default function AdminLoginPage() {
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="remember-email"
+                    aria-label="Remember email"
                     checked={rememberEmail}
                     onCheckedChange={(checked) => setRememberEmail(checked === true)}
                     className="border-white/30 data-[state=checked]:bg-brand-gold data-[state=checked]:border-brand-gold"

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/firebaseAdmin";
 import { unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {

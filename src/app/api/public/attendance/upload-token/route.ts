@@ -5,6 +5,7 @@ import {
   buildRateLimitKey,
   getClientIp,
 } from "@/lib/server/rate-limit";
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {

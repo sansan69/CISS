@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
 import { isLegacyAdminEmail } from "@/lib/auth/admin";
+export const runtime = "nodejs";
 
 function isAdmin(decoded: Record<string, unknown>) {
   return (

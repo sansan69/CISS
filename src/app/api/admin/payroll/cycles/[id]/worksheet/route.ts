@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import type { PayrollEntry } from "@/types/payroll";
+export const runtime = "nodejs";
 
 function formatLabel(value: string) {
   return value

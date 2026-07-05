@@ -7,6 +7,7 @@ import { validateRegionFirebaseConnection } from "@/lib/server/region-onboarding
 import { getRegionConnection } from "@/lib/server/region-connections";
 import { buildRegionVercelProjectName } from "@/lib/vercel-region";
 import type { ReadinessCheckResult, ReadinessSummary } from "@/types/region";
+export const runtime = "nodejs";
 
 async function probeUrl(url: string): Promise<boolean> {
   try {

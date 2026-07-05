@@ -3,6 +3,7 @@ import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit, buildServerUpdateAudit, buildServerAuditEvent } from "@/lib/server/audit";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { formatDateLabel, normalizeText, serializeDate, sortByDateDesc, toInt } from "@/lib/server/mobile-api-utils";
+export const runtime = "nodejs";
 
 function normalizeWorkOrderDate(value: unknown) {
   if (value instanceof Date) {

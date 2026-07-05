@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
 import { buildRegionEnvConfig, ensureVercelProject, setVercelEnvVars, getVercelProjectHealth } from "@/lib/server/vercel-provisioner";
+import type { RegionRecord } from "@/types/region";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,
@@ -18,10 +20,10 @@ export async function POST(
       return NextResponse.json({ error: "Region not found." }, { status: 404 });
     }
 
-    const region = { id: regionSnap.id, ...regionSnap.data() } as Record<string, unknown>;
+    const region = { id: regionSnap.id, ...regionSnap.data() } as RegionRecord;
 
-    const project = await ensureVercelProject(region as any);
-    const envVars = await buildRegionEnvConfig(region as any);
+    const project = await ensureVercelProject(region);
+    const envVars = await buildRegionEnvConfig(region);
 
     await setVercelEnvVars(project.projectName, envVars);
 

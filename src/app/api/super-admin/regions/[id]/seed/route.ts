@@ -8,6 +8,7 @@ import {
   nextRegionStatus,
   seedRegionDefaults,
 } from "@/lib/server/region-onboarding";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,

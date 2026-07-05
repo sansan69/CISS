@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { buildServerCreateAudit } from "@/lib/server/audit";
 import { REGION_CODE } from "@/lib/runtime-config";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {

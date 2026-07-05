@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { startAutomation, getAutomationJob } from "@/lib/server/region-automator";
 import { getRegionConnection } from "@/lib/server/region-connections";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import { DEFAULT_SETUP_PROGRESS } from "@/lib/region-wizard";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

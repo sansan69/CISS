@@ -11,6 +11,8 @@ import {
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
 
+export const dynamic = "force-dynamic";
+
 type FieldOfficerProfile = {
   name: string;
   stateCode: string;

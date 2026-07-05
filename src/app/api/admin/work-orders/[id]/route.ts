@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyRequestAuth, requireAdminOrFieldOfficer, requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerUpdateAudit } from "@/lib/server/audit";
 import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cleanup";
+export const runtime = "nodejs";
 
 export async function PATCH(
   request: Request,

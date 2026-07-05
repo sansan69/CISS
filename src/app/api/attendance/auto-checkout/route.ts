@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db as adminDb } from "@/lib/firebaseAdmin";
 import { isSessionStale } from "@/lib/attendance/attendance-validation";
+import { runChunked, buildSelfUrl } from "@/lib/server/self-queue";
 import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
 
-const CHUNK_SIZE = 50;
 const PAGE_LIMIT = 100;
 
 async function verifyVercelCronSignature(request: NextRequest): Promise<boolean> {
@@ -75,12 +75,16 @@ function computeFallbackAutoCheckout(
   ).toISOString();
 }
 
-async function processStaleSession(
+/**
+ * Generate the writes needed for a stale session auto-close.
+ * Returns null if the session is not stale.
+ */
+function processStaleSession(
   doc: FirebaseFirestore.QueryDocumentSnapshot,
   state: Record<string, any>,
   session: Record<string, any> | undefined,
   now: Date,
-): Promise<{
+): {
   employeeDocId: string;
   attendanceDate: string;
   reason: string;
@@ -89,7 +93,7 @@ async function processStaleSession(
     data: Record<string, any>;
     merge?: boolean;
   }>;
-} | null> {
+} | null {
   const autoCheckoutAt = computeFallbackAutoCheckout(state, session);
   const staleCheck = isSessionStale({
     lastState: {
@@ -187,118 +191,141 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date();
-  let totalClosed = 0;
-  let totalPages = 0;
-  const closedSessions: Array<{
-    employeeDocId: string;
-    attendanceDate: string;
-    reason: string;
-  }> = [];
+  const selfUrl = buildSelfUrl(request.url, "/api/attendance/auto-checkout");
+  const cronSecret = process.env.CRON_SECRET || "";
 
   try {
-    let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
-    let hasMore = true;
+    const result = await runChunked(
+      {
+        stateCollection: "systemConfig",
+        jobId: "autoCheckoutQueue",
+        budgetMs: 50_000,
+        selfUrl,
+        cronSecret,
+      },
+      // ── claim: read one page of stale attendance states ──
+      async (tx, cursor) => {
+        let query = adminDb
+          .collection("attendanceState")
+          .where("lastStatus", "==", "In")
+          .orderBy("lastAttendanceDate")
+          .limit(PAGE_LIMIT);
 
-    while (hasMore) {
-      let query = adminDb
-        .collection("attendanceState")
-        .where("lastStatus", "==", "In")
-        .limit(PAGE_LIMIT);
-
-      if (lastDoc) {
-        query = query.startAfter(lastDoc);
-      }
-
-      const statesSnapshot = await query.get();
-      if (statesSnapshot.empty) {
-        hasMore = false;
-        break;
-      }
-
-      totalPages++;
-
-      // Pre-fetch session docs for this page
-      const sessionIds = statesSnapshot.docs
-        .map((d) => (d.data() as Record<string, any>).openSessionId)
-        .filter((id): id is string => typeof id === "string");
-
-      const sessionById = new Map<string, Record<string, any>>();
-      if (sessionIds.length > 0) {
-        for (let i = 0; i < sessionIds.length; i += 10) {
-          const idBatch = sessionIds.slice(i, i + 10);
-          const snap = await adminDb
-            .collection("attendanceSessions")
-            .where("__name__", "in", idBatch)
-            .get();
-          for (const sDoc of snap.docs) {
-            sessionById.set(sDoc.id, sDoc.data());
+        if (cursor) {
+          const cursorDocRef = adminDb
+            .collection("attendanceState")
+            .doc(cursor as string);
+          const cursorDoc = await tx.get(cursorDocRef);
+          if (cursorDoc.exists) {
+            query = query.startAfter(cursorDoc);
           }
         }
-      }
 
-      // Collect all stale sessions for this page
-      const pageResults: Array<{
-        employeeDocId: string;
-        attendanceDate: string;
-        reason: string;
-        writes: Array<{
-          ref: FirebaseFirestore.DocumentReference;
-          data: Record<string, any>;
-          merge?: boolean;
-        }>;
-      }> = [];
-
-      for (const doc of statesSnapshot.docs) {
-        const state = doc.data() as Record<string, any>;
-        const session = state.openSessionId
-          ? sessionById.get(String(state.openSessionId))
-          : undefined;
-        const result = await processStaleSession(doc, state, session, now);
-        if (result) {
-          pageResults.push(result);
+        const snapshot = await query.get();
+        if (snapshot.empty) {
+          return { chunk: null, cursor: null };
         }
-      }
 
-      lastDoc = statesSnapshot.docs[statesSnapshot.docs.length - 1];
-      hasMore = statesSnapshot.docs.length >= PAGE_LIMIT;
+        const docs = snapshot.docs;
+        return {
+          chunk: docs,
+          cursor: docs[docs.length - 1].id,
+        };
+      },
+      // ── process: close stale sessions in individual transactions ──
+      async (docs) => {
+        // Pre-fetch session docs for this page in batches of 10
+        const sessionIds = docs
+          .map((d) => (d.data() as Record<string, any>).openSessionId)
+          .filter((id): id is string => typeof id === "string");
 
-      // Commit chunks of 50 stale sessions per batch
-      if (pageResults.length > 0) {
-        for (let i = 0; i < pageResults.length; i += CHUNK_SIZE) {
-          const chunk = pageResults.slice(i, i + CHUNK_SIZE);
-          const batch = adminDb.batch();
-          for (const result of chunk) {
-            for (const write of result.writes) {
-              if (write.merge) {
-                batch.set(write.ref, write.data, { merge: true });
-              } else {
-                batch.set(write.ref, write.data);
-              }
+        const sessionById = new Map<string, Record<string, any>>();
+        if (sessionIds.length > 0) {
+          for (let i = 0; i < sessionIds.length; i += 10) {
+            const idBatch = sessionIds.slice(i, i + 10);
+            const snap = await adminDb
+              .collection("attendanceSessions")
+              .where("__name__", "in", idBatch)
+              .get();
+            for (const sDoc of snap.docs) {
+              sessionById.set(sDoc.id, sDoc.data());
             }
           }
-          await batch.commit();
         }
 
-        totalClosed += pageResults.length;
-        for (const r of pageResults) {
-          closedSessions.push({
-            employeeDocId: r.employeeDocId,
-            attendanceDate: r.attendanceDate,
-            reason: r.reason,
-          });
+        let closedCount = 0;
+
+        for (const doc of docs) {
+          const state = doc.data() as Record<string, any>;
+          const session = state.openSessionId
+            ? sessionById.get(String(state.openSessionId))
+            : undefined;
+
+          const result = processStaleSession(doc, state, session, now);
+          if (!result) continue;
+
+          // Use runTransaction per session to atomically verify & close
+          // (prevents P1-7 race where a real checkout is overwritten)
+          try {
+            await adminDb.runTransaction(async (tx) => {
+              const freshSnap = await tx.get(doc.ref);
+              if (!freshSnap.exists) return;
+              const freshState = freshSnap.data() as Record<string, any>;
+              if (freshState.lastStatus !== "In") return;
+
+              for (const write of result.writes) {
+                if (write.merge) {
+                  tx.set(write.ref, write.data, { merge: true });
+                } else {
+                  tx.set(write.ref, write.data);
+                }
+              }
+            });
+            closedCount++;
+          } catch (txError) {
+            // Transaction conflict — the guard likely checked out concurrently
+            console.warn(
+              `[auto-checkout] Transaction conflict for ${result.employeeDocId}:`,
+              txError,
+            );
+          }
         }
-      }
+
+        return { done: true, processed: closedCount };
+      },
+    );
+
+    // Write completion marker (covers W-P2-2)
+    if (result.done) {
+      await adminDb
+        .collection("systemConfig")
+        .doc("autoCheckoutQueue")
+        .set(
+          {
+            autoCheckoutLastRun: {
+              ranAt: now.toISOString(),
+              closedCount: result.processed,
+              status: result.status,
+            },
+          },
+          { merge: true },
+        );
+    }
+
+    if (!result.done) {
+      return NextResponse.json({ status: 202 });
     }
 
     return NextResponse.json({
       success: true,
-      closedCount: totalClosed,
-      pagesScanned: totalPages,
-      closedSessions: closedSessions.slice(0, 20),
+      closedCount: result.processed,
       checkedAt: now.toISOString(),
     });
   } catch (error: any) {
-    console.error("Auto-checkout job failed:", error);
+    const { log } = await import("@/lib/server/log");
+    log("error", "auto-checkout", "Auto-checkout job failed", {
+      error: error?.message,
+    });
     return NextResponse.json(
       { error: error?.message || "Auto-checkout failed." },
       { status: 500 },

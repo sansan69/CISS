@@ -60,7 +60,7 @@ export default function DownloadPage() {
             href="https://github.com/sansan69/CISS-Mobile/releases/latest"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-white/50 underline hover:text-white/70"
+            className="text-white/50 underline hover:text-white/70 inline-flex items-center min-h-11 px-2"
           >
             GitHub Releases
           </a>
@@ -100,7 +100,7 @@ export default function DownloadPage() {
         </div>
 
         <div className="mt-6">
-          <Link href="/" className="text-xs text-white/40 hover:text-white/60 underline">
+          <Link href="/" className="text-xs text-white/40 hover:text-white/60 underline inline-flex items-center min-h-11 px-2">
             Back to CISS Workforce
           </Link>
         </div>

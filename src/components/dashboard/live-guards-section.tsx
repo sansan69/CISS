@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, WifiOff, AlertTriangle, Clock, Search, List, Map as MapIcon } from "lucide-react";
 import type { GuardLocation } from "@/types/guard-location";
-import { LiveGuardMap } from "@/components/dashboard/live-guard-map";
+
+const LiveGuardMap = dynamic(
+  () => import("@/components/dashboard/live-guard-map").then((mod) => ({ default: mod.LiveGuardMap })),
+  { ssr: false },
+);
 
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);

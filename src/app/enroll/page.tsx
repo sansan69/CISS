@@ -50,7 +50,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from 'next/navigation';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Download, KeyRound } from "lucide-react";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import type { PDFFont } from 'pdf-lib';
 import {
   EDUCATION_OPTIONS,
   isLngClientName,
@@ -990,6 +990,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     // We'll just show loading state via button
 
     try {
+      const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.create();
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -1764,6 +1765,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     <>
       <Card className="mx-auto w-full max-w-6xl overflow-hidden border-t-4 border-primary shadow-xl">
         <CardHeader className="px-5 pb-3 pt-6 text-center sm:px-8 sm:pb-4 lg:px-10">
+          <h1 className="sr-only">Employee Registration</h1>
           <CardTitle className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">Employee Registration</CardTitle>
           <CardDescription className="mx-auto mt-1 max-w-lg text-xs sm:text-sm">Fill any section now and continue later from this device.</CardDescription>
         </CardHeader>
@@ -1940,7 +1942,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                              <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('profilePictureInput')?.click()}><Upload className="mr-2 h-4 w-4" /> Upload</Button>
                              <Button type="button" variant="outline" size="sm" onClick={() => openCamera("profilePicture")}><Camera className="mr-2 h-4 w-4" /> Take Photo</Button>
                           </div>
-                          <FormControl><Input id="profilePictureInput" type="file" className="hidden" accept={ENROLLMENT_IMAGE_ACCEPT} onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}/></FormControl>
+                          <FormControl><Input id="profilePictureInput" type="file" aria-label="Upload profile picture" className="hidden" accept={ENROLLMENT_IMAGE_ACCEPT} onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}/></FormControl>
                           <FormDescription>Phone photos and gallery images work better here now, including larger photos before compression.</FormDescription>
                           <FormMessage />
                          </div>
@@ -2314,7 +2316,7 @@ const ImagePreviewAndUpload: React.FC<{
                 <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`${fieldName}Input`)?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Camera</Button>
             </div>
-            <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept={ENROLLMENT_DOCUMENT_ACCEPT} onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
+            <FormControl><Input id={`${fieldName}Input`} type="file" aria-label={`Upload ${fieldName}`} className="hidden" accept={ENROLLMENT_DOCUMENT_ACCEPT} onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
             {helperText && <p className="mt-3 text-sm text-muted-foreground">{helperText}</p>}
         </div>
     );
@@ -2327,7 +2329,7 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
         <div className="w-full border-t border-dashed" />
       </div>
       <div className="relative flex justify-center">
-        <span className="bg-card px-3 text-xl font-semibold text-primary">{title}</span>
+        <h2 className="bg-card px-3 text-xl font-semibold text-primary">{title}</h2>
       </div>
     </div>
     {children}

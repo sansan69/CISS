@@ -8,6 +8,8 @@ import {
 } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 
+export const dynamic = "force-dynamic";
+
 function toCsv(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
     return "employeeName,employeeId,status,clientName,employeeClientName,siteClientName,crossClientRelief,district,siteName,dutyPointName,attendanceDate,locationText,complianceStatus,complianceWarnings,requiresLocationReview,isMockLocationSuspected,gpsAccuracyMeters,reportedAt,createdAt\n";
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     let clientScope = null;
-    let snapshots: Array<{ size: number; docs: Array<{ id: string; data(): Record<string, any> }> }> = [];
+    let snapshots: Array<FirebaseFirestore.QuerySnapshot> = [];
     if (isClient) {
       clientScope = await resolveClientScope(adminDb, decodedToken);
       if (!clientScope) {
@@ -87,12 +89,12 @@ export async function GET(request: NextRequest) {
           .where("clientName", "==", clientScope.clientName)
           .orderBy("attendanceDate", "desc")
           .limit(1000)
-          .get() as any,
+          .get(),
         queryRef
           .where("employeeClientName", "==", clientScope.clientName)
           .orderBy("attendanceDate", "desc")
           .limit(1000)
-          .get() as any,
+          .get(),
       ]);
     } else if (!isAdmin) {
       // Field officers can only export their assigned districts
@@ -117,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     const LIMIT = 1000;
     if (!isClient) {
-      snapshots = [await queryRef.orderBy("attendanceDate", "desc").limit(LIMIT).get() as any];
+      snapshots = [await queryRef.orderBy("attendanceDate", "desc").limit(LIMIT).get()];
     }
     const docsById = new Map<string, { id: string; data(): Record<string, any> }>();
     for (const snapshot of snapshots) {

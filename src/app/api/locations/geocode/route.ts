@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { handleLocationGeocode } from "@/lib/server/location-geocode";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {

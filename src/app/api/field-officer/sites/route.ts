@@ -7,6 +7,7 @@ import {
   type AppDecodedToken,
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();

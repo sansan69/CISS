@@ -4,6 +4,7 @@ import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cl
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // POST /api/admin/work-orders/bulk-delete
 // Body: { examName: string, examCode?: string } or { workOrderIds: string[] }

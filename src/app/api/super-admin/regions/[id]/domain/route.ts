@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { addVercelDomain } from "@/lib/server/vercel-provisioner";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,

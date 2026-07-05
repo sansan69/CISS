@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 interface ImportDoc {
   id: string;

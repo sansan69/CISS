@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {

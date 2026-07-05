@@ -8,6 +8,7 @@ import {
   extractSiteCoordinates,
   normalizeIndianStateName,
 } from "@/lib/site-gps-repair";
+export const runtime = "nodejs";
 
 export type BatchGeocodeResult = {
   siteId: string;

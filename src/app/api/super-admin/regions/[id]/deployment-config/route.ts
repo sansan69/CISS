@@ -4,6 +4,7 @@ import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { getRegionConnection } from "@/lib/server/region-connections";
 import { REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import type { RegionRecord } from "@/types/region";
+export const runtime = "nodejs";
 
 export async function GET(
   request: Request,

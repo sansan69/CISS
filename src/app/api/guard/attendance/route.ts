@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
 
+export const dynamic = "force-dynamic";
+
 function timestampToMillis(value: unknown) {
   if (!value) return 0;
   if (value instanceof Date) return value.getTime();

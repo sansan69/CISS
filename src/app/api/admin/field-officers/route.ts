@@ -10,6 +10,8 @@ import {
 } from "@/lib/server/monitoring";
 import { REGION_CODE } from "@/lib/runtime-config";
 
+export const dynamic = "force-dynamic";
+
 type OfficerRequest = {
   uid?: string;
   email?: string;

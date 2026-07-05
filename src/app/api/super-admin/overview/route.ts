@@ -11,6 +11,7 @@ import type {
   RegionRecord,
   SuperAdminOverviewSummary,
 } from "@/types/region";
+export const runtime = "nodejs";
 
 function startOfToday() {
   const now = new Date();

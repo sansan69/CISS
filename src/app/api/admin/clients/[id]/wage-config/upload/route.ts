@@ -5,6 +5,7 @@ import {
   detectHeaderRow,
   inferSheetFamily,
 } from "@/lib/payroll/wage-template-parser";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,

@@ -4,6 +4,7 @@ import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { retryAutomationStep } from "@/lib/server/region-automator";
 import { getRegionConnection } from "@/lib/server/region-connections";
 import type { RegionRecord } from "@/types/region";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,

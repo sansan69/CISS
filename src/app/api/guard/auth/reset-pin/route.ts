@@ -13,6 +13,7 @@ import {
 import { GUARD_AUTH_EMAIL_DOMAIN } from "@/lib/runtime-config";
 import { districtMatches } from "@/lib/districts";
 import { FieldValue } from "firebase-admin/firestore";
+export const runtime = "nodejs";
 
 type EmployeeDocLike = {
   id: string;

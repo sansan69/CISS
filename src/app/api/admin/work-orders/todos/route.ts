@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const siteId = searchParams.get("siteId");
     const status = searchParams.get("status");
 
-    let q = adminDb.collection("workOrderTodos") as any;
+    let q: FirebaseFirestore.Query = adminDb.collection("workOrderTodos");
 
     if (workOrderId) {
       q = q.where("workOrderId", "==", workOrderId);

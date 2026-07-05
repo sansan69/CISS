@@ -54,9 +54,9 @@ service firebase.storage {
       return isSignedIn() && request.auth.token.role == 'fieldOfficer';
     }
 
-    // F-01: Field officer report photo uploads
+    // F-01: Field officer report photo uploads — only admin or field officer can read
     match /foReports/{folder}/{uid}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || isFieldOfficer();
       allow create: if isFieldOfficer() && request.auth.uid == uid && (
         (folder == 'trainingReportFiles' && isAllowedTrainingSize() && isTrainingContent()) ||
         (folder != 'trainingReportFiles' && isAllowedSize() && isDocument())
@@ -65,11 +65,11 @@ service firebase.storage {
     }
 
     // Legacy employee file paths. Public attendance can still upload attendance
-    // photos here, but sensitive files are readable only by authenticated users.
-    // Profile pictures with download tokens are readable by anyone who has
-    // the token URL. The download token itself is the authorization mechanism.
+    // photos here.
+    // Profile pictures — readable by any authenticated user (was public).
+    // All other employee paths contain sensitive PII and are admin-only.
     match /employees/{employeeKey}/profilePictures/{fileName} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isAdmin() && isAllowedSize() && isImage();
       allow update, delete: if isAdmin();
     }
@@ -87,55 +87,55 @@ service firebase.storage {
     }
 
     match /employees/{employeeKey}/idProofs/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/addressProofs/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/serviceBooks/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/armsLicenses/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/aadharCards/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/panCards/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/passports/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/bankDocuments/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/policeCertificates/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
       allow update, delete: if isAdmin();
     }
@@ -147,71 +147,72 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
-    // Public self-enrollment uploads — unauthenticated writes allowed.
+    // Public self-enrollment uploads — unauthenticated writes allowed for
+    // creating the enrollment, but reads are admin-only (sensitive PII documents).
     // The public form stores files under typed subfolders, so size rules are
     // enforced by folder instead of MIME type to avoid false denials.
     match /enrollments/{employeeKey}/profilePictures/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentImage();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/signatures/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentImage();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/idProofs/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/addressProofs/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/serviceBooks/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/armsLicenses/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/aadharCards/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/panCards/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/passports/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/bankDocuments/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/policeCertificates/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if isEnrollmentDocument();
       allow update, delete: if isAdmin();
     }

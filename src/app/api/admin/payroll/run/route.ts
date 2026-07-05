@@ -14,7 +14,12 @@ import {
 } from "@/lib/payroll/calculate";
 import { aggregateAttendance } from "@/lib/payroll/attendance-aggregator";
 import { cloneComplianceSettings } from "@/lib/payroll/defaults";
+import { runChunked, buildSelfUrl } from "@/lib/server/self-queue";
 import type { ClientWageConfig, ComplianceSettings, WageComponent, WageTemplateRule } from "@/types/payroll";
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
+const CHUNK_SIZE = 25;
 
 type ClientDocShape = {
   name?: string;
@@ -37,313 +42,408 @@ export async function POST(request: Request) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
-    const existingCycles = await adminDb.collection("payrollCycles").where("period", "==", period).get();
-    const conflictingCycle = existingCycles.docs.find((doc) => {
-      const data = doc.data() as { clientId?: string | null };
-      return (data.clientId || null) === (clientId || null);
-    });
-
-    if (conflictingCycle) {
-      return NextResponse.json(
-        { error: `Payroll cycle for ${period} already exists.`, cycleId: conflictingCycle.id },
-        { status: 409 },
-      );
-    }
-
     const [yearStr, monthStr] = period.split("-");
     const year = parseInt(yearStr, 10);
     const month = parseInt(monthStr, 10);
 
+    // ── Atomically create the payroll cycle ──
+    const cycleDocId = clientId ? `${period}_${clientId}` : period;
+    const potentialCycleRef = adminDb.collection("payrollCycles").doc(cycleDocId);
+
+    await adminDb.runTransaction(async (transaction) => {
+      const existing = await transaction.get(potentialCycleRef);
+      if (existing.exists) {
+        throw Object.assign(
+          new Error(`Payroll cycle for ${period} already exists.`),
+          { statusCode: 409, cycleId: cycleDocId },
+        );
+      }
+      transaction.create(potentialCycleRef, {
+        period,
+        month,
+        year,
+        clientId: clientId ?? null,
+        status: "processing",
+        totalEmployees: 0,
+        totalGross: 0,
+        totalNetPay: 0,
+        totalEPF: 0,
+        totalESIC: 0,
+        totalPT: 0,
+        totalTDS: 0,
+        processedBy: decoded.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    cycleRef = potentialCycleRef;
+
     const compDoc = await adminDb.collection("complianceSettings").doc("global").get();
     const compliance = (compDoc.exists ? compDoc.data() : cloneComplianceSettings()) as ComplianceSettings;
 
-    let employeeQuery: FirebaseFirestore.Query = adminDb.collection("employees").where("status", "==", "Active");
-    if (clientId) {
-      employeeQuery = employeeQuery.where("clientId", "==", clientId);
-    }
-    const employeeSnapshot = await employeeQuery.limit(500).get();
+    const selfUrl = buildSelfUrl(request.url, "/api/admin/payroll/run");
+    const cronSecret = process.env.CRON_SECRET || "";
 
-    cycleRef = await adminDb.collection("payrollCycles").add({
-      period,
-      month,
-      year,
-      clientId: clientId ?? null,
-      status: "processing",
-      totalEmployees: 0,
-      totalGross: 0,
-      totalNetPay: 0,
-      totalEPF: 0,
-      totalESIC: 0,
-      totalPT: 0,
-      totalTDS: 0,
-      processedBy: decoded.uid,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    const result = await runChunked(
+      {
+        stateCollection: "payrollCycles",
+        jobId: cycleDocId,
+        budgetMs: 50_000,
+        selfUrl,
+        cronSecret,
+        cursorKey: "progress",
+      },
+      // ── claim: next 25 employees ──
+      async (tx, cursor) => {
+        let query: FirebaseFirestore.Query = adminDb
+          .collection("employees")
+          .where("status", "==", "Active")
+          .orderBy("__name__")
+          .limit(CHUNK_SIZE);
 
-    const wageConfigCache = new Map<string, ClientWageConfig | null>();
-    const payrollTemplateCache = new Map<
-      string,
-      { grossMonthly: number; componentAmounts: Record<string, number> } | null
-    >();
-    const clientCache = new Map<string, ClientDocShape>();
+        if (clientId) {
+          query = query.where("clientId", "==", clientId);
+        }
 
-    async function getWageConfig(targetClientId?: string | null) {
-      if (!targetClientId) return null;
-      if (wageConfigCache.has(targetClientId)) return wageConfigCache.get(targetClientId) ?? null;
-      const configDoc = await adminDb.collection("clientWageConfig").doc(targetClientId).get();
-      const config = configDoc.exists ? ({ id: configDoc.id, ...configDoc.data() } as ClientWageConfig) : null;
-      wageConfigCache.set(targetClientId, config);
-      return config;
-    }
+        if (cursor) {
+          const cursorDocRef = adminDb
+            .collection("employees")
+            .doc(cursor as string);
+          const cursorDoc = await tx.get(cursorDocRef);
+          if (cursorDoc.exists) {
+            query = query.startAfter(cursorDoc);
+          }
+        }
 
-    async function getPayrollTemplate(targetClientId?: string | null) {
-      if (!targetClientId) return null;
-      if (payrollTemplateCache.has(targetClientId)) {
-        return payrollTemplateCache.get(targetClientId) ?? null;
-      }
-      const wageConfig = await getWageConfig(targetClientId);
-      const wageComponents = (wageConfig?.components ?? []) as WageComponent[];
-      const template = derivePayrollTemplateFromWageConfig(wageComponents);
-      payrollTemplateCache.set(targetClientId, template);
-      return template;
-    }
+        const snapshot = await query.get();
+        if (snapshot.empty) {
+          return { chunk: null, cursor: null };
+        }
 
-    async function getClientDoc(targetClientId?: string | null) {
-      if (!targetClientId) return null;
-      if (clientCache.has(targetClientId)) return clientCache.get(targetClientId) ?? null;
-      const clientDoc = await adminDb.collection("clients").doc(targetClientId).get();
-      const clientData = clientDoc.exists ? (clientDoc.data() as ClientDocShape) : null;
-      if (clientData) clientCache.set(targetClientId, clientData);
-      return clientData;
-    }
+        return {
+          chunk: snapshot.docs,
+          cursor: snapshot.docs[snapshot.docs.length - 1].id,
+        };
+      },
+      // ── process: compute pay and write entries for 25 employees ──
+      async (docs) => {
+        const wageConfigCache = new Map<string, ClientWageConfig | null>();
+        const payrollTemplateCache = new Map<
+          string,
+          { grossMonthly: number; componentAmounts: Record<string, number> } | null
+        >();
+        const clientCache = new Map<string, ClientDocShape>();
 
-    let totalEmployees = 0;
-    let totalGross = 0;
-    let totalNetPay = 0;
-    let totalEPF = 0;
-    let totalESIC = 0;
-    let totalPT = 0;
-    let totalTDS = 0;
+        async function getWageConfig(targetClientId?: string | null) {
+          if (!targetClientId) return null;
+          if (wageConfigCache.has(targetClientId)) return wageConfigCache.get(targetClientId) ?? null;
+          const configDoc = await adminDb.collection("clientWageConfig").doc(targetClientId).get();
+          const config = configDoc.exists ? ({ id: configDoc.id, ...configDoc.data() } as ClientWageConfig) : null;
+          wageConfigCache.set(targetClientId, config);
+          return config;
+        }
 
-    const skippedEmployees: Array<{ name: string; clientId: string | null; reason: string }> = [];
+        async function getPayrollTemplate(targetClientId?: string | null) {
+          if (!targetClientId) return null;
+          if (payrollTemplateCache.has(targetClientId)) {
+            return payrollTemplateCache.get(targetClientId) ?? null;
+          }
+          const wageConfig = await getWageConfig(targetClientId);
+          const wageComponents = (wageConfig?.components ?? []) as WageComponent[];
+          const template = derivePayrollTemplateFromWageConfig(wageComponents);
+          payrollTemplateCache.set(targetClientId, template);
+          return template;
+        }
 
-    const BATCH_SIZE = 450;
-    let batch = adminDb.batch();
-    let batchCount = 0;
+        async function getClientDoc(targetClientId?: string | null) {
+          if (!targetClientId) return null;
+          if (clientCache.has(targetClientId)) return clientCache.get(targetClientId) ?? null;
+          const clientDoc = await adminDb.collection("clients").doc(targetClientId).get();
+          const clientData = clientDoc.exists ? (clientDoc.data() as ClientDocShape) : null;
+          if (clientData) clientCache.set(targetClientId, clientData);
+          return clientData;
+        }
 
-    for (const employeeDoc of employeeSnapshot.docs) {
-      const employee = employeeDoc.data() as {
-        name?: string;
-        firstName?: string;
-        lastName?: string;
-        employeeCode?: string;
-        guardId?: string;
-        clientId?: string;
-        clientName?: string;
-        district?: string;
-      };
+        let chunkProcessed = 0;
+        let chunkGross = 0;
+        let chunkNetPay = 0;
+        let chunkEPF = 0;
+        let chunkESIC = 0;
+        let chunkPT = 0;
+        let chunkTDS = 0;
+        const chunkSkipped: Array<{ name: string; clientId: string | null; reason: string }> = [];
 
-      const resolvedClientId = employee.clientId ?? null;
-      const clientDoc = await getClientDoc(resolvedClientId);
-      const wageConfig = await getWageConfig(resolvedClientId);
-      const wageComponents = (wageConfig?.components ?? []) as WageComponent[];
-      const payrollTemplate = await getPayrollTemplate(resolvedClientId);
-      const templateRules = wageConfig?.templateRules ?? [];
-      const templateConstants = wageConfig?.templateConstants ?? [];
+        const BATCH_SIZE = 450;
+        let batch = adminDb.batch();
+        let batchCount = 0;
 
-      if (!payrollTemplate && !templateRules.length) {
-        const empName =
-          employee.name ||
-          [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
-          "Unnamed employee";
-        skippedEmployees.push({
-          name: empName,
-          clientId: resolvedClientId,
-          reason: resolvedClientId
-            ? "No wage configuration found for client"
-            : "Employee has no client assigned",
-        });
-        continue;
-      }
+        for (const employeeDoc of docs) {
+          const employee = employeeDoc.data() as {
+            name?: string;
+            firstName?: string;
+            lastName?: string;
+            employeeCode?: string;
+            guardId?: string;
+            clientId?: string;
+            clientName?: string;
+            district?: string;
+          };
 
-      const mergedComponentAmounts: Record<string, number> = {
-        ...(payrollTemplate?.componentAmounts ?? {}),
-      };
+          const resolvedClientId = employee.clientId ?? null;
+          const clientDoc = await getClientDoc(resolvedClientId);
+          const wageConfig = await getWageConfig(resolvedClientId);
+          const wageComponents = (wageConfig?.components ?? []) as WageComponent[];
+          const payrollTemplate = await getPayrollTemplate(resolvedClientId);
+          const templateRules = wageConfig?.templateRules ?? [];
+          const templateConstants = wageConfig?.templateConstants ?? [];
 
-      if (clientDoc?.uniformAllowanceMonthly) {
-        mergedComponentAmounts.uniform_allowance =
-          (mergedComponentAmounts.uniform_allowance ?? 0) + clientDoc.uniformAllowanceMonthly;
-      }
-      if (clientDoc?.fieldAllowanceMonthly) {
-        mergedComponentAmounts.field_allowance =
-          (mergedComponentAmounts.field_allowance ?? 0) + clientDoc.fieldAllowanceMonthly;
-      }
+          if (!payrollTemplate && !templateRules.length) {
+            const empName =
+              employee.name ||
+              [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
+              "Unnamed employee";
+            chunkSkipped.push({
+              name: empName,
+              clientId: resolvedClientId,
+              reason: resolvedClientId
+                ? "No wage configuration found for client"
+                : "Employee has no client assigned",
+            });
+            continue;
+          }
 
-      const attendance = await aggregateAttendance(employeeDoc.id, period, adminDb);
-      const payableDays = Math.min(
-        attendance.workingDays,
-        attendance.presentDays,
-      );
+          const mergedComponentAmounts: Record<string, number> = {
+            ...(payrollTemplate?.componentAmounts ?? {}),
+          };
 
-      const attendanceInputs = {
-        payable_duties: payableDays,
-        duties: attendance.presentDays,
-        weekly_off: 0,
-        extra_duty_days: 0,
-        half_day: 0,
-        total: payableDays,
-        additional_duties: 0,
-      };
+          if (clientDoc?.uniformAllowanceMonthly) {
+            mergedComponentAmounts.uniform_allowance =
+              (mergedComponentAmounts.uniform_allowance ?? 0) + clientDoc.uniformAllowanceMonthly;
+          }
+          if (clientDoc?.fieldAllowanceMonthly) {
+            mergedComponentAmounts.field_allowance =
+              (mergedComponentAmounts.field_allowance ?? 0) + clientDoc.fieldAllowanceMonthly;
+          }
 
-      const templateSyntheticComponents: WageComponent[] = templateRules.map((rule, index) => ({
-        id: rule.standardName,
-        name: rule.displayLabel,
-        type:
-          rule.category === "deduction"
-            ? "deduction"
-            : rule.category === "employer_contribution"
-              ? "employer_contribution"
-              : "earning",
-        calculationType: "fixed_amount",
-        value: null,
-        isStatutory: false,
-        statutoryType: null,
-        isTaxable: rule.category !== "deduction",
-        epfApplicable: /basic|da|dearness/i.test(rule.standardName),
-        order: index + 1,
-      }));
+          const attendance = await aggregateAttendance(employeeDoc.id, period, adminDb);
+          const payableDays = Math.min(attendance.workingDays, attendance.presentDays);
 
-      const proratedComponents = templateRules.length
-        ? applySavedWageTemplate({
-            rules: templateRules,
-            constants: templateConstants,
-            attendance: attendanceInputs,
-          }).components
-        : Object.fromEntries(
-            Object.entries(mergedComponentAmounts).map(([componentId, amount]) => [
-              componentId,
-              prorateAmount(amount, attendance.workingDays, payableDays),
-            ]),
+          const attendanceInputs = {
+            payable_duties: payableDays,
+            duties: attendance.presentDays,
+            weekly_off: 0,
+            extra_duty_days: 0,
+            half_day: 0,
+            total: payableDays,
+            additional_duties: 0,
+          };
+
+          const templateSyntheticComponents: WageComponent[] = templateRules.map((rule, index) => ({
+            id: rule.standardName,
+            name: rule.displayLabel,
+            type:
+              rule.category === "deduction"
+                ? "deduction"
+                : rule.category === "employer_contribution"
+                  ? "employer_contribution"
+                  : "earning",
+            calculationType: "fixed_amount",
+            value: null,
+            isStatutory: false,
+            statutoryType: null,
+            isTaxable: rule.category !== "deduction",
+            epfApplicable: /basic|da|dearness/i.test(rule.standardName),
+            order: index + 1,
+          }));
+
+          const proratedComponents = templateRules.length
+            ? applySavedWageTemplate({
+                rules: templateRules,
+                constants: templateConstants,
+                attendance: attendanceInputs,
+              }).components
+            : Object.fromEntries(
+                Object.entries(mergedComponentAmounts).map(([componentId, amount]) => [
+                  componentId,
+                  prorateAmount(amount, attendance.workingDays, payableDays),
+                ]),
+              );
+
+          const componentMeta = templateRules.length ? templateSyntheticComponents : wageComponents;
+          const earningsSummary = summarizeNamedEarnings(proratedComponents, componentMeta);
+          const grossFromSummaryRule =
+            proratedComponents.gross ??
+            proratedComponents.gross_earnings ??
+            proratedComponents.salary_payable;
+          const grossEarnings =
+            grossFromSummaryRule !== undefined
+              ? round2(grossFromSummaryRule)
+              : round2(
+                  Object.entries(proratedComponents).reduce((sum, [componentId, amount]) => {
+                    const matchingRule = templateRules.find((rule) => rule.standardName === componentId);
+                    if (matchingRule && matchingRule.category !== "earning" && matchingRule.category !== "summary") {
+                      return sum;
+                    }
+                    const component = componentMeta.find((entry) => entry.id === componentId);
+                    if (component?.type === "deduction" || component?.type === "employer_contribution") return sum;
+                    return sum + amount;
+                  }, 0),
+                );
+          const epfBase = computeEpfApplicableWage(proratedComponents, componentMeta);
+          const epfResult = calculateEPF(epfBase, compliance.epf);
+          const esicResult = calculateESIC(grossEarnings, compliance.esic);
+          const pt = calculatePT(grossEarnings, compliance.professionalTax.slabs);
+          const tds = calculateTDS(grossEarnings, compliance.tds);
+          const totalDeductions = round2(
+            epfResult.employeeEPF +
+            (esicResult?.employeeESIC ?? 0) +
+            pt +
+            tds
+          );
+          const netPay = round2(
+            grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds,
           );
 
-      const componentMeta = templateRules.length ? templateSyntheticComponents : wageComponents;
-      const earningsSummary = summarizeNamedEarnings(proratedComponents, componentMeta);
-      const grossFromSummaryRule =
-        proratedComponents.gross ??
-        proratedComponents.gross_earnings ??
-        proratedComponents.salary_payable;
-      const grossEarnings =
-        grossFromSummaryRule !== undefined
-          ? round2(grossFromSummaryRule)
-          : round2(
-              Object.entries(proratedComponents).reduce((sum, [componentId, amount]) => {
-                const matchingRule = templateRules.find((rule) => rule.standardName === componentId);
-                if (matchingRule && matchingRule.category !== "earning" && matchingRule.category !== "summary") {
-                  return sum;
-                }
-                const component = componentMeta.find((entry) => entry.id === componentId);
-                if (component?.type === "deduction" || component?.type === "employer_contribution") return sum;
-                return sum + amount;
-              }, 0),
-            );
-      const epfBase = computeEpfApplicableWage(proratedComponents, componentMeta);
-      const epfResult = calculateEPF(epfBase, compliance.epf);
-      const esicResult = calculateESIC(grossEarnings, compliance.esic);
-      const pt = calculatePT(grossEarnings, compliance.professionalTax.slabs);
-      const tds = calculateTDS(grossEarnings, compliance.tds);
-      const totalDeductions = round2(
-        epfResult.employeeEPF +
-        (esicResult?.employeeESIC ?? 0) +
-        pt +
-        tds
-      );
-      const netPay = round2(
-        grossEarnings - epfResult.employeeEPF - (esicResult?.employeeESIC ?? 0) - pt - tds,
-      );
+          const entryRef = adminDb.collection("payrollEntries").doc();
+          batch.set(entryRef, {
+            cycleId: cycleRef!.id,
+            period,
+            employeeId: employeeDoc.id,
+            employeeName:
+              employee.name ||
+              [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
+              "Unnamed employee",
+            employeeCode: employee.employeeCode ?? employee.guardId ?? "",
+            clientId: resolvedClientId ?? "",
+            clientName: employee.clientName ?? clientDoc?.name ?? clientDoc?.clientName ?? "",
+            district: employee.district ?? "",
+            workingDays: attendance.workingDays,
+            presentDays: attendance.presentDays,
+            payableDays,
+            earnings: {
+              ...earningsSummary,
+              grossEarnings,
+              componentBreakdown: proratedComponents,
+            },
+            deductions: {
+              epfEmployee: epfResult.employeeEPF,
+              esicEmployee: esicResult?.employeeESIC ?? 0,
+              professionalTax: pt,
+              tds,
+              otherDeductions: 0,
+              totalDeductions,
+            },
+            employerContributions: {
+              epfEmployer: epfResult.totalEmployerEPF,
+              esicEmployer: esicResult?.employerESIC ?? 0,
+            },
+            netPay,
+            payslipUrl: `/api/admin/payroll/entries/${entryRef.id}/payslip`,
+            status: "pending",
+            createdAt: FieldValue.serverTimestamp(),
+          });
 
-      const entryRef = adminDb.collection("payrollEntries").doc();
-      batch.set(entryRef, {
-        cycleId: cycleRef.id,
-        period,
-        employeeId: employeeDoc.id,
-        employeeName:
-          employee.name ||
-          [employee.firstName, employee.lastName].filter(Boolean).join(" ") ||
-          "Unnamed employee",
-        employeeCode: employee.employeeCode ?? employee.guardId ?? "",
-        clientId: resolvedClientId ?? "",
-        clientName: employee.clientName ?? clientDoc?.name ?? clientDoc?.clientName ?? "",
-        district: employee.district ?? "",
-        workingDays: attendance.workingDays,
-        presentDays: attendance.presentDays,
-        payableDays,
-        earnings: {
-          ...earningsSummary,
-          grossEarnings,
-          componentBreakdown: proratedComponents,
-        },
-        deductions: {
-          epfEmployee: epfResult.employeeEPF,
-          esicEmployee: esicResult?.employeeESIC ?? 0,
-          professionalTax: pt,
-          tds,
-          otherDeductions: 0,
-          totalDeductions,
-        },
-        employerContributions: {
-          epfEmployer: epfResult.totalEmployerEPF,
-          esicEmployer: esicResult?.employerESIC ?? 0,
-        },
-        netPay,
-        payslipUrl: `/api/admin/payroll/entries/${entryRef.id}/payslip`,
-        status: "pending",
-        createdAt: FieldValue.serverTimestamp(),
+          batchCount += 1;
+          if (batchCount >= BATCH_SIZE) {
+            await batch.commit();
+            batch = adminDb.batch();
+            batchCount = 0;
+          }
+
+          chunkProcessed += 1;
+          chunkGross += grossEarnings;
+          chunkNetPay += netPay;
+          chunkEPF += epfResult.employeeEPF;
+          chunkESIC += esicResult?.employeeESIC ?? 0;
+          chunkPT += pt;
+          chunkTDS += tds;
+        }
+
+        if (batchCount > 0) {
+          await batch.commit();
+        }
+
+        // Write progress + accumulate totals atomically
+        if (chunkProcessed > 0 || chunkSkipped.length > 0) {
+          await adminDb.collection("payrollCycles").doc(cycleRef!.id).update({
+            totalEmployees: FieldValue.increment(chunkProcessed),
+            totalGross: FieldValue.increment(chunkGross),
+            totalNetPay: FieldValue.increment(chunkNetPay),
+            totalEPF: FieldValue.increment(chunkEPF),
+            totalESIC: FieldValue.increment(chunkESIC),
+            totalPT: FieldValue.increment(chunkPT),
+            totalTDS: FieldValue.increment(chunkTDS),
+            "progress.processedCount": FieldValue.increment(chunkProcessed),
+            "progress.lastEmployeeDocId": docs[docs.length - 1]?.id ?? null,
+            "progress.heartbeatAt": FieldValue.serverTimestamp(),
+          });
+
+          if (chunkSkipped.length > 0) {
+            await adminDb.collection("payrollCycles").doc(cycleRef!.id).update({
+              skippedEmployees: FieldValue.arrayUnion(...chunkSkipped),
+            });
+          }
+        }
+
+        return { done: true, processed: chunkProcessed };
+      },
+    );
+
+    // All chunks complete (or no work to do)
+    if (result.done && result.processed > 0) {
+      await cycleRef.update({
+        status: "review",
+        totalGross: round2(await readTotal(adminDb, cycleRef.id, "totalGross")),
+        totalNetPay: round2(await readTotal(adminDb, cycleRef.id, "totalNetPay")),
+        totalEPF: round2(await readTotal(adminDb, cycleRef.id, "totalEPF")),
+        totalESIC: round2(await readTotal(adminDb, cycleRef.id, "totalESIC")),
+        totalPT: round2(await readTotal(adminDb, cycleRef.id, "totalPT")),
+        totalTDS: round2(await readTotal(adminDb, cycleRef.id, "totalTDS")),
+        processedAt: FieldValue.serverTimestamp(),
       });
-
-      batchCount += 1;
-      if (batchCount >= BATCH_SIZE) {
-        await batch.commit();
-        batch = adminDb.batch();
-        batchCount = 0;
-      }
-
-      totalEmployees += 1;
-      totalGross += grossEarnings;
-      totalNetPay += netPay;
-      totalEPF += epfResult.employeeEPF;
-      totalESIC += esicResult?.employeeESIC ?? 0;
-      totalPT += pt;
-      totalTDS += tds;
+    } else if (result.done && result.processed === 0) {
+      // No employees matched — mark as review with zeroes
+      await cycleRef.update({
+        status: "review",
+        totalGross: 0,
+        totalNetPay: 0,
+        totalEPF: 0,
+        totalESIC: 0,
+        totalPT: 0,
+        totalTDS: 0,
+        processedAt: FieldValue.serverTimestamp(),
+      });
     }
 
-    if (batchCount > 0) {
-      await batch.commit();
+    if (!result.done) {
+      return NextResponse.json({ status: 202 });
     }
 
-    await cycleRef.update({
-      status: "review",
-      totalEmployees,
-      totalGross: round2(totalGross),
-      totalNetPay: round2(totalNetPay),
-      totalEPF: round2(totalEPF),
-      totalESIC: round2(totalESIC),
-      totalPT: round2(totalPT),
-      totalTDS: round2(totalTDS),
-      skippedEmployees,
-      processedAt: FieldValue.serverTimestamp(),
-    });
-
+    const refreshedSnap = await cycleRef.get();
+    const cycleData = refreshedSnap.data() ?? {};
     return NextResponse.json({
       success: true,
       cycleId: cycleRef.id,
-      totalEmployees,
-      totalGross: round2(totalGross),
-      totalNetPay: round2(totalNetPay),
-      skippedEmployees,
-      skippedCount: skippedEmployees.length,
+      totalEmployees: (cycleData as any).totalEmployees ?? 0,
+      totalGross: (cycleData as any).totalGross ?? 0,
+      totalNetPay: (cycleData as any).totalNetPay ?? 0,
+      skippedCount: Array.isArray((cycleData as any).skippedEmployees)
+        ? (cycleData as any).skippedEmployees.length
+        : 0,
     });
   } catch (err: unknown) {
-    console.error("Payroll run error:", err);
+    const toctouError = err as { statusCode?: number; cycleId?: string; message?: string };
+    if (toctouError.statusCode === 409) {
+      return NextResponse.json(
+        {
+          error: toctouError.message || "Payroll cycle already exists.",
+          cycleId: toctouError.cycleId,
+        },
+        { status: 409 },
+      );
+    }
+    const { log } = await import("@/lib/server/log");
+    log("error", "payroll", "Payroll run error", { error: err instanceof Error ? err.message : String(err) });
     if (cycleRef) {
       try {
         const { FieldValue: FV } = await import("firebase-admin/firestore");
@@ -359,4 +459,15 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : "Payroll processing failed.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+/** Helper to read a numeric total field from the cycle doc (rounded). */
+async function readTotal(
+  db: FirebaseFirestore.Firestore,
+  cycleId: string,
+  field: string,
+): Promise<number> {
+  const snap = await db.collection("payrollCycles").doc(cycleId).get();
+  const data = snap.data();
+  return (data && typeof (data as any)[field] === "number" ? (data as any)[field] : 0) as number;
 }

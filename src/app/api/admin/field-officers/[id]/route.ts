@@ -4,6 +4,7 @@ import {
   buildServerAuditEvent,
   buildServerUpdateAudit,
 } from "@/lib/server/audit";
+export const runtime = "nodejs";
 
 export async function PATCH(
   request: Request,

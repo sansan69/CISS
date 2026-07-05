@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { storage } from "@/lib/firebaseAdmin";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+export const runtime = "nodejs";
 
 export async function GET() {
   try {

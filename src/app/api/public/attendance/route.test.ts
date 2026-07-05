@@ -21,6 +21,12 @@ vi.mock("@/lib/firebaseAdmin", () => ({
   },
 }));
 
+vi.mock("@/lib/server/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 29, resetAt: new Date(), totalAttempts: 1 }),
+  getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
+  buildRateLimitKey: vi.fn().mockReturnValue("test-key"),
+}));
+
 describe("GET /api/public/attendance", () => {
   it("returns attendance centers from sites and client locations", async () => {
     docsByCollection.set("sites", [
@@ -51,7 +57,7 @@ describe("GET /api/public/attendance", () => {
     ]);
 
     const { GET } = await import("./route");
-    const response = await GET();
+    const response = await GET(new Request("http://localhost:3000/api/public/attendance"));
     const body = await response.json();
 
     expect(response.status).toBe(200);

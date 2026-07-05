@@ -22,6 +22,7 @@ import type {
 } from "@/types/work-orders";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const IST_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",

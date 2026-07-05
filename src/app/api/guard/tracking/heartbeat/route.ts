@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { db } from "@/lib/firebaseAdmin";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
+export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();

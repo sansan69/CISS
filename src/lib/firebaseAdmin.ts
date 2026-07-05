@@ -79,71 +79,68 @@ function initializeAdmin() {
   });
 }
 
-function initializeCustomTokenSigner() {
-  let existingApp: admin.app.App | undefined;
-  for (const maybeApp of admin.apps) {
-    if (maybeApp && maybeApp.name === "custom-token-signer") {
-      existingApp = maybeApp;
-      break;
-    }
-  }
-  if (existingApp) {
-    return existingApp;
-  }
+let _adminApp: admin.app.App | null = null;
+let _db: admin.firestore.Firestore | null = null;
+let _auth: admin.auth.Auth | null = null;
+let _storage: admin.storage.Storage | null = null;
+let _messaging: admin.messaging.Messaging | null = null;
 
-  let credential: admin.credential.Credential | null = null;
-
-  if (process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64) {
-    try {
-      const decodedServiceAccount = Buffer.from(
-        process.env.FIREBASE_ADMIN_SDK_CONFIG_BASE64,
-        "base64",
-      ).toString("utf-8");
-      credential = admin.credential.cert(JSON.parse(decodedServiceAccount));
-    } catch (e) {
-      console.error("Failed to parse FIREBASE_ADMIN_SDK_CONFIG_BASE64 for token signer:", e);
-    }
-  } else if (process.env.FIREBASE_ADMIN_SDK_CONFIG) {
-    try {
-      credential = admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG));
-    } catch (e) {
-      console.error("Failed to parse FIREBASE_ADMIN_SDK_CONFIG for token signer:", e);
-    }
-  } else if (
-    process.env.FIREBASE_ADMIN_PROJECT_ID &&
-    process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
-    process.env.FIREBASE_ADMIN_PRIVATE_KEY
-  ) {
-    credential = admin.credential.cert({
-      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-    });
+/** Lazy getter for the Admin app singleton. */
+function getAdminApp(): admin.app.App {
+  if (!_adminApp) {
+    _adminApp = initializeAdmin();
   }
-
-  if (!credential) {
-    return adminApp;
-  }
-
-  return admin.initializeApp(
-    {
-      credential,
-      projectId: getAdminProjectId(),
-      storageBucket:
-        process.env.FIREBASE_ADMIN_STORAGE_BUCKET ||
-        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    },
-    "custom-token-signer",
-  );
+  return _adminApp;
 }
 
-const adminApp = initializeAdmin();
-const customTokenSignerApp = initializeCustomTokenSigner();
+/** Lazy getter for Admin Firestore (with preferRest to cut gRPC cold-start cost). */
+export function getDb(): admin.firestore.Firestore {
+  if (!_db) {
+    _db = getAdminApp().firestore();
+    try {
+      _db.settings({ preferRest: true });
+    } catch {
+      // settings() can only be called once per Firestore instance and only
+      // before any other method is used. On warm starts in dev where the app
+      // was already initialized, this throws harmlessly — safe to ignore.
+    }
+  }
+  return _db;
+}
 
-const db = adminApp.firestore();
-const auth = adminApp.auth();
-const storage = adminApp.storage();
-const messaging = adminApp.messaging();
-const customTokenAuth = customTokenSignerApp.auth();
+/** Lazy getter for Admin Auth (default app — can mint custom tokens). */
+export function getAuth(): admin.auth.Auth {
+  if (!_auth) {
+    _auth = getAdminApp().auth();
+  }
+  return _auth;
+}
 
-export { adminApp, db, auth, storage, messaging, customTokenAuth };
+/** Lazy getter for Admin Storage. */
+export function getStorage(): admin.storage.Storage {
+  if (!_storage) {
+    _storage = getAdminApp().storage();
+  }
+  return _storage;
+}
+
+/** Lazy getter for Admin Messaging. */
+export function getMessaging(): admin.messaging.Messaging {
+  if (!_messaging) {
+    _messaging = getAdminApp().messaging();
+  }
+  return _messaging;
+}
+
+// Re-export the admin app for advanced use-cases (e.g. multiple apps)
+export { getAdminApp as adminApp };
+
+// Backward-compatible aliases so existing imports keep working
+export const db = new Proxy({} as admin.firestore.Firestore, { get(_, prop) { return (getDb() as any)[prop]; } });
+export const auth = new Proxy({} as admin.auth.Auth, { get(_, prop) { return (getAuth() as any)[prop]; } });
+export const storage = new Proxy({} as admin.storage.Storage, { get(_, prop) { return (getStorage() as any)[prop]; } });
+export const messaging = new Proxy({} as admin.messaging.Messaging, { get(_, prop) { return (getMessaging() as any)[prop]; } });
+
+// Drop customTokenSignerApp — the default app's auth() can mint custom tokens.
+// Keep the export for backward compatibility.
+export const customTokenAuth = new Proxy({} as admin.auth.Auth, { get(_, prop) { return (getAuth() as any)[prop]; } });

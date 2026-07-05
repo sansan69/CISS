@@ -757,6 +757,130 @@ async function claimNextAutomationJob(db: Firestore, workerId: string): Promise<
   });
 }
 
+/**
+ * Find a pending automation job without using a transaction.
+ * Returns queued jobs first, then stale running jobs.
+ */
+export async function findPendingJob(
+  db: Firestore,
+): Promise<{ id: string; data: AutomationJob } | null> {
+  const staleCutoff = Date.now() - STALE_RUNNING_JOB_MS;
+
+  // Try queued jobs first
+  const queuedSnap = await db
+    .collection(AUTOMATION_COLLECTION)
+    .where("status", "==", "queued")
+    .limit(10)
+    .get();
+
+  if (!queuedSnap.empty) {
+    const docs = queuedSnap.docs
+      .map((doc) => ({ id: doc.id, data: doc.data() as AutomationJob }))
+      .sort((a, b) =>
+        (a.data.queuedAt || "").localeCompare(b.data.queuedAt || ""),
+      );
+    return docs[0] ?? null;
+  }
+
+  // Check for stale running jobs
+  const runningSnap = await db
+    .collection(AUTOMATION_COLLECTION)
+    .where("status", "==", "running")
+    .limit(10)
+    .get();
+
+  const staleRunning = runningSnap.docs
+    .filter((doc) => {
+      const data = doc.data() as AutomationJob;
+      return !data.claimedAt || new Date(data.claimedAt).getTime() < staleCutoff;
+    })
+    .map((doc) => ({ id: doc.id, data: doc.data() as AutomationJob }))
+    .sort((a, b) =>
+      (a.data.queuedAt || a.data.startedAt || "").localeCompare(
+        b.data.queuedAt || b.data.startedAt || "",
+      ),
+    );
+
+  return staleRunning[0] ?? null;
+}
+
+/**
+ * Execute ONE step of an automation job, then either re-queue or mark
+ * complete depending on remaining steps.
+ */
+export async function executeOneStep(
+  db: Firestore,
+  job: AutomationJob,
+  region: RegionRecord,
+  serviceAccountJson: string | null,
+  actor?: { uid?: string | null; email?: string | null },
+): Promise<{ stepCompleted: boolean; jobCompleted: boolean; error?: string }> {
+  const stepIndex = findCurrentStep(job);
+  if (stepIndex >= AUTOMATION_STEPS.length) {
+    // All steps done
+    return { stepCompleted: false, jobCompleted: true };
+  }
+
+  const stepDef = AUTOMATION_STEPS[stepIndex];
+  const jobRef = db.collection(AUTOMATION_COLLECTION).doc(job.id);
+  const context: AutomationContext = { db, region, serviceAccountJson, actor };
+
+  // Mark step as running
+  await jobRef.update({
+    currentStepIndex: stepIndex,
+    [`steps.${stepIndex}.status`]: "running",
+    [`steps.${stepIndex}.startedAt`]: now(),
+  });
+
+  try {
+    const result = await executeStep(stepDef.stepId, context);
+
+    await jobRef.update({
+      [`steps.${stepIndex}.status`]: result.status,
+      [`steps.${stepIndex}.completedAt`]: result.completedAt,
+      [`steps.${stepIndex}.elapsedMs`]: result.elapsedMs,
+      [`steps.${stepIndex}.error`]: result.error || null,
+      [`steps.${stepIndex}.result`]: result.result || null,
+    });
+
+    if (result.status === "failed") {
+      await jobRef.update({
+        status: "failed",
+        error: `Step ${stepDef.stepId} failed: ${result.error}`,
+        completedAt: now(),
+      });
+      return { stepCompleted: true, jobCompleted: true, error: result.error };
+    }
+
+    // Check if this was the last step
+    const isLastStep = stepIndex >= AUTOMATION_STEPS.length - 1;
+    if (isLastStep) {
+      await jobRef.update({ status: "completed", completedAt: now() });
+      return { stepCompleted: true, jobCompleted: true };
+    }
+
+    // More steps remain — re-queue the job so the next invocation picks it up
+    await jobRef.update({
+      status: "queued",
+      error: null,
+      queuedAt: now(),
+    });
+    return { stepCompleted: true, jobCompleted: false };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    await jobRef.update({
+      [`steps.${stepIndex}.status`]: "failed",
+      [`steps.${stepIndex}.completedAt`]: now(),
+      [`steps.${stepIndex}.elapsedMs`]: 0,
+      [`steps.${stepIndex}.error`]: message,
+      status: "failed",
+      error: `Step ${stepDef.stepId} crashed: ${message}`,
+      completedAt: now(),
+    });
+    return { stepCompleted: true, jobCompleted: true, error: message };
+  }
+}
+
 export async function processNextAutomationJob(db: Firestore): Promise<{
   processed: boolean;
   jobId?: string;
@@ -786,15 +910,13 @@ export async function processNextAutomationJob(db: Firestore): Promise<{
     regionCode: job.regionCode,
   };
   const connection = await getRegionConnection(db, job.regionCode).catch(() => null);
-  const startStepIndex = findCurrentStep(job);
 
-  await runClaimedJob(
+  const stepResult = await executeOneStep(
     db,
-    job.id,
+    job,
     region,
     connection?.serviceAccountJson || null,
     { uid: job.workerId || workerId, email: "automation-worker@ciss.local" },
-    startStepIndex,
   );
 
   const refreshed = await getAutomationJob(db, job.id);

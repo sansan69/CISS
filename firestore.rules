@@ -287,9 +287,17 @@ service cloud.firestore {
 
     // attendanceState — hot doc per guard tracking last check-in status, shift, duty point
     // This is the active collection used by the submit route and employee lookup API.
+    // Guards can only write allowed fields to prevent arbitrary data injection.
     match /attendanceState/{employeeId} {
       allow read: if readStateMatches() && (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId));
-      allow create, update: if (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId)) && writeStateMatches();
+      allow create: if isAdmin() && writeStateMatches();
+      allow update: if (isAdmin() && writeStateMatches()) ||
+        (isGuard() && guardEmployeeDocId() == employeeId && writeStateMatches() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'lastStatus', 'lastAttendanceDate', 'lastSiteId', 'lastDutyPointId',
+           'lastShiftCode', 'openSessionId', 'lastLatitude', 'lastLongitude',
+           'lastAccuracy', 'updatedAt',
+         ]));
       allow delete: if isAdmin() && readStateMatches();
     }
 
@@ -439,10 +447,10 @@ service cloud.firestore {
     // ── workOrderTodos (task management for work orders) ─────────────────────
 
     match /workOrderTodos/{todoId} {
-      allow read: if isStaff();
-      allow create: if isStaff();
-      allow update: if isStaff();
-      allow delete: if isAdmin();
+      allow read: if readStateMatches() && (isStaff());
+      allow create: if isStaff() && writeStateMatches();
+      allow update: if readStateMatches() && writeStateMatches() && (isAdmin() || resource.data.assignedTo == request.auth.uid);
+      allow delete: if isAdmin() && readStateMatches();
     }
 
     // ── notifications (push + web) ─────────────────────────────────────────
@@ -451,7 +459,9 @@ service cloud.firestore {
       // Each user can read their own notifications
       allow read: if readStateMatches() && (isAdmin() ||
         (isSignedIn() && resource.data.recipientUid == request.auth.uid));
-      allow create: if (isAdmin() || isFieldOfficer()) && writeStateMatches();
+      // Restrict create to admins only — prevents FO/others from writing arbitrary notifications.
+      // Use server-side API for targeted notification dispatch.
+      allow create: if isAdmin() && writeStateMatches();
       allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
         (isSignedIn() && resource.data.recipientUid == request.auth.uid &&
          readStateMatches() &&
