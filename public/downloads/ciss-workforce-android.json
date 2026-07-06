@@ -1,15 +1,15 @@
 {
   "platform": "android",
   "packageName": "co.in.ciss.ciss_mobile",
-  "latestVersionName": "1.0.15",
-  "latestVersionCode": 15,
+  "latestVersionName": "1.0.16",
+  "latestVersionCode": 16,
   "minimumSupportedVersionCode": 13,
-  "apkPath": "/downloads/ciss-workforce-1.0.15.apk",
-  "sha256": "f196e44b03969c870480267756de2916ca3a71162db75127b379aa9e4f4ff00d",
-  "sizeBytes": 84829312,
+  "apkPath": "/downloads/ciss-workforce-1.0.16.apk",
+  "sha256": "42a43e9e70eacb32c96603c2c090c305f8c74293d012782df407de90fd5de51c",
+  "sizeBytes": 86682532,
   "releaseDate": "2026-07-05",
   "releaseNotes": [
-    "Publishes a cache-safe Android APK with a new version code.",
+    "Publishes the latest Flutter Android rebuild with a new version code.",
     "Adds cancellable in-app APK downloads with integrity verification.",
     "Includes the latest attendance, regional switching, and production job reliability fixes."
   ],
