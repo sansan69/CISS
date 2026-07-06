@@ -95,6 +95,16 @@ describe("resolveAttendanceShift", () => {
     expect(shift?.code).toBe("day");
   });
 
+  it("corrects stale explicit night code for a morning IN during handoff", () => {
+    const shift = resolveAttendanceShift({
+      shiftTemplates: shifts12h,
+      punchAt: istDate("07:31"),
+      status: "In",
+      explicitShiftCode: "night",
+    });
+    expect(shift?.code).toBe("day");
+  });
+
   it("assigns 07:30 IN to day shift (30 min early)", () => {
     const shift = resolveAttendanceShift({
       shiftTemplates: shifts12h,
@@ -191,6 +201,16 @@ describe("resolveAttendanceShift", () => {
         shiftTemplates: shifts8h,
         punchAt: istDate("05:30"),
         status: "In",
+      });
+      expect(shift?.code).toBe("morning");
+    });
+
+    it("corrects stale explicit night code for 06:43 IN after night handoff", () => {
+      const shift = resolveAttendanceShift({
+        shiftTemplates: shifts8h,
+        punchAt: istDate("06:43"),
+        status: "In",
+        explicitShiftCode: "night",
       });
       expect(shift?.code).toBe("morning");
     });

@@ -232,6 +232,21 @@ function timeToMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
+function getShiftDurationMinutes(shift: ShiftTemplate) {
+  if (typeof shift.hours === "number" && Number.isFinite(shift.hours) && shift.hours > 0) {
+    return shift.hours * 60;
+  }
+
+  const start = timeToMinutes(shift.startTime);
+  const end = timeToMinutes(shift.endTime);
+  const duration = (end - start + 24 * 60) % (24 * 60);
+  return duration || 24 * 60;
+}
+
+function minutesSinceShiftStart(shift: ShiftTemplate, punchMinutes: number) {
+  return (punchMinutes - timeToMinutes(shift.startTime) + 24 * 60) % (24 * 60);
+}
+
 function getMinutesInTimeZone(at: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone,
@@ -323,12 +338,7 @@ export function resolveAttendanceShift({
   toleranceMinutesAfter?: number;
   handoffWindowMinutes?: number;
 }): ShiftTemplate | null {
-  // 1. Explicit shift selection always wins
-  if (explicitShiftCode) {
-    return resolveShiftByCode("fixed", shiftTemplates, explicitShiftCode);
-  }
-
-  // 2. OUT punches use the shift from the open session
+  // 1. OUT punches use the shift from the open session
   if (status === "Out" && lastShiftCode) {
     return resolveShiftByCode("fixed", shiftTemplates, lastShiftCode);
   }
@@ -341,13 +351,13 @@ export function resolveAttendanceShift({
 
   for (const shift of shiftTemplates) {
     const start = timeToMinutes(shift.startTime);
-    const duration = shift.hours * 60;
+    const duration = getShiftDurationMinutes(shift);
 
     // Minutes until this shift starts (0–1439)
     const forwardDistance = (start - punchMinutes + 24 * 60) % (24 * 60);
 
     // Minutes since this shift started (0–1439)
-    const timeInShift = (punchMinutes - start + 24 * 60) % (24 * 60);
+    const timeInShift = minutesSinceShiftStart(shift, punchMinutes);
 
     let score: number;
 
@@ -370,6 +380,32 @@ export function resolveAttendanceShift({
       bestScore = score;
       bestShift = shift;
     }
+  }
+
+  // Explicit IN selection is respected unless it points to the tail end of a
+  // previous shift while another shift is in the normal early-arrival window.
+  // That is the common 06:30-07:30 case for 20:00-08:00 night shifts.
+  if (explicitShiftCode) {
+    const explicitShift = resolveShiftByCode("fixed", shiftTemplates, explicitShiftCode);
+    if (!explicitShift || status !== "In" || !bestShift || bestShift.code === explicitShift.code) {
+      return explicitShift;
+    }
+
+    const explicitDuration = getShiftDurationMinutes(explicitShift);
+    const explicitTimeInShift = minutesSinceShiftStart(explicitShift, punchMinutes);
+    const bestForwardDistance =
+      (timeToMinutes(bestShift.startTime) - punchMinutes + 24 * 60) % (24 * 60);
+    const bestTimeInShift = minutesSinceShiftStart(bestShift, punchMinutes);
+    const bestIsNearStart =
+      bestForwardDistance <= toleranceMinutesBefore || bestTimeInShift <= toleranceMinutesAfter;
+    const explicitIsHandoffTail =
+      explicitTimeInShift >= explicitDuration - handoffWindowMinutes &&
+      explicitTimeInShift < explicitDuration;
+    const explicitShiftHasEnded = explicitTimeInShift >= explicitDuration;
+
+    return (explicitIsHandoffTail || explicitShiftHasEnded) && bestIsNearStart
+      ? bestShift
+      : explicitShift;
   }
 
   return bestShift;

@@ -21,8 +21,8 @@ import {
   DUTY_POINT_COVERAGE_LABELS,
   DUTY_POINT_HOURS_LABELS,
   getNextShift,
+  resolveAttendanceShift,
   resolveShiftByCode,
-  resolveSiteShift,
 } from '@/lib/shift-utils';
 import { loadAttendanceHistory, loadQueuedAttendance, saveAttendanceHistory, saveQueuedAttendance } from '@/lib/attendance-offline';
 import { parseEmployeeQrText } from '@/lib/qr/employee-qr';
@@ -213,12 +213,15 @@ export default function AttendancePage() {
     (!requiresDutyPointSelection || !!selectedDutyPointId);
   const autoDetectedShift = useMemo(
     () =>
-      resolveSiteShift(
-        shiftMode,
-        shiftTemplates,
-        currentTime ?? new Date(),
-      ),
-    [currentTime, shiftMode, shiftTemplates],
+      shiftMode === 'fixed'
+        ? resolveAttendanceShift({
+            shiftTemplates,
+            punchAt: currentTime ?? new Date(),
+            status: selectedStatus,
+            lastShiftCode: scannedEmployee?.attendanceHint?.lastShiftCode ?? null,
+          })
+        : null,
+    [currentTime, scannedEmployee?.attendanceHint?.lastShiftCode, selectedStatus, shiftMode, shiftTemplates],
   );
   const selectedShift = useMemo(
     () => resolveShiftByCode(shiftMode, shiftTemplates, selectedShiftCode),

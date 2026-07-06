@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { startHybridQrScanner } from "@/lib/qr/scanner-engine";
 import { parseQrContent } from "@/lib/qr/qr-token";
+import { resolveAttendanceShift } from "@/lib/shift-utils";
 
 
 interface SiteOption {
@@ -31,7 +32,7 @@ interface SiteOption {
   geofenceRadiusMeters: number;
   strictGeofence: boolean;
   shiftMode: string;
-  shiftTemplates: unknown[];
+  shiftTemplates: ShiftTemplate[];
   dutyPoints: DutyPoint[];
 }
 
@@ -49,6 +50,8 @@ interface ShiftTemplate {
   label: string;
   startTime: string;
   endTime: string;
+  hours: number;
+  crossesMidnight: boolean;
 }
 
 interface EmployeeInfo {
@@ -245,27 +248,20 @@ export default function RecordAttendancePage() {
   useEffect(() => {
     if (!selectedDutyPoint && !selectedSite) return;
     const templates = selectedDutyPoint?.shiftTemplates ?? selectedSite?.shiftTemplates ?? [];
-    if (templates.length === 0) return;
-
-    const now = new Date();
-    const totalMinutes = now.getHours() * 60 + now.getMinutes();
-
-    for (const t of templates as ShiftTemplate[]) {
-      const [sh, sm] = t.startTime.split(":").map(Number);
-      const [eh, em] = t.endTime.split(":").map(Number);
-      const start = sh * 60 + sm;
-      const end = eh * 60 + em;
-      const crossesMidnight = start >= end;
-      const inShift = crossesMidnight
-        ? totalMinutes >= start || totalMinutes < end
-        : totalMinutes >= start && totalMinutes < end;
-      if (inShift) {
-        setSelectedShift(t);
-        return;
-      }
+    if (templates.length === 0) {
+      setSelectedShift(null);
+      return;
     }
-    setSelectedShift(templates[0] as ShiftTemplate);
-  }, [selectedDutyPoint, selectedSite]);
+
+    setSelectedShift(
+      resolveAttendanceShift({
+        shiftTemplates: templates,
+        punchAt: new Date(),
+        status,
+        lastShiftCode: hint?.lastShiftCode ?? null,
+      }) ?? null,
+    );
+  }, [hint?.lastShiftCode, selectedDutyPoint, selectedSite, status]);
 
   // ── Photo Capture ────────────────────────────────────────────────────────
   const capturePhoto = async () => {

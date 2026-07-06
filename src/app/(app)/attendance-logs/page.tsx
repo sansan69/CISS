@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Loader2, FileDown, Search, MapPin, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
+import { CalendarIcon, Loader2, FileDown, Search, MapPin, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +93,7 @@ export default function AttendanceLogsPage() {
   const { userRole, assignedDistricts, clientInfo, stateCode } = useAppAuth();
   const isClientView = userRole === "client";
   const todayAttendanceDate = useMemo(() => getTodayAttendanceDate(), []);
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState(todayAttendanceDate);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -115,14 +116,14 @@ export default function AttendanceLogsPage() {
       const siteClientQuery = query(
         collection(db, "attendanceLogs"),
         where("clientName", "==", clientInfo.clientName),
-        where("attendanceDate", "==", todayAttendanceDate),
+        where("attendanceDate", "==", selectedAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
       const employeeClientQuery = query(
         collection(db, "attendanceLogs"),
         where("employeeClientName", "==", clientInfo.clientName),
-        where("attendanceDate", "==", todayAttendanceDate),
+        where("attendanceDate", "==", selectedAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
@@ -177,7 +178,7 @@ export default function AttendanceLogsPage() {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
         where("district", "in", assignedDistricts),
-        where("attendanceDate", "==", todayAttendanceDate),
+        where("attendanceDate", "==", selectedAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
@@ -199,7 +200,7 @@ export default function AttendanceLogsPage() {
     } else {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
-        where("attendanceDate", "==", todayAttendanceDate),
+        where("attendanceDate", "==", selectedAttendanceDate),
         orderBy("createdAt", "desc"),
         limit(200)
       );
@@ -219,7 +220,7 @@ export default function AttendanceLogsPage() {
 
       return () => unsubscribe();
     }
-  }, [userRole, clientInfo, assignedDistricts, todayAttendanceDate]);
+  }, [userRole, clientInfo, assignedDistricts, selectedAttendanceDate]);
 
   const clientOptions = useMemo(() => {
     const names = new Set<string>();
@@ -255,7 +256,7 @@ export default function AttendanceLogsPage() {
       const matchesDistrict =
         districtFilter === "all" || districtMatches(log.district, districtFilter);
       const matchesClient = clientFilter === "all" || logMatchesClient(log, clientFilter);
-      const matchesDate = log.attendanceDate === todayAttendanceDate;
+      const matchesDate = log.attendanceDate === selectedAttendanceDate;
       const matchesSearch =
         !term ||
         log.employeeName?.toLowerCase().includes(term) ||
@@ -268,7 +269,7 @@ export default function AttendanceLogsPage() {
 
       return matchesRole && matchesStatus && matchesDistrict && matchesClient && matchesDate && matchesSearch;
     });
-  }, [assignedDistricts, clientFilter, clientInfo?.clientName, districtFilter, logs, searchTerm, statusFilter, todayAttendanceDate, userRole]);
+  }, [assignedDistricts, clientFilter, clientInfo?.clientName, districtFilter, logs, searchTerm, selectedAttendanceDate, statusFilter, userRole]);
 
   const groupedByClient = useMemo(() => {
     const groups = new Map<string, AttendanceLog[]>();
@@ -321,8 +322,8 @@ export default function AttendanceLogsPage() {
         format: "csv",
         status: statusFilter,
         district: districtFilter,
-        from: todayAttendanceDate,
-        to: todayAttendanceDate,
+        from: selectedAttendanceDate,
+        to: selectedAttendanceDate,
       });
 
       const response = await authorizedFetch(`/api/admin/reports/attendance?${params.toString()}`);
@@ -548,7 +549,7 @@ export default function AttendanceLogsPage() {
       <PageHeader
         eyebrow="Workforce"
         title="Attendance Logs"
-        description={`Current attendance for ${todayAttendanceDate}, grouped by client.`}
+        description={`Attendance for ${selectedAttendanceDate}, grouped by client.`}
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Attendance Logs" },
@@ -597,9 +598,9 @@ export default function AttendanceLogsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
-          <CardDescription>Showing only today&apos;s attendance date: {todayAttendanceDate}.</CardDescription>
+          <CardDescription>Select an attendance date and narrow results by status, district, or client.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -607,6 +608,18 @@ export default function AttendanceLogsPage() {
               placeholder="Search logs"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <CalendarIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="date"
+              className="pl-9"
+              value={selectedAttendanceDate}
+              max={todayAttendanceDate}
+              onChange={(event) => {
+                setSelectedAttendanceDate(event.target.value || todayAttendanceDate);
+              }}
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -650,7 +663,7 @@ export default function AttendanceLogsPage() {
             </SelectContent>
           </Select>
           {isClientView && (
-            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-4">
+            <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-5">
               Client filter is locked to your account scope.
             </p>
           )}
@@ -662,8 +675,8 @@ export default function AttendanceLogsPage() {
           <CardTitle>Attendance by Client</CardTitle>
           <CardDescription>
             {filteredLogs.length === 0
-              ? `No records found for ${todayAttendanceDate}.`
-              : `${filteredLogs.length} records for ${todayAttendanceDate} across ${groupedByClient.size} client(s).`}
+              ? `No records found for ${selectedAttendanceDate}.`
+              : `${filteredLogs.length} records for ${selectedAttendanceDate} across ${groupedByClient.size} client(s).`}
           </CardDescription>
         </CardHeader>
         <CardContent>
