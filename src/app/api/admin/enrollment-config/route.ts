@@ -58,7 +58,8 @@ export async function PATCH(request: NextRequest) {
   try {
     await requireAdmin(request);
     const body = await request.json();
-    const { db: adminDb, FieldValue } = await import("@/lib/firebaseAdmin");
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const configRef = adminDb.collection("config").doc("enrollment");
     const update: Record<string, unknown> = {

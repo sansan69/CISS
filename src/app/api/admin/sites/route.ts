@@ -56,7 +56,8 @@ export async function POST(request: NextRequest) {
   try {
     await requireAdmin(request);
     const body = await request.json();
-    const { db: adminDb, FieldValue } = await import("@/lib/firebaseAdmin");
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const docRef = await adminDb.collection("sites").add({
       name: normalizeText(body.name || body.siteName),

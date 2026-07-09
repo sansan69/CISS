@@ -11,7 +11,8 @@ export async function PATCH(
     await requireAdmin(request);
     const { id } = await params;
     const body = await request.json();
-    const { db: adminDb, FieldValue } = await import("@/lib/firebaseAdmin");
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     if (!id || !id.trim()) {
       return NextResponse.json(

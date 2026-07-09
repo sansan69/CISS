@@ -65,7 +65,8 @@ export async function POST(request: NextRequest) {
   try {
     const guard = await requireGuard(request);
     const body = await request.json();
-    const { db: adminDb, FieldValue } = await import("@/lib/firebaseAdmin");
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
 
     const docRef = await adminDb.collection("leaveRequests").add({
       employeeDocId: guard.employeeDocId,
@@ -107,7 +108,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const { db: adminDb, FieldValue } = await import("@/lib/firebaseAdmin");
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { FieldValue } = await import("firebase-admin/firestore");
     const ref = adminDb.collection("leaveRequests").doc(requestId);
     const doc = await ref.get();
 
