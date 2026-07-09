@@ -24,6 +24,17 @@ export async function GET(request: Request) {
       }
     }
 
+    // Normalise document URLs from the employee record.
+    // Both URL fields and Firestore upload metadata maps are supported.
+    const docUrl = (field: unknown): string | null => {
+      if (typeof field === "string" && field.trim()) return field.trim();
+      if (field && typeof field === "object" && "url" in (field as Record<string, unknown>)) {
+        const url = (field as Record<string, unknown>).url;
+        return typeof url === "string" && url.trim() ? url.trim() : null;
+      }
+      return null;
+    };
+
     return NextResponse.json({
       fullName: empData.fullName ?? empData.name ?? "",
       employeeId: guard.employeeId,
@@ -37,6 +48,19 @@ export async function GET(request: Request) {
       profilePhotoUrl: empData.profilePhotoUrl ?? empData.profilePictureUrl ?? null,
       address: empData.fullAddress ?? empData.address ?? null,
       emailAddress: empData.emailAddress ?? null,
+      // ── Document fields ─────────────────────────────────────────────
+      idProofType: empData.idProofType ?? null,
+      idProofNumber: empData.idProofNumber ?? null,
+      idProofFrontUrl: docUrl(empData.idProofFrontUrl ?? empData.idProofFront),
+      idProofBackUrl: docUrl(empData.idProofBackUrl ?? empData.idProofBack),
+      addressProofType: empData.addressProofType ?? null,
+      addressProofNumber: empData.addressProofNumber ?? null,
+      addressProofFrontUrl: docUrl(empData.addressProofFrontUrl ?? empData.addressProofFront),
+      addressProofBackUrl: docUrl(empData.addressProofBackUrl ?? empData.addressProofBack),
+      signatureUrl: docUrl(empData.signatureUrl ?? empData.signature),
+      bankAccountNumber: empData.bankAccountNumber ?? null,
+      bankIfscCode: empData.bankIfscCode ?? null,
+      bankName: empData.bankName ?? null,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Internal server error.";
