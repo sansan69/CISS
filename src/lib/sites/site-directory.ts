@@ -8,7 +8,9 @@ function normalizeClientKey(value?: string | null) {
   return normalizeToken(value)
     .replace(/[’']/g, "'")
     .replace(/'s\b/g, "")
-    .replace(/[^a-z0-9]/g, "");
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function siteBelongsToClient(

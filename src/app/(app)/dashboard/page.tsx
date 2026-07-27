@@ -527,7 +527,7 @@ export default function DashboardPage() {
       const cn = log.clientName || 'Unassigned';
       if (log.status === 'In') {
         if (!clientCheckedIn.has(cn)) clientCheckedIn.set(cn, new Set());
-        clientCheckedIn.get(cn)!.add(log.employeeId);
+        clientCheckedIn.get(cn)!.add(log.employeeDocId);
       }
       if (log.isMockLocationSuspected) clientMockAlerts.set(cn, (clientMockAlerts.get(cn) ?? 0) + 1);
       if (log.photoCompliance?.overallStatus) {
@@ -679,7 +679,16 @@ export default function DashboardPage() {
             })
             .filter((duty) => isOperationalWorkOrderClientName(duty.clientName))
             .filter((duty) => assignedDistricts.includes(duty.district))
-        )
+        ),
+        (error) => {
+          console.error("[dashboard] workOrders listener failed:", error);
+          if (error.code === "failed-precondition") {
+            console.warn(
+              "[dashboard] Missing composite index for workOrders query. " +
+              "Ensure firestore.indexes.json includes district ASC, date ASC.",
+            );
+          }
+        }
       );
       cleanups.push(unsub2);
     }
@@ -692,7 +701,16 @@ export default function DashboardPage() {
           where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
           orderBy('createdAt', 'desc')
         ),
-        (snap) => setTodayAttendanceDocs(snap.docs.map(d => d.data() as any))
+        (snap) => setTodayAttendanceDocs(snap.docs.map(d => d.data() as any)),
+        (error) => {
+          console.error("[dashboard] todayAttendanceDocs listener failed:", error);
+          if (error.code === "failed-precondition") {
+            console.warn(
+              "[dashboard] Missing composite index for attendanceLogs query. " +
+              "Ensure firestore.indexes.json is deployed.",
+            );
+          }
+        }
       );
       cleanups.push(unsub3);
     }

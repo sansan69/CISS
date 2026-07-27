@@ -64,8 +64,8 @@ function computeFallbackAutoCheckout(
   const [endH, endM] = endTime.split(":").map(Number);
   const [startH, startM] = startTime.split(":").map(Number);
   const crossesMidnight = startH * 60 + startM >= endH * 60 + endM;
-  const [y, m, d] = sessionStartDate.split("-").map(Number);
-  const sessionStart = Date.UTC(y, m - 1, d);
+  const sessionStart = Date.parse(`${sessionStartDate}T00:00:00+05:30`);
+  if (Number.isNaN(sessionStart)) return null;
   const shiftEndTimestamp = crossesMidnight
     ? sessionStart + 24 * 60 * 60 * 1000
     : sessionStart;

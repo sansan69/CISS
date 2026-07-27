@@ -3,7 +3,12 @@ import crypto from "node:crypto";
 const DEFAULT_SECRET = "ciss-attendance-upload-secret-2026";
 
 function getSecret(): string {
-  return process.env.UPLOAD_TOKEN_SECRET || process.env.NEXTAUTH_SECRET || DEFAULT_SECRET;
+  const secret = process.env.UPLOAD_TOKEN_SECRET || process.env.NEXTAUTH_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("UPLOAD_TOKEN_SECRET or NEXTAUTH_SECRET must be configured.");
+  }
+  return DEFAULT_SECRET;
 }
 
 export interface UploadTokenPayload {

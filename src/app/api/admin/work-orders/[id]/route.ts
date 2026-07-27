@@ -4,6 +4,32 @@ import { buildServerUpdateAudit } from "@/lib/server/audit";
 import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cleanup";
 export const runtime = "nodejs";
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const adminUser = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
+    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { id } = await params;
+
+    const snapshot = await adminDb.collection("workOrders").doc(id).get();
+    if (!snapshot.exists) {
+      return NextResponse.json({ error: "Work order not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ id, ...snapshot.data() });
+  } catch (error: any) {
+    if (error?.message?.includes("access required")) {
+      return unauthorizedResponse(error.message, 403);
+    }
+    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
+      return unauthorizedResponse(error.message, 401);
+    }
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -88,10 +114,22 @@ export async function DELETE(
     }
 
     const deletedWorkOrder = snapshot.data() ?? {};
-    await workOrderRef.delete();
+    const todosSnap = await adminDb
+      .collection("workOrderTodos")
+      .where("workOrderId", "==", id)
+      .get();
+    const batch = adminDb.batch();
+    batch.delete(workOrderRef);
+    todosSnap.docs.forEach((todoDoc) => batch.delete(todoDoc.ref));
+    await batch.commit();
     const importsDeleted = await cleanupOrphanWorkOrderImports(adminDb, [deletedWorkOrder]);
 
-    return NextResponse.json({ ok: true, deleted: true, importsDeleted });
+    return NextResponse.json({
+      ok: true,
+      deleted: true,
+      importsDeleted,
+      todosDeleted: todosSnap.size,
+    });
   } catch (error: any) {
     if (error?.message?.includes("access required")) {
       return unauthorizedResponse(error.message, 403);

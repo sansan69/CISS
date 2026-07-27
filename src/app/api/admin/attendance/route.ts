@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const limit = Math.min(Number.parseInt(searchParams.get("limit") || "200", 10), 500);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-    const snapshot = await adminDb.collection("attendanceLogs").limit(limit).get();
+    const snapshot = await adminDb.collection("attendanceLogs").orderBy("createdAt", "desc").limit(limit).get();
     const attendance = sortByDateDesc(
       snapshot.docs.map((doc) => {
         const data = doc.data() as Record<string, unknown>;

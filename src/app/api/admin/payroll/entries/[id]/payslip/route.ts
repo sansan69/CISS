@@ -23,7 +23,8 @@ export async function GET(
     const cycle = cycleDoc.exists ? ({ id: cycleDoc.id, ...cycleDoc.data() } as PayrollCycle) : null;
 
     const pdfBytes = await generatePayslipPdf({ entry, cycle, companyName: "CISS Workforce" });
-    const filename = `payslip-${entry.employeeCode || entry.employeeId}-${entry.period}.pdf`;
+    const employeeLabel = entry.employeeCode || entry.employeeName?.replace(/\s+/g, "_") || entry.id || "payslip";
+    const filename = `payslip-${employeeLabel}-${entry.period}.pdf`;
 
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {

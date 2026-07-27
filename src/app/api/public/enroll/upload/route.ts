@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { assertEnrollmentUploadSize, getEnrollmentFileSelectionError } from "@/lib/enrollmentFiles";
-import { storage } from "@/lib/firebaseAdmin";
+import { storage, db } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
 
@@ -43,6 +43,20 @@ export async function POST(request: NextRequest) {
     const folder = match?.[1] || "";
     if (!isSafeEnrollmentPath(path) || !ALLOWED_FOLDERS.has(folder)) {
       return NextResponse.json({ error: "Invalid enrollment upload path." }, { status: 400 });
+    }
+
+    // Verify the enrollment exists and is in a valid state for file uploads.
+    const enrollmentId = path.split("/")[1];
+    const enrollmentSnap = await db.collection("enrollments").doc(enrollmentId).get();
+    if (!enrollmentSnap.exists) {
+      return NextResponse.json({ error: "Enrollment not found." }, { status: 404 });
+    }
+    const enrollmentData = enrollmentSnap.data() as { status?: string } | undefined;
+    if (!enrollmentData?.status || enrollmentData.status === "completed" || enrollmentData.status === "rejected") {
+      return NextResponse.json(
+        { error: "Cannot upload files for an enrollment that is already completed or rejected." },
+        { status: 400 },
+      );
     }
 
     const selectionError = getEnrollmentFileSelectionError(file);

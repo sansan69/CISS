@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import {
+  hasAdminAccess,
+  hasFieldOfficerAccess,
+  verifyRequestAuth,
+} from "@/lib/server/auth";
+import {
   resolveSiteDutyPoints,
   resolveAttendanceShift,
 } from "@/lib/shift-utils";
 import { districtMatches } from "@/lib/districts";
 import { DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
 import { haversineDistanceMeters } from "@/lib/geo";
+
+const INDIA_DATE = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 export const runtime = "nodejs";
 
@@ -18,6 +30,7 @@ export const runtime = "nodejs";
  */
 export async function POST(request: NextRequest) {
   try {
+    const decodedToken = await verifyRequestAuth(request);
     const body = await request.json().catch(() => ({}));
     const employeeDocId = String(body.employeeDocId ?? "");
     const siteId = String(body.siteId ?? "");
@@ -31,6 +44,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Missing required fields: employeeDocId, siteId, lat, lon." },
         { status: 400 },
+      );
+    }
+
+    const tokenEmployeeDocId =
+      typeof decodedToken.employeeDocId === "string" ? decodedToken.employeeDocId : "";
+    const tokenEmployeeId =
+      typeof decodedToken.employeeId === "string" ? decodedToken.employeeId : "";
+    const canValidateAnyEmployee =
+      hasAdminAccess(decodedToken) || hasFieldOfficerAccess(decodedToken);
+
+    if (
+      !canValidateAnyEmployee &&
+      tokenEmployeeDocId !== employeeDocId &&
+      tokenEmployeeId !== employeeDocId
+    ) {
+      return NextResponse.json(
+        { canSubmit: false, error: "You can only validate your own attendance." },
+        { status: 403 },
       );
     }
 
@@ -127,7 +158,7 @@ export async function POST(request: NextRequest) {
     // State machine check
     let stateCheck: { ok: boolean; reason?: string } = { ok: true };
     if (status === "In") {
-      if (stateData?.lastStatus === "In" && stateData?.lastAttendanceDate === new Date().toISOString().slice(0, 10)) {
+      if (stateData?.lastStatus === "In" && stateData?.lastAttendanceDate === INDIA_DATE.format(new Date())) {
         stateCheck = { ok: false, reason: "Already clocked IN today." };
       }
     } else {
@@ -167,6 +198,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Attendance validation failed:", error);
+    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
+      return NextResponse.json(
+        { canSubmit: false, error: error?.message || "Unauthorized." },
+        { status: 401 },
+      );
+    }
     return NextResponse.json(
       { canSubmit: false, error: error?.message || "Validation failed." },
       { status: 500 },

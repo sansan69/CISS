@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { collection, limit, onSnapshot, orderBy, query, where, Timestamp, type DocumentData, type QuerySnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,7 +102,7 @@ export default function AttendanceLogsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AttendanceLog | null>(null);
-  const [expandedClients, setExpandedClients] = useState<string[]>(["all"]);
+  const [expandedClients, setExpandedClients] = useState<string[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -232,6 +232,15 @@ export default function AttendanceLogsPage() {
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [logs]);
 
+  // Auto-expand all client accordion sections on first data load
+  const prevClientCount = useRef(0);
+  useEffect(() => {
+    if (clientOptions.length > 0 && clientOptions.length !== prevClientCount.current) {
+      prevClientCount.current = clientOptions.length;
+      setExpandedClients(clientOptions.map((cn) => `client-${cn}`));
+    }
+  }, [clientOptions]);
+
   const districtOptions = useMemo(
     () =>
       mergeDistrictOptions(
@@ -301,7 +310,7 @@ export default function AttendanceLogsPage() {
         total: clientLogs.length,
         inCount: clientLogs.filter((l) => l.status === "In").length,
         outCount: clientLogs.filter((l) => l.status === "Out").length,
-        uniqueEmployees: new Set(clientLogs.map((l) => l.employeeId)).size,
+        uniqueEmployees: new Set(clientLogs.map((l) => (l as any).employeeDocId)).size,
       });
     }
     return stats;
@@ -310,7 +319,7 @@ export default function AttendanceLogsPage() {
   const totals = useMemo(() => {
     const inCount = filteredLogs.filter((log) => log.status === "In").length;
     const outCount = filteredLogs.filter((log) => log.status === "Out").length;
-    const uniqueEmployees = new Set(filteredLogs.map((log) => log.employeeId)).size;
+    const uniqueEmployees = new Set(filteredLogs.map((log) => (log as any).employeeDocId)).size;
     const uniqueClients = groupedByClient.size;
     return { total: filteredLogs.length, inCount, outCount, uniqueEmployees, uniqueClients };
   }, [filteredLogs, groupedByClient]);

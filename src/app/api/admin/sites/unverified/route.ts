@@ -7,7 +7,11 @@ export async function GET(request: Request) {
   try {
     await requireAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const snapshot = await adminDb.collection("sites").get();
+    const snapshot = await adminDb
+      .collection("sites")
+      .where("coordinateStatus", "in", ["missing", "geocoded"])
+      .limit(500)
+      .get();
 
     const unverifiedSites = snapshot.docs
       .map((siteDoc) => ({ id: siteDoc.id, ...(siteDoc.data() as Record<string, unknown>) }))

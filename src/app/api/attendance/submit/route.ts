@@ -315,7 +315,15 @@ export async function POST(request: NextRequest) {
 
     const payload = attendanceSubmissionSchema.parse(await request.json());
 
-    // ── 2. Ownership check ────────────────────────────────────────────────
+    // ── 2. Auth requirement ──────────────────────────────────────────────────
+    // Unauthenticated submissions must have a QR token for traceability.
+    const hasQrToken = !!payload.qrToken;
+    if (!isAuthenticated && !hasQrToken) {
+      return NextResponse.json(
+        { error: "Authentication required. Please sign in or use a valid QR token." },
+        { status: 401 },
+      );
+    }
     if (isAuthenticated) {
       await verifyCallerOwnership(decoded, payload.employeeDocId);
     }
@@ -668,7 +676,7 @@ export async function POST(request: NextRequest) {
       // Auto-close stale open session from a previous date
       if (staleSessionAutoClosed && lastState) {
         const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
-        const staleDate = lastState.lastAttendanceDate ?? "unknown";
+        const staleDate = lastState.lastAttendanceDate ?? INDIA_DATE_FORMATTER.format(new Date());
         transaction.set(staleOutLogRef, {
           employeeId: payload.employeeId,
           employeeDocId: payload.employeeDocId,
@@ -716,7 +724,7 @@ export async function POST(request: NextRequest) {
       // Auto-close stale session via OUT attempt
       if (staleOutAutoClosed && lastState) {
         const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
-        const staleDate = lastState.lastAttendanceDate ?? "unknown";
+        const staleDate = lastState.lastAttendanceDate ?? INDIA_DATE_FORMATTER.format(new Date());
         transaction.set(staleOutLogRef, {
           employeeId: payload.employeeId,
           employeeDocId: payload.employeeDocId,
@@ -946,8 +954,8 @@ export async function POST(request: NextRequest) {
         siteClientName,
         crossClientRelief,
         district: normalizeDistrictName(payload.district),
-        lat: payload.status === "In" ? payload.locationCoords.lat : 0,
-        lng: payload.status === "In" ? payload.locationCoords.lon : 0,
+        lat: payload.locationCoords.lat,
+        lng: payload.locationCoords.lon,
         accuracy:
           typeof gpsAccuracyMeters === "number" && Number.isFinite(gpsAccuracyMeters)
             ? gpsAccuracyMeters

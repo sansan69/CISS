@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/server/auth";
 import { storage } from "@/lib/firebaseAdmin";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdmin(request);
     const corsPath = resolve(process.cwd(), "cors.json");
     const corsConfig = JSON.parse(readFileSync(corsPath, "utf8"));
     const bucket = storage.bucket();

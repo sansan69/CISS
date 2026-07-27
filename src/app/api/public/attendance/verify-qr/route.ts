@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import { verifyQrToken, parseQrContent } from "@/lib/qr/qr-token";
 import { checkRateLimit, getClientIp, buildRateLimitKey } from "@/lib/server/rate-limit";
+import { verifyRequestAuth } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 
@@ -103,10 +104,18 @@ export async function POST(request: Request) {
       .get();
     const stateData = stateSnap.exists ? stateSnap.data() : null;
 
-    // Check if caller is authenticated (has a valid bearer token)
-    // to decide whether to include PII fields
+    // Check if caller is authenticated with a valid bearer token before
+    // including PII fields.
     const authHeader = request.headers.get("authorization") || "";
-    const callerIsAuthenticated = authHeader.startsWith("Bearer ");
+    let callerIsAuthenticated = false;
+    if (authHeader.startsWith("Bearer ")) {
+      try {
+        await verifyRequestAuth(request);
+        callerIsAuthenticated = true;
+      } catch {
+        callerIsAuthenticated = false;
+      }
+    }
 
     const employee: Record<string, unknown> = {
       id: employeeDoc.id,

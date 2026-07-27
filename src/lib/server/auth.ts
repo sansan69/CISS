@@ -28,11 +28,23 @@ export function hasAdminAccess(decodedToken: Pick<AppDecodedToken, "admin" | "ro
   const tokenEmail =
     typeof decodedToken.email === "string" ? decodedToken.email : undefined;
 
+  const isLegacy = isLegacyAdminEmail(tokenEmail);
+  if (isLegacy) {
+    console.warn(
+      `[auth] Legacy admin email access used for ${tokenEmail}. ` +
+      `Migrate to custom claims (role: "admin" or "superAdmin"). ` +
+      `Set DISABLE_LEGACY_ADMIN_EMAILS=true to disable this path.`,
+    );
+  }
+
+  const legacyDisabled =
+    process.env.DISABLE_LEGACY_ADMIN_EMAILS === "true";
+
   return (
     decodedToken.admin === true ||
     decodedToken.role === "admin" ||
     decodedToken.role === "superAdmin" ||
-    isLegacyAdminEmail(tokenEmail)
+    (isLegacy && !legacyDisabled)
   );
 }
 
@@ -69,6 +81,20 @@ export async function requireSuperAdmin(request: Request) {
     throw new Error("Super admin access required.");
   }
   return decodedToken;
+}
+
+export async function requireScopedAdmin(request: Request) {
+  const decodedToken = await verifyRequestAuth(request);
+  if (!hasAdminAccess(decodedToken)) {
+    throw new Error("Admin access required.");
+  }
+  return {
+    ...decodedToken,
+    scope: {
+      stateCode: decodedToken.stateCode ?? undefined,
+      assignedDistricts: decodedToken.assignedDistricts ?? undefined,
+    },
+  };
 }
 
 export function unauthorizedResponse(message: string, status = 401) {

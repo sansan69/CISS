@@ -209,12 +209,23 @@ export default function WageConfigPage() {
       } else {
         setStage("upload");
       }
-    } catch {
-      setSavedConfig(null);
-      setSavedComponents([]);
-      setTemplateRules([]);
-      setTemplateConstants([]);
-      setStage("upload");
+    } catch (error: any) {
+      // Only treat a missing document as "no config exists".
+      // Network errors, auth expiry, etc. should show an error.
+      if (
+        error?.code === "not-found" ||
+        error?.message?.includes("No document") ||
+        (error?.status === 404)
+      ) {
+        setSavedConfig(null);
+        setSavedComponents([]);
+        setTemplateRules([]);
+        setTemplateConstants([]);
+        setStage("upload");
+      } else {
+        console.error("[wage-config] Failed to load saved config:", error);
+        // Keep existing state and show error — don't silently discard
+      }
     } finally {
       setIsLoading(false);
     }

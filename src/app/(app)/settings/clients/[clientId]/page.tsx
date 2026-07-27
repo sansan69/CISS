@@ -94,7 +94,7 @@ import type { ClientDashboardModule, ClientDashboardModulesConfig } from "@/type
 import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/route";
 import { useToast } from "@/hooks/use-toast";
 import { DEFAULT_GEOFENCE_RADIUS_METERS } from "@/lib/constants";
-import { KERALA_DISTRICTS } from "@/lib/districts";
+import { canonicalizeDistrictName, KERALA_DISTRICTS } from "@/lib/districts";
 import { buildFirestoreCreateAudit, buildFirestoreUpdateAudit } from "@/lib/firestore-audit";
 import { buildSiteLocationSyncPatch, coordinateStatusLabels, formatCoordinate } from "@/lib/location-utils";
 import { extractSiteCoordinates, hasUsableSiteGps } from "@/lib/site-gps-repair";
@@ -647,6 +647,7 @@ export default function ClientDashboardPage() {
     setSavingSite(true);
     try {
       const coordinatePatch = buildCoordinatePayload(siteForm);
+      const normalizedDistrict = canonicalizeDistrictName(siteForm.district, [...KERALA_DISTRICTS]) || siteForm.district.trim();
       if (siteDialog === "create") {
         const normalizedDutyPoints = isOperationalClientName(client?.name)
           ? []
@@ -656,7 +657,7 @@ export default function ClientDashboardPage() {
           clientName: client?.name ?? "",
           siteName: siteForm.siteName.trim(),
           siteAddress: siteForm.siteAddress.trim(),
-          district: siteForm.district.trim(),
+          district: normalizedDistrict,
           clientLocationId: siteForm.clientLocationId ?? null,
           clientLocationName: siteForm.clientLocationName ?? null,
           geofenceRadiusMeters: siteForm.geofenceRadiusMeters,
@@ -675,7 +676,7 @@ export default function ClientDashboardPage() {
         await updateDoc(doc(db, "sites", editingSite.id), {
           siteName: siteForm.siteName.trim(),
           siteAddress: siteForm.siteAddress.trim(),
-          district: siteForm.district.trim(),
+          district: normalizedDistrict,
           clientLocationId: siteForm.clientLocationId ?? null,
           clientLocationName: siteForm.clientLocationName ?? null,
           geofenceRadiusMeters: siteForm.geofenceRadiusMeters,

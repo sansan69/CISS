@@ -29,6 +29,11 @@ function parseDateKey(value: string) {
   return Date.UTC(Number(year), Number(month) - 1, Number(day));
 }
 
+function parseISTDateStart(value: string) {
+  const parsed = Date.parse(`${value}T00:00:00+05:30`);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function isImmediateNextDate(previousDate: string, nextDate: string) {
   const previous = parseDateKey(previousDate);
   const next = parseDateKey(nextDate);
@@ -80,9 +85,9 @@ export function computeAutoCheckoutTime(params: {
   const startMin = timeToMinutes(shift.startTime);
   const endMin = timeToMinutes(shift.endTime);
 
-  // Parse session start date as UTC midnight
-  const [year, month, day] = sessionStartDate.split("-").map(Number);
-  const sessionStart = Date.UTC(year, month - 1, day);
+  // Attendance dates are business dates in IST.
+  const sessionStart = parseISTDateStart(sessionStartDate);
+  if (sessionStart === null) return null;
 
   // Determine the date when the shift ends
   const crossesMidnight = startMin >= endMin;
@@ -129,8 +134,10 @@ export function isSessionStale(params: {
   }
 
   // Fallback: session older than max hours
-  const [y, m, d] = lastState.lastAttendanceDate.split("-").map(Number);
-  const sessionStart = Date.UTC(y, m - 1, d);
+  const sessionStart = parseISTDateStart(lastState.lastAttendanceDate);
+  if (sessionStart === null) {
+    return { stale: false, reason: "Invalid attendance date." };
+  }
   const hoursOpen = (now.getTime() - sessionStart) / (1000 * 60 * 60);
 
   if (hoursOpen > maxSessionHours) {

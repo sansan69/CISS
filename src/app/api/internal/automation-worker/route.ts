@@ -15,7 +15,13 @@ const AUTOMATION_COLLECTION = "automationJobs";
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET || process.env.AUTOMATION_WORKER_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
+  // In production, require a valid secret. In development, require a dev token
+  // unless explicitly bypassed via DEV_ALLOW_AUTOMATION_WORKER=true.
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") return false;
+    if (process.env.DEV_ALLOW_AUTOMATION_WORKER === "true") return true;
+    return request.headers.get("authorization") === "Bearer dev-automation";
+  }
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 

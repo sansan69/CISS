@@ -23,46 +23,67 @@ export async function PATCH(
       dashboardModules?: Record<string, boolean>;
       patrolSettings?: Record<string, unknown>;
     };
-    const name = body.name?.trim();
-    const portalSubdomain = slugifyPortalSubdomain(body.portalSubdomain || name || "");
+    const existingDoc = await adminDb.collection("clients").doc(id).get();
+    if (!existingDoc.exists) {
+      return NextResponse.json({ error: "Client not found." }, { status: 404 });
+    }
+    const existing = existingDoc.data() as Record<string, unknown>;
+    const currentName = typeof existing.name === "string" ? existing.name : "";
+    const name = body.name === undefined ? currentName : body.name.trim();
 
     if (!name) {
       return NextResponse.json({ error: "Client name is required." }, { status: 400 });
     }
 
-    const existingPortal = await adminDb
-      .collection("clients")
-      .where("portalSubdomain", "==", portalSubdomain)
-      .limit(2)
-      .get();
-    const conflict = existingPortal.docs.find((doc) => doc.id !== id);
-    if (conflict) {
-      return NextResponse.json(
-        { error: "This client portal subdomain is already assigned." },
-        { status: 409 },
-      );
+    const hasPortalSubdomain = Object.prototype.hasOwnProperty.call(body, "portalSubdomain");
+    const currentPortalSubdomain =
+      typeof existing.portalSubdomain === "string" && existing.portalSubdomain
+        ? existing.portalSubdomain
+        : slugifyPortalSubdomain(name);
+    const portalSubdomain = hasPortalSubdomain
+      ? slugifyPortalSubdomain(body.portalSubdomain || "")
+      : currentPortalSubdomain;
+
+    if (!portalSubdomain) {
+      return NextResponse.json({ error: "Client portal subdomain is required." }, { status: 400 });
+    }
+
+    if (portalSubdomain !== currentPortalSubdomain) {
+      const existingPortal = await adminDb
+        .collection("clients")
+        .where("portalSubdomain", "==", portalSubdomain)
+        .limit(2)
+        .get();
+      const conflict = existingPortal.docs.find((doc) => doc.id !== id);
+      if (conflict) {
+        return NextResponse.json(
+          { error: "This client portal subdomain is already assigned." },
+          { status: 409 },
+        );
+      }
     }
 
     const updateData: Record<string, unknown> = {
       name,
       portalSubdomain,
-      portalEnabled: body.portalEnabled !== false,
-      nationalHolidayList: Array.isArray(body.nationalHolidayList)
-        ? body.nationalHolidayList.filter(Boolean)
-        : [],
-      uniformAllowanceMonthly:
-        typeof body.uniformAllowanceMonthly === "number"
-          ? body.uniformAllowanceMonthly
-          : 0,
-      fieldAllowanceMonthly:
-        typeof body.fieldAllowanceMonthly === "number"
-          ? body.fieldAllowanceMonthly
-          : 0,
       ...buildServerUpdateAudit({
         uid: adminUser.uid,
         email: adminUser.email,
       }),
     };
+
+    if (typeof body.portalEnabled === "boolean") {
+      updateData.portalEnabled = body.portalEnabled;
+    }
+    if (Array.isArray(body.nationalHolidayList)) {
+      updateData.nationalHolidayList = body.nationalHolidayList.filter(Boolean);
+    }
+    if (typeof body.uniformAllowanceMonthly === "number") {
+      updateData.uniformAllowanceMonthly = body.uniformAllowanceMonthly;
+    }
+    if (typeof body.fieldAllowanceMonthly === "number") {
+      updateData.fieldAllowanceMonthly = body.fieldAllowanceMonthly;
+    }
 
     if (body.dashboardModules && typeof body.dashboardModules === "object") {
       updateData.dashboardModules = body.dashboardModules;
@@ -77,7 +98,10 @@ export async function PATCH(
       id,
       name,
       portalSubdomain,
-      portalEnabled: body.portalEnabled !== false,
+      portalEnabled:
+        typeof body.portalEnabled === "boolean"
+          ? body.portalEnabled
+          : existing.portalEnabled !== false,
       portalUrl: buildClientPortalUrl(portalSubdomain),
     });
   } catch (error: any) {
@@ -95,29 +119,41 @@ export async function DELETE(
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
 
-    const sitesSnap = await adminDb
-      .collection("sites")
-      .where("clientId", "==", id)
-      .limit(1)
-      .get();
+    const [
+      sitesSnap,
+      locationsSnap,
+      usersSnap,
+      employeesSnap,
+      workOrdersSnap,
+      trainingAssignmentsSnap,
+      wageConfigSnap,
+    ] = await Promise.all([
+      adminDb.collection("sites").where("clientId", "==", id).limit(1).get(),
+      adminDb.collection("clientLocations").where("clientId", "==", id).limit(1).get(),
+      adminDb.collection("clientUsers").where("clientId", "==", id).limit(1).get(),
+      adminDb.collection("employees").where("clientId", "==", id).limit(1).get(),
+      adminDb.collection("workOrders").where("clientId", "==", id).limit(1).get(),
+      adminDb.collection("trainingAssignments").where("clientId", "==", id).limit(1).get(),
+      adminDb.collection("clientWageConfig").doc(id).get(),
+    ]);
 
-    const locationsSnap = await adminDb
-      .collection("clientLocations")
-      .where("clientId", "==", id)
-      .limit(1)
-      .get();
-
-    const usersSnap = await adminDb
-      .collection("clientUsers")
-      .where("clientId", "==", id)
-      .limit(1)
-      .get();
-
-    if (!sitesSnap.empty || !locationsSnap.empty || !usersSnap.empty) {
+    if (
+      !sitesSnap.empty ||
+      !locationsSnap.empty ||
+      !usersSnap.empty ||
+      !employeesSnap.empty ||
+      !workOrdersSnap.empty ||
+      !trainingAssignmentsSnap.empty ||
+      wageConfigSnap.exists
+    ) {
       const parts: string[] = [];
       if (!sitesSnap.empty) parts.push("sites");
       if (!locationsSnap.empty) parts.push("locations");
       if (!usersSnap.empty) parts.push("users");
+      if (!employeesSnap.empty) parts.push("employees");
+      if (!workOrdersSnap.empty) parts.push("work orders");
+      if (!trainingAssignmentsSnap.empty) parts.push("training assignments");
+      if (wageConfigSnap.exists) parts.push("wage configuration");
       return NextResponse.json(
         {
           error: `Cannot delete client with existing ${parts.join(", ")}. Please remove them first.`,

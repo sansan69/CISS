@@ -61,6 +61,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Client name is required." }, { status: 400 });
     }
 
+    const existingName = await adminDb
+      .collection("clients")
+      .where("name", "==", name)
+      .limit(1)
+      .get();
+    if (!existingName.empty) {
+      return NextResponse.json(
+        { error: "A client with this name already exists." },
+        { status: 409 },
+      );
+    }
+
     const existingPortal = await adminDb
       .collection("clients")
       .where("portalSubdomain", "==", portalSubdomain)

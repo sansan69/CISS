@@ -541,6 +541,7 @@ function buildWorkOrderWrites(
   originalKeyByResolvedKey: Map<string, string>,
   resolvedByOriginalKey: Map<string, TcsExamSourceRow>,
   resolvedByResolvedKey: Map<string, TcsExamSourceRow>,
+  existingRows: readonly ExistingWorkOrderRecord[],
   activeExistingRows: readonly ExistingWorkOrderRecord[],
   adminUser: { uid: string; email?: string | null },
   importId: string,
@@ -579,6 +580,21 @@ function buildWorkOrderWrites(
       null;
 
     if (!parsedRow) continue;
+
+    const inactiveExisting =
+      existingRows.find(
+        (row) =>
+          !isActiveRecordStatus(row.recordStatus) &&
+          getIdentityKey(row) === diffRow.key,
+      ) ??
+      (originalRow
+        ? existingRows.find(
+            (row) =>
+              !isActiveRecordStatus(row.recordStatus) &&
+              getIdentityKey(row) === getIdentityKey(originalRow),
+          )
+        : null);
+    if (inactiveExisting) continue;
 
     const existing =
       activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
@@ -772,6 +788,7 @@ export async function POST(request: Request) {
       originalKeyByResolvedKey,
       resolvedByOriginalKey,
       resolvedByResolvedKey,
+      existingRows,
       activeExistingRows,
       adminUser,
       importId,

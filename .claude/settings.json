@@ -63,5 +63,15 @@
   "enableAllProjectMcpServers": true,
   "env": {
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80"
+  },
+  "sandbox": {
+    "network": {
+      "allowedHosts": [
+        "api.github.com",
+        "github.com",
+        "raw.githubusercontent.com",
+        "codeload.github.com"
+      ]
+    }
   }
 }

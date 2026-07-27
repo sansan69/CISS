@@ -496,7 +496,8 @@ export default function EnrollEmployeePage() {
           setCameraError("There was an error with the video stream display.");
       };
     }
-  }, [isCameraDialogOpen, cameraStream]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCameraDialogOpen]);
 
   const openCamera = async (fieldName: CameraField) => {
     setActiveCameraField(fieldName);

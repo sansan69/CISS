@@ -56,9 +56,11 @@ export function calculatePT(monthlyGross: number, slabs: PTSlab[]): number {
 /** Calculate monthly TDS from projected annual gross */
 export function calculateTDS(
   monthlyGross: number,
-  settings: ComplianceSettings["tds"]
+  settings: ComplianceSettings["tds"],
+  projectionMonths = 12,
 ): number {
-  const annual = monthlyGross * 12;
+  const months = Math.max(1, Math.min(12, Math.round(projectionMonths)));
+  const annual = monthlyGross * months;
   const taxableAnnual = Math.max(0, annual - settings.standardDeduction);
   const sorted = [...settings.slabs].sort((a, b) => (a.upTo ?? Infinity) - (b.upTo ?? Infinity));
   let tax = 0;
@@ -70,7 +72,7 @@ export function calculateTDS(
     tax += taxable * slab.rate;
     prev = ceiling;
   }
-  return round2(tax / 12);
+  return round2(tax / months);
 }
 
 /**

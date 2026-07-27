@@ -46,8 +46,6 @@ export async function PATCH(
           : "verified";
       patch.coordinateSource = body.coordinateSource ?? "manual";
       patch.geocodedAt = new Date();
-    } else {
-      patch.coordinateStatus = "verified";
     }
 
     if (typeof body.address === "string") {

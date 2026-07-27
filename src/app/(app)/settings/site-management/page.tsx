@@ -1751,10 +1751,21 @@ export default function SiteManagementPage() {
                             const isTcs = createData.clientName.trim().toLowerCase() === OPERATIONAL_CLIENT_NAME.toLowerCase();
                             try {
                                 setIsSubmitting(true);
+                                const duplicateSiteSnap = await getDocs(
+                                    query(
+                                        collection(db, 'sites'),
+                                        where('clientId', '==', createData.clientId),
+                                        where('siteName', '==', createData.siteName.trim()),
+                                    ),
+                                );
+                                if (!duplicateSiteSnap.empty) {
+                                    toast({ variant: 'destructive', title: 'Duplicate site', description: 'This client already has a site with that name.' });
+                                    return;
+                                }
                                 await addDoc(collection(db, 'sites'), {
                                     clientId: createData.clientId,
                                     clientName: createData.clientName,
-                                    siteName: createData.siteName,
+                                    siteName: createData.siteName.trim(),
                                     siteId: createData.siteId || null,
                                     siteAddress: createData.siteAddress,
                                     district: normalizedDistrict,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { LEGACY_ADMIN_EMAILS } from "@/lib/constants";
 import { buildServerAuditEvent } from "@/lib/server/audit";
 import { runChunked, buildSelfUrl } from "@/lib/server/self-queue";
@@ -112,7 +112,7 @@ async function collectRepairItems() {
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin(request);
+    await requireSuperAdmin(request);
     const items = await collectRepairItems();
 
     return NextResponse.json({
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const adminUser = await requireAdmin(request);
+    const adminUser = await requireSuperAdmin(request);
     const { auth: adminAuth, db: adminDb } = await import("@/lib/firebaseAdmin");
 
     // Pre-load reference data from Firestore for cross-referencing

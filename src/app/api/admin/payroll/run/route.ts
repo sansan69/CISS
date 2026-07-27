@@ -21,9 +21,49 @@ export const maxDuration = 300;
 
 const CHUNK_SIZE = 25;
 
+function normalizeDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const parsed = (value as { toDate: () => Date }).toDate();
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function getTdsProjectionMonths(period: string, joiningDate: unknown) {
+  const [periodYear, periodMonth] = period.split("-").map(Number);
+  const financialYearStartYear = periodMonth >= 4 ? periodYear : periodYear - 1;
+  const financialYearEnd = new Date(financialYearStartYear + 1, 2, 31);
+  const defaultMonths =
+    (financialYearEnd.getFullYear() - periodYear) * 12 +
+    (financialYearEnd.getMonth() - (periodMonth - 1)) +
+    1;
+
+  const joinedAt = normalizeDate(joiningDate);
+  if (!joinedAt) return defaultMonths;
+
+  const periodStart = new Date(periodYear, periodMonth - 1, 1);
+  const projectionStart = joinedAt > periodStart
+    ? new Date(joinedAt.getFullYear(), joinedAt.getMonth(), 1)
+    : periodStart;
+
+  if (projectionStart > financialYearEnd) return 1;
+  return (
+    (financialYearEnd.getFullYear() - projectionStart.getFullYear()) * 12 +
+    (financialYearEnd.getMonth() - projectionStart.getMonth()) +
+    1
+  );
+}
+
 type ClientDocShape = {
   name?: string;
   clientName?: string;
+  nationalHolidayList?: string[];
   uniformAllowanceMonthly?: number;
   fieldAllowanceMonthly?: number;
 };
@@ -187,6 +227,7 @@ export async function POST(request: Request) {
             clientId?: string;
             clientName?: string;
             district?: string;
+            joiningDate?: unknown;
           };
 
           const resolvedClientId = employee.clientId ?? null;
@@ -225,7 +266,11 @@ export async function POST(request: Request) {
               (mergedComponentAmounts.field_allowance ?? 0) + clientDoc.fieldAllowanceMonthly;
           }
 
-          const attendance = await aggregateAttendance(employeeDoc.id, period, adminDb);
+          const attendance = await aggregateAttendance(employeeDoc.id, period, adminDb, {
+            holidays: Array.isArray(clientDoc?.nationalHolidayList)
+              ? clientDoc.nationalHolidayList
+              : [],
+          });
           const payableDays = Math.min(attendance.workingDays, attendance.presentDays);
 
           const attendanceInputs = {
@@ -269,6 +314,30 @@ export async function POST(request: Request) {
                 ]),
               );
 
+          // Inject client-level uniform/field allowances for template-based configs.
+          // These are NOT part of the template rules but are configured per-client
+          // and should be included in every payroll entry for that client.
+          if (templateRules.length) {
+            if (clientDoc?.uniformAllowanceMonthly) {
+              const prorated = prorateAmount(
+                clientDoc.uniformAllowanceMonthly,
+                attendance.workingDays,
+                payableDays,
+              );
+              proratedComponents.uniform_allowance =
+                (proratedComponents.uniform_allowance ?? 0) + prorated;
+            }
+            if (clientDoc?.fieldAllowanceMonthly) {
+              const prorated = prorateAmount(
+                clientDoc.fieldAllowanceMonthly,
+                attendance.workingDays,
+                payableDays,
+              );
+              proratedComponents.field_allowance =
+                (proratedComponents.field_allowance ?? 0) + prorated;
+            }
+          }
+
           const componentMeta = templateRules.length ? templateSyntheticComponents : wageComponents;
           const earningsSummary = summarizeNamedEarnings(proratedComponents, componentMeta);
           const grossFromSummaryRule =
@@ -281,8 +350,16 @@ export async function POST(request: Request) {
               : round2(
                   Object.entries(proratedComponents).reduce((sum, [componentId, amount]) => {
                     const matchingRule = templateRules.find((rule) => rule.standardName === componentId);
-                    if (matchingRule && matchingRule.category !== "earning" && matchingRule.category !== "summary") {
-                      return sum;
+                    // Exclude deductions, employer contributions, and summary aggregates
+                    // (e.g. "total_deductions", "net_pay") from gross earnings calculation.
+                    if (matchingRule) {
+                      if (matchingRule.category === "deduction" || matchingRule.category === "employer_contribution") {
+                        return sum;
+                      }
+                      if (matchingRule.category === "summary") {
+                        // Summary components aggregate non-earning values — exclude from gross.
+                        return sum;
+                      }
                     }
                     const component = componentMeta.find((entry) => entry.id === componentId);
                     if (component?.type === "deduction" || component?.type === "employer_contribution") return sum;
@@ -293,7 +370,11 @@ export async function POST(request: Request) {
           const epfResult = calculateEPF(epfBase, compliance.epf);
           const esicResult = calculateESIC(grossEarnings, compliance.esic);
           const pt = calculatePT(grossEarnings, compliance.professionalTax.slabs);
-          const tds = calculateTDS(grossEarnings, compliance.tds);
+          const tds = calculateTDS(
+            grossEarnings,
+            compliance.tds,
+            getTdsProjectionMonths(period, employee.joiningDate),
+          );
           const totalDeductions = round2(
             epfResult.employeeEPF +
             (esicResult?.employeeESIC ?? 0) +
@@ -391,32 +472,64 @@ export async function POST(request: Request) {
 
     // All chunks complete (or no work to do)
     if (result.done && result.processed > 0) {
-      await cycleRef.update({
-        status: "review",
-        totalGross: round2(await readTotal(adminDb, cycleRef.id, "totalGross")),
-        totalNetPay: round2(await readTotal(adminDb, cycleRef.id, "totalNetPay")),
-        totalEPF: round2(await readTotal(adminDb, cycleRef.id, "totalEPF")),
-        totalESIC: round2(await readTotal(adminDb, cycleRef.id, "totalESIC")),
-        totalPT: round2(await readTotal(adminDb, cycleRef.id, "totalPT")),
-        totalTDS: round2(await readTotal(adminDb, cycleRef.id, "totalTDS")),
-        processedAt: FieldValue.serverTimestamp(),
+      // Use a transaction to atomically read current totals, round them,
+      // and transition status to "review". This prevents TOCTOU races
+      // between concurrent invocations.
+      await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(cycleRef!);
+        const data = snap.data() ?? {};
+        tx.update(cycleRef!, {
+          status: "review",
+          totalGross: round2((data as any).totalGross ?? 0),
+          totalNetPay: round2((data as any).totalNetPay ?? 0),
+          totalEPF: round2((data as any).totalEPF ?? 0),
+          totalESIC: round2((data as any).totalESIC ?? 0),
+          totalPT: round2((data as any).totalPT ?? 0),
+          totalTDS: round2((data as any).totalTDS ?? 0),
+          processedAt: FieldValue.serverTimestamp(),
+        });
       });
     } else if (result.done && result.processed === 0) {
-      // No employees matched — mark as review with zeroes
-      await cycleRef.update({
-        status: "review",
-        totalGross: 0,
-        totalNetPay: 0,
-        totalEPF: 0,
-        totalESIC: 0,
-        totalPT: 0,
-        totalTDS: 0,
-        processedAt: FieldValue.serverTimestamp(),
-      });
+      // This invocation claimed zero employees. Check whether a prior
+      // self-queue invocation already wrote totals (non-zero cycle doc).
+      const snap = await cycleRef!.get();
+      const currentData = snap.data() ?? {};
+      const hasExistingTotals = (currentData as any).totalGross > 0;
+
+      if (hasExistingTotals) {
+        // Prior invocations already accumulated correct totals. Just round
+        // them and transition to review, using a transaction for safety.
+        await adminDb.runTransaction(async (tx) => {
+          const snap2 = await tx.get(cycleRef!);
+          const d = snap2.data() ?? {};
+          tx.update(cycleRef!, {
+            status: "review",
+            totalGross: round2((d as any).totalGross ?? 0),
+            totalNetPay: round2((d as any).totalNetPay ?? 0),
+            totalEPF: round2((d as any).totalEPF ?? 0),
+            totalESIC: round2((d as any).totalESIC ?? 0),
+            totalPT: round2((d as any).totalPT ?? 0),
+            totalTDS: round2((d as any).totalTDS ?? 0),
+            processedAt: FieldValue.serverTimestamp(),
+          });
+        });
+      } else {
+        // Truly no employees matched — mark as review with zeroes
+        await cycleRef.update({
+          status: "review",
+          totalGross: 0,
+          totalNetPay: 0,
+          totalEPF: 0,
+          totalESIC: 0,
+          totalPT: 0,
+          totalTDS: 0,
+          processedAt: FieldValue.serverTimestamp(),
+        });
+      }
     }
 
     if (!result.done) {
-      return NextResponse.json({ status: 202 });
+      return NextResponse.json({ status: 202, cycleId: cycleRef.id });
     }
 
     const refreshedSnap = await cycleRef.get();

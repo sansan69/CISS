@@ -123,9 +123,7 @@ export async function GET(request: Request) {
       .map(({ reportedAtMillis: _reportedAtMillis, ...log }) => log);
 
     // Summary
-    const presentDates = new Set(
-      rawLogs.filter((l) => l.status === "In").map((l) => l.date)
-    );
+    const presentDates = new Set(rawLogs.map((l) => l.date).filter(Boolean));
     const presentDays = presentDates.size;
 
     // Working days in month (exclude Sundays)

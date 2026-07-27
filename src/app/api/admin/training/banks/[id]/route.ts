@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
+import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 export const runtime = "nodejs";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await verifyRequestAuth(request);
+    await requireAdmin(request);
     const { id } = await params;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const doc = await adminDb.collection("questionBanks").doc(id).get();

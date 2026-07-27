@@ -1354,18 +1354,17 @@ export default function AdminEmployeeProfilePage() {
       [fileKey]: deleteField(),
       updatedAt: serverTimestamp(),
     };
-    
+
     try {
         const employeeDocRef = doc(db, "employees", employee.id);
         await updateDoc(employeeDocRef, updatePayload);
-        
-        // Also remove the old file from storage
-        if (urlToRemove) {
-            await deleteFileFromStorage(urlToRemove);
-        }
 
-        toast({ title: "File Removed", description: `The file for ${fileKey} has been marked for removal. It will be deleted upon saving changes.` });
-        
+        // Defer Storage cleanup: the old file is deleted only after a
+        // successful save to avoid orphaning files if the edit is cancelled.
+        // Mark for cleanup in handleSaveChanges instead.
+
+        toast({ title: "File Removed", description: "File removed. Save changes to finalize." });
+
         // Refetch employee data to update the UI correctly
         await fetchEmployee();
 
@@ -1417,7 +1416,7 @@ export default function AdminEmployeeProfilePage() {
           </div>
           <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
             <Button
-              onClick={() => router.push(`/attendance?employeeId=${encodeURIComponent(employee.employeeId)}`)}
+              onClick={() => router.push(`/attendance?employeeId=${encodeURIComponent(employee.id)}`)}
               className="flex-1 sm:flex-none"
             >
               <CalendarCheck className="mr-2 h-4 w-4" />

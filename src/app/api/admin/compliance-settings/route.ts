@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/server/auth";
+import { requireSuperAdmin } from "@/lib/server/auth";
 import { cloneComplianceSettings } from "@/lib/payroll/defaults";
 import type { ComplianceSettings } from "@/types/payroll";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin(request);
+    await requireSuperAdmin(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const doc = await adminDb.collection("complianceSettings").doc("global").get();
     if (!doc.exists) {
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const decoded = await requireAdmin(request);
+    const decoded = await requireSuperAdmin(request);
     const body = (await request.json()) as Partial<ComplianceSettings>;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");

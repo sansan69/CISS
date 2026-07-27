@@ -42,7 +42,11 @@ export async function GET(request: Request) {
     const wageConfigResults = await Promise.all(
       Array.from(clientIds).map(async (cid) => {
         const doc = await adminDb.collection("clientWageConfig").doc(cid).get();
-        return { clientId: cid, hasConfig: doc.exists && ((doc.data()?.components ?? []) as unknown[]).length > 0 };
+        const data = doc.data() as { components?: unknown[]; templateRules?: unknown[]; payrollTemplate?: unknown } | undefined;
+        const hasComponents = (data?.components ?? []).length > 0;
+        const hasTemplateRules = (data?.templateRules ?? []).length > 0;
+        const hasPayrollTemplate = !!data?.payrollTemplate;
+        return { clientId: cid, hasConfig: doc.exists && (hasComponents || hasTemplateRules || hasPayrollTemplate) };
       })
     );
     const clientsWithConfig = new Set(

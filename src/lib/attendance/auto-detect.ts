@@ -28,6 +28,20 @@ export type AttendanceHint = {
   lastShiftCode?: string | null;
 };
 
+function getMinutesInIST(at: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(at);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  return Number.isFinite(hour) && Number.isFinite(minute)
+    ? hour * 60 + minute
+    : at.getHours() * 60 + at.getMinutes();
+}
+
 /**
  * Find the nearest site within geofence radius from current GPS position.
  * Returns null if no site is within range.
@@ -91,7 +105,7 @@ export function detectShift(
 } | null {
   if (!shiftTemplates?.length) return null;
 
-  const punchMinutes = now.getHours() * 60 + now.getMinutes();
+  const punchMinutes = getMinutesInIST(now);
 
   let best: (typeof shiftTemplates)[0] | null = null;
   let bestScore = Infinity;

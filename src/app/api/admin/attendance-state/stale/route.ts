@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
           const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
 
           transaction.set(staleOutLogRef, {
-            employeeId: stateData.employeeDocId ?? employeeDocId,
+            employeeId: stateData.employeeId ?? null,
             employeeDocId,
             employeeName: stateData.employeeName ?? "Unknown",
             status: "Out",

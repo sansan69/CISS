@@ -150,14 +150,18 @@ export async function GET(request: Request) {
     let attendanceSnap = await adminDb
       .collection("attendanceLogs")
       .where("employeeDocId", "==", guard.employeeDocId)
-      .limit(200)
+      .where("attendanceDate", ">=", startDateStr)
+      .where("attendanceDate", "<=", endDateStr)
+      .limit(500)
       .get();
 
     if (attendanceSnap.empty) {
       attendanceSnap = await adminDb
         .collection("attendanceLogs")
         .where("employeeId", "==", guard.employeeId)
-        .limit(200)
+        .where("attendanceDate", ">=", startDateStr)
+        .where("attendanceDate", "<=", endDateStr)
+        .limit(500)
         .get();
     }
 

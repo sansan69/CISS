@@ -200,9 +200,9 @@ export async function GET(request: Request) {
     const latestByEmployee = new Map<string, Record<string, unknown>>();
 
     for (const log of attendanceLogs) {
-      const employeeKey = normalizeText(
-        log.employeeDocId || log.employeeId || log.employeeName,
-      );
+      const employeeKey =
+        normalizeText(log.employeeDocId || log.employeeId) ||
+        `log:${String(log.id ?? "")}`;
       if (!employeeKey) continue;
       if (normalizeText(log.status).toLowerCase() === "in") {
         checkedInEmployees.add(employeeKey);

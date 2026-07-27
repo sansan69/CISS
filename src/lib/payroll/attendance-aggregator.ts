@@ -1,4 +1,18 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
+
+function normalizeTimestamp(ts: unknown): Date | null {
+  if (!ts) return null;
+  if (ts instanceof Timestamp) return ts.toDate();
+  if (typeof ts === "string") {
+    const d = new Date(ts);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof ts === "object" && ts !== null && "toDate" in ts) {
+    return (ts as Timestamp).toDate();
+  }
+  return null;
+}
 
 export interface AttendanceSummary {
   presentDays: number;
@@ -8,7 +22,8 @@ export interface AttendanceSummary {
 export async function aggregateAttendance(
   employeeDocId: string,
   period: string,
-  adminDb: Firestore
+  adminDb: Firestore,
+  options: { holidays?: string[] } = {},
 ): Promise<AttendanceSummary> {
   const [year, month] = period.split("-").map(Number);
 
@@ -70,7 +85,8 @@ export async function aggregateAttendance(
     if (!dateStr) {
       const ts = data.createdAt;
       if (!ts) return;
-      const date = ts?.toDate ? ts.toDate() : new Date(ts as unknown as Date);
+      const date = normalizeTimestamp(ts);
+      if (!date) return;
       const y = date.getFullYear();
       const mo = String(date.getMonth() + 1).padStart(2, "0");
       const dd = String(date.getDate()).padStart(2, "0");
@@ -84,11 +100,18 @@ export async function aggregateAttendance(
   });
 
   const daysInMonth = lastDay;
-  let sundays = 0;
+  const holidayDates = new Set(
+    (options.holidays ?? []).filter((date) =>
+      date >= startDateStr && date <= endDateStr,
+    ),
+  );
+  let nonWorkingDays = 0;
   for (let day = 1; day <= daysInMonth; day++) {
-    if (new Date(year, month - 1, day).getDay() === 0) sundays++;
+    const dateStr = `${year}-${monthPadded}-${String(day).padStart(2, "0")}`;
+    const isSunday = new Date(year, month - 1, day).getDay() === 0;
+    if (isSunday || holidayDates.has(dateStr)) nonWorkingDays++;
   }
-  const workingDays = daysInMonth - sundays;
+  const workingDays = daysInMonth - nonWorkingDays;
   const presentDays = Math.min(presentDates.size, workingDays);
 
   return { presentDays, workingDays };

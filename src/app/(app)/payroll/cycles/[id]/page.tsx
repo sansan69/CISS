@@ -179,9 +179,18 @@ export default function PayrollCyclePage({
     }
   };
 
+  const escapeCsvField = (val: unknown): string => {
+    if (val == null) return "";
+    const s = String(val);
+    // CSV injection protection: prefix formula-starting values
+    const sanitized = /^[=+@-]/.test(s) ? `'${s}` : s;
+    if (/[,"\n\r]/.test(sanitized)) return `"${sanitized.replace(/"/g, '""')}"`;
+    return sanitized;
+  };
+
   const downloadCSV = () => {
     if (!entries.length) return;
-    const headers = ["Employee", "Code", "Client", "District", "Present Days", "Working Days", "Gross", "EPF", "ESIC", "PT", "TDS", "Net Pay", "Status"];
+    const headers = ["Employee", "Code", "Client", "District", "Present Days", "Working Days", "Payable Days", "Gross", "EPF", "ESIC", "PT", "TDS", "Net Pay", "Status"];
     const rows = entries.map((e) => [
       e.employeeName,
       e.employeeCode,
@@ -189,6 +198,7 @@ export default function PayrollCyclePage({
       e.district,
       e.presentDays,
       e.workingDays,
+      e.payableDays ?? "",
       e.earnings.grossEarnings,
       e.deductions.epfEmployee,
       e.deductions.esicEmployee,
@@ -198,8 +208,9 @@ export default function PayrollCyclePage({
       e.status,
     ]);
 
-    const csvContent = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    const csvContent = [headers, ...rows].map((r) => r.map(escapeCsvField).join(",")).join("\n");
+    const bom = "﻿"; // UTF-8 BOM for Excel compatibility
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
