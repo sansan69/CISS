@@ -1046,7 +1046,7 @@ describe("attendance flow integration", () => {
     });
   });
 
-  it("records cross-client relieving duty without rejecting the selected site", async () => {
+  it("records TCS ad-hoc or relieving duty without requiring a work order", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-24T03:30:00.000Z"));
     const db = new FakeFirestore();
@@ -1059,9 +1059,9 @@ describe("attendance flow integration", () => {
       district: "Ernakulam",
       status: "Active",
     });
-    db.seed("sites", "site-federal-relief", {
-      siteName: "Federal Relief Center",
-      clientName: "Federal Bank Ltd.",
+    db.seed("sites", "site-tcs-adhoc", {
+      siteName: "TCS Ad-hoc Center",
+      clientName: "TCS",
       district: "Ernakulam",
       lat: 9.981,
       lng: 76.281,
@@ -1116,13 +1116,13 @@ describe("attendance flow integration", () => {
             employeeName: "Relief Guard",
             employeePhoneNumber: "7777777777",
             clientName: "Geodis India Ltd.",
-            siteClientName: "Federal Bank Ltd.",
+            siteClientName: "TCS",
             district: "Ernakulam",
-            siteId: "site-federal-relief",
-            siteName: "Federal Relief Center",
+            siteId: "site-tcs-adhoc",
+            siteName: "TCS Ad-hoc Center",
             siteCoords: { lat: 9.981, lng: 76.281 },
             locationCoords: { lat: 9.9811, lon: 76.2811, accuracyMeters: 8 },
-            locationText: "Federal Relief Center",
+            locationText: "TCS Ad-hoc Center",
             status: "In",
             reportedAtClient: "2026-05-24T03:29:00.000Z",
             shiftCode: "day",
@@ -1138,16 +1138,16 @@ describe("attendance flow integration", () => {
     expect(db.listDocs("attendanceLogs")[0].data).toMatchObject({
       employeeId: "CISS/GIL/2026-27/777",
       employeeClientName: "Geodis India Ltd.",
-      siteClientName: "Federal Bank Ltd.",
-      clientName: "Federal Bank Ltd.",
+      siteClientName: "TCS",
+      clientName: "TCS",
       crossClientRelief: true,
-      siteName: "Federal Relief Center",
+      siteName: "TCS Ad-hoc Center",
       status: "In",
     });
     expect(db.listDocs("attendanceSessions")[0].data).toMatchObject({
       employeeClientName: "Geodis India Ltd.",
-      siteClientName: "Federal Bank Ltd.",
-      clientName: "Federal Bank Ltd.",
+      siteClientName: "TCS",
+      clientName: "TCS",
       crossClientRelief: true,
     });
   });

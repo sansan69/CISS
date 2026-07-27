@@ -1600,7 +1600,7 @@ describe("TCS exam work order import server slice", () => {
     );
   });
 
-  it("extends admin work order patching and active-only readers for exam imports", () => {
+  it("keeps work-order lifecycle logic isolated from attendance recording", () => {
     const previewRouteSource = readFileSync(
       resolve(process.cwd(), "src/app/api/admin/work-orders/import/preview/route.ts"),
       "utf8",
@@ -1629,11 +1629,14 @@ describe("TCS exam work order import server slice", () => {
     expect(patchRouteSource).not.toContain('"sourceFileName"');
     expect(patchRouteSource).not.toContain('"contentHash"');
 
-    expect(attendanceRouteSource).toContain('recordStatus');
-    expect(attendanceRouteSource).toContain('=== "active"');
-    expect(attendanceRouteSource).not.toContain('.limit(5)');
-    expect(attendanceRouteSource).toContain('isAssignedGuardMatch');
-    expect(attendanceRouteSource).toContain('employeeId');
+    expect(attendanceRouteSource).not.toContain('.collection("workOrders")');
+    expect(attendanceRouteSource).not.toContain("isAssignedGuardMatch");
+    expect(attendanceRouteSource).not.toContain(
+      "No work order has been assigned",
+    );
+    expect(attendanceRouteSource).not.toContain(
+      "not assigned to this site for today's work order",
+    );
     expect(patchRouteSource).toContain('assignmentHistory cannot be updated via this route.');
 
     expect(guardDashboardRouteSource).toContain('recordStatus');

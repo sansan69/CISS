@@ -32,7 +32,6 @@ import {
   resolveAttendanceSubmissionWindow,
   resolveShiftOperationalDate,
 } from "@/lib/attendance/attendance-validation";
-import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 import type { AppDecodedToken } from "@/lib/server/auth";
 import {
   checkRateLimit,
@@ -249,10 +248,6 @@ function mergePhotoCompliance(
     fullBodyVisible: existing?.fullBodyVisible ?? false,
     onePersonVisible: existing?.onePersonVisible ?? true,
   };
-}
-
-function isActiveWorkOrderRecord(workOrder: Record<string, any>) {
-  return String(workOrder.recordStatus ?? "active").trim().toLowerCase() === "active";
 }
 
 function buildGuardName(employeeData: Record<string, any>, fallbackEmployeeId: string) {
@@ -558,71 +553,19 @@ export async function POST(request: NextRequest) {
         operationalDate: attendanceDate,
         shift: effectiveShift,
       });
-      let workOrderReviewWarning: string | null = null;
-
-      if (isTcsSite) {
-        const guardIsPermanentTcs =
-          normalizeClientNameKey(employeeClientName) ===
-          normalizeClientNameKey(siteClientName);
-
-        if (guardIsPermanentTcs) {
-          // Permanent TCS guards do not require a work order to mark attendance.
-          // They are always assigned to their site — skip the work order check.
-        } else {
-          const startOfDay = new Date(`${attendanceDate}T00:00:00+05:30`);
-          const endOfDay = new Date(`${attendanceDate}T23:59:59.999+05:30`);
-          const workOrdersSnapshot = await adminDb
-            .collection("workOrders")
-            .where("siteId", "==", payload.siteId)
-            .where("date", ">=", startOfDay)
-            .where("date", "<=", endOfDay)
-            .get();
-
-          const activeWorkOrders = workOrdersSnapshot.docs
-            .map((doc) => doc.data() as Record<string, any>)
-            .filter(isActiveWorkOrderRecord);
-
-          if (activeWorkOrders.length === 0) {
-            if (payload.status === "Out" && submissionWindow.closingOpenSession) {
-              workOrderReviewWarning = "Checkout was accepted for an open session even though no active work order was found for the session date.";
-            } else {
-              throw new AttendanceError("No work order has been assigned for this site today. Attendance cannot be recorded.");
-            }
-          }
-
-          const matchingWorkOrder = activeWorkOrders
-            .find((workOrder) => {
-              const assignedGuards = Array.isArray(workOrder.assignedGuards)
-                ? workOrder.assignedGuards
-                : [];
-              return (
-                assignedGuards.length === 0 ||
-                isAssignedGuardMatch(
-                  assignedGuards,
-                  payload.employeeDocId,
-                  payload.employeeId,
-                )
-              );
-            });
-
-          if (!matchingWorkOrder && !workOrderReviewWarning) {
-            if (payload.status === "Out" && submissionWindow.closingOpenSession) {
-              workOrderReviewWarning = "Checkout was accepted for an open session even though the guard was not matched to the work order for the session date.";
-            } else {
-              throw new AttendanceError(
-                "You are not assigned to this site for today's work order. Please contact your supervisor.",
-              );
-            }
-          }
-        }
-      } else {
-        if (activeShiftSource.shiftMode === "fixed" && !effectiveShift) {
-          throw new AttendanceError(
-            selectedDutyPoint
-              ? `Please select a shift for duty point "${selectedDutyPoint.name}" before submitting.`
-              : "Please select a shift before submitting attendance.",
-          );
-        }
+      // Work orders represent TCS ad-hoc manpower planning only. Attendance is
+      // authoritative on its own and must never be blocked by the presence,
+      // absence, or guard assignment of a work order.
+      if (
+        !isTcsSite &&
+        activeShiftSource.shiftMode === "fixed" &&
+        !effectiveShift
+      ) {
+        throw new AttendanceError(
+          selectedDutyPoint
+            ? `Please select a shift for duty point "${selectedDutyPoint.name}" before submitting.`
+            : "Please select a shift before submitting attendance.",
+        );
       }
 
       const actualDistance = haversineDistanceMeters(
@@ -721,7 +664,6 @@ export async function POST(request: NextRequest) {
             : null;
       const attendanceReviewWarnings = [
         locationReviewWarning,
-        workOrderReviewWarning,
         submissionWindow.contextChanged
           ? "Checkout context differed from the original IN session and requires admin review."
           : null,
