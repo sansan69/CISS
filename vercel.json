@@ -25,7 +25,7 @@
   "crons": [
     {
       "path": "/api/attendance/auto-checkout",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/internal/automation-worker",
