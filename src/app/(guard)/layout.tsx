@@ -9,6 +9,7 @@ import { auth } from "@/lib/firebase";
 import { AuthContext } from "@/context/auth-context";
 import { GuardHeader } from "@/components/guard/guard-header";
 import { GuardBottomNav } from "@/components/guard/guard-bottom-nav";
+import { GuardLiveTracking } from "@/components/guard/guard-live-tracking";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loading Screen
@@ -129,6 +130,7 @@ export default function GuardLayout({ children }: { children: ReactNode }) {
       <div className="flex flex-col min-h-[100dvh] app-shell-surface">
         {/* Sticky header */}
         <GuardHeader employeeName={displayName} />
+        <GuardLiveTracking />
 
         {/* Main content — padded for floating pill nav, max-width constrained for tablets */}
         <main className="flex-1 overflow-y-auto pb-[88px]">

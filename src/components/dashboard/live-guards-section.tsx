@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, WifiOff, AlertTriangle, Clock, Search, List, Map as MapIcon } from "lucide-react";
+import {
+  getGuardLocationHealth,
+  guardLocationHealthLabel,
+  guardLocationUpdatedAt,
+} from "@/lib/guard-location-status";
 import type { GuardLocation } from "@/types/guard-location";
 
 const LiveGuardMap = dynamic(
@@ -35,9 +40,16 @@ export default function LiveGuardsSection({
 }) {
   const [locations, setLocations] = useState<GuardLocation[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGuard, setSelectedGuard] = useState<GuardLocation | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let q = query(
@@ -60,17 +72,27 @@ export default function LiveGuardsSection({
     const unsub = onSnapshot(
       q,
       (snap) => {
+        setLocationsError(null);
         const locs: GuardLocation[] = [];
         snap.forEach((doc) => {
           const data = doc.data() as GuardLocation;
-          locs.push({
-            ...data,
-            employeeDocId: data.employeeDocId || doc.id,
-          });
+          if (
+            Number.isFinite(data.lat) &&
+            data.lat >= -90 &&
+            data.lat <= 90 &&
+            Number.isFinite(data.lng) &&
+            data.lng >= -180 &&
+            data.lng <= 180
+          ) {
+            locs.push({
+              ...data,
+              employeeDocId: data.employeeDocId || doc.id,
+            });
+          }
         });
         locs.sort((a, b) => {
-          const aTime = a.updatedAt?.toDate?.()?.getTime() ?? 0;
-          const bTime = b.updatedAt?.toDate?.()?.getTime() ?? 0;
+          const aTime = guardLocationUpdatedAt(a)?.getTime() ?? 0;
+          const bTime = guardLocationUpdatedAt(b)?.getTime() ?? 0;
           return bTime - aTime;
         });
         setLocations(locs);
@@ -78,6 +100,9 @@ export default function LiveGuardsSection({
       },
       (err) => {
         console.error("LiveGuardsSection error:", err);
+        setLocationsError(
+          "Live locations could not be loaded. Check access and try refreshing.",
+        );
         setLocationsLoading(false);
       }
     );
@@ -101,17 +126,19 @@ export default function LiveGuardsSection({
   }, [markedInLocations, selectedGuard]);
 
   const onDuty = markedInLocations.length;
-  const isStale = (location: GuardLocation) => {
-    const updated = location.updatedAt?.toDate?.();
-    return Boolean(updated && Date.now() - updated.getTime() > 10 * 60 * 1000);
-  };
-  const outOfZone = markedInLocations.filter((l) => l.isOutOfZone).length;
-  const stale = markedInLocations.filter((l) => {
-    const updated = l.updatedAt?.toDate?.();
-    return updated && Date.now() - updated.getTime() > 10 * 60 * 1000;
-  }).length;
+  const healthFor = (location: GuardLocation) =>
+    getGuardLocationHealth(location, now);
+  const outOfZone = markedInLocations.filter(
+    (location) => healthFor(location) === "out_of_zone",
+  ).length;
+  const stale = markedInLocations.filter(
+    (location) => healthFor(location) === "stale",
+  ).length;
+  const poorAccuracy = markedInLocations.filter(
+    (location) => healthFor(location) === "poor_accuracy",
+  ).length;
   const inZone = markedInLocations.filter(
-    (location) => !location.isOutOfZone && !isStale(location),
+    (location) => healthFor(location) === "live",
   ).length;
 
   const filteredLocations = searchTerm
@@ -133,17 +160,19 @@ export default function LiveGuardsSection({
           </CardTitle>
           <div className="flex items-center gap-1">
             <Button
+              aria-label="Show live locations on map"
               variant={viewMode === "map" ? "default" : "ghost"}
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-11 w-11 p-0 sm:h-9 sm:w-9"
               onClick={() => setViewMode("map")}
             >
               <MapIcon className="h-4 w-4" />
             </Button>
             <Button
+              aria-label="Show live locations as a list"
               variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-11 w-11 p-0 sm:h-9 sm:w-9"
               onClick={() => setViewMode("list")}
             >
               <List className="h-4 w-4" />
@@ -172,6 +201,12 @@ export default function LiveGuardsSection({
                 {stale} stale
               </Badge>
             )}
+            {poorAccuracy > 0 && (
+              <Badge variant="outline" className="text-xs gap-1.5 border-violet-200 text-violet-700 bg-violet-50/50">
+                <AlertTriangle className="h-3 w-3" />
+                {poorAccuracy} weak GPS
+              </Badge>
+            )}
           </div>
         )}
       </CardHeader>
@@ -181,6 +216,11 @@ export default function LiveGuardsSection({
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-48 rounded-lg bg-muted/50 animate-pulse" />
             ))}
+          </div>
+        ) : locationsError ? (
+          <div className="px-6 py-10 text-center text-sm text-red-700">
+            <AlertTriangle className="mx-auto mb-2 h-8 w-8 opacity-60" />
+            <p>{locationsError}</p>
           </div>
         ) : markedInLocations.length === 0 ? (
           <div className="px-6 pb-6 text-center text-sm text-muted-foreground py-8">
@@ -193,9 +233,11 @@ export default function LiveGuardsSection({
         ) : viewMode === "map" ? (
           <div className="flex flex-col md:flex-row gap-3 p-3">
             {/* Map */}
-            <div className="h-[400px] md:h-[500px] md:flex-1 rounded-xl overflow-hidden border">
+            <div className="h-[340px] md:h-[500px] md:flex-1 rounded-xl overflow-hidden border">
               <LiveGuardMap
                 locations={filteredLocations}
+                selectedEmployeeDocId={selectedGuard?.employeeDocId}
+                now={now}
                 onSelectGuard={(loc) => setSelectedGuard(loc)}
               />
             </div>
@@ -212,39 +254,77 @@ export default function LiveGuardsSection({
               </div>
               <div className="space-y-1 max-h-[440px] overflow-y-auto">
                 {filteredLocations.map((loc) => {
-                  const updated = loc.updatedAt?.toDate?.() ?? new Date();
-                  const isStale = Date.now() - updated.getTime() > 10 * 60 * 1000;
+                  const updated = guardLocationUpdatedAt(loc);
+                  const health = healthFor(loc);
                   const isSelected = selectedGuard?.employeeDocId === loc.employeeDocId;
                   return (
                     <button
                       key={loc.employeeDocId}
                       onClick={() => setSelectedGuard(loc)}
-                      className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      className={`min-h-11 w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
                         isSelected
                           ? "bg-primary/5 border-primary/30"
                           : "bg-card border-border/60 hover:bg-muted/50"
                       }`}
                     >
                       <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                        loc.isOutOfZone ? "bg-red-500" : isStale ? "bg-amber-500" : "bg-emerald-500"
+                        health === "out_of_zone"
+                          ? "bg-red-500"
+                          : health === "poor_accuracy"
+                            ? "bg-violet-500"
+                            : health === "live"
+                              ? "bg-emerald-500"
+                              : "bg-amber-500"
                       }`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{loc.guardName}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{loc.siteName}</p>
                       </div>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(updated)}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {updated ? timeAgo(updated) : "No time"}
+                      </span>
                     </button>
                   );
                 })}
               </div>
+              {selectedGuard && (
+                <div className="rounded-xl border bg-muted/30 p-3 text-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{selectedGuard.guardName}</p>
+                      <p className="text-muted-foreground">
+                        {selectedGuard.siteName}
+                        {selectedGuard.district ? ` · ${selectedGuard.district}` : ""}
+                      </p>
+                    </div>
+                    <Badge variant="outline">
+                      {guardLocationHealthLabel(healthFor(selectedGuard))}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
+                    <span>Accuracy ±{Math.round(selectedGuard.accuracy)} m</span>
+                    <span>
+                      {typeof selectedGuard.distanceFromSite === "number"
+                        ? `${Math.round(selectedGuard.distanceFromSite)} m from site`
+                        : "Site distance unavailable"}
+                    </span>
+                    <span>
+                      {guardLocationUpdatedAt(selectedGuard)
+                        ? `Updated ${timeAgo(guardLocationUpdatedAt(selectedGuard) as Date)}`
+                        : "Update time unavailable"}
+                    </span>
+                    <span>{selectedGuard.clientName || "Client unavailable"}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
           /* List view */
           <div className="divide-y divide-border/50">
             {filteredLocations.map((loc) => {
-              const updated = loc.updatedAt?.toDate?.() ?? new Date();
-              const isStale = Date.now() - updated.getTime() > 10 * 60 * 1000;
+              const updated = guardLocationUpdatedAt(loc);
+              const health = healthFor(loc);
               return (
                 <div
                   key={loc.employeeDocId}
@@ -253,9 +333,11 @@ export default function LiveGuardsSection({
                   <div className="relative shrink-0">
                     <div
                       className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                        loc.isOutOfZone
+                        health === "out_of_zone"
                           ? "bg-red-100 text-red-700"
-                          : isStale
+                          : health === "poor_accuracy"
+                          ? "bg-violet-100 text-violet-700"
+                          : health !== "live"
                           ? "bg-amber-100 text-amber-700"
                           : "bg-emerald-100 text-emerald-700"
                       }`}
@@ -264,7 +346,13 @@ export default function LiveGuardsSection({
                     </div>
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                        loc.isOutOfZone ? "bg-red-500" : isStale ? "bg-amber-500" : "bg-emerald-500"
+                        health === "out_of_zone"
+                          ? "bg-red-500"
+                          : health === "poor_accuracy"
+                            ? "bg-violet-500"
+                            : health === "live"
+                              ? "bg-emerald-500"
+                              : "bg-amber-500"
                       }`}
                     />
                   </div>
@@ -282,16 +370,16 @@ export default function LiveGuardsSection({
                     </p>
                     <p className="text-[10px] text-muted-foreground flex items-center gap-1 justify-end">
                       <Clock className="h-3 w-3" />
-                      {isStale ? "Stale \u00b7 " : ""}
-                      {timeAgo(updated)}
+                      {health !== "live" ? `${guardLocationHealthLabel(health)} · ` : ""}
+                      {updated ? timeAgo(updated) : "No update time"}
                     </p>
                   </div>
-                  {loc.isOutOfZone && (
+                  {health === "out_of_zone" && (
                     <Badge variant="destructive" className="text-[10px] h-5 px-1.5 shrink-0">
                       OUT
                     </Badge>
                   )}
-                  {isStale && !loc.isOutOfZone && (
+                  {health === "stale" && (
                     <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0 border-amber-300 text-amber-700">
                       STALE
                     </Badge>

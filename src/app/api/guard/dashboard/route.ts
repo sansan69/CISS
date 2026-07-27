@@ -117,9 +117,16 @@ export async function GET(request: Request) {
     const profilePhotoUrl: string | null = empData.profilePhotoUrl ?? null;
 
     // ─── Current attendance status ──────────────────────────────────────────
-    let attendanceStatus: { lastStatus: string | null; lastAttendanceDate: string | null } = {
+    let attendanceStatus: {
+      lastStatus: string | null;
+      lastAttendanceDate: string | null;
+      lastSiteId: string | null;
+      openSessionId: string | null;
+    } = {
       lastStatus: null,
       lastAttendanceDate: null,
+      lastSiteId: null,
+      openSessionId: null,
     };
     try {
       const stateSnap = await adminDb
@@ -131,6 +138,8 @@ export async function GET(request: Request) {
         attendanceStatus = {
           lastStatus: stateData.lastStatus ?? null,
           lastAttendanceDate: stateData.lastAttendanceDate ?? null,
+          lastSiteId: stateData.lastSiteId ?? null,
+          openSessionId: stateData.openSessionId ?? null,
         };
       }
     } catch {

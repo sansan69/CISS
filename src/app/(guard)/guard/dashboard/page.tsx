@@ -15,7 +15,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppAuth } from "@/context/auth-context";
-import { useGuardHeartbeat } from "@/lib/hooks/use-guard-heartbeat";
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,6 +52,8 @@ interface DashboardData {
   attendanceStatus: {
     lastStatus: string | null;
     lastAttendanceDate: string | null;
+    lastSiteId: string | null;
+    openSessionId: string | null;
   };
 }
 
@@ -171,9 +172,6 @@ export default function GuardDashboardPage() {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
-
-  const isClockedIn = data?.attendanceStatus?.lastStatus === "In";
-  useGuardHeartbeat(user, isClockedIn, data?.nextShift?.siteId ?? null);
 
   if (loading) return <DashboardSkeleton />;
 

@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import LiveGuardsSection from "@/components/dashboard/live-guards-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authorizedFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -207,6 +208,10 @@ export function ClientOperationsDashboard() {
             })}
           </div>
         </>
+      )}
+
+      {modules.attendance && (
+        <LiveGuardsSection clientName={summary.clientName} />
       )}
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">

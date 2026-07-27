@@ -14,10 +14,16 @@ export interface GuardLocation {
   lat: number;
   lng: number;
   accuracy: number;
+  accuracyLimit?: number;
+  gpsReliable?: boolean;
   distanceFromSite?: number | null;
+  zoneStatus?: "in_zone" | "out_of_zone" | "poor_accuracy";
   isOutOfZone: boolean;
   status: "In" | "Out";
-  updatedAt: Timestamp;
+  updatedAt: Timestamp | null;
+  serverReceivedAt?: Timestamp | null;
+  clientCapturedAt?: Timestamp | null;
+  attendanceSessionId?: string | null;
   attendanceId?: string | null;
   siteLat?: number | null;
   siteLng?: number | null;

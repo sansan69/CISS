@@ -131,6 +131,10 @@ type GuardLocationWrite = {
   lat: number;
   lng: number;
   accuracy: number;
+  accuracyLimit: number;
+  gpsReliable: boolean;
+  distanceFromSite: number;
+  zoneStatus: "in_zone" | "out_of_zone";
   isOutOfZone: boolean;
   status: "In" | "Out";
   siteLat: number | null;
@@ -1007,6 +1011,15 @@ export async function POST(request: NextRequest) {
           typeof gpsAccuracyMeters === "number" && Number.isFinite(gpsAccuracyMeters)
             ? gpsAccuracyMeters
             : 0,
+        accuracyLimit: gpsAccuracyLimitMeters,
+        gpsReliable:
+          typeof gpsAccuracyMeters === "number" &&
+          Number.isFinite(gpsAccuracyMeters) &&
+          gpsAccuracyMeters > 0 &&
+          gpsAccuracyMeters <= gpsAccuracyLimitMeters,
+        distanceFromSite: actualDistance,
+        zoneStatus:
+          actualDistance > effectiveRadiusMeters ? "out_of_zone" : "in_zone",
         isOutOfZone: payload.status === "In" ? actualDistance > effectiveRadiusMeters : false,
         status: payload.status,
         siteLat: siteCoords.lat,
@@ -1032,12 +1045,22 @@ export async function POST(request: NextRequest) {
           lat: liveLocationWrite.lat,
           lng: liveLocationWrite.lng,
           accuracy: liveLocationWrite.accuracy,
+          accuracyLimit: liveLocationWrite.accuracyLimit,
+          gpsReliable: liveLocationWrite.gpsReliable,
+          distanceFromSite: liveLocationWrite.distanceFromSite,
+          zoneStatus: liveLocationWrite.zoneStatus,
           isOutOfZone: liveLocationWrite.isOutOfZone,
           status: liveLocationWrite.status,
           attendanceId: liveLocationWrite.attendanceId,
           siteLat: liveLocationWrite.siteLat,
           siteLng: liveLocationWrite.siteLng,
           geofenceRadius: liveLocationWrite.geofenceRadius,
+          attendanceSessionId:
+            payload.status === "In"
+              ? attendanceLogRef.id
+              : submissionWindow.openSessionId ?? null,
+          trackingSource: "attendance_submission",
+          serverReceivedAt: now,
           updatedAt: now,
         },
         { merge: true },

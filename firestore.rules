@@ -546,9 +546,8 @@ service cloud.firestore {
     }
 
     // ── guardLocations — live GPS tracking heartbeat ─────────────────────────
-    // Guards write their own location doc (employeeId == doc ID).
-    // Read is scoped per role: admin/staff full read, FO by district,
-    // client by own client, guard only own location.
+    // Live locations are written only through trusted server APIs. This keeps
+    // attendance-session, site, distance and GPS checks authoritative.
 
     match /guardLocations/{employeeId} {
       // Read scoped by role — NOT open to all signed-in users
@@ -564,13 +563,7 @@ service cloud.firestore {
         // Guard reads only their own location
         guardOwnsEmployeePath(employeeId));
 
-      // Guards write their own location document, and staff can create/update
-      // guard location records during QR attendance and monitoring workflows.
-      allow create, update: if (guardOwnsEmployeePath(employeeId) || isStaff()) &&
-        writeStateMatches();
-
-      // Only the guard themselves or admin/staff can delete
-      allow delete: if readStateMatches() && (guardOwnsEmployeePath(employeeId) || isAdmin());
+      allow create, update, delete: if false;
 
       // ── guardLocations/{docId}/locationHistory — immutable breadcrumb trail ─
       match /locationHistory/{historyId} {
@@ -581,10 +574,7 @@ service cloud.firestore {
           (isClientUser() &&
             clientUserClientName() != null &&
             resource.data.clientName == clientUserClientName()));
-        allow create: if (guardOwnsEmployeePath(employeeId) || isStaff()) &&
-          writeStateMatches();
-        // History is immutable — only admins can delete for cleanup
-        allow delete: if isAdmin() && readStateMatches();
+        allow create, update, delete: if false;
       }
     }
   }

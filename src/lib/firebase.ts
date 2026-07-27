@@ -9,8 +9,7 @@ import {
 import {
   getFirestore,
   initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -58,13 +57,14 @@ if (!getApps().length) {
 
 const auth = getAuth(app);
 
-// Client: persistent IndexedDB cache → data appears instantly from cache, then syncs.
-// Server (API routes): plain Firestore without browser cache.
+// Workforce, attendance, and live-location records are sensitive. Keep the
+// Firestore cache in memory so shared browsers do not retain records after the
+// tab is closed. Authentication persistence remains separate.
 const db = (() => {
   if (typeof window === "undefined") return getFirestore(app);
   try {
     return initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      localCache: memoryLocalCache(),
     });
   } catch {
     // Already initialized on hot-reload — getFirestore returns the same instance
