@@ -23,7 +23,7 @@ export async function aggregateAttendance(
   employeeDocId: string,
   period: string,
   adminDb: Firestore,
-  options: { holidays?: string[] } = {},
+  options: { holidays?: string[]; scheduledDates?: string[] } = {},
 ): Promise<AttendanceSummary> {
   const [year, month] = period.split("-").map(Number);
 
@@ -32,55 +32,61 @@ export async function aggregateAttendance(
   const startDateStr = `${year}-${monthPadded}-01`;
   const endDateStr = `${year}-${monthPadded}-${String(lastDay).padStart(2, "0")}`;
 
-  // Primary query: by employeeDocId
-  let snapshot = await adminDb
-    .collection("attendanceLogs")
-    .where("employeeDocId", "==", employeeDocId)
-    .where("attendanceDate", ">=", startDateStr)
-    .where("attendanceDate", "<=", endDateStr)
+  const employeeSnap = await adminDb
+    .collection("employees")
+    .doc(employeeDocId)
     .get();
+  const employeeData = employeeSnap.data() as
+    | Record<string, unknown>
+    | undefined;
+  const employeeId =
+    typeof employeeData?.employeeId === "string"
+      ? employeeData.employeeId
+      : undefined;
 
-  // Fallback: some legacy logs may only have employeeId, not employeeDocId.
-  // If the primary query returns empty, look up the employee's employeeId
-  // and retry with that field.
-  //
-  // NOTE: This fallback is redundant — it performs an extra query per employee
-  // when employeeDocId is missing. Backfilling employeeDocId on legacy logs
-  // (via a one-time migration that copies employeeId → employeeDocId on each
-  // attendanceLog document) would eliminate this branch entirely.
-  if (snapshot.empty) {
-    const employeeSnap = await adminDb
-      .collection("employees")
-      .doc(employeeDocId)
+  const buildLogQuery = (field: "employeeDocId" | "employeeId", value: string) =>
+    adminDb
+      .collection("attendanceLogs")
+      .where(field, "==", value)
+      .where("attendanceDate", ">=", startDateStr)
+      .where("attendanceDate", "<=", endDateStr)
       .get();
-    const employeeData = employeeSnap.data() as Record<string, any> | undefined;
-    const employeeId = employeeData?.employeeId as string | undefined;
 
-    if (employeeId) {
-      snapshot = await adminDb
-        .collection("attendanceLogs")
-        .where("employeeId", "==", employeeId)
-        .where("attendanceDate", ">=", startDateStr)
-        .where("attendanceDate", "<=", endDateStr)
-        .get();
-    }
-  }
+  // Read both modern and legacy identifiers. Using a legacy query only when
+  // the modern query is empty silently loses older days in partially migrated
+  // months.
+  const [modernSnapshot, legacySnapshot] = await Promise.all([
+    buildLogQuery("employeeDocId", employeeDocId),
+    employeeId
+      ? buildLogQuery("employeeId", employeeId)
+      : Promise.resolve(null),
+  ]);
 
   type LogEntry = {
     attendanceDate: string;
     status: string;
+    reviewStatus?: string;
     reportedAt?: { seconds?: number; nanoseconds?: number; toDate?: () => Date };
     createdAt?: { seconds?: number; nanoseconds?: number; toDate?: () => Date };
   };
 
   const presentDates = new Set<string>();
 
-  snapshot.docs.forEach((d) => {
+  const logsById = new Map(
+    [
+      ...modernSnapshot.docs,
+      ...(legacySnapshot?.docs ?? []),
+    ].map((document) => [document.id, document]),
+  );
+
+  logsById.forEach((d) => {
     const data = d.data() as LogEntry;
 
-    // Count any date with at least one attendance log as "present".
-    // Previously only counted status === "In", which missed guards who
-    // only had checkout logs or whose IN log was in a different batch.
+    // Presence requires a valid check-in. An isolated auto-checkout or a
+    // rejected record must never create a paid attendance day.
+    if (String(data.status).toLowerCase() !== "in") return;
+    if (String(data.reviewStatus ?? "").toLowerCase() === "rejected") return;
+
     let dateStr = data.attendanceDate as string | undefined;
     if (!dateStr) {
       const ts = data.createdAt;
@@ -105,13 +111,26 @@ export async function aggregateAttendance(
       date >= startDateStr && date <= endDateStr,
     ),
   );
-  let nonWorkingDays = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${year}-${monthPadded}-${String(day).padStart(2, "0")}`;
-    const isSunday = new Date(year, month - 1, day).getDay() === 0;
-    if (isSunday || holidayDates.has(dateStr)) nonWorkingDays++;
+  const scheduledDates = new Set(
+    (options.scheduledDates ?? []).filter(
+      (date) =>
+        date >= startDateStr &&
+        date <= endDateStr &&
+        !holidayDates.has(date),
+    ),
+  );
+  let workingDays: number;
+  if (options.scheduledDates) {
+    workingDays = scheduledDates.size;
+  } else {
+    let nonWorkingDays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${monthPadded}-${String(day).padStart(2, "0")}`;
+      const isSunday = new Date(year, month - 1, day).getDay() === 0;
+      if (isSunday || holidayDates.has(dateStr)) nonWorkingDays++;
+    }
+    workingDays = daysInMonth - nonWorkingDays;
   }
-  const workingDays = daysInMonth - nonWorkingDays;
   const presentDays = Math.min(presentDates.size, workingDays);
 
   return { presentDays, workingDays };

@@ -107,25 +107,30 @@ export function ClientOperationsDashboard() {
     setIsLoading(true);
     setError(null);
 
-    authorizedFetch("/api/client/dashboard")
-      .then(async (response) => {
+    const refresh = async () => {
+      try {
+        const response = await authorizedFetch("/api/client/dashboard");
         const json = await response.json();
         if (!response.ok) {
           throw new Error(json.error || "Could not load client dashboard.");
         }
         if (!active) return;
         setData(json);
-      })
-      .catch((err: unknown) => {
+        setError(null);
+      } catch (err: unknown) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Could not load client dashboard.");
-      })
-      .finally(() => {
+      } finally {
         if (active) setIsLoading(false);
-      });
+      }
+    };
+
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 60_000);
 
     return () => {
       active = false;
+      window.clearInterval(interval);
     };
   }, []);
 

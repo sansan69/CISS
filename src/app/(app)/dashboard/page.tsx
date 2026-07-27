@@ -523,11 +523,32 @@ export default function DashboardPage() {
     const clientCheckedIn  = new Map<string, Set<string>>();
     const clientMockAlerts = new Map<string, number>();
     const clientCompliance = new Map<string, { clear: number; total: number }>();
-    todayAttendanceDocs.forEach(log => {
-      const cn = log.clientName || 'Unassigned';
+    const latestByEmployee = new Map<string, any>();
+    todayAttendanceDocs.forEach((log) => {
+      const employeeKey = log.employeeDocId || log.employeeId;
+      if (!employeeKey) return;
+      const currentTime =
+        log.reportedAt?.toMillis?.() ??
+        log.reportedAt?.toDate?.()?.getTime?.() ??
+        log.createdAt?.toMillis?.() ??
+        log.createdAt?.toDate?.()?.getTime?.() ??
+        0;
+      const previous = latestByEmployee.get(employeeKey);
+      const previousTime =
+        previous?.reportedAt?.toMillis?.() ??
+        previous?.reportedAt?.toDate?.()?.getTime?.() ??
+        previous?.createdAt?.toMillis?.() ??
+        previous?.createdAt?.toDate?.()?.getTime?.() ??
+        0;
+      if (!previous || currentTime >= previousTime) {
+        latestByEmployee.set(employeeKey, log);
+      }
+    });
+    latestByEmployee.forEach((log, employeeKey) => {
+      const cn = log.siteClientName || log.clientName || 'Unassigned';
       if (log.status === 'In') {
         if (!clientCheckedIn.has(cn)) clientCheckedIn.set(cn, new Set());
-        clientCheckedIn.get(cn)!.add(log.employeeDocId);
+        clientCheckedIn.get(cn)!.add(employeeKey);
       }
       if (log.isMockLocationSuspected) clientMockAlerts.set(cn, (clientMockAlerts.get(cn) ?? 0) + 1);
       if (log.photoCompliance?.overallStatus) {
@@ -698,8 +719,14 @@ export default function DashboardPage() {
       const unsub3 = onSnapshot(
         query(
           collection(db, 'attendanceLogs'),
-          where('createdAt', '>=', Timestamp.fromDate(startOfToday())),
-          orderBy('createdAt', 'desc')
+          where(
+            'attendanceDate',
+            '==',
+            new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'Asia/Kolkata',
+            }).format(new Date()),
+          ),
+          orderBy('reportedAt', 'desc')
         ),
         (snap) => setTodayAttendanceDocs(snap.docs.map(d => d.data() as any)),
         (error) => {
@@ -849,10 +876,8 @@ export default function DashboardPage() {
       {/* ── Live Guard Locations (admin + FO) ────────────────────────────── */}
       {canViewLiveGuards && (
         <LiveGuardsSection
-          district={
-            userRole === 'fieldOfficer' && assignedDistricts?.length
-              ? assignedDistricts[0]
-              : undefined
+          districts={
+            userRole === 'fieldOfficer' ? assignedDistricts : undefined
           }
         />
       )}

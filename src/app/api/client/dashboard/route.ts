@@ -115,11 +115,13 @@ export async function GET(request: Request) {
     const siteAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("clientName", "==", scope.clientName)
+      .orderBy("reportedAt", "desc")
       .limit(500)
       .get();
     const employeeAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("employeeClientName", "==", scope.clientName)
+      .orderBy("reportedAt", "desc")
       .limit(500)
       .get();
     const workOrdersPromise: Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }> =
@@ -195,8 +197,8 @@ export async function GET(request: Request) {
       }) as DashboardRecord)
       .filter((log) => matchesClientScope(log, scope))
       .sort((left, right) => {
-        const leftIso = serializeDate(left.createdAt) ?? serializeDate(left.reportedAt) ?? "";
-        const rightIso = serializeDate(right.createdAt) ?? serializeDate(right.reportedAt) ?? "";
+        const leftIso = serializeDate(left.reportedAt) ?? serializeDate(left.createdAt) ?? "";
+        const rightIso = serializeDate(right.reportedAt) ?? serializeDate(right.createdAt) ?? "";
         return new Date(rightIso).getTime() - new Date(leftIso).getTime();
       });
 
@@ -220,15 +222,15 @@ export async function GET(request: Request) {
       const previous = latestByEmployee.get(employeeId);
       const previousMs = previous
         ? new Date(
-            serializeDate(previous.createdAt) ??
-              serializeDate(previous.reportedAt) ??
+            serializeDate(previous.reportedAt) ??
+              serializeDate(previous.createdAt) ??
               serializeDate(previous.reportedAtClient) ??
               0,
           ).getTime()
         : 0;
       const currentMs = new Date(
-        serializeDate(log.createdAt) ??
-          serializeDate(log.reportedAt) ??
+        serializeDate(log.reportedAt) ??
+          serializeDate(log.createdAt) ??
           serializeDate(log.reportedAtClient) ??
           0,
       ).getTime();

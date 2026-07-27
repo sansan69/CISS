@@ -29,7 +29,12 @@ export async function GET(request: Request) {
       sitesSnapshot,
     ] = await Promise.all([
       adminDb.collection("employees").limit(2000).get(),
-      adminDb.collection("attendanceLogs").where("attendanceDate", "==", todayKey).limit(1000).get(),
+      adminDb
+        .collection("attendanceLogs")
+        .where("attendanceDate", "==", todayKey)
+        .orderBy("reportedAt", "desc")
+        .limit(2000)
+        .get(),
       adminDb.collection("workOrders").limit(1000).get(),
       adminDb.collection("clients").limit(1000).get(),
       adminDb.collection("sites").limit(1000).get(),
@@ -48,7 +53,9 @@ export async function GET(request: Request) {
     for (const doc of attendanceSnapshot.docs) {
       const data = doc.data() as Record<string, unknown>;
       const employeeKey = String(data.employeeId || data.employeeDocId || doc.id);
-      latestByEmployee.set(employeeKey, String(data.status || "In"));
+      if (!latestByEmployee.has(employeeKey)) {
+        latestByEmployee.set(employeeKey, String(data.status || "In"));
+      }
     }
     for (const status of latestByEmployee.values()) {
       if (status.toLowerCase() === "in") checkedInToday += 1;

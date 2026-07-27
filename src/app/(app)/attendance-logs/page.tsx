@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { CalendarIcon, Loader2, FileDown, Search, MapPin, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
+import { AlertCircle, CalendarIcon, Loader2, FileDown, Search, MapPin, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +25,8 @@ import {
 } from "@/lib/districts";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type AttendanceLog = FirestoreAttendanceLog;
 
@@ -102,11 +104,17 @@ export default function AttendanceLogsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AttendanceLog | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+  const [correctedOutAt, setCorrectedOutAt] = useState("");
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [expandedClients, setExpandedClients] = useState<string[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
     if (userRole === null) return;
+    setIsLoading(true);
+    setLoadError("");
 
     if (userRole === "client") {
       if (!clientInfo?.clientName) {
@@ -117,15 +125,15 @@ export default function AttendanceLogsPage() {
         collection(db, "attendanceLogs"),
         where("clientName", "==", clientInfo.clientName),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("createdAt", "desc"),
-        limit(200)
+        orderBy("reportedAt", "desc"),
+        limit(1000)
       );
       const employeeClientQuery = query(
         collection(db, "attendanceLogs"),
         where("employeeClientName", "==", clientInfo.clientName),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("createdAt", "desc"),
-        limit(200)
+        orderBy("reportedAt", "desc"),
+        limit(1000)
       );
       const siteLogs = new Map<string, AttendanceLog>();
       const employeeLogs = new Map<string, AttendanceLog>();
@@ -143,7 +151,7 @@ export default function AttendanceLogsPage() {
               const rightTime = getReportedAt(right)?.getTime() ?? 0;
               return rightTime - leftTime;
             })
-            .slice(0, 200)
+            .slice(0, 1000)
         );
       };
       const handleSnapshot = (scope: "site" | "employee") => (snapshot: QuerySnapshot<DocumentData>) => {
@@ -159,8 +167,9 @@ export default function AttendanceLogsPage() {
         updateLogs();
         if (pending.size === 0) setIsLoading(false);
       };
-      const handleError = () => {
+      const handleError = (error: Error) => {
         pending.clear();
+        setLoadError(error.message || "Attendance records could not be loaded.");
         setIsLoading(false);
       };
       const unsubscribeSite = onSnapshot(siteClientQuery, handleSnapshot("site"), handleError);
@@ -179,8 +188,8 @@ export default function AttendanceLogsPage() {
         collection(db, "attendanceLogs"),
         where("district", "in", assignedDistricts),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("createdAt", "desc"),
-        limit(200)
+        orderBy("reportedAt", "desc"),
+        limit(1000)
       );
       const unsubscribe = onSnapshot(
         logsQuery,
@@ -193,7 +202,10 @@ export default function AttendanceLogsPage() {
           );
           setIsLoading(false);
         },
-        () => setIsLoading(false)
+        (error) => {
+          setLoadError(error.message || "Attendance records could not be loaded.");
+          setIsLoading(false);
+        }
       );
 
       return () => unsubscribe();
@@ -201,8 +213,8 @@ export default function AttendanceLogsPage() {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("createdAt", "desc"),
-        limit(200)
+        orderBy("reportedAt", "desc"),
+        limit(1000)
       );
       const unsubscribe = onSnapshot(
         logsQuery,
@@ -215,7 +227,10 @@ export default function AttendanceLogsPage() {
           );
           setIsLoading(false);
         },
-        () => setIsLoading(false)
+        (error) => {
+          setLoadError(error.message || "Attendance records could not be loaded.");
+          setIsLoading(false);
+        }
       );
 
       return () => unsubscribe();
@@ -350,6 +365,73 @@ export default function AttendanceLogsPage() {
       });
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleReview = async (
+    action: "approve" | "reject" | "correct",
+  ) => {
+    if (!selectedLog) return;
+    if (reviewNote.trim().length < 3) {
+      toast({
+        variant: "destructive",
+        title: "Review note required",
+        description: "Enter a short reason before completing the review.",
+      });
+      return;
+    }
+    if (action === "correct" && !correctedOutAt) {
+      toast({
+        variant: "destructive",
+        title: "Corrected OUT time required",
+      });
+      return;
+    }
+
+    setIsReviewing(true);
+    try {
+      const response = await authorizedFetch(
+        `/api/admin/attendance/${encodeURIComponent(selectedLog.id)}/review`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            note: reviewNote.trim(),
+            correctedOutAt:
+              action === "correct"
+                ? new Date(correctedOutAt).toISOString()
+                : undefined,
+          }),
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || "Attendance review failed.");
+      }
+      setSelectedLog({
+        ...selectedLog,
+        requiresAdminReview: false,
+        reviewStatus:
+          action === "approve"
+            ? "approved"
+            : action === "reject"
+              ? "rejected"
+              : "corrected",
+        reviewNote: reviewNote.trim(),
+      });
+      setReviewNote("");
+      setCorrectedOutAt("");
+      toast({ title: "Attendance review saved" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Review failed",
+        description:
+          error instanceof Error ? error.message : "Could not save review.",
+      });
+    } finally {
+      setIsReviewing(false);
     }
   };
 
@@ -570,6 +652,26 @@ export default function AttendanceLogsPage() {
           </Button>
         }
       />
+
+      {loadError ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Attendance could not be loaded</AlertTitle>
+          <AlertDescription>
+            {loadError} Refresh the page after checking your connection and access.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {logs.length >= 1000 ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Showing the newest 1,000 records</AlertTitle>
+          <AlertDescription>
+            Use the date and filters, or export the report, to review the complete result set.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card>
@@ -915,6 +1017,92 @@ export default function AttendanceLogsPage() {
                         <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingIdCard ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}ID Card: {selectedLog.photoCompliance.missingIdCard ? "Missing" : "OK"}</div>
                         <div className="flex items-center gap-1">{selectedLog.photoCompliance.uniformIssue ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}Uniform: {selectedLog.photoCompliance.uniformIssue ? "Issue" : "OK"}</div>
                         <div className="flex items-center gap-1">{selectedLog.photoCompliance.fullBodyVisible ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <XCircle className="h-3.5 w-3.5 text-destructive" />}Full body: {selectedLog.photoCompliance.fullBodyVisible ? "Visible" : "Not visible"}</div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {(userRole === "admin" ||
+                  userRole === "superAdmin" ||
+                  userRole === "fieldOfficer") && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Attendance review
+                        </h3>
+                        <Badge
+                          variant={
+                            selectedLog.reviewStatus === "rejected"
+                              ? "destructive"
+                              : selectedLog.reviewStatus
+                                ? "outline"
+                                : "secondary"
+                          }
+                        >
+                          {selectedLog.reviewStatus ??
+                            (selectedLog.requiresAdminReview
+                              ? "Pending"
+                              : "No review required")}
+                        </Badge>
+                      </div>
+                      {selectedLog.attendanceReviewWarnings?.length ? (
+                        <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                          {selectedLog.attendanceReviewWarnings.map(
+                            (warning, index) => (
+                              <li key={`${warning}-${index}`}>{warning}</li>
+                            ),
+                          )}
+                        </ul>
+                      ) : null}
+                      {selectedLog.reviewNote && (
+                        <p className="rounded-lg bg-muted/30 p-3 text-sm">
+                          {selectedLog.reviewNote}
+                        </p>
+                      )}
+                      <Textarea
+                        value={reviewNote}
+                        onChange={(event) => setReviewNote(event.target.value)}
+                        placeholder="Review reason or correction note"
+                        disabled={isReviewing}
+                      />
+                      {selectedLog.status === "Out" && (
+                        <Input
+                          type="datetime-local"
+                          value={correctedOutAt}
+                          onChange={(event) =>
+                            setCorrectedOutAt(event.target.value)
+                          }
+                          disabled={isReviewing}
+                        />
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleReview("approve")}
+                          disabled={isReviewing}
+                        >
+                          Approve
+                        </Button>
+                        {selectedLog.status === "Out" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleReview("correct")}
+                            disabled={isReviewing}
+                          >
+                            Correct OUT
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleReview("reject")}
+                          disabled={isReviewing}
+                        >
+                          Reject
+                        </Button>
                       </div>
                     </div>
                   </>

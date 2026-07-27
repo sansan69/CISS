@@ -1,127 +1,167 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { POST } from "./route";
-import { db } from "@/lib/firebaseAdmin";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+function createDb() {
+  const refs = new Map<string, Record<string, unknown>>();
+  const ref = (collection: string, id: string) => ({
+    id,
+    path: `${collection}/${id}`,
+  });
+  return {
+    refs,
+    collection(name: string) {
+      return {
+        doc(id = `${name}-generated`) {
+          const documentRef = ref(name, id);
+          return {
+            ...documentRef,
+            set: vi.fn(async (data: Record<string, unknown>) => {
+              refs.set(documentRef.path, data);
+            }),
+          };
+        },
+      };
+    },
+  };
+}
+
+afterEach(() => {
+  vi.resetModules();
+  vi.unstubAllEnvs();
+  vi.clearAllMocks();
+});
 
 describe("auto-checkout cron", () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    vi.stubEnv("CRON_SECRET", "test-cron-secret");
-  });
-
   it("rejects requests without auth", async () => {
-    const req = new Request("https://example.com/api/attendance/auto-checkout", {
-      method: "POST",
-    });
-    const res = await POST(req as any);
-    expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body.error).toBe("Unauthorized");
-  });
+    vi.stubEnv("CRON_SECRET", "test-cron-secret");
+    const db = createDb();
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/self-queue", () => ({
+      buildSelfUrl: vi.fn(() => "https://example.test/auto-checkout"),
+      runChunked: vi.fn(),
+    }));
 
-  it("allows requests with correct query param key", async () => {
-    const req = new Request(
-      "https://example.com/api/attendance/auto-checkout?key=test-cron-secret",
-      { method: "POST" },
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("https://example.test/api/attendance/auto-checkout", {
+        method: "POST",
+      }) as never,
     );
 
-    // Mock Firestore snapshot
-    const docs: any[] = [];
-    vi.spyOn(db, "collection").mockReturnValue({
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      get: vi.fn().mockResolvedValue({ docs, size: 0 }),
-    } as any);
-
-    const res = await POST(req as any);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.closedCount).toBe(0);
+    expect(response.status).toBe(401);
   });
 
-  it("auto-closes a stale session using shift end time", async () => {
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    const attendanceDate = twoDaysAgo.toISOString().slice(0, 10);
+  it.each([
+    ["query", "https://example.test/api/attendance/auto-checkout?key=test-cron-secret", {}],
+    [
+      "bearer",
+      "https://example.test/api/attendance/auto-checkout",
+      { Authorization: "Bearer test-cron-secret" },
+    ],
+  ])("accepts the configured %s credential", async (_label, url, headers) => {
+    vi.stubEnv("CRON_SECRET", "test-cron-secret");
+    const db = createDb();
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/self-queue", () => ({
+      buildSelfUrl: vi.fn(() => "https://example.test/auto-checkout"),
+      runChunked: vi.fn(async () => ({
+        done: true,
+        processed: 0,
+        status: "complete",
+      })),
+    }));
 
-    const stateDoc = {
-      id: "emp-123",
-      data: () => ({
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request(url, { method: "POST", headers }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ success: true, closedCount: 0 });
+  });
+
+  it("supports the GET method used by Vercel Cron", async () => {
+    vi.stubEnv("CRON_SECRET", "test-cron-secret");
+    const db = createDb();
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/self-queue", () => ({
+      buildSelfUrl: vi.fn(() => "https://example.test/auto-checkout"),
+      runChunked: vi.fn(async () => ({
+        done: true,
+        processed: 0,
+        status: "complete",
+      })),
+    }));
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("https://example.test/api/attendance/auto-checkout", {
+        headers: { Authorization: "Bearer test-cron-secret" },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("uses scheduled shift end and updates log, session, state, and live status", async () => {
+    const db = createDb();
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("firebase-admin/firestore", () => ({
+      FieldValue: { delete: vi.fn(() => ({ delete: true })) },
+    }));
+
+    const { processStaleSession } = await import(
+      "@/lib/attendance/auto-checkout"
+    );
+    const shiftEnd = new Date("2026-07-28T00:30:00.000Z");
+    const stateRef = { id: "employee-doc-1", path: "attendanceState/employee-doc-1" };
+    const result = processStaleSession(
+      {
+        id: "employee-doc-1",
+        ref: stateRef,
+      } as never,
+      {
         lastStatus: "In",
-        lastAttendanceDate: attendanceDate,
+        lastAttendanceDate: "2026-07-27",
         employeeId: "CISS/TEST/001",
         employeeName: "Test Guard",
         lastSiteId: "site-1",
         lastSiteName: "Test Site",
-        lastDutyPointId: "dp-1",
+        lastDutyPointId: "main-gate",
         lastDutyPointName: "Main Gate",
-        lastSiteClientName: "Test Client",
-        employeeClientName: "Test Client",
+        lastShiftCode: "night",
+        lastShiftLabel: "Night Shift",
         openSessionId: "session-1",
-      }),
-      ref: { path: "attendanceState/emp-123" },
-    };
-
-    const sessionDoc = {
-      id: "session-1",
-      data: () => ({
-        shiftStartTime: "09:00",
-        shiftEndTime: "17:00",
-      }),
-    };
-
-    const mockBatch = {
-      set: vi.fn(),
-      commit: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const stateSnapshot = {
-      docs: [stateDoc],
-      size: 1,
-    };
-
-    const sessionSnapshot = {
-      docs: [sessionDoc],
-      size: 1,
-    };
-
-    vi.spyOn(db, "batch").mockReturnValue(mockBatch as any);
-    vi.spyOn(db, "collection").mockImplementation((name: string) => {
-      if (name === "attendanceState") {
-        return {
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          get: vi.fn().mockResolvedValue(stateSnapshot),
-        } as any;
-      }
-      if (name === "attendanceSessions") {
-        return {
-          where: vi.fn().mockReturnThis(),
-          get: vi.fn().mockResolvedValue(sessionSnapshot),
-          doc: vi.fn().mockReturnValue({ id: "session-1", path: "attendanceSessions/session-1" }),
-        } as any;
-      }
-      if (name === "attendanceLogs") {
-        return {
-          doc: vi.fn().mockReturnValue({ id: "log-1", path: "attendanceLogs/log-1" }),
-        } as any;
-      }
-      return {} as any;
-    });
-
-    const req = new Request(
-      "https://example.com/api/attendance/auto-checkout?key=test-cron-secret",
-      { method: "POST" },
+        autoCheckoutAt: {
+          toDate: () => new Date("2026-07-28T02:30:00.000Z"),
+        },
+      },
+      {
+        employeeDocId: "employee-doc-1",
+        status: "open",
+        shiftEndsAt: { toDate: () => shiftEnd },
+      },
+      new Date("2026-07-28T02:40:00.000Z"),
     );
 
-    const res = await POST(req as any);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.closedCount).toBe(1);
-    expect(body.closedSessions[0].employeeDocId).toBe("emp-123");
-
-    // Verify batch.set was called for attendanceLogs, attendanceSessions, and attendanceState
-    expect(mockBatch.set).toHaveBeenCalledTimes(3);
-    expect(mockBatch.commit).toHaveBeenCalled();
+    expect(result).not.toBeNull();
+    expect(result?.writes).toHaveLength(4);
+    const logWrite = result?.writes.find((write) =>
+      String((write.ref as { path?: string }).path).startsWith("attendanceLogs/"),
+    );
+    expect(logWrite?.data).toMatchObject({
+      status: "Out",
+      autoClosed: true,
+      closeReason: "missed_checkout",
+      reportedAt: shiftEnd,
+      requiresAdminReview: true,
+    });
+    expect(
+      result?.writes.some(
+        (write) =>
+          (write.ref as { path?: string }).path ===
+          "guardLocations/employee-doc-1",
+      ),
+    ).toBe(true);
   });
 });

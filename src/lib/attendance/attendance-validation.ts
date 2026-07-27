@@ -9,8 +9,8 @@ export type AttendanceStateSnapshot = {
   lastShiftCode?: string | null;
   openSessionId?: string | null;
   openSessionStartedAt?: unknown;
-  /** When the current open session should auto-close (ISO string) */
-  autoCheckoutAt?: string | null;
+  /** When the current open session should auto-close. */
+  autoCheckoutAt?: unknown;
 };
 
 export type AttendanceShiftSnapshot = {
@@ -50,22 +50,141 @@ function timeToMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
-function getMinutesInTimeZone(at: Date, timeZone: string) {
+function addDays(dateKey: string, days: number) {
+  const parsed = parseDateKey(dateKey);
+  if (parsed === null) return null;
+  return new Date(parsed + days * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function getZonedParts(at: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(at);
 
-  const hour = Number(parts.find((part) => part.type === "hour")?.value);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour: value("hour"),
+    minute: value("minute"),
+  };
+}
 
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
-    return at.getHours() * 60 + at.getMinutes();
+function zonedDateTimeToDate(
+  dateKey: string,
+  time: string,
+  timeZone: string,
+) {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!dateMatch || !timeMatch) return null;
+
+  const desiredUtc = Date.UTC(
+    Number(dateMatch[1]),
+    Number(dateMatch[2]) - 1,
+    Number(dateMatch[3]),
+    Number(timeMatch[1]),
+    Number(timeMatch[2]),
+  );
+  let candidate = new Date(desiredUtc);
+
+  // Resolve the timezone offset from Intl instead of hard-coding IST. Two
+  // passes also handle timezones whose offset changes near the requested date.
+  for (let index = 0; index < 2; index += 1) {
+    const displayed = getZonedParts(candidate, timeZone);
+    const displayedUtc = Date.UTC(
+      displayed.year,
+      displayed.month - 1,
+      displayed.day,
+      displayed.hour,
+      displayed.minute,
+    );
+    candidate = new Date(candidate.getTime() + desiredUtc - displayedUtc);
   }
 
-  return hour * 60 + minute;
+  return candidate;
+}
+
+export function computeShiftInterval(params: {
+  operationalDate: string;
+  shift: AttendanceShiftSnapshot;
+  bufferMinutes?: number;
+  timeZone?: string;
+}) {
+  const {
+    operationalDate,
+    shift,
+    bufferMinutes = 120,
+    timeZone = DEFAULT_SHIFT_TIME_ZONE,
+  } = params;
+  if (!shift?.startTime || !shift.endTime) return null;
+
+  const startMinutes = timeToMinutes(shift.startTime);
+  const endMinutes = timeToMinutes(shift.endTime);
+  if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) {
+    return null;
+  }
+
+  const crossesMidnight = endMinutes <= startMinutes;
+  const endDate = crossesMidnight
+    ? addDays(operationalDate, 1)
+    : operationalDate;
+  if (!endDate) return null;
+
+  const shiftStartsAt = zonedDateTimeToDate(
+    operationalDate,
+    shift.startTime,
+    timeZone,
+  );
+  const shiftEndsAt = zonedDateTimeToDate(endDate, shift.endTime, timeZone);
+  if (!shiftStartsAt || !shiftEndsAt) return null;
+
+  return {
+    operationalDate,
+    crossesMidnight,
+    shiftStartsAt: shiftStartsAt.toISOString(),
+    shiftEndsAt: shiftEndsAt.toISOString(),
+    autoCheckoutAt: new Date(
+      shiftEndsAt.getTime() + bufferMinutes * 60 * 1000,
+    ).toISOString(),
+  };
+}
+
+export function resolveShiftOperationalDate(params: {
+  punchAt: Date;
+  shift: AttendanceShiftSnapshot;
+  status: "In" | "Out";
+  openSessionOperationalDate?: string | null;
+  timeZone?: string;
+}) {
+  if (params.status === "Out" && params.openSessionOperationalDate) {
+    return params.openSessionOperationalDate;
+  }
+
+  const timeZone = params.timeZone ?? DEFAULT_SHIFT_TIME_ZONE;
+  const parts = getZonedParts(params.punchAt, timeZone);
+  const currentDate = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+  if (!params.shift?.startTime || !params.shift.endTime) return currentDate;
+
+  const startMinutes = timeToMinutes(params.shift.startTime);
+  const endMinutes = timeToMinutes(params.shift.endTime);
+  const punchMinutes = parts.hour * 60 + parts.minute;
+  const crossesMidnight = endMinutes <= startMinutes;
+
+  if (crossesMidnight && punchMinutes < endMinutes) {
+    return addDays(currentDate, -1) ?? currentDate;
+  }
+  return currentDate;
 }
 
 /**
@@ -78,31 +197,14 @@ export function computeAutoCheckoutTime(params: {
   bufferMinutes?: number;
   timeZone?: string;
 }): string | null {
-  const { sessionStartDate, shift, bufferMinutes = 120, timeZone = DEFAULT_SHIFT_TIME_ZONE } = params;
-
-  if (!shift?.endTime || !shift?.startTime) return null;
-
-  const startMin = timeToMinutes(shift.startTime);
-  const endMin = timeToMinutes(shift.endTime);
-
-  // Attendance dates are business dates in IST.
-  const sessionStart = parseISTDateStart(sessionStartDate);
-  if (sessionStart === null) return null;
-
-  // Determine the date when the shift ends
-  const crossesMidnight = startMin >= endMin;
-  const shiftEndTimestamp = crossesMidnight
-    ? sessionStart + 24 * 60 * 60 * 1000
-    : sessionStart;
-
-  const endHour = Math.floor(endMin / 60);
-  const endMinute = endMin % 60;
-
-  const autoCheckout = new Date(
-    shiftEndTimestamp + (endHour * 60 + endMinute + bufferMinutes) * 60 * 1000,
+  return (
+    computeShiftInterval({
+      operationalDate: params.sessionStartDate,
+      shift: params.shift,
+      bufferMinutes: params.bufferMinutes,
+      timeZone: params.timeZone,
+    })?.autoCheckoutAt ?? null
   );
-
-  return autoCheckout.toISOString();
 }
 
 /**
@@ -124,8 +226,17 @@ export function isSessionStale(params: {
 
   // Check explicit auto-checkout time
   if (lastState.autoCheckoutAt) {
-    const autoCheckoutTime = new Date(lastState.autoCheckoutAt);
-    if (now > autoCheckoutTime) {
+    const value = lastState.autoCheckoutAt as {
+      toDate?: () => Date;
+      seconds?: number;
+    };
+    const autoCheckoutTime =
+      typeof value.toDate === "function"
+        ? value.toDate()
+        : typeof value.seconds === "number"
+          ? new Date(value.seconds * 1000)
+          : new Date(String(lastState.autoCheckoutAt));
+    if (!Number.isNaN(autoCheckoutTime.getTime()) && now > autoCheckoutTime) {
       return {
         stale: true,
         reason: `Session exceeded auto-checkout time (${autoCheckoutTime.toISOString()}).`,
@@ -172,37 +283,6 @@ function getCheckoutShift(input: {
   return input.shift;
 }
 
-function canUseOpenSessionDateForCheckout(input: {
-  attendanceDate: string;
-  status: "In" | "Out";
-  shift: AttendanceShiftSnapshot;
-  lastShift?: AttendanceShiftSnapshot;
-  lastState: AttendanceStateSnapshot;
-}) {
-  if (input.status !== "Out") return false;
-
-  const lastAttendanceDate = input.lastState.lastAttendanceDate ?? null;
-  if (!lastAttendanceDate || lastAttendanceDate === input.attendanceDate) {
-    return false;
-  }
-
-  if (!isImmediateNextDate(lastAttendanceDate, input.attendanceDate)) {
-    return false;
-  }
-
-  if (input.lastState.lastStatus !== "In") {
-    return false;
-  }
-
-  const checkoutShift = getCheckoutShift({
-    shift: input.shift,
-    lastShift: input.lastShift,
-    lastState: input.lastState,
-  });
-
-  return checkoutShift?.crossesMidnight === true;
-}
-
 export function canRecordNextDayCheckout(input: {
   attendanceDate: string;
   status: "In" | "Out";
@@ -245,16 +325,8 @@ export function canRecordNextDayCheckout(input: {
     return checkoutShift?.crossesMidnight === true;
   }
 
-  // When lastShift is not provided but we have lastShiftCode:
-  // If the current shift code differs from lastShiftCode on consecutive dates,
-  // this is an overnight shift checkout (e.g., night shift ending next morning)
   const currentShiftCode = input.shift?.code ?? null;
   const lastShiftCode = input.lastState.lastShiftCode ?? null;
-  if (currentShiftCode && lastShiftCode && currentShiftCode !== lastShiftCode) {
-    return true;
-  }
-
-  // Same shift code — check if it crosses midnight
   if (currentShiftCode === lastShiftCode && input.shift?.crossesMidnight) {
     return true;
   }
@@ -328,20 +400,10 @@ export function resolveAttendanceSubmissionWindow(input: {
     lastDutyPointId !== currentDutyPointId ||
     Boolean(lastShiftCode && currentShiftCode && lastShiftCode !== currentShiftCode);
 
-  const shouldUseOpenSessionDate =
-    lastState.lastAttendanceDate === input.attendanceDate ||
-    canUseOpenSessionDateForCheckout({
-      attendanceDate: input.attendanceDate,
-      status: input.status,
-      shift: input.shift,
-      lastShift: input.lastShift,
-      lastState,
-    });
-
   return {
-    attendanceDate: shouldUseOpenSessionDate
-      ? lastState.lastAttendanceDate ?? input.attendanceDate
-      : input.attendanceDate,
+    // OUT always closes the exact open session and keeps the operational date
+    // established by its IN punch. The current clock/shift must not reclassify it.
+    attendanceDate: lastState.lastAttendanceDate ?? input.attendanceDate,
     openSessionId: lastState.openSessionId ?? null,
     closingOpenSession: true,
     contextChanged,
@@ -378,33 +440,36 @@ export function canRecordIn(params: {
     return { ok: true, action: "allow" };
   }
 
-  // Previous state was IN on a different date
-  if (lastState.lastAttendanceDate !== attendanceDate) {
-    // Check if session is stale (should have auto-closed)
-    const staleCheck = isSessionStale({ lastState });
-    if (staleCheck.stale && allowAutoCloseStale) {
-      return {
-        ok: true,
-        reason: staleCheck.reason,
-        action: "autoClosePrevious",
-      };
-    }
-    // Not stale but different date → this is an overnight shift continuing
-    return { ok: true, action: "allow" };
-  }
-
-  // Previous state was IN on the SAME date
-  // Check if it's a shift handoff (same duty point, different guard is handled by caller)
-  if (lastState.lastSiteId === siteId && lastState.lastDutyPointId === (dutyPointId ?? null)) {
+  if (lastState.lastAttendanceDate === attendanceDate) {
     return {
       ok: false,
-      reason: "You are already clocked IN at this duty point. Please mark OUT before marking IN again.",
+      reason:
+        lastState.lastSiteId === siteId &&
+        lastState.lastDutyPointId === (dutyPointId ?? null)
+          ? "You are already marked IN here. Mark OUT before starting another shift."
+          : "You already have an open attendance session. Mark OUT before changing site or duty point.",
       action: "block",
     };
   }
 
-  // Same date, different site/duty point → allow (guard moved to different location)
-  return { ok: true, action: "allow" };
+  const staleCheck = isSessionStale({ lastState });
+  if (staleCheck.stale && allowAutoCloseStale) {
+    return {
+      ok: true,
+      reason: staleCheck.reason,
+      action: "autoClosePrevious",
+    };
+  }
+
+  return {
+    ok: false,
+    reason:
+      lastState.lastSiteId === siteId &&
+      lastState.lastDutyPointId === (dutyPointId ?? null)
+        ? "You are already marked IN here. Mark OUT before starting another shift."
+        : "You already have an open attendance session. Mark OUT before changing site or duty point.",
+    action: "block",
+  };
 }
 
 /**
@@ -419,7 +484,7 @@ export function canRecordOut(params: {
   /** If true, allows OUT even without open session (for stale session cleanup) */
   allowStaleClose?: boolean;
 }): { ok: boolean; reason?: string; action: "block" | "autoCloseStale" | "allow" } {
-  const { lastState, attendanceDate, siteId, dutyPointId, shift, allowStaleClose = true } = params;
+  const { lastState } = params;
 
   // No open session
   if (!lastState || lastState.lastStatus !== "In") {
@@ -430,44 +495,7 @@ export function canRecordOut(params: {
     };
   }
 
-  // Check for next-day checkout (overnight shift)
-  const canNextDay = canRecordNextDayCheckout({
-    attendanceDate,
-    status: "Out",
-    siteId,
-    dutyPointId,
-    shift,
-    lastState,
-  });
-
-  if (canNextDay) {
-    return { ok: true, action: "allow" };
-  }
-
-  // Same-date checkout
-  if (lastState.lastAttendanceDate === attendanceDate) {
-    if (lastState.lastSiteId !== siteId || lastState.lastDutyPointId !== (dutyPointId ?? null)) {
-      // Context changed → still allow but will flag for review
-      return { ok: true, action: "allow" };
-    }
-    return { ok: true, action: "allow" };
-  }
-
-  // Different date, not next-day eligible
-  if (allowStaleClose) {
-    const staleCheck = isSessionStale({ lastState });
-    if (staleCheck.stale) {
-      return {
-        ok: true,
-        reason: staleCheck.reason,
-        action: "autoCloseStale",
-      };
-    }
-  }
-
-  return {
-    ok: false,
-    reason: "No open session found for today. Your last IN was on " + (lastState.lastAttendanceDate ?? "unknown date") + ".",
-    action: "block",
-  };
+  // OUT closes the exact open session. The stored session owns
+  // operational date, shift, site, and duty-point context.
+  return { ok: true, action: "allow" };
 }

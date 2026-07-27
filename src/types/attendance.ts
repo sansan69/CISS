@@ -38,6 +38,7 @@ export const attendanceSubmissionSchema = z.object({
   employeeName: z.string().min(1),
   employeeDocId: z.string().min(1),
   reportedAtClient: optionalDateTimeStringFromNull,
+  locationCapturedAt: z.string().datetime(),
   employeePhoneNumber: optionalStringFromNull,
   employeeClientName: optionalStringFromNull,
   status: attendanceStatusSchema,
@@ -54,13 +55,13 @@ export const attendanceSubmissionSchema = z.object({
   nextShiftCode: optionalStringFromNull,
   nextShiftStartsAt: optionalStringFromNull,
   siteCoords: z.object({
-    lat: z.number(),
-    lng: z.number(),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
   }),
   locationText: z.string().min(1),
   locationCoords: z.object({
-    lat: z.number(),
-    lon: z.number(),
+    lat: z.number().min(-90).max(90),
+    lon: z.number().min(-180).max(180),
     accuracyMeters: z.number().optional(),
   }),
   distanceMeters: z.number().nonnegative(),
@@ -71,17 +72,22 @@ export const attendanceSubmissionSchema = z.object({
   mockLocationReason: z.string().nullable().optional(),
   sourceCollection: z.enum(['sites', 'clientLocations']).optional(),
   photoUrl: z.string().url(),
-  photoCapturedAt: optionalDateTimeStringFromNull,
+  photoStoragePath: z.string().min(1),
+  photoCapturedAt: z.string().datetime(),
   photoCompliance: attendancePhotoComplianceSchema.optional(),
   deviceInfo: z.object({
     userAgent: z.string(),
   }),
   // Industry-standard idempotency key (UUID v4) — prevents duplicate submissions on retries
   clientRequestId: optionalUuidFromNull,
+  attendanceAttemptId: z.string().uuid(),
   // Optional override reason when guard is outside geofence but has legitimate cause
   overrideReason: optionalBoundedStringFromNull(z.string().min(1).max(500)),
   // QR token for verification when scanning another guard's QR code
   qrToken: optionalStringFromNull,
+  // Signed, short-lived identity proof returned after public identification.
+  // Logged-in guards are verified from their Firebase identity instead.
+  attendanceVerificationToken: optionalStringFromNull,
 });
 
 export type AttendanceSubmission = z.infer<typeof attendanceSubmissionSchema>;
@@ -107,6 +113,11 @@ export const attendanceLogSchema = attendanceSubmissionSchema.extend({
   createdAt: firestoreTimestampSchema.optional(),
   // Server-populated deduplication marker
   processedClientRequestId: z.string().optional(),
+  requiresAdminReview: z.boolean().optional(),
+  reviewStatus: z
+    .enum(["pending", "approved", "corrected", "rejected"])
+    .optional(),
+  reviewNote: z.string().nullable().optional(),
 });
 
 export type AttendanceLog = z.infer<typeof attendanceLogSchema>;
@@ -151,6 +162,16 @@ export interface FirestoreAttendanceLog {
   createdAt?: { seconds: number; nanoseconds: number; toDate: () => Date } | null;
   attendanceDate?: string;
   auditTrail?: unknown[];
+  attendanceSessionId?: string | null;
+  autoClosed?: boolean;
+  closeReason?: string | null;
+  requiresAdminReview?: boolean;
+  attendanceReviewWarnings?: string[];
+  reviewStatus?: "pending" | "approved" | "corrected" | "rejected";
+  reviewNote?: string | null;
+  reviewedByUid?: string | null;
+  reviewedByRole?: string | null;
+  reviewedAt?: { seconds: number; nanoseconds: number; toDate: () => Date } | null;
 }
 
 export type AttendanceSyncStatus = "queued" | "synced" | "failed";
@@ -184,7 +205,7 @@ export interface DeviceAttendanceHistoryItem {
 export interface QueuedAttendanceSubmission {
   id: string;
   createdAt: string;
-  payload: Omit<AttendanceSubmission, "photoUrl"> & {
+  payload: Omit<AttendanceSubmission, "photoUrl" | "photoStoragePath"> & {
     photoDataUrl?: string;
   };
   /**

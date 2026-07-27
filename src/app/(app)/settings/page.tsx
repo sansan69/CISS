@@ -38,7 +38,7 @@ const settingsOptions: SettingsCard[] = [
   },
   {
     title: "Admin Tools",
-    description: "Access bulk imports, QR maintenance, and full data exports.",
+    description: "Access bulk imports, QR maintenance, and full data exports from one utility hub.",
     icon: Wrench,
     href: "/settings/admin-tools",
     roles: ["admin", "superAdmin"],

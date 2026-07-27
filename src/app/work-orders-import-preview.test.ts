@@ -17,7 +17,7 @@ const guardDashboardRoutePath = resolve(
   "src/app/api/guard/dashboard/route.ts",
 );
 
-type Filter = { field: string; op: "==" | ">=" | "<="; value: unknown };
+type Filter = { field: string; op: "==" | ">=" | "<=" | "in"; value: unknown };
 
 class FakeQuerySnapshot {
   constructor(
@@ -233,6 +233,8 @@ function matchFilter(data: Record<string, unknown>, filter: Filter) {
       return compareValues(actual, filter.value) >= 0;
     case "<=":
       return compareValues(actual, filter.value) <= 0;
+    case "in":
+      return Array.isArray(filter.value) && filter.value.includes(actual);
     default:
       return false;
   }

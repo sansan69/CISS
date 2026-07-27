@@ -12,8 +12,9 @@ function getSecret(): string {
 }
 
 export interface UploadTokenPayload {
-  employeeId: string;
+  employeeDocId: string;
   siteId: string;
+  attemptId: string;
   exp: number;
 }
 
@@ -21,10 +22,16 @@ export interface UploadTokenPayload {
  * Generate a short-lived upload token for public attendance photo uploads.
  * Token format: base64(jsonPayload).base64(hmacSignature)
  */
-export function generateUploadToken(employeeId: string, siteId: string, ttlSeconds = 300): string {
+export function generateUploadToken(
+  employeeDocId: string,
+  siteId: string,
+  attemptId: string,
+  ttlSeconds = 300,
+): string {
   const payload: UploadTokenPayload = {
-    employeeId,
+    employeeDocId,
     siteId,
+    attemptId,
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
   };
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -56,7 +63,15 @@ export function verifyUploadToken(token: string): UploadTokenPayload | null {
       Buffer.from(payloadB64, "base64url").toString("utf-8"),
     );
 
-    if (payload.exp < Math.floor(Date.now() / 1000)) {
+    if (
+      typeof payload.employeeDocId !== "string" ||
+      !payload.employeeDocId ||
+      typeof payload.siteId !== "string" ||
+      !payload.siteId ||
+      typeof payload.attemptId !== "string" ||
+      !payload.attemptId ||
+      payload.exp < Math.floor(Date.now() / 1000)
+    ) {
       return null; // expired
     }
 

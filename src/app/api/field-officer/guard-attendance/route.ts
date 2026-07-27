@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Timestamp } from "firebase-admin/firestore";
 import {
   hasAdminAccess,
   hasFieldOfficerAccess,
@@ -107,6 +108,12 @@ export async function GET(request: Request) {
     const requestedDistrict = normalizeText(url.searchParams.get("district"));
     const isAdmin = hasAdminAccess(decoded);
     const profile = await getFieldOfficerProfile(adminDb, decoded);
+    if (!isAdmin && profile.assignedDistricts.length === 0) {
+      return NextResponse.json(
+        { error: "No districts are assigned to this field officer." },
+        { status: 403 },
+      );
+    }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json(
@@ -128,11 +135,38 @@ export async function GET(request: Request) {
       );
     }
 
-    const snapshot = await adminDb
+    let attendanceQuery: FirebaseFirestore.Query = adminDb
       .collection("attendanceLogs")
-      .where("attendanceDate", "==", date)
-      .limit(2000)
-      .get();
+      .where("attendanceDate", "==", date);
+    if (requestedDistrict) {
+      attendanceQuery = attendanceQuery.where(
+        "district",
+        "==",
+        requestedDistrict,
+      );
+    } else if (!isAdmin) {
+      attendanceQuery = attendanceQuery.where(
+        "district",
+        "in",
+        profile.assignedDistricts.slice(0, 30),
+      );
+    }
+    const dayStart = new Date(`${date}T00:00:00+05:30`);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+    const [snapshot, workOrdersSnapshot] = await Promise.all([
+      attendanceQuery
+        .orderBy("reportedAt", "asc")
+        .limit(5000)
+        .get(),
+      adminDb
+        .collection("workOrders")
+        .where("date", ">=", Timestamp.fromDate(dayStart))
+        .where("date", "<", Timestamp.fromDate(dayEnd))
+        .orderBy("date", "asc")
+        .limit(2000)
+        .get(),
+    ]);
 
     const logs = snapshot.docs
       .map(
@@ -147,7 +181,7 @@ export async function GET(request: Request) {
         if (requestedDistrict && !districtMatches(district, requestedDistrict)) {
           return false;
         }
-        if (isAdmin || profile.assignedDistricts.length == 0) {
+        if (isAdmin) {
           return true;
         }
         return profile.assignedDistricts.some((assigned) =>
@@ -174,7 +208,9 @@ export async function GET(request: Request) {
     >();
 
     for (const log of logs) {
-      const key = employeeKey(log);
+      const employee = employeeKey(log);
+      const sessionId = normalizeText(log.attendanceSessionId);
+      const key = sessionId ? `${employee}:${sessionId}` : employee;
       if (!key) continue;
       const millis = Math.max(
         toMillis(log.reportedAt),
@@ -254,6 +290,89 @@ export async function GET(request: Request) {
         if (statusOrder != 0) return statusOrder;
         return left.guardName.localeCompare(right.guardName);
       });
+
+    const attendedAssignments = new Set<string>();
+    for (const log of logs) {
+      const employee = employeeKey(log);
+      const site = normalizeText(log.siteId || log.siteName);
+      attendedAssignments.add(`${employee}:${site}`);
+      const employeeId = normalizeText(log.employeeId);
+      if (employeeId) attendedAssignments.add(`${employeeId}:${site}`);
+    }
+
+    const absentAssignments = new Map<
+      string,
+      (typeof attendance)[number]
+    >();
+    for (const document of workOrdersSnapshot.docs) {
+      const workOrder = document.data() as Record<string, unknown>;
+      const district = normalizeText(workOrder.district);
+      if (
+        requestedDistrict &&
+        !districtMatches(district, requestedDistrict)
+      ) {
+        continue;
+      }
+      if (
+        !isAdmin &&
+        !profile.assignedDistricts.some((assigned) =>
+          districtMatches(assigned, district),
+        )
+      ) {
+        continue;
+      }
+      if (
+        normalizeText(workOrder.recordStatus || "active").toLowerCase() !==
+        "active"
+      ) {
+        continue;
+      }
+      const siteId = normalizeText(workOrder.siteId);
+      const siteName = normalizeText(workOrder.siteName);
+      const siteKey = siteId || siteName;
+      const assignedGuards = Array.isArray(workOrder.assignedGuards)
+        ? workOrder.assignedGuards
+        : [];
+      for (const assigned of assignedGuards) {
+        if (!assigned || typeof assigned !== "object") continue;
+        const guard = assigned as Record<string, unknown>;
+        const guardKey = normalizeText(guard.uid || guard.employeeId);
+        if (!guardKey) continue;
+        const employeeId = normalizeText(guard.employeeId);
+        if (
+          attendedAssignments.has(`${guardKey}:${siteKey}`) ||
+          (employeeId &&
+            attendedAssignments.has(`${employeeId}:${siteKey}`))
+        ) {
+          continue;
+        }
+        const key = `${document.id}:${guardKey}`;
+        absentAssignments.set(key, {
+          id: `absent:${key}`,
+          guardName: normalizeText(guard.name) || "Guard",
+          guardId: employeeId,
+          employeeId,
+          siteName,
+          clientName: normalizeText(workOrder.clientName),
+          district,
+          date,
+          checkIn: null,
+          checkOut: null,
+          dutyPointName: "",
+          shiftLabel: normalizeText(workOrder.shiftLabel),
+          status: "Absent",
+          photoUrl: null,
+        });
+      }
+    }
+
+    attendance.push(...absentAssignments.values());
+    attendance.sort((left, right) => {
+      const statusOrder =
+        (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
+      if (statusOrder !== 0) return statusOrder;
+      return left.guardName.localeCompare(right.guardName);
+    });
 
     return NextResponse.json({ attendance });
   } catch (error: unknown) {

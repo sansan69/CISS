@@ -195,14 +195,19 @@ function findMatchingExistingRow(
   parsedRow: TcsExamSourceRow,
   existingRows: readonly ExistingWorkOrderRecord[],
 ) {
+  const preferredRows = [...existingRows].sort(
+    (left, right) =>
+      Number(isActiveRecordStatus(right.recordStatus)) -
+      Number(isActiveRecordStatus(left.recordStatus)),
+  );
   if (hasConcreteSiteId(parsedRow)) {
-    const exactMatch = existingRows.find(
+    const exactMatch = preferredRows.find(
       (row) => hasConcreteSiteId(row) && getIdentityKey(row) === getIdentityKey(parsedRow),
     );
     if (exactMatch) return exactMatch;
   }
   const fallbackKey = getFallbackIdentityKey(parsedRow);
-  return existingRows.find((row) => {
+  return preferredRows.find((row) => {
     if (hasConcreteSiteId(parsedRow) && hasConcreteSiteId(row)) return false;
     return getFallbackIdentityKey(row) === fallbackKey;
   });
@@ -581,6 +586,10 @@ function buildWorkOrderWrites(
 
     if (!parsedRow) continue;
 
+    const existing =
+      activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
+      (originalRow ? findMatchingExistingRow(originalRow, activeExistingRows) : null) ??
+      null;
     const inactiveExisting =
       existingRows.find(
         (row) =>
@@ -594,12 +603,9 @@ function buildWorkOrderWrites(
               getIdentityKey(row) === getIdentityKey(originalRow),
           )
         : null);
-    if (inactiveExisting) continue;
-
-    const existing =
-      activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key) ??
-      (originalRow ? findMatchingExistingRow(originalRow, activeExistingRows) : null) ??
-      null;
+    // Do not resurrect a cancelled-only row, but a cancelled duplicate must
+    // never prevent the matching active row from being revised.
+    if (inactiveExisting && !existing) continue;
 
     committedRows += 1;
     const targetId = existing?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);

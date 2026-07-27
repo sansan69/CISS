@@ -27,16 +27,14 @@ function timeAgo(date: Date): string {
 }
 
 export default function LiveGuardsSection({
-  district,
+  districts,
   clientName,
 }: {
-  district?: string;
+  districts?: string[];
   clientName?: string;
 }) {
   const [locations, setLocations] = useState<GuardLocation[]>([]);
-  const [activeGuardIds, setActiveGuardIds] = useState<Set<string> | null>(null);
   const [locationsLoading, setLocationsLoading] = useState(true);
-  const [attendanceLoading, setAttendanceLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGuard, setSelectedGuard] = useState<GuardLocation | null>(null);
@@ -46,8 +44,14 @@ export default function LiveGuardsSection({
       collection(db, "guardLocations"),
       where("status", "==", "In")
     );
-    if (district && district.trim()) {
-      q = query(q, where("district", "==", district.trim()));
+    const scopedDistricts = (districts ?? [])
+      .map((district) => district.trim())
+      .filter(Boolean)
+      .slice(0, 30);
+    if (scopedDistricts.length === 1) {
+      q = query(q, where("district", "==", scopedDistricts[0]));
+    } else if (scopedDistricts.length > 1) {
+      q = query(q, where("district", "in", scopedDistricts));
     }
     if (clientName && clientName.trim()) {
       q = query(q, where("clientName", "==", clientName.trim()));
@@ -79,41 +83,13 @@ export default function LiveGuardsSection({
     );
 
     return () => unsub();
-  }, [district, clientName]);
+  }, [districts, clientName]);
 
-  useEffect(() => {
-    const q = query(
-      collection(db, "attendanceState"),
-      where("lastStatus", "==", "In"),
-    );
-
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setActiveGuardIds(new Set(snap.docs.map((doc) => doc.id)));
-        setAttendanceLoading(false);
-      },
-      (err) => {
-        console.error("LiveGuardsSection attendance state error:", err);
-        setActiveGuardIds(new Set());
-        setAttendanceLoading(false);
-      },
-    );
-
-    return () => unsub();
-  }, []);
-
-  const loading = locationsLoading || attendanceLoading;
+  const loading = locationsLoading;
 
   const markedInLocations = useMemo(() => {
-    if (!activeGuardIds) return [];
-    return locations.filter(
-      (location) =>
-        location.status === "In" &&
-        Boolean(location.employeeDocId) &&
-        activeGuardIds.has(location.employeeDocId),
-    );
-  }, [activeGuardIds, locations]);
+    return locations.filter((location) => location.status === "In");
+  }, [locations]);
 
   useEffect(() => {
     if (
@@ -125,12 +101,18 @@ export default function LiveGuardsSection({
   }, [markedInLocations, selectedGuard]);
 
   const onDuty = markedInLocations.length;
+  const isStale = (location: GuardLocation) => {
+    const updated = location.updatedAt?.toDate?.();
+    return Boolean(updated && Date.now() - updated.getTime() > 10 * 60 * 1000);
+  };
   const outOfZone = markedInLocations.filter((l) => l.isOutOfZone).length;
   const stale = markedInLocations.filter((l) => {
     const updated = l.updatedAt?.toDate?.();
     return updated && Date.now() - updated.getTime() > 10 * 60 * 1000;
   }).length;
-  const inZone = onDuty - outOfZone - stale;
+  const inZone = markedInLocations.filter(
+    (location) => !location.isOutOfZone && !isStale(location),
+  ).length;
 
   const filteredLocations = searchTerm
     ? markedInLocations.filter(

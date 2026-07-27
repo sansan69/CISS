@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db as adminDb } from "@/lib/firebaseAdmin";
-import { isSessionStale } from "@/lib/attendance/attendance-validation";
 import { runChunked, buildSelfUrl } from "@/lib/server/self-queue";
-import { FieldValue } from "firebase-admin/firestore";
+import { processStaleSession } from "@/lib/attendance/auto-checkout";
 
 export const runtime = "nodejs";
 
@@ -49,138 +48,20 @@ async function verifyVercelCronSignature(request: NextRequest): Promise<boolean>
   return result === 0;
 }
 
-function computeFallbackAutoCheckout(
-  state: Record<string, any>,
-  session: Record<string, any> | undefined,
-): string | null {
-  if (state.autoCheckoutAt) return state.autoCheckoutAt;
-  if (!session?.shiftEndTime || !session?.shiftStartTime) return null;
-
-  const sessionStartDate = String(state.lastAttendanceDate ?? "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionStartDate)) return null;
-
-  const endTime = String(session.shiftEndTime);
-  const startTime = String(session.shiftStartTime);
-  const [endH, endM] = endTime.split(":").map(Number);
-  const [startH, startM] = startTime.split(":").map(Number);
-  const crossesMidnight = startH * 60 + startM >= endH * 60 + endM;
-  const sessionStart = Date.parse(`${sessionStartDate}T00:00:00+05:30`);
-  if (Number.isNaN(sessionStart)) return null;
-  const shiftEndTimestamp = crossesMidnight
-    ? sessionStart + 24 * 60 * 60 * 1000
-    : sessionStart;
-  const bufferMinutes = 120;
-  return new Date(
-    shiftEndTimestamp + (endH * 60 + endM + bufferMinutes) * 60 * 1000,
-  ).toISOString();
-}
-
-/**
- * Generate the writes needed for a stale session auto-close.
- * Returns null if the session is not stale.
- */
-function processStaleSession(
-  doc: FirebaseFirestore.QueryDocumentSnapshot,
-  state: Record<string, any>,
-  session: Record<string, any> | undefined,
-  now: Date,
-): {
-  employeeDocId: string;
-  attendanceDate: string;
-  reason: string;
-  writes: Array<{
-    ref: FirebaseFirestore.DocumentReference;
-    data: Record<string, any>;
-    merge?: boolean;
-  }>;
-} | null {
-  const autoCheckoutAt = computeFallbackAutoCheckout(state, session);
-  const staleCheck = isSessionStale({
-    lastState: {
-      lastStatus: "In",
-      lastAttendanceDate: state.lastAttendanceDate,
-      autoCheckoutAt,
-    },
-    now,
-  });
-
-  if (!staleCheck.stale) return null;
-
-  const employeeDocId = doc.id;
-  const staleDate = state.lastAttendanceDate ?? "unknown";
-  const writes: Array<{
-    ref: FirebaseFirestore.DocumentReference;
-    data: Record<string, any>;
-    merge?: boolean;
-  }> = [];
-
-  const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
-  writes.push({
-    ref: staleOutLogRef,
-    data: {
-      employeeId: state.employeeId ?? employeeDocId,
-      employeeDocId,
-      employeeName: state.employeeName ?? "",
-      status: "Out",
-      attendanceDate: staleDate,
-      siteId: state.lastSiteId ?? "",
-      siteName: state.lastSiteName ?? "",
-      dutyPointId: state.lastDutyPointId ?? null,
-      dutyPointName: state.lastDutyPointName ?? null,
-      clientName: state.lastSiteClientName ?? "",
-      employeeClientName: state.employeeClientName ?? "",
-      autoClosed: true,
-      autoClosedReason: "Session auto-closed by scheduled job. " + staleCheck.reason,
-      reportedAt: now,
-      serverProcessedAt: now,
-      createdAt: now,
-      attendanceReviewWarnings: [
-        "Auto-closed stale session: " + staleCheck.reason,
-      ],
-    },
-  });
-
-  if (state.openSessionId) {
-    writes.push({
-      ref: adminDb.collection("attendanceSessions").doc(String(state.openSessionId)),
-      data: {
-        status: "closed",
-        outLogId: staleOutLogRef.id,
-        endedAt: now,
-        autoClosed: true,
-        autoClosedReason: "Scheduled auto-checkout: " + staleCheck.reason,
-        updatedAt: now,
-      },
-      merge: true,
-    });
-  }
-
-  writes.push({
-    ref: doc.ref,
-    data: {
-      lastStatus: "Out",
-      lastAttendanceDate: staleDate,
-      lastAttendanceId: staleOutLogRef.id,
-      openSessionId: FieldValue.delete(),
-      openSessionStartedAt: FieldValue.delete(),
-      autoCheckoutAt: FieldValue.delete(),
-      lastLoggedAt: now,
-      updatedAt: now,
-      lastAutoClosedAt: now,
-      lastAutoCloseReason: staleCheck.reason,
-    },
-    merge: true,
-  });
-
-  return { employeeDocId, attendanceDate: staleDate, reason: staleCheck.reason, writes };
-}
-
 export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const key = searchParams.get("key");
+  const authorization = request.headers.get("authorization") || "";
+  const bearerSecret = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
 
   let authorized = false;
-  if (key === process.env.CRON_SECRET) {
+  if (
+    process.env.CRON_SECRET &&
+    (key === process.env.CRON_SECRET ||
+      bearerSecret === process.env.CRON_SECRET)
+  ) {
     authorized = true;
   } else {
     authorized = await verifyVercelCronSignature(request);
@@ -234,45 +115,45 @@ export async function POST(request: NextRequest) {
       },
       // ── process: close stale sessions in individual transactions ──
       async (docs) => {
-        // Pre-fetch session docs for this page in batches of 10
-        const sessionIds = docs
-          .map((d) => (d.data() as Record<string, any>).openSessionId)
-          .filter((id): id is string => typeof id === "string");
-
-        const sessionById = new Map<string, Record<string, any>>();
-        if (sessionIds.length > 0) {
-          for (let i = 0; i < sessionIds.length; i += 10) {
-            const idBatch = sessionIds.slice(i, i + 10);
-            const snap = await adminDb
-              .collection("attendanceSessions")
-              .where("__name__", "in", idBatch)
-              .get();
-            for (const sDoc of snap.docs) {
-              sessionById.set(sDoc.id, sDoc.data());
-            }
-          }
-        }
-
         let closedCount = 0;
 
         for (const doc of docs) {
-          const state = doc.data() as Record<string, any>;
-          const session = state.openSessionId
-            ? sessionById.get(String(state.openSessionId))
-            : undefined;
-
-          const result = processStaleSession(doc, state, session, now);
-          if (!result) continue;
-
-          // Use runTransaction per session to atomically verify & close
-          // (prevents P1-7 race where a real checkout is overwritten)
           try {
+            let closed = false;
             await adminDb.runTransaction(async (tx) => {
               const freshSnap = await tx.get(doc.ref);
               if (!freshSnap.exists) return;
               const freshState = freshSnap.data() as Record<string, any>;
+              const openSessionId =
+                typeof freshState.openSessionId === "string"
+                  ? freshState.openSessionId
+                  : "";
               if (freshState.lastStatus !== "In") return;
 
+              let freshSession: Record<string, any> | undefined;
+              if (openSessionId) {
+                const sessionRef = adminDb
+                  .collection("attendanceSessions")
+                  .doc(openSessionId);
+                const freshSessionSnap = await tx.get(sessionRef);
+                if (!freshSessionSnap.exists) return;
+                freshSession =
+                  freshSessionSnap.data() as Record<string, any>;
+                if (
+                  freshSession.status !== "open" ||
+                  freshSession.employeeDocId !== doc.id
+                ) {
+                  return;
+                }
+              }
+
+              const result = processStaleSession(
+                doc,
+                freshState,
+                freshSession,
+                now,
+              );
+              if (!result) return;
               for (const write of result.writes) {
                 if (write.merge) {
                   tx.set(write.ref, write.data, { merge: true });
@@ -280,12 +161,13 @@ export async function POST(request: NextRequest) {
                   tx.set(write.ref, write.data);
                 }
               }
+              closed = true;
             });
-            closedCount++;
+            if (closed) closedCount++;
           } catch (txError) {
             // Transaction conflict — the guard likely checked out concurrently
             console.warn(
-              `[auto-checkout] Transaction conflict for ${result.employeeDocId}:`,
+              `[auto-checkout] Transaction conflict for ${doc.id}:`,
               txError,
             );
           }
@@ -313,7 +195,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!result.done) {
-      return NextResponse.json({ status: 202 });
+      return NextResponse.json(
+        {
+          success: false,
+          status: result.status,
+          closedCount: result.processed,
+        },
+        { status: result.status === "retry-later" ? 503 : 202 },
+      );
     }
 
     return NextResponse.json({
@@ -331,4 +220,11 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// Vercel Cron invokes configured paths with GET and an Authorization bearer
+// token. Keep POST for explicit/manual runs and route both methods through the
+// same secured implementation.
+export async function GET(request: NextRequest) {
+  return POST(request);
 }

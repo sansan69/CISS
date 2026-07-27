@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildShiftTemplates } from "@/lib/shift-utils";
+import { generateAttendanceVerificationToken } from "@/lib/server/attendance-verification-token";
 
 type Filter = {
   field: string;
@@ -378,11 +379,16 @@ function buildAttendancePayload(args: {
   nextShiftCode?: string;
   nextShiftStartsAt?: string;
 }) {
+  const attendanceAttemptId = crypto.randomUUID();
+  const photoStoragePath =
+    `employees/${args.employeeDocId}/attendance/` +
+    `${attendanceAttemptId}/photo.jpg`;
   return {
     employeeId: args.employeeId,
     employeeName: args.employeeName,
     employeeDocId: args.employeeDocId,
     reportedAtClient: args.reportedAtClient,
+    locationCapturedAt: args.reportedAtClient,
     employeePhoneNumber: args.employeePhoneNumber,
     employeeClientName: args.clientName,
     status: args.status,
@@ -406,9 +412,18 @@ function buildAttendancePayload(args: {
     locationAccuracyMeters: 8,
     geofenceRadiusAtTime: 200,
     sourceCollection: "sites" as const,
-    photoUrl: "https://example.com/photo.jpg",
+    photoUrl:
+      `https://firebasestorage.googleapis.com/v0/b/test/o/` +
+      `${encodeURIComponent(photoStoragePath)}?alt=media`,
+    photoStoragePath,
     photoCapturedAt: args.reportedAtClient,
     deviceInfo: { userAgent: "vitest" },
+    attendanceAttemptId,
+    clientRequestId: attendanceAttemptId,
+    attendanceVerificationToken: generateAttendanceVerificationToken({
+      employeeDocId: args.employeeDocId,
+      method: "employeeId",
+    }),
   };
 }
 
@@ -558,12 +573,29 @@ describe("attendance flow integration", () => {
     const inBody = await inResponse.json();
     expect(inBody).toMatchObject({ success: true });
 
+    const duplicateInResponse = await POST(
+      new Request("https://example.com/api/attendance/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer guard",
+        },
+        body: JSON.stringify(inPayload),
+      }),
+    );
+    expect(duplicateInResponse.status).toBe(200);
+    expect(await duplicateInResponse.json()).toMatchObject({
+      success: true,
+      duplicate: true,
+    });
+    expect(db.listDocs("attendanceLogs")).toHaveLength(1);
+
     const outPayload = buildAttendancePayload({
       ...site,
       status: "Out",
       reportedAtClient: "2026-05-21T02:25:00.000Z",
       shiftCode: "day",
-      shiftLabel: "Day Shift",
+      shiftLabel: "Night Shift",
       shiftStartTime: "08:00",
       shiftEndTime: "20:00",
       nextShiftCode: "night",
@@ -589,7 +621,7 @@ describe("attendance flow integration", () => {
     expect(logs.map(({ data }) => data.attendanceDate)).toEqual(["2026-05-20", "2026-05-20"]);
     expect(logs.map(({ data }) => data.status)).toEqual(["In", "Out"]);
     expect(logs[0].data.shiftLabel).toBe("Night Shift");
-    expect(logs[1].data.shiftLabel).toBe("Day Shift");
+    expect(logs[1].data.shiftLabel).toBe("Night Shift");
 
     const attendanceState = db.getDoc("attendanceState", "emp-1");
     expect(attendanceState).toMatchObject({
@@ -599,7 +631,7 @@ describe("attendance flow integration", () => {
       lastStatus: "Out",
       lastSiteId: "site-12h",
       lastDutyPointId: "main-duty",
-      lastShiftCode: "day",
+      lastShiftCode: "night",
     });
     expect(attendanceState?.openSessionId).toBeUndefined();
 
@@ -623,7 +655,7 @@ describe("attendance flow integration", () => {
           date: "2026-05-20",
           status: "Out",
           siteName: "Acme Tower",
-          shiftLabel: "Day Shift",
+          shiftLabel: "Night Shift",
         }),
       ]),
     );
@@ -642,7 +674,7 @@ describe("attendance flow integration", () => {
         checkIn: "20:05",
         checkOut: "07:55",
         status: "Checked out",
-        shiftLabel: "Day Shift",
+        shiftLabel: "Night Shift",
       }),
     ]);
 
@@ -828,6 +860,7 @@ describe("attendance flow integration", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: "Bearer guard:emp-2",
         },
         body: JSON.stringify(
           buildAttendancePayload({
@@ -852,6 +885,7 @@ describe("attendance flow integration", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: "Bearer guard:emp-2",
         },
         body: JSON.stringify(
           buildAttendancePayload({
@@ -873,7 +907,7 @@ describe("attendance flow integration", () => {
     const logs = db.listDocs("attendanceLogs");
     expect(logs).toHaveLength(2);
     expect(logs.map(({ data }) => data.attendanceDate)).toEqual(["2026-05-20", "2026-05-20"]);
-    expect(logs.map(({ data }) => data.shiftLabel)).toEqual(["Night Shift", "Morning Shift"]);
+    expect(logs.map(({ data }) => data.shiftLabel)).toEqual(["Night Shift", "Night Shift"]);
 
     const fieldOfficerResponse = await getFieldOfficerGuardAttendance(
       new Request("https://example.com/api/field-officer/guard-attendance?date=2026-05-20", {
@@ -887,7 +921,7 @@ describe("attendance flow integration", () => {
         guardName: "Dummy Guard Two",
         checkIn: "22:10",
         checkOut: "05:50",
-        shiftLabel: "Morning Shift",
+        shiftLabel: "Night Shift",
         status: "Checked out",
       }),
     ]);
@@ -909,7 +943,7 @@ describe("attendance flow integration", () => {
         expect.objectContaining({
           date: "2026-05-20",
           status: "Out",
-          shiftLabel: "Morning Shift",
+          shiftLabel: "Night Shift",
         }),
       ]),
     );
@@ -1007,7 +1041,7 @@ describe("attendance flow integration", () => {
       employeeId: "CISS/GEODIS/2026-27/001",
       clientName: "Geodis India Ltd., Kochi",
       siteName: "Floor 9",
-      shiftLabel: "Day Shift",
+      shiftLabel: "Night Shift",
       status: "In",
     });
   });

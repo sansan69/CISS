@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
     const snapshot = await query.get();
     const sites = snapshot.docs.map((doc) => {
       const d = doc.data() as Record<string, unknown>;
+      const coordinates =
+        d.coordinates && typeof d.coordinates === "object"
+          ? (d.coordinates as Record<string, unknown>)
+          : {};
       return {
         id: doc.id,
         name: normalizeText(d.name || d.siteName),
@@ -27,8 +31,8 @@ export async function GET(request: NextRequest) {
         clientName: normalizeText(d.clientName),
         district: normalizeText(d.district),
         location: d.location ?? null,
-        latitude: d.latitude ?? d.coordinates?.latitude ?? null,
-        longitude: d.longitude ?? d.coordinates?.longitude ?? null,
+        latitude: d.latitude ?? coordinates.latitude ?? null,
+        longitude: d.longitude ?? coordinates.longitude ?? null,
         status: normalizeText(d.status || "active"),
         dutyPoints: Array.isArray(d.dutyPoints)
           ? d.dutyPoints.map((dp: unknown) =>

@@ -21,8 +21,18 @@ export async function GET(request: Request) {
     }
 
     const [siteAttendanceSnapshot, employeeAttendanceSnapshot] = await Promise.all([
-      adminDb.collection("attendanceLogs").where("clientName", "==", scope.clientName).limit(limit).get(),
-      adminDb.collection("attendanceLogs").where("employeeClientName", "==", scope.clientName).limit(limit).get(),
+      adminDb
+        .collection("attendanceLogs")
+        .where("clientName", "==", scope.clientName)
+        .orderBy("reportedAt", "desc")
+        .limit(limit)
+        .get(),
+      adminDb
+        .collection("attendanceLogs")
+        .where("employeeClientName", "==", scope.clientName)
+        .orderBy("reportedAt", "desc")
+        .limit(limit)
+        .get(),
     ]);
 
     const docsById = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
@@ -48,8 +58,9 @@ export async function GET(request: Request) {
             district: normalizeText(data.district),
             dutyPointName: normalizeText(data.dutyPointName),
             attendanceDate: normalizeText(data.attendanceDate),
-            checkIn: reportedAt ?? "",
-            checkInTime: reportedAt ?? "",
+            checkIn: data.status === "In" ? reportedAt ?? "" : "",
+            checkOut: data.status === "Out" ? reportedAt ?? "" : "",
+            checkInTime: data.status === "In" ? reportedAt ?? "" : "",
             reportedAt,
           };
         })

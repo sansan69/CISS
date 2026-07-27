@@ -114,6 +114,28 @@ class FakeFirestore {
     return new FakeCollectionRef(this, name);
   }
 
+  async runTransaction<T>(
+    callback: (transaction: {
+      get(ref: FakeDocRef): Promise<FakeDocSnapshot>;
+      set(
+        ref: FakeDocRef,
+        value: Record<string, unknown>,
+        options?: { merge?: boolean },
+      ): void;
+      update(ref: FakeDocRef, value: Record<string, unknown>): void;
+    }) => Promise<T>,
+  ) {
+    return callback({
+      get: (ref) => ref.get(),
+      set: (ref, value, options) => {
+        void ref.set(value, options);
+      },
+      update: (ref, value) => {
+        void ref.update(value);
+      },
+    });
+  }
+
   doc(path: string) {
     const [collectionName, id] = path.split("/");
     if (!collectionName || !id) {
@@ -243,6 +265,10 @@ describe("guard auth routes", () => {
     vi.doMock("@/lib/guard/identity-utils", async () => await import("../lib/guard/identity-utils"));
     vi.doMock("@/lib/guard/pin-utils", async () => await import("../lib/guard/pin-utils"));
     vi.doMock("firebase-admin/firestore", () => ({
+      Timestamp: {
+        now: () => ({ toDate: () => new Date() }),
+        fromDate: (date: Date) => ({ toDate: () => date }),
+      },
       FieldValue: {
         serverTimestamp: () => serverTimestampSentinel,
         delete: () => deleteSentinel,
@@ -308,6 +334,10 @@ describe("guard auth routes", () => {
       GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
     }));
     vi.doMock("firebase-admin/firestore", () => ({
+      Timestamp: {
+        now: () => ({ toDate: () => new Date() }),
+        fromDate: (date: Date) => ({ toDate: () => date }),
+      },
       FieldValue: {
         serverTimestamp: () => serverTimestampSentinel,
         delete: () => deleteSentinel,
@@ -393,6 +423,10 @@ describe("guard auth routes", () => {
       GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
     }));
     vi.doMock("firebase-admin/firestore", () => ({
+      Timestamp: {
+        now: () => ({ toDate: () => new Date() }),
+        fromDate: (date: Date) => ({ toDate: () => date }),
+      },
       FieldValue: {
         serverTimestamp: () => serverTimestampSentinel,
         delete: () => deleteSentinel,
@@ -480,6 +514,10 @@ describe("guard auth routes", () => {
       GUARD_AUTH_EMAIL_DOMAIN: "guard.cisskerala.app",
     }));
     vi.doMock("firebase-admin/firestore", () => ({
+      Timestamp: {
+        now: () => ({ toDate: () => new Date() }),
+        fromDate: (date: Date) => ({ toDate: () => date }),
+      },
       FieldValue: {
         serverTimestamp: () => serverTimestampSentinel,
         delete: () => deleteSentinel,

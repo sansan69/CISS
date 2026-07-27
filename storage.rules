@@ -80,9 +80,10 @@ service firebase.storage {
       allow update, delete: if isAdmin();
     }
 
-    match /employees/{employeeKey}/attendance/{fileName} {
+    match /employees/{employeeKey}/attendance/{attemptId}/{fileName} {
       allow read: if isSignedIn();
-      allow create: if isAllowedSize() && isImage();
+      // Attendance photos are written only by the validated server upload route.
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 

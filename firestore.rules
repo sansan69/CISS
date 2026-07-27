@@ -259,18 +259,11 @@ service cloud.firestore {
     }
 
     // ── attendanceLogs ───────────────────────────────────────────────────────
-    // Guards create their own logs directly from their device.
-    // Next.js Admin SDK still creates logs server-side — both are supported.
-    // Guards can ONLY read and create their OWN logs (scoped by employeeDocId).
-    // They CANNOT update or delete any log (immutable audit trail).
+    // Attendance writes are server-only so QR/identity, photo, location,
+    // geofence, shift, session, and idempotency rules cannot be bypassed.
 
     match /attendanceLogs/{logId} {
-      // Guards can create their own attendance records.
-      // Guard client writes: status ('In'/'Out'), employeeDocId, reportedAt (server ts)
-      allow create: if isGuard() &&
-        request.resource.data.employeeDocId == guardEmployeeDocId() &&
-        request.resource.data.status in ['In', 'Out'] &&
-        request.resource.data.keys().hasAll(['employeeDocId', 'status', 'reportedAt']);
+      allow create: if false;
 
       // Guards can only read their own logs; FO scoped by district; client users scoped to their clientName
       allow read: if readStateMatches() && (isAdmin() ||
@@ -291,13 +284,7 @@ service cloud.firestore {
     match /attendanceState/{employeeId} {
       allow read: if readStateMatches() && (isAdmin() || (isGuard() && guardEmployeeDocId() == employeeId));
       allow create: if isAdmin() && writeStateMatches();
-      allow update: if (isAdmin() && writeStateMatches()) ||
-        (isGuard() && guardEmployeeDocId() == employeeId && writeStateMatches() &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-           'lastStatus', 'lastAttendanceDate', 'lastSiteId', 'lastDutyPointId',
-           'lastShiftCode', 'openSessionId', 'lastLatitude', 'lastLongitude',
-           'lastAccuracy', 'updatedAt',
-         ]));
+      allow update: if isAdmin() && writeStateMatches();
       allow delete: if isAdmin() && readStateMatches();
     }
 

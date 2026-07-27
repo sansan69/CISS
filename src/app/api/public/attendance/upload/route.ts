@@ -14,7 +14,7 @@ const MAX_ATTENDANCE_PHOTO_BYTES = 5 * 1024 * 1024;
 const UPLOAD_RATE_LIMIT = { maxRequests: 10, windowMs: 60_000 };
 
 function isSafeAttendancePath(path: string) {
-  return /^employees\/[0-9A-Za-z_\/-]+\/attendance\/[A-Za-z0-9._-]+$/.test(path);
+  return /^employees\/[0-9A-Za-z_-]+\/attendance\/[0-9a-f-]{36}\/photo\.jpg$/i.test(path);
 }
 
 function parseImageDataUrl(dataUrl: string) {
@@ -23,7 +23,10 @@ function parseImageDataUrl(dataUrl: string) {
     throw new Error("Attendance photo must be an image data URL.");
   }
 
-  const contentType = match[1];
+  const contentType = match[1].toLowerCase();
+  if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+    throw new Error("Attendance photo must be JPEG, PNG, or WebP.");
+  }
   const buffer = Buffer.from(match[2], "base64");
   if (buffer.length === 0) {
     throw new Error("Attendance photo is empty.");
@@ -70,7 +73,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!path.startsWith("employees/" + tokenPayload.employeeId + "/")) {
+    const expectedPath =
+      `employees/${tokenPayload.employeeDocId}/attendance/` +
+      `${tokenPayload.attemptId}/photo.jpg`;
+    if (path !== expectedPath) {
       return NextResponse.json({ error: "Upload path does not match session." }, { status: 403 });
     }
 
@@ -95,6 +101,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       url: buildDownloadUrl(bucket.name, path, downloadToken),
+      path,
     });
   } catch (error: any) {
     const { log } = await import("@/lib/server/log");

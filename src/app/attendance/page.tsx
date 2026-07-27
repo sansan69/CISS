@@ -90,6 +90,8 @@ type PublicAttendanceSitesResponse = {
 type PublicAttendanceEmployeeLookupResponse = {
   found: boolean;
   employee?: ScannedEmployee;
+  verificationToken?: string | null;
+  authenticated?: boolean;
   error?: string;
 };
 
@@ -130,7 +132,7 @@ function buildLocationAccessError(error: GeolocationPositionError) {
 
 export default function AttendancePage() {
   const router = useRouter();
-  const { user } = useAppAuth();
+  const { user, userRole } = useAppAuth();
   const [workflowStep, setWorkflowStep] = useState<'idle' | 'scanning' | 'review' | 'photo' | 'done'>('idle');
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -148,6 +150,7 @@ export default function AttendancePage() {
   const [isLoadingCenters, setIsLoadingCenters] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<'In' | 'Out'>('In');
   const [scannedEmployee, setScannedEmployee] = useState<ScannedEmployee | null>(null);
+  const [attendanceVerificationToken, setAttendanceVerificationToken] = useState<string | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
   const [hasManualCenterOverride, setHasManualCenterOverride] = useState(false);
   const [hasManualShiftOverride, setHasManualShiftOverride] = useState(false);
@@ -162,7 +165,6 @@ export default function AttendancePage() {
   const [isSubmittingAttendance, setIsSubmittingAttendance] = useState(false);
   const [manualEmployeeId, setManualEmployeeId] = useState('');
   const [manualPhone, setManualPhone] = useState('');
-  const [manualResourceId, setManualResourceId] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [siteSearchQuery, setSiteSearchQuery] = useState('');
   const [photoCapturedAt, setPhotoCapturedAt] = useState<string | null>(null);
@@ -894,33 +896,52 @@ export default function AttendancePage() {
     }
   };
 
-  const fetchEmployeeByEmployeeId = useCallback(async (empId: string, phoneNumber?: string | null) => {
-    const params = new URLSearchParams({ employeeId: empId });
-    if (phoneNumber) {
-      params.set('phoneNumber', phoneNumber);
-    }
-    const response = await fetch(
-      `/api/public/attendance/employee?${params.toString()}`,
-      {
-        cache: 'no-store',
+  const identifyGuard = useCallback(async (
+    method: 'qr' | 'phone' | 'employeeId' | 'authenticated',
+    value?: string,
+  ) => {
+    const authToken =
+      method === 'authenticated' && user ? await user.getIdToken() : null;
+    const response = await fetch('/api/public/attendance/identify', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
-    );
+      body: JSON.stringify(
+        method === 'authenticated' ? { method } : { method, value },
+      ),
+    });
     const responseBody = (await response.json().catch(() => ({}))) as PublicAttendanceEmployeeLookupResponse;
 
     if (!response.ok) {
-      throw new Error(responseBody.error || 'Could not verify employee ID.');
+      throw new Error(responseBody.error || 'Could not identify guard.');
     }
 
+    setAttendanceVerificationToken(responseBody.verificationToken ?? null);
     return responseBody.found ? responseBody.employee ?? null : null;
-  }, []);
+  }, [user]);
+
+  const fetchEmployeeByEmployeeId = useCallback(
+    (employeeId: string) => identifyGuard('employeeId', employeeId),
+    [identifyGuard],
+  );
 
   useEffect(() => {
-    const prefilledEmployeeId =
+    const query =
       typeof window === 'undefined'
-        ? ''
-        : new URLSearchParams(window.location.search).get('employeeId')?.trim() || '';
+        ? null
+        : new URLSearchParams(window.location.search);
+    const prefilledEmployeeId = query?.get('employeeId')?.trim() || '';
+    const prefilledPhoneNumber = query?.get('phoneNumber')?.trim() || '';
+    const shouldLoadAuthenticatedGuard = userRole === 'guard' && Boolean(user);
 
-    if (!prefilledEmployeeId || scannedEmployee || workflowStep !== 'idle') {
+    if (
+      (!prefilledEmployeeId && !prefilledPhoneNumber && !shouldLoadAuthenticatedGuard) ||
+      scannedEmployee ||
+      workflowStep !== 'idle'
+    ) {
       return;
     }
 
@@ -929,15 +950,20 @@ export default function AttendancePage() {
     const prefillEmployeeFromProfile = async () => {
       setIsPrefillingEmployee(true);
       setManualEmployeeId(prefilledEmployeeId);
+      setManualPhone(prefilledPhoneNumber);
 
       try {
-        const employee = await fetchEmployeeByEmployeeId(prefilledEmployeeId);
+        const employee = shouldLoadAuthenticatedGuard
+          ? await identifyGuard('authenticated')
+          : prefilledPhoneNumber
+            ? await identifyGuard('phone', prefilledPhoneNumber)
+            : await fetchEmployeeByEmployeeId(prefilledEmployeeId);
         if (!employee) {
           if (!cancelled) {
             toast({
               variant: 'destructive',
               title: 'Employee not found',
-              description: `No employee record matches ${prefilledEmployeeId}.`,
+              description: 'No active guard record matches those details.',
             });
             router.replace('/attendance', { scroll: false });
           }
@@ -947,7 +973,11 @@ export default function AttendancePage() {
         if (cancelled) return;
 
         setScannedEmployee(employee);
-        setScanResult(`Profile:${prefilledEmployeeId}`);
+        setScanResult(
+          shouldLoadAuthenticatedGuard
+            ? 'Authenticated guard account'
+            : `Profile:${prefilledEmployeeId || 'phone'}`,
+        );
         setHasScanned(true);
         setReportingStartedAt(new Date().toISOString());
         setWorkflowStep('review');
@@ -1008,11 +1038,14 @@ export default function AttendancePage() {
   }, [
     fetchEmployeeByEmployeeId,
     getDeviceLocation,
+    identifyGuard,
     isFetchingLocation,
     locationCoords,
     router,
     scannedEmployee,
     toast,
+    user,
+    userRole,
     workflowStep,
   ]);
 
@@ -1044,7 +1077,7 @@ export default function AttendancePage() {
           }
 
           try {
-            const employee = await fetchEmployeeByEmployeeId(parsedId, parsedQr.phoneNumber);
+            const employee = await identifyGuard('qr', text);
             if (employee) {
               resolveScannedEmployee(employee, text);
               return;
@@ -1068,7 +1101,7 @@ export default function AttendancePage() {
       handleScannerError(normalizeScannerError(e));
       setIsScanning(false);
     }
-  }, [fetchEmployeeByEmployeeId, handleScannerError, resolveScannedEmployee, stopScannerSession, toast]);
+  }, [handleScannerError, identifyGuard, resolveScannedEmployee, stopScannerSession, toast]);
 
   const handleRescan = async () => {
     stopScanner();
@@ -1076,6 +1109,7 @@ export default function AttendancePage() {
     setHasScanned(false);
     setScanResult(null);
     setScannedEmployee(null);
+    setAttendanceVerificationToken(null);
     setHasManualShiftOverride(false);
     setCapturedPhoto(null);
     setWatermarkedPhoto(null);
@@ -1171,7 +1205,7 @@ export default function AttendancePage() {
 
   const buildHistoryItem = useCallback((
     id: string,
-    payload: Omit<AttendanceSubmission, 'photoUrl'>,
+    payload: Omit<AttendanceSubmission, 'photoUrl' | 'photoStoragePath'>,
     photoUrl?: string,
     syncStatus: DeviceAttendanceHistoryItem['syncStatus'] = 'synced',
   ): DeviceAttendanceHistoryItem => ({
@@ -1207,26 +1241,36 @@ export default function AttendancePage() {
     return /failed to fetch|network|fetch|timeout|offline/i.test(message);
   };
 
-  const buildAttendancePhotoOwnerKey = (payload: Pick<AttendanceSubmission, 'employeeDocId' | 'employeePhoneNumber' | 'employeeId'>) => {
-    const rawOwner = payload.employeeDocId || payload.employeePhoneNumber || payload.employeeId;
-    return rawOwner.replace(/[^0-9A-Za-z_-]/g, '_') || 'unknown';
-  };
-
-  const fetchAttendanceUploadToken = useCallback(async (ownerKey: string, siteId: string) => {
+  const fetchAttendanceUploadToken = useCallback(async (
+    employeeDocId: string,
+    siteId: string,
+    attemptId: string,
+  ) => {
+    const authToken =
+      userRole === 'guard' && user ? await user.getIdToken() : null;
     const response = await fetch('/api/public/attendance/upload-token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId: ownerKey, siteId }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        employeeDocId,
+        siteId,
+        attemptId,
+        attendanceVerificationToken:
+          userRole === 'guard' ? undefined : attendanceVerificationToken,
+      }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || typeof body.uploadToken !== 'string') {
       throw new Error(body.error || 'Could not prepare attendance photo upload.');
     }
     return body.uploadToken as string;
-  }, []);
+  }, [attendanceVerificationToken, user, userRole]);
 
   const submitAttendanceOnline = useCallback(async (
-    payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'>,
+    payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl' | 'photoStoragePath'>,
     photoDataUrl: string,
   ) => {
     if (!photoDataUrl) {
@@ -1234,9 +1278,14 @@ export default function AttendancePage() {
     }
 
     const ts = Date.now();
-    const ownerKey = buildAttendancePhotoOwnerKey(payloadWithoutPhotoUrl);
-    const path = `employees/${ownerKey}/attendance/${ts}_attendance.jpg`;
-    const uploadToken = await fetchAttendanceUploadToken(ownerKey, payloadWithoutPhotoUrl.siteId);
+    const path =
+      `employees/${payloadWithoutPhotoUrl.employeeDocId}/attendance/` +
+      `${payloadWithoutPhotoUrl.attendanceAttemptId}/photo.jpg`;
+    const uploadToken = await fetchAttendanceUploadToken(
+      payloadWithoutPhotoUrl.employeeDocId,
+      payloadWithoutPhotoUrl.siteId,
+      payloadWithoutPhotoUrl.attendanceAttemptId,
+    );
 
     const uploadResponse = await withRetry(() => fetch('/api/public/attendance/upload', {
       method: 'POST',
@@ -1244,11 +1293,13 @@ export default function AttendancePage() {
       body: JSON.stringify({ path, photoDataUrl, uploadToken }),
     }));
     const uploadBody = await uploadResponse.json().catch(() => ({}));
-    if (!uploadResponse.ok || !uploadBody.url) {
+    if (!uploadResponse.ok || !uploadBody.url || !uploadBody.path) {
       throw new Error(uploadBody.error || 'Could not upload attendance photo.');
     }
     const photoUrl = uploadBody.url as string;
-    const authToken = user ? await user.getIdToken() : null;
+    const photoStoragePath = uploadBody.path as string;
+    const authToken =
+      userRole === 'guard' && user ? await user.getIdToken() : null;
 
     const response = await fetch('/api/attendance/submit', {
       method: 'POST',
@@ -1259,6 +1310,7 @@ export default function AttendancePage() {
       body: JSON.stringify({
         ...payloadWithoutPhotoUrl,
         photoUrl,
+        photoStoragePath,
       }),
     });
 
@@ -1271,6 +1323,7 @@ export default function AttendancePage() {
     if (responseBody.autoClosed) {
       return {
         photoUrl,
+        photoStoragePath,
         recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
         autoClosed: true,
         message: responseBody.message || 'Previous session was auto-closed.',
@@ -1279,9 +1332,10 @@ export default function AttendancePage() {
 
     return {
       photoUrl,
+      photoStoragePath,
       recordId: responseBody.id || `${payloadWithoutPhotoUrl.employeeId}-${ts}`,
     };
-  }, [fetchAttendanceUploadToken, user]);
+  }, [fetchAttendanceUploadToken, user, userRole]);
 
   const createClientRequestId = () => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -1453,10 +1507,11 @@ export default function AttendancePage() {
     }
 
     const mockLocationRisk = detectMockLocationRisk();
-    const latestEmployee = await fetchEmployeeByEmployeeId(
-      scannedEmployee.employeeCode || scannedEmployee.id,
-      scannedEmployee.phoneNumber,
-    ).catch(() => null);
+    const latestEmployee = userRole === 'guard'
+      ? await identifyGuard('authenticated').catch(() => null)
+      : await fetchEmployeeByEmployeeId(
+          scannedEmployee.employeeCode || scannedEmployee.id,
+        ).catch(() => null);
     if (latestEmployee) {
       setScannedEmployee(latestEmployee);
       if (selectedStatus === 'Out' && latestEmployee.attendanceHint?.lastStatus !== 'In') {
@@ -1478,11 +1533,16 @@ export default function AttendancePage() {
       }
     }
 
-    const payloadWithoutPhotoUrl: Omit<AttendanceSubmission, 'photoUrl'> = {
+    const attendanceAttemptId = createClientRequestId();
+    const payloadWithoutPhotoUrl: Omit<
+      AttendanceSubmission,
+      'photoUrl' | 'photoStoragePath'
+    > = {
       employeeId: (latestEmployee ?? scannedEmployee).employeeCode || (latestEmployee ?? scannedEmployee).id,
       employeeDocId: (latestEmployee ?? scannedEmployee).id,
       employeeName: (latestEmployee ?? scannedEmployee).fullName,
       reportedAtClient: reportingStartedAt || new Date().toISOString(),
+      locationCapturedAt: locationCapturedAt!,
       employeePhoneNumber: (latestEmployee ?? scannedEmployee).phoneNumber,
       employeeClientName: (latestEmployee ?? scannedEmployee).clientName,
       status: selectedStatus,
@@ -1511,7 +1571,10 @@ export default function AttendancePage() {
       photoCapturedAt: photoCapturedAt || new Date().toISOString(),
       photoCompliance: photoCompliance ?? undefined,
       deviceInfo: { userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown' },
-      clientRequestId: createClientRequestId(),
+      clientRequestId: attendanceAttemptId,
+      attendanceAttemptId,
+      attendanceVerificationToken:
+        userRole === 'guard' ? undefined : attendanceVerificationToken ?? undefined,
     };
 
     setIsSubmittingAttendance(true);
@@ -1616,6 +1679,7 @@ export default function AttendancePage() {
         setHasManualShiftOverride(false);
       }
       setScannedEmployee(null);
+      setAttendanceVerificationToken(null);
       setHasScanned(false);
       setIsScanning(false);
       setIsTakingPhoto(false);
@@ -1624,7 +1688,20 @@ export default function AttendancePage() {
   };
 
   const isLoading = isFetchingLocation || isTakingPhoto || isScanning || isWatermarking;
-  const canSubmit = isSelectionComplete && !!scannedEmployee && !!capturedPhoto && !isTakingPhoto && !isScanning && !isWatermarking;
+  const hasGuardIdentityProof =
+    userRole === 'guard'
+      ? Boolean(user)
+      : Boolean(attendanceVerificationToken);
+  const canSubmit =
+    isSelectionComplete &&
+    !!scannedEmployee &&
+    hasGuardIdentityProof &&
+    !!locationCoords &&
+    !!locationCapturedAt &&
+    !!capturedPhoto &&
+    !isTakingPhoto &&
+    !isScanning &&
+    !isWatermarking;
   const verificationStarted = workflowStep !== 'idle';
   const selectedSiteDistance = selectedSite && locationCoords && typeof selectedSite.lat === 'number' && typeof selectedSite.lng === 'number'
     ? haversineDistanceMeters(locationCoords.lat, locationCoords.lon, selectedSite.lat, selectedSite.lng)
@@ -1742,7 +1819,7 @@ export default function AttendancePage() {
 
             <Accordion type="single" collapsible className="rounded-2xl border px-4">
               <AccordionItem value="manual-id" className="border-none">
-                <AccordionTrigger>QR not working? Use employee ID / phone / resource ID</AccordionTrigger>
+                <AccordionTrigger>QR not working? Use employee ID or phone</AccordionTrigger>
                 <AccordionContent>
                   <div className="grid gap-3 pb-1">
                     <Input placeholder="Employee ID (e.g. CISS/TCS/...)" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
@@ -1752,41 +1829,31 @@ export default function AttendancePage() {
                       <div className="h-px flex-1 bg-border" />
                     </div>
                     <Input placeholder="Phone number (10 digits)" value={manualPhone} onChange={(e) => setManualPhone(e.target.value)} type="tel" maxLength={10} />
-                    <div className="flex items-center gap-2">
-                      <div className="h-px flex-1 bg-border" />
-                      <span className="text-xs text-muted-foreground">OR</span>
-                      <div className="h-px flex-1 bg-border" />
-                    </div>
-                    <Input placeholder="Resource ID" value={manualResourceId} onChange={(e) => setManualResourceId(e.target.value)} />
                     <Button
                       variant="outline"
                       onClick={async () => {
                         const id = manualEmployeeId.trim();
                         const phone = manualPhone.trim();
-                        const rid = manualResourceId.trim();
-                        if (!id && !phone && !rid) {
-                          toast({ variant: 'destructive', title: 'Enter an employee ID, phone number, or resource ID' });
+                        if (!id && !phone) {
+                          toast({ variant: 'destructive', title: 'Enter an employee ID or phone number' });
                           return;
                         }
-                        const params = new URLSearchParams();
-                        if (id) params.set('employeeId', id);
-                        if (phone) params.set('phoneNumber', phone);
-                        if (rid) params.set('resourceId', rid);
                         setLookupLoading(true);
                         try {
-                          const res = await fetch(`/api/public/attendance/employee?${params.toString()}`);
-                          const data = await res.json();
-                          if (data.found && data.employee) {
-                            resolveScannedEmployee(data.employee, `Manual:${id || phone || rid}`);
+                          const employee = phone
+                            ? await identifyGuard('phone', phone)
+                            : await identifyGuard('employeeId', id);
+                          if (employee) {
+                            resolveScannedEmployee(employee, `Manual:${id || phone}`);
                             if (!locationCoords && !isFetchingLocation) {
                               setIsFetchingLocation(true);
                               void getDeviceLocation().catch((error: any) => setLocationError(error.message || 'Location could not be captured.'));
                             }
                           } else {
-                            toast({ variant: 'destructive', title: 'Not found', description: data.error || 'No employee found with that information.' });
+                            toast({ variant: 'destructive', title: 'Not found', description: 'No active guard was found with that information.' });
                           }
-                        } catch {
-                          toast({ variant: 'destructive', title: 'Lookup failed', description: 'Could not verify information. Try again.' });
+                        } catch (error: any) {
+                          toast({ variant: 'destructive', title: 'Lookup failed', description: error?.message || 'Could not verify information. Try again.' });
                         } finally {
                           setLookupLoading(false);
                         }

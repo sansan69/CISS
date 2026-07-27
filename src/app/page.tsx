@@ -232,7 +232,7 @@ export default function LandingPage() {
 
       if (data.found && data.employeeId) {
         toast({ title: "Welcome!", description: "Opening attendance..." });
-        router.push(`/attendance?employeeId=${encodeURIComponent(data.employeeId)}`);
+        router.push(`/attendance?phoneNumber=${encodeURIComponent(normalizedPhone)}`);
       } else {
         toast({ title: "New User", description: "Redirecting to enrollment form." });
         if (typeof window !== "undefined") {
@@ -261,7 +261,10 @@ export default function LandingPage() {
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-5 py-4 sm:px-6 lg:px-8 lg:py-8">
 
         {/* Mobile hero */}
-        <section className="flex flex-col gap-4 py-5 lg:hidden animate-slide-up">
+        <section
+          data-mobile-section="header"
+          className="flex flex-col gap-4 py-5 lg:hidden animate-slide-up"
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
               <Image src="/ciss-logo.png" alt="CISS Workforce Logo" width={32} height={32} priority className="h-8 w-8" />
@@ -408,7 +411,10 @@ export default function LandingPage() {
             </section>
 
             {/* Secondary links */}
-            <div className="flex flex-col items-center gap-3 text-sm animate-slide-up stagger-2">
+            <div
+              data-mobile-section="quick-access"
+              className="flex flex-col items-center gap-3 text-sm animate-slide-up stagger-2"
+            >
               <Link
                 href="/enroll"
                 className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"

@@ -7,6 +7,8 @@ import {
   canRecordOut,
   isSessionStale,
   computeAutoCheckoutTime,
+  computeShiftInterval,
+  resolveShiftOperationalDate,
 } from "./attendance-validation";
 
 describe("canRecordNextDayCheckout", () => {
@@ -119,7 +121,7 @@ describe("resolveAttendanceSubmissionWindow", () => {
     });
   });
 
-  it("does not rewrite a stale non-overnight checkout to the previous IN date", () => {
+  it("closes a non-overnight open session using its original operational date", () => {
     expect(
       resolveAttendanceSubmissionWindow({
         attendanceDate: "2026-05-21",
@@ -138,7 +140,7 @@ describe("resolveAttendanceSubmissionWindow", () => {
         },
       }),
     ).toEqual({
-      attendanceDate: "2026-05-21",
+      attendanceDate: "2026-05-20",
       openSessionId: "session-1",
       closingOpenSession: true,
       contextChanged: false,
@@ -179,7 +181,7 @@ describe("computeAutoCheckoutTime", () => {
       shift: { code: "day", crossesMidnight: false, startTime: "08:00", endTime: "20:00", hours: 12 },
       bufferMinutes: 120,
     });
-    expect(time).toBe("2026-05-20T22:00:00.000Z");
+    expect(time).toBe("2026-05-20T16:30:00.000Z");
   });
 
   it("computes auto-checkout for night shift ending at 08:00 next day with 2h buffer", () => {
@@ -188,7 +190,7 @@ describe("computeAutoCheckoutTime", () => {
       shift: { code: "night", crossesMidnight: true, startTime: "20:00", endTime: "08:00", hours: 12 },
       bufferMinutes: 120,
     });
-    expect(time).toBe("2026-05-21T10:00:00.000Z");
+    expect(time).toBe("2026-05-21T04:30:00.000Z");
   });
 
   it("returns null when shift info is missing", () => {
@@ -197,6 +199,57 @@ describe("computeAutoCheckoutTime", () => {
       shift: null,
     });
     expect(time).toBeNull();
+  });
+});
+
+describe("overnight shift intervals", () => {
+  it("builds third shift across midnight in Asia/Kolkata", () => {
+    expect(
+      computeShiftInterval({
+        operationalDate: "2026-07-27",
+        shift: {
+          code: "night",
+          startTime: "22:00",
+          endTime: "06:00",
+        },
+        bufferMinutes: 120,
+      }),
+    ).toMatchObject({
+      operationalDate: "2026-07-27",
+      crossesMidnight: true,
+      shiftStartsAt: "2026-07-27T16:30:00.000Z",
+      shiftEndsAt: "2026-07-28T00:30:00.000Z",
+      autoCheckoutAt: "2026-07-28T02:30:00.000Z",
+    });
+  });
+
+  it("assigns an early-morning night punch to the previous operational date", () => {
+    expect(
+      resolveShiftOperationalDate({
+        punchAt: new Date("2026-07-27T19:30:00.000Z"),
+        shift: {
+          code: "night",
+          startTime: "22:00",
+          endTime: "06:00",
+        },
+        status: "In",
+      }),
+    ).toBe("2026-07-27");
+  });
+
+  it("keeps OUT on the open session operational date", () => {
+    expect(
+      resolveShiftOperationalDate({
+        punchAt: new Date("2026-07-28T10:00:00.000Z"),
+        shift: {
+          code: "day",
+          startTime: "06:00",
+          endTime: "14:00",
+        },
+        status: "Out",
+        openSessionOperationalDate: "2026-07-27",
+      }),
+    ).toBe("2026-07-27");
   });
 });
 
@@ -290,7 +343,7 @@ describe("canRecordIn", () => {
     expect(result.action).toBe("block");
   });
 
-  it("allows IN at different site even with open session", () => {
+  it("blocks IN at a different site while another session is open", () => {
     const result = canRecordIn({
       lastState: {
         lastStatus: "In",
@@ -303,8 +356,8 @@ describe("canRecordIn", () => {
       shift: { code: "day" },
       employeeDocId: "emp-1",
     });
-    expect(result.ok).toBe(true);
-    expect(result.action).toBe("allow");
+    expect(result.ok).toBe(false);
+    expect(result.action).toBe("block");
   });
 
   it("auto-closes stale session from previous date", () => {
@@ -384,7 +437,7 @@ describe("canRecordOut", () => {
     expect(result.action).toBe("allow");
   });
 
-  it("auto-closes stale session on late OUT attempt", () => {
+  it("allows a late OUT to close the exact open session", () => {
     const result = canRecordOut({
       lastState: {
         lastStatus: "In",
@@ -398,6 +451,6 @@ describe("canRecordOut", () => {
       shift: { code: "day" },
     });
     expect(result.ok).toBe(true);
-    expect(result.action).toBe("autoCloseStale");
+    expect(result.action).toBe("allow");
   });
 });

@@ -68,6 +68,12 @@ const moduleMocks: Record<string, unknown> = {
     __esModule: true,
     Input: (props: Record<string, unknown>) => React.createElement("input", props),
   },
+  "@/lib/qr/employee-qr": {
+    parseEmployeeIdFromQrText: () => null,
+  },
+  "@/components/qr-scanner-dialog": {
+    QrScannerDialog: () => null,
+  },
 };
 
 let cachedLandingPage: React.ComponentType | null = null;
@@ -164,11 +170,11 @@ describe("landing page surface", () => {
     const quickAccessSectionIndex = indexOfAttribute(html, 'data-mobile-section="quick-access"');
     const brandIndex = indexOfText(textContent, "CISS Workforce");
     const descriptorIndex = indexOfText(textContent, "Security workforce management platform");
-    const verificationIntroIndex = indexOfText(textContent, "Enter mobile number.");
+    const verificationIntroIndex = indexOfText(textContent, "Enter phone or scan QR.");
     const mobileLabelIndex = indexOfText(textContent, "Mobile number");
-    const verifyButtonIndex = indexOfText(textContent, "Verify Employee");
-    const quickAccessIndex = indexOfText(textContent, "Quick access");
-    const attendanceIndex = indexOfText(textContent, "Record Attendance");
+    const verifyButtonIndex = indexOfText(textContent, "Continue");
+    const quickAccessIndex = indexOfText(textContent, "New guard?");
+    const attendanceIndex = indexOfText(textContent, "Guard Portal");
 
     expect(brandIndex).toBeLessThan(descriptorIndex);
     expect(shellIndex).toBeLessThan(headerSectionIndex);
@@ -183,9 +189,9 @@ describe("landing page surface", () => {
 
     expect(textContent).toContain("CISS Workforce");
     expect(textContent).toContain("Security workforce management platform");
-    expect(textContent).toContain("Enter mobile number.");
+    expect(textContent).toContain("Enter phone or scan QR.");
     expect(textContent).toContain("Fast mobile verification for daily workforce access.");
-    expect(hrefs).toEqual(expect.arrayContaining(["/attendance", "/guard-login", "/admin-login"]));
+    expect(hrefs).toEqual(expect.arrayContaining(["/enroll", "/guard-login", "/admin-login"]));
     expect(images).toEqual(
       expect.arrayContaining([{ alt: "CISS Workforce Logo", src: "/ciss-logo.png" }]),
     );

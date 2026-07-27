@@ -93,7 +93,25 @@ export async function GET(request: Request) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const profile = await getFieldOfficerProfile(adminDb, decoded);
     const assignedDistricts = profile.assignedDistricts;
+    const isAdmin = hasAdminAccess(decoded);
+    if (!isAdmin && assignedDistricts.length === 0) {
+      return unauthorizedResponse(
+        "No districts are assigned to this field officer.",
+        403,
+      );
+    }
     const todayKey = INDIA_DATE_FORMATTER.format(new Date());
+    let attendanceQuery: FirebaseFirestore.Query = adminDb
+      .collection("attendanceLogs")
+      .where("attendanceDate", "==", todayKey);
+    if (!isAdmin) {
+      attendanceQuery = attendanceQuery.where(
+        "district",
+        "in",
+        assignedDistricts.slice(0, 30),
+      );
+    }
+    attendanceQuery = attendanceQuery.orderBy("reportedAt", "desc").limit(2000);
 
     const [
       employeesSnap,
@@ -118,11 +136,7 @@ export async function GET(request: Request) {
         .where("fieldOfficerId", "==", decoded.uid)
         .limit(50)
         .get(),
-      adminDb
-        .collection("attendanceLogs")
-        .where("attendanceDate", "==", todayKey)
-        .limit(1000)
-        .get(),
+      attendanceQuery.get(),
     ]);
 
     const employees = employeesSnap.docs
@@ -134,7 +148,7 @@ export async function GET(request: Request) {
           }) as Record<string, unknown> & { id: string },
       )
       .filter((employee) => {
-        if (assignedDistricts.length === 0) return true;
+        if (isAdmin) return true;
         return employeeMatchesAnyDistrict(employee, assignedDistricts);
       });
 
@@ -147,7 +161,7 @@ export async function GET(request: Request) {
           }) as Record<string, unknown> & { id: string },
       )
       .filter((row) => {
-        if (assignedDistricts.length === 0) return true;
+        if (isAdmin) return true;
         return assignedDistricts.some((district) =>
           districtMatches(district, String(row.district ?? "")),
         );
@@ -190,7 +204,7 @@ export async function GET(request: Request) {
         ...(doc.data() as Record<string, unknown>),
       }))
       .filter((log) => {
-        if (assignedDistricts.length === 0) return true;
+        if (isAdmin) return true;
         return assignedDistricts.some((district) =>
           districtMatches(district, normalizeText(log.district)),
         );
@@ -211,15 +225,15 @@ export async function GET(request: Request) {
       const previous = latestByEmployee.get(employeeKey);
       const previousMs = previous
         ? new Date(
-            serializeDate(previous.createdAt) ||
-              serializeDate(previous.reportedAt) ||
+            serializeDate(previous.reportedAt) ||
+              serializeDate(previous.createdAt) ||
               serializeDate(previous.reportedAtClient) ||
               0,
           ).getTime()
         : 0;
       const currentMs = new Date(
-        serializeDate(log.createdAt) ||
-          serializeDate(log.reportedAt) ||
+        serializeDate(log.reportedAt) ||
+          serializeDate(log.createdAt) ||
           serializeDate(log.reportedAtClient) ||
           0,
       ).getTime();

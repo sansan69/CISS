@@ -28,8 +28,9 @@ import {
 import {
   canRecordIn,
   canRecordOut,
-  computeAutoCheckoutTime,
+  computeShiftInterval,
   resolveAttendanceSubmissionWindow,
+  resolveShiftOperationalDate,
 } from "@/lib/attendance/attendance-validation";
 import { isAssignedGuardMatch } from "../../../../lib/work-orders/assignment-match";
 import type { AppDecodedToken } from "@/lib/server/auth";
@@ -38,7 +39,7 @@ import {
   buildRateLimitKey,
   getClientIp,
 } from "@/lib/server/rate-limit";
-import { verifyQrToken } from "@/lib/qr/qr-token";
+import { verifyAttendanceVerificationToken } from "@/lib/server/attendance-verification-token";
 
 export const runtime = "nodejs";
 
@@ -273,7 +274,7 @@ async function findDuplicateSubmission(
   const snap = await adminDb
     .collection("attendanceLogs")
     .where("processedClientRequestId", "==", clientRequestId)
-    .limit(5)
+    .limit(10)
     .get();
 
   if (snap.empty) return null;
@@ -315,17 +316,29 @@ export async function POST(request: NextRequest) {
 
     const payload = attendanceSubmissionSchema.parse(await request.json());
 
-    // ── 2. Auth requirement ──────────────────────────────────────────────────
-    // Unauthenticated submissions must have a QR token for traceability.
-    const hasQrToken = !!payload.qrToken;
-    if (!isAuthenticated && !hasQrToken) {
-      return NextResponse.json(
-        { error: "Authentication required. Please sign in or use a valid QR token." },
-        { status: 401 },
-      );
-    }
+    // ── 2. Guard identity ─────────────────────────────────────────────────────
+    // Logged-in guards are bound to their own employee record. Public callers
+    // must present the short-lived identity proof issued after QR/phone/ID lookup.
     if (isAuthenticated) {
       await verifyCallerOwnership(decoded, payload.employeeDocId);
+    } else {
+      const verification = payload.attendanceVerificationToken
+        ? verifyAttendanceVerificationToken(
+            payload.attendanceVerificationToken,
+          )
+        : null;
+      if (
+        !verification ||
+        verification.employeeDocId !== payload.employeeDocId
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Guard identification has expired or is invalid. Identify the guard again.",
+          },
+          { status: 401 },
+        );
+      }
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
@@ -350,18 +363,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 4. QR token validation (if provided) ──────────────────────────────
-    if (payload.qrToken && payload.employeePhoneNumber) {
-      const tokenValid = await verifyQrToken(
-        payload.employeeId,
-        payload.employeePhoneNumber,
-        payload.qrToken,
-      );
-      if (!tokenValid) {
-        throw new AttendanceError("Invalid QR code. The code may be tampered with or expired.");
-      }
-    }
-
     const reportedAt = payload.reportedAtClient
       ? Timestamp.fromDate(new Date(payload.reportedAtClient))
       : now;
@@ -371,6 +372,39 @@ export async function POST(request: NextRequest) {
     if (Date.now() - reportedAtDate.getTime() > oldestAllowedMs) {
       throw new AttendanceError(
         `Queued attendance older than ${OFFLINE_ATTENDANCE_MAX_AGE_HOURS} hours cannot be submitted. Please record a fresh attendance entry.`,
+      );
+    }
+    const locationCapturedAtDate = new Date(payload.locationCapturedAt);
+    const photoCapturedAtDate = new Date(payload.photoCapturedAt);
+    const futureToleranceMs = 5 * 60 * 1000;
+    const captureWindowMs = 30 * 60 * 1000;
+    if (
+      locationCapturedAtDate.getTime() > serverNow.getTime() + futureToleranceMs ||
+      photoCapturedAtDate.getTime() > serverNow.getTime() + futureToleranceMs
+    ) {
+      throw new AttendanceError(
+        "The device time is incorrect. Set the device clock automatically and try again.",
+      );
+    }
+    if (
+      Math.abs(locationCapturedAtDate.getTime() - reportedAtDate.getTime()) >
+        captureWindowMs ||
+      Math.abs(photoCapturedAtDate.getTime() - reportedAtDate.getTime()) >
+        captureWindowMs
+    ) {
+      throw new AttendanceError(
+        "Location and photo must be captured during the current attendance attempt.",
+      );
+    }
+    const expectedPhotoStoragePath =
+      `employees/${payload.employeeDocId}/attendance/` +
+      `${payload.attendanceAttemptId}/photo.jpg`;
+    if (
+      payload.photoStoragePath !== expectedPhotoStoragePath ||
+      !payload.photoUrl.includes(encodeURIComponent(expectedPhotoStoragePath))
+    ) {
+      throw new AttendanceError(
+        "Attendance photo does not belong to this attendance attempt.",
       );
     }
     const submittedAttendanceDate = INDIA_DATE_FORMATTER.format(reportedAtDate);
@@ -386,16 +420,25 @@ export async function POST(request: NextRequest) {
     const attendanceStateRef = adminDb
       .collection("attendanceState")
       .doc(payload.employeeDocId);
-    const attendanceLogRef = adminDb.collection("attendanceLogs").doc();
-    let guardLocationWrite: GuardLocationWrite | null = null;
-    let staleOutAutoCloseResult: { id: string; staleDate: string } | null = null;
+    const attendanceLogsCollection = adminDb.collection("attendanceLogs");
+    const attendanceLogRef = payload.clientRequestId
+      ? attendanceLogsCollection.doc(payload.clientRequestId)
+      : attendanceLogsCollection.doc();
+    let transactionDuplicateId: string | null = null;
 
     await adminDb.runTransaction(async (transaction) => {
-      const [employeeSnap, siteSnap, stateSnap] = await Promise.all([
+      const [employeeSnap, siteSnap, stateSnap, existingLogSnap] =
+        await Promise.all([
         transaction.get(employeeRef),
         transaction.get(siteRef),
         transaction.get(attendanceStateRef),
+        transaction.get(attendanceLogRef),
       ]);
+
+      if (existingLogSnap.exists) {
+        transactionDuplicateId = attendanceLogRef.id;
+        return;
+      }
 
       if (!employeeSnap.exists) {
         throw new AttendanceError("Employee record not found. Please verify your ID and try again.");
@@ -467,7 +510,7 @@ export async function POST(request: NextRequest) {
         activeShiftSource.shiftTemplates,
         payload.shiftCode,
       );
-      const effectiveShift = selectedShift ?? resolvedShift;
+      const effectiveShift = resolvedShift ?? selectedShift;
       const nextShift = getNextShift(
         activeShiftSource.shiftMode,
         activeShiftSource.shiftTemplates,
@@ -487,8 +530,18 @@ export async function POST(request: NextRequest) {
       const selectedShiftLabel = effectiveShift?.label ?? payload.shiftLabel ?? null;
       const selectedShiftStartTime = effectiveShift?.startTime ?? payload.shiftStartTime ?? null;
       const selectedShiftEndTime = effectiveShift?.endTime ?? payload.shiftEndTime ?? null;
+      const resolvedOperationalDate = resolveShiftOperationalDate({
+        punchAt: reportedAtDate,
+        shift: effectiveShift,
+        status: payload.status,
+        openSessionOperationalDate:
+          lastState?.lastStatus === "In"
+            ? lastState.lastAttendanceDate ?? null
+            : null,
+      });
       const submissionWindow = resolveAttendanceSubmissionWindow({
-        attendanceDate: submittedAttendanceDate,
+        attendanceDate:
+          effectiveShift ? resolvedOperationalDate : submittedAttendanceDate,
         status: payload.status,
         siteId: payload.siteId,
         dutyPointId: selectedDutyPointId,
@@ -497,6 +550,10 @@ export async function POST(request: NextRequest) {
         lastState,
       });
       const attendanceDate = submissionWindow.attendanceDate;
+      const shiftInterval = computeShiftInterval({
+        operationalDate: attendanceDate,
+        shift: effectiveShift,
+      });
       let workOrderReviewWarning: string | null = null;
 
       if (isTcsSite) {
@@ -614,7 +671,6 @@ export async function POST(request: NextRequest) {
 
       // ── State machine validation using canRecordIn / canRecordOut ────────────
       let staleSessionAutoClosed = false;
-      let staleOutAutoClosed = false;
 
       if (payload.status === "In") {
         const inCheck = canRecordIn({
@@ -646,9 +702,6 @@ export async function POST(request: NextRequest) {
           throw new AttendanceError(outCheck.reason || "Cannot record OUT at this time.");
         }
 
-        if (outCheck.action === "autoCloseStale" && lastState) {
-          staleOutAutoClosed = true;
-        }
       }
 
       const isMockLocationSuspected =
@@ -677,23 +730,52 @@ export async function POST(request: NextRequest) {
       if (staleSessionAutoClosed && lastState) {
         const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
         const staleDate = lastState.lastAttendanceDate ?? INDIA_DATE_FORMATTER.format(new Date());
+        const shiftEndsAtValue = lastState.shiftEndsAt as
+          | { toDate?: () => Date; seconds?: number }
+          | string
+          | undefined;
+        const scheduledEndCandidate =
+          typeof shiftEndsAtValue === "object" &&
+          typeof shiftEndsAtValue?.toDate === "function"
+            ? shiftEndsAtValue.toDate()
+            : typeof shiftEndsAtValue === "object" &&
+                typeof shiftEndsAtValue?.seconds === "number"
+              ? new Date(shiftEndsAtValue.seconds * 1000)
+              : typeof shiftEndsAtValue === "string"
+                ? new Date(shiftEndsAtValue)
+                : null;
+        const scheduledEndDate =
+          scheduledEndCandidate &&
+          !Number.isNaN(scheduledEndCandidate.getTime())
+            ? scheduledEndCandidate
+            : reportedAtDate;
+        const scheduledEnd = Timestamp.fromDate(scheduledEndDate);
         transaction.set(staleOutLogRef, {
-          employeeId: payload.employeeId,
+          employeeId: lastState.employeeId ?? payload.employeeId,
           employeeDocId: payload.employeeDocId,
-          employeeName: payload.employeeName,
+          employeeName: lastState.employeeName ?? buildGuardName(employeeData, payload.employeeId),
           status: "Out",
           attendanceDate: staleDate,
           siteId: lastState.lastSiteId ?? payload.siteId,
-          siteName: payload.siteName,
+          siteName: lastState.lastSiteName ?? "",
+          dutyPointId: lastState.lastDutyPointId ?? null,
+          dutyPointName: lastState.lastDutyPointName ?? null,
           clientName: lastState.lastSiteClientName ?? siteClientName,
+          employeeClientName: lastState.employeeClientName ?? employeeClientName,
+          siteClientName: lastState.lastSiteClientName ?? siteClientName,
+          shiftCode: lastState.lastShiftCode ?? null,
+          shiftLabel: lastState.lastShiftLabel ?? null,
+          attendanceSessionId: lastState.openSessionId ?? null,
           autoClosed: true,
+          closeReason: "missed_checkout",
+          requiresAdminReview: true,
           autoClosedReason:
             "Previous IN session from " +
             staleDate +
             " was never checked out. Auto-closed by new IN on " +
             submittedAttendanceDate +
             ".",
-          reportedAt: now,
+          reportedAt: scheduledEnd,
           serverProcessedAt: now,
           createdAt: now,
           attendanceReviewWarnings: [
@@ -708,8 +790,10 @@ export async function POST(request: NextRequest) {
             {
               status: "closed",
               outLogId: staleOutLogRef.id,
-              endedAt: now,
+              endedAt: scheduledEnd,
               autoClosed: true,
+              closeReason: "missed_checkout",
+              requiresAdminReview: true,
               autoClosedReason: "Auto-closed by new IN on " + submittedAttendanceDate,
               updatedAt: now,
             },
@@ -719,67 +803,6 @@ export async function POST(request: NextRequest) {
         attendanceReviewWarnings.push(
           "Previous session from " + staleDate + " was auto-closed (no OUT was recorded).",
         );
-      }
-
-      // Auto-close stale session via OUT attempt
-      if (staleOutAutoClosed && lastState) {
-        const staleOutLogRef = adminDb.collection("attendanceLogs").doc();
-        const staleDate = lastState.lastAttendanceDate ?? INDIA_DATE_FORMATTER.format(new Date());
-        transaction.set(staleOutLogRef, {
-          employeeId: payload.employeeId,
-          employeeDocId: payload.employeeDocId,
-          employeeName: payload.employeeName,
-          status: "Out",
-          attendanceDate: staleDate,
-          siteId: lastState.lastSiteId ?? payload.siteId,
-          siteName: payload.siteName,
-          clientName: lastState.lastSiteClientName ?? siteClientName,
-          autoClosed: true,
-          autoClosedReason:
-            "Previous IN session from " +
-            staleDate +
-            " was never checked out. Auto-closed by OUT attempt on " +
-            submittedAttendanceDate +
-            ".",
-          reportedAt: now,
-          serverProcessedAt: now,
-          createdAt: now,
-          attendanceReviewWarnings: [
-            "Auto-closed stale session from " + staleDate + " (guard attempted late OUT).",
-          ],
-        });
-        if (lastState.openSessionId) {
-          transaction.set(
-            adminDb
-              .collection("attendanceSessions")
-              .doc(String(lastState.openSessionId)),
-            {
-              status: "closed",
-              outLogId: staleOutLogRef.id,
-              endedAt: now,
-              autoClosed: true,
-              autoClosedReason:
-                "Auto-closed by OUT attempt on " + submittedAttendanceDate,
-              updatedAt: now,
-            },
-            { merge: true },
-          );
-        }
-        transaction.set(
-          attendanceStateRef,
-          {
-            lastStatus: "Out",
-            lastAttendanceDate: staleDate,
-            lastAttendanceId: staleOutLogRef.id,
-            openSessionId: FieldValue.delete(),
-            openSessionStartedAt: FieldValue.delete(),
-            lastLoggedAt: now,
-            updatedAt: now,
-          },
-          { merge: true },
-        );
-        staleOutAutoCloseResult = { id: staleOutLogRef.id, staleDate };
-        return;
       }
 
       const attendanceSessionId =
@@ -812,11 +835,18 @@ export async function POST(request: NextRequest) {
         shiftLabel: selectedShiftLabel,
         shiftStartTime: selectedShiftStartTime,
         shiftEndTime: selectedShiftEndTime,
+        shiftStartsAt: shiftInterval
+          ? Timestamp.fromDate(new Date(shiftInterval.shiftStartsAt))
+          : null,
+        shiftEndsAt: shiftInterval
+          ? Timestamp.fromDate(new Date(shiftInterval.shiftEndsAt))
+          : null,
         nextShiftCode: payload.nextShiftCode ?? nextShift?.code ?? null,
         nextShiftStartsAt: payload.nextShiftStartsAt ?? nextShift?.startTime ?? null,
         siteCoords,
         locationText: payload.locationText,
         locationCoords: payload.locationCoords,
+        locationCapturedAt: Timestamp.fromDate(locationCapturedAtDate),
         distanceMeters: Math.round(actualDistance),
         gpsAccuracyMeters:
           typeof gpsAccuracyMeters === "number" ? Math.round(gpsAccuracyMeters) : null,
@@ -841,7 +871,8 @@ export async function POST(request: NextRequest) {
           (typeof payload.photoCompliance?.adminFlag === "boolean" && payload.photoCompliance.adminFlag) ||
           Boolean(payload.overrideReason),
         photoUrl: payload.photoUrl,
-        photoCapturedAt: payload.photoCapturedAt ?? null,
+        photoStoragePath: payload.photoStoragePath,
+        photoCapturedAt: Timestamp.fromDate(photoCapturedAtDate),
         photoCompliance: locationReviewWarning
           ? mergePhotoCompliance(payload.photoCompliance, locationReviewWarning)
           : payload.photoCompliance ?? null,
@@ -852,6 +883,7 @@ export async function POST(request: NextRequest) {
         submittedByRole: decoded?.role ?? null,
         // Robustness fields
         processedClientRequestId: payload.clientRequestId ?? null,
+        attendanceAttemptId: payload.attendanceAttemptId,
         overrideReason: payload.overrideReason ?? null,
         qrToken: payload.qrToken ?? null,
         auditTrail: [
@@ -888,6 +920,15 @@ export async function POST(request: NextRequest) {
           shiftLabel: selectedShiftLabel,
           shiftStartTime: selectedShiftStartTime,
           shiftEndTime: selectedShiftEndTime,
+          shiftStartsAt: shiftInterval
+            ? Timestamp.fromDate(new Date(shiftInterval.shiftStartsAt))
+            : null,
+          shiftEndsAt: shiftInterval
+            ? Timestamp.fromDate(new Date(shiftInterval.shiftEndsAt))
+            : null,
+          autoCheckoutAt: shiftInterval
+            ? Timestamp.fromDate(new Date(shiftInterval.autoCheckoutAt))
+            : null,
           inLogId: attendanceLogRef.id,
           startedAt: reportedAt,
           createdAt: now,
@@ -911,24 +952,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Compute auto-checkout time for IN punches so stale sessions can be detected
-      const autoCheckoutAt =
-        payload.status === "In" && effectiveShift
-          ? computeAutoCheckoutTime({
-              sessionStartDate: attendanceDate,
-              shift: effectiveShift,
-            })
-          : null;
-
       transaction.set(
         attendanceStateRef,
         {
           employeeDocId: payload.employeeDocId,
+          employeeId: payload.employeeId,
           employeeName: payload.employeeName,
           lastStatus: payload.status,
           lastSiteId: payload.siteId,
+          lastSiteName: String(siteData.siteName || payload.siteName || "").trim(),
           lastDutyPointId: selectedDutyPointId,
+          lastDutyPointName: selectedDutyPointName,
           lastShiftCode: selectedShiftCode,
+          lastShiftLabel: selectedShiftLabel,
+          shiftStartsAt:
+            payload.status === "In" && shiftInterval
+              ? Timestamp.fromDate(new Date(shiftInterval.shiftStartsAt))
+              : FieldValue.delete(),
+          shiftEndsAt:
+            payload.status === "In" && shiftInterval
+              ? Timestamp.fromDate(new Date(shiftInterval.shiftEndsAt))
+              : FieldValue.delete(),
           employeeClientName,
           lastSiteClientName: siteClientName,
           lastCrossClientRelief: crossClientRelief,
@@ -936,14 +980,17 @@ export async function POST(request: NextRequest) {
           lastAttendanceId: attendanceLogRef.id,
           openSessionId: payload.status === "In" ? attendanceLogRef.id : FieldValue.delete(),
           openSessionStartedAt: payload.status === "In" ? reportedAt : FieldValue.delete(),
-          autoCheckoutAt: payload.status === "In" && autoCheckoutAt ? autoCheckoutAt : FieldValue.delete(),
+          autoCheckoutAt:
+            payload.status === "In" && shiftInterval
+              ? Timestamp.fromDate(new Date(shiftInterval.autoCheckoutAt))
+              : FieldValue.delete(),
           lastLoggedAt: now,
           updatedAt: now,
         },
         { merge: true },
       );
 
-      guardLocationWrite = {
+      const liveLocationWrite: GuardLocationWrite = {
         employeeId: payload.employeeId,
         employeeDocId: payload.employeeDocId,
         guardName: buildGuardName(employeeData, payload.employeeId),
@@ -967,51 +1014,42 @@ export async function POST(request: NextRequest) {
         geofenceRadius: effectiveRadiusMeters,
         attendanceId: attendanceLogRef.id,
       };
+      transaction.set(
+        adminDb
+          .collection("guardLocations")
+          .doc(liveLocationWrite.employeeDocId),
+        {
+          employeeDocId: liveLocationWrite.employeeDocId,
+          employeeId: liveLocationWrite.employeeId,
+          guardName: liveLocationWrite.guardName,
+          siteId: liveLocationWrite.siteId,
+          siteName: liveLocationWrite.siteName,
+          clientName: liveLocationWrite.clientName,
+          employeeClientName: liveLocationWrite.employeeClientName,
+          siteClientName: liveLocationWrite.siteClientName,
+          crossClientRelief: liveLocationWrite.crossClientRelief,
+          district: liveLocationWrite.district,
+          lat: liveLocationWrite.lat,
+          lng: liveLocationWrite.lng,
+          accuracy: liveLocationWrite.accuracy,
+          isOutOfZone: liveLocationWrite.isOutOfZone,
+          status: liveLocationWrite.status,
+          attendanceId: liveLocationWrite.attendanceId,
+          siteLat: liveLocationWrite.siteLat,
+          siteLng: liveLocationWrite.siteLng,
+          geofenceRadius: liveLocationWrite.geofenceRadius,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
     });
 
-    const liveLocationWrite = guardLocationWrite as GuardLocationWrite | null;
-    if (liveLocationWrite) {
-      await adminDb
-        .collection("guardLocations")
-        .doc(liveLocationWrite.employeeDocId)
-        .set(
-          {
-            employeeDocId: liveLocationWrite.employeeDocId,
-            employeeId: liveLocationWrite.employeeId,
-            guardName: liveLocationWrite.guardName,
-            siteId: liveLocationWrite.siteId,
-            siteName: liveLocationWrite.siteName,
-            clientName: liveLocationWrite.clientName,
-            employeeClientName: liveLocationWrite.employeeClientName,
-            siteClientName: liveLocationWrite.siteClientName,
-            crossClientRelief: liveLocationWrite.crossClientRelief,
-            district: liveLocationWrite.district,
-            lat: liveLocationWrite.lat,
-            lng: liveLocationWrite.lng,
-            accuracy: liveLocationWrite.accuracy,
-            isOutOfZone: liveLocationWrite.isOutOfZone,
-            status: liveLocationWrite.status,
-            attendanceId: liveLocationWrite.attendanceId,
-            siteLat: liveLocationWrite.siteLat,
-            siteLng: liveLocationWrite.siteLng,
-            geofenceRadius: liveLocationWrite.geofenceRadius,
-            updatedAt: now,
-          },
-          { merge: true },
-        );
-    }
-
-    if (staleOutAutoCloseResult !== null) {
-      const result = staleOutAutoCloseResult as { id: string; staleDate: string };
-      await incrementSystemMetric(SYSTEM_METRIC_NAMES.attendanceSubmitSuccess);
+    if (transactionDuplicateId) {
       return NextResponse.json({
         success: true,
-        id: result.id,
-        autoClosed: true,
-        message:
-          "Previous IN session from " +
-          result.staleDate +
-          " was never checked out. Session has been auto-closed. Please mark IN to start today's attendance.",
+        id: transactionDuplicateId,
+        duplicate: true,
+        message: "Attendance already recorded for this request.",
       });
     }
 

@@ -9,6 +9,7 @@ describe("attendanceSubmissionSchema", () => {
       employeeName: "Test Guard",
       employeeDocId: "emp-1",
       reportedAtClient: null,
+      locationCapturedAt: "2026-07-27T12:00:00.000Z",
       employeePhoneNumber: null,
       employeeClientName: null,
       status: "Out",
@@ -32,10 +33,14 @@ describe("attendanceSubmissionSchema", () => {
       locationAccuracyMeters: 8,
       geofenceRadiusAtTime: 150,
       sourceCollection: "sites",
-      photoUrl: "https://example.com/photo.jpg",
-      photoCapturedAt: null,
+      photoUrl:
+        "https://firebasestorage.googleapis.com/v0/b/test/o/employees%2Femp-1%2Fattendance%2F10000000-1000-4000-8000-100000000000%2Fphoto.jpg?alt=media",
+      photoStoragePath:
+        "employees/emp-1/attendance/10000000-1000-4000-8000-100000000000/photo.jpg",
+      photoCapturedAt: "2026-07-27T12:00:00.000Z",
       deviceInfo: { userAgent: "flutter-mobile" },
       clientRequestId: null,
+      attendanceAttemptId: "10000000-1000-4000-8000-100000000000",
       overrideReason: null,
       qrToken: null,
     });
