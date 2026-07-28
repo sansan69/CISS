@@ -1818,6 +1818,62 @@ describe("TCS exam work order import server slice", () => {
     expect(adminDb.listDocs("workOrderAssignmentEvents")).toHaveLength(1);
   });
 
+  it("saves a valid partial assignment while other required positions remain open", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("workOrders", "wo-partial", {
+      siteId: "site-a",
+      siteName: "Alpha Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      date: new Date("2026-07-30T00:00:00.000Z"),
+      examCode: "tcs-exam",
+      recordStatus: "active",
+      maleGuardsRequired: 1,
+      femaleGuardsRequired: 2,
+      totalManpower: 3,
+      assignedGuards: [],
+    });
+    adminDb.seed("employees", "guard-m", {
+      fullName: "Male Guard",
+      employeeId: "EMP-M",
+      gender: "Male",
+      status: "Active",
+      district: "Ernakulam",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db: adminDb }));
+
+    const { PATCH } = await import("./api/admin/work-orders/[id]/route");
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/work-orders/wo-partial", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          assignedGuards: [{ uid: "guard-m" }],
+        }),
+      }),
+      { params: Promise.resolve({ id: "wo-partial" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(adminDb.getDoc("workOrders", "wo-partial")).toEqual(
+      expect.objectContaining({
+        assignmentStatus: "partial",
+        assignmentVersion: 1,
+        assignedGuards: [
+          {
+            uid: "guard-m",
+            name: "Male Guard",
+            employeeId: "EMP-M",
+            gender: "Male",
+          },
+        ],
+      }),
+    );
+  });
+
   it("rejects same-date double assignment of a guard", async () => {
     const adminDb = new FakeFirestore();
     const dutyDate = new Date("2026-04-21T00:00:00.000Z");

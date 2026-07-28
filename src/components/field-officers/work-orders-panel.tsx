@@ -49,6 +49,10 @@ import type { WorkOrder } from "@/types/work-orders";
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
 import { districtMatches } from "@/lib/districts";
 import { fetchActiveGuardsForDistricts } from "@/lib/work-orders/available-guards";
+import {
+  countGuardAssignments,
+  getGuardAssignmentCapacityIssue,
+} from "@/lib/work-orders/guard-assignment-capacity";
 import { WorkOrderRevisionNotices } from "@/components/work-orders/revision-notices";
 
 type WorkOrderExamFields = Pick<
@@ -115,29 +119,16 @@ const AssignGuardsDialog: React.FC<{
     haptic("selection");
     const isSelected = selectedGuards.some((g) => g.uid === guard.id);
     if (!isSelected) {
-      const gender = String(guard.gender ?? "").trim().toLowerCase();
-      const assignedForGender = selectedGuards.filter(
-        (selected) => String(selected.gender ?? "").trim().toLowerCase() === gender,
-      ).length;
-      const requiredForGender =
-        gender === "male"
-          ? workOrder.maleGuardsRequired
-          : gender === "female"
-            ? workOrder.femaleGuardsRequired
-            : 0;
-      if (gender !== "male" && gender !== "female") {
+      const issue = getGuardAssignmentCapacityIssue(
+        selectedGuards,
+        guard.gender,
+        workOrder,
+      );
+      if (issue) {
         toast({
           variant: "destructive",
-          title: "Gender information required",
-          description: "Update this guard’s profile before assigning them to a male or female requirement.",
-        });
-        return;
-      }
-      if (assignedForGender >= requiredForGender) {
-        toast({
-          variant: "destructive",
-          title: `${gender === "male" ? "Male" : "Female"} requirement already filled`,
-          description: `This work order requires ${requiredForGender} ${gender} guard${requiredForGender === 1 ? "" : "s"}.`,
+          title: issue.title,
+          description: issue.description,
         });
         return;
       }
@@ -182,8 +173,8 @@ const AssignGuardsDialog: React.FC<{
     }
   };
 
-  const maleCount = selectedGuards.filter((g) => g.gender === "Male").length;
-  const femaleCount = selectedGuards.filter((g) => g.gender === "Female").length;
+  const { male: maleCount, female: femaleCount } =
+    countGuardAssignments(selectedGuards);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

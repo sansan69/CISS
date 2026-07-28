@@ -40,6 +40,10 @@ import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/wo
 import { PageHeader } from '@/components/layout/page-header';
 import { districtMatches } from '@/lib/districts';
 import { fetchActiveGuardsForDistricts } from '@/lib/work-orders/available-guards';
+import {
+    countGuardAssignments,
+    getGuardAssignmentCapacityIssue,
+} from '@/lib/work-orders/guard-assignment-capacity';
 
 type WorkOrderExamFields = Pick<
     WorkOrder,
@@ -107,6 +111,19 @@ const AssignGuardsDialog: React.FC<{
         if (isSelected) {
             setSelectedGuards(prev => prev.filter(g => g.uid !== guard.id));
         } else {
+            const issue = getGuardAssignmentCapacityIssue(
+                selectedGuards,
+                guard.gender,
+                workOrder,
+            );
+            if (issue) {
+                toast({
+                    variant: "destructive",
+                    title: issue.title,
+                    description: issue.description,
+                });
+                return;
+            }
             setSelectedGuards(prev => [
                 ...prev,
                 { uid: guard.id, name: guard.fullName, employeeId: guard.employeeId, gender: guard.gender },
@@ -123,19 +140,26 @@ const AssignGuardsDialog: React.FC<{
                     assignedGuards: selectedGuards,
                 }),
             });
-            if (!res.ok) throw new Error('Failed to save');
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(payload?.error || 'Could not save assignments.');
+            }
             haptic('success');
             toast({ title: "Saved", description: "Guard assignments updated successfully." });
             onClose();
-        } catch {
-            toast({ variant: "destructive", title: "Error", description: "Could not save assignments." });
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Assignment not saved",
+                description: error instanceof Error ? error.message : "Could not save assignments.",
+            });
         } finally {
             setIsSaving(false);
         }
     };
 
-    const maleCount = selectedGuards.filter(g => g.gender === 'Male').length;
-    const femaleCount = selectedGuards.filter(g => g.gender === 'Female').length;
+    const { male: maleCount, female: femaleCount } =
+        countGuardAssignments(selectedGuards);
     const getGuardDetails = (uid: string) => availableGuards.find(g => g.id === uid);
 
     return (
