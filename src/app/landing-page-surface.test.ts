@@ -197,6 +197,8 @@ describe("landing page surface", () => {
     expect(textContent).toContain("Mark attendance");
     expect(textContent).toContain("Identify and continue");
     expect(textContent).toContain("Enter your mobile number or scan your employee QR.");
+    expect(textContent).toContain("Not registered? Continue with your mobile number.");
+    expect(textContent).toContain("open the enrolment form.");
     expect(textContent).toContain("Keep location permission on. A live photo is also required.");
     expect(hrefs).toEqual(expect.arrayContaining(["/enroll", "/guard-login", "/admin-login"]));
     expect(hrefs).toEqual(

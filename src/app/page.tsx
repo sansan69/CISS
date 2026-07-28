@@ -476,6 +476,10 @@ export default function LandingPage() {
                   )}
                 </Button>
 
+                <p className="mt-3 text-center text-xs leading-5 text-muted-foreground xl:hidden">
+                  Not registered? Continue with your mobile number. We&apos;ll open the enrolment form.
+                </p>
+
                 <div className="mt-4 flex items-start gap-3 rounded-xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground lg:mt-5">
                   <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <p className="leading-5">
