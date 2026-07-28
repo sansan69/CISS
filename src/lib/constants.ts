@@ -92,15 +92,3 @@ export function requiresLngArmsLicense(designation?: string | null) {
 export const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
 export const DEFAULT_GPS_ACCURACY_LIMIT_METERS = 100;
 export const OFFLINE_ATTENDANCE_MAX_AGE_HOURS = 4;
-
-const configuredLegacyAdminEmails = [
-  process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL,
-  process.env.SUPER_ADMIN_EMAIL,
-  "admin@cisskerala.app",
-]
-  .filter(Boolean)
-  .flatMap((value) => (value ?? "").split(","))
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
-
-export const LEGACY_ADMIN_EMAILS = Array.from(new Set(configuredLegacyAdminEmails));

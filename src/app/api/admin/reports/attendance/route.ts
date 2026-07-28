@@ -30,6 +30,24 @@ function normalizeAttendanceDateParam(value: string | null) {
   return parsed.toISOString().slice(0, 10);
 }
 
+async function getAllQueryDocuments(query: FirebaseFirestore.Query) {
+  const pageSize = 1000;
+  const documents: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+  for (;;) {
+    let pageQuery = query.limit(pageSize);
+    if (cursor) pageQuery = pageQuery.startAfter(cursor);
+    const snapshot = await pageQuery.get();
+    documents.push(...snapshot.docs);
+    if (snapshot.size < pageSize) break;
+    cursor = snapshot.docs[snapshot.docs.length - 1] ?? null;
+    if (!cursor) break;
+  }
+
+  return documents;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const decodedToken = await verifyRequestAuth(request);
@@ -75,7 +93,7 @@ export async function GET(request: NextRequest) {
     }
 
     let clientScope = null;
-    let snapshots: Array<FirebaseFirestore.QuerySnapshot> = [];
+    let documentGroups: FirebaseFirestore.QueryDocumentSnapshot[][] = [];
     if (isClient) {
       clientScope = await resolveClientScope(adminDb, decodedToken);
       if (!clientScope) {
@@ -84,17 +102,13 @@ export async function GET(request: NextRequest) {
       if (clientName && clientName !== "all" && clientName !== clientScope.clientName) {
         return NextResponse.json({ error: "Access denied for that client." }, { status: 403 });
       }
-      snapshots = await Promise.all([
-        queryRef
+      documentGroups = await Promise.all([
+        getAllQueryDocuments(queryRef
           .where("clientName", "==", clientScope.clientName)
-          .orderBy("attendanceDate", "desc")
-          .limit(1000)
-          .get(),
-        queryRef
+          .orderBy("attendanceDate", "desc")),
+        getAllQueryDocuments(queryRef
           .where("employeeClientName", "==", clientScope.clientName)
-          .orderBy("attendanceDate", "desc")
-          .limit(1000)
-          .get(),
+          .orderBy("attendanceDate", "desc")),
       ]);
     } else if (!isAdmin) {
       // Field officers can only export their assigned districts
@@ -117,17 +131,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const LIMIT = 1000;
     if (!isClient) {
-      snapshots = [await queryRef.orderBy("attendanceDate", "desc").limit(LIMIT).get()];
+      documentGroups = [
+        await getAllQueryDocuments(queryRef.orderBy("attendanceDate", "desc")),
+      ];
     }
     const docsById = new Map<string, { id: string; data(): Record<string, any> }>();
-    for (const snapshot of snapshots) {
-      for (const doc of snapshot.docs) {
+    for (const documents of documentGroups) {
+      for (const doc of documents) {
         docsById.set(doc.id, doc);
       }
     }
-    const truncated = snapshots.some((snapshot) => snapshot.size === LIMIT);
     const rows = Array.from(docsById.values())
       .map((doc) => {
         const data = doc.data() as Record<string, any>;
@@ -173,11 +187,10 @@ export async function GET(request: NextRequest) {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": 'attachment; filename="attendance-report.csv"',
       };
-      if (truncated) headers["X-Truncated"] = "true";
       return new NextResponse(toCsv(rows), { headers });
     }
 
-    return NextResponse.json({ rows, truncated });
+    return NextResponse.json({ rows, truncated: false });
   } catch (error: any) {
     const msg = error?.message || "Unauthorized";
     if (msg.includes("Missing bearer token") || msg.includes("access required")) {

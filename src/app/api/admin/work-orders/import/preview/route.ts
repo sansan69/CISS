@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import readXlsxFile from "read-excel-file/node";
+import { parse as parseCsv } from "csv-parse/sync";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
@@ -25,6 +26,13 @@ import type {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const MAX_FILES = 10;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 30 * 1024 * 1024;
+const MAX_SHEETS_PER_FILE = 20;
+const MAX_ROWS_PER_SHEET = 5_000;
+const MAX_COLUMNS_PER_SHEET = 100;
+
 const IST_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Kolkata",
 });
@@ -41,6 +49,58 @@ function normalizeExamCode(value: FormDataEntryValue | null): string {
   return typeof value === "string"
     ? value.replace(/\s+/g, " ").trim().toLowerCase()
     : "";
+}
+
+async function readTabularWorkbook(file: File, buffer: Buffer) {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".xls")) {
+    throw new Error(
+      `${file.name}: legacy .xls files are not accepted. Open the file in Excel and save it as .xlsx.`,
+    );
+  }
+
+  let sheets: Array<{ sheet: string; data: unknown[][] }>;
+  if (lowerName.endsWith(".csv")) {
+    const rows = parseCsv(buffer, {
+      bom: true,
+      relax_column_count: true,
+      skip_empty_lines: false,
+    }) as unknown[][];
+    sheets = [{ sheet: "CSV", data: rows }];
+  } else if (lowerName.endsWith(".xlsx")) {
+    if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+      throw new Error(`${file.name}: the file is not a valid .xlsx workbook.`);
+    }
+    sheets = (await readXlsxFile(buffer)).map(({ sheet, data }) => ({
+      sheet,
+      data: data as unknown[][],
+    }));
+  } else {
+    throw new Error(`${file.name}: only .xlsx and .csv work-order files are accepted.`);
+  }
+
+  if (sheets.length === 0 || sheets.length > MAX_SHEETS_PER_FILE) {
+    throw new Error(
+      `${file.name}: workbook must contain between 1 and ${MAX_SHEETS_PER_FILE} sheets.`,
+    );
+  }
+  for (const sheet of sheets) {
+    if (sheet.data.length > MAX_ROWS_PER_SHEET) {
+      throw new Error(
+        `${file.name}: sheet "${sheet.sheet}" exceeds ${MAX_ROWS_PER_SHEET.toLocaleString()} rows.`,
+      );
+    }
+    if (sheet.data.some((row) => row.length > MAX_COLUMNS_PER_SHEET)) {
+      throw new Error(
+        `${file.name}: sheet "${sheet.sheet}" exceeds ${MAX_COLUMNS_PER_SHEET} columns.`,
+      );
+    }
+  }
+
+  return {
+    SheetNames: sheets.map((sheet) => sheet.sheet),
+    Sheets: Object.fromEntries(sheets.map((sheet) => [sheet.sheet, sheet.data])),
+  };
 }
 
 function normalizeRecordStatus(value: unknown): string {
@@ -446,6 +506,25 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (files.length > MAX_FILES) {
+      return NextResponse.json(
+        { error: `Upload at most ${MAX_FILES} work-order files at a time.` },
+        { status: 400 },
+      );
+    }
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+    if (files.some((file) => file.size <= 0 || file.size > MAX_FILE_BYTES)) {
+      return NextResponse.json(
+        { error: `Each work-order file must be no larger than ${MAX_FILE_BYTES / 1024 / 1024}MB.` },
+        { status: 400 },
+      );
+    }
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      return NextResponse.json(
+        { error: `The combined upload must be no larger than ${MAX_TOTAL_BYTES / 1024 / 1024}MB.` },
+        { status: 400 },
+      );
+    }
 
     const mode = normalizeMode(formData.get("mode"));
     const targetExamCode = normalizeExamCode(formData.get("targetExamCode"));
@@ -454,20 +533,16 @@ export async function POST(request: Request) {
       typeof targetExamNameValue === "string"
         ? targetExamNameValue.replace(/\s+/g, " ").trim()
         : "";
-    const parsedFiles = await Promise.all(
-      files.map(async (file) => {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const workbook = XLSX.read(buffer, {
-          type: "buffer",
-          cellDates: false,
-        });
-        return {
-          fileName: file.name,
-          buffer,
-          result: parseTcsExamWorkbook(workbook, file.name),
-        };
-      }),
-    );
+    const parsedFiles = [];
+    for (const file of files) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const workbook = await readTabularWorkbook(file, buffer);
+      parsedFiles.push({
+        fileName: file.name,
+        buffer,
+        result: parseTcsExamWorkbook(workbook, file.name),
+      });
+    }
     const rawParseResult = combineParsedFiles(parsedFiles);
     const effectiveExamCode =
       mode === "revision"

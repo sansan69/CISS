@@ -401,6 +401,7 @@ export default function AdminEmployeeProfilePage() {
   const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false);
   const [resetPin, setResetPin] = useState("");
   const [confirmResetPin, setConfirmResetPin] = useState("");
+  const [resetPinReason, setResetPinReason] = useState("");
   const [isResettingPin, setIsResettingPin] = useState(false);
   const [isResettingAttendanceState, setIsResettingAttendanceState] = useState(false);
 
@@ -849,6 +850,10 @@ export default function AdminEmployeeProfilePage() {
       toast({ variant: "destructive", title: "PIN mismatch", description: "PINs do not match." });
       return;
     }
+    if (resetPinReason.trim().length < 3) {
+      toast({ variant: "destructive", title: "Reason required", description: "Enter why the PIN is being reset." });
+      return;
+    }
 
     setIsResettingPin(true);
     try {
@@ -862,7 +867,7 @@ export default function AdminEmployeeProfilePage() {
         body: JSON.stringify({
           employeeDocId: employee.id,
           newPin: resetPin,
-          reason: "manual-reset",
+          reason: resetPinReason.trim(),
         }),
       });
 
@@ -878,6 +883,7 @@ export default function AdminEmployeeProfilePage() {
       setIsResetPinDialogOpen(false);
       setResetPin("");
       setConfirmResetPin("");
+      setResetPinReason("");
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -1836,6 +1842,19 @@ export default function AdminEmployeeProfilePage() {
                   className="text-center tracking-[0.35em]"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="reset-pin-reason">Reason for reset</Label>
+                <Input
+                  id="reset-pin-reason"
+                  value={resetPinReason}
+                  onChange={(event) => setResetPinReason(event.target.value.slice(0, 200))}
+                  maxLength={200}
+                  placeholder="Example: Guard forgot PIN"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This reason and your administrator account will be recorded.
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -1846,7 +1865,12 @@ export default function AdminEmployeeProfilePage() {
               <Button
                 type="button"
                 onClick={handleResetPin}
-                disabled={isResettingPin || resetPin.length < 4 || resetPin !== confirmResetPin}
+                disabled={
+                  isResettingPin ||
+                  resetPin.length < 4 ||
+                  resetPin !== confirmResetPin ||
+                  resetPinReason.trim().length < 3
+                }
               >
                 {isResettingPin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Set PIN

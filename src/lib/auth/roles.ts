@@ -1,7 +1,6 @@
 import type { User } from "firebase/auth";
 import { doc, getDoc, getDocs, query, where, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { isLegacyAdminEmail } from "@/lib/auth/admin";
 import { canonicalizeDistrictList } from "@/lib/districts";
 import type { AppRole, ResolvedAppUser } from "@/types/app";
 
@@ -38,9 +37,6 @@ async function refreshClaimedRole(user: User) {
 export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
   const tokenResult = await user.getIdTokenResult();
   const claimedRole = claimsToRole(tokenResult.claims);
-  const tokenEmail =
-    typeof tokenResult.claims.email === "string" ? tokenResult.claims.email : undefined;
-
   // Extract stateCode from custom claims
   const stateCode =
     typeof tokenResult.claims.stateCode === "string" ? tokenResult.claims.stateCode : null;
@@ -73,7 +69,7 @@ export async function resolveAppUser(user: User): Promise<ResolvedAppUser> {
     };
   }
 
-  if (claimedRole === "admin" || isLegacyAdminEmail(user.email ?? tokenEmail)) {
+  if (claimedRole === "admin") {
     return { role: "admin", assignedDistricts: [], stateCode, isSuperAdmin: false };
   }
 

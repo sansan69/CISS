@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
-import { LEGACY_ADMIN_EMAILS } from "@/lib/constants";
 import { buildServerAuditEvent } from "@/lib/server/audit";
 import { runChunked, buildSelfUrl } from "@/lib/server/self-queue";
 export const runtime = "nodejs";
@@ -9,9 +8,9 @@ export const maxDuration = 60;
 type RepairItem = {
   uid: string;
   email?: string;
-  expectedRole: "admin" | "fieldOfficer" | "client";
+  expectedRole: "fieldOfficer" | "client";
   currentRole: string | null;
-  source: "legacyAdminEmail" | "fieldOfficers" | "clientUsersByUid";
+  source: "fieldOfficers" | "clientUsersByUid";
   claimPatch?: Record<string, unknown>;
 };
 
@@ -26,12 +25,6 @@ async function collectRepairItems() {
   const { auth: adminAuth, db: adminDb } = await import("@/lib/firebaseAdmin");
   const listedUsers = await adminAuth.listUsers(1000);
   const usersByUid = new Map(listedUsers.users.map((user) => [user.uid, user]));
-  const usersByEmail = new Map(
-    listedUsers.users
-      .filter((user) => user.email)
-      .map((user) => [String(user.email).toLowerCase(), user]),
-  );
-
   const fieldOfficerDocs = await adminDb.collection("fieldOfficers").get();
   const clientUserDocs = await adminDb.collection("clientUsersByUid").get();
   const repairItems = new Map<string, RepairItem>();
@@ -90,21 +83,6 @@ async function collectRepairItems() {
     }
   }
 
-  for (const email of LEGACY_ADMIN_EMAILS) {
-    const authUser = usersByEmail.get(email.toLowerCase());
-    if (!authUser) continue;
-    const currentRole = claimsToRole(authUser.customClaims);
-    if (currentRole !== "admin") {
-      repairItems.set(authUser.uid, {
-        uid: authUser.uid,
-        email: authUser.email,
-        expectedRole: "admin",
-        currentRole,
-        source: "legacyAdminEmail",
-      });
-    }
-  }
-
   return Array.from(repairItems.values()).sort((a, b) =>
     (a.email || a.uid).localeCompare(b.email || b.uid),
   );
@@ -146,10 +124,6 @@ export async function POST(request: Request) {
       if (data.uid) clientUsersByUid.set(data.uid, data);
     }
 
-    const legacyAdminEmailSet = new Set(
-      LEGACY_ADMIN_EMAILS.map((e: string) => e.toLowerCase()),
-    );
-
     const selfUrl = buildSelfUrl(request.url, "/api/admin/claims/repair");
     const cronSecret = process.env.CRON_SECRET || "";
 
@@ -179,10 +153,7 @@ export async function POST(request: Request) {
         for (const user of users) {
           const foData = fieldOfficersByUid.get(user.uid);
           const cuData = clientUsersByUid.get(user.uid);
-          const isLegacyAdmin =
-            user.email && legacyAdminEmailSet.has(user.email.toLowerCase());
-
-          let expectedRole: "admin" | "fieldOfficer" | "client" | null = null;
+          let expectedRole: "fieldOfficer" | "client" | null = null;
           let claimPatch: Record<string, unknown> | undefined;
 
           if (foData) {
@@ -200,8 +171,6 @@ export async function POST(request: Request) {
               clientId: cuData.clientId ?? null,
               clientName: cuData.clientName ?? null,
             };
-          } else if (isLegacyAdmin) {
-            expectedRole = "admin";
           }
 
           if (!expectedRole) continue;
@@ -212,14 +181,11 @@ export async function POST(request: Request) {
           if (currentRole === expectedRole) continue;
 
           // Fix the claims
-          const nextClaims =
-            expectedRole === "admin"
-              ? { ...user.customClaims, admin: true, role: "admin" }
-              : {
-                  ...(user.customClaims as Record<string, unknown>),
-                  role: expectedRole,
-                  ...(claimPatch ?? {}),
-                };
+          const nextClaims = {
+            ...(user.customClaims as Record<string, unknown>),
+            role: expectedRole,
+            ...(claimPatch ?? {}),
+          };
 
           await adminAuth.setCustomUserClaims(user.uid, nextClaims);
           if (!user.emailVerified && user.email) {

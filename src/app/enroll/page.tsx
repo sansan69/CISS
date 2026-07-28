@@ -697,14 +697,13 @@ const ENROLLMENT_STEPS: {
 ];
 
 function buildEnrollmentStoragePath(
-  phoneNumber: string,
+  draftId: string,
   folder: string,
   fileStem: string,
   file: File,
 ): string {
   const extension = getUploadFileExtension(file, "bin");
-  // Use public enrollments/ path so unauthenticated users can upload
-  return `enrollments/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}`;
+  return `enrollments/${draftId}/${folder}/${Date.now()}_${fileStem}.${extension}`;
 }
 
 function splitLngFullName(rawFullName: string) {
@@ -1368,6 +1367,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     };
 
     try {
+        const draftResponse = await fetch("/api/public/enroll/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phoneNumber }),
+        });
+        const draft = await draftResponse.json();
+        if (!draftResponse.ok || !draft?.draftId || !draft?.uploadToken) {
+          throw new Error(draft?.error || "Could not start enrollment.");
+        }
+
         const filesToUpload: { name: string; file?: File; folder: string; fileStem: string; key: keyof typeof uploadedUrls }[] = [
             { name: "Profile Picture", file: data.profilePicture, folder: "profilePictures", fileStem: "profile", key: 'profilePictureUrl' },
             { name: "Identity Proof (Front)", file: data.identityProofUrlFront, folder: "idProofs", fileStem: "id_front", key: 'identityProofUrlFront' },
@@ -1390,8 +1399,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             try {
                 const fileToUpload = await prepareFileForUpload(file);
                 assertEnrollmentUploadSize(fileToUpload);
-                const path = buildEnrollmentStoragePath(phoneNumber, folder, fileStem, fileToUpload);
-                const url = await uploadEnrollmentFileViaApi(fileToUpload, path);
+                const path = buildEnrollmentStoragePath(draft.draftId, folder, fileStem, fileToUpload);
+                const url = await uploadEnrollmentFileViaApi(fileToUpload, path, draft.uploadToken);
                 uploadedUrls[key] = url;
             } catch (err: any) {
                  throw new Error(`Upload failed for ${name}: ${err.message}`);
@@ -1404,6 +1413,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            enrollmentDraftId: draft.draftId,
+            enrollmentUploadToken: draft.uploadToken,
             joiningDate: data.joiningDate.toISOString(),
             clientName: data.clientName,
             resourceIdNumber: data.resourceIdNumber || undefined,

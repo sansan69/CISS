@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import crypto from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -22,6 +23,10 @@ class FakeTimestamp {
     return new FakeTimestamp(date);
   }
 
+  static fromMillis(milliseconds: number) {
+    return new FakeTimestamp(new Date(milliseconds));
+  }
+
   toDate() {
     return this.date;
   }
@@ -43,13 +48,25 @@ class FakeCollection {
   }
 
   doc(id?: string) {
-    return {
+    const ref = {
       id: id || `employee-doc-${mocks.addedEmployees.length + 1}`,
       path: `${this.name}/${id || `employee-doc-${mocks.addedEmployees.length + 1}`}`,
       async get() {
-        return { exists: false };
+        if (ref.path === "enrollments/draft-test-123") {
+          return {
+            exists: true,
+            data: () => ({
+              status: "draft",
+              phoneNumber: "9012345690",
+              tokenHash: crypto.createHash("sha256").update("test-upload-token").digest("hex"),
+              expiresAt: { toMillis: () => Date.now() + 60_000 },
+            }),
+          };
+        }
+        return { exists: false, data: () => undefined };
       },
     };
+    return ref;
   }
 }
 
@@ -60,6 +77,7 @@ vi.mock("@/lib/firebaseAdmin", () => ({
       let employeePayload: Record<string, unknown> | null = null;
       return {
         create: vi.fn(),
+        update: vi.fn(),
         set: vi.fn((_ref: unknown, payload: Record<string, unknown>) => {
           employeePayload = payload;
         }),
@@ -85,6 +103,8 @@ vi.mock("@/lib/qr", () => ({
 
 function buildStandardPayload(overrides: Record<string, unknown> = {}) {
   return {
+    enrollmentDraftId: "draft-test-123",
+    enrollmentUploadToken: "test-upload-token",
     joiningDate: "2026-04-30T18:30:00.000Z",
     clientName: "TCS",
     resourceIdNumber: "TCS-RESOURCE-001",

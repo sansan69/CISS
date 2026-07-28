@@ -185,10 +185,12 @@ export async function uploadFileToStorage(
 export async function uploadEnrollmentFileViaApi(
   file: File,
   storagePath: string,
+  uploadToken: string,
 ): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("path", storagePath);
+  formData.append("uploadToken", uploadToken);
 
   const response = await fetch("/api/public/enroll/upload", {
     method: "POST",

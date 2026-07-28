@@ -164,6 +164,13 @@ export async function POST(request: Request) {
 
     const empDoc = empQuery.docs[0];
     const empData = empDoc.data();
+    const employeeStatus = String(empData.status ?? "Active").trim().toLowerCase();
+    if (employeeStatus !== "active") {
+      return NextResponse.json(
+        { error: "This guard account is inactive. Please contact an administrator." },
+        { status: 403 },
+      );
+    }
 
     // Check lockout
     if (empData.guardLockoutUntil) {

@@ -10,13 +10,18 @@ import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, 
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, writeBatch, serverTimestamp, Timestamp, query, where, getDocs } from 'firebase/firestore';
-import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { generateEmployeeId } from '@/lib/employee-id';
 import { generateQrCodeDataUrl } from '@/lib/qr';
 import { PageHeader } from '@/components/layout/page-header';
 import { siteBelongsToClient } from '@/lib/sites/site-directory';
+import {
+    downloadCsv,
+    downloadXlsx,
+    readTabularFile,
+    rowsToRecords,
+} from '@/lib/spreadsheets/browser';
 
 interface ProcessedRecord {
     data: any;
@@ -55,24 +60,22 @@ export default function BulkImportPage() {
 
     const handleDownloadTemplate = () => {
         const templateData = [requiredFields.concat(['spouseName', 'panNumber', 'epfUanNumber', 'esicNumber', 'resourceIdNumber'])];
-        const ws = XLSX.utils.aoa_to_sheet(templateData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Employee Import Template");
-        XLSX.writeFile(wb, "CISS_Employee_Import_Template.csv");
+        downloadCsv("CISS_Employee_Import_Template.csv", templateData);
         toast({
             title: "Template Downloading",
             description: "The CSV template file has started downloading."
         });
     };
 
-    const handleDownloadClientsSitesTemplate = () => {
+    const handleDownloadClientsSitesTemplate = async () => {
         const templateHeaders = ['Client Name', 'Site Name', 'Site Address', 'District', 'Geolocation', 'Shift Pattern'];
         const templateExampleRow = ['TCS', 'TCS Kochi Main', '123 Tech Park, Kochi, Kerala', 'Ernakulam', '10.0234,76.3123', '2x12'];
         const templateData = [templateHeaders, templateExampleRow];
-        const ws = XLSX.utils.aoa_to_sheet(templateData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Clients & Sites Import");
-        XLSX.writeFile(wb, "CISS_Clients_Sites_Import_Template.xlsx");
+        await downloadXlsx(
+            "CISS_Clients_Sites_Import_Template.xlsx",
+            templateData,
+            "Clients & Sites Import",
+        );
         toast({
             title: "Template Downloading",
             description: "The Clients & Sites template file has started downloading."
@@ -189,14 +192,8 @@ export default function BulkImportPage() {
         setProcessedRecords([]);
 
         if (importType === 'clients_sites') {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            try {
+                    const jsonData = rowsToRecords(await readTabularFile(file));
                     
                     if (jsonData.length < 1) {
                         throw new Error("The file is empty or contains only a header row.");
@@ -217,19 +214,11 @@ export default function BulkImportPage() {
                 } finally {
                     setIsProcessing(false);
                 }
-            };
-            reader.readAsArrayBuffer(file);
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        try {
+                const jsonData = await readTabularFile(file);
                 
                 if (jsonData.length < 2) {
                     throw new Error("The file is empty or contains only a header row.");
@@ -335,8 +324,6 @@ export default function BulkImportPage() {
             } finally {
                 setIsProcessing(false);
             }
-        };
-        reader.readAsArrayBuffer(file);
     };
 
     const successCount = processedRecords.filter(r => r.status === 'success').length;

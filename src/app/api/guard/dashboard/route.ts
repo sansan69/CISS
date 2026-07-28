@@ -5,6 +5,7 @@ import { unauthorizedResponse } from "@/lib/server/auth";
 export const dynamic = "force-dynamic";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
+import { getIstYearMonth } from "@/lib/ist-date";
 
 function workingDaysInMonth(year: number, month: number): number {
   // Approximate: count days excluding Sundays
@@ -148,9 +149,7 @@ export async function GET(request: Request) {
 
     // ─── This month's attendance ───────────────────────────────────────────
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth(); // 0-indexed
-    const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const { year, month, monthStr } = getIstYearMonth(now);
 
     const lastDay = new Date(year, month + 1, 0).getDate();
     const startDateStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;

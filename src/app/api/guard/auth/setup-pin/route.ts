@@ -134,6 +134,13 @@ export async function POST(request: Request) {
 
     const empDoc = empQuery.docs[0];
     const empData = empDoc.data();
+    const employeeStatus = String(empData.status ?? "Active").trim().toLowerCase();
+    if (employeeStatus !== "active") {
+      return NextResponse.json(
+        { error: "This guard account is inactive. Please contact an administrator." },
+        { status: 403 },
+      );
+    }
 
     // Verify phone number if employeeId was provided
     if (normalizedEmployeeId && normalizedPhone) {
@@ -155,6 +162,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: blocked ? "Too many attempts. Please try again later." : "Identity verification failed." },
         { status: blocked ? 429 : 401 }
+      );
+    }
+
+    if (empData.guardPin || empData.guardAuthUid) {
+      return NextResponse.json(
+        { error: "A PIN is already configured. Please ask an administrator to reset it." },
+        { status: 409 },
       );
     }
 

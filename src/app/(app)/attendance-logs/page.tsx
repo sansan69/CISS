@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, limit, onSnapshot, orderBy, query, where, Timestamp, type DocumentData, type QuerySnapshot } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query, where, Timestamp, type DocumentData, type QuerySnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -134,15 +134,13 @@ export default function AttendanceLogsPage() {
         collection(db, "attendanceLogs"),
         where("clientName", "==", clientInfo.clientName),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc"),
-        limit(1000)
+        orderBy("reportedAt", "desc")
       );
       const employeeClientQuery = query(
         collection(db, "attendanceLogs"),
         where("employeeClientName", "==", clientInfo.clientName),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc"),
-        limit(1000)
+        orderBy("reportedAt", "desc")
       );
       const siteLogs = new Map<string, AttendanceLog>();
       const employeeLogs = new Map<string, AttendanceLog>();
@@ -160,7 +158,6 @@ export default function AttendanceLogsPage() {
               const rightTime = getReportedAt(right)?.getTime() ?? 0;
               return rightTime - leftTime;
             })
-            .slice(0, 1000)
         );
       };
       const handleSnapshot = (scope: "site" | "employee") => (snapshot: QuerySnapshot<DocumentData>) => {
@@ -197,8 +194,7 @@ export default function AttendanceLogsPage() {
         collection(db, "attendanceLogs"),
         where("district", "in", assignedDistricts),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc"),
-        limit(1000)
+        orderBy("reportedAt", "desc")
       );
       const unsubscribe = onSnapshot(
         logsQuery,
@@ -222,8 +218,7 @@ export default function AttendanceLogsPage() {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc"),
-        limit(1000)
+        orderBy("reportedAt", "desc")
       );
       const unsubscribe = onSnapshot(
         logsQuery,
@@ -668,16 +663,6 @@ export default function AttendanceLogsPage() {
           <AlertTitle>Attendance could not be loaded</AlertTitle>
           <AlertDescription>
             {loadError} Refresh the page after checking your connection and access.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {logs.length >= 1000 ? (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Showing the newest 1,000 records</AlertTitle>
-          <AlertDescription>
-            Use the date and filters, or export the report, to review the complete result set.
           </AlertDescription>
         </Alert>
       ) : null}

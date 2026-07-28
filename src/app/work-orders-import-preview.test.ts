@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import * as XLSX from "xlsx";
+import writeXlsxFile from "write-excel-file/node";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isAssignedGuardMatch } from "../lib/work-orders/assignment-match";
 
@@ -289,15 +289,12 @@ function normalizeComparable(value: unknown) {
   return String(value);
 }
 
-function makeWorkbookBuffer() {
-  const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.aoa_to_sheet([
+async function makeWorkbookBuffer() {
+  return writeXlsxFile([
     ["TCS Exam"],
     ["Site Name", "District", "Male", "Female"],
     ["Alpha Site", "Ernakulam", 3, 1],
-  ]);
-  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  ], { sheet: "Sheet1" }).toBuffer();
 }
 
 const requireAdminMock = vi.fn();
@@ -518,7 +515,7 @@ describe("TCS exam work order import server slice", () => {
     const formData = new FormData();
     formData.set(
       "file",
-      new File([makeWorkbookBuffer()], "tcs-exam.xlsx", {
+      new File([await makeWorkbookBuffer()], "tcs-exam.xlsx", {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
     );
@@ -592,8 +589,8 @@ describe("TCS exam work order import server slice", () => {
 
     const { POST } = await import("./api/admin/work-orders/import/preview/route");
     const formData = new FormData();
-    formData.append("files", new File([makeWorkbookBuffer()], "part-a.xlsx"));
-    formData.append("files", new File([makeWorkbookBuffer()], "part-b.xlsx"));
+    formData.append("files", new File([await makeWorkbookBuffer()], "part-a.xlsx"));
+    formData.append("files", new File([await makeWorkbookBuffer()], "part-b.xlsx"));
     formData.set("mode", "new");
 
     const response = await POST(new Request("http://localhost/api/admin/work-orders/import/preview", {
@@ -670,7 +667,7 @@ describe("TCS exam work order import server slice", () => {
     const formData = new FormData();
     formData.set(
       "file",
-      new File([makeWorkbookBuffer()], "tcs-exam.xlsx", {
+      new File([await makeWorkbookBuffer()], "tcs-exam.xlsx", {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
     );
@@ -827,7 +824,7 @@ describe("TCS exam work order import server slice", () => {
     const formData = new FormData();
     formData.set(
       "file",
-      new File([makeWorkbookBuffer()], "tcs-exam.xlsx", {
+      new File([await makeWorkbookBuffer()], "tcs-exam.xlsx", {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
     );
@@ -908,7 +905,7 @@ describe("TCS exam work order import server slice", () => {
     const formData = new FormData();
     formData.set(
       "file",
-      new File([makeWorkbookBuffer()], "tcs-exam.xlsx", {
+      new File([await makeWorkbookBuffer()], "tcs-exam.xlsx", {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
     );

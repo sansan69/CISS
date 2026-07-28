@@ -115,14 +115,14 @@ export async function GET(request: Request) {
     const siteAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("clientName", "==", scope.clientName)
+      .where("attendanceDate", "==", todayKey)
       .orderBy("reportedAt", "desc")
-      .limit(500)
       .get();
     const employeeAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("employeeClientName", "==", scope.clientName)
+      .where("attendanceDate", "==", todayKey)
       .orderBy("reportedAt", "desc")
-      .limit(500)
       .get();
     const workOrdersPromise: Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }> =
       isOperationalClient

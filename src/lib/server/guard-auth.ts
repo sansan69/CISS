@@ -22,17 +22,22 @@ export async function requireGuard(
   const employeeId = claimAsString(decodedToken.employeeId);
   const employeeDocId = claimAsString(decodedToken.employeeDocId);
 
-  if (employeeId && employeeDocId) {
-    return { uid: decodedToken.uid, employeeId, employeeDocId };
-  }
-
   const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-  let employeeSnap = await adminDb
-    .collection("employees")
-    .where("guardAuthUid", "==", decodedToken.uid)
-    .limit(1)
-    .get();
+  let employeeSnap;
+  if (employeeDocId) {
+    const employeeDoc = await adminDb.collection("employees").doc(employeeDocId).get();
+    employeeSnap = {
+      empty: !employeeDoc.exists,
+      docs: employeeDoc.exists ? [employeeDoc] : [],
+    };
+  } else {
+    employeeSnap = await adminDb
+      .collection("employees")
+      .where("guardAuthUid", "==", decodedToken.uid)
+      .limit(1)
+      .get();
+  }
 
   if (employeeSnap.empty && employeeId) {
     employeeSnap = await adminDb
@@ -56,6 +61,9 @@ export async function requireGuard(
   }
 
   const employeeData = employeeDoc.data() as Record<string, unknown>;
+  if (claimAsString(employeeData.status || "Active").toLowerCase() !== "active") {
+    throw new Error("Guard account is inactive.");
+  }
   const resolvedEmployeeId =
     employeeId ||
     claimAsString(employeeData.employeeId) ||

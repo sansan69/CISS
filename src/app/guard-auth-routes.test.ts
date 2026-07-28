@@ -377,7 +377,7 @@ describe("guard auth routes", () => {
     );
   });
 
-  it("resets a guard PIN with qr identity and dob without OTP", async () => {
+  it("allows an administrator to reset a guard PIN and writes an audit event", async () => {
     const adminDb = new FakeFirestore();
     const guardPin = await hashPin("1234");
 
@@ -407,9 +407,11 @@ describe("guard auth routes", () => {
     vi.doMock("@/lib/guard/pin-utils", async () => await import("../lib/guard/pin-utils"));
     vi.doMock("@/lib/qr/employee-qr", async () => await import("../lib/qr/employee-qr"));
     vi.doMock("@/lib/server/auth", () => ({
-      verifyRequestAuth: vi.fn(),
-      hasAdminAccess: (decoded: { role?: string; admin?: boolean }) => decoded.admin === true || decoded.role === "admin" || decoded.role === "superAdmin",
-      hasFieldOfficerAccess: (decoded: { role?: string }) => decoded.role === "fieldOfficer",
+      requireAdmin: vi.fn().mockResolvedValue({
+        uid: "admin-uid-1",
+        email: "admin@example.com",
+        role: "admin",
+      }),
       unauthorizedResponse: (message: string, status = 401) => new Response(JSON.stringify({ error: message }), {
         status,
         headers: { "content-type": "application/json" },
@@ -437,11 +439,14 @@ describe("guard auth routes", () => {
     const response = await POST(
       new Request("https://cisskerala.app/api/guard/auth/reset-pin", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer admin-token",
+        },
         body: JSON.stringify({
-          qrText: "Employee ID: EMP003\nName: Guard Three\nPhone: +91 77777 77777",
-          dateOfBirth: "1999-04-30",
+          employeeDocId: "emp-3",
           newPin: "4321",
+          reason: "Guard forgot PIN",
         }),
       }),
     );
@@ -449,7 +454,7 @@ describe("guard auth routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       success: true,
-      message: "Your PIN has been reset. Please log in with the new PIN.",
+      message: "PIN reset successfully. The action was recorded in the audit log.",
     });
     expect(setCustomUserClaims).toHaveBeenCalledWith("guard-uid-3", {
       role: "guard",
@@ -465,7 +470,7 @@ describe("guard auth routes", () => {
     expect(adminDb.listDocs("guardPinResetEvents")).toHaveLength(1);
   });
 
-  it("blocks field officers from resetting guards outside their assigned districts", async () => {
+  it("blocks field officers from resetting guard PINs", async () => {
     const adminDb = new FakeFirestore();
     adminDb.seed("employees", "emp-4", {
       employeeId: "EMP004",
@@ -494,13 +499,7 @@ describe("guard auth routes", () => {
     vi.doMock("@/lib/guard/pin-utils", async () => await import("../lib/guard/pin-utils"));
     vi.doMock("@/lib/qr/employee-qr", async () => await import("../lib/qr/employee-qr"));
     vi.doMock("@/lib/server/auth", () => ({
-      verifyRequestAuth: vi.fn().mockResolvedValue({
-        uid: "fo-uid-1",
-        role: "fieldOfficer",
-        assignedDistricts: ["Kollam"],
-      }),
-      hasAdminAccess: (decoded: { role?: string; admin?: boolean }) => decoded.admin === true || decoded.role === "admin" || decoded.role === "superAdmin",
-      hasFieldOfficerAccess: (decoded: { role?: string }) => decoded.role === "fieldOfficer",
+      requireAdmin: vi.fn().mockRejectedValue(new Error("Admin access required.")),
       unauthorizedResponse: (message: string, status = 401) => new Response(JSON.stringify({ error: message }), {
         status,
         headers: { "content-type": "application/json" },
@@ -535,13 +534,14 @@ describe("guard auth routes", () => {
         body: JSON.stringify({
           employeeDocId: "emp-4",
           newPin: "4321",
+          reason: "Forgot PIN",
         }),
       }),
     );
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
-      error: "This guard is outside your assigned districts.",
+      error: "Admin access required.",
     });
   });
 });

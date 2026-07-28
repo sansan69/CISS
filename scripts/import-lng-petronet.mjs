@@ -8,7 +8,7 @@ import { initializeApp, applicationDefault, cert, getApps } from "firebase-admin
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import QRCode from "qrcode";
-import XLSX from "xlsx";
+import { parse } from "csv-parse/sync";
 
 const LNG_CLIENT_NAME = "LNG Petronet";
 const CSV_PATH = "/Users/mymac/Downloads/LNG Petronet Enrollment Form - Form Responses 1.csv";
@@ -482,9 +482,11 @@ async function importEmployees({ dryRun = false, limit = null }) {
   const db = getFirestore();
   const bucket = getStorage().bucket(BUCKET_NAME);
 
-  const workbook = XLSX.readFile(CSV_PATH, { raw: false });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  const rows = parse(readFileSync(CSV_PATH, "utf8"), {
+    bom: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+  });
   const dataRows = rows.slice(1);
   const dedupedRows = dedupeRows(dataRows);
   const targetRows = limit ? dedupedRows.slice(0, limit) : dedupedRows;

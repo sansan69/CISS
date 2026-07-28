@@ -148,73 +148,71 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
-    // Public self-enrollment uploads — unauthenticated writes allowed for
-    // creating the enrollment, but reads are admin-only (sensitive PII documents).
-    // The public form stores files under typed subfolders, so size rules are
-    // enforced by folder instead of MIME type to avoid false denials.
+    // Enrollment uploads go through the server after it validates a short-lived
+    // draft capability. Sensitive enrollment files remain admin-only.
     match /enrollments/{employeeKey}/profilePictures/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentImage();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/signatures/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentImage();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/idProofs/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/addressProofs/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/serviceBooks/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/armsLicenses/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/aadharCards/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/panCards/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/passports/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/bankDocuments/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/policeCertificates/{fileName} {
       allow read: if isAdmin();
-      allow create: if isEnrollmentDocument();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 

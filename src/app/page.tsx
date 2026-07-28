@@ -238,9 +238,9 @@ export default function LandingPage() {
         throw new Error((body as any).error || "Could not verify phone number.");
       }
 
-      const data = (await response.json()) as { found: boolean; id?: string; fullName?: string; employeeId?: string };
+      const data = (await response.json()) as { found: boolean };
 
-      if (data.found && data.employeeId) {
+      if (data.found) {
         toast({ title: "Welcome!", description: "Opening attendance..." });
         router.push(`/attendance?phoneNumber=${encodeURIComponent(normalizedPhone)}`);
       } else {
@@ -286,43 +286,42 @@ export default function LandingPage() {
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[90rem] flex-col px-4 sm:px-6 lg:px-10">
         <header
           data-mobile-section="header"
-          className="flex h-16 items-center justify-between border-b border-border/60 lg:h-[4.75rem]"
+          className="flex min-h-20 items-center justify-between border-b border-border/60 py-4 lg:h-[4.75rem] lg:py-0"
         >
-          <Link href="/" className="group flex min-w-0 items-center gap-3" aria-label="CISS Workforce home">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-card shadow-brand-sm transition-transform duration-200 group-hover:-translate-y-0.5 dark:bg-white/[0.05] lg:h-10 lg:w-10 lg:rounded-xl">
+          <Link href="/" className="group flex min-w-0 items-center gap-3.5" aria-label="CISS Workforce home">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-gold/35 bg-brand-blue-darker shadow-brand-sm transition-transform duration-200 group-hover:-translate-y-0.5 lg:h-10 lg:w-10">
               <Image
                 src="/ciss-logo.png"
                 alt="CISS Workforce Logo"
-                width={32}
-                height={32}
+                width={40}
+                height={40}
                 priority
-                className="h-7 w-7"
+                className="h-9 w-9 lg:h-7 lg:w-7"
               />
             </span>
             <span className="min-w-0">
-              <span className="block font-exo2 text-lg font-bold leading-none tracking-[-0.035em] text-brand-blue dark:text-white lg:text-xl">
-                CISS
+              <span className="block font-exo2 text-[1.15rem] font-bold leading-none tracking-[-0.035em] text-brand-blue-darker dark:text-white lg:text-xl">
+                CISS Workforce
               </span>
-              <span className="mt-1 hidden text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:block">
-                Workforce
+              <span className="mt-1.5 block text-[9px] font-bold uppercase tracking-[0.18em] text-brand-gold-dark dark:text-brand-gold-light">
+                CISS Services Limited
               </span>
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1 sm:gap-2" aria-label="Public navigation">
+          <nav className="hidden items-center gap-2 xl:flex" aria-label="Public navigation">
             <a
               href="https://cissindia.co.in"
               target="_blank"
               rel="noreferrer"
-              className="hidden min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               CISS India
               <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
             <Button asChild variant="outline" size="sm" className="bg-card/70 backdrop-blur">
               <Link href="/admin-login">
-                <span className="sm:hidden">Staff</span>
-                <span className="hidden sm:inline">Staff sign in</span>
+                Staff sign in
               </Link>
             </Button>
           </nav>
@@ -401,11 +400,11 @@ export default function LandingPage() {
                 <div className="absolute inset-0 hidden opacity-40 [background-image:radial-gradient(circle_at_85%_10%,rgba(189,156,85,0.34),transparent_34%),linear-gradient(115deg,transparent_48%,rgba(255,255,255,0.05)_48%,rgba(255,255,255,0.05)_49%,transparent_49%)] lg:block" />
                 <div className="relative flex items-start justify-between gap-4">
                   <div>
-                    <p className="hidden text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light xl:block">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light">
                       Guard attendance
                     </p>
-                    <h2 id="attendance-title" className="font-exo2 text-2xl font-bold tracking-tight lg:mt-2 lg:text-[2rem]">
-                      <span className="xl:hidden">Mark attendance</span>
+                    <h2 id="attendance-title" className="mt-2 font-exo2 text-2xl font-bold tracking-tight lg:text-[2rem]">
+                      <span className="xl:hidden">Mark your attendance</span>
                       <span className="hidden xl:inline">Identify and continue</span>
                     </h2>
                     <p className="mt-1 max-w-md text-sm leading-5 text-white/70 lg:leading-6 lg:text-white/62">
@@ -491,13 +490,41 @@ export default function LandingPage() {
 
             <nav className="mt-5 flex items-center justify-center gap-5 text-sm xl:hidden" aria-label="Guard access">
               <Link href="/guard-login" className="min-h-11 py-3 font-semibold text-primary">
-                Guard login
+                Guard portal
               </Link>
               <span className="h-4 w-px bg-border" aria-hidden="true" />
               <Link href="/enroll" className="min-h-11 py-3 text-muted-foreground">
-                New guard enrolment
+                New guard enrollment
               </Link>
             </nav>
+
+            <section
+              data-mobile-section="android-download"
+              className="mt-4 border-y border-border/70 py-4 xl:hidden"
+              aria-labelledby="android-download-title"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue-darker text-brand-gold-light">
+                  <Smartphone className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 id="android-download-title" className="text-sm font-bold text-foreground">
+                    CISS Workforce for Android
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Version 1.0.16 · Official guard app
+                  </p>
+                </div>
+                <a
+                  href="/api/public/download/android"
+                  download
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-brand-gold/45 bg-brand-gold/15 px-3 text-xs font-bold text-brand-gold-dark transition-colors hover:bg-brand-gold/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-light"
+                >
+                  <DownloadCloud className="h-4 w-4" />
+                  Download
+                </a>
+              </div>
+            </section>
           </section>
         </div>
 
@@ -554,6 +581,40 @@ export default function LandingPage() {
               Terms
             </a>
             <a href="https://cissindia.co.in" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-semibold text-primary hover:text-brand-blue-dark dark:hover:text-primary/80">
+              <Globe2 className="h-3.5 w-3.5" />
+              Official website
+            </a>
+          </div>
+        </footer>
+
+        <footer
+          data-mobile-section="staff-access"
+          className="border-t border-border/70 pb-[max(env(safe-area-inset-bottom),1rem)] pt-5 xl:hidden"
+        >
+          <Link
+            href="/admin-login"
+            className="group flex min-h-14 items-center gap-3 rounded-xl bg-muted/55 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background text-primary shadow-sm">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-foreground">Staff login</span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
+                Field officers, clients and administrators
+              </span>
+            </span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+          </Link>
+
+          <div className="flex items-center justify-between gap-4 py-4 text-[11px] text-muted-foreground">
+            <p>&copy; {new Date().getFullYear()} CISS Services Ltd.</p>
+            <a
+              href="https://cissindia.co.in"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary"
+            >
               <Globe2 className="h-3.5 w-3.5" />
               Official website
             </a>

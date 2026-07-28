@@ -470,12 +470,12 @@ export default function WageConfigPage() {
                     <>
                       <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
                       <p className="text-sm font-medium">Drop Excel file here or click to browse</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Supports .xlsx and .xls wage sheets</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Supports secure .xlsx wage sheets</p>
                     </>
                   )}
                   <input
                     type="file"
-                    accept=".xlsx,.xls"
+                    accept=".xlsx"
                     className="hidden"
                     ref={(element) => setFileInputEl(element)}
                     onChange={(event) => {

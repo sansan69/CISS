@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { hasAdminAccess, hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
-import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import {
+  canonicalizeDistrictList,
+  districtMatches,
+  getDistrictFirestoreQueryValues,
+} from "@/lib/districts";
 import { employeeMatchesAnyDistrict, resolveEmployeeDistrict } from "@/lib/employees/visibility";
 export const runtime = "nodejs";
 
@@ -57,13 +61,42 @@ export async function GET(request: Request) {
       return NextResponse.json({ guards: [] });
     }
 
-    // Load every employee. The previous `.limit(1000)` was unbounded by
-    // ordering, so a workforce past the cap could silently exclude guards in
-    // the requested district. Status/district matching has to run in memory
-    // anyway because both are case-insensitive and alias-aware.
-    const employeesSnap = await adminDb.collection("employees").get();
+    const employeeDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    if (isAdmin && districtScope.length === 0) {
+      const snapshot = await adminDb.collection("employees").get();
+      snapshot.docs.forEach((doc) => employeeDocs.set(doc.id, doc));
+    } else {
+      // Firestore supports at most 30 values in an `in` query. Query only the
+      // officer's canonical district scope and merge chunks by document ID.
+      const queryValues = Array.from(
+        new Set(districtScope.flatMap((district) => getDistrictFirestoreQueryValues(district))),
+      );
+      const chunks: string[][] = [];
+      for (let index = 0; index < queryValues.length; index += 30) {
+        chunks.push(queryValues.slice(index, index + 30));
+      }
+      const districtFields = [
+        "district",
+        "districtName",
+        "currentDistrict",
+        "permanentDistrict",
+        "addressDistrict",
+        "locationDistrict",
+        "city",
+      ];
+      const snapshots = await Promise.all(
+        districtFields.flatMap((field) =>
+          chunks.map((districts) =>
+            adminDb.collection("employees").where(field, "in", districts).get(),
+          ),
+        ),
+      );
+      snapshots.forEach((snapshot) => {
+        snapshot.docs.forEach((doc) => employeeDocs.set(doc.id, doc));
+      });
+    }
 
-    const guards = employeesSnap.docs
+    const guards = Array.from(employeeDocs.values())
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
       .filter((employee) => normalizeText(employee.status || "Active").toLowerCase() === "active")
       .filter((employee) => {

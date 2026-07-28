@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import {
   canonicalizeDistrictName,
   inferKeralaDistrictFromText,
@@ -14,6 +13,11 @@ import type {
 
 const EMPTY_RESULT_DATE = "";
 const HEADER_SCAN_ROWS = 4;
+
+export type TcsTabularWorkbook = {
+  SheetNames: string[];
+  Sheets: Record<string, unknown[][] | undefined>;
+};
 
 // "Location" is intentionally only a siteName alias — TCS files often label
 // the centre column "Location" while the actual district lives in a CITY or
@@ -160,9 +164,11 @@ function toIsoDate(value: unknown): string | null {
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed) {
-      return formatLocalDate(new Date(parsed.y, parsed.m - 1, parsed.d));
+    const parsed = new Date(Date.UTC(1899, 11, 30) + value * 86_400_000);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatLocalDate(
+        new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()),
+      );
     }
   }
 
@@ -658,7 +664,7 @@ function detectParserMode(rows: unknown[][]): TcsExamParserMode {
 }
 
 export function parseTcsExamWorkbook(
-  workbook: XLSX.WorkBook,
+  workbook: TcsTabularWorkbook,
   fileName: string,
 ): TcsExamWorkbookParseResult {
   if (workbook.SheetNames.length === 0) {
@@ -678,11 +684,7 @@ export function parseTcsExamWorkbook(
       });
       continue;
     }
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-      header: 1,
-      raw: true,
-      defval: "",
-    }) as unknown[][];
+    const rows = sheet.map((row) => row.map((cell) => cell ?? ""));
     if (rows.length === 0) {
       emptySheetWarnings.push({
         code: "empty_sheet",

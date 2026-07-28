@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { verifyRequestAuth, unauthorizedResponse } from "@/lib/server/auth";
-import { isLegacyAdminEmail } from "@/lib/auth/admin";
 export const runtime = "nodejs";
 
 function isAdmin(decoded: Record<string, unknown>) {
   return (
     decoded.admin === true ||
-    decoded.role === "admin" ||
-    (typeof decoded.email === "string" && isLegacyAdminEmail(decoded.email))
+    decoded.role === "admin"
   );
 }
 

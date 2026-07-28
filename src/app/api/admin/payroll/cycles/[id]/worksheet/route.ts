@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import type { PayrollEntry } from "@/types/payroll";
+import writeXlsxFile from "write-excel-file/node";
 export const runtime = "nodejs";
 
 function formatLabel(value: string) {
@@ -90,16 +91,11 @@ export async function GET(
       entry.adminNotes ?? "",
     ]);
 
-    const XLSX = await import("xlsx");
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet([
+    const fileBuffer = await writeXlsxFile([
       [...fixedHeaders, ...componentHeaders, ...deductionHeaders],
       ...rows,
-    ]);
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Payroll");
-
-    const arrayBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
-    return new NextResponse(Buffer.from(arrayBuffer), {
+    ], { sheet: "Payroll" }).toBuffer();
+    return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         "Content-Type":

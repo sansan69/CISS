@@ -169,7 +169,9 @@ describe("landing page surface", () => {
     const shellIndex = indexOfAttribute(html, 'data-slot="landing-shell"');
     const headerSectionIndex = indexOfAttribute(html, 'data-mobile-section="header"');
     const verificationSectionIndex = indexOfAttribute(html, 'data-mobile-section="verification"');
+    const androidDownloadIndex = indexOfAttribute(html, 'data-mobile-section="android-download"');
     const quickAccessSectionIndex = indexOfAttribute(html, 'data-mobile-section="quick-access"');
+    const staffAccessIndex = indexOfAttribute(html, 'data-mobile-section="staff-access"');
     const brandIndex = indexOfText(textContent, "CISS Workforce");
     const descriptorIndex = indexOfText(textContent, "CISS Services · Secure workforce operations");
     const heroIndex = indexOfText(textContent, "Duty, verified.");
@@ -182,7 +184,9 @@ describe("landing page surface", () => {
     expect(brandIndex).toBeLessThan(descriptorIndex);
     expect(shellIndex).toBeLessThan(headerSectionIndex);
     expect(headerSectionIndex).toBeLessThan(verificationSectionIndex);
+    expect(verificationSectionIndex).toBeLessThan(androidDownloadIndex);
     expect(verificationSectionIndex).toBeLessThan(quickAccessSectionIndex);
+    expect(androidDownloadIndex).toBeLessThan(staffAccessIndex);
     expect(descriptorIndex).toBeLessThan(heroIndex);
     expect(heroIndex).toBeLessThan(verificationIntroIndex);
     expect(verificationIntroIndex).toBeLessThan(mobileLabelIndex);
@@ -194,13 +198,18 @@ describe("landing page surface", () => {
     expect(textContent).toContain("CISS Services · Secure workforce operations");
     expect(textContent).toContain("Duty, verified.");
     expect(textContent).toContain("Operations, connected.");
-    expect(textContent).toContain("Mark attendance");
+    expect(textContent).toContain("Mark your attendance");
     expect(textContent).toContain("Identify and continue");
     expect(textContent).toContain("Enter your mobile number or scan your employee QR.");
     expect(textContent).toContain("Not registered? Continue with your mobile number.");
     expect(textContent).toContain("open the enrolment form.");
     expect(textContent).toContain("Keep location permission on. A live photo is also required.");
+    expect(textContent).toContain("CISS Workforce for Android");
+    expect(textContent).toContain("Version 1.0.16 · Official guard app");
+    expect(textContent).toContain("Staff login");
+    expect(textContent).toContain("Field officers, clients and administrators");
     expect(hrefs).toEqual(expect.arrayContaining(["/enroll", "/guard-login", "/admin-login"]));
+    expect(hrefs).toContain("/api/public/download/android");
     expect(hrefs).toEqual(
       expect.arrayContaining([
         "https://cissindia.co.in",
@@ -219,6 +228,8 @@ describe("landing page surface", () => {
     expect(html).toContain('data-mobile-section="header"');
     expect(html).toContain('data-mobile-section="verification"');
     expect(html).toContain('data-mobile-section="quick-access"');
+    expect(html).toContain('data-mobile-section="android-download"');
+    expect(html).toContain('data-mobile-section="staff-access"');
     expect(html).toContain("hidden overflow-hidden rounded-2xl");
     expect(html).toContain('aria-label="Guard access"');
     expect(html).not.toContain('data-mobile-section="install"');

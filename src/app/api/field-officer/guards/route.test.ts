@@ -17,8 +17,13 @@ class FakeQuery {
     private readonly limitCount?: number,
   ) {}
 
-  where(field: string, _op: "==", value: unknown) {
-    return new FakeQuery(this.store, this.collectionName, [...this.filters, { field, value }], this.limitCount);
+  where(field: string, op: "==" | "in", value: unknown) {
+    return new FakeQuery(
+      this.store,
+      this.collectionName,
+      [...this.filters, { field, value: op === "in" ? { in: value } : value }],
+      this.limitCount,
+    );
   }
 
   limit(value: number) {
@@ -28,7 +33,18 @@ class FakeQuery {
   async get() {
     const docs = this.store
       .listDocs(this.collectionName)
-      .filter(({ data }) => this.filters.every((filter) => data[filter.field] === filter.value))
+      .filter(({ data }) =>
+        this.filters.every((filter) => {
+          if (
+            filter.value &&
+            typeof filter.value === "object" &&
+            "in" in filter.value
+          ) {
+            return (filter.value.in as unknown[]).includes(data[filter.field]);
+          }
+          return data[filter.field] === filter.value;
+        }),
+      )
       .map(({ id, data }) => ({ id, data: () => data }));
     return new FakeSnapshot(typeof this.limitCount === "number" ? docs.slice(0, this.limitCount) : docs);
   }

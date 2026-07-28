@@ -1,57 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
+import {
+  buildRateLimitKey,
+  checkRateLimit,
+  getClientIp,
+} from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 
-// Simple in-memory rate limiter: max 10 lookups per IP per minute.
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-
-function getClientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
-
-function checkRateLimit(ip: string, max = RATE_LIMIT_MAX): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return false;
-  }
-  entry.count += 1;
-  return true;
-}
-
-// Periodically clean up stale rate limit entries to prevent memory growth.
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [ip, entry] of rateLimitMap.entries()) {
-      if (now > entry.resetAt) rateLimitMap.delete(ip);
-    }
-  }, RATE_LIMIT_WINDOW_MS * 5);
-}
 
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIp(request);
 
-    let isAuthenticated = false;
-    try {
-      const { verifyRequestAuth } = await import("@/lib/server/auth");
-      await verifyRequestAuth(request);
-      isAuthenticated = true;
-    } catch {}
-
-    const maxAttempts = isAuthenticated ? 20 : RATE_LIMIT_MAX;
-    if (!checkRateLimit(ip, maxAttempts)) {
+    const ipLimit = await checkRateLimit(
+      buildRateLimitKey("employee-lookup-ip", ip),
+      { maxRequests: RATE_LIMIT_MAX, windowMs: RATE_LIMIT_WINDOW_MS, failClosed: true },
+    );
+    if (!ipLimit.allowed) {
       return NextResponse.json(
         { error: "Too many requests. Please wait a moment and try again." },
         { status: 429 },
@@ -68,6 +36,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const phoneFingerprint = crypto.createHash("sha256").update(phone).digest("hex").slice(0, 24);
+    const phoneLimit = await checkRateLimit(
+      buildRateLimitKey("employee-lookup-phone", phoneFingerprint),
+      { maxRequests: 3, windowMs: RATE_LIMIT_WINDOW_MS, failClosed: true },
+    );
+    if (!phoneLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests for this phone number. Please wait and try again." },
+        { status: 429 },
+      );
+    }
+
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
     const snapshot = await adminDb
@@ -80,16 +60,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ found: false });
     }
 
-    const doc = snapshot.docs[0];
-    const data = doc.data() as Record<string, unknown>;
-
-    // Return only the minimum fields needed for the public landing page.
-    return NextResponse.json({
-      found: true,
-      id: doc.id,
-      fullName: data.fullName ?? "",
-      employeeId: data.employeeId ?? "",
-    });
+    return NextResponse.json({ found: true });
   } catch (error: any) {
     console.error("Employee lookup failed:", error);
     return NextResponse.json(

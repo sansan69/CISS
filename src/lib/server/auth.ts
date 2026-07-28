@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { isLegacyAdminEmail } from "@/lib/auth/admin";
 
 export type AppDecodedToken = DecodedIdToken & {
   admin?: boolean;
@@ -25,26 +24,10 @@ export async function verifyRequestAuth(request: Request): Promise<AppDecodedTok
 }
 
 export function hasAdminAccess(decodedToken: Pick<AppDecodedToken, "admin" | "role" | "email">) {
-  const tokenEmail =
-    typeof decodedToken.email === "string" ? decodedToken.email : undefined;
-
-  const isLegacy = isLegacyAdminEmail(tokenEmail);
-  if (isLegacy) {
-    console.warn(
-      `[auth] Legacy admin email access used for ${tokenEmail}. ` +
-      `Migrate to custom claims (role: "admin" or "superAdmin"). ` +
-      `Set DISABLE_LEGACY_ADMIN_EMAILS=true to disable this path.`,
-    );
-  }
-
-  const legacyDisabled =
-    process.env.DISABLE_LEGACY_ADMIN_EMAILS === "true";
-
   return (
     decodedToken.admin === true ||
     decodedToken.role === "admin" ||
-    decodedToken.role === "superAdmin" ||
-    (isLegacy && !legacyDisabled)
+    decodedToken.role === "superAdmin"
   );
 }
 

@@ -246,6 +246,26 @@ export function districtMatches(left?: string | null, right?: string | null) {
   return Boolean(leftKey) && leftKey === rightKey;
 }
 
+export function getDistrictFirestoreQueryValues(value?: string | null) {
+  const canonical = canonicalizeDistrictName(value);
+  const entry = KERALA_DISTRICT_INDEX.find((candidate) =>
+    districtMatches(candidate.canonical, canonical),
+  );
+  const values = new Set<string>([canonical]);
+  for (const candidate of [
+    ...(entry?.searchTerms ?? []),
+    ...(entry?.aliases ?? []),
+  ]) {
+    const normalized = normalizeDistrictName(candidate);
+    if (!normalized) continue;
+    values.add(normalized);
+    values.add(normalized.replace(/\b\w/g, (character) => character.toUpperCase()));
+    values.add(normalized.toUpperCase());
+  }
+  values.delete("");
+  return Array.from(values);
+}
+
 export function getDefaultDistrictSuggestions(regionCode?: string | null) {
   return (regionCode ?? REGION_CODE).trim().toUpperCase() === "KL"
     ? [...KERALA_DISTRICTS]

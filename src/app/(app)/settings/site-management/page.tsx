@@ -11,7 +11,6 @@ import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, 
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast, addDoc, arrayUnion } from 'firebase/firestore';
-import * as XLSX from 'xlsx';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import {
@@ -45,6 +44,11 @@ import { buildFirestoreAuditEvent, buildFirestoreCreateAudit, buildFirestoreUpda
 import { buildGeocodeReportLine, type GeocodeStatus } from '@/lib/geocode-report';
 import { LocationEditorCard } from '@/components/location/location-editor-card';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
+import {
+    downloadXlsx,
+    readTabularFile,
+    rowsToRecords,
+} from '@/lib/spreadsheets/browser';
 import { buildGoogleMapsLink, buildLocationIdentity, buildSiteLocationSyncPatch, coordinateStatusLabels, deriveCoordinateStatus, formatCoordinate, hasValidCoordinates, parseGeoString } from '@/lib/location-utils';
 import {
     buildDutyPointShiftTemplates,
@@ -834,14 +838,15 @@ export default function SiteManagementPage() {
         }
     };
 
-    const handleDownloadTemplate = () => {
+    const handleDownloadTemplate = async () => {
         const templateHeaders = ['Client Name', 'Site Name', 'Site ID', 'Site Address', 'Geolocation', 'District', 'Client Location Name', 'Shift Pattern', 'Coordinate Status', 'Coordinate Source', 'Strict Geofence', 'Site Type'];
         const templateExampleRow = [OPERATIONAL_CLIENT_NAME, 'Main Branch', 'SITE-001', '123 Example St, Example City, EX 12345', '10.1234,76.5432', 'Ernakulam', 'TCS Kochi Branch', '', 'verified', 'manual', 'TRUE', 'site'];
         const templateData = [templateHeaders, templateExampleRow];
-        const ws = XLSX.utils.aoa_to_sheet(templateData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Site Import Template");
-        XLSX.writeFile(wb, "CISS_Site_Import_Template.xlsx");
+        await downloadXlsx(
+            "CISS_Site_Import_Template.xlsx",
+            templateData,
+            "Site Import Template",
+        );
         toast({
             title: "Template Downloading",
             description: "The Excel template file has started downloading."
@@ -857,14 +862,8 @@ export default function SiteManagementPage() {
         setIsProcessing(true);
         setProcessedRecords([]);
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        try {
+                const jsonData = rowsToRecords(await readTabularFile(file));
                 
                 if (jsonData.length === 0) {
                     throw new Error("The file is empty or does not contain data rows.");
@@ -987,8 +986,6 @@ export default function SiteManagementPage() {
             } finally {
                 setIsProcessing(false);
             }
-        };
-        reader.readAsArrayBuffer(file);
     };
 
     const handleUpdateSite = async (updatedData: Partial<Site>) => {
@@ -1055,31 +1052,46 @@ export default function SiteManagementPage() {
         }
     };
 
-    const handleDownloadGeocodeReport = () => {
+    const handleDownloadGeocodeReport = async () => {
         if (!geocodeResults.length) {
             toast({ variant: 'destructive', title: 'No Report Available', description: 'Run "Update Site Locations" first.' });
             return;
         }
 
-        const rows = geocodeResults.map((r, index) => ({
-            SNo: index + 1,
-            Client: r.clientName ?? '',
-            'Site Name': r.siteName ?? '',
-            District: r.district ?? '',
-            'Site Address': r.siteAddress ?? '',
-            Status: r.status,
-            Message: r.message,
-            'Old Latitude': typeof r.oldLat === 'number' ? formatCoord(r.oldLat) : '',
-            'Old Longitude': typeof r.oldLng === 'number' ? formatCoord(r.oldLng) : '',
-            'New Latitude': typeof r.newLat === 'number' ? formatCoord(r.newLat) : '',
-            'New Longitude': typeof r.newLng === 'number' ? formatCoord(r.newLng) : '',
-            'Distance (m)': typeof r.distanceMeters === 'number' ? Math.round(r.distanceMeters) : '',
-        }));
+        const headers = [
+            'SNo',
+            'Client',
+            'Site Name',
+            'District',
+            'Site Address',
+            'Status',
+            'Message',
+            'Old Latitude',
+            'Old Longitude',
+            'New Latitude',
+            'New Longitude',
+            'Distance (m)',
+        ];
+        const rows = geocodeResults.map((r, index) => [
+            index + 1,
+            r.clientName ?? '',
+            r.siteName ?? '',
+            r.district ?? '',
+            r.siteAddress ?? '',
+            r.status,
+            r.message,
+            typeof r.oldLat === 'number' ? formatCoord(r.oldLat) : '',
+            typeof r.oldLng === 'number' ? formatCoord(r.oldLng) : '',
+            typeof r.newLat === 'number' ? formatCoord(r.newLat) : '',
+            typeof r.newLng === 'number' ? formatCoord(r.newLng) : '',
+            typeof r.distanceMeters === 'number' ? Math.round(r.distanceMeters) : '',
+        ]);
 
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Geocoding Report');
-        XLSX.writeFile(workbook, 'CISS_Site_Geocoding_Report.xlsx');
+        await downloadXlsx(
+            'CISS_Site_Geocoding_Report.xlsx',
+            [headers, ...rows],
+            'Geocoding Report',
+        );
     };
 
     // --- Bulk Geocoding using a server-side API route ---

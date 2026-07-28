@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Download, Loader2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import type { WorkOrder as WorkOrderDoc } from '@/types/work-orders';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { isOperationalWorkOrderClientName } from '@/lib/work-orders';
+import { downloadXlsx } from '@/lib/spreadsheets/browser';
 
 interface SiteDoc {
   id: string;
@@ -194,23 +194,8 @@ export function AssignedGuardsExportPanel() {
         'ID proof number',
       ];
 
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const dateOfBirthColumn = headers.indexOf('date of birth');
-      if (dateOfBirthColumn >= 0) {
-        rows.forEach((row, rowIndex) => {
-          const cellAddress = XLSX.utils.encode_cell({ r: rowIndex + 1, c: dateOfBirthColumn });
-          const cell = (worksheet as any)[cellAddress];
-          if (cell && cell.v instanceof Date) {
-            cell.t = 'd';
-            cell.z = 'dd-mm-yyyy';
-          }
-        });
-      }
-
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Assigned Guards');
       const fileName = `Assigned_Guards_${buildFiltersDescription().replace(/[^a-zA-Z0-9_\- ,]/g, '')}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
+      await downloadXlsx(fileName, [headers, ...rows], 'Assigned Guards');
     } catch (error) {
       console.error('Export failed:', error);
     } finally {

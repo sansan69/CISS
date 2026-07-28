@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
+import { getIstYearMonth } from "@/lib/ist-date";
 
 export const dynamic = "force-dynamic";
 
@@ -62,10 +63,7 @@ export async function GET(request: Request) {
         { status: 400 },
       );
     } else {
-      const now = new Date();
-      year = now.getFullYear();
-      month = now.getMonth();
-      monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
+      ({ year, month, monthStr } = getIstYearMonth());
     }
 
     const firstDay = `${monthStr}-01`;

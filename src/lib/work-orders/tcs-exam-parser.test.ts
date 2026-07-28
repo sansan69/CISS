@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
-import * as XLSX from "xlsx";
 import { parseTcsExamWorkbook } from "./tcs-exam-parser";
 
-function workbookFromRows(rows: unknown[][]): XLSX.WorkBook {
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-  return workbook;
+function workbookFromRows(rows: unknown[][]) {
+  return { SheetNames: ["Sheet1"], Sheets: { Sheet1: rows } };
 }
 
 describe("parseTcsExamWorkbook", () => {
@@ -191,25 +187,21 @@ describe("parseTcsExamWorkbook", () => {
   });
 
   it("parses every populated worksheet in a workbook", () => {
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([
+    const workbook = {
+      SheetNames: ["Ernakulam", "Kollam"],
+      Sheets: {
+        Ernakulam: [
         ["Exam Name:- Multi Sheet Exam", "21 Apr 2026"],
         ["District", "Site", "Male", "Female"],
         ["Ernakulam", "Centre A", 2, 1],
-      ]),
-      "Ernakulam",
-    );
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([
+        ],
+        Kollam: [
         ["Exam Name:- Multi Sheet Exam", "21 Apr 2026"],
         ["District", "Site", "Male", "Female"],
         ["Kollam", "Centre B", 3, 0],
-      ]),
-      "Kollam",
-    );
+        ],
+      },
+    };
 
     const result = parseTcsExamWorkbook(workbook, "Multi Sheet Exam.xlsx");
 

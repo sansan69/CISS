@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { getBytes, ref } from 'firebase/storage';
 import { PageHeader } from '@/components/layout/page-header';
 import { dedupeClientOptions } from '@/lib/client-options';
+import { downloadXlsx, type TabularRow } from '@/lib/spreadsheets/browser';
 
 const XLSX_EXCLUDED_FIELDS = new Set([
     'bankAccountNumber',
@@ -178,11 +179,29 @@ export default function DataExportPage() {
                 return { id: doc.id, ...processedRecord };
             });
             
-            const XLSX = await import('xlsx');
-            const workbook = XLSX.utils.book_new();
-            const worksheet = XLSX.utils.json_to_sheet(employeesData);
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
-            XLSX.writeFile(workbook, `CISS_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            const headers = Array.from(
+                new Set(employeesData.flatMap((record) => Object.keys(record))),
+            );
+            const rows: TabularRow[] = employeesData.map((record) =>
+                headers.map((header) => {
+                    const value = record[header];
+                    if (
+                        value == null ||
+                        typeof value === 'string' ||
+                        typeof value === 'number' ||
+                        typeof value === 'boolean' ||
+                        value instanceof Date
+                    ) {
+                        return value ?? '';
+                    }
+                    return JSON.stringify(value);
+                }),
+            );
+            await downloadXlsx(
+                `CISS_Export_${new Date().toISOString().split('T')[0]}.xlsx`,
+                [headers, ...rows],
+                "Employees",
+            );
 
             setGenerationStatus('complete');
             toast({ variant: 'default', title: "Export Ready!", description: `Successfully exported ${employeesData.length} records.` });

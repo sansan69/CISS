@@ -745,7 +745,7 @@ export default function WorkOrderPage() {
         if (event.target.files && event.target.files.length > 0) {
             const selectedFiles = Array.from(event.target.files);
             const invalidFile = selectedFiles.find((selectedFile) =>
-                !/\.(csv|xlsx|xls)$/i.test(selectedFile.name),
+                !/\.(csv|xlsx)$/i.test(selectedFile.name),
             );
             if (!invalidFile) {
                 setFiles(selectedFiles);
@@ -984,7 +984,7 @@ export default function WorkOrderPage() {
                                             key={fileInputKey}
                                             id="work-order-file"
                                             type="file"
-                                            accept=".csv, .xlsx, .xls"
+                                            accept=".csv, .xlsx"
                                             multiple
                                             onChange={handleFileChange}
                                         />

@@ -13,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, ensureAuthPersistence } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
-import { isLegacyAdminEmail } from '@/lib/auth/admin';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   buildClientPortalAuthEmail,
@@ -105,8 +104,7 @@ export default function AdminLoginPage() {
         || role === 'admin'
         || role === 'superAdmin'
         || role === 'fieldOfficer'
-        || role === 'client'
-        || isLegacyAdminEmail(userCredential.user.email);
+        || role === 'client';
 
       if (!baseAuthorized) {
         toast({
@@ -136,8 +134,7 @@ export default function AdminLoginPage() {
         const isAdminLike =
           idTokenResult.claims.admin === true ||
           role === "admin" ||
-          role === "superAdmin" ||
-          isLegacyAdminEmail(userCredential.user.email);
+          role === "superAdmin";
         const isMatchingClient =
           role === "client" &&
           tokenClientName.trim().toLowerCase() === portalContext.client.name.trim().toLowerCase();

@@ -21,6 +21,7 @@ import {
   enrollmentSubmissionSchema,
   type EnrollmentSubmission,
 } from "@/types/enrollment";
+import { enrollmentDraftTokenMatches } from "@/lib/server/enrollment-draft";
 export const runtime = "nodejs";
 
 function buildSearchableFields(data: EnrollmentSubmission, employeeId: string) {
@@ -84,7 +85,16 @@ function buildLngFallbackEmail(payload: EnrollmentSubmission) {
 export async function POST(request: NextRequest) {
   try {
     // Public endpoint — self-enrollment does not require authentication.
-    const payload = enrollmentSubmissionSchema.parse(await request.json());
+    const rawPayload = (await request.json()) as Record<string, unknown>;
+    const draftId = String(rawPayload.enrollmentDraftId ?? "").trim();
+    const draftToken = String(rawPayload.enrollmentUploadToken ?? "");
+    if (!/^[A-Za-z0-9_-]{10,128}$/.test(draftId) || !draftToken) {
+      return NextResponse.json(
+        { error: "Enrollment upload session is required." },
+        { status: 400 },
+      );
+    }
+    const payload = enrollmentSubmissionSchema.parse(rawPayload);
     const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
     const district = canonicalizeDistrictName(payload.district, districtSuggestions);
     if (!isRecognizedDistrictName(district, districtSuggestions)) {
@@ -97,6 +107,26 @@ export async function POST(request: NextRequest) {
     const { Timestamp } = await import("firebase-admin/firestore");
 
     const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
+    const draftRef = adminDb.collection("enrollments").doc(draftId);
+    const draftSnap = await draftRef.get();
+    const draftData = draftSnap.data() as {
+      status?: string;
+      phoneNumber?: string;
+      tokenHash?: string;
+      expiresAt?: { toMillis?: () => number };
+    } | undefined;
+    if (
+      !draftSnap.exists ||
+      draftData?.status !== "draft" ||
+      draftData.phoneNumber !== normalizedPhone ||
+      (draftData.expiresAt?.toMillis?.() ?? 0) <= Date.now() ||
+      !enrollmentDraftTokenMatches(draftToken, draftData.tokenHash)
+    ) {
+      return NextResponse.json(
+        { error: "Enrollment upload session is invalid or has expired." },
+        { status: 403 },
+      );
+    }
     const isLngEnrollment = isLngClientName(payload.clientName);
     const canonicalClientName = isLngEnrollment ? LNG_CLIENT_NAME : payload.clientName;
     const normalizedEmail =
@@ -302,6 +332,13 @@ export async function POST(request: NextRequest) {
       }),
     );
     batch.set(docRef, employeeData);
+    batch.update(draftRef, {
+      status: "completed",
+      employeeDocId: docRef.id,
+      employeeId,
+      completedAt: now,
+      tokenHash: null,
+    });
     await batch.commit();
 
     return NextResponse.json({

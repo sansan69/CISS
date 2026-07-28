@@ -45,8 +45,7 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.admin == true ||
         request.auth.token.role == 'admin' ||
-        request.auth.token.role == 'superAdmin' ||
-        request.auth.token.email == 'admin@cisskerala.app'
+        request.auth.token.role == 'superAdmin'
       );
     }
 

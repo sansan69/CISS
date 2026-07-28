@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { assertEnrollmentUploadSize, getEnrollmentFileSelectionError } from "@/lib/enrollmentFiles";
 import { storage, db } from "@/lib/firebaseAdmin";
+import {
+  ENROLLMENT_DRAFT_MAX_UPLOADS,
+  enrollmentDraftTokenMatches,
+} from "@/lib/server/enrollment-draft";
 
 export const runtime = "nodejs";
 
@@ -34,6 +38,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file");
     const path = String(formData.get("path") || "");
+    const uploadToken = String(formData.get("uploadToken") || "");
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "File is required." }, { status: 400 });
@@ -51,10 +56,26 @@ export async function POST(request: NextRequest) {
     if (!enrollmentSnap.exists) {
       return NextResponse.json({ error: "Enrollment not found." }, { status: 404 });
     }
-    const enrollmentData = enrollmentSnap.data() as { status?: string } | undefined;
-    if (!enrollmentData?.status || enrollmentData.status === "completed" || enrollmentData.status === "rejected") {
+    const enrollmentData = enrollmentSnap.data() as {
+      status?: string;
+      tokenHash?: string;
+      expiresAt?: { toMillis?: () => number };
+      uploadCount?: number;
+    } | undefined;
+    const expiresAt = enrollmentData?.expiresAt?.toMillis?.() ?? 0;
+    if (
+      enrollmentData?.status !== "draft" ||
+      expiresAt <= Date.now() ||
+      !enrollmentDraftTokenMatches(uploadToken, enrollmentData.tokenHash)
+    ) {
       return NextResponse.json(
-        { error: "Cannot upload files for an enrollment that is already completed or rejected." },
+        { error: "This enrollment upload session is invalid or has expired." },
+        { status: 403 },
+      );
+    }
+    if ((enrollmentData.uploadCount ?? 0) >= ENROLLMENT_DRAFT_MAX_UPLOADS) {
+      return NextResponse.json(
+        { error: "The maximum number of enrollment files has been reached." },
         { status: 400 },
       );
     }
@@ -79,6 +100,9 @@ export async function POST(request: NextRequest) {
           firebaseStorageDownloadTokens: downloadToken,
         },
       },
+    });
+    await enrollmentSnap.ref.update({
+      uploadCount: (enrollmentData.uploadCount ?? 0) + 1,
     });
 
     return NextResponse.json({

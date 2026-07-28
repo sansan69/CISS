@@ -11,7 +11,6 @@ import {
   GraduationCap,
   Star,
   User,
-  KeyRound,
   LogOut,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -36,7 +35,6 @@ const moreItems = [
   { href: "/guard/training",    label: "Training",    icon: GraduationCap },
   { href: "/guard/evaluations", label: "Evaluations", icon: Star          },
   { href: "/guard/profile",     label: "Profile",     icon: User          },
-  { href: "/guard-login/reset", label: "Change PIN",  icon: KeyRound      },
 ];
 
 export function GuardBottomNav() {
