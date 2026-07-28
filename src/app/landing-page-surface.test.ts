@@ -5,7 +5,7 @@ import { transformSync } from "esbuild";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-const pagePath = resolve(process.cwd(), "src/app/page.tsx");
+const pagePath = resolve(process.cwd(), "src/components/landing-page.tsx");
 const pageSource = readFileSync(pagePath, "utf8");
 
 const lucideProxy = new Proxy(
@@ -171,6 +171,7 @@ describe("landing page surface", () => {
     const verificationSectionIndex = indexOfAttribute(html, 'data-mobile-section="verification"');
     const androidDownloadIndex = indexOfAttribute(html, 'data-mobile-section="android-download"');
     const quickAccessSectionIndex = indexOfAttribute(html, 'data-mobile-section="quick-access"');
+    const platformInformationIndex = indexOfAttribute(html, 'data-section="platform-information"');
     const staffAccessIndex = indexOfAttribute(html, 'data-mobile-section="staff-access"');
     const brandIndex = indexOfText(textContent, "CISS Workforce");
     const descriptorIndex = indexOfText(textContent, "CISS Services · Secure workforce operations");
@@ -187,6 +188,8 @@ describe("landing page surface", () => {
     expect(verificationSectionIndex).toBeLessThan(androidDownloadIndex);
     expect(verificationSectionIndex).toBeLessThan(quickAccessSectionIndex);
     expect(androidDownloadIndex).toBeLessThan(staffAccessIndex);
+    expect(quickAccessSectionIndex).toBeLessThan(platformInformationIndex);
+    expect(platformInformationIndex).toBeLessThan(staffAccessIndex);
     expect(descriptorIndex).toBeLessThan(heroIndex);
     expect(heroIndex).toBeLessThan(verificationIntroIndex);
     expect(verificationIntroIndex).toBeLessThan(mobileLabelIndex);
@@ -208,6 +211,10 @@ describe("landing page surface", () => {
     expect(textContent).toContain("Version 1.0.16 · Official guard app");
     expect(textContent).toContain("Staff login");
     expect(textContent).toContain("Field officers, clients and administrators");
+    expect(textContent).toContain("The official CISS workforce portal");
+    expect(textContent).toContain("Verified attendance from the duty location");
+    expect(textContent).toContain("Clear information for every operations role");
+    expect(textContent.split(/\s+/).length).toBeGreaterThanOrEqual(300);
     expect(hrefs).toEqual(expect.arrayContaining(["/enroll", "/guard-login", "/admin-login"]));
     expect(hrefs).toContain("/api/public/download/android");
     expect(hrefs).toEqual(
@@ -230,6 +237,8 @@ describe("landing page surface", () => {
     expect(html).toContain('data-mobile-section="quick-access"');
     expect(html).toContain('data-mobile-section="android-download"');
     expect(html).toContain('data-mobile-section="staff-access"');
+    expect(html).toContain('data-section="platform-information"');
+    expect(html).toContain('aria-controls="platform-information-content"');
     expect(html).toContain("hidden overflow-hidden rounded-2xl");
     expect(html).toContain('aria-label="Guard access"');
     expect(html).not.toContain('data-mobile-section="install"');

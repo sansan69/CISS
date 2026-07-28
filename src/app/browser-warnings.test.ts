@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const rootLayoutSource = readFileSync(resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
-const homePageSource = readFileSync(resolve(process.cwd(), "src/app/page.tsx"), "utf8");
+const homePageSource = readFileSync(
+  resolve(process.cwd(), "src/components/landing-page.tsx"),
+  "utf8",
+);
 const adminLoginSource = readFileSync(resolve(process.cwd(), "src/app/admin-login/page.tsx"), "utf8");
 const appLayoutSource = readFileSync(resolve(process.cwd(), "src/app/(app)/layout.tsx"), "utf8");
 const fcmSource = readFileSync(resolve(process.cwd(), "src/lib/fcm.ts"), "utf8");

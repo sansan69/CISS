@@ -1,5 +1,6 @@
 
 import type {Metadata, Viewport} from 'next';
+import { headers } from 'next/headers';
 import {Geist, Geist_Mono, Exo_2} from 'next/font/google';
 import './globals.css';
 import PwaLoader from '@/components/pwa-loader';
@@ -34,7 +35,22 @@ export const metadata: Metadata = {
     title: 'CISS Workforce',
     description: 'Secure attendance and workforce operations for CISS Services.',
     siteName: 'CISS Workforce',
+    locale: 'en_IN',
     type: 'website',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'CISS Workforce secure attendance and workforce operations',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'CISS Workforce',
+    description: 'Secure attendance and workforce operations for CISS Services.',
+    images: ['/opengraph-image'],
   },
   manifest: '/manifest.json',
   appleWebApp: {
@@ -77,15 +93,18 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){var d=document.documentElement;var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){var dark=m.matches;d.classList.toggle('dark',dark);d.dataset.theme=dark?'dark':'light';d.style.colorScheme=dark?'dark':'light'}s();if(m.addEventListener)m.addEventListener('change',s);else if(m.addListener)m.addListener(s)})();`,
           }}
