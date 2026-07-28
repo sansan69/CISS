@@ -277,7 +277,7 @@ export default function LandingPage() {
         Skip to attendance access
       </a>
 
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div className="pointer-events-none absolute inset-0 hidden overflow-hidden xl:block" aria-hidden="true">
         <div className="absolute -right-28 -top-36 h-[34rem] w-[34rem] rounded-full bg-primary/[0.09] blur-3xl dark:bg-primary/[0.13]" />
         <div className="absolute -left-48 top-[42%] h-[30rem] w-[30rem] rounded-full bg-accent/[0.10] blur-3xl dark:bg-accent/[0.07]" />
         <div className="absolute inset-0 opacity-[0.22] [background-image:linear-gradient(hsl(var(--border)/0.55)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/0.55)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
@@ -286,10 +286,10 @@ export default function LandingPage() {
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[90rem] flex-col px-4 sm:px-6 lg:px-10">
         <header
           data-mobile-section="header"
-          className="flex h-[4.75rem] items-center justify-between border-b border-border/60"
+          className="flex h-16 items-center justify-between border-b border-border/60 lg:h-[4.75rem]"
         >
           <Link href="/" className="group flex min-w-0 items-center gap-3" aria-label="CISS Workforce home">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/30 bg-card shadow-brand-sm transition-transform duration-200 group-hover:-translate-y-0.5 dark:bg-white/[0.05]">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent/30 bg-card shadow-brand-sm transition-transform duration-200 group-hover:-translate-y-0.5 dark:bg-white/[0.05] lg:h-10 lg:w-10 lg:rounded-xl">
               <Image
                 src="/ciss-logo.png"
                 alt="CISS Workforce Logo"
@@ -300,10 +300,10 @@ export default function LandingPage() {
               />
             </span>
             <span className="min-w-0">
-              <span className="block font-exo2 text-xl font-bold leading-none tracking-[-0.035em] text-brand-blue dark:text-white">
+              <span className="block font-exo2 text-lg font-bold leading-none tracking-[-0.035em] text-brand-blue dark:text-white lg:text-xl">
                 CISS
               </span>
-              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              <span className="mt-1 hidden text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:block">
                 Workforce
               </span>
             </span>
@@ -320,15 +320,18 @@ export default function LandingPage() {
               <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
             <Button asChild variant="outline" size="sm" className="bg-card/70 backdrop-blur">
-              <Link href="/admin-login">Staff sign in</Link>
+              <Link href="/admin-login">
+                <span className="sm:hidden">Staff</span>
+                <span className="hidden sm:inline">Staff sign in</span>
+              </Link>
             </Button>
           </nav>
         </header>
 
-        <div className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)] lg:gap-16 lg:py-14">
+        <div className="grid flex-1 items-start gap-6 py-6 sm:py-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)] xl:items-center xl:gap-16 xl:py-14">
           <section
             data-desktop-section="brand"
-            className="animate-slide-up lg:pr-4"
+            className="hidden animate-slide-up xl:block xl:pr-4"
             aria-labelledby="landing-title"
           >
             <div className="inline-flex items-center gap-2 border-l-2 border-accent pl-3 text-[11px] font-bold uppercase tracking-[0.22em] text-brand-blue dark:text-accent">
@@ -386,26 +389,27 @@ export default function LandingPage() {
           <section
             id="attendance-access"
             data-mobile-section="verification"
-            className="relative animate-slide-up stagger-1"
+            className="relative mx-auto w-full max-w-xl animate-slide-up xl:max-w-none"
             aria-labelledby="attendance-title"
           >
             <div
-              className="absolute -inset-3 -z-10 translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.05] dark:border-white/[0.06] dark:bg-white/[0.025]"
+              className="absolute -inset-3 -z-10 hidden translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.05] dark:border-white/[0.06] dark:bg-white/[0.025] xl:block"
               aria-hidden="true"
             />
-            <div className="overflow-hidden rounded-[1.75rem] border border-border/70 bg-card/95 shadow-[0_30px_90px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl dark:bg-card/90">
-              <div className="relative overflow-hidden border-b border-border/70 bg-brand-blue-darker px-5 py-5 text-white sm:px-7">
-                <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_85%_10%,rgba(189,156,85,0.34),transparent_34%),linear-gradient(115deg,transparent_48%,rgba(255,255,255,0.05)_48%,rgba(255,255,255,0.05)_49%,transparent_49%)]" />
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-brand-md lg:rounded-[1.75rem] lg:bg-card/95 lg:shadow-[0_30px_90px_-42px_hsl(var(--primary)/0.55)] lg:backdrop-blur-xl dark:bg-card/90">
+              <div className="relative overflow-hidden border-b border-border/70 bg-brand-blue-darker px-5 py-5 text-white sm:px-7 lg:py-6">
+                <div className="absolute inset-0 hidden opacity-40 [background-image:radial-gradient(circle_at_85%_10%,rgba(189,156,85,0.34),transparent_34%),linear-gradient(115deg,transparent_48%,rgba(255,255,255,0.05)_48%,rgba(255,255,255,0.05)_49%,transparent_49%)] lg:block" />
                 <div className="relative flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light">
+                    <p className="hidden text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light xl:block">
                       Guard attendance
                     </p>
-                    <h2 id="attendance-title" className="mt-2 font-exo2 text-2xl font-bold tracking-tight sm:text-[2rem]">
-                      Identify and continue
+                    <h2 id="attendance-title" className="font-exo2 text-2xl font-bold tracking-tight lg:mt-2 lg:text-[2rem]">
+                      <span className="xl:hidden">Mark attendance</span>
+                      <span className="hidden xl:inline">Identify and continue</span>
                     </h2>
-                    <p className="mt-1 max-w-md text-sm leading-6 text-white/62">
-                      Use the registered mobile number or scan the employee QR card.
+                    <p className="mt-1 max-w-md text-sm leading-5 text-white/70 lg:leading-6 lg:text-white/62">
+                      Enter your mobile number or scan your employee QR.
                     </p>
                   </div>
                   <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.07] sm:flex">
@@ -416,9 +420,9 @@ export default function LandingPage() {
 
               <div className="p-5 sm:p-7">
                 <label htmlFor="employee-phone" className="text-sm font-semibold text-foreground">
-                  Registered mobile number
+                  Mobile number
                 </label>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                <p className="mt-1 hidden text-xs leading-5 text-muted-foreground xl:block">
                   Enter the 10-digit number linked to the guard profile.
                 </p>
 
@@ -472,20 +476,30 @@ export default function LandingPage() {
                   )}
                 </Button>
 
-                <div className="mt-5 flex items-start gap-3 rounded-xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+                <div className="mt-4 flex items-start gap-3 rounded-xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground lg:mt-5">
                   <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <p className="leading-5">
-                    Attendance submission requires a live photo and location permission.
+                    Keep location permission on. A live photo is also required.
                   </p>
                 </div>
               </div>
             </div>
+
+            <nav className="mt-5 flex items-center justify-center gap-5 text-sm xl:hidden" aria-label="Guard access">
+              <Link href="/guard-login" className="min-h-11 py-3 font-semibold text-primary">
+                Guard login
+              </Link>
+              <span className="h-4 w-px bg-border" aria-hidden="true" />
+              <Link href="/enroll" className="min-h-11 py-3 text-muted-foreground">
+                New guard enrolment
+              </Link>
+            </nav>
           </section>
         </div>
 
         <section
           data-mobile-section="quick-access"
-          className="mb-8 grid overflow-hidden rounded-2xl border border-border/70 bg-card/65 backdrop-blur lg:grid-cols-[1.15fr_0.85fr_1fr]"
+          className="mb-8 hidden overflow-hidden rounded-2xl border border-border/70 bg-card/65 backdrop-blur xl:grid xl:grid-cols-[1.15fr_0.85fr_1fr]"
           aria-label="Platform capabilities"
         >
           <div className="flex gap-4 border-b border-border/70 p-5 lg:border-b-0 lg:border-r">
@@ -517,7 +531,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <footer className="flex flex-col gap-5 border-t border-border/60 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <footer className="hidden flex-col gap-5 border-t border-border/60 py-6 text-xs text-muted-foreground xl:flex xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <Building2 className="h-4 w-4 text-accent" />
             <p>
@@ -550,7 +564,7 @@ export default function LandingPage() {
       />
 
       {showInstallPrompt && (
-        <div className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] animate-slide-up">
+        <div className="fixed inset-x-0 bottom-0 z-50 hidden px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] animate-slide-up xl:block">
           <div className="mx-auto max-w-md rounded-2xl border border-border/80 bg-card/95 p-4 text-card-foreground shadow-brand-lg backdrop-blur-2xl">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-brand-gold-dark dark:text-accent">

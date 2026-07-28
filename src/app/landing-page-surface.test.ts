@@ -174,7 +174,7 @@ describe("landing page surface", () => {
     const descriptorIndex = indexOfText(textContent, "CISS Services · Secure workforce operations");
     const heroIndex = indexOfText(textContent, "Duty, verified.");
     const verificationIntroIndex = indexOfText(textContent, "Identify and continue");
-    const mobileLabelIndex = indexOfText(textContent, "Registered mobile number");
+    const mobileLabelIndex = indexOfText(textContent, "Mobile number");
     const verifyButtonIndex = indexOfText(textContent, "Continue to attendance");
     const quickAccessIndex = indexOfText(textContent, "Verified attendance");
     const attendanceIndex = indexOfText(textContent, "Open guard portal");
@@ -194,8 +194,10 @@ describe("landing page surface", () => {
     expect(textContent).toContain("CISS Services · Secure workforce operations");
     expect(textContent).toContain("Duty, verified.");
     expect(textContent).toContain("Operations, connected.");
+    expect(textContent).toContain("Mark attendance");
     expect(textContent).toContain("Identify and continue");
-    expect(textContent).toContain("Attendance submission requires a live photo and location permission.");
+    expect(textContent).toContain("Enter your mobile number or scan your employee QR.");
+    expect(textContent).toContain("Keep location permission on. A live photo is also required.");
     expect(hrefs).toEqual(expect.arrayContaining(["/enroll", "/guard-login", "/admin-login"]));
     expect(hrefs).toEqual(
       expect.arrayContaining([
@@ -208,12 +210,15 @@ describe("landing page surface", () => {
       expect.arrayContaining([{ alt: "CISS Workforce Logo", src: "/ciss-logo.png" }]),
     );
     expect(html).toContain('data-desktop-section="brand"');
-    expect(html).toContain("lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]");
+    expect(html).toContain("hidden animate-slide-up xl:block");
+    expect(html).toContain("xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]");
     expect(html).toContain('id="attendance-access"');
     expect(html).toContain("dark:bg-card/90");
     expect(html).toContain('data-mobile-section="header"');
     expect(html).toContain('data-mobile-section="verification"');
     expect(html).toContain('data-mobile-section="quick-access"');
+    expect(html).toContain("hidden overflow-hidden rounded-2xl");
+    expect(html).toContain('aria-label="Guard access"');
     expect(html).not.toContain('data-mobile-section="install"');
   });
 });
