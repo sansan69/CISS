@@ -208,17 +208,14 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div
-      className="min-h-[100dvh] w-full flex flex-col md:flex-row text-foreground"
-      style={{ background: "linear-gradient(160deg, hsl(206 98% 10%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 14%) 100%)" }}
-    >
+    <div className="min-h-[100dvh] w-full flex flex-col bg-background text-foreground md:flex-row">
       {/* Home link */}
       <div className="absolute top-4 right-4 z-10">
         <Button
           variant="ghost"
           asChild
           size="default"
-          className="px-3 text-white/80 hover:text-white hover:bg-white/10"
+          className="border border-border/70 bg-card/70 px-3 text-foreground shadow-brand-xs backdrop-blur hover:bg-muted"
         >
           <Link href="/">
             <HomeIcon className="mr-2 h-4 w-4" /> Home
@@ -227,7 +224,8 @@ export default function AdminLoginPage() {
       </div>
 
       {/* Desktop brand panel */}
-      <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
+      <aside className="relative hidden overflow-hidden bg-brand-blue-darker text-white md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16">
+        <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_10%,rgba(189,156,85,0.3),transparent_28%),linear-gradient(120deg,transparent_55%,rgba(255,255,255,0.05)_55%,rgba(255,255,255,0.05)_56%,transparent_56%)]" />
         <div className="relative flex items-center gap-3 animate-slide-up">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
             <Image
@@ -289,12 +287,12 @@ export default function AdminLoginPage() {
       </aside>
 
       {/* Login panel */}
-      <main className="flex-1 flex flex-col md:items-center md:justify-center md:p-10">
+      <main className="flex flex-1 flex-col bg-background md:items-center md:justify-center md:p-10">
         <div className="flex-1 flex flex-col w-full md:flex-none md:max-w-md">
 
           {/* Brand header — mobile only */}
           <div className="flex flex-col items-center justify-center pt-16 pb-7 px-6 md:hidden animate-slide-up">
-            <div className="flex h-20 w-20 items-center justify-center rounded-[22px] mb-5 bg-white/10 ring-1 ring-white/15 inset-highlight">
+            <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-[22px] border border-accent/30 bg-card shadow-brand-md">
               <Image
                 src="/ciss-logo.png"
                 alt="CISS Workforce Logo"
@@ -306,10 +304,10 @@ export default function AdminLoginPage() {
                 unoptimized
               />
             </div>
-            <h1 className="text-2xl font-bold text-white font-exo2 tracking-tight">
+            <h1 className="text-2xl font-bold text-foreground font-exo2 tracking-tight">
               {portalContext?.isClientPortal ? "Client Portal" : "Admin Portal"}
             </h1>
-            <p className="text-sm mt-1.5 font-medium text-accent">
+            <p className="text-sm mt-1.5 font-medium text-brand-gold-dark dark:text-accent">
               {portalContext?.isClientPortal && portalContext.client
                 ? portalContext.client.name
                 : "CISS Workforce"}
@@ -319,12 +317,12 @@ export default function AdminLoginPage() {
           {/* Card */}
           <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
             <div
-              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl border border-white/10 bg-black/15 text-white backdrop-blur md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] px-6 pt-8 pb-8 sm:px-8 md:p-10"
+              className="flex-1 rounded-t-[28px] rounded-b-none border border-border/70 bg-card/95 px-6 pb-8 pt-8 text-card-foreground shadow-brand-lg backdrop-blur sm:px-8 md:flex-none md:rounded-3xl md:p-10"
               style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 2rem)" }}
             >
               <div className="text-center md:text-left mb-7">
                 <h2 className="text-2xl font-bold font-exo2 tracking-tight">Sign in</h2>
-                <p className="text-base text-white/60 mt-1">
+                <p className="text-base text-muted-foreground mt-1">
                   {portalContext?.isClientPortal && portalContext.client
                     ? `Sign in to ${portalContext.client.name}. Admin oversight is still allowed here.`
                     : "Enter your admin credentials to continue."}
@@ -333,7 +331,7 @@ export default function AdminLoginPage() {
 
               <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-semibold text-white">
+                  <Label htmlFor="email" className="text-sm font-semibold text-foreground">
                     {portalContext?.isClientPortal ? "Email or Login ID" : "Email"}
                   </Label>
                   <Input
@@ -345,12 +343,12 @@ export default function AdminLoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading}
-                    className="h-12 text-base bg-white text-foreground"
+                    className="h-12 bg-background/60 text-base text-foreground"
                     autoFocus
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-semibold text-white">
+                  <Label htmlFor="password" className="text-sm font-semibold text-foreground">
                     Password
                   </Label>
                   <Input
@@ -362,7 +360,7 @@ export default function AdminLoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    className="h-12 text-base bg-white text-foreground"
+                    className="h-12 bg-background/60 text-base text-foreground"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -371,15 +369,16 @@ export default function AdminLoginPage() {
                     aria-label="Remember email"
                     checked={rememberEmail}
                     onCheckedChange={(checked) => setRememberEmail(checked === true)}
-                    className="border-white/30 data-[state=checked]:bg-brand-gold data-[state=checked]:border-brand-gold"
+                    className="border-input data-[state=checked]:bg-accent data-[state=checked]:border-accent"
                   />
-                  <Label htmlFor="remember-email" className="text-sm text-white/60 cursor-pointer select-none">
+                  <Label htmlFor="remember-email" className="text-sm text-muted-foreground cursor-pointer select-none">
                     Remember email
                   </Label>
                 </div>
                 <Button
                   type="submit"
-                  className="w-full h-12 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
+                  variant="brand"
+                  className="w-full h-12 text-base font-semibold rounded-xl"
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -394,7 +393,7 @@ export default function AdminLoginPage() {
                 </Button>
               </form>
 
-              <p className="mt-6 text-center text-xs text-white/40 md:hidden">
+              <p className="mt-6 text-center text-xs text-muted-foreground md:hidden">
                 &copy; {new Date().getFullYear()} CISS Workforce
               </p>
             </div>

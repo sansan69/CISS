@@ -23,9 +23,19 @@ const exoDisplay = Exo_2({
 });
 
 export const metadata: Metadata = {
-  title: 'CISS Workforce',
-  description: 'CISS Workforce Employee Management System',
+  title: {
+    default: 'CISS Workforce',
+    template: '%s · CISS Workforce',
+  },
+  description: 'Secure attendance and workforce operations for CISS Services.',
   applicationName: 'CISS Workforce',
+  metadataBase: new URL('https://cisskerala.site'),
+  openGraph: {
+    title: 'CISS Workforce',
+    description: 'Secure attendance and workforce operations for CISS Services.',
+    siteName: 'CISS Workforce',
+    type: 'website',
+  },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -54,7 +64,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#014c85',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f4f7f9' },
+    { media: '(prefers-color-scheme: dark)', color: '#061521' },
+  ],
+  colorScheme: 'light dark',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -69,9 +83,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        {/* Meta tags for PWA defined in metadata object now */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var d=document.documentElement;var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){var dark=m.matches;d.classList.toggle('dark',dark);d.dataset.theme=dark?'dark':'light';d.style.colorScheme=dark?'dark':'light'}s();if(m.addEventListener)m.addEventListener('change',s);else if(m.addListener)m.addListener(s)})();`,
+          }}
+        />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} ${exoDisplay.variable} antialiased`}>
         <ErrorBoundary>

@@ -22,7 +22,7 @@ const buttonVariants = cva(
       variant: {
         /* Primary — brand blue */
         default:
-          "bg-brand-blue text-white shadow-brand-sm hover:bg-brand-blue-dark hover:shadow-brand-md rounded-lg [box-shadow:inset_0_1px_0_hsl(0_0%_100%/0.12),var(--shadow-brand-sm)]",
+          "bg-primary text-primary-foreground shadow-brand-sm hover:bg-primary/90 hover:shadow-brand-md rounded-lg [box-shadow:inset_0_1px_0_hsl(0_0%_100%/0.14),var(--shadow-brand-sm)]",
 
         /* Destructive — red */
         destructive:
@@ -42,11 +42,11 @@ const buttonVariants = cva(
 
         /* Ghost Brand — text-primary, hover brand bg */
         "ghost-brand":
-          "text-primary hover:bg-brand-blue-pale hover:text-brand-blue rounded-lg",
+          "text-primary hover:bg-primary/10 hover:text-primary rounded-lg",
 
         /* Brand Gold accent */
         brand:
-          "bg-brand-gold text-white shadow-brand-sm hover:bg-brand-gold-dark rounded-lg",
+          "bg-accent text-accent-foreground shadow-brand-sm hover:bg-accent/88 rounded-lg",
 
         /* Glass morphism */
         glass:

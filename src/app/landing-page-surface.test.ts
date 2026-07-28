@@ -61,8 +61,10 @@ const moduleMocks: Record<string, unknown> = {
   },
   "@/components/ui/button": {
     __esModule: true,
-    Button: ({ children, ...props }: MockWithChildrenProps) =>
-      React.createElement("button", props, children),
+    Button: ({ children, asChild, ...props }: MockWithChildrenProps & { asChild?: boolean }) =>
+      asChild && React.isValidElement(children)
+        ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, props)
+        : React.createElement("button", props, children),
   },
   "@/components/ui/input": {
     __esModule: true,
@@ -157,7 +159,7 @@ function indexOfText(textContent: string, value: string) {
 }
 
 describe("landing page surface", () => {
-  it("renders the approved editorial split desktop and native mobile landing surface", () => {
+  it("renders the official CISS-themed attendance landing surface", () => {
     const LandingPage = loadLandingPage();
     const html = renderToStaticMarkup(React.createElement(LandingPage));
     const textContent = normalizeTextContent(html);
@@ -169,43 +171,46 @@ describe("landing page surface", () => {
     const verificationSectionIndex = indexOfAttribute(html, 'data-mobile-section="verification"');
     const quickAccessSectionIndex = indexOfAttribute(html, 'data-mobile-section="quick-access"');
     const brandIndex = indexOfText(textContent, "CISS Workforce");
-    const descriptorIndex = indexOfText(textContent, "Security workforce management platform");
-    const verificationIntroIndex = indexOfText(textContent, "Enter phone or scan QR.");
-    const mobileLabelIndex = indexOfText(textContent, "Mobile number");
-    const verifyButtonIndex = indexOfText(textContent, "Continue");
-    const quickAccessIndex = indexOfText(textContent, "New guard?");
-    const attendanceIndex = indexOfText(textContent, "Guard Portal");
+    const descriptorIndex = indexOfText(textContent, "CISS Services · Secure workforce operations");
+    const heroIndex = indexOfText(textContent, "Duty, verified.");
+    const verificationIntroIndex = indexOfText(textContent, "Identify and continue");
+    const mobileLabelIndex = indexOfText(textContent, "Registered mobile number");
+    const verifyButtonIndex = indexOfText(textContent, "Continue to attendance");
+    const quickAccessIndex = indexOfText(textContent, "Verified attendance");
+    const attendanceIndex = indexOfText(textContent, "Open guard portal");
 
     expect(brandIndex).toBeLessThan(descriptorIndex);
     expect(shellIndex).toBeLessThan(headerSectionIndex);
     expect(headerSectionIndex).toBeLessThan(verificationSectionIndex);
     expect(verificationSectionIndex).toBeLessThan(quickAccessSectionIndex);
-    expect(descriptorIndex).toBeLessThan(verificationIntroIndex);
+    expect(descriptorIndex).toBeLessThan(heroIndex);
+    expect(heroIndex).toBeLessThan(verificationIntroIndex);
     expect(verificationIntroIndex).toBeLessThan(mobileLabelIndex);
     expect(mobileLabelIndex).toBeLessThan(verifyButtonIndex);
     expect(verifyButtonIndex).toBeLessThan(quickAccessIndex);
-    expect(verificationIntroIndex).toBeLessThan(quickAccessIndex);
-    expect(verificationIntroIndex).toBeLessThan(attendanceIndex);
+    expect(attendanceIndex).toBeLessThan(verificationIntroIndex);
 
     expect(textContent).toContain("CISS Workforce");
-    expect(textContent).toContain("Security workforce management platform");
-    expect(textContent).toContain("Enter phone or scan QR.");
-    expect(textContent).toContain("Fast mobile verification for daily workforce access.");
+    expect(textContent).toContain("CISS Services · Secure workforce operations");
+    expect(textContent).toContain("Duty, verified.");
+    expect(textContent).toContain("Operations, connected.");
+    expect(textContent).toContain("Identify and continue");
+    expect(textContent).toContain("Attendance submission requires a live photo and location permission.");
     expect(hrefs).toEqual(expect.arrayContaining(["/enroll", "/guard-login", "/admin-login"]));
+    expect(hrefs).toEqual(
+      expect.arrayContaining([
+        "https://cissindia.co.in",
+        "https://cissindia.co.in/privacy-policy/",
+        "https://cissindia.co.in/terms-conditions/",
+      ]),
+    );
     expect(images).toEqual(
       expect.arrayContaining([{ alt: "CISS Workforce Logo", src: "/ciss-logo.png" }]),
     );
     expect(html).toContain('data-desktop-section="brand"');
-    expect(html).toContain("lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]");
-    expect(html).not.toContain('aria-label="Desktop hero"');
-    expect(html).not.toContain(
-      "rounded-[2rem] border border-white/30 bg-[linear-gradient(135deg,#014c85_0%,#0f67a7_58%,#3f87bd_100%)]",
-    );
-    expect(html).not.toContain("shadow-[0_28px_80px_-30px_rgba(1,76,133,0.85)]");
-    expect(html).not.toContain("Verify guards, record attendance, and access admin operations fast.");
-    expect(html).not.toContain("Native mobile access");
-    expect(html).toContain('data-mobile-section="header"');
-    expect(html).toContain("lg:hidden");
+    expect(html).toContain("lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]");
+    expect(html).toContain('id="attendance-access"');
+    expect(html).toContain("dark:bg-card/90");
     expect(html).toContain('data-mobile-section="header"');
     expect(html).toContain('data-mobile-section="verification"');
     expect(html).toContain('data-mobile-section="quick-access"');

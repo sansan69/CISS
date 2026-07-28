@@ -4,11 +4,11 @@ import { cn } from "@/lib/utils"
 
 /* ─── Card variants ──────────────────────────────────────────── */
 const cardVariants = cva(
-  "rounded-lg bg-card text-card-foreground",
+  "rounded-xl bg-card text-card-foreground",
   {
     variants: {
       variant: {
-        default:     "border border-border/80 shadow-card",
+        default:     "border border-border/70 shadow-card",
         elevated:    "border border-border/80 shadow-brand-md",
         interactive: "border border-border/80 shadow-card card-interactive cursor-pointer",
         flush:       "border border-border/80 shadow-none",

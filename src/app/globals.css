@@ -38,27 +38,27 @@
     ───────────────────────────────────────────────────── */
 
     /* Surfaces */
-    --background:          214 24% 96%;
-    --foreground:          214 38% 11%;
+    --background:          210 28% 97%;
+    --foreground:          208 58% 11%;
 
-    --muted:               214 18% 91%;
-    --muted-foreground:    214 15% 42%;
+    --muted:               208 24% 92%;
+    --muted-foreground:    208 16% 40%;
 
     --popover:             0 0% 100%;
     --popover-foreground:  214 40% 12%;
 
     --card:                0 0% 100%;
-    --card-foreground:     214 40% 12%;
+    --card-foreground:     208 58% 11%;
 
-    --border:              214 18% 85%;
-    --input:               214 18% 84%;
+    --border:              208 22% 84%;
+    --input:               208 22% 81%;
 
     /* Brand colours */
     --primary:             206 98% 26%;   /* #014c85 */
     --primary-foreground:  0   0% 98%;
 
-    --secondary:           214 22% 93%;
-    --secondary-foreground: 214 30% 20%;
+    --secondary:           208 28% 93%;
+    --secondary-foreground: 208 42% 18%;
 
     --accent:              41  44% 54%;   /* #bd9c55 */
     --accent-foreground:   214 40% 10%;
@@ -73,7 +73,7 @@
     --warning-foreground:  214 40% 10%;
 
     --ring:                206 98% 26%;
-    --radius:              0.5rem;         /* 8px */
+    --radius:              0.625rem;
 
     /* Chart */
     --chart-1: 206 98% 26%;
@@ -83,13 +83,13 @@
     --chart-5: 345 80% 58%;
 
     /* Sidebar — deep brand blue */
-    --sidebar-background:         207 74% 18%;
+    --sidebar-background:         207 83% 15%;
     --sidebar-foreground:         0   0% 96%;
     --sidebar-primary:            41  44% 60%;
     --sidebar-primary-foreground: 0   0% 8%;
     --sidebar-accent:             0   0% 100%;
     --sidebar-accent-foreground:  0   0% 98%;
-    --sidebar-border:             207 54% 26%;
+    --sidebar-border:             207 52% 25%;
     --sidebar-ring:               206 98% 40%;
 
     /* ── Emil Kowalski easing curves ── */
@@ -106,34 +106,34 @@
   }
 
   .dark {
-    --background:          210 22% 10%;
-    --foreground:          210 20% 96%;
+    --background:          205 58% 7%;
+    --foreground:          205 24% 95%;
 
-    --muted:               210 20% 16%;
-    --muted-foreground:    210 16% 56%;
+    --muted:               205 35% 14%;
+    --muted-foreground:    205 16% 63%;
 
-    --popover:             210 22% 9%;
-    --popover-foreground:  210 20% 96%;
+    --popover:             205 48% 9%;
+    --popover-foreground:  205 24% 95%;
 
-    --card:                210 22% 11%;
-    --card-foreground:     210 20% 96%;
+    --card:                205 45% 10%;
+    --card-foreground:     205 24% 95%;
 
-    --border:              210 20% 20%;
-    --input:               210 20% 18%;
+    --border:              205 30% 21%;
+    --input:               205 28% 24%;
 
-    --primary:             206 80% 52%;
-    --primary-foreground:  210 22% 10%;
+    --primary:             204 78% 57%;
+    --primary-foreground:  205 58% 7%;
 
-    --secondary:           210 20% 16%;
-    --secondary-foreground: 210 20% 96%;
+    --secondary:           205 35% 15%;
+    --secondary-foreground: 205 24% 95%;
 
     --accent:              41  44% 60%;
-    --accent-foreground:   210 22% 10%;
+    --accent-foreground:   205 58% 7%;
 
     --destructive:         0   63% 45%;
     --destructive-foreground: 0 0% 98%;
 
-    --ring:                206 80% 52%;
+    --ring:                204 78% 57%;
 
     --chart-1: 206 80% 55%;
     --chart-2: 41  50% 62%;
@@ -141,7 +141,7 @@
     --chart-4: 24  85% 62%;
     --chart-5: 345 80% 65%;
 
-    --sidebar-background:  206 98% 16%;
+    --sidebar-background:  207 88% 11%;
     --sidebar-foreground:  0   0% 96%;
     --sidebar-primary:     41  44% 58%;
     --sidebar-primary-foreground: 0 0% 8%;
@@ -175,10 +175,9 @@
     font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     background-image:
-      linear-gradient(180deg, hsl(214 30% 98%) 0%, hsl(var(--background)) 22rem),
-      linear-gradient(90deg, hsl(214 24% 91% / 0.42) 1px, transparent 1px),
-      linear-gradient(180deg, hsl(214 24% 91% / 0.42) 1px, transparent 1px);
-    background-size: auto, 44px 44px, 44px 44px;
+      radial-gradient(circle at 12% -10%, hsl(var(--primary) / 0.08), transparent 28rem),
+      linear-gradient(180deg, hsl(var(--card) / 0.72) 0%, hsl(var(--background)) 24rem);
+    background-attachment: fixed;
     /* Prevent pull-to-refresh chrome/safari overscroll quirk */
     overscroll-behavior-y: contain;
   }
@@ -188,7 +187,7 @@
     content: '';
     position: fixed;
     inset: 0;
-    z-index: 9998;
+    z-index: 40;
     pointer-events: none;
     opacity: 0.022;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -615,7 +614,8 @@ tbody tr:hover {
 
   .app-shell-surface {
     background:
-      linear-gradient(180deg, hsl(214 30% 98%) 0%, hsl(var(--background)) 20rem);
+      radial-gradient(circle at 78% -12%, hsl(var(--primary) / 0.08), transparent 30rem),
+      linear-gradient(180deg, hsl(var(--card) / 0.65) 0%, hsl(var(--background)) 22rem);
   }
 
   /* Filter chips row */

@@ -6,10 +6,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  ArrowUpRight,
+  BadgeCheck,
+  Building2,
+  Clock3,
   DownloadCloud,
+  Fingerprint,
+  Globe2,
   Loader2,
+  MapPinned,
   Phone,
   QrCode,
+  ShieldCheck,
+  Smartphone,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,124 +265,177 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="relative min-h-[100dvh] overflow-hidden text-white" data-slot="landing-shell" style={{ background: "linear-gradient(160deg, hsl(206 98% 10%) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 14%) 100%)" }}>
-      <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:repeating-linear-gradient(45deg,transparent,transparent_12px,rgba(255,255,255,0.03)_12px,rgba(255,255,255,0.03)_13px)]" />
+    <main
+      id="main-content"
+      className="relative min-h-[100dvh] overflow-hidden bg-background text-foreground"
+      data-slot="landing-shell"
+    >
+      <a
+        href="#attendance-access"
+        className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Skip to attendance access
+      </a>
 
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-5 py-4 sm:px-6 lg:px-8 lg:py-8">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -right-28 -top-36 h-[34rem] w-[34rem] rounded-full bg-primary/[0.09] blur-3xl dark:bg-primary/[0.13]" />
+        <div className="absolute -left-48 top-[42%] h-[30rem] w-[30rem] rounded-full bg-accent/[0.10] blur-3xl dark:bg-accent/[0.07]" />
+        <div className="absolute inset-0 opacity-[0.22] [background-image:linear-gradient(hsl(var(--border)/0.55)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/0.55)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
+      </div>
 
-        {/* Mobile hero */}
-        <section
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[90rem] flex-col px-4 sm:px-6 lg:px-10">
+        <header
           data-mobile-section="header"
-          className="flex flex-col gap-4 py-5 lg:hidden animate-slide-up"
+          className="flex h-[4.75rem] items-center justify-between border-b border-border/60"
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
-              <Image src="/ciss-logo.png" alt="CISS Workforce Logo" width={32} height={32} priority className="h-8 w-8" />
-            </div>
-            <div>
-              <p className="text-lg font-bold tracking-tight font-exo2 text-white">CISS Workforce</p>
-              <p className="text-xs text-white/50">Security workforce platform</p>
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold leading-[1.05] tracking-[-0.04em] font-exo2 text-white">
-            Fast verification for daily workforce access.
-          </h1>
-          <p className="text-sm leading-6 text-white/55">
-            Mark attendance with your phone number or scan your QR card for instant check-in.
-          </p>
-        </section>
+          <Link href="/" className="group flex min-w-0 items-center gap-3" aria-label="CISS Workforce home">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/30 bg-card shadow-brand-sm transition-transform duration-200 group-hover:-translate-y-0.5 dark:bg-white/[0.05]">
+              <Image
+                src="/ciss-logo.png"
+                alt="CISS Workforce Logo"
+                width={32}
+                height={32}
+                priority
+                className="h-7 w-7"
+              />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-exo2 text-xl font-bold leading-none tracking-[-0.035em] text-brand-blue dark:text-white">
+                CISS
+              </span>
+              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Workforce
+              </span>
+            </span>
+          </Link>
 
-        {portalContext?.isClientPortal && portalContext.client ? (
-          <section className="mt-3 rounded-[1.75rem] border border-white/10 bg-black/20 p-4 backdrop-blur sm:p-5 lg:mt-0">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="max-w-xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-gold">
-                  Client portal
-                </p>
-                <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-[2rem]">
-                  {portalContext.client.name}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-white/60">
-                  This subdomain is assigned by the admin for the {portalContext.client.name} client dashboard.
-                </p>
-              </div>
-              <Button asChild className="h-11 rounded-xl px-4 bg-brand-gold text-black hover:bg-brand-gold-dark">
-                <Link href="/admin-login">Open portal login</Link>
-              </Button>
-            </div>
-          </section>
-        ) : null}
+          <nav className="flex items-center gap-1 sm:gap-2" aria-label="Public navigation">
+            <a
+              href="https://cissindia.co.in"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground sm:inline-flex"
+            >
+              CISS India
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+            <Button asChild variant="outline" size="sm" className="bg-card/70 backdrop-blur">
+              <Link href="/admin-login">Staff sign in</Link>
+            </Button>
+          </nav>
+        </header>
 
-        <div className="mt-4 grid items-start gap-6 lg:mt-8 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-12">
+        <div className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)] lg:gap-16 lg:py-14">
           <section
             data-desktop-section="brand"
-            className="hidden flex-col justify-center gap-6 px-1 py-2 lg:flex lg:px-1 lg:py-6 animate-slide-up"
+            className="animate-slide-up lg:pr-4"
+            aria-labelledby="landing-title"
           >
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-gold backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-gold" />
-              Security workforce management platform
+            <div className="inline-flex items-center gap-2 border-l-2 border-accent pl-3 text-[11px] font-bold uppercase tracking-[0.22em] text-brand-blue dark:text-accent">
+              <BadgeCheck className="h-4 w-4 text-accent" />
+              CISS Services · Secure workforce operations
             </div>
 
-            <div className="flex items-center gap-3.5">
-              <div className="rounded-[1.4rem] border border-white/15 bg-white/8 p-2.5 backdrop-blur">
-                <Image src="/ciss-logo.png" alt="CISS Workforce Logo" width={60} height={60} priority className="h-12 w-12" />
+            <h1
+              id="landing-title"
+              className="mt-6 max-w-3xl font-exo2 text-[clamp(2.8rem,7vw,6.4rem)] font-bold leading-[0.92] tracking-[-0.065em] text-brand-blue-darker dark:text-white"
+            >
+              Duty, verified.
+              <span className="mt-2 block text-brand-gold-dark dark:text-brand-gold-light">
+                Operations, connected.
+              </span>
+            </h1>
+
+            <p className="mt-7 max-w-[62ch] text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+              The operational workspace for CISS guards, field officers, clients, and administrators.
+              Record attendance, coordinate sites, and keep every deployment visible.
+            </p>
+
+            <div className="mt-8 grid max-w-2xl grid-cols-3 divide-x divide-border border-y border-border/70 py-4">
+              <div className="pr-4">
+                <p className="font-exo2 text-xl font-bold tabular-nums text-foreground sm:text-2xl">1985</p>
+                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Established</p>
               </div>
-              <div>
-                <p className="text-lg font-bold tracking-tight font-exo2">CISS Workforce</p>
-                <p className="text-sm font-medium text-white/60">Security workforce management platform</p>
+              <div className="px-4">
+                <p className="font-exo2 text-xl font-bold text-foreground sm:text-2xl">Pan-India</p>
+                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Operations</p>
+              </div>
+              <div className="pl-4">
+                <p className="font-exo2 text-xl font-bold tabular-nums text-foreground sm:text-2xl">24×365</p>
+                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Operational focus</p>
               </div>
             </div>
 
-            <div className="max-w-2xl space-y-4">
-              <h1
-                className="text-[clamp(2.9rem,5.2vw,5.1rem)] font-bold leading-[0.96] tracking-[-0.055em] font-exo2"
-                style={{ textWrap: "balance" }}
+            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
+              <Link
+                href="/guard-login"
+                className="group inline-flex min-h-11 items-center gap-2 font-semibold text-primary hover:text-brand-blue-dark dark:hover:text-primary/80"
               >
-                Fast mobile verification for daily workforce access.
-              </h1>
-              <p className="max-w-xl text-base leading-7 text-white/60 lg:text-[1.03rem]">
-                Use your mobile number to verify attendance, or scan your QR card for instant check-in.
-              </p>
+                Open guard portal
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Link>
+              <Link
+                href="/enroll"
+                className="inline-flex min-h-11 items-center text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground"
+              >
+                Enrol as a new guard
+              </Link>
             </div>
           </section>
 
-          <div className="flex flex-col gap-4 lg:self-center">
-            {/* Main card */}
-            <section
-              data-mobile-section="verification"
-              className="flex flex-col rounded-3xl border border-white/10 bg-black/15 p-5 backdrop-blur shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:p-6 lg:p-8 animate-slide-up stagger-1"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-gold">
-                Guard attendance
-              </p>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl font-exo2">
-                Enter phone or scan QR.
-              </h2>
-              <p className="mt-1.5 text-sm leading-6 text-white/50 sm:text-base">
-                Mark attendance or open the guard portal.
-              </p>
+          <section
+            id="attendance-access"
+            data-mobile-section="verification"
+            className="relative animate-slide-up stagger-1"
+            aria-labelledby="attendance-title"
+          >
+            <div
+              className="absolute -inset-3 -z-10 translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.05] dark:border-white/[0.06] dark:bg-white/[0.025]"
+              aria-hidden="true"
+            />
+            <div className="overflow-hidden rounded-[1.75rem] border border-border/70 bg-card/95 shadow-[0_30px_90px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl dark:bg-card/90">
+              <div className="relative overflow-hidden border-b border-border/70 bg-brand-blue-darker px-5 py-5 text-white sm:px-7">
+                <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_85%_10%,rgba(189,156,85,0.34),transparent_34%),linear-gradient(115deg,transparent_48%,rgba(255,255,255,0.05)_48%,rgba(255,255,255,0.05)_49%,transparent_49%)]" />
+                <div className="relative flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light">
+                      Guard attendance
+                    </p>
+                    <h2 id="attendance-title" className="mt-2 font-exo2 text-2xl font-bold tracking-tight sm:text-[2rem]">
+                      Identify and continue
+                    </h2>
+                    <p className="mt-1 max-w-md text-sm leading-6 text-white/62">
+                      Use the registered mobile number or scan the employee QR card.
+                    </p>
+                  </div>
+                  <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.07] sm:flex">
+                    <Fingerprint className="h-6 w-6 text-brand-gold-light" />
+                  </div>
+                </div>
+              </div>
 
-              <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 sm:p-5">
-                <label
-                  htmlFor="employee-phone"
-                  className="mb-2.5 block text-sm font-semibold text-white/90"
-                >
-                  Mobile number
+              <div className="p-5 sm:p-7">
+                <label htmlFor="employee-phone" className="text-sm font-semibold text-foreground">
+                  Registered mobile number
                 </label>
-                <div className="flex gap-2.5">
-                  <div className="relative flex-1">
-                    <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Enter the 10-digit number linked to the guard profile.
+                </p>
+
+                <div className="mt-3 flex gap-2.5">
+                  <div className="relative min-w-0 flex-1">
+                    <Phone className="pointer-events-none absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="employee-phone"
                       type="tel"
                       inputMode="numeric"
                       autoComplete="tel"
-                      placeholder="Mobile number"
+                      placeholder="10-digit mobile number"
                       value={phoneNumber}
                       onChange={(event) =>
                         setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
                       }
-                      className="h-14 rounded-2xl bg-white pl-12 text-base text-foreground shadow-none placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-brand-gold/60"
+                      className="h-14 rounded-xl bg-background/65 pl-12 pr-4 text-base shadow-inner focus-visible:border-accent focus-visible:ring-accent/25 dark:bg-background/45"
                       maxLength={10}
                       disabled={isLoading}
                       onKeyDown={(event) => {
@@ -383,67 +446,101 @@ export default function LandingPage() {
                   <button
                     type="button"
                     onClick={() => setQrDialogOpen(true)}
-                    aria-label="Scan QR code"
-                    className="h-14 w-14 shrink-0 rounded-2xl border border-white/[0.15] bg-white/[0.04] flex items-center justify-center text-white/50 transition-all duration-200 hover:bg-white/[0.1] hover:text-white hover:border-white/30 active:scale-[0.95]"
+                    aria-label="Scan employee QR code"
+                    className="group flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border bg-background/65 text-primary shadow-inner transition-all duration-200 hover:-translate-y-0.5 hover:border-accent hover:text-accent-foreground hover:shadow-brand-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:bg-background/45 dark:hover:text-accent"
                   >
-                    <QrCode className="h-6 w-6" />
+                    <QrCode className="h-6 w-6 transition-transform duration-200 group-hover:scale-105" />
                   </button>
                 </div>
 
                 <Button
+                  variant="brand"
                   onClick={handleContinue}
-                  className="mt-4 h-14 w-full rounded-2xl text-base font-bold bg-brand-gold text-black shadow-lg shadow-brand-gold/20 hover:bg-brand-gold-dark hover:shadow-xl hover:shadow-brand-gold/25 active:scale-[0.98] transition-all duration-200"
+                  className="mt-4 h-14 w-full rounded-xl text-base font-bold shadow-gold"
                   disabled={isLoading || normalizedPhone.length < 10}
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Verifying...
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Verifying
                     </>
                   ) : (
                     <>
-                      Continue
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      Continue to attendance
+                      <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </Button>
-              </div>
-            </section>
 
-            {/* Secondary links */}
-            <div
-              data-mobile-section="quick-access"
-              className="flex flex-col items-center gap-3 text-sm animate-slide-up stagger-2"
-            >
-              <Link
-                href="/enroll"
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"
-              >
-                New guard? <span className="text-brand-gold font-semibold">Enroll here</span>
-              </Link>
-              <Link
-                href="/guard-login"
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 font-medium text-white/70 transition-all hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"
-              >
-                Guard Portal
-              </Link>
+                <div className="mt-5 flex items-start gap-3 rounded-xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+                  <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <p className="leading-5">
+                    Attendance submission requires a live photo and location permission.
+                  </p>
+                </div>
+              </div>
             </div>
-
-            {/* Footer */}
-            <footer className="mt-4 flex flex-col items-center gap-2 text-center text-xs text-white/30">
-              <div className="flex items-center gap-3">
-                <Link href="/admin-login" className="rounded-lg px-3 py-2.5 min-h-11 inline-flex items-center text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
-                  Admin
-                </Link>
-                <span className="text-white/15">|</span>
-                <Link href="/download" className="rounded-lg px-3 py-2.5 min-h-11 inline-flex items-center text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70">
-                  Download App
-                </Link>
-              </div>
-              <p className="text-white/20">&copy; {new Date().getFullYear()} CISS Workforce</p>
-            </footer>
-          </div>
+          </section>
         </div>
+
+        <section
+          data-mobile-section="quick-access"
+          className="mb-8 grid overflow-hidden rounded-2xl border border-border/70 bg-card/65 backdrop-blur lg:grid-cols-[1.15fr_0.85fr_1fr]"
+          aria-label="Platform capabilities"
+        >
+          <div className="flex gap-4 border-b border-border/70 p-5 lg:border-b-0 lg:border-r">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Clock3 className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-exo2 text-sm font-bold">Verified attendance</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Identity, live location, photo, shift, and audit trail.</p>
+            </div>
+          </div>
+          <div className="flex gap-4 border-b border-border/70 p-5 lg:border-b-0 lg:border-r">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-brand-gold-dark dark:text-accent">
+              <Users className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-exo2 text-sm font-bold">Field coordination</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Guard rosters, duty sites, revisions, and field reporting.</p>
+            </div>
+          </div>
+          <div className="flex gap-4 p-5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-exo2 text-sm font-bold">Role-controlled visibility</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Purpose-built views for guards, officers, clients, and administrators.</p>
+            </div>
+          </div>
+        </section>
+
+        <footer className="flex flex-col gap-5 border-t border-border/60 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Building2 className="h-4 w-4 text-accent" />
+            <p>
+              &copy; {new Date().getFullYear()} CISS Services Ltd. Workforce operations.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link href="/download" className="inline-flex items-center gap-1.5 hover:text-foreground">
+              <Smartphone className="h-3.5 w-3.5" />
+              Download app
+            </Link>
+            <a href="https://cissindia.co.in/privacy-policy/" target="_blank" rel="noreferrer" className="hover:text-foreground">
+              Privacy
+            </a>
+            <a href="https://cissindia.co.in/terms-conditions/" target="_blank" rel="noreferrer" className="hover:text-foreground">
+              Terms
+            </a>
+            <a href="https://cissindia.co.in" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-semibold text-primary hover:text-brand-blue-dark dark:hover:text-primary/80">
+              <Globe2 className="h-3.5 w-3.5" />
+              Official website
+            </a>
+          </div>
+        </footer>
       </div>
 
       <QrScannerDialog
@@ -453,33 +550,33 @@ export default function LandingPage() {
       />
 
       {showInstallPrompt && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom)] animate-slide-up">
-          <div className="mx-auto max-w-md rounded-2xl border border-white/[0.12] bg-black/90 p-4 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+        <div className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] animate-slide-up">
+          <div className="mx-auto max-w-md rounded-2xl border border-border/80 bg-card/95 p-4 text-card-foreground shadow-brand-lg backdrop-blur-2xl">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gold/15 text-brand-gold">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-brand-gold-dark dark:text-accent">
                 <DownloadCloud className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-white">Install CISS Workforce</p>
-                <p className="mt-0.5 text-xs text-white/45">
-                  Add the app to your device for faster access.
+                <p className="text-sm font-semibold">Install CISS Workforce</p>
+                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                  Add the app to this device for quicker duty access.
                 </p>
                 {showFallbackGuidance && (
-                  <p className="mt-1.5 text-xs text-white/35">
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     On iOS, tap Share and choose &ldquo;Add to Home Screen&rdquo;.
                   </p>
                 )}
               </div>
-              <div className="flex gap-2 shrink-0">
+              <div className="flex shrink-0 gap-2">
                 <button
                   onClick={handleDismissInstall}
-                  className="h-9 rounded-lg border border-white/[0.12] bg-white/[0.04] px-3 text-xs font-medium text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
+                  className="h-9 rounded-lg px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Not now
                 </button>
                 <button
                   onClick={handleInstallClick}
-                  className="h-9 rounded-lg bg-brand-gold px-3 text-xs font-semibold text-black transition-all duration-200 hover:bg-brand-gold-dark active:scale-[0.97]"
+                  className="h-9 rounded-lg bg-accent px-3 text-xs font-semibold text-accent-foreground shadow-brand-sm hover:bg-accent/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {deferredPromptRef.current ? "Install" : "Got it"}
                 </button>
