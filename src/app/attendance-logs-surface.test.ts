@@ -15,6 +15,13 @@ describe("attendance logs detail sheet", () => {
     expect(attendanceLogsPageSource).toContain("Reported at");
     expect(attendanceLogsPageSource).toContain("Server recorded");
     expect(attendanceLogsPageSource).toContain("Attendance date");
+    expect(attendanceLogsPageSource).toContain("toValidAttendanceDate(log.reportedAt)");
+    expect(attendanceLogsPageSource).toContain(
+      "formatAttendanceDate(selectedLog.photoCapturedAt",
+    );
+    expect(attendanceLogsPageSource).not.toContain(
+      "new Date(selectedLog.photoCapturedAt)",
+    );
     expect(attendanceLogsPageSource).not.toContain("GPS & Location");
     expect(attendanceLogsPageSource).not.toContain("Uniform / Photo Compliance");
     expect(attendanceLogsPageSource).not.toContain("object-cover");

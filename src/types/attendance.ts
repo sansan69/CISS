@@ -122,6 +122,18 @@ export const attendanceLogSchema = attendanceSubmissionSchema.extend({
 
 export type AttendanceLog = z.infer<typeof attendanceLogSchema>;
 
+export type FirestoreDateValue =
+  | string
+  | Date
+  | {
+      seconds?: number;
+      nanoseconds?: number;
+      _seconds?: number;
+      _nanoseconds?: number;
+      toDate?: () => Date;
+    }
+  | null;
+
 export interface FirestoreAttendanceLog {
   id: string;
   employeeId: string;
@@ -155,11 +167,11 @@ export interface FirestoreAttendanceLog {
   mockLocationReason?: string | null;
   requiresLocationReview?: boolean;
   photoUrl?: string;
-  photoCapturedAt?: string | null;
+  photoCapturedAt?: FirestoreDateValue;
   photoCompliance?: AttendancePhotoCompliance | null;
   deviceInfo?: { userAgent: string };
-  reportedAt?: { seconds: number; nanoseconds: number; toDate: () => Date } | null;
-  createdAt?: { seconds: number; nanoseconds: number; toDate: () => Date } | null;
+  reportedAt?: FirestoreDateValue;
+  createdAt?: FirestoreDateValue;
   attendanceDate?: string;
   auditTrail?: unknown[];
   attendanceSessionId?: string | null;

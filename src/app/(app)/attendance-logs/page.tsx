@@ -27,6 +27,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { toValidAttendanceDate } from "@/lib/attendance/date-value";
 
 type AttendanceLog = FirestoreAttendanceLog;
 
@@ -42,12 +43,20 @@ function getTodayAttendanceDate() {
 }
 
 function getReportedAt(log: AttendanceLog) {
-  if (log.reportedAt?.toDate) return log.reportedAt.toDate();
-  if (log.reportedAtClient) {
-    const parsed = new Date(log.reportedAtClient);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-  return log.createdAt?.toDate ? log.createdAt.toDate() : null;
+  return (
+    toValidAttendanceDate(log.reportedAt) ??
+    toValidAttendanceDate(log.reportedAtClient) ??
+    toValidAttendanceDate(log.createdAt)
+  );
+}
+
+function formatAttendanceDate(
+  value: unknown,
+  pattern: string,
+  fallback = "—",
+) {
+  const date = toValidAttendanceDate(value);
+  return date ? format(date, pattern) : fallback;
 }
 
 function normalizeClientFilterValue(value: unknown) {
@@ -869,7 +878,7 @@ export default function AttendanceLogsPage() {
                   </div>
                   {selectedLog.photoCapturedAt && (
                     <p className="border-t bg-background px-3 py-2 text-xs text-muted-foreground">
-                      Photo taken: {format(new Date(selectedLog.photoCapturedAt), "dd MMM yyyy, hh:mm:ss a")}
+                      Photo taken: {formatAttendanceDate(selectedLog.photoCapturedAt, "dd MMM yyyy, hh:mm:ss a")}
                     </p>
                   )}
                 </div>
@@ -887,7 +896,7 @@ export default function AttendanceLogsPage() {
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Server recorded</p>
                     <p className="mt-1 font-medium">
-                      {selectedLog.createdAt?.toDate ? format(selectedLog.createdAt.toDate(), "dd MMM yyyy, hh:mm a") : "—"}
+                      {formatAttendanceDate(selectedLog.createdAt, "dd MMM yyyy, hh:mm a")}
                     </p>
                   </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
