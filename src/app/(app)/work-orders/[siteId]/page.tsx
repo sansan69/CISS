@@ -511,6 +511,8 @@ export default function AssignGuardsPage() {
     const { toast } = useToast();
     const { haptic } = useHaptics();
     const canAdminWorkOrders = isWorkOrderAdminRole(userRole);
+    const canAssignGuards = canAdminWorkOrders || userRole === 'fieldOfficer';
+    const isClientView = userRole === 'client';
     const activeOrders = useMemo(
         () => workOrders.filter((order) => (order.recordStatus ?? 'active').trim().toLowerCase() === 'active'),
         [workOrders],
@@ -697,8 +699,16 @@ export default function AssignGuardsPage() {
         <div className="flex flex-col gap-4 sm:gap-6">
             <PageHeader
                 eyebrow="Workforce"
-                title={site ? `${site.siteName}` : "Guard Assignment"}
-                description={site ? `Assign guards for upcoming duties at ${site.clientName} — ${site.district}.` : "Assign guards and review staffing for the selected duty site."}
+                title={site ? `${site.siteName}` : isClientView ? "Deployment Details" : "Guard Assignment"}
+                description={
+                    site
+                        ? isClientView
+                            ? `Review upcoming deployment coverage at ${site.clientName} — ${site.district}.`
+                            : `Assign guards for upcoming duties at ${site.clientName} — ${site.district}.`
+                        : isClientView
+                            ? "Review staffing for the selected duty site."
+                            : "Assign guards and review staffing for the selected duty site."
+                }
                 breadcrumbs={[
                     { label: "Dashboard", href: "/dashboard" },
                     { label: "Work Orders", href: backHref },
@@ -723,23 +733,33 @@ export default function AssignGuardsPage() {
                 <div className="space-y-3 sm:space-y-4">
                     {activeOrders.map(order => {
                         const totalRequired = (order.totalManpower ?? 0) || ((order.maleGuardsRequired || 0) + (order.femaleGuardsRequired || 0));
-                        const assignedCount = Array.isArray(order.assignedGuards) ? order.assignedGuards.length : 0;
+                        const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+                        const assignedCount = assignedGuards.length;
+                        const assignedMale = assignedGuards.filter((guard) => guard.gender?.trim().toLowerCase() === 'male').length;
+                        const assignedFemale = assignedGuards.filter((guard) => guard.gender?.trim().toLowerCase() === 'female').length;
+                        const maleReady = assignedMale === (order.maleGuardsRequired || 0);
+                        const femaleReady = assignedFemale === (order.femaleGuardsRequired || 0);
+                        const needsAssignmentReview =
+                            order.assignmentReviewRequired === true ||
+                            order.assignmentStatus === 'review' ||
+                            assignedCount > totalRequired ||
+                            assignedMale > (order.maleGuardsRequired || 0) ||
+                            assignedFemale > (order.femaleGuardsRequired || 0);
                         const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                        const isFullyAssigned = assignedCount >= totalRequired && totalRequired > 0;
-                        const isPartial = assignedCount > 0 && !isFullyAssigned;
-                        const status = assignedCount === 0 ? 'Unassigned' : isFullyAssigned ? 'Fully Assigned' : 'Partial';
+                        const isFullyAssigned = !needsAssignmentReview && maleReady && femaleReady && assignedCount === totalRequired && totalRequired > 0;
+                        const status = assignedCount === 0 ? 'Unassigned' : needsAssignmentReview ? 'Review' : isFullyAssigned ? 'Fully Assigned' : 'Partial';
 
-                        const borderColor = assignedCount === 0
+                        const borderColor = assignedCount === 0 || needsAssignmentReview
                             ? 'border-l-red-400'
                             : isFullyAssigned ? 'border-l-green-500' : 'border-l-amber-400';
 
-                        const statusBadge = assignedCount === 0
+                        const statusBadge = assignedCount === 0 || needsAssignmentReview
                             ? 'bg-red-100 text-red-700 border-red-200'
                             : isFullyAssigned
                                 ? 'bg-green-100 text-green-700 border-green-200'
                                 : 'bg-amber-100 text-amber-800 border-amber-200';
 
-                        const countColor = assignedCount === 0
+                        const countColor = assignedCount === 0 || needsAssignmentReview
                             ? 'text-red-600'
                             : isFullyAssigned ? 'text-green-600' : 'text-amber-600';
 
@@ -787,9 +807,13 @@ export default function AssignGuardsPage() {
                                 <div className="px-4 py-3">
                                     <div className="flex items-center justify-between mb-1.5">
                                         <p className="text-xs text-muted-foreground">
-                                            {totalRequired - assignedCount > 0
+                                            {assignedCount > totalRequired
+                                                ? `${assignedCount - totalRequired} excess assignment${assignedCount - totalRequired === 1 ? '' : 's'} — review required`
+                                                : totalRequired - assignedCount > 0
                                                 ? `${totalRequired - assignedCount} more guard${totalRequired - assignedCount !== 1 ? 's' : ''} needed`
-                                                : 'All positions filled'}
+                                                : isFullyAssigned
+                                                    ? 'All positions filled'
+                                                    : 'Gender allocation needs review'}
                                         </p>
                                         <p className="text-xs font-semibold">{percent}%</p>
                                     </div>
@@ -798,14 +822,16 @@ export default function AssignGuardsPage() {
 
                                 {/* Actions */}
                                 <div className="px-4 pb-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                                    <Button
-                                        onClick={() => { haptic('medium'); handleOpenAssignDialog(order); }}
-                                        className="w-full sm:w-auto h-11 sm:h-9 text-sm"
-                                        size="sm"
-                                    >
-                                        <UserPlus className="mr-2 h-4 w-4" />
-                                        Assign Guards
-                                    </Button>
+                                    {canAssignGuards && (
+                                        <Button
+                                            onClick={() => { haptic('medium'); handleOpenAssignDialog(order); }}
+                                            className="w-full sm:w-auto h-11 sm:h-9 text-sm"
+                                            size="sm"
+                                        >
+                                            <UserPlus className="mr-2 h-4 w-4" />
+                                            Assign Guards
+                                        </Button>
+                                    )}
                                     {canAdminWorkOrders && (
                                         <div className="grid grid-cols-2 gap-2 sm:contents">
                                             <Button

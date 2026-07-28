@@ -49,6 +49,7 @@ import type { WorkOrder } from "@/types/work-orders";
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
 import { districtMatches } from "@/lib/districts";
 import { fetchActiveGuardsForDistricts } from "@/lib/work-orders/available-guards";
+import { WorkOrderRevisionNotices } from "@/components/work-orders/revision-notices";
 
 type WorkOrderExamFields = Pick<
   WorkOrder,
@@ -113,6 +114,34 @@ const AssignGuardsDialog: React.FC<{
   const handleToggle = (guard: Employee) => {
     haptic("selection");
     const isSelected = selectedGuards.some((g) => g.uid === guard.id);
+    if (!isSelected) {
+      const gender = String(guard.gender ?? "").trim().toLowerCase();
+      const assignedForGender = selectedGuards.filter(
+        (selected) => String(selected.gender ?? "").trim().toLowerCase() === gender,
+      ).length;
+      const requiredForGender =
+        gender === "male"
+          ? workOrder.maleGuardsRequired
+          : gender === "female"
+            ? workOrder.femaleGuardsRequired
+            : 0;
+      if (gender !== "male" && gender !== "female") {
+        toast({
+          variant: "destructive",
+          title: "Gender information required",
+          description: "Update this guard’s profile before assigning them to a male or female requirement.",
+        });
+        return;
+      }
+      if (assignedForGender >= requiredForGender) {
+        toast({
+          variant: "destructive",
+          title: `${gender === "male" ? "Male" : "Female"} requirement already filled`,
+          description: `This work order requires ${requiredForGender} ${gender} guard${requiredForGender === 1 ? "" : "s"}.`,
+        });
+        return;
+      }
+    }
     setSelectedGuards((prev) =>
       isSelected
         ? prev.filter((g) => g.uid !== guard.id)
@@ -137,12 +166,17 @@ const AssignGuardsDialog: React.FC<{
           assignedGuards: selectedGuards,
         }),
       });
-      if (!res.ok) throw new Error("Failed to save");
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Could not save assignments.");
       haptic("success");
       toast({ title: "Saved", description: "Guard assignments updated." });
       onClose();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not save assignments." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Assignment not saved",
+        description: error instanceof Error ? error.message : "Could not save assignments.",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -477,7 +511,7 @@ export function WorkOrdersPanel() {
         )
       : query(
           collection(db, "workOrders"),
-          where("district", "in", assignedDistricts.slice(0, 10)),
+          where("district", "in", assignedDistricts.slice(0, 30)),
           where("date", ">=", today),
           orderBy("date", "asc"),
         );
@@ -641,12 +675,48 @@ export function WorkOrdersPanel() {
   return (
     <>
       <div className="space-y-4">
+        <WorkOrderRevisionNotices />
         {ordersByDate.map(({ dateKey, dateLabel, orders }) => {
           const dateTotalRequired = orders.reduce((sum, order) => sum + (order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired)), 0);
           const dateAssignedCount = orders.reduce((sum, order) => {
             const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
             return sum + assignedGuards.length;
           }, 0);
+          const datePendingCount = orders.reduce((sum, order) => {
+            const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+            const assignedMale = assignedGuards.filter(
+              (guard) => String(guard.gender ?? "").trim().toLowerCase() === "male",
+            ).length;
+            const assignedFemale = assignedGuards.filter(
+              (guard) => String(guard.gender ?? "").trim().toLowerCase() === "female",
+            ).length;
+            return (
+              sum +
+              Math.max(0, order.maleGuardsRequired - assignedMale) +
+              Math.max(0, order.femaleGuardsRequired - assignedFemale)
+            );
+          }, 0);
+          const dateNeedsReview = orders.some((order) => {
+            const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
+            const assignedMale = assignedGuards.filter(
+              (guard) => String(guard.gender ?? "").trim().toLowerCase() === "male",
+            ).length;
+            const assignedFemale = assignedGuards.filter(
+              (guard) => String(guard.gender ?? "").trim().toLowerCase() === "female",
+            ).length;
+            const required = order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired);
+            return (
+              order.assignmentReviewRequired === true ||
+              assignedGuards.length > required ||
+              assignedMale > order.maleGuardsRequired ||
+              assignedFemale > order.femaleGuardsRequired
+            );
+          });
+          const dateIsReady =
+            !dateNeedsReview &&
+            datePendingCount === 0 &&
+            dateAssignedCount === dateTotalRequired &&
+            dateTotalRequired > 0;
           const isCollapsed = collapsedDateKeys.has(dateKey);
           const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
 
@@ -671,8 +741,8 @@ export function WorkOrdersPanel() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
-                  <Badge variant={dateAssignedCount >= dateTotalRequired ? "default" : "secondary"} className="shrink-0 text-[10px]">
-                    {dateAssignedCount >= dateTotalRequired ? "Ready" : `${dateTotalRequired - dateAssignedCount} pending`}
+                  <Badge variant={dateIsReady ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                    {dateIsReady ? "Ready" : dateNeedsReview ? "Review assignments" : `${datePendingCount} pending`}
                   </Badge>
                   <span className="text-[11px] font-medium text-primary">
                     {isCollapsed ? "View details" : "Hide details"}
@@ -688,17 +758,42 @@ export function WorkOrdersPanel() {
                       const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
                       const assignedCount = assignedGuards.length;
                       const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                      const isFullyAssigned = assignedCount >= totalRequired && totalRequired > 0;
+                      const assignedMale = assignedGuards.filter(
+                        (guard) => String(guard.gender ?? "").trim().toLowerCase() === "male",
+                      ).length;
+                      const assignedFemale = assignedGuards.filter(
+                        (guard) => String(guard.gender ?? "").trim().toLowerCase() === "female",
+                      ).length;
+                      const isFullyAssigned =
+                        totalRequired > 0 &&
+                        assignedMale === order.maleGuardsRequired &&
+                        assignedFemale === order.femaleGuardsRequired;
                       const isUnassigned = assignedCount === 0;
+                      const needsAssignmentReview =
+                        order.assignmentReviewRequired === true ||
+                        order.assignmentStatus === "review" ||
+                        assignedCount > totalRequired ||
+                        assignedMale > order.maleGuardsRequired ||
+                        assignedFemale > order.femaleGuardsRequired;
 
-                      const statusColor = isUnassigned
+                      const statusColor = needsAssignmentReview
+                        ? "text-red-600"
+                        : isUnassigned
                         ? "text-red-600"
                         : isFullyAssigned
                           ? "text-green-600"
                           : "text-amber-600";
 
-                      const statusLabel = isUnassigned ? "Unassigned" : isFullyAssigned ? "Full" : "Partial";
-                      const statusBadgeClass = isUnassigned
+                      const statusLabel = needsAssignmentReview
+                        ? "Review"
+                        : isUnassigned
+                          ? "Unassigned"
+                          : isFullyAssigned
+                            ? "Ready"
+                            : "Partial";
+                      const statusBadgeClass = needsAssignmentReview
+                        ? "bg-red-100 text-red-700 border-red-200"
+                        : isUnassigned
                         ? "bg-red-100 text-red-700 border-red-200"
                         : isFullyAssigned
                           ? "bg-green-100 text-green-700 border-green-200"
@@ -708,7 +803,18 @@ export function WorkOrdersPanel() {
                         <div key={order.id} className="p-4">
                           <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">{order.siteName}</p>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <p className="truncate text-sm font-medium">{order.siteName}</p>
+                                {(order.revisionNumber ?? 1) > 1 && (
+                                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                                    {order.lastRevisionChange === "added"
+                                      ? "New centre"
+                                      : order.lastRevisionChange === "reactivated"
+                                        ? "Reactivated"
+                                        : "Revised"}
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="truncate text-[11px] text-muted-foreground">
                                 {order.examName || order.examCode || "General Duty"} · {order.district}
                               </p>
@@ -755,12 +861,16 @@ export function WorkOrdersPanel() {
 
                           <Button
                             size="sm"
-                            variant={isUnassigned ? "default" : "outline"}
+                            variant={isUnassigned || needsAssignmentReview ? "default" : "outline"}
                             className="w-full"
                             onClick={() => handleOpenAssign(order)}
                           >
                             <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                            {isUnassigned ? "Assign Guards" : "Edit Assignment"}
+                            {needsAssignmentReview
+                              ? "Review Assignment"
+                              : isUnassigned
+                                ? "Assign Guards"
+                                : "Edit Assignment"}
                           </Button>
                         </div>
                       );

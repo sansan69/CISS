@@ -31,6 +31,7 @@ import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-
 import { districtKey, districtMatches } from '@/lib/districts';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
+import { WorkOrderRevisionNotices } from '@/components/work-orders/revision-notices';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Dialog,
@@ -42,7 +43,6 @@ import {
 } from "@/components/ui/dialog";
 import type {
     TcsExamImportPreviewPayload,
-    TcsExamSourceRow,
     WorkOrder,
     WorkOrderDuplicateResolution,
     WorkOrderImportMode,
@@ -95,8 +95,6 @@ type ResolvedImportPreview = TcsExamImportPreviewPayload & {
     pendingSiteCreations: number;
 };
 
-type PreviewEditableField = "siteName" | "district" | "date" | "maleGuardsRequired" | "femaleGuardsRequired";
-
 const normalizeSegment = (value: string | null | undefined) =>
     String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -137,8 +135,10 @@ type WorkOrderBoardRow = {
 };
 
 export default function WorkOrderPage() {
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
+    const [fileInputKey, setFileInputKey] = useState(0);
     const [importMode, setImportMode] = useState<WorkOrderImportMode>('new');
+    const [targetExamCode, setTargetExamCode] = useState('');
     const [duplicateResolution, setDuplicateResolution] = useState<WorkOrderDuplicateResolution>('replace');
     const [isPreviewing, setIsPreviewing] = useState(false);
     const [isConfirmingImport, setIsConfirmingImport] = useState(false);
@@ -382,7 +382,7 @@ export default function WorkOrderPage() {
         if (userRole === 'fieldOfficer') {
             q = query(
                 collection(db, "workOrders"),
-                where("district", "in", assignedDistricts.slice(0, 10)),
+                where("district", "in", assignedDistricts.slice(0, 30)),
                 where("date", ">=", todayTs),
             );
         } else {
@@ -486,14 +486,28 @@ export default function WorkOrderPage() {
                         const assignedMale = assignedGuards.filter((guard: any) => guard.gender === 'Male').length;
                         const assignedFemale = assignedGuards.filter((guard: any) => guard.gender === 'Female').length;
                         const assignedCount = assignedGuards.length;
+                        const isReady =
+                            assignedMale === (order.maleGuardsRequired || 0) &&
+                            assignedFemale === (order.femaleGuardsRequired || 0) &&
+                            assignedCount === totalRequired &&
+                            totalRequired > 0;
+                        const needsReview =
+                            order.assignmentReviewRequired === true ||
+                            assignedCount > totalRequired ||
+                            assignedMale > (order.maleGuardsRequired || 0) ||
+                            assignedFemale > (order.femaleGuardsRequired || 0);
                         const statusLabel = assignedCount === 0
                             ? 'Open'
-                            : assignedCount >= totalRequired
-                                ? 'Filled'
+                            : needsReview
+                                ? 'Review'
+                            : isReady
+                                ? 'Ready'
                                 : 'Partial';
                         const statusClassName = assignedCount === 0
                             ? 'border-red-200 bg-red-50 text-red-700'
-                            : assignedCount >= totalRequired
+                            : needsReview
+                                ? 'border-red-200 bg-red-50 text-red-700'
+                            : isReady
                                 ? 'border-green-200 bg-green-50 text-green-700'
                                 : 'border-amber-200 bg-amber-50 text-amber-800';
 
@@ -599,6 +613,8 @@ export default function WorkOrderPage() {
             femaleRequired: number;
             totalRequired: number;
             assignedCount: number;
+            assignedMale: number;
+            assignedFemale: number;
             examLabels: Set<string>;
         }>();
         for (const row of filteredRows) {
@@ -610,6 +626,8 @@ export default function WorkOrderPage() {
                 femaleRequired: 0,
                 totalRequired: 0,
                 assignedCount: 0,
+                assignedMale: 0,
+                assignedFemale: 0,
                 examLabels: new Set<string>(),
             };
             const existingSiteIndex = existing.rows.findIndex((entry) => `${entry.dateKey}::${entry.siteId}` === groupedSiteKey);
@@ -623,14 +641,29 @@ export default function WorkOrderPage() {
                 const assignedCount = current.assignedCount + row.assignedCount;
                 const assignedMale = current.assignedMale + row.assignedMale;
                 const assignedFemale = current.assignedFemale + row.assignedFemale;
+                const maleRequired = current.maleRequired + row.maleRequired;
+                const femaleRequired = current.femaleRequired + row.femaleRequired;
+                const isReady =
+                    assignedMale === maleRequired &&
+                    assignedFemale === femaleRequired &&
+                    assignedCount === totalRequired &&
+                    totalRequired > 0;
+                const needsReview =
+                    assignedCount > totalRequired ||
+                    assignedMale > maleRequired ||
+                    assignedFemale > femaleRequired;
                 const statusLabel = assignedCount === 0
                     ? 'Open'
-                    : assignedCount >= totalRequired
-                        ? 'Filled'
+                    : needsReview
+                        ? 'Review'
+                    : isReady
+                        ? 'Ready'
                         : 'Partial';
                 const statusClassName = assignedCount === 0
                     ? 'border-red-200 bg-red-50 text-red-700'
-                    : assignedCount >= totalRequired
+                    : needsReview
+                        ? 'border-red-200 bg-red-50 text-red-700'
+                    : isReady
                         ? 'border-green-200 bg-green-50 text-green-700'
                         : 'border-amber-200 bg-amber-50 text-amber-800';
 
@@ -639,8 +672,8 @@ export default function WorkOrderPage() {
                     orders: [...current.orders, ...row.orders],
                     examLabels,
                     examKeys,
-                    maleRequired: current.maleRequired + row.maleRequired,
-                    femaleRequired: current.femaleRequired + row.femaleRequired,
+                    maleRequired,
+                    femaleRequired,
                     totalRequired,
                     assignedCount,
                     assignedMale,
@@ -654,6 +687,8 @@ export default function WorkOrderPage() {
             existing.femaleRequired += row.femaleRequired;
             existing.totalRequired += row.totalRequired;
             existing.assignedCount += row.assignedCount;
+            existing.assignedMale += row.assignedMale;
+            existing.assignedFemale += row.assignedFemale;
             map.set(row.dateKey, existing);
         }
         return Array.from(map.entries())
@@ -664,7 +699,12 @@ export default function WorkOrderPage() {
                     if (districtCompare !== 0) return districtCompare;
                     return a.siteName.localeCompare(b.siteName);
                 });
-                const assignedCenters = rows.filter((row) => row.totalRequired > 0 && row.assignedCount >= row.totalRequired).length;
+                const assignedCenters = rows.filter(
+                    (row) =>
+                        row.totalRequired > 0 &&
+                        row.assignedMale === row.maleRequired &&
+                        row.assignedFemale === row.femaleRequired,
+                ).length;
                 const pendingCenters = rows.length - assignedCenters;
                 return {
                     dateKey,
@@ -674,6 +714,8 @@ export default function WorkOrderPage() {
                     femaleRequired: group.femaleRequired,
                     totalRequired: group.totalRequired,
                     assignedCount: group.assignedCount,
+                    assignedMale: group.assignedMale,
+                    assignedFemale: group.assignedFemale,
                     totalCenters: rows.length,
                     assignedCenters,
                     pendingCenters,
@@ -700,17 +742,19 @@ export default function WorkOrderPage() {
     }, []);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files[0]) {
-            const selectedFile = event.target.files[0];
-            const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv', 'application/vnd.ms-excel'];
-            if (validTypes.some(type => selectedFile.type.includes(type))) {
-                setFile(selectedFile);
+        if (event.target.files && event.target.files.length > 0) {
+            const selectedFiles = Array.from(event.target.files);
+            const invalidFile = selectedFiles.find((selectedFile) =>
+                !/\.(csv|xlsx|xls)$/i.test(selectedFile.name),
+            );
+            if (!invalidFile) {
+                setFiles(selectedFiles);
                 setImportPreview(null);
             } else {
                 toast({
                     variant: 'destructive',
                     title: 'Invalid File Type',
-                    description: 'Please upload a CSV or XLSX file.',
+                    description: `${invalidFile.name} is not a CSV or Excel workbook.`,
                 });
             }
         }
@@ -752,8 +796,16 @@ export default function WorkOrderPage() {
     }, []);
 
     const handlePreviewImport = async () => {
-        if (!file) {
-            toast({ variant: 'destructive', title: 'No File Selected' });
+        if (files.length === 0) {
+            toast({ variant: 'destructive', title: 'No files selected' });
+            return;
+        }
+        if (importMode === 'revision' && !targetExamCode) {
+            toast({
+                variant: 'destructive',
+                title: 'Select the exam duty',
+                description: 'Choose which existing exam duty this revised file belongs to.',
+            });
             return;
         }
         setIsPreviewing(true);
@@ -761,8 +813,13 @@ export default function WorkOrderPage() {
 
         try {
             const formData = new FormData();
-            formData.set('file', file);
+            files.forEach((file) => formData.append('files', file));
             formData.set('mode', importMode);
+            if (importMode === 'revision') {
+                const targetExam = availableExams.find((exam) => exam.key === targetExamCode);
+                formData.set('targetExamCode', targetExamCode);
+                formData.set('targetExamName', targetExam?.label ?? targetExamCode);
+            }
 
             const response = await authorizedFetch('/api/admin/work-orders/import/preview', {
                 method: 'POST',
@@ -799,38 +856,16 @@ export default function WorkOrderPage() {
         }
     };
 
-    const updatePreviewRow = React.useCallback((rowIndex: number, field: PreviewEditableField, value: string) => {
-        setImportPreview((current) => {
-            if (!current) return current;
-            const rows = current.rows.map((row, index) => {
-                if (index !== rowIndex) return row;
-                if (field === "maleGuardsRequired" || field === "femaleGuardsRequired") {
-                    return { ...row, [field]: Math.max(0, Number(value) || 0) };
-                }
-                return { ...row, [field]: value } as TcsExamSourceRow;
-            });
-            const sortedDates = rows.map((row) => row.date).filter(Boolean).sort();
-            return {
-                ...current,
-                rows,
-                rowCount: rows.length,
-                siteCount: new Set(rows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`)).size,
-                dateRange: {
-                    from: sortedDates[0] ?? current.dateRange.from,
-                    to: sortedDates[sortedDates.length - 1] ?? current.dateRange.to,
-                },
-            };
-        });
-    }, []);
-
     const handleConfirmImport = async () => {
-        if (!file || !importPreview) {
-            toast({ variant: 'destructive', title: 'Preview Required', description: 'Preview the file before confirming the import.' });
+        if (files.length === 0 || !importPreview) {
+            toast({ variant: 'destructive', title: 'Preview required', description: 'Preview the selected files before confirming the import.' });
             return;
         }
 
         const resolvedExamName = customExamName.trim() || importPreview.suggestedExamName;
-        const resolvedExamCode = resolvedExamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const resolvedExamCode = importMode === 'revision'
+            ? targetExamCode
+            : resolvedExamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         const rowsWithExam = importPreview.rows.map((row) => ({
             ...row,
             examName: resolvedExamName,
@@ -856,7 +891,9 @@ export default function WorkOrderPage() {
                 method: 'POST',
                 body: JSON.stringify({
                     mode: importPreview.mode,
-                    fileName: file.name,
+                    targetExamCode: importPreview.mode === 'revision' ? targetExamCode : undefined,
+                    fileName: files.map((file) => file.name).join(', '),
+                    fileNames: files.map((file) => file.name),
                     parserMode: importPreview.parserMode,
                     examName: resolvedExamName,
                     examCode: resolvedExamCode,
@@ -876,7 +913,8 @@ export default function WorkOrderPage() {
                 title: 'Import Confirmed',
                 description: `Committed ${payload.committedRows ?? importPreview.rowCount} rows${payload.createdSites > 0 ? ` and created ${payload.createdSites} site${payload.createdSites === 1 ? '' : 's'}` : ''}.`,
             });
-            setFile(null);
+            setFiles([]);
+            setFileInputKey((current) => current + 1);
             setImportPreview(null);
         } catch (error: any) {
             console.error('Error confirming import:', error);
@@ -931,6 +969,7 @@ export default function WorkOrderPage() {
                 </TabsList>
 
                 <TabsContent value="assignments" className="mt-0 flex flex-col gap-4 sm:gap-6">
+                    {!isClientView && <WorkOrderRevisionNotices />}
                     {canAdminWorkOrders && (
                         <Card>
                             <CardHeader>
@@ -940,8 +979,18 @@ export default function WorkOrderPage() {
                             <CardContent className="space-y-4">
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
                                     <div className="grid w-full items-center gap-1.5">
-                                        <Label htmlFor="work-order-file">Work Order File (Excel/CSV)</Label>
-                                        <Input id="work-order-file" type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} />
+                                        <Label htmlFor="work-order-file">Work order files (Excel/CSV)</Label>
+                                        <Input
+                                            key={fileInputKey}
+                                            id="work-order-file"
+                                            type="file"
+                                            accept=".csv, .xlsx, .xls"
+                                            multiple
+                                            onChange={handleFileChange}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Select all files belonging to this exam package. Every workbook sheet will be reviewed.
+                                        </p>
                                     </div>
                                     <div className="grid w-full items-center gap-1.5">
                                         <Label htmlFor="work-order-mode">Import Mode</Label>
@@ -949,6 +998,7 @@ export default function WorkOrderPage() {
                                             value={importMode}
                                             onValueChange={(value) => {
                                                 setImportMode(value as WorkOrderImportMode);
+                                                setTargetExamCode('');
                                                 clearImportPreview();
                                             }}
                                         >
@@ -962,10 +1012,62 @@ export default function WorkOrderPage() {
                                         </Select>
                                     </div>
                                 </div>
-                                {file && (
-                                    <div className="flex items-center gap-2 rounded-md border bg-muted p-2 text-sm">
-                                        <FileCheck2 className="h-5 w-5 text-green-500" />
-                                        <span>{file.name}</span>
+                                {importMode === 'revision' && (
+                                    <div className="grid w-full items-center gap-1.5">
+                                        <Label htmlFor="revision-exam">Existing exam duty</Label>
+                                        <Select
+                                            value={targetExamCode}
+                                            onValueChange={(value) => {
+                                                setTargetExamCode(value);
+                                                clearImportPreview();
+                                            }}
+                                        >
+                                            <SelectTrigger id="revision-exam">
+                                                <SelectValue placeholder="Select the exam being revised" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableExams.map((exam) => (
+                                                    <SelectItem key={exam.key} value={exam.key}>
+                                                        {exam.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-muted-foreground">
+                                            Missing centres within the uploaded duty-date range will be marked cancelled.
+                                        </p>
+                                    </div>
+                                )}
+                                {files.length > 0 && (
+                                    <div className="rounded-lg border bg-muted/30">
+                                        <div className="flex items-center justify-between border-b px-3 py-2">
+                                            <div className="flex items-center gap-2 text-sm font-medium">
+                                                <FileCheck2 className="h-4 w-4 text-green-600" />
+                                                {files.length} file{files.length === 1 ? '' : 's'} ready
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setFiles([]);
+                                                    setFileInputKey((current) => current + 1);
+                                                    clearImportPreview();
+                                                }}
+                                            >
+                                                Clear files
+                                            </Button>
+                                        </div>
+                                        <div className="divide-y">
+                                            {files.map((selectedFile) => (
+                                                <div key={`${selectedFile.name}-${selectedFile.size}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                                                    <span className="min-w-0 truncate">{selectedFile.name}</span>
+                                                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                                        {(selectedFile.size / 1024).toFixed(1)} KB
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                                 {importPreview && (
@@ -990,25 +1092,33 @@ export default function WorkOrderPage() {
                                                 />
                                             </div>
                                         </div>
-                                        <div className="grid gap-3 sm:grid-cols-4">
+                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                                             <div className="rounded-md bg-muted px-3 py-2">
-                                                <p className="text-xs text-muted-foreground">Rows</p>
-                                                <p className="text-lg font-semibold">{importPreview.rowCount}</p>
+                                                <p className="text-xs text-muted-foreground">Centres</p>
+                                                <p className="text-lg font-semibold tabular-nums">{importPreview.siteCount}</p>
                                             </div>
                                             <div className="rounded-md bg-muted px-3 py-2">
-                                                <p className="text-xs text-muted-foreground">Sites</p>
-                                                <p className="text-lg font-semibold">{importPreview.siteCount}</p>
+                                                <p className="text-xs text-muted-foreground">Unchanged</p>
+                                                <p className="text-lg font-semibold tabular-nums">
+                                                    {importPreview.diffRows.filter((row) => row.status === 'unchanged').length}
+                                                </p>
                                             </div>
                                             <div className="rounded-md bg-muted px-3 py-2">
                                                 <p className="text-xs text-muted-foreground">Added</p>
-                                                <p className="text-lg font-semibold">
+                                                <p className="text-lg font-semibold tabular-nums text-green-700">
                                                     {importPreview.diffRows.filter((row) => row.status === 'added').length}
                                                 </p>
                                             </div>
                                             <div className="rounded-md bg-muted px-3 py-2">
-                                                <p className="text-xs text-muted-foreground">Updated/Cancelled</p>
-                                                <p className="text-lg font-semibold">
-                                                    {importPreview.diffRows.filter((row) => row.status === 'updated' || row.status === 'cancelled').length}
+                                                <p className="text-xs text-muted-foreground">Changed</p>
+                                                <p className="text-lg font-semibold tabular-nums text-amber-700">
+                                                    {importPreview.diffRows.filter((row) => row.status === 'updated').length}
+                                                </p>
+                                            </div>
+                                            <div className="rounded-md bg-muted px-3 py-2">
+                                                <p className="text-xs text-muted-foreground">Cancelled</p>
+                                                <p className="text-lg font-semibold tabular-nums text-red-700">
+                                                    {importPreview.diffRows.filter((row) => row.status === 'cancelled').length}
                                                 </p>
                                             </div>
                                         </div>
@@ -1050,8 +1160,8 @@ export default function WorkOrderPage() {
                                                 <p className="text-sm font-medium">Warnings</p>
                                                 <div className="space-y-1">
                                                     {importPreview.warnings.map((warning) => (
-                                                        <p key={`${warning.code}-${warning.rowNumber ?? 'na'}-${warning.sheetName ?? 'sheet'}`} className="text-xs text-muted-foreground">
-                                                            {warning.message}
+                                                        <p key={`${warning.fileName ?? 'file'}-${warning.code}-${warning.rowNumber ?? 'na'}-${warning.sheetName ?? 'sheet'}`} className="text-xs text-muted-foreground">
+                                                            {warning.fileName ? `${warning.fileName}: ` : ''}{warning.message}
                                                         </p>
                                                     ))}
                                                 </div>
@@ -1060,7 +1170,12 @@ export default function WorkOrderPage() {
 
                                         {/* Preview Details Table */}
                                         <div className="space-y-2">
-                                            <p className="text-sm font-medium">Preview Details</p>
+                                            <div>
+                                                <p className="text-sm font-medium">Change review</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Confirm these changes against the source files. Correct the workbook and preview again if anything is wrong.
+                                                </p>
+                                            </div>
                                             <ScrollArea className="h-[300px] rounded-md border">
                                                 <Table>
                                                     <TableHeader className="sticky top-0 bg-background">
@@ -1074,17 +1189,10 @@ export default function WorkOrderPage() {
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {importPreview.rows
-                                                            .map((row, originalIndex) => ({ row, originalIndex }))
-                                                            .sort((a, b) => a.row.date.localeCompare(b.row.date) || a.row.siteName.localeCompare(b.row.siteName))
-                                                            .map(({ row, originalIndex }) => {
-                                                                const diffRow = importPreview.diffRows.find((diff) =>
-                                                                    diff.date === row.date &&
-                                                                    diff.siteName === row.siteName &&
-                                                                    diff.district === row.district &&
-                                                                    (diff.siteId ?? "") === (row.siteId ?? ""),
-                                                                );
-                                                                const status = diffRow?.status ?? 'added';
+                                                        {[...importPreview.diffRows]
+                                                            .sort((a, b) => a.date.localeCompare(b.date) || a.siteName.localeCompare(b.siteName))
+                                                            .map((row) => {
+                                                                const status = row.status;
                                                                 const statusColors: Record<string, string> = {
                                                                     added: 'text-green-600 bg-green-50',
                                                                     updated: 'text-amber-600 bg-amber-50',
@@ -1092,46 +1200,19 @@ export default function WorkOrderPage() {
                                                                     cancelled: 'text-red-600 bg-red-50',
                                                                 };
                                                                 return (
-                                                                    <TableRow key={`${row.sourceSheetName ?? 'sheet'}-${row.sourceRowNumber ?? originalIndex}-${originalIndex}`}>
-                                                                        <TableCell>
-                                                                            <Input
-                                                                                type="date"
-                                                                                value={row.date}
-                                                                                onChange={(event) => updatePreviewRow(originalIndex, "date", event.target.value)}
-                                                                                className="h-8 min-w-28 text-xs"
-                                                                            />
+                                                                    <TableRow key={row.key} className={status === 'cancelled' ? 'bg-red-50/50' : ''}>
+                                                                        <TableCell className="text-xs tabular-nums">{row.date}</TableCell>
+                                                                        <TableCell className="text-xs font-medium">{row.siteName}</TableCell>
+                                                                        <TableCell className="text-xs">{row.district}</TableCell>
+                                                                        <TableCell className="text-right text-xs tabular-nums">
+                                                                            {status === 'updated' && row.previousMaleGuardsRequired !== undefined
+                                                                                ? `${row.previousMaleGuardsRequired} → ${row.maleGuardsRequired}`
+                                                                                : row.maleGuardsRequired}
                                                                         </TableCell>
-                                                                        <TableCell>
-                                                                            <Input
-                                                                                value={row.siteName}
-                                                                                onChange={(event) => updatePreviewRow(originalIndex, "siteName", event.target.value)}
-                                                                                className="h-8 min-w-48 text-xs"
-                                                                            />
-                                                                        </TableCell>
-                                                                        <TableCell>
-                                                                            <Input
-                                                                                value={row.district}
-                                                                                onChange={(event) => updatePreviewRow(originalIndex, "district", event.target.value)}
-                                                                                className="h-8 min-w-32 text-xs"
-                                                                            />
-                                                                        </TableCell>
-                                                                        <TableCell>
-                                                                            <Input
-                                                                                type="number"
-                                                                                min={0}
-                                                                                value={row.maleGuardsRequired}
-                                                                                onChange={(event) => updatePreviewRow(originalIndex, "maleGuardsRequired", event.target.value)}
-                                                                                className="h-8 w-20 text-right font-mono text-xs"
-                                                                            />
-                                                                        </TableCell>
-                                                                        <TableCell>
-                                                                            <Input
-                                                                                type="number"
-                                                                                min={0}
-                                                                                value={row.femaleGuardsRequired}
-                                                                                onChange={(event) => updatePreviewRow(originalIndex, "femaleGuardsRequired", event.target.value)}
-                                                                                className="h-8 w-20 text-right font-mono text-xs"
-                                                                            />
+                                                                        <TableCell className="text-right text-xs tabular-nums">
+                                                                            {status === 'updated' && row.previousFemaleGuardsRequired !== undefined
+                                                                                ? `${row.previousFemaleGuardsRequired} → ${row.femaleGuardsRequired}`
+                                                                                : row.femaleGuardsRequired}
                                                                         </TableCell>
                                                                         <TableCell>
                                                                             <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${statusColors[status] || ''}`}>
@@ -1160,13 +1241,22 @@ export default function WorkOrderPage() {
                                             Clear Preview
                                         </Button>
                                     )}
-                                    <Button onClick={handlePreviewImport} disabled={isPreviewing || isConfirmingImport || !file} className="w-full sm:w-auto">
+                                    <Button
+                                        onClick={handlePreviewImport}
+                                        disabled={
+                                            isPreviewing ||
+                                            isConfirmingImport ||
+                                            files.length === 0 ||
+                                            (importMode === 'revision' && !targetExamCode)
+                                        }
+                                        className="w-full sm:w-auto"
+                                    >
                                         {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                                         {isPreviewing ? 'Previewing...' : 'Preview Import'}
                                     </Button>
                                     <Button
                                         onClick={handleConfirmImport}
-                                        disabled={isPreviewing || isConfirmingImport || !file || !importPreview || (
+                                        disabled={isPreviewing || isConfirmingImport || files.length === 0 || !importPreview || (
                                             importPreview.duplicateState !== 'none' &&
                                             !(importMode === 'revision' || duplicateResolution === 'replace' || duplicateResolution === 'omit')
                                         )}
@@ -1326,7 +1416,13 @@ export default function WorkOrderPage() {
                             ) : allWorkOrderRows.length === 0 ? (
                                 <div className="rounded-lg border border-dashed py-10 text-center">
                                     <p className="font-medium">No upcoming duties found.</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">Upload a {OPERATIONAL_CLIENT_NAME} work order to start assigning guards.</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        {canAdminWorkOrders
+                                            ? `Upload a ${OPERATIONAL_CLIENT_NAME} work order to start assigning guards.`
+                                            : isClientView
+                                                ? "There are no active deployments available for your sites."
+                                                : "There are no active deployments in your assigned districts."}
+                                    </p>
                                 </div>
                             ) : filteredRows.length === 0 ? (
                                 <div className="rounded-lg border border-dashed py-10 text-center">
@@ -1370,8 +1466,8 @@ export default function WorkOrderPage() {
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <Badge variant={group.assignedCount >= group.totalRequired ? 'default' : 'secondary'} className="w-fit">
-                                                            {group.assignedCount >= group.totalRequired ? 'Ready' : `${group.totalRequired - group.assignedCount} pending`}
+                                                        <Badge variant={group.pendingCenters === 0 ? 'default' : 'secondary'} className="w-fit">
+                                                            {group.pendingCenters === 0 ? 'Ready' : `${group.pendingCenters} centre${group.pendingCenters === 1 ? '' : 's'} pending`}
                                                         </Badge>
                                                         <span className="text-xs font-medium text-primary">
                                                             {isCollapsed ? 'View details' : 'Hide details'}
@@ -1433,12 +1529,14 @@ export default function WorkOrderPage() {
                                                                         </Link>
                                                                     </Button>
                                                                 )}
-                                                                <Button size="sm" asChild className="h-8 text-xs">
-                                                                    <Link href={siteHref(row.siteId)}>
-                                                                        <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                                                                        Assign
-                                                                    </Link>
-                                                                </Button>
+                                                                {!isClientView && (
+                                                                    <Button size="sm" asChild className="h-8 text-xs">
+                                                                        <Link href={siteHref(row.siteId)}>
+                                                                            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                                                                            Assign
+                                                                        </Link>
+                                                                    </Button>
+                                                                )}
                                                                 {canAdminWorkOrders && (
                                                                     <Button
                                                                         size="icon"

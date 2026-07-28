@@ -661,25 +661,49 @@ export function parseTcsExamWorkbook(
   workbook: XLSX.WorkBook,
   fileName: string,
 ): TcsExamWorkbookParseResult {
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
+  if (workbook.SheetNames.length === 0) {
     throw new Error("The workbook does not contain any sheets.");
   }
 
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) {
-    throw new Error(`Could not read sheet "${sheetName}".`);
+  const results: TcsExamWorkbookParseResult[] = [];
+  const emptySheetWarnings: WorkOrderImportWarning[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      emptySheetWarnings.push({
+        code: "missing_sheet",
+        message: `Could not read sheet "${sheetName}".`,
+        sheetName,
+      });
+      continue;
+    }
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      raw: true,
+      defval: "",
+    }) as unknown[][];
+    if (rows.length === 0) {
+      emptySheetWarnings.push({
+        code: "empty_sheet",
+        message: `Sheet "${sheetName}" did not contain any rows and was skipped.`,
+        sheetName,
+      });
+      continue;
+    }
+    const parserMode = detectParserMode(rows);
+    results.push(
+      parserMode === "pivot-date-sheet"
+        ? parsePivotSheet(rows, fileName, sheetName)
+        : parseLegacySheet(rows, fileName, sheetName),
+    );
   }
 
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    raw: true,
-    defval: "",
-  }) as unknown[][];
-
-  if (rows.length === 0) {
-    const suggestedExamName = cleanExamNameFromFilename(fileName);
-    const suggestedExamCode = slugifyLocal(suggestedExamName);
+  const suggestedExamName =
+    results[0]?.suggestedExamName ?? cleanExamNameFromFilename(fileName);
+  const suggestedExamCode =
+    results[0]?.suggestedExamCode ?? slugifyLocal(suggestedExamName);
+  if (results.length === 0) {
     return {
       parserMode: "legacy-sheet",
       suggestedExamName,
@@ -691,17 +715,61 @@ export function parseTcsExamWorkbook(
       rowCount: 0,
       totalMale: 0,
       totalFemale: 0,
-      warnings: [
-        {
-          code: "empty_sheet",
-          message: "The selected workbook did not contain any rows.",
-        },
-      ],
+      warnings: emptySheetWarnings,
     };
   }
 
-  const parserMode = detectParserMode(rows);
-  return parserMode === "pivot-date-sheet"
-    ? parsePivotSheet(rows, fileName, sheetName)
-    : parseLegacySheet(rows, fileName, sheetName);
+  const combinedRows: TcsExamSourceRow[] = [];
+  const warnings = [...emptySheetWarnings, ...results.flatMap((result) => result.warnings)];
+  const seenRows = new Map<string, TcsExamSourceRow>();
+  for (const row of results.flatMap((result) => result.rows)) {
+    const siteKey = row.siteId?.trim().toLowerCase()
+      ? `id:${row.siteId.trim().toLowerCase()}`
+      : `name:${row.siteName.trim().toLowerCase()}|district:${row.district.trim().toLowerCase()}`;
+    const key = `${siteKey}|date:${row.date}|exam:${row.examCode ?? suggestedExamCode}`;
+    const existing = seenRows.get(key);
+    if (!existing) {
+      seenRows.set(key, row);
+      combinedRows.push(row);
+      continue;
+    }
+    if (
+      existing.maleGuardsRequired !== row.maleGuardsRequired ||
+      existing.femaleGuardsRequired !== row.femaleGuardsRequired
+    ) {
+      throw new Error(
+        `Conflicting guard requirements were found for ${row.siteName} on ${row.date} across workbook sheets.`,
+      );
+    }
+    warnings.push({
+      code: "duplicate_sheet_row",
+      message: `Duplicate row for ${row.siteName} on ${row.date} was ignored.`,
+      rowNumber: row.sourceRowNumber,
+      sheetName: row.sourceSheetName,
+    });
+  }
+
+  const dates = Array.from(new Set(combinedRows.map((row) => row.date))).sort();
+  const siteCount = new Set(
+    combinedRows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
+  ).size;
+  return {
+    parserMode:
+      workbook.SheetNames.length > 1
+        ? "mixed-workbook"
+        : results[0].parserMode,
+    suggestedExamName,
+    suggestedExamCode,
+    dateRange: {
+      from: dates[0] ?? EMPTY_RESULT_DATE,
+      to: dates[dates.length - 1] ?? EMPTY_RESULT_DATE,
+    },
+    dates,
+    rows: combinedRows,
+    siteCount,
+    rowCount: combinedRows.length,
+    totalMale: combinedRows.reduce((sum, row) => sum + row.maleGuardsRequired, 0),
+    totalFemale: combinedRows.reduce((sum, row) => sum + row.femaleGuardsRequired, 0),
+    warnings,
+  };
 }

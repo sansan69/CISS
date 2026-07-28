@@ -129,7 +129,8 @@ export async function GET(request: Request) {
         return { row, resolvedDistrict, siteIdString };
       })
       .filter(({ resolvedDistrict }) => {
-        if (assignedDistricts.length === 0) return true;
+        if (!hasAdminAccess(decoded) && assignedDistricts.length === 0) return false;
+        if (hasAdminAccess(decoded) && assignedDistricts.length === 0) return true;
         return assignedDistricts.some((district) => districtMatches(district, resolvedDistrict));
       })
       .map(({ row, resolvedDistrict, siteIdString }) => ({

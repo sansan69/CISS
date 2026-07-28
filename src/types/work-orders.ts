@@ -11,7 +11,7 @@ export type WorkOrderLifecycleStatus = "active" | "cancelled" | "superseded" | "
 export type WorkOrderImportMode = "new" | "revision";
 export type WorkOrderDuplicateResolution = "reject" | "replace" | "omit";
 export type WorkOrderDiffStatus = "added" | "updated" | "unchanged" | "cancelled";
-export type TcsExamParserMode = "legacy-sheet" | "pivot-date-sheet";
+export type TcsExamParserMode = "legacy-sheet" | "pivot-date-sheet" | "mixed-workbook";
 export type WorkOrderImportDuplicateState =
   | "none"
   | "binary-duplicate"
@@ -37,16 +37,23 @@ export interface WorkOrder {
   sourceSheetName?: string;
   binaryFileHash?: string;
   contentHash?: string;
+  packageId?: string;
+  revisionNumber?: number;
+  lastRevisionChange?: "new" | "added" | "updated" | "reactivated";
+  assignmentStatus?: "unassigned" | "partial" | "ready" | "review";
+  assignmentReviewRequired?: boolean;
 }
 
 export interface WorkOrderImportWarning {
   code: string;
   message: string;
+  fileName?: string;
   rowNumber?: number;
   sheetName?: string;
 }
 
 export interface TcsExamSourceRow {
+  sourceFileName?: string;
   siteId?: string;
   siteName: string;
   district: string;
@@ -104,6 +111,8 @@ export interface TcsExamExistingWorkOrder extends TcsExamHashRow {
 
 export interface TcsExamImportPreviewPayload extends TcsExamWorkbookParseResult {
   mode: WorkOrderImportMode;
+  targetExamCode?: string;
+  fileNames?: string[];
   binaryFileHash: string;
   contentHash: string;
   duplicateState: WorkOrderImportDuplicateState;
@@ -113,8 +122,10 @@ export interface TcsExamImportPreviewPayload extends TcsExamWorkbookParseResult 
 
 export interface TcsExamImportCommitPayload {
   mode?: WorkOrderImportMode;
+  targetExamCode?: string;
   duplicateResolution?: WorkOrderDuplicateResolution;
   fileName: string;
+  fileNames?: string[];
   parserMode: TcsExamParserMode;
   examName: string;
   examCode: string;

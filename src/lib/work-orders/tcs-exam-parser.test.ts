@@ -189,4 +189,37 @@ describe("parseTcsExamWorkbook", () => {
       district: "Kozhikode",
     });
   });
+
+  it("parses every populated worksheet in a workbook", () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ["Exam Name:- Multi Sheet Exam", "21 Apr 2026"],
+        ["District", "Site", "Male", "Female"],
+        ["Ernakulam", "Centre A", 2, 1],
+      ]),
+      "Ernakulam",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ["Exam Name:- Multi Sheet Exam", "21 Apr 2026"],
+        ["District", "Site", "Male", "Female"],
+        ["Kollam", "Centre B", 3, 0],
+      ]),
+      "Kollam",
+    );
+
+    const result = parseTcsExamWorkbook(workbook, "Multi Sheet Exam.xlsx");
+
+    expect(result.parserMode).toBe("mixed-workbook");
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows.map((row) => row.sourceSheetName)).toEqual([
+      "Ernakulam",
+      "Kollam",
+    ]);
+    expect(result.totalMale).toBe(5);
+    expect(result.totalFemale).toBe(1);
+  });
 });

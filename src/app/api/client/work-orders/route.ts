@@ -63,8 +63,10 @@ export async function GET(request: Request) {
             totalManpower,
             maleGuardsRequired: toInt(data.maleGuardsRequired),
             femaleGuardsRequired: toInt(data.femaleGuardsRequired),
+            recordStatus: normalizeText(data.recordStatus || "active").toLowerCase(),
           };
         })
+        .filter((row) => row.recordStatus === "active")
         .filter((row) => matchesClientScope(row, scope) || (isOperationalClient && row.clientName === OPERATIONAL_CLIENT_NAME)),
       (row) => row.date,
     ).slice(0, limit);

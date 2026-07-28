@@ -223,26 +223,18 @@ service cloud.firestore {
     }
 
     // ── workOrders ───────────────────────────────────────────────────────────
-    // FO can read all workOrders (client-side JS filters by district).
-    // Update is restricted to the FO's assigned districts.
+    // FO reads are restricted to assigned districts.
+    // FO writes are server-only so assignment conflicts and quotas cannot be bypassed.
     // Client users see only their own client's workOrders.
     // Admin has full access.
 
     match /workOrders/{workOrderId} {
       allow read: if readStateMatches() && (isAdmin() ||
-        isFieldOfficer() ||
+        isFieldOfficerForDistrict(resource.data.district) ||
         isOwnClientDoc('clientName'));
       allow create: if isAdmin() && writeStateMatches();
       allow delete: if isAdmin() && readStateMatches();
-      // FO can update workOrders only in their assigned districts.
-      // When district is missing, deny FO update (admin-only).
-      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
-        (isFieldOfficer() &&
-          readStateMatches() &&
-          writeStateMatches() &&
-          resource.data.district is string &&
-          resource.data.district != "" &&
-          resource.data.district in request.auth.token.assignedDistricts);
+      allow update: if isAdmin() && readStateMatches() && writeStateMatches();
     }
 
     // ── fcmTokens (push notification device registration) ────────────────────

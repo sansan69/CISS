@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,10 @@ export async function GET(request: Request) {
         .orderBy("reportedAt", "desc")
         .limit(2000)
         .get(),
-      adminDb.collection("workOrders").limit(1000).get(),
+      adminDb
+        .collection("workOrders")
+        .where("date", ">=", new Date(`${todayKey}T00:00:00+05:30`))
+        .get(),
       adminDb.collection("clients").limit(1000).get(),
       adminDb.collection("sites").limit(1000).get(),
     ]);
@@ -64,13 +68,30 @@ export async function GET(request: Request) {
     let pendingWorkOrders = 0;
     for (const doc of workOrdersSnapshot.docs) {
       const data = doc.data() as Record<string, unknown>;
-      const assignedCount = Array.isArray(data.assignedGuards) ? data.assignedGuards.length : 0;
-      const totalManpower =
-        typeof data.totalManpower === "number"
-          ? data.totalManpower
-          : (typeof data.maleGuardsRequired === "number" ? data.maleGuardsRequired : 0) +
-            (typeof data.femaleGuardsRequired === "number" ? data.femaleGuardsRequired : 0);
-      if (totalManpower > assignedCount) pendingWorkOrders += 1;
+      if (!isOperationalWorkOrderClientName(String(data.clientName ?? ""))) continue;
+      if (String(data.recordStatus ?? "active").trim().toLowerCase() !== "active") continue;
+      const assignedGuards = Array.isArray(data.assignedGuards) ? data.assignedGuards : [];
+      const assignedMale = assignedGuards.filter(
+        (guard) =>
+          guard &&
+          typeof guard === "object" &&
+          String((guard as { gender?: unknown }).gender ?? "").trim().toLowerCase() === "male",
+      ).length;
+      const assignedFemale = assignedGuards.filter(
+        (guard) =>
+          guard &&
+          typeof guard === "object" &&
+          String((guard as { gender?: unknown }).gender ?? "").trim().toLowerCase() === "female",
+      ).length;
+      const maleRequired = Number(data.maleGuardsRequired ?? 0);
+      const femaleRequired = Number(data.femaleGuardsRequired ?? 0);
+      if (
+        data.assignmentReviewRequired === true ||
+        assignedMale !== maleRequired ||
+        assignedFemale !== femaleRequired
+      ) {
+        pendingWorkOrders += 1;
+      }
     }
 
     return NextResponse.json({

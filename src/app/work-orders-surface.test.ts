@@ -19,6 +19,10 @@ const workOrdersImportsPageSource = readFileSync(
   resolve(process.cwd(), "src/app/(app)/work-orders/imports/page.tsx"),
   "utf8",
 );
+const workOrdersImportsRouteSource = readFileSync(
+  resolve(process.cwd(), "src/app/api/admin/work-orders/imports/route.ts"),
+  "utf8",
+);
 const workOrdersRouteSource = readFileSync(
   resolve(process.cwd(), "src/app/api/admin/work-orders/route.ts"),
   "utf8",
@@ -90,16 +94,18 @@ describe("work orders operations surface", () => {
     expect(workOrdersPageSource).not.toContain("buildTcsExamDiff({");
     expect(workOrdersRouteSource).toContain("function normalizeWorkOrderDate");
     expect(workOrdersRouteSource).toContain('if ("date" in filtered)');
-    expect(workOrdersImportsPageSource).toContain('collection(db, "workOrders")');
-    expect(workOrdersImportsPageSource).toContain("onSnapshot");
+    expect(workOrdersImportsPageSource).toContain('authorizedFetch("/api/admin/work-orders/imports")');
     expect(workOrdersImportsPageSource).toContain("rowCount");
-    expect(workOrdersImportsPageSource).toContain("recordStatus");
+    expect(workOrdersImportsPageSource).toContain("revisionNumber");
+    expect(workOrdersImportsRouteSource).toContain('.collection("workOrderImports")');
+    expect(workOrdersImportsRouteSource).toContain('.orderBy("createdAt", "desc")');
   });
 
-  it("supports editable previews and deletes visible site rows from the database", () => {
-    expect(workOrdersPageSource).toContain("updatePreviewRow");
-    expect(workOrdersPageSource).toContain('onChange={(event) => updatePreviewRow(originalIndex, "siteName", event.target.value)}');
-    expect(workOrdersPageSource).toContain('onChange={(event) => updatePreviewRow(originalIndex, "maleGuardsRequired", event.target.value)}');
+  it("keeps import review read-only and deletes visible site rows from the database", () => {
+    expect(workOrdersPageSource).toContain("Change review");
+    expect(workOrdersPageSource).toContain("previousMaleGuardsRequired");
+    expect(workOrdersPageSource).toContain("row.status === 'cancelled'");
+    expect(workOrdersPageSource).not.toContain("updatePreviewRow");
     expect(workOrdersPageSource).toContain("handleDeleteOrders(row.orders)");
     expect(workOrdersPageSource).toContain("body: JSON.stringify({ workOrderIds: ids })");
     expect(workOrdersPageSource).toContain("duplicateResolution");

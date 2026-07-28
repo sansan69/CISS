@@ -17,6 +17,7 @@ import type {
   TcsExamExistingWorkOrder,
   TcsExamImportPreviewPayload,
   TcsExamSourceRow,
+  TcsExamWorkbookParseResult,
   WorkOrderImportDuplicateState,
   WorkOrderImportMode,
 } from "@/types/work-orders";
@@ -36,6 +37,12 @@ function normalizeMode(value: FormDataEntryValue | null): WorkOrderImportMode {
   return value === "revision" ? "revision" : "new";
 }
 
+function normalizeExamCode(value: FormDataEntryValue | null): string {
+  return typeof value === "string"
+    ? value.replace(/\s+/g, " ").trim().toLowerCase()
+    : "";
+}
+
 function normalizeRecordStatus(value: unknown): string {
   return String(value ?? "active").trim().toLowerCase();
 }
@@ -49,6 +56,71 @@ function normalizeSegment(value: string | number | undefined | null): string {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+function combineParsedFiles(
+  parsedFiles: Array<{ fileName: string; result: TcsExamWorkbookParseResult }>,
+): TcsExamWorkbookParseResult {
+  const first = parsedFiles[0]?.result;
+  if (!first) {
+    throw new Error("At least one workbook file is required.");
+  }
+
+  const rows: TcsExamSourceRow[] = [];
+  const warnings = parsedFiles.flatMap(({ fileName, result }) =>
+    result.warnings.map((warning) => ({ ...warning, fileName })),
+  );
+  const seenRows = new Map<string, TcsExamSourceRow>();
+  for (const { fileName, result } of parsedFiles) {
+    for (const sourceRow of result.rows) {
+      const row = { ...sourceRow, sourceFileName: fileName };
+      const key = getIdentityKey(row);
+      const existing = seenRows.get(key);
+      if (!existing) {
+        seenRows.set(key, row);
+        rows.push(row);
+        continue;
+      }
+      if (
+        existing.maleGuardsRequired !== row.maleGuardsRequired ||
+        existing.femaleGuardsRequired !== row.femaleGuardsRequired
+      ) {
+        throw new Error(
+          `Conflicting guard requirements were found for ${row.siteName} on ${row.date} across uploaded files.`,
+        );
+      }
+      warnings.push({
+        code: "duplicate_file_row",
+        message: `Duplicate row for ${row.siteName} on ${row.date} in ${fileName} was ignored.`,
+        fileName,
+        rowNumber: row.sourceRowNumber,
+        sheetName: row.sourceSheetName,
+      });
+    }
+  }
+
+  const dates = Array.from(new Set(rows.map((row) => row.date))).sort();
+  return {
+    parserMode:
+      parsedFiles.length > 1 || parsedFiles.some(({ result }) => result.parserMode === "mixed-workbook")
+        ? "mixed-workbook"
+        : first.parserMode,
+    suggestedExamName: first.suggestedExamName,
+    suggestedExamCode: first.suggestedExamCode,
+    dateRange: {
+      from: dates[0] ?? "",
+      to: dates[dates.length - 1] ?? "",
+    },
+    dates,
+    rows,
+    siteCount: new Set(
+      rows.map((row) => `${row.siteId ?? ""}|${row.siteName}|${row.district}`),
+    ).size,
+    rowCount: rows.length,
+    totalMale: rows.reduce((sum, row) => sum + row.maleGuardsRequired, 0),
+    totalFemale: rows.reduce((sum, row) => sum + row.femaleGuardsRequired, 0),
+    warnings,
+  };
 }
 
 function hasConcreteSiteId(row: {
@@ -190,6 +262,23 @@ async function fetchExistingRows(
     .filter((row) =>
       relevantExamCodes.size === 0 ? true : relevantExamCodes.has(row.examCode),
     );
+}
+
+function scopeExistingRowsForRevision(
+  existingRows: readonly TcsExamExistingWorkOrder[],
+  parsedRows: readonly TcsExamSourceRow[],
+  mode: WorkOrderImportMode,
+): TcsExamExistingWorkOrder[] {
+  if (mode !== "revision" || parsedRows.length === 0) {
+    return [...existingRows];
+  }
+
+  const dates = parsedRows.map((row) => row.date).filter(Boolean).sort();
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  if (!from || !to) return [];
+
+  return existingRows.filter((row) => row.date >= from && row.date <= to);
 }
 
 async function hasActiveRowsForField(
@@ -343,22 +432,72 @@ export async function POST(request: Request) {
   try {
     await requireAdmin(request);
     const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File)) {
+    const multiFiles = formData.getAll("files").filter((value): value is File => value instanceof File);
+    const legacyFile = formData.get("file");
+    const files =
+      multiFiles.length > 0
+        ? multiFiles
+        : legacyFile instanceof File
+          ? [legacyFile]
+          : [];
+    if (files.length === 0) {
       return NextResponse.json(
-        { error: "A workbook file is required." },
+        { error: "At least one workbook file is required." },
         { status: 400 },
       );
     }
 
     const mode = normalizeMode(formData.get("mode"));
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const workbook = XLSX.read(fileBuffer, {
-      type: "buffer",
-      cellDates: false,
-    });
-    const parseResult = parseTcsExamWorkbook(workbook, file.name);
-    const binaryFileHash = buildBinaryFileHash(fileBuffer);
+    const targetExamCode = normalizeExamCode(formData.get("targetExamCode"));
+    const targetExamNameValue = formData.get("targetExamName");
+    const targetExamName =
+      typeof targetExamNameValue === "string"
+        ? targetExamNameValue.replace(/\s+/g, " ").trim()
+        : "";
+    const parsedFiles = await Promise.all(
+      files.map(async (file) => {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const workbook = XLSX.read(buffer, {
+          type: "buffer",
+          cellDates: false,
+        });
+        return {
+          fileName: file.name,
+          buffer,
+          result: parseTcsExamWorkbook(workbook, file.name),
+        };
+      }),
+    );
+    const rawParseResult = combineParsedFiles(parsedFiles);
+    const effectiveExamCode =
+      mode === "revision"
+        ? targetExamCode || rawParseResult.suggestedExamCode
+        : rawParseResult.suggestedExamCode;
+    const effectiveExamName =
+      mode === "revision" && targetExamName
+        ? targetExamName
+        : rawParseResult.suggestedExamName;
+    const parseResult = {
+      ...rawParseResult,
+      suggestedExamName: effectiveExamName,
+      suggestedExamCode: effectiveExamCode,
+      rows: rawParseResult.rows.map((row) => ({
+        ...row,
+        examName: effectiveExamName,
+        examCode: effectiveExamCode,
+      })),
+    };
+    const combinedBinary = Buffer.concat(
+      [...parsedFiles]
+        .sort((left, right) => left.fileName.localeCompare(right.fileName))
+        .flatMap(({ fileName, buffer }) => [
+          Buffer.from(fileName, "utf8"),
+          Buffer.from([0]),
+          buffer,
+          Buffer.from([0]),
+        ]),
+    );
+    const binaryFileHash = buildBinaryFileHash(combinedBinary);
     const contentHash = buildTcsExamContentHash(
       parseResult.suggestedExamCode,
       parseResult.rows.map((row) => ({
@@ -382,7 +521,12 @@ export async function POST(request: Request) {
       siteLookupMaps,
     );
 
-    const existingRows = await fetchExistingRows(adminDb, resolvedParsedRows);
+    const fetchedExistingRows = await fetchExistingRows(adminDb, resolvedParsedRows);
+    const existingRows = scopeExistingRowsForRevision(
+      fetchedExistingRows,
+      resolvedParsedRows,
+      mode,
+    );
     const activeExistingRows = existingRows.filter((row) =>
       isActiveRecordStatus(row.recordStatus),
     );
@@ -406,6 +550,8 @@ export async function POST(request: Request) {
       ...parseResult,
       rows: parseResult.rows,
       mode,
+      targetExamCode: mode === "revision" ? effectiveExamCode : undefined,
+      fileNames: files.map((file) => file.name),
       binaryFileHash,
       contentHash,
       duplicateState: duplicate.duplicateState,

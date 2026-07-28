@@ -75,6 +75,32 @@ function commitWritesInChunks(
   return commitWritesInChunksInternal(db, writes, BATCH_MAX_OPS);
 }
 
+async function getNextRevisionMetadata(
+  adminDb: FirebaseFirestore.Firestore,
+  examCode: string,
+): Promise<{ revisionNumber: number; supersedesImportId: string | null }> {
+  const snapshot = await adminDb
+    .collection("workOrderImports")
+    .where("examCode", "==", examCode)
+    .get();
+
+  let highestRevision = 0;
+  let supersedesImportId: string | null = null;
+  snapshot.docs.forEach((doc, index) => {
+    const data = doc.data();
+    const revisionNumber = Number(data.revisionNumber ?? index + 1);
+    if (Number.isFinite(revisionNumber) && revisionNumber >= highestRevision) {
+      highestRevision = revisionNumber;
+      supersedesImportId = doc.id;
+    }
+  });
+
+  return {
+    revisionNumber: highestRevision + 1,
+    supersedesImportId,
+  };
+}
+
 async function commitWritesInChunksInternal(
   db: FirebaseFirestore.Firestore,
   writes: WriteOp[],
@@ -340,6 +366,23 @@ async function fetchExistingRows(
     );
 }
 
+function scopeExistingRowsForRevision(
+  existingRows: readonly ExistingWorkOrderRecord[],
+  parsedRows: readonly TcsExamSourceRow[],
+  mode: WorkOrderImportMode,
+): ExistingWorkOrderRecord[] {
+  if (mode !== "revision" || parsedRows.length === 0) {
+    return [...existingRows];
+  }
+
+  const dates = parsedRows.map((row) => row.date).filter(Boolean).sort();
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  if (!from || !to) return [];
+
+  return existingRows.filter((row) => row.date >= from && row.date <= to);
+}
+
 async function fetchSites(
   adminDb: FirebaseFirestore.Firestore,
   tcsClientId: string | null,
@@ -550,6 +593,7 @@ function buildWorkOrderWrites(
   activeExistingRows: readonly ExistingWorkOrderRecord[],
   adminUser: { uid: string; email?: string | null },
   importId: string,
+  revisionNumber: number,
   payload: TcsExamImportCommitPayload,
 ): { writes: WriteOp[]; committedRows: number; cancelledRows: number } {
   const writes: WriteOp[] = [];
@@ -561,14 +605,45 @@ function buildWorkOrderWrites(
       const existing = activeExistingRows.find((row) => getIdentityKey(row) === diffRow.key);
       if (!existing) continue;
       cancelledRows += 1;
+      const assignedGuards = Array.isArray(existing.assignedGuards) ? existing.assignedGuards : [];
+      const revisionEventRef = adminDb.collection("workOrderRevisionEvents").doc();
       writes.push({
         ref: adminDb.collection("workOrders").doc(existing.id),
         data: {
           recordStatus: "cancelled",
           cancelledByImportId: importId,
+          cancelledAssignedGuards: assignedGuards,
+          assignedGuards: [],
+          assignmentStatus: "unassigned",
+          assignmentReviewRequired: assignedGuards.length > 0,
+          packageId: payload.examCode,
+          revisionNumber,
           ...buildServerUpdateAudit({ uid: adminUser.uid, email: adminUser.email }),
         },
         merge: true,
+      });
+      writes.push({
+        ref: revisionEventRef,
+        data: {
+          id: revisionEventRef.id,
+          importId,
+          packageId: payload.examCode,
+          revisionNumber,
+          workOrderId: existing.id,
+          changeType: "cancelled",
+          siteId: existing.siteId ?? "",
+          siteName: existing.siteName,
+          district: existing.district,
+          date: createStoredDate(existing.date),
+          previousMaleGuardsRequired: existing.maleGuardsRequired,
+          previousFemaleGuardsRequired: existing.femaleGuardsRequired,
+          maleGuardsRequired: 0,
+          femaleGuardsRequired: 0,
+          affectedGuards: assignedGuards,
+          affectedGuardCount: assignedGuards.length,
+          acknowledgedBy: [],
+          ...buildServerCreateAudit({ uid: adminUser.uid, email: adminUser.email }),
+        },
       });
       continue;
     }
@@ -603,13 +678,45 @@ function buildWorkOrderWrites(
               getIdentityKey(row) === getIdentityKey(originalRow),
           )
         : null);
-    // Do not resurrect a cancelled-only row, but a cancelled duplicate must
-    // never prevent the matching active row from being revised.
-    if (inactiveExisting && !existing) continue;
-
     committedRows += 1;
-    const targetId = existing?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);
+    const priorRecord = existing ?? inactiveExisting ?? null;
+    const targetId = priorRecord?.id ?? buildWorkOrderDocIdForExam(parsedRow, payload.examCode);
     const workOrderRef = adminDb.collection("workOrders").doc(targetId);
+    const assignedGuards = Array.isArray(existing?.assignedGuards) ? existing.assignedGuards : [];
+    const assignedMale = assignedGuards.filter(
+      (guard) =>
+        guard &&
+        typeof guard === "object" &&
+        normalizeSegment((guard as { gender?: unknown }).gender as string) === "male",
+    ).length;
+    const assignedFemale = assignedGuards.filter(
+      (guard) =>
+        guard &&
+        typeof guard === "object" &&
+        normalizeSegment((guard as { gender?: unknown }).gender as string) === "female",
+    ).length;
+    const requiredMale = Number(parsedRow.maleGuardsRequired);
+    const requiredFemale = Number(parsedRow.femaleGuardsRequired);
+    const assignmentReviewRequired =
+      assignedMale > requiredMale ||
+      assignedFemale > requiredFemale ||
+      assignedGuards.length > requiredMale + requiredFemale;
+    const assignmentStatus =
+      assignmentReviewRequired
+        ? "review"
+        : assignedMale === requiredMale && assignedFemale === requiredFemale
+          ? "ready"
+          : assignedGuards.length === 0
+            ? "unassigned"
+            : "partial";
+    const changeType =
+      inactiveExisting && !existing
+        ? "reactivated"
+        : diffRow.status === "updated"
+          ? "updated"
+          : payload.mode === "revision"
+            ? "added"
+            : "new";
     const basePayload = {
       siteId: parsedRow.siteId,
       siteName: parsedRow.siteName,
@@ -620,22 +727,33 @@ function buildWorkOrderWrites(
       femaleGuardsRequired: parsedRow.femaleGuardsRequired,
       totalManpower:
         Number(parsedRow.maleGuardsRequired) + Number(parsedRow.femaleGuardsRequired),
-      assignedGuards: Array.isArray(existing?.assignedGuards) ? existing.assignedGuards : [],
+      assignedGuards,
+      assignmentStatus,
+      assignmentReviewRequired,
       examName: payload.examName,
       examCode: payload.examCode,
+      packageId: payload.examCode,
+      revisionNumber,
+      lastRevisionChange: changeType,
       recordStatus: "active",
       importId,
-      sourceFileName: payload.fileName,
+      sourceFileName: parsedRow.sourceFileName || payload.fileName,
       sourceSheetName: parsedRow.sourceSheetName,
       binaryFileHash: payload.binaryFileHash,
       contentHash: payload.contentHash,
     };
 
-    if (existing) {
+    if (priorRecord) {
       writes.push({
         ref: workOrderRef,
         data: {
           ...basePayload,
+          ...(inactiveExisting && !existing
+            ? {
+                reactivatedByImportId: importId,
+                cancelledByImportId: null,
+              }
+            : {}),
           ...buildServerUpdateAudit({ uid: adminUser.uid, email: adminUser.email }),
         },
         merge: true,
@@ -646,6 +764,33 @@ function buildWorkOrderWrites(
         data: {
           id: targetId,
           ...basePayload,
+          ...buildServerCreateAudit({ uid: adminUser.uid, email: adminUser.email }),
+        },
+      });
+    }
+    if (changeType !== "new" && diffRow.status !== "unchanged") {
+      const revisionEventRef = adminDb.collection("workOrderRevisionEvents").doc();
+      writes.push({
+        ref: revisionEventRef,
+        data: {
+          id: revisionEventRef.id,
+          importId,
+          packageId: payload.examCode,
+          revisionNumber,
+          workOrderId: targetId,
+          changeType,
+          siteId: parsedRow.siteId ?? "",
+          siteName: parsedRow.siteName,
+          district: parsedRow.district,
+          date: createStoredDate(parsedRow.date),
+          previousMaleGuardsRequired: priorRecord?.maleGuardsRequired ?? 0,
+          previousFemaleGuardsRequired: priorRecord?.femaleGuardsRequired ?? 0,
+          maleGuardsRequired: requiredMale,
+          femaleGuardsRequired: requiredFemale,
+          affectedGuards: assignedGuards,
+          affectedGuardCount: assignmentReviewRequired ? assignedGuards.length : 0,
+          assignmentReviewRequired,
+          acknowledgedBy: [],
           ...buildServerCreateAudit({ uid: adminUser.uid, email: adminUser.email }),
         },
       });
@@ -662,6 +807,16 @@ export async function POST(request: Request) {
     const adminUser = await requireAdmin(request);
     const payload = validatePayload(await request.json());
     const mode = normalizeMode(payload.mode);
+    const normalizedTargetExamCode = String(payload.targetExamCode ?? payload.examCode ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    if (mode === "revision" && normalizedTargetExamCode !== payload.examCode) {
+      return NextResponse.json(
+        { error: "Revision exam code does not match the selected exam duty." },
+        { status: 400 },
+      );
+    }
     const duplicateResolution =
       mode === "revision" ? "replace" : normalizeDuplicateResolution(payload.duplicateResolution);
     const canonicalRows = payload.rows.map((row) => ({
@@ -709,7 +864,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const existingRows = await fetchExistingRows(adminDb, resolvedCanonicalRows);
+    const fetchedExistingRows = await fetchExistingRows(adminDb, resolvedCanonicalRows);
+    const existingRows = scopeExistingRowsForRevision(
+      fetchedExistingRows,
+      resolvedCanonicalRows,
+      mode,
+    );
     const activeExistingRows = existingRows.filter((row) => isActiveRecordStatus(row.recordStatus));
 
     if (
@@ -755,7 +915,7 @@ export async function POST(request: Request) {
       if (originalRow) rowsToResolve.push(originalRow);
     }
 
-    // ── Phase 1: Commit site writes ──
+    // ── Phase 1: Resolve site writes in memory ──
     const siteWrites: WriteOp[] = [];
     const { resolvedRows, createdSites } = await resolveCommitRows(
       adminDb,
@@ -764,11 +924,6 @@ export async function POST(request: Request) {
       adminUser,
       activeExistingRows,
     );
-
-    // Commit site writes immediately (typically small, <450 ops)
-    if (siteWrites.length > 0) {
-      await commitWritesInChunks(adminDb, siteWrites);
-    }
 
     // ── Phase 2: Build resolved lookups for work order phase ──
     const resolvedByOriginalKey = new Map<string, TcsExamSourceRow>();
@@ -783,6 +938,10 @@ export async function POST(request: Request) {
     // ── Phase 3: Build & commit work-order writes in chunks ──
     const importRef = adminDb.collection("workOrderImports").doc();
     const importId = importRef.id;
+    const { revisionNumber, supersedesImportId } = await getNextRevisionMetadata(
+      adminDb,
+      payload.examCode,
+    );
 
     // Pre-compute all work-order writes
     const { writes: woWrites, committedRows, cancelledRows } = buildWorkOrderWrites(
@@ -798,6 +957,7 @@ export async function POST(request: Request) {
       activeExistingRows,
       adminUser,
       importId,
+      revisionNumber,
       payload,
     );
 
@@ -812,10 +972,17 @@ export async function POST(request: Request) {
         id: importId,
         clientName: OPERATIONAL_CLIENT_NAME,
         fileName: payload.fileName,
+        fileNames:
+          Array.isArray(payload.fileNames) && payload.fileNames.length > 0
+            ? payload.fileNames
+            : [payload.fileName],
         binaryFileHash: payload.binaryFileHash,
         contentHash: payload.contentHash,
         examName: payload.examName,
         examCode: payload.examCode,
+        packageId: payload.examCode,
+        revisionNumber,
+        supersedesImportId,
         parserMode: payload.parserMode,
         mode,
         status: "committed",
@@ -847,10 +1014,38 @@ export async function POST(request: Request) {
       },
     };
 
-    // Commit all writes in chunks of max BATCH_MAX_OPS (450)
-    // to stay within Firestore's batch-operation limit.
-    const allWrites = [...woWrites, importDocWrite];
-    await commitWritesInChunks(adminDb, allWrites);
+    const operationalWrites = [...siteWrites, ...woWrites];
+    const allWrites = [...operationalWrites, importDocWrite];
+    if (allWrites.length <= BATCH_MAX_OPS) {
+      // Normal imports are fully atomic: sites, work orders, revision events,
+      // and the authoritative import record succeed or fail together.
+      await commitWritesInChunks(adminDb, allWrites);
+    } else {
+      // Firestore cannot atomically write more than 500 documents. Large jobs
+      // receive an explicit processing/failed state so partial progress is
+      // visible and retryable instead of becoming an orphaned silent import.
+      await importRef.set({
+        ...importDocWrite.data,
+        status: "processing",
+        committedRows: 0,
+        cancelledRows: 0,
+      });
+      try {
+        await commitWritesInChunks(adminDb, operationalWrites);
+        await importRef.set(importDocWrite.data, { merge: true });
+      } catch (commitError) {
+        await importRef.set(
+          {
+            status: "failed",
+            failureMessage:
+              commitError instanceof Error ? commitError.message : "Import commit failed.",
+            failedAt: new Date(),
+          },
+          { merge: true },
+        );
+        throw commitError;
+      }
+    }
 
     return NextResponse.json({
       importId,

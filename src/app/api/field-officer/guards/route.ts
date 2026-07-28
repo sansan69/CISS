@@ -65,6 +65,7 @@ export async function GET(request: Request) {
 
     const guards = employeesSnap.docs
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
+      .filter((employee) => normalizeText(employee.status || "Active").toLowerCase() === "active")
       .filter((employee) => {
         if (districtScope.length === 0) return true;
         return employeeMatchesAnyDistrict(employee, districtScope);
