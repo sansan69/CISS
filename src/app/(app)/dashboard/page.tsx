@@ -814,38 +814,29 @@ export default function DashboardPage() {
   return (
     <div className="page-content">
 
-      {/* ── Greeting ─────────────────────────────────────────────────────── */}
-      <div className="animate-slide-down">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{todayLabel}</p>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground capitalize mt-0.5 leading-tight">
-              {getGreeting()}, {userName} 👋
-            </h1>
+      {/* ── Operations overview ──────────────────────────────────────────── */}
+      <header className="animate-slide-down flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              Operations overview
+            </p>
           </div>
-          {/* Active badge */}
-          {userRole !== 'client' && !isLoading && stats && (
-            <div className="flex items-center gap-6 shrink-0">
-              <div className="flex flex-col items-end">
-                <span className="text-2xl font-bold text-emerald-600 tabular-nums leading-none">
-                  {stats.active}
-                </span>
-                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
-                  active guards
-                </span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-2xl font-bold text-brand-blue tabular-nums leading-none">
-                  {todayAttendanceDocs.length}
-                </span>
-                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
-                  checks today
-                </span>
-              </div>
-            </div>
-          )}
+          <h1 className="mt-2 font-exo2 text-2xl font-bold leading-tight tracking-[-0.025em] text-foreground sm:text-3xl">
+            {getGreeting()}, <span className="capitalize">{userName}</span>
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+            Workforce status and frequently used tools in one place.
+          </p>
         </div>
-      </div>
+        <time
+          dateTime={format(new Date(), "yyyy-MM-dd")}
+          className="w-fit rounded-full border border-border/70 bg-card px-3 py-1.5 text-[11px] font-semibold text-muted-foreground shadow-brand-xs"
+        >
+          {todayLabel}
+        </time>
+      </header>
 
       {userRole === 'client' ? (
         <ClientOperationsDashboard />
@@ -867,6 +858,7 @@ export default function DashboardPage() {
         <DashboardStats 
           role={userRole as any} 
           stats={stats}
+          roleSpecific={{ checkedIn: todayAttendanceDocs.length }}
         />
       )}
 
