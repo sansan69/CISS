@@ -9,7 +9,6 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Building2,
-  ChevronDown,
   Clock3,
   DownloadCloud,
   Fingerprint,
@@ -62,7 +61,6 @@ export default function LandingPage() {
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showFallbackGuidance, setShowFallbackGuidance] = useState(false);
-  const [showPlatformInformation, setShowPlatformInformation] = useState(false);
   const [portalContext, setPortalContext] = useState<PortalContext | null>(null);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const normalizedPhone = phoneNumber.trim().replace(/\D/g, "");
@@ -403,14 +401,13 @@ export default function LandingPage() {
                 <div className="relative flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light">
-                      Guard attendance
+                      CISS Workforce
                     </p>
                     <h2 id="attendance-title" className="mt-2 font-exo2 text-2xl font-bold tracking-tight lg:text-[2rem]">
-                      <span className="xl:hidden">Mark your attendance</span>
-                      <span className="hidden xl:inline">Identify and continue</span>
+                      Your duty starts here
                     </h2>
                     <p className="mt-1 max-w-md text-sm leading-5 text-white/70 lg:leading-6 lg:text-white/62">
-                      Enter your mobile number or scan your employee QR.
+                      Mark attendance, enrol as a new guard, and access duty services securely.
                     </p>
                   </div>
                   <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.07] sm:flex">
@@ -461,7 +458,7 @@ export default function LandingPage() {
                 <Button
                   variant="brand"
                   onClick={handleContinue}
-                  className="mt-4 h-14 w-full rounded-xl text-base font-bold shadow-gold"
+                  className="mt-4 h-14 w-full rounded-xl text-sm font-bold shadow-gold sm:text-base"
                   disabled={isLoading || normalizedPhone.length < 10}
                 >
                   {isLoading ? (
@@ -471,7 +468,7 @@ export default function LandingPage() {
                     </>
                   ) : (
                     <>
-                      Continue to attendance
+                      Continue to attendance / enrolment
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -490,12 +487,19 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <nav className="mt-5 flex items-center justify-center gap-5 text-sm xl:hidden" aria-label="Guard access">
-              <Link href="/guard-login" className="min-h-11 py-3 font-semibold text-primary">
+            <nav className="mt-5 grid grid-cols-2 gap-3 text-sm xl:hidden" aria-label="Guard access">
+              <Link
+                href="/guard-login"
+                data-action="guard-portal"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-primary/35 bg-primary/10 px-3 py-2.5 text-center font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 Guard portal
               </Link>
-              <span className="h-4 w-px bg-border" aria-hidden="true" />
-              <Link href="/enroll" className="min-h-11 py-3 text-muted-foreground">
+              <Link
+                href="/enroll"
+                data-action="new-guard-enrollment"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-border bg-card px-3 py-2.5 text-center font-semibold leading-5 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 New guard enrollment
               </Link>
             </nav>
@@ -561,91 +565,6 @@ export default function LandingPage() {
               <h2 className="font-exo2 text-sm font-bold">Role-controlled visibility</h2>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">Purpose-built views for guards, officers, clients, and administrators.</p>
             </div>
-          </div>
-        </section>
-
-        <section
-          data-section="platform-information"
-          className="mb-8 overflow-hidden rounded-2xl border border-border/70 bg-card/55"
-          aria-labelledby="platform-information-title"
-        >
-          <button
-            type="button"
-            className="flex min-h-14 w-full items-center justify-between gap-4 px-4 text-left xl:hidden"
-            aria-expanded={showPlatformInformation}
-            aria-controls="platform-information-content"
-            onClick={() => setShowPlatformInformation((current) => !current)}
-          >
-            <span>
-              <span id="platform-information-title" className="block text-sm font-bold text-foreground">
-                About CISS Workforce
-              </span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                Attendance, privacy and role-based access
-              </span>
-            </span>
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                showPlatformInformation ? "rotate-180" : ""
-              }`}
-              aria-hidden="true"
-            />
-          </button>
-
-          <div
-            id="platform-information-content"
-            className={`border-t border-border/70 p-5 xl:grid xl:grid-cols-3 xl:gap-8 xl:border-t-0 xl:p-7 ${
-              showPlatformInformation ? "grid gap-6" : "hidden"
-            }`}
-          >
-            <article>
-              <h2 className="font-exo2 text-lg font-bold text-foreground xl:text-xl">
-                The official CISS workforce portal
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                CISS Workforce is the official digital operations platform for CISS Services
-                teams in Kerala and Lakshadweep. It gives security guards a direct way to mark
-                duty attendance, access their guard portal, complete enrolment when they are not
-                yet registered, and download the Android app. The same platform helps field
-                officers coordinate people and duty locations while giving authorised clients
-                and administrators the operational information relevant to their responsibilities.
-                Access is organised by role, so each person sees the tools intended for their work
-                instead of an unnecessarily complex shared screen.
-              </p>
-            </article>
-
-            <article>
-              <h2 className="font-exo2 text-lg font-bold text-foreground xl:text-xl">
-                Verified attendance from the duty location
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                A guard can begin attendance with a registered mobile number or employee QR code.
-                A signed-in guard can continue directly from the guard portal. Attendance is
-                submitted only after the required live location and current photo are captured,
-                helping the operations team confirm who reported and where the record was made.
-                If browser location access is blocked, the guard receives guidance to enable the
-                permission and try again. Guards who are not registered are directed to the
-                enrolment form, where their details can be submitted for review before regular
-                portal access is used.
-              </p>
-            </article>
-
-            <article>
-              <h2 className="font-exo2 text-lg font-bold text-foreground xl:text-xl">
-                Clear information for every operations role
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Field officers use CISS Workforce to review assigned sites, guards, attendance and
-                field activity. Administrators manage employees, duty operations, attendance
-                records, work orders and reports according to their authorised area. Client views
-                are limited to the information made available for their sites and services. These
-                role-based views support day-to-day follow-up without exposing unrelated
-                operational data. Location and photo information is collected for attendance
-                verification and should only be viewed by authorised users for legitimate
-                workforce purposes. For company information, policies and service details, visit
-                the official CISS Services website linked below.
-              </p>
-            </article>
           </div>
         </section>
 
