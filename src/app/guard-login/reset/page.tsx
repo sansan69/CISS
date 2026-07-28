@@ -2,13 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, KeyRound, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Key as KeyRound, ShieldCheck } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function GuardResetPinPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-sky-950 px-4 py-10 text-slate-100">
+    <main className="min-h-[100dvh] bg-brand-blue-darker px-4 py-10 text-white">
       <div className="mx-auto w-full max-w-md">
         <header className="mb-6 text-center">
           <Image

@@ -10,6 +10,8 @@ import { AuthContext } from "@/context/auth-context";
 import { GuardHeader } from "@/components/guard/guard-header";
 import { GuardBottomNav } from "@/components/guard/guard-bottom-nav";
 import { GuardLiveTracking } from "@/components/guard/guard-live-tracking";
+import { PageTransition } from "@/components/motion/page-transition";
+import { usePathname } from "next/navigation";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loading Screen
@@ -18,25 +20,25 @@ import { GuardLiveTracking } from "@/components/guard/guard-live-tracking";
 function GuardLoadingScreen() {
   return (
     <div
-      className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/80"
+      className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-background"
     >
       <div className="flex flex-col items-center gap-3">
         <div
-          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15"
+          className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-primary/10 ring-1 ring-primary/15"
         >
           <Image src="/ciss-logo.png" alt="CISS" width={40} height={40} unoptimized />
         </div>
-        <p className="text-white font-bold text-lg tracking-wide">
+        <p className="font-exo2 text-lg font-bold tracking-wide text-foreground">
           CISS Workforce
         </p>
-        <p className="text-white/50 text-xs uppercase tracking-widest font-medium">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
           Guard Portal
         </p>
         <div className="flex gap-1.5 mt-2">
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="w-1.5 h-1.5 rounded-full animate-bounce bg-accent"
+              className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
               style={{
                 animationDelay: `${i * 160}ms`,
               }}
@@ -54,6 +56,7 @@ function GuardLoadingScreen() {
 
 export default function GuardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [employeeId, setEmployeeId] = useState<string | undefined>(undefined);
   const [employeeDocId, setEmployeeDocId] = useState<string | undefined>(undefined);
@@ -127,14 +130,16 @@ export default function GuardLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-      <div className="flex flex-col min-h-[100dvh] app-shell-surface">
+      <div className="flex min-h-[100dvh] flex-col app-shell-surface">
         {/* Sticky header */}
         <GuardHeader employeeName={displayName} />
         <GuardLiveTracking />
 
         {/* Main content — padded for floating pill nav, max-width constrained for tablets */}
-        <main className="flex-1 overflow-y-auto pb-[88px]">
-          <div className="mx-auto max-w-md">{children}</div>
+        <main className="flex-1 overflow-y-auto pb-[96px]">
+          <div className="mx-auto w-full max-w-lg">
+            <PageTransition routeKey={pathname}>{children}</PageTransition>
+          </div>
         </main>
 
         {/* Fixed bottom navigation */}

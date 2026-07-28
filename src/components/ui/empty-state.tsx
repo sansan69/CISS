@@ -3,8 +3,6 @@ import { cn } from "@/lib/utils";
 
 interface EmptyStateProps {
   icon?: React.ElementType;
-  /** Emoji or image URL (alternative to icon) */
-  emoji?: string;
   title: string;
   description?: string;
   action?: React.ReactNode;
@@ -26,7 +24,6 @@ interface EmptyStateProps {
  */
 export function EmptyState({
   icon: Icon,
-  emoji,
   title,
   description,
   action,
@@ -41,22 +38,16 @@ export function EmptyState({
         className
       )}
     >
-      {/* Icon or emoji */}
-      {(Icon || emoji) && (
+      {Icon && (
         <div
           className={cn(
-            "flex items-center justify-center rounded-lg mb-4 ring-1 ring-border/70",
+            "mb-4 flex items-center justify-center rounded-2xl bg-primary/[0.07] text-primary",
             compact
-              ? "h-10 w-10 bg-muted/70"
-              : "h-14 w-14 bg-muted/70",
-            Icon && "text-muted-foreground"
+              ? "h-10 w-10"
+              : "h-14 w-14",
           )}
         >
-          {emoji ? (
-            <span className={cn(compact ? "text-2xl" : "text-3xl")}>{emoji}</span>
-          ) : Icon ? (
-            <Icon className={cn(compact ? "h-5 w-5" : "h-7 w-7")} />
-          ) : null}
+          <Icon className={cn(compact ? "h-5 w-5" : "h-7 w-7")} />
         </div>
       )}
 

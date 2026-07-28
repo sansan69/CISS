@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function DownloadPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/40 to-primary px-4 py-12">
+    <main className="flex min-h-[100dvh] items-center justify-center bg-brand-blue-darker px-4 py-12">
       <div className="max-w-md w-full text-center">
         {/* Logo */}
         <div className="mx-auto w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center mb-6 ring-1 ring-white/10">

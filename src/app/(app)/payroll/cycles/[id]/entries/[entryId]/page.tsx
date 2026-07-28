@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import type { PayrollCycle, PayrollEntry } from "@/types/payroll";
-import { Download } from "lucide-react";
+import { Download } from "@phosphor-icons/react";
 
 export default function PayrollEntryDetailPage({
   params,

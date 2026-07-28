@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/layout/page-header";
 import { authorizedFetch } from "@/lib/api-client";
-import { Send, Megaphone, Users, Shield, UserCheck, Loader2, CheckCircle } from "lucide-react";
+import { PaperPlaneTilt as Send, Megaphone, Users, Shield, UserCheck, SpinnerGap as Loader2, CheckCircle } from "@phosphor-icons/react";
 
 export default function AdminNotificationsPage() {
   const [title, setTitle] = useState("");

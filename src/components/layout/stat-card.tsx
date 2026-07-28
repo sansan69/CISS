@@ -1,5 +1,7 @@
+"use client";
+
 import type { ElementType } from "react";
-import { Loader2, TrendingDown, TrendingUp } from "lucide-react";
+import { SpinnerGap as Loader2, TrendDown as TrendingDown, TrendUp as TrendingUp } from "@phosphor-icons/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface StatCardProps {
@@ -27,7 +29,7 @@ export function StatCard({
     trendDirection === "up" ? TrendingUp : trendDirection === "down" ? TrendingDown : null;
 
   return (
-    <Card className="border-border/80 bg-card/95 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-brand-md">
+    <Card className="border-border/80 bg-card transition-colors duration-200 hover:border-primary/25">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Trash2, Edit, Loader2, UserPlus, ShieldCheck, AlertCircle as AlertIcon, Wrench, FileText, GraduationCap, Users, ClipboardList } from 'lucide-react';
+import { Trash as Trash2, PencilSimple as Edit, SpinnerGap as Loader2, UserPlus, ShieldCheck, WarningCircle as AlertIcon, Wrench, FileText, GraduationCap, Users, ClipboardText as ClipboardList } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,

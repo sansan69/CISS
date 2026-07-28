@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
-import { CheckCircle2, Edit3, FileText, ImageIcon, MapPin, Calendar, Clock, User, Building2, Shield, Timer, Users, BookOpen } from "lucide-react";
+import { CheckCircle as CheckCircle2, PencilSimple as Edit3, FileText, ImageIcon, MapPin, Calendar, Clock, User, Buildings as Building2, Shield, Timer, Users, BookOpen } from "@phosphor-icons/react";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 
 const STATUS_CONFIG: Record<TrainingReportStatus, { label: string; className: string }> = {

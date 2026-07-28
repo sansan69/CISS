@@ -27,7 +27,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, UserPlus, FileUp, Check, ArrowLeft, Upload, Camera, UserCircle2, Loader2, AlertCircle, X, CheckCircle as CheckCircleIcon, AlertTriangle } from "lucide-react";
+import { CalendarIcon, UserPlus, FileArrowUp as FileUp, Check, ArrowLeft, Upload, Camera, UserCircle as UserCircle2, SpinnerGap as Loader2, WarningCircle as AlertCircle, X, CheckCircle as CheckCircleIcon, Warning as AlertTriangle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { format, subYears, addYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";

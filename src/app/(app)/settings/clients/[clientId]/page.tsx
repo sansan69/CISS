@@ -61,23 +61,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus,
-  MoreHorizontal,
+  DotsThree as MoreHorizontal,
   Pencil,
-  Trash2,
+  Trash as Trash2,
   Footprints,
   MapPin,
-  Building2,
+  Buildings as Building2,
   Users,
-  Loader2,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
-  KeyRound,
-  Settings2,
+  SpinnerGap as Loader2,
+  ArrowSquareOut as ExternalLink,
+  CheckCircle as CheckCircle2,
+  WarningCircle as AlertCircle,
+  Key as KeyRound,
+  SlidersHorizontal as Settings2,
   Eye,
-  EyeOff,
+  EyeSlash as EyeOff,
   ShieldCheck,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
 import {
   buildClientPortalUrl,

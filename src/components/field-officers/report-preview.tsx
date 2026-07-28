@@ -3,7 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, Clock, Users, FileText, ImageIcon, ArrowLeft, Send, GraduationCap, ClipboardCheck } from "lucide-react";
+import { MapPin, Clock, Users, FileText, ImageIcon, ArrowLeft, PaperPlaneTilt as Send, GraduationCap, ClipboardText as ClipboardCheck } from "@phosphor-icons/react";
 
 interface VisitPreviewData {
   type: "visit";

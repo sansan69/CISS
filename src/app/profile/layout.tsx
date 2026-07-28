@@ -6,7 +6,7 @@ import '@/app/globals.css';
 // It doesn't include the admin sidebar.
 export default function PublicProfileLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen bg-background text-foreground p-4 md:p-8">
+    <main className="min-h-[100dvh] bg-background p-4 text-foreground md:p-8">
       {children}
     </main>
   );

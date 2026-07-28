@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/page-header";
-import { Loader2, Save, ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
+import { SpinnerGap as Loader2, FloppyDisk as Save, ArrowUp, ArrowDown, Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
 import type { EnrollmentFormConfig, EnrollmentFormFieldConfig } from "@/types/region";
 
 export default function EnrollmentFormSettingsPage() {

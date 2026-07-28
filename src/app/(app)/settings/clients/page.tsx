@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, MapPin, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Buildings as Building2, MapPin, CaretRight as ChevronRight, SpinnerGap as Loader2 } from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { siteBelongsToClient } from "@/lib/sites/site-directory";

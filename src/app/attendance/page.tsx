@@ -5,7 +5,21 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, Camera, MapPin, CheckCircle, Loader2, ScanLine, RotateCcw, AlertTriangle, ShieldAlert, Shirt, BadgeCheck, Clock, Search } from 'lucide-react';
+import {
+  ArrowClockwise as RotateCcw,
+  Camera,
+  CheckCircle,
+  Clock,
+  MagnifyingGlass as Search,
+  MapPin,
+  QrCode,
+  Scan as ScanLine,
+  SealCheck as BadgeCheck,
+  ShieldWarning as ShieldAlert,
+  SpinnerGap as Loader2,
+  TShirt as Shirt,
+  Warning as AlertTriangle,
+} from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -1777,7 +1791,7 @@ export default function AttendancePage() {
             <div className="relative aspect-[3/4] overflow-hidden rounded-3xl border bg-black">
               <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
               <div className="pointer-events-none absolute inset-x-6 top-1/2 h-44 -translate-y-1/2 rounded-3xl border-2 border-white/80" />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-center text-sm text-white">
+              <div className="absolute inset-x-0 bottom-0 bg-black/75 p-4 text-center text-sm text-white">
                 Show the QR clearly inside the frame
               </div>
             </div>
@@ -1822,13 +1836,19 @@ export default function AttendancePage() {
                 <AccordionTrigger>QR not working? Use employee ID or phone</AccordionTrigger>
                 <AccordionContent>
                   <div className="grid gap-3 pb-1">
-                    <Input placeholder="Employee ID (e.g. CISS/TCS/...)" value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-employee-id">Employee ID</Label>
+                      <Input id="manual-employee-id" placeholder="e.g. CISS/TCS/..." value={manualEmployeeId} onChange={(e) => setManualEmployeeId(e.target.value)} />
+                    </div>
                     <div className="flex items-center gap-2">
                       <div className="h-px flex-1 bg-border" />
                       <span className="text-xs text-muted-foreground">OR</span>
                       <div className="h-px flex-1 bg-border" />
                     </div>
-                    <Input placeholder="Phone number (10 digits)" value={manualPhone} onChange={(e) => setManualPhone(e.target.value)} type="tel" maxLength={10} />
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-phone">Phone number</Label>
+                      <Input id="manual-phone" placeholder="10-digit number" value={manualPhone} onChange={(e) => setManualPhone(e.target.value)} type="tel" maxLength={10} />
+                    </div>
                     <Button
                       variant="outline"
                       onClick={async () => {
@@ -2047,9 +2067,11 @@ export default function AttendancePage() {
 
               {/* Site search input — visible at all times */}
               <div className="mt-2">
+                <Label htmlFor="attendance-site-search">Search center</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    id="attendance-site-search"
                     placeholder="Search site by name..."
                     value={siteSearchQuery}
                     onChange={(e) => setSiteSearchQuery(e.target.value)}

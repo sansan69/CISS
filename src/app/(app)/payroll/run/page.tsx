@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { CheckCircle2, Loader2, Play, ArrowRight, AlertTriangle, Users, XCircle } from "lucide-react";
+import { CheckCircle as CheckCircle2, SpinnerGap as Loader2, Play, ArrowRight, Warning as AlertTriangle, Users, XCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 type Step = 1 | 2 | 3 | 4 | 5;

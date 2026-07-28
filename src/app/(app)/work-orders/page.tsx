@@ -16,7 +16,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { UploadCloud, Loader2, FileCheck2, UserPlus, Edit3, Trash2, Download, FileSpreadsheet, Search, X, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
+  CloudArrowUp as UploadCloud,
+  DownloadSimple as Download,
+  File as FileCheck2,
+  FileXls as FileSpreadsheet,
+  MagnifyingGlass as Search,
+  PencilSimple as Edit3,
+  PencilSimple as Pencil,
+  SpinnerGap as Loader2,
+  Trash as Trash2,
+  UserPlus,
+  X,
+} from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';

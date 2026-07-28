@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, Loader2, RefreshCw } from "lucide-react";
+import { Warning as AlertTriangle, Check, SpinnerGap as Loader2, ArrowClockwise as RefreshCw } from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft } from 'lucide-react';
+import { CloudArrowUp as UploadCloud, Download, SpinnerGap as Loader2, File as FileCheck2, Warning as AlertTriangle, ListChecks, CheckCircle, CaretLeft as ChevronLeft } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, writeBatch, serverTimestamp, Timestamp, query, where, getDocs } from 'firebase/firestore';

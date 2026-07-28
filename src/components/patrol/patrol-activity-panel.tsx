@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Clock3, Footprints, MapPin, ShieldCheck } from "lucide-react";
+import { Camera, Clock as Clock3, Footprints, MapPin, ShieldCheck } from "@phosphor-icons/react";
 import { format } from "date-fns";
 
 import { PageHeader } from "@/components/layout/page-header";

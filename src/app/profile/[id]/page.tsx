@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, ArrowLeft, Home, CalendarCheck } from 'lucide-react';
+import { User, Briefcase, Money as Banknote, ShieldCheck, QrCode, FileArrowUp as FileUp, Download, SpinnerGap as Loader2, WarningCircle as AlertCircle, ArrowLeft, House as Home, CalendarCheck } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 import { storage } from '@/lib/firebase';
 import { Timestamp } from 'firebase/firestore';
@@ -575,7 +575,7 @@ export default function PublicEmployeeProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col justify-center items-center min-h-screen gap-3">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">Loading profile…</p>
       </div>
@@ -584,7 +584,7 @@ export default function PublicEmployeeProfilePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="flex min-h-[100dvh] items-center justify-center p-4">
         <Alert variant="destructive" className="max-w-lg">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -603,7 +603,7 @@ export default function PublicEmployeeProfilePage() {
 
   if (!employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="flex min-h-[100dvh] items-center justify-center p-4">
         <Alert variant="default" className="max-w-lg">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Employee Not Found</AlertTitle>

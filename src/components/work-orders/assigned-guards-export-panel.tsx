@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, SpinnerGap as Loader2 } from '@phosphor-icons/react';
 import type { WorkOrder as WorkOrderDoc } from '@/types/work-orders';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { isOperationalWorkOrderClientName } from '@/lib/work-orders';

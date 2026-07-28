@@ -1,12 +1,28 @@
 "use client";
 
 import {
-  Users, UserCheck, UserMinus, Clock,
-  ArrowRight, UserPlus, AlertCircle as AlertIcon, AlertCircle,
-  CalendarClock, QrCode, Briefcase, TrendingUp,
-  ShieldCheck, Star, ChevronRight, Activity, Globe,
-  AlertTriangle, CheckCircle2, MapPin, Building,
-} from "lucide-react";
+  ArrowRight,
+  Buildings as Building,
+  CalendarDots as CalendarClock,
+  CaretRight as ChevronRight,
+  CheckCircle as CheckCircle2,
+  Clock,
+  GlobeHemisphereWest as Globe,
+  MapPin,
+  Pulse as Activity,
+  QrCode,
+  ShieldCheck,
+  Star,
+  SuitcaseSimple as Briefcase,
+  TrendUp as TrendingUp,
+  UserCheck,
+  UserMinus,
+  UserPlus,
+  UsersThree as Users,
+  Warning as AlertTriangle,
+  WarningCircle as AlertCircle,
+  WarningCircle as AlertIcon,
+} from "@phosphor-icons/react";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { db } from '@/lib/firebase';
 import {
@@ -912,7 +928,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="px-4 py-6">
-                  <EmptyState emoji="📅" title="No upcoming duties" description="No guard requirements in your districts for the next 7 days." compact />
+                  <EmptyState icon={CalendarClock} title="No upcoming duties" description="No guard requirements in your districts for the next 7 days." compact />
                 </div>
               )}
             </CardContent>

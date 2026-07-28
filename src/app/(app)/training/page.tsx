@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, BookOpen, Clock, Target, Pencil, Trash2, GraduationCap, Shield, Scale, Users, Zap, UploadCloud, FileText, FileImage, Presentation } from "lucide-react";
+import { SpinnerGap as Loader2, Plus, BookOpen, Clock, Target, Pencil, Trash as Trash2, GraduationCap, Shield, Scales as Scale, Users, Lightning as Zap, CloudArrowUp as UploadCloud, FileText, FileImage, Presentation } from "@phosphor-icons/react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { TrainingModule, TrainingCategory, TrainingContentType } from "@/types/training";
 

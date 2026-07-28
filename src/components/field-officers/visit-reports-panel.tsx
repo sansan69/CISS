@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, FileText, CheckCircle2, Eye, ImageIcon } from "lucide-react";
+import { Plus, FileText, CheckCircle as CheckCircle2, Eye, ImageIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";

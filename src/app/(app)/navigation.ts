@@ -1,24 +1,25 @@
 import type { ElementType } from "react";
 import {
-  BarChart3,
-  BookOpen,
-  Briefcase,
+  Buildings,
   CalendarCheck,
-  CalendarDays,
-  ClipboardList,
-  FileClock,
+  CalendarDots,
+  ChartBar,
+  ClipboardText,
   FileText,
   Footprints,
-  Globe,
+  Gear,
+  GlobeHemisphereWest,
   GraduationCap,
-  LayoutDashboard,
-  Settings,
-  ShieldAlert,
-  Trophy,
-  Users,
+  IdentificationCard,
+  Medal,
+  Notebook,
+  ShieldCheck,
+  SuitcaseSimple,
+  UsersThree,
   Wallet,
   Wrench,
-} from "lucide-react";
+  BookOpen,
+} from "@phosphor-icons/react";
 
 export type NavItem = {
   href: string;
@@ -46,16 +47,16 @@ export const mainNavGroups: NavGroup[] = [
   {
     label: "Core",
     items: [
-      { href: "/dashboard", label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard, exact: true, clientVisible: true },
-      { href: "/employees", label: "Employees", shortLabel: "Guards", icon: Users, clientVisible: true },
+      { href: "/dashboard", label: "Dashboard", shortLabel: "Home", icon: ChartBar, exact: true, clientVisible: true },
+      { href: "/employees", label: "Employees", shortLabel: "Guards", icon: UsersThree, clientVisible: true },
       { href: "/attendance-logs", label: "Attendance", shortLabel: "Attendance", icon: CalendarCheck, clientVisible: true },
     ],
   },
   {
     label: "Workforce",
     items: [
-      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true, operationalClientOnly: true },
-      { href: "/field-officers", label: "Field Officers", icon: ShieldAlert, fieldOfficerVisible: true },
+      { href: "/work-orders", label: "Work Orders", fieldOfficerLabel: "Upcoming Duties", shortLabel: "Orders", icon: ClipboardText, fieldOfficerVisible: true, clientVisible: true, operationalClientOnly: true },
+      { href: "/field-officers", label: "Field Officers", icon: ShieldCheck, fieldOfficerVisible: true },
     ],
   },
   {
@@ -71,8 +72,8 @@ export const mainNavGroups: NavGroup[] = [
     items: [
       { href: "/training", label: "Training Modules", icon: GraduationCap, adminOnly: true },
       { href: "/training/assignments", label: "Training Assignments", icon: BookOpen, fieldOfficerVisible: true },
-      { href: "/evaluations", label: "Evaluations", icon: BookOpen, adminOnly: true },
-      { href: "/leaderboard", label: "Leaderboard", icon: Trophy, adminOnly: true },
+      { href: "/evaluations", label: "Evaluations", icon: Notebook, adminOnly: true },
+      { href: "/leaderboard", label: "Leaderboard", icon: Medal, adminOnly: true },
     ],
   },
   {
@@ -80,34 +81,34 @@ export const mainNavGroups: NavGroup[] = [
     adminOnly: true,
     items: [
       { href: "/payroll", label: "Payroll Runs", icon: Wallet, adminOnly: true },
-      { href: "/leave", label: "Leave", icon: CalendarDays, adminOnly: true },
+      { href: "/leave", label: "Leave", icon: CalendarDots, adminOnly: true },
     ],
   },
   {
     label: "Admin",
     adminOnly: true,
-    items: [{ href: "/settings", label: "Settings", icon: Settings, adminOnly: true }],
+    items: [{ href: "/settings", label: "Settings", icon: Gear, adminOnly: true }],
   },
   {
     label: "Company",
     superAdminOnly: true,
-    items: [{ href: "/settings/state-management", label: "Region Onboarding", icon: Globe, superAdminOnly: true }],
+    items: [{ href: "/settings/state-management", label: "Region Onboarding", icon: GlobeHemisphereWest, superAdminOnly: true }],
   },
 ];
 
 export const settingsSubItems: NavItem[] = [
-  { href: "/settings/clients", label: "Clients & Sites", icon: Briefcase },
-  { href: "/settings/work-order-imports", label: "Work Order Imports", icon: FileClock, adminOnly: true },
+  { href: "/settings/clients", label: "Clients & Sites", icon: Buildings },
+  { href: "/settings/work-order-imports", label: "Work Order Imports", icon: IdentificationCard, adminOnly: true },
   { href: "/settings/admin-tools", label: "Admin Tools", icon: Wrench },
-  { href: "/settings/reports", label: "Reports", icon: BarChart3 },
+  { href: "/settings/reports", label: "Reports", icon: ChartBar },
   { href: "/settings/wage-config", label: "Wage Config", icon: Wallet },
 ];
 
 export const bottomNavItems: NavItem[] = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard, exact: true, clientVisible: true },
-  { href: "/employees", label: "Guards", icon: Users, clientVisible: true },
+  { href: "/dashboard", label: "Home", icon: ChartBar, exact: true, clientVisible: true },
+  { href: "/employees", label: "Guards", icon: UsersThree, clientVisible: true },
   { href: "/attendance-logs", label: "Attendance", icon: CalendarCheck, clientVisible: true },
-  { href: "/work-orders", label: "Orders", icon: ClipboardList, fieldOfficerVisible: true, clientVisible: true, operationalClientOnly: true },
+  { href: "/work-orders", label: "Orders", icon: SuitcaseSimple, fieldOfficerVisible: true, clientVisible: true, operationalClientOnly: true },
 ];
 
 export function isVisibleNavItem(

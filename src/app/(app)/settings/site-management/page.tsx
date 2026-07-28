@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UploadCloud, Download, Loader2, FileCheck2, AlertTriangle, ListChecks, CheckCircle, ChevronLeft, Edit, Trash2, ChevronRight, MapPinned, ShieldCheck } from 'lucide-react';
+import { CloudArrowUp as UploadCloud, Download, SpinnerGap as Loader2, File as FileCheck2, Warning as AlertTriangle, ListChecks, CheckCircle, CaretLeft as ChevronLeft, PencilSimple as Edit, Trash as Trash2, CaretRight as ChevronRight, MapPin as MapPinned, ShieldCheck } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, serverTimestamp, GeoPoint, doc, query, where, getDocs, onSnapshot, orderBy, updateDoc, deleteDoc, limit, startAfter, type Query, type QueryDocumentSnapshot, endBefore, limitToLast, addDoc, arrayUnion } from 'firebase/firestore';

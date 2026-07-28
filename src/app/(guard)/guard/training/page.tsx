@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, ExternalLink, GraduationCap, FileText, Presentation, ImageIcon } from "lucide-react";
+import { BookOpen, ArrowSquareOut as ExternalLink, GraduationCap, FileText, Presentation, ImageIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";

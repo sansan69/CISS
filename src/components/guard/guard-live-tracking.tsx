@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
-  LoaderCircle,
-  LocateFixed,
-  MapPinOff,
-  RefreshCw,
-} from "lucide-react";
+  Warning as AlertTriangle,
+  CheckCircle as CheckCircle2,
+  SpinnerGap as LoaderCircle,
+  Crosshair as LocateFixed,
+  MapPinLine as MapPinOff,
+  ArrowClockwise as RefreshCw,
+} from "@phosphor-icons/react";
 
 import { useAppAuth } from "@/context/auth-context";
 import { useGuardHeartbeat } from "@/lib/hooks/use-guard-heartbeat";

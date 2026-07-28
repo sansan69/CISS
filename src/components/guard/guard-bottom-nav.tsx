@@ -4,15 +4,15 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
+  ChartBar,
   CalendarCheck,
   Wallet,
-  MoreHorizontal,
+  DotsThree,
   GraduationCap,
   Star,
   User,
-  LogOut,
-} from "lucide-react";
+  SignOut,
+} from "@phosphor-icons/react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
@@ -26,7 +26,7 @@ interface NavTab {
 }
 
 const navTabs: NavTab[] = [
-  { href: "/guard/dashboard",  label: "Home",       icon: LayoutDashboard },
+  { href: "/guard/dashboard",  label: "Home",       icon: ChartBar },
   { href: "/guard/attendance", label: "Attendance", icon: CalendarCheck   },
   { href: "/guard/payslips",   label: "Pay",        icon: Wallet          },
 ];
@@ -60,8 +60,7 @@ export function GuardBottomNav() {
       >
         <nav
           aria-label="Guard navigation"
-          className="flex items-stretch bg-card/97 backdrop-blur-xl rounded-xl border border-border/70 shadow-[0_10px_28px_hsl(214_40%_18%/0.14),0_2px_8px_hsl(214_30%_18%/0.08)]"
-          style={{ height: 60 }}
+          className="flex h-16 items-stretch rounded-[22px] border border-border/80 bg-card/95 shadow-[0_10px_28px_hsl(207_52%_13%/0.14)] backdrop-blur-xl"
         >
           {navTabs.map((tab) => {
             const active = isActive(tab.href);
@@ -71,24 +70,20 @@ export function GuardBottomNav() {
                 href={tab.href}
                 className={cn(
                   "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
-                  "transition-all duration-150 ease-out",
-                  "active:brightness-[0.92] select-none rounded-xl",
+                  "select-none rounded-[18px] transition-colors duration-150 active:scale-[0.97]",
                   active ? "text-primary" : "text-muted-foreground/60"
                 )}
+                aria-current={active ? "page" : undefined}
               >
-                {/* Active dot beneath icon */}
-                <div className="relative">
-                  <tab.icon size={active ? 22 : 20} strokeWidth={active ? 2.2 : 1.8} />
-                  {active && (
-                    <span
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-accent"
-                      aria-hidden
-                    />
-                  )}
+                <div className={cn(
+                  "flex h-8 min-w-14 items-center justify-center rounded-full px-4 transition-colors",
+                  active && "bg-primary/10"
+                )}>
+                  <tab.icon size={22} weight={active ? "fill" : "regular"} />
                 </div>
                 <span
                   className="text-[11px] leading-none tracking-wide"
-                  style={{ fontWeight: active ? 700 : 500 }}
+                  style={{ fontWeight: active ? 900 : 700 }}
                 >
                   {tab.label}
                 </span>
@@ -105,23 +100,19 @@ export function GuardBottomNav() {
             aria-label="More options"
             className={cn(
               "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 relative",
-              "transition-all duration-150 ease-out",
-              "active:brightness-[0.92] select-none rounded-xl",
+              "select-none rounded-[18px] transition-colors duration-150 active:scale-[0.97]",
               isMoreActive ? "text-primary" : "text-muted-foreground/60"
             )}
           >
-            <div className="relative">
-              <MoreHorizontal size={isMoreActive ? 22 : 20} strokeWidth={isMoreActive ? 2.2 : 1.8} />
-              {isMoreActive && (
-                <span
-                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-accent"
-                  aria-hidden
-                />
-              )}
+            <div className={cn(
+              "flex h-8 min-w-14 items-center justify-center rounded-full px-4 transition-colors",
+              isMoreActive && "bg-primary/10"
+            )}>
+              <DotsThree size={22} weight={isMoreActive ? "fill" : "bold"} />
             </div>
             <span
               className="text-[11px] leading-none tracking-wide"
-              style={{ fontWeight: isMoreActive ? 700 : 500 }}
+              style={{ fontWeight: isMoreActive ? 900 : 700 }}
             >
               More
             </span>
@@ -131,7 +122,7 @@ export function GuardBottomNav() {
 
       {/* More Sheet */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl p-0 max-h-[75vh] border-0 shadow-[0_-8px_40px_hsl(214_40%_18%/0.16)]">
+        <SheetContent side="bottom" className="max-h-[75vh] rounded-t-[28px] border-x-0 border-b-0 p-0 shadow-[0_-8px_40px_hsl(207_52%_13%/0.14)]">
           <SheetTitle className="sr-only">More Options</SheetTitle>
 
           {/* Handle */}
@@ -140,7 +131,7 @@ export function GuardBottomNav() {
           </div>
 
           <div className="px-4 pb-6">
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-3 mt-1 px-1 text-accent">
+            <p className="mb-3 mt-1 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">
               More Options
             </p>
 
@@ -150,13 +141,13 @@ export function GuardBottomNav() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:brightness-[0.92] hover:bg-muted/60 animate-slide-up"
+                  className="flex min-h-14 items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-muted/60 active:scale-[0.99]"
                   style={{ animationDelay: `${i * 50}ms` }}
                 >
                   <span
-                    className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 shrink-0"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10"
                   >
-                    <item.icon size={18} className="text-primary" />
+                    <item.icon size={19} className="text-primary" weight="duotone" />
                   </span>
                   <span className="text-sm font-semibold text-foreground">
                     {item.label}
@@ -166,10 +157,10 @@ export function GuardBottomNav() {
 
               <button
                 onClick={() => { setMoreOpen(false); handleSignOut(); }}
-                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-lg transition-all duration-150 active:brightness-[0.92] hover:bg-destructive/15"
+                className="flex min-h-14 w-full items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-destructive/10 active:scale-[0.99]"
               >
                 <span className="flex items-center justify-center h-10 w-10 rounded-lg bg-destructive/10 shrink-0">
-                  <LogOut size={18} className="text-destructive" />
+                  <SignOut size={18} className="text-destructive" />
                 </span>
                 <span className="text-sm font-semibold text-destructive">
                   Sign Out

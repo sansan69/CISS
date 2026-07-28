@@ -11,7 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { AlertCircle, CalendarIcon, Loader2, FileDown, Search, MapPin, ChevronRight, Users, Building2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Buildings as Building2,
+  CalendarBlank as CalendarIcon,
+  CaretRight as ChevronRight,
+  CheckCircle as CheckCircle2,
+  DownloadSimple as FileDown,
+  MagnifyingGlass as Search,
+  MapPin,
+  SpinnerGap as Loader2,
+  UsersThree as Users,
+  WarningCircle as AlertCircle,
+  XCircle,
+} from "@phosphor-icons/react";
 import { format } from "date-fns";
 import { authorizedFetch } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +40,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toValidAttendanceDate } from "@/lib/attendance/date-value";
+import { Label } from "@/components/ui/label";
 
 type AttendanceLog = FirestoreAttendanceLog;
 
@@ -667,38 +680,23 @@ export default function AttendanceLogsPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total records</CardDescription>
-            <CardTitle>{totals.total}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>IN marks</CardDescription>
-            <CardTitle>{totals.inCount}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>OUT marks</CardDescription>
-            <CardTitle>{totals.outCount}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Unique employees</CardDescription>
-            <CardTitle>{totals.uniqueEmployees}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Clients</CardDescription>
-            <CardTitle>{totals.uniqueClients}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <section aria-label="Attendance summary" className="grid overflow-hidden rounded-2xl border border-border/70 bg-card sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          ["Total records", totals.total],
+          ["IN marks", totals.inCount],
+          ["OUT marks", totals.outCount],
+          ["Unique employees", totals.uniqueEmployees],
+          ["Clients", totals.uniqueClients],
+        ].map(([label, value], index) => (
+          <div
+            key={label}
+            className="border-b border-border/70 px-5 py-4 last:border-b-0 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0"
+          >
+            <p className="text-xs font-bold text-muted-foreground">{label}</p>
+            <p className="mt-2 font-exo2 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+          </div>
+        ))}
+      </section>
 
       <Card>
         <CardHeader>
@@ -706,18 +704,25 @@ export default function AttendanceLogsPage() {
           <CardDescription>Select an attendance date and narrow results by status, district, or client.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <div className="relative">
+          <div className="space-y-2">
+            <Label htmlFor="attendance-search">Search records</Label>
+            <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id="attendance-search"
               className="pl-9"
-              placeholder="Search logs"
+              placeholder="Name, employee ID, or site"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
+            </div>
           </div>
-          <div className="relative">
+          <div className="space-y-2">
+            <Label htmlFor="attendance-date">Attendance date</Label>
+            <div className="relative">
             <CalendarIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id="attendance-date"
               type="date"
               className="pl-9"
               value={selectedAttendanceDate}
@@ -726,7 +731,10 @@ export default function AttendanceLogsPage() {
                 setSelectedAttendanceDate(event.target.value || todayAttendanceDate);
               }}
             />
+            </div>
           </div>
+          <div className="space-y-2">
+          <Label>Status</Label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger>
               <SelectValue placeholder="Status" />
@@ -737,6 +745,9 @@ export default function AttendanceLogsPage() {
               <SelectItem value="Out">OUT only</SelectItem>
             </SelectContent>
           </Select>
+          </div>
+          <div className="space-y-2">
+          <Label>District</Label>
           <Select value={districtFilter} onValueChange={setDistrictFilter}>
             <SelectTrigger>
               <SelectValue placeholder="District" />
@@ -750,6 +761,9 @@ export default function AttendanceLogsPage() {
               ))}
             </SelectContent>
           </Select>
+          </div>
+          <div className="space-y-2">
+          <Label>Client</Label>
           <Select
             value={isClientView ? (clientInfo?.clientName || clientFilter) : clientFilter}
             onValueChange={setClientFilter}
@@ -767,6 +781,7 @@ export default function AttendanceLogsPage() {
               ))}
             </SelectContent>
           </Select>
+          </div>
           {isClientView && (
             <p className="text-xs text-muted-foreground md:col-span-2 xl:col-span-5">
               Client filter is locked to your account scope.

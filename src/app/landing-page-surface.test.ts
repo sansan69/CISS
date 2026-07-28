@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 const pagePath = resolve(process.cwd(), "src/components/landing-page.tsx");
 const pageSource = readFileSync(pagePath, "utf8");
 
-const lucideProxy = new Proxy(
+const iconProxy = new Proxy(
   {},
   {
     get(_target, prop) {
@@ -53,7 +53,7 @@ const moduleMocks: Record<string, unknown> = {
     default: ({ href, children, ...props }: MockWithChildrenProps & { href?: string }) =>
       React.createElement("a", { href, ...props }, children),
   },
-  "lucide-react": lucideProxy,
+  "@phosphor-icons/react": iconProxy,
   "@/hooks/use-toast": {
     useToast: () => ({
       toast() {},
@@ -229,7 +229,7 @@ describe("landing page surface", () => {
     expect(html).toContain("hidden animate-slide-up xl:block");
     expect(html).toContain("xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]");
     expect(html).toContain('id="attendance-access"');
-    expect(html).toContain("dark:bg-card/90");
+    expect(html).toContain("dark:bg-card");
     expect(html).toContain('data-mobile-section="header"');
     expect(html).toContain('data-mobile-section="verification"');
     expect(html).toContain('data-mobile-section="quick-access"');

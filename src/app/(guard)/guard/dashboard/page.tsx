@@ -8,9 +8,9 @@ import {
   MapPin,
   Clock,
   ArrowRight,
-  Building2,
+  Buildings as Building2,
   Camera,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -347,7 +347,7 @@ export default function GuardDashboardPage() {
         className="block animate-slide-up stagger-4"
       >
         <div
-          className="rounded-xl p-4 text-white transition-all duration-150 ease-out active:brightness-[0.92] bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25"
+          className="rounded-2xl bg-primary p-4 text-primary-foreground transition-colors duration-150 active:scale-[0.99]"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">

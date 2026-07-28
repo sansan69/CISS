@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleIcon, AlertTriangle, ChevronDown, ChevronUp, FileUp, Loader2, Upload, UserCircle2, X } from "lucide-react";
+import { WarningCircle as AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleIcon, Warning as AlertTriangle, CaretDown as ChevronDown, CaretUp as ChevronUp, FileArrowUp as FileUp, SpinnerGap as Loader2, Upload, UserCircle as UserCircle2, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -49,7 +49,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from 'next/navigation';
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, KeyRound } from "lucide-react";
+import { Download, Key as KeyRound } from "@phosphor-icons/react";
 import type { PDFFont } from 'pdf-lib';
 import {
   EDUCATION_OPTIONS,
@@ -1715,17 +1715,17 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   if (completionState) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md rounded-2xl border border-border/70 bg-card p-8 text-center shadow-brand-md">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircleIcon className="w-10 h-10 text-green-600" />
           </div>
 
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Registration Complete!</h1>
-          <p className="text-slate-600 mb-6">Your profile has been created successfully.</p>
+          <h1 className="mb-2 text-2xl font-bold text-foreground">Registration complete</h1>
+          <p className="mb-6 text-muted-foreground">Your profile has been created successfully.</p>
 
-          <div className="bg-slate-50 rounded-xl p-4 mb-6">
-            <p className="text-sm text-slate-500 mb-1">Your Employee ID</p>
+          <div className="mb-6 rounded-xl bg-muted/50 p-4">
+            <p className="mb-1 text-sm text-muted-foreground">Your Employee ID</p>
             <p className="text-3xl font-bold text-primary font-mono">{completionState.employeeId}</p>
           </div>
 
@@ -1746,7 +1746,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
             <a
               href="/guard-login/setup"
-              className="flex items-center justify-center w-full py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex w-full items-center justify-center rounded-xl border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted"
             >
               <KeyRound className="mr-2 h-4 w-4" />
               Set up PIN to access your profile
@@ -1758,7 +1758,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 setCompletionState(null);
                 setCurrentStep(0);
               }}
-              className="w-full text-slate-500"
+              className="w-full text-muted-foreground"
             >
               Register Another Person
             </Button>
@@ -1774,13 +1774,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   return (
     <>
-      <Card className="mx-auto w-full max-w-6xl overflow-hidden border-t-4 border-primary shadow-xl">
-        <CardHeader className="px-5 pb-3 pt-6 text-center sm:px-8 sm:pb-4 lg:px-10">
+      <Card className="mx-auto w-full max-w-6xl overflow-visible border-0 bg-transparent shadow-none sm:overflow-hidden sm:border sm:border-border/70 sm:bg-card">
+        <CardHeader className="px-0 pb-4 pt-2 text-center sm:px-8 sm:pt-7 lg:px-10">
           <h1 className="sr-only">Employee Registration</h1>
           <CardTitle className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">Employee Registration</CardTitle>
           <CardDescription className="mx-auto mt-1 max-w-lg text-xs sm:text-sm">Fill any section now and continue later from this device.</CardDescription>
         </CardHeader>
-        <CardContent className="px-5 pb-8 sm:px-8 lg:px-10">
+        <CardContent className="px-0 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} className="space-y-8 pb-28 sm:pb-32">
               <div className="rounded-[20px] border bg-muted/10 p-3 sm:p-4">
@@ -2244,7 +2244,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 </FormSection>
               )}
 
-              <div className="sticky bottom-3 z-10 rounded-2xl border bg-background/95 px-4 py-4 shadow-lg backdrop-blur sm:px-5 lg:px-6">
+              <div className="sticky bottom-3 z-10 rounded-2xl border border-border/80 bg-card/95 px-4 py-4 shadow-brand-lg backdrop-blur sm:px-5 lg:px-6">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">{draftStatusLabel}</p>
@@ -2420,7 +2420,7 @@ function EnrollmentFormWrapper() {
 
 function EnrollmentPageSkeleton() {
   return (
-    <Card className="shadow-xl">
+    <Card>
       <CardHeader className="text-center">
         <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
         <CardDescription>Loading form...</CardDescription>
@@ -2437,7 +2437,7 @@ function EnrollmentPageSkeleton() {
 
 export default function EnrollEmployeePage() {
   return (
-    <div className="min-h-screen w-full bg-[linear-gradient(180deg,rgba(224,239,255,0.55),rgba(255,255,255,0.95)_16%,rgba(245,247,251,0.9)_100%)]">
+    <div className="min-h-[100dvh] w-full bg-background">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
           <div className="mb-4 sm:mb-6">
             <Button asChild variant="ghost" size="sm">

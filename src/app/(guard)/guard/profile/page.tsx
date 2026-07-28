@@ -10,12 +10,12 @@ import {
   User,
   Phone,
   MapPin,
-  Building2,
+  Buildings as Building2,
   Calendar,
-  IdCard,
+  IdentificationCard as IdCard,
   Shield,
-  Mail,
-} from "lucide-react";
+  Envelope as Mail,
+} from "@phosphor-icons/react";
 
 
 interface GuardProfileData {

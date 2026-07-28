@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAppAuth } from "@/context/auth-context";
-import { CheckCircle2, XCircle, Timer } from "lucide-react";
+import { CheckCircle as CheckCircle2, XCircle, Timer } from "@phosphor-icons/react";
 
 type QuizQuestion = { id: string; prompt: string; options: string[] };
 

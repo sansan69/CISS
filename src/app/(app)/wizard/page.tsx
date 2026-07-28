@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, ArrowRight, Building2, MapPin, Users, FileEdit, ShieldCheck, Sparkles } from "lucide-react";
+import { SpinnerGap as Loader2, CheckCircle as CheckCircle2, ArrowRight, Buildings as Building2, MapPin, Users, NotePencil as FileEdit, ShieldCheck, Sparkle as Sparkles } from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
 
 const WIZARD_STEPS = [
@@ -88,7 +88,7 @@ export default function WizardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-[100dvh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -97,7 +97,7 @@ export default function WizardPage() {
   const step = WIZARD_STEPS[currentStep];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 p-4 md:p-8">
+    <div className="min-h-[100dvh] bg-background p-4 md:p-8">
       <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-8 text-center">

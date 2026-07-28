@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trophy, Medal, Star, Award, TrendingUp, TrendingDown, Minus, ShieldCheck, GraduationCap } from "lucide-react";
+import { SpinnerGap as Loader2, Trophy, Medal, Star, Medal as Award, TrendUp as TrendingUp, TrendDown as TrendingDown, Minus, ShieldCheck, GraduationCap } from "@phosphor-icons/react";
 import { format } from "date-fns";
 import { resolveAppUser } from "@/lib/auth/roles";
 import { dedupeClientOptions } from "@/lib/client-options";

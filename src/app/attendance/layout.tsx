@@ -1,10 +1,12 @@
 
+"use client";
+
 import type { ReactNode } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import '@/app/globals.css'; 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home } from 'lucide-react';
+import { House as Home } from '@phosphor-icons/react';
 
 // This is a simple layout for the public attendance page.
 export default function AttendanceLayout({ children }: { children: ReactNode }) {

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, CheckCircle2, ChevronRight, ChevronLeft } from "lucide-react";
+import { SpinnerGap as Loader2, CheckCircle as CheckCircle2, CaretRight as ChevronRight, CaretLeft as ChevronLeft } from "@phosphor-icons/react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function GuardSetupPage() {

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Warning as AlertTriangle, ArrowClockwise as RefreshCw } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -37,7 +37,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-8 bg-gray-50 dark:bg-gray-900">
+        <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background p-8">
           <div className="flex flex-col items-center gap-4 max-w-md text-center">
             <AlertTriangle className="h-12 w-12 text-destructive" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">

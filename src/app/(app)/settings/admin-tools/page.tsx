@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import {
-  ChevronLeft,
-  ChevronRight,
-  DownloadCloud,
-  FileUp,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
+  DownloadSimple as DownloadCloud,
+  FileArrowUp as FileUp,
   Megaphone,
   QrCode,
   Wrench,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

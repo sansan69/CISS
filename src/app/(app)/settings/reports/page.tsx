@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { format, subDays } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { BarChart3, CalendarIcon, ChevronLeft, Download, Loader2, Sparkles } from "lucide-react";
+import { ChartBar as BarChart3, CalendarIcon, CaretLeft as ChevronLeft, Download, SpinnerGap as Loader2, Sparkle as Sparkles } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";

@@ -8,7 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, QrCode, Phone, ScanLine, RotateCcw, ArrowRight, KeyRound, ShieldCheck, Sparkles, Home } from "lucide-react";
+import {
+  ArrowClockwise as RotateCcw,
+  ArrowRight,
+  House as Home,
+  Key as KeyRound,
+  Phone,
+  QrCode,
+  Scan as ScanLine,
+  SealCheck as Sparkles,
+  ShieldCheck,
+  SpinnerGap as Loader2,
+} from "@phosphor-icons/react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
 import { parseEmployeeIdFromQrText, parseEmployeeQrText } from "@/lib/qr/employee-qr";
@@ -303,8 +314,7 @@ export default function GuardLoginPage() {
 
   return (
     <div
-      className="min-h-[100dvh] w-full flex flex-col md:flex-row text-foreground"
-      style={{ background: `linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(206 98% 18%) 60%, hsl(206 98% 10%) 100%)` }}
+      className="flex min-h-[100dvh] w-full flex-col bg-brand-blue-darker text-foreground md:flex-row"
     >
       {/* Desktop brand panel — hidden on mobile */}
       <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
@@ -380,7 +390,7 @@ export default function GuardLoginPage() {
           {/* Card — bottom-sheet on mobile, centered card on desktop */}
           <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
             <div
-              className="flex-1 md:flex-none rounded-t-[28px] rounded-b-none md:rounded-3xl border border-white/10 bg-black/15 text-white backdrop-blur md:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] px-6 pt-7 pb-[max(env(safe-area-inset-bottom,0px),2rem)] sm:px-8 md:p-10"
+            className="flex-1 rounded-t-[28px] rounded-b-none border border-white/10 bg-white/[0.06] px-6 pb-[max(env(safe-area-inset-bottom,0px),2rem)] pt-7 text-white sm:px-8 md:flex-none md:rounded-3xl md:p-10"
             >
               <div className="text-center md:text-left mb-6">
                 <h2 className="text-2xl font-bold font-exo2 tracking-tight">Welcome back</h2>
@@ -526,7 +536,7 @@ export default function GuardLoginPage() {
                           </div>
                         )}
                         {!isScanning && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80 bg-gradient-to-b from-white/5 to-black/30">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 text-white/80">
                             <QrCode className="h-14 w-14" />
                             <p className="text-sm">Tap below to start scanning</p>
                           </div>

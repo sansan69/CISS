@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { MoreHorizontal, Search, UserPlus, Eye, Loader2, AlertCircle, CheckCircle, Trash2, AlertTriangle as WarningIcon, CalendarIcon, ChevronLeft, ChevronRight, ShieldAlert } from 'lucide-react';
+import { DotsThree as MoreHorizontal, MagnifyingGlass as Search, UserPlus, Eye, SpinnerGap as Loader2, WarningCircle as AlertCircle, CheckCircle, Trash as Trash2, Warning as WarningIcon, CalendarIcon, CaretLeft as ChevronLeft, CaretRight as ChevronRight, ShieldWarning as ShieldAlert } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';

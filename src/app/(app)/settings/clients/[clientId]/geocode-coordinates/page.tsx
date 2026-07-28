@@ -13,15 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import type { BatchGeocodeResult } from "@/app/api/admin/sites/batch-geocode/route";
 import {
-  CheckCircle2,
+  CheckCircle as CheckCircle2,
   XCircle,
-  AlertTriangle,
+  Warning as AlertTriangle,
   SkipForward,
   MapPin,
-  Loader2,
+  SpinnerGap as Loader2,
   ArrowLeft,
   Play,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
 

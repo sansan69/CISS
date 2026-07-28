@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Plus, Trash2, CheckCircle2, Pencil } from "lucide-react";
+import { Plus, Trash as Trash2, CheckCircle as CheckCircle2, Pencil } from "@phosphor-icons/react";
 
 type Question = {
   id: string;

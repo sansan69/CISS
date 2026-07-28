@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Star, User, Calendar, ClipboardList, ChevronRight } from "lucide-react";
+import { SpinnerGap as Loader2, Plus, Star, User, Calendar, ClipboardText as ClipboardList, CaretRight as ChevronRight } from "@phosphor-icons/react";
 import { format, subDays } from "date-fns";
 import { resolveAppUser } from "@/lib/auth/roles";
 import type { User as FirebaseUser } from "firebase/auth";

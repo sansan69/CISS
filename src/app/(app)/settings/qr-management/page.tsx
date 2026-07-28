@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { QrCode, AlertTriangle, CheckCircle, Users, RefreshCw, Loader2, ChevronLeft } from 'lucide-react';
+import { QrCode, Warning as AlertTriangle, CheckCircle, Users, ArrowClockwise as RefreshCw, SpinnerGap as Loader2, CaretLeft as ChevronLeft } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';

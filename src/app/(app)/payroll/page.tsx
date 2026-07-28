@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Play, Eye, Users, IndianRupee, Banknote, ShieldCheck } from "lucide-react";
+import { Play, Eye, Users, CurrencyInr as IndianRupee, Money as Banknote, ShieldCheck } from "@phosphor-icons/react";
 import type { PayrollCycle, PayrollCycleStatus } from "@/types/payroll";
 
 const STATUS_CONFIG: Record<PayrollCycleStatus, { label: string; className: string }> = {

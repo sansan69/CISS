@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { QrCode, ScanLine, Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { QrCode, Scan as ScanLine, SpinnerGap as Loader2, Warning as AlertTriangle, ArrowCounterClockwise as RotateCcw } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { startHybridQrScanner } from '@/lib/qr/scanner-engine';
 import { normalizeScannerError } from '@/lib/qr/scanner-support';

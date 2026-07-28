@@ -10,10 +10,10 @@ const buttonVariants = cva(
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
     "text-sm font-semibold leading-snug",
     "ring-offset-background",
-    "transition-[transform,box-shadow,background-color,opacity,filter] duration-150 ease-out",
+    "transition-[transform,box-shadow,background-color,border-color,color,opacity] duration-200 ease-spring",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
-    "active:brightness-[0.92]",
+    "active:scale-[0.98]",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     "select-none",
   ].join(" "),
@@ -22,35 +22,35 @@ const buttonVariants = cva(
       variant: {
         /* Primary — brand blue */
         default:
-          "bg-primary text-primary-foreground shadow-brand-sm hover:bg-primary/90 hover:shadow-brand-md rounded-lg [box-shadow:inset_0_1px_0_hsl(0_0%_100%/0.14),var(--shadow-brand-sm)]",
+          "rounded-xl bg-primary text-primary-foreground shadow-brand-xs hover:bg-brand-blue-dark",
 
         /* Destructive — red */
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 rounded-lg",
+          "rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90",
 
         /* Outline */
         outline:
-          "border border-input bg-card text-foreground hover:bg-muted hover:border-primary/40 rounded-lg shadow-brand-xs",
+          "rounded-xl border border-input bg-card text-foreground hover:border-primary/30 hover:bg-muted",
 
         /* Secondary — muted fill */
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-muted rounded-lg shadow-none",
+          "rounded-xl bg-secondary text-secondary-foreground hover:bg-muted",
 
         /* Ghost — subtle hover */
         ghost:
-          "text-foreground hover:bg-muted hover:text-foreground rounded-lg",
+          "rounded-xl text-foreground hover:bg-muted hover:text-foreground",
 
         /* Ghost Brand — text-primary, hover brand bg */
         "ghost-brand":
-          "text-primary hover:bg-primary/10 hover:text-primary rounded-lg",
+          "rounded-xl text-primary hover:bg-primary/10 hover:text-primary",
 
         /* Brand Gold accent */
         brand:
-          "bg-accent text-accent-foreground shadow-brand-sm hover:bg-accent/88 rounded-lg",
+          "rounded-xl bg-accent text-accent-foreground hover:bg-brand-gold-dark hover:text-white",
 
         /* Glass morphism */
         glass:
-          "glass text-foreground hover:bg-card/90 rounded-lg shadow-brand-sm",
+          "glass rounded-xl text-foreground hover:bg-card",
 
         /* Link */
         link:

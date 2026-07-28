@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import { useAppAuth } from "@/context/auth-context";
-import { Plus } from "lucide-react";
+import { Plus } from "@phosphor-icons/react";
 
 type TrainingAssignment = {
   id: string;

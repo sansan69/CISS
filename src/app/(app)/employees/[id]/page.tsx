@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
-import { Edit3, User, Briefcase, Banknote, ShieldCheck, QrCode, FileUp, Download, Loader2, AlertCircle, RefreshCw, ArrowLeft, Home, CalendarIcon, Upload, Camera, Edit, Trash2, CalendarCheck, KeyRound, RotateCcw, MoreHorizontal, Phone, MapPin, CheckCircle, AlertTriangle } from 'lucide-react';
+import { PencilSimple as Edit3, User, Briefcase, Money as Banknote, ShieldCheck, QrCode, FileArrowUp as FileUp, Download, SpinnerGap as Loader2, WarningCircle as AlertCircle, ArrowClockwise as RefreshCw, ArrowLeft, House as Home, CalendarIcon, Upload, Camera, PencilSimple as Edit, Trash as Trash2, CalendarCheck, Key as KeyRound, ArrowCounterClockwise as RotateCcw, DotsThree as MoreHorizontal, Phone, MapPin, CheckCircle, Warning as AlertTriangle } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';

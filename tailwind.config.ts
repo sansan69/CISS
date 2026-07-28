@@ -101,8 +101,6 @@ export default {
         "card":      "0 1px 3px 0 rgb(1 76 133 / 0.08), 0 1px 2px -1px rgb(1 76 133 / 0.06)",
         "elevated":  "0 8px 20px -4px rgb(1 76 133 / 0.16), 0 4px 8px -4px rgb(1 76 133 / 0.10)",
         "inner-sm":  "inset 0 1px 3px 0 rgb(1 76 133 / 0.08)",
-        "gold":      "0 4px 14px 0 rgb(189 156 85 / 0.4)",
-        "glow-blue": "0 0 20px rgb(1 76 133 / 0.3)",
       },
 
       fontSize: {
@@ -163,10 +161,6 @@ export default {
           from: { backgroundPosition: "-200% center" },
           to:   { backgroundPosition:  "200% center" },
         },
-        "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 0 0 hsl(var(--primary) / 0.4)" },
-          "50%":       { boxShadow: "0 0 0 8px hsl(var(--primary) / 0)" },
-        },
         "count-up": {
           from: { transform: "translateY(8px)", opacity: "0" },
           to:   { transform: "translateY(0)",   opacity: "1" },
@@ -174,13 +168,6 @@ export default {
         "nav-active": {
           from: { transform: "scaleX(0)", opacity: "0" },
           to:   { transform: "scaleX(1)", opacity: "1" },
-        },
-        "bounce-x": {
-          "0%, 100%": { transform: "translateX(0)" },
-          "50%":       { transform: "translateX(4px)" },
-        },
-        "spin-slow": {
-          to: { transform: "rotate(360deg)" },
         },
       },
 
@@ -195,11 +182,8 @@ export default {
         "scale-in":        "scale-in 220ms cubic-bezier(0.16,1,0.3,1) both",
         "scale-bounce":    "scale-bounce 380ms cubic-bezier(0.16,1,0.3,1) both",
         "shimmer":         "shimmer 1.8s linear infinite",
-        "pulse-glow":      "pulse-glow 2s ease-in-out infinite",
         "count-up":        "count-up 400ms cubic-bezier(0.16,1,0.3,1) both",
         "nav-active":      "nav-active 240ms cubic-bezier(0.16,1,0.3,1) both",
-        "bounce-x":        "bounce-x 1.2s ease-in-out infinite",
-        "spin-slow":       "spin-slow 2.4s linear infinite",
       },
 
       transitionTimingFunction: {
@@ -210,7 +194,9 @@ export default {
       },
 
       fontFamily: {
+        sans: ["var(--font-ciss-body)", "ui-sans-serif", "system-ui", "sans-serif"],
         exo2: ["var(--font-exo-display)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
     },
   },

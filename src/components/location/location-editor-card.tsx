@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { GeoPoint } from "firebase/firestore";
-import { Loader2, LocateFixed, MapPinned, Navigation, ShieldCheck } from "lucide-react";
+import { SpinnerGap as Loader2, Crosshair as LocateFixed, MapPin as MapPinned, NavigationArrow as Navigation, ShieldCheck } from "@phosphor-icons/react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

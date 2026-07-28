@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { ArrowLeft, CaretRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -19,7 +19,7 @@ interface PageHeaderProps {
   breadcrumbs?: BreadcrumbItem[];
   actions?: ReactNode;
   className?: string;
-  /** Show a gold accent line below the title */
+  /** Add a restrained gold brand marker beside the heading */
   accent?: boolean;
   /** Show a back button (goes back in history) — useful on detail pages */
   backHref?: string;
@@ -49,10 +49,15 @@ export function PageHeader({
   const router = useRouter();
 
   return (
-    <div className={cn("mb-5 rounded-lg border border-border/60 bg-card/70 p-4 shadow-brand-xs backdrop-blur-sm sm:mb-6 sm:p-5 animate-slide-down", className)}>
+    <header
+      className={cn(
+        "mb-6 border-b border-border/80 pb-5 animate-slide-down sm:mb-7 sm:pb-6",
+        className,
+      )}
+    >
       {/* Eyebrow */}
       {eyebrow && (
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary">
           {eyebrow}
         </p>
       )}
@@ -61,22 +66,22 @@ export function PageHeader({
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav
           aria-label="Breadcrumb"
-          className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground mb-2 flex-wrap leading-none"
+          className="mb-3 hidden flex-wrap items-center gap-1.5 text-xs leading-none text-muted-foreground sm:flex"
         >
           {breadcrumbs.map((crumb, i) => (
             <span key={i} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground/60" />}
+              {i > 0 && <CaretRight className="h-3 w-3 shrink-0 text-muted-foreground/55" weight="bold" />}
               {crumb.href && i < breadcrumbs.length - 1 ? (
                 <Link
                   href={crumb.href}
-                  className="hover:text-primary transition-colors font-medium"
+                  className="font-bold transition-colors hover:text-primary"
                 >
                   {crumb.label}
                 </Link>
               ) : (
                 <span
                   className={cn(
-                    i === breadcrumbs.length - 1 && "text-foreground font-semibold"
+                    i === breadcrumbs.length - 1 && "font-bold text-foreground"
                   )}
                 >
                   {crumb.label}
@@ -88,40 +93,33 @@ export function PageHeader({
       )}
 
       {/* Title row */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div className="flex min-w-0 items-start gap-3">
           {/* Back button — desktop only; mobile relies on OS swipe-back gesture */}
           {backHref && (
             <button
               onClick={() => backHref === "__back" ? router.back() : router.push(backHref)}
-              className="hidden sm:flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-card hover:bg-muted transition-colors shrink-0 mt-0.5"
+              className="mt-0.5 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-[transform,background-color,color] duration-200 ease-spring hover:bg-muted hover:text-foreground active:scale-[0.98] sm:flex"
               aria-label="Go back"
             >
-              <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+              <ArrowLeft className="h-4 w-4" weight="bold" />
             </button>
           )}
 
           <div className="min-w-0">
-            {/* Title with optional gold accent line */}
-            <div className={cn("flex flex-col", accent && "relative")}>
-              {accent && (
-                <span
-                  className="absolute -left-3 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full bg-brand-gold"
-                  aria-hidden
-                />
-              )}
+            <div className="flex items-center gap-3">
               <h1
-                className={cn(
-                  "text-xl sm:text-2xl font-bold leading-tight font-exo2 tracking-tight",
-                  accent ? "text-foreground pl-0" : "text-foreground"
-                )}
+                className="font-exo2 text-2xl font-bold leading-tight tracking-[-0.035em] text-foreground sm:text-[2rem]"
               >
                 {title}
               </h1>
+              {accent && (
+                <span className="h-1.5 w-8 rounded-full bg-accent" aria-hidden="true" />
+              )}
             </div>
 
             {description && (
-              <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+              <p className="mt-1.5 max-w-[65ch] text-sm leading-6 text-muted-foreground">
                 {description}
               </p>
             )}
@@ -130,11 +128,11 @@ export function PageHeader({
 
         {/* Actions */}
         {actions && (
-          <div className="flex items-center gap-2 shrink-0 self-start mt-0.5">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
             {actions}
           </div>
         )}
       </div>
-    </div>
+    </header>
   );
 }

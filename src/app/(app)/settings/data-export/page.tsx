@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DownloadCloud, AlertTriangle, Loader2, FileSpreadsheet, CalendarIcon, Filter, CheckCircle, ChevronLeft, FileText } from 'lucide-react';
+import { DownloadSimple as DownloadCloud, Warning as AlertTriangle, SpinnerGap as Loader2, FileXls as FileSpreadsheet, CalendarIcon, Funnel as Filter, CheckCircle, CaretLeft as ChevronLeft, FileText } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';

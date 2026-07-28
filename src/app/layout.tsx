@@ -1,15 +1,16 @@
 
 import type {Metadata, Viewport} from 'next';
 import { headers } from 'next/headers';
-import {Geist, Geist_Mono, Exo_2} from 'next/font/google';
+import {Geist_Mono, Exo_2, Lato} from 'next/font/google';
 import './globals.css';
 import PwaLoader from '@/components/pwa-loader';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const cissBody = Lato({
+  variable: '--font-ciss-body',
   subsets: ['latin'],
+  weight: ['400', '700', '900'],
 });
 
 const geistMono = Geist_Mono({
@@ -105,12 +106,13 @@ export default async function RootLayout({
       <head>
         <script
           nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `(function(){var d=document.documentElement;var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){var dark=m.matches;d.classList.toggle('dark',dark);d.dataset.theme=dark?'dark':'light';d.style.colorScheme=dark?'dark':'light'}s();if(m.addEventListener)m.addEventListener('change',s);else if(m.addListener)m.addListener(s)})();`,
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${exoDisplay.variable} antialiased`}>
+      <body className={`${cissBody.variable} ${geistMono.variable} ${exoDisplay.variable} antialiased`}>
         <ErrorBoundary>
           {children}
         </ErrorBoundary>

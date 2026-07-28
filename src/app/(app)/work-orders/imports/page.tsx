@@ -4,15 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarRange,
-  ClipboardList,
-  FileClock,
-  FileSpreadsheet,
-  Loader2,
-  RefreshCw,
+  CalendarDots as CalendarRange,
+  ClipboardText as ClipboardList,
+  FileText as FileClock,
+  FileXls as FileSpreadsheet,
+  SpinnerGap as Loader2,
+  ArrowClockwise as RefreshCw,
   ShieldCheck,
-  TriangleAlert,
-} from "lucide-react";
+  Warning as TriangleAlert,
+} from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
 import { useAppAuth } from "@/context/auth-context";
 import { isWorkOrderAdminRole } from "@/lib/work-orders";

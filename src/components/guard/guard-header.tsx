@@ -10,15 +10,14 @@ interface GuardHeaderProps {
 export function GuardHeader({ employeeName }: GuardHeaderProps) {
   return (
     <header
-      className="sticky top-0 z-40 flex items-center gap-3 bg-card/97 backdrop-blur-xl border-b border-border/70 px-4 shrink-0"
+      className="sticky top-0 z-40 flex shrink-0 items-center gap-3 border-b border-border/70 bg-card/92 px-4 backdrop-blur-xl"
       style={{
         minHeight: 56,
         paddingTop: "env(safe-area-inset-top, 0px)",
-        boxShadow: "0 1px 0 hsl(var(--border) / 0.5), 0 2px 8px hsl(0 0% 0% / 0.04)",
       }}
     >
       {/* Logo */}
-      <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-brand-blue-pale shrink-0">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
         <Image
           src="/ciss-logo.png"
           alt="CISS"
@@ -31,15 +30,15 @@ export function GuardHeader({ employeeName }: GuardHeaderProps) {
 
       {/* Identity */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground truncate font-exo2 tracking-tight leading-tight">
-          Guard Portal
+        <p className="truncate font-exo2 text-sm font-bold leading-tight tracking-tight text-foreground">
+          CISS Guard
         </p>
       </div>
 
       {/* Employee name chip */}
       {employeeName && employeeName !== "Guard Portal" && (
         <div className="shrink-0 max-w-[140px]">
-          <p className="text-xs font-medium text-muted-foreground truncate text-right leading-tight">
+          <p className="truncate text-right text-xs font-bold leading-tight text-muted-foreground">
             {employeeName}
           </p>
         </div>

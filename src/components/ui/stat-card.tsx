@@ -1,5 +1,7 @@
+"use client";
+
 import * as React from "react";
-import { TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
+import { Minus, SpinnerGap as Loader2, TrendDown as TrendingDown, TrendUp as TrendingUp } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 
@@ -10,7 +12,7 @@ interface StatCardProps {
   value?: number | string;
   /** Small subtitle shown below the value */
   subtitle?: string;
-  /** Icon component (LucideIcon) */
+  /** Icon component */
   icon: React.ElementType;
   /** Tailwind bg class for the icon bubble, e.g. "bg-blue-100 text-blue-600" */
   iconColor?: string;

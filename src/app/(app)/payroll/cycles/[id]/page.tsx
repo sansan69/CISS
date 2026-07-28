@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
-import { Download, CheckCircle2, Pencil, Users, IndianRupee, Banknote, ShieldCheck, Eye, Trash2 } from "lucide-react";
+import { Download, CheckCircle as CheckCircle2, Pencil, Users, CurrencyInr as IndianRupee, Money as Banknote, ShieldCheck, Eye, Trash as Trash2 } from "@phosphor-icons/react";
 import type { PayrollCycle, PayrollEntry, PayrollCycleStatus } from "@/types/payroll";
 import { cn } from "@/lib/utils";
 

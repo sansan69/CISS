@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  Activity,
-  Clock3,
+  Pulse as Activity,
+  Clock,
   UserCheck,
   UserMinus,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+  UsersThree,
+  type Icon,
+} from "@phosphor-icons/react";
 
 type UserRole = 'admin' | 'superAdmin' | 'hr' | 'accounts' | 'compliance' | 'fieldOfficer' | 'client';
 
@@ -28,12 +28,12 @@ type StatValueKey = "total" | "active" | "inactiveOrExited" | "checkedIn";
 interface StatDefinition {
   label: string;
   valueKey: StatValueKey;
-  icon: LucideIcon;
+  icon: Icon;
   tone: "brand" | "success" | "neutral" | "accent";
 }
 
 const workforceStats: StatDefinition[] = [
-  { label: "Total employees", valueKey: "total", icon: Users, tone: "brand" },
+  { label: "Total employees", valueKey: "total", icon: UsersThree, tone: "brand" },
   { label: "Active employees", valueKey: "active", icon: UserCheck, tone: "success" },
   { label: "Inactive / exited", valueKey: "inactiveOrExited", icon: UserMinus, tone: "neutral" },
 ];
@@ -41,10 +41,10 @@ const workforceStats: StatDefinition[] = [
 const roleConfig: Record<UserRole, StatDefinition[]> = {
   admin: [
     ...workforceStats,
-    { label: "Attendance checks", valueKey: "checkedIn", icon: Clock3, tone: "accent" },
+    { label: "Attendance checks", valueKey: "checkedIn", icon: Clock, tone: "accent" },
   ],
   fieldOfficer: [
-    { label: "Assigned guards", valueKey: "total", icon: Users, tone: "brand" },
+    { label: "Assigned guards", valueKey: "total", icon: UsersThree, tone: "brand" },
     { label: "Active assigned", valueKey: "active", icon: UserCheck, tone: "success" },
     { label: "Inactive assigned", valueKey: "inactiveOrExited", icon: UserMinus, tone: "neutral" },
   ],
@@ -87,11 +87,8 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
             "md:border-t-0",
           ].join(" ")}
         >
-          {index === 0 && (
-            <span className="absolute inset-y-0 left-0 w-1 bg-brand-blue dark:bg-primary" aria-hidden="true" />
-          )}
           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneStyles[item.tone]}`}>
-            <item.icon className="h-5 w-5" aria-hidden="true" />
+            <item.icon className="h-5 w-5" weight="duotone" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <p className="font-exo2 text-2xl font-bold leading-none tabular-nums text-foreground sm:text-[1.7rem]">

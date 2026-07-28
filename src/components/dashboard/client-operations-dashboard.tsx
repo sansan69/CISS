@@ -4,19 +4,19 @@ import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
-  Activity,
   ArrowRight,
-  Briefcase,
-  Building2,
+  Buildings as Building2,
   Camera,
   CalendarCheck,
-  Clock3,
+  Clock as Clock3,
   FileText,
   Footprints,
   GraduationCap,
+  Pulse as Activity,
   ShieldCheck,
-  Users,
-} from "lucide-react";
+  SuitcaseSimple as Briefcase,
+  UsersThree as Users,
+} from "@phosphor-icons/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -160,7 +160,7 @@ export function ClientOperationsDashboard() {
     <div className="space-y-5">
       {modules.summary && (
         <>
-          <div className="overflow-hidden rounded-3xl border border-brand-blue/10 bg-[radial-gradient(circle_at_top_right,_rgba(189,156,85,0.18),_transparent_34%),linear-gradient(135deg,#0c4576_0%,#0f5c97_48%,#f8fbff_180%)] p-5 text-white shadow-brand-md">
+          <div className="overflow-hidden rounded-3xl border border-brand-blue/20 bg-brand-blue-darker p-5 text-white shadow-brand-md">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">

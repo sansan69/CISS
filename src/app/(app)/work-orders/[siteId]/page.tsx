@@ -13,9 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import {
-    Loader2, ArrowLeft, UserPlus, AlertCircle, Search,
-    X, Edit3, Trash2, CheckCircle2,
-} from 'lucide-react';
+    SpinnerGap as Loader2, ArrowLeft, UserPlus, WarningCircle as AlertCircle, MagnifyingGlass as Search,
+    X, PencilSimple as Edit3, Trash as Trash2, CheckCircle as CheckCircle2,
+} from '@phosphor-icons/react';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {

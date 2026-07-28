@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useAppAuth } from "@/context/auth-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, BarChart3, Briefcase, ChevronRight, FileEdit, Globe, Loader2, ShieldCheck, Wallet, Wrench, Users } from "lucide-react";
+import { WarningCircle as AlertCircle, ChartBar as BarChart3, Briefcase, CaretRight as ChevronRight, NotePencil as FileEdit, Globe, SpinnerGap as Loader2, ShieldCheck, Wallet, Wrench, Users } from "@phosphor-icons/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";

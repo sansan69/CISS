@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { onSnapshot, collection, query } from "firebase/firestore";
-import { ChevronDown, ChevronUp, FileClock, Loader2, MapPin, Rows3, SquareStack } from "lucide-react";
+import { CaretDown as ChevronDown, CaretUp as ChevronUp, FileText as FileClock, SpinnerGap as Loader2, MapPin, Rows as Rows3, Stack as SquareStack } from "@phosphor-icons/react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

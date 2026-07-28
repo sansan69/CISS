@@ -8,7 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, WifiOff, AlertTriangle, Clock, Search, List, Map as MapIcon } from "lucide-react";
+import {
+  Clock,
+  List,
+  MagnifyingGlass as Search,
+  MapPin,
+  MapTrifold as MapIcon,
+  Warning as AlertTriangle,
+  WifiSlash as WifiOff,
+} from "@phosphor-icons/react";
 import {
   getGuardLocationHealth,
   guardLocationHealthLabel,

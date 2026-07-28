@@ -24,22 +24,22 @@ import { authorizedFetch } from "@/lib/api-client";
 import { APP_MODE, REGION_CODE, REGION_NAME } from "@/lib/runtime-config";
 import type { RegionRecord, RegionValidationChecks } from "@/types/region";
 import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  ExternalLink,
+  WarningCircle as AlertCircle,
+  Warning as AlertTriangle,
+  CheckCircle as CheckCircle2,
+  ArrowSquareOut as ExternalLink,
   Database,
   Globe,
-  KeyRound,
-  Link2,
-  Loader2,
+  Key as KeyRound,
+  Link as Link2,
+  SpinnerGap as Loader2,
   Play,
   Plus,
-  RefreshCw,
+  ArrowClockwise as RefreshCw,
   Rocket,
-  Save,
+  FloppyDisk as Save,
   ShieldCheck,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 
 type RegionFormState = {
   regionCode: string;

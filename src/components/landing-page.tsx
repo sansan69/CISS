@@ -7,20 +7,20 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   ArrowUpRight,
-  BadgeCheck,
-  Building2,
-  Clock3,
-  DownloadCloud,
+  SealCheck as BadgeCheck,
+  Buildings as Building2,
+  Clock as Clock3,
+  DownloadSimple as DownloadCloud,
   Fingerprint,
-  Globe2,
-  Loader2,
-  MapPinned,
+  GlobeHemisphereWest as Globe2,
+  SpinnerGap as Loader2,
+  MapPin as MapPinned,
   Phone,
   QrCode,
   ShieldCheck,
-  Smartphone,
-  Users,
-} from "lucide-react";
+  DeviceMobile as Smartphone,
+  UsersThree as Users,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -277,12 +277,6 @@ export default function LandingPage() {
         Skip to attendance access
       </a>
 
-      <div className="pointer-events-none absolute inset-0 hidden overflow-hidden xl:block" aria-hidden="true">
-        <div className="absolute -right-28 -top-36 h-[34rem] w-[34rem] rounded-full bg-primary/[0.09] blur-3xl dark:bg-primary/[0.13]" />
-        <div className="absolute -left-48 top-[42%] h-[30rem] w-[30rem] rounded-full bg-accent/[0.10] blur-3xl dark:bg-accent/[0.07]" />
-        <div className="absolute inset-0 opacity-[0.22] [background-image:linear-gradient(hsl(var(--border)/0.55)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/0.55)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
-      </div>
-
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[90rem] flex-col px-4 sm:px-6 lg:px-10">
         <header
           data-mobile-section="header"
@@ -333,7 +327,7 @@ export default function LandingPage() {
             className="hidden animate-slide-up xl:block xl:pr-4"
             aria-labelledby="landing-title"
           >
-            <div className="inline-flex items-center gap-2 border-l-2 border-accent pl-3 text-[11px] font-bold uppercase tracking-[0.22em] text-brand-blue dark:text-accent">
+            <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-brand-blue dark:text-accent">
               <BadgeCheck className="h-4 w-4 text-accent" />
               CISS Services · Secure workforce operations
             </div>
@@ -392,12 +386,11 @@ export default function LandingPage() {
             aria-labelledby="attendance-title"
           >
             <div
-              className="absolute -inset-3 -z-10 hidden translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.05] dark:border-white/[0.06] dark:bg-white/[0.025] xl:block"
+              className="absolute -inset-3 -z-10 hidden translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.04] dark:border-white/[0.06] dark:bg-white/[0.025] xl:block"
               aria-hidden="true"
             />
-            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-brand-md lg:rounded-[1.75rem] lg:bg-card/95 lg:shadow-[0_30px_90px_-42px_hsl(var(--primary)/0.55)] lg:backdrop-blur-xl dark:bg-card/90">
+            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-brand-md lg:rounded-[1.75rem] dark:bg-card">
               <div className="relative overflow-hidden border-b border-border/70 bg-brand-blue-darker px-5 py-5 text-white sm:px-7 lg:py-6">
-                <div className="absolute inset-0 hidden opacity-40 [background-image:radial-gradient(circle_at_85%_10%,rgba(189,156,85,0.34),transparent_34%),linear-gradient(115deg,transparent_48%,rgba(255,255,255,0.05)_48%,rgba(255,255,255,0.05)_49%,transparent_49%)] lg:block" />
                 <div className="relative flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-brand-gold-light">
@@ -458,7 +451,7 @@ export default function LandingPage() {
                 <Button
                   variant="brand"
                   onClick={handleContinue}
-                  className="mt-4 h-14 w-full rounded-xl text-sm font-bold shadow-gold sm:text-base"
+                  className="mt-4 h-14 w-full rounded-xl text-sm font-bold sm:text-base"
                   disabled={isLoading || normalizedPhone.length < 10}
                 >
                   {isLoading ? (

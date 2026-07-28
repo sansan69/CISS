@@ -35,16 +35,16 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Loader2,
+  SpinnerGap as Loader2,
   UserPlus,
-  Search,
+  MagnifyingGlass as Search,
   X,
-  CheckCircle2,
-  ClipboardList,
+  CheckCircle as CheckCircle2,
+  ClipboardText as ClipboardList,
   Users,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
+} from "@phosphor-icons/react";
 import type { WorkOrder } from "@/types/work-orders";
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
 import { districtMatches } from "@/lib/districts";

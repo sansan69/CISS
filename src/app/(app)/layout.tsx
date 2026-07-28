@@ -7,14 +7,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  LogOut,
-  ChevronLeft,
-  ClipboardList,
-  MoreHorizontal,
+  CaretLeft,
+  CaretRight,
+  DotsThree,
+  List,
+  SignOut,
+  SidebarSimple,
   X,
-  ChevronRight,
-  PanelLeft,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +41,7 @@ import { useHaptics } from '@/hooks/use-haptics';
 import { LogoutDialog } from '@/components/common/logout-dialog';
 import { AuthContext } from '@/context/auth-context';
 import { toast } from '@/hooks/use-toast';
+import { PageTransition } from '@/components/motion/page-transition';
 import {
   bottomNavItems,
   getVisibleGroups,
@@ -104,17 +105,19 @@ function SidebarNavLink({
             href={item.href}
             onClick={onClick}
             className={cn(
-              'flex items-center justify-center h-10 w-10 mx-auto rounded-lg transition-all duration-200',
+              'flex h-10 w-10 items-center justify-center rounded-xl transition-colors duration-200 active:scale-[0.97]',
               active
-                ? 'bg-white/15 text-white ring-1 ring-brand-gold/40'
-                : 'text-white/55 hover:text-white hover:bg-white/10'
+                ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                : 'text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
             )}
+            aria-current={active ? 'page' : undefined}
           >
             <item.icon
               className={cn(
                 'h-5 w-5 shrink-0',
-                active ? 'text-brand-gold-light' : ''
+                active ? 'text-sidebar-primary-foreground' : ''
               )}
+              weight={active ? 'fill' : 'regular'}
             />
           </Link>
         </TooltipTrigger>
@@ -130,25 +133,26 @@ function SidebarNavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-3 rounded-lg py-2.5 px-3 text-sm font-semibold',
-        'transition-all duration-200',
+        'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold',
+        'transition-colors duration-200 active:scale-[0.99]',
         active
-          ? 'bg-white/15 text-white'
-          : 'text-white/65 hover:text-white hover:bg-white/10'
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+          : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       )}
+      aria-current={active ? 'page' : undefined}
     >
-      {/* Active indicator: small pill, not a border */}
       {active && (
         <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand-gold"
+          className="absolute right-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-brand-gold"
           aria-hidden
         />
       )}
       <item.icon
         className={cn(
           'h-[18px] w-[18px] shrink-0 transition-all duration-200',
-          active ? 'text-brand-gold-light' : 'text-white/50 group-hover:text-white/80'
+          active ? 'text-sidebar-primary-foreground' : 'text-sidebar-foreground/50 group-hover:text-sidebar-accent-foreground'
         )}
+        weight={active ? 'fill' : 'regular'}
       />
       <span className="truncate">{label}</span>
     </Link>
@@ -186,14 +190,14 @@ function DesktopSidebar({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <aside className="hidden md:flex flex-col h-full max-h-screen bg-sidebar overflow-hidden border-r border-sidebar-border/70">
+      <aside className="hidden h-full max-h-screen flex-col overflow-hidden border-r border-sidebar-border bg-sidebar md:flex">
 
         {/* Logo area */}
         <div className={cn(
-          "flex h-16 items-center shrink-0 border-b border-white/10 transition-all duration-300",
-          collapsed ? "justify-center px-0" : "gap-3 px-5"
+          "flex h-[72px] shrink-0 items-center border-b border-sidebar-border transition-all duration-300",
+          collapsed ? "justify-center px-0" : "gap-3 px-4"
         )}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/10 shrink-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
             <Image
               src="/ciss-logo.png"
               alt="CISS"
@@ -205,11 +209,11 @@ function DesktopSidebar({
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1 animate-fade-in">
-              <p className="text-white font-bold text-sm truncate leading-tight tracking-wide">
+              <p className="truncate font-exo2 text-[15px] font-bold leading-tight text-sidebar-foreground">
                 CISS Workforce
               </p>
-              <p className="text-white/45 text-[10px] truncate uppercase tracking-widest font-medium">
-                Management Platform
+              <p className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/45">
+                Operations
               </p>
             </div>
           )}
@@ -227,9 +231,9 @@ function DesktopSidebar({
                   <TooltipTrigger asChild>
                     <Link
                       href="/dashboard"
-                    className="flex items-center justify-center h-10 w-10 mx-auto rounded-lg text-white/65 hover:text-white hover:bg-white/10 transition-all mb-2"
+                    className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
-                      <ChevronLeft className="h-5 w-5" />
+                      <CaretLeft className="h-5 w-5" />
                     </Link>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8} className="text-xs font-medium">Back to Main Menu</TooltipContent>
@@ -238,12 +242,12 @@ function DesktopSidebar({
                 <>
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-white/65 hover:text-white hover:bg-white/10 transition-all mb-3"
+                    className="mb-3 flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   >
-                    <ChevronLeft className="h-4 w-4 shrink-0" />
+                    <CaretLeft className="h-4 w-4 shrink-0" />
                     Back to Main Menu
                   </Link>
-                  <p className="section-label text-brand-gold/80 px-3 mb-2">Settings</p>
+                  <p className="section-label mb-2 px-3 text-sidebar-foreground/45">Settings</p>
                 </>
               )}
               {settingsSubItems.map(item => (
@@ -252,11 +256,11 @@ function DesktopSidebar({
             </>
           ) : (
             visibleGroups.map((group, gi) => (
-              <div key={group.label} className={cn(gi > 0 && (collapsed ? "pt-2 border-t border-white/10 mt-2" : "pt-4"))}>
+              <div key={group.label} className={cn(gi > 0 && (collapsed ? "mt-2 border-t border-sidebar-border pt-2" : "pt-4"))}>
                 {!collapsed && (
-                  <p className="section-label text-brand-gold/60 px-3 mb-1">{group.label}</p>
+                  <p className="section-label mb-1 px-3 text-sidebar-foreground/40">{group.label}</p>
                 )}
-                {collapsed && gi > 0 && <div className="h-px bg-white/10 mx-2 mb-2" />}
+                {collapsed && gi > 0 && <div className="mx-2 mb-2 h-px bg-sidebar-border" />}
                 <div className={cn("space-y-0.5", collapsed && "space-y-1")}>
                   {group.items.map(item => (
                     <SidebarNavLink key={item.href} item={item} userRole={userRole} collapsed={collapsed} />
@@ -268,14 +272,14 @@ function DesktopSidebar({
         </nav>
 
         {/* User section */}
-        <div className="border-t border-white/10 p-2 shrink-0">
+        <div className="shrink-0 border-t border-sidebar-border p-2">
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex w-full items-center justify-center rounded-lg h-10 text-white/70 hover:text-white hover:bg-white/10 transition-all group">
-                      <Avatar className="h-7 w-7 shrink-0 ring-2 ring-white/20 group-hover:ring-brand-gold/60 transition-all">
+                    <button className="group flex h-10 w-full items-center justify-center rounded-xl text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                      <Avatar className="h-7 w-7 shrink-0 ring-2 ring-sidebar-border transition-colors group-hover:ring-primary/30">
                         <AvatarImage src={user?.photoURL || undefined} />
                         <AvatarFallback className="text-[10px] bg-brand-gold text-white font-semibold">
                           {initials}
@@ -288,7 +292,7 @@ function DesktopSidebar({
                     <DropdownMenuLabel className="text-xs text-muted-foreground truncate font-normal -mt-1 pt-0">{user.email}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                      <LogOut className="mr-2 h-4 w-4" />
+                      <SignOut className="mr-2 h-4 w-4" />
                       Sign out
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -301,25 +305,25 @@ function DesktopSidebar({
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-white/70 hover:text-white hover:bg-white/10 transition-all text-left group">
-                  <Avatar className="h-8 w-8 shrink-0 ring-2 ring-white/20 group-hover:ring-brand-gold/60 transition-all">
+                <button className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                  <Avatar className="h-8 w-8 shrink-0 ring-2 ring-sidebar-border transition-colors group-hover:ring-primary/30">
                     <AvatarImage src={user?.photoURL || undefined} />
                     <AvatarFallback className="text-xs bg-brand-gold text-white font-semibold">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1 animate-fade-in">
-                    <p className="text-xs font-semibold text-white truncate leading-tight">{displayName}</p>
-                    <p className="text-[10px] text-white/45 truncate capitalize font-medium">{roleBadge}</p>
+                    <p className="truncate text-xs font-bold leading-tight text-sidebar-foreground">{displayName}</p>
+                    <p className="truncate text-[10px] font-medium capitalize text-sidebar-foreground/45">{roleBadge}</p>
                   </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                  <CaretRight className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/35" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top" className="w-52">
                 <DropdownMenuLabel className="text-xs text-muted-foreground truncate font-normal">{user.email}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <SignOut className="mr-2 h-4 w-4" />
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -351,15 +355,14 @@ function MobileBottomNav({
 
   return (
     <div
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-3"
+      className="fixed inset-x-0 bottom-0 z-40 px-3 md:hidden"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 12px)" }}
     >
       <nav
         className={cn(
-          "flex items-stretch h-[58px]",
-          "bg-white/97 backdrop-blur-xl rounded-xl",
-          "border border-border/40",
-          "shadow-[0_8px_32px_hsl(0_0%_0%/0.12),0_2px_8px_hsl(0_0%_0%/0.08)]"
+          "flex h-16 items-stretch rounded-[22px]",
+          "border border-border/80 bg-card/95 backdrop-blur-xl",
+          "shadow-[0_10px_28px_hsl(207_52%_13%/0.14)]"
         )}
       >
         {items.map(item => {
@@ -371,24 +374,21 @@ function MobileBottomNav({
               onClick={() => haptic('light')}
               className={cn(
                 "bottom-nav-item relative",
-                "transition-all duration-150 ease-out",
-                "active:brightness-[0.92] select-none rounded-xl",
+                "select-none rounded-[18px] transition-colors duration-150 active:scale-[0.97]",
                 active ? "text-brand-blue" : "text-muted-foreground/60"
               )}
+              aria-current={active ? "page" : undefined}
             >
-              <div className="relative">
+              <div className={cn(
+                "relative flex h-8 min-w-14 items-center justify-center rounded-full px-4 transition-colors",
+                active && "bg-primary/10"
+              )}>
                 <item.icon
-                  className={cn("transition-all duration-150", active ? "h-[22px] w-[22px]" : "h-5 w-5")}
-                  strokeWidth={active ? 2.2 : 1.8}
+                  className="h-[22px] w-[22px]"
+                  weight={active ? "fill" : "regular"}
                 />
-                {active && (
-                  <span
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-brand-gold"
-                    aria-hidden
-                  />
-                )}
               </div>
-              <span className={cn("text-[10px] leading-none tracking-wide transition-all duration-150", active ? "font-bold" : "font-medium")}>
+              <span className={cn("text-[10px] leading-none tracking-wide", active ? "font-black" : "font-bold")}>
                 {item.label}
               </span>
             </Link>
@@ -403,24 +403,20 @@ function MobileBottomNav({
           onClick={() => { haptic('light'); onMoreClick(); }}
           className={cn(
             "bottom-nav-item relative",
-            "transition-all duration-150 ease-out",
-            "active:brightness-[0.92] select-none rounded-xl",
+            "select-none rounded-[18px] transition-colors duration-150 active:scale-[0.97]",
             moreActive ? "text-brand-blue" : "text-muted-foreground/60"
           )}
         >
-          <div className="relative">
-            <MoreHorizontal
-              className={cn("transition-all duration-150", moreActive ? "h-[22px] w-[22px]" : "h-5 w-5")}
-              strokeWidth={moreActive ? 2.2 : 1.8}
+          <div className={cn(
+            "relative flex h-8 min-w-14 items-center justify-center rounded-full px-4 transition-colors",
+            moreActive && "bg-primary/10"
+          )}>
+            <DotsThree
+              className="h-[22px] w-[22px]"
+              weight={moreActive ? "fill" : "bold"}
             />
-            {moreActive && (
-              <span
-                className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-brand-gold"
-                aria-hidden
-              />
-            )}
           </div>
-          <span className={cn("text-[11px] leading-none tracking-wide transition-all duration-150", moreActive ? "font-bold" : "font-medium")}>
+          <span className={cn("text-[10px] leading-none tracking-wide", moreActive ? "font-black" : "font-bold")}>
             More
           </span>
         </button>
@@ -464,13 +460,13 @@ function MobileMoreSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex flex-col p-0 w-[280px] bg-sidebar border-r-0 shadow-brand-lg">
+      <SheetContent side="left" className="flex w-[min(88vw,320px)] flex-col border-r border-sidebar-border bg-sidebar p-0 shadow-brand-lg">
         <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
         {/* Header */}
-        <div className="flex h-16 items-center justify-between border-b border-white/10 px-4 shrink-0">
+        <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-sidebar-border px-4">
           <Link href="/dashboard" onClick={close} className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 ring-1 ring-white/10">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/15">
               <Image
                 src="/ciss-logo.png"
                 alt="CISS"
@@ -480,12 +476,12 @@ function MobileMoreSheet({
                 unoptimized
               />
             </div>
-            <span className="text-white font-bold text-sm tracking-wide">CISS Workforce</span>
+            <span className="font-exo2 text-sm font-bold tracking-wide text-sidebar-foreground">CISS Workforce</span>
           </Link>
           <button
             onClick={close}
             aria-label="Close menu"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.97]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -498,12 +494,12 @@ function MobileMoreSheet({
               <Link
                 href="/dashboard"
                 onClick={close}
-                className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-white/65 hover:text-white hover:bg-white/10 transition-all mb-3"
+                className="mb-3 flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <CaretLeft className="h-4 w-4" />
                 Back to Main Menu
               </Link>
-              <p className="section-label text-brand-gold/60 px-3 mb-1">Settings</p>
+              <p className="section-label mb-1 px-3 text-sidebar-foreground/40">Settings</p>
               {settingsSubItems.map(item => (
                 <SidebarNavLink key={item.href} item={item} userRole={userRole} onClick={close} />
               ))}
@@ -511,7 +507,7 @@ function MobileMoreSheet({
           ) : (
             visibleGroups.map((group, gi) => (
               <div key={group.label} className={cn(gi > 0 && "pt-3")}>
-                <p className="section-label text-brand-gold/60 px-3 mb-1">{group.label}</p>
+                <p className="section-label mb-1 px-3 text-sidebar-foreground/40">{group.label}</p>
                 <div className="space-y-0.5">
                   {group.items.map(item => (
                     <SidebarNavLink key={item.href} item={item} userRole={userRole} onClick={close} />
@@ -523,8 +519,8 @@ function MobileMoreSheet({
         </nav>
 
         {/* User section */}
-        <div className="border-t border-white/10 p-4 shrink-0">
-          <div className="flex items-center gap-3 mb-3 p-2 rounded-lg bg-white/8">
+        <div className="shrink-0 border-t border-sidebar-border p-4">
+          <div className="mb-3 flex items-center gap-3 rounded-xl bg-sidebar-accent p-2">
             <Avatar className="h-9 w-9 shrink-0 ring-2 ring-brand-gold/40">
               <AvatarImage src={user?.photoURL || undefined} />
               <AvatarFallback className="text-sm bg-brand-gold text-white font-semibold">
@@ -532,16 +528,16 @@ function MobileMoreSheet({
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate leading-tight">{displayName}</p>
-              <p className="text-xs text-white/50 capitalize font-medium">{roleBadge}</p>
+              <p className="truncate text-sm font-bold leading-tight text-sidebar-foreground">{displayName}</p>
+              <p className="text-xs font-medium capitalize text-sidebar-foreground/50">{roleBadge}</p>
             </div>
           </div>
           <Button
             variant="ghost"
-            className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-3 px-3 rounded-lg"
+            className="w-full justify-start gap-3 rounded-xl px-3 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             onClick={() => { close(); onLogout(); }}
           >
-            <LogOut className="h-4 w-4" />
+            <SignOut className="h-4 w-4" />
             Sign out
           </Button>
         </div>
@@ -573,7 +569,7 @@ function MobileHeader({
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
 
   return (
-    <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 bg-card/97 backdrop-blur-xl border-b border-border/70 px-4 shrink-0"
+    <header className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-border/70 bg-card/92 px-4 backdrop-blur-xl md:hidden"
       style={{
         minHeight: 56,
         paddingTop: "env(safe-area-inset-top, 0px)",
@@ -584,7 +580,7 @@ function MobileHeader({
           href="/dashboard"
           className="flex items-center justify-center h-8 w-8 -ml-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <CaretLeft className="h-5 w-5" />
         </Link>
       ) : (
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue-pale shrink-0">
@@ -611,7 +607,7 @@ function MobileHeader({
             onClick={onMenuClick}
             className="text-muted-foreground"
           >
-            <MoreHorizontal className="h-5 w-5" />
+            <List className="h-5 w-5" />
           </Button>
         )}
         <DropdownMenu>
@@ -634,7 +630,7 @@ function MobileHeader({
               onClick={onLogout}
               className="text-destructive focus:text-destructive focus:bg-destructive/10"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <SignOut className="mr-2 h-4 w-4" />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -650,9 +646,9 @@ function MobileHeader({
 
 function LoadingScreen() {
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center bg-brand-blue gap-4">
+    <div className="flex min-h-[100dvh] w-full flex-col items-center justify-center gap-5 bg-background">
       <div className="flex flex-col items-center gap-3 animate-scale-in">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 shadow-brand-md">
+        <div className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-primary/10 ring-1 ring-primary/15">
           <Image
             src="/ciss-logo.png"
             alt="CISS"
@@ -663,9 +659,9 @@ function LoadingScreen() {
           />
         </div>
         <div>
-          <p className="text-white font-bold text-lg text-center tracking-wide">CISS Workforce</p>
-          <p className="text-white/50 text-xs text-center tracking-widest uppercase font-medium mt-0.5">
-            Management Platform
+          <p className="text-center font-exo2 text-lg font-bold tracking-wide text-foreground">CISS Workforce</p>
+          <p className="mt-0.5 text-center text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Preparing workspace
           </p>
         </div>
       </div>
@@ -673,7 +669,7 @@ function LoadingScreen() {
         {[0, 1, 2].map(i => (
           <span
             key={i}
-            className="w-1.5 h-1.5 rounded-full bg-brand-gold animate-bounce"
+            className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"
             style={{ animationDelay: `${i * 160}ms` }}
           />
         ))}
@@ -705,7 +701,7 @@ function DesktopTopBar({
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
 
   return (
-    <header className="hidden md:flex h-14 items-center justify-between gap-4 border-b border-border/70 bg-card/95 backdrop-blur-sm px-5 shrink-0 shadow-brand-xs sticky top-0 z-20">
+    <header className="sticky top-0 z-20 hidden h-16 shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-background/92 px-5 backdrop-blur-xl md:flex">
       <div className="flex items-center gap-2 min-w-0">
         {/* Sidebar toggle */}
         <button
@@ -713,7 +709,7 @@ function DesktopTopBar({
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
         >
-          <PanelLeft className={cn("h-4 w-4 transition-transform duration-300", sidebarCollapsed && "rotate-180")} />
+          <SidebarSimple className="h-[18px] w-[18px]" weight={sidebarCollapsed ? "fill" : "regular"} />
         </button>
         <h2 className="text-sm font-semibold text-foreground truncate">{pageLabel}</h2>
       </div>
@@ -746,7 +742,7 @@ function DesktopTopBar({
             onClick={onLogout}
             className="text-destructive focus:text-destructive focus:bg-destructive/10"
           >
-            <LogOut className="mr-2 h-4 w-4" />
+              <SignOut className="mr-2 h-4 w-4" />
             Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -929,7 +925,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* ── Desktop Sidebar ── */}
       <div
         className={cn(
-          "hidden md:flex shrink-0 flex-col h-screen sticky top-0 z-10",
+          "sticky top-0 z-10 hidden h-[100dvh] shrink-0 flex-col md:flex",
           "transition-[width] duration-300 ease-in-out will-change-[width]",
           sidebarCollapsed ? "w-[64px]" : "w-[240px] lg:w-[256px]"
         )}
@@ -946,7 +942,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-screen">
+      <div className="flex min-h-[100dvh] min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
         <MobileHeader
           isSettingsPage={isSettingsPage}
@@ -968,8 +964,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         />
 
         {/* Page content */}
-        <main className="flex-1 p-4 sm:p-5 lg:p-6 pb-[104px] md:pb-6 overflow-x-hidden">
-          {children}
+        <main className="flex-1 overflow-x-hidden px-4 pb-[104px] pt-4 sm:px-5 sm:pt-5 md:pb-8 lg:px-8 lg:pt-7">
+          <PageTransition routeKey={pathname}>{children}</PageTransition>
         </main>
       </div>
 

@@ -4,17 +4,17 @@ import { cn } from "@/lib/utils"
 
 /* ─── Card variants ──────────────────────────────────────────── */
 const cardVariants = cva(
-  "rounded-xl bg-card text-card-foreground",
+  "rounded-2xl bg-card text-card-foreground",
   {
     variants: {
       variant: {
-        default:     "border border-border/70 shadow-card",
+        default:     "border border-border/80",
         elevated:    "border border-border/80 shadow-brand-md",
-        interactive: "border border-border/80 shadow-card card-interactive cursor-pointer",
-        flush:       "border border-border/80 shadow-none",
-        ghost:       "bg-muted/40 border-0 shadow-none",
-        brand:       "bg-brand-blue text-white border-0 shadow-brand-md",
-        gold:        "bg-brand-gold text-white border-0 shadow-brand-sm",
+        interactive: "cursor-pointer border border-border/80 card-interactive",
+        flush:       "border border-border/80",
+        ghost:       "border-0 bg-muted/45",
+        brand:       "border-0 bg-brand-blue text-white",
+        gold:        "border-0 bg-brand-gold text-white",
         outline:     "border border-border bg-transparent shadow-none",
       },
     },
@@ -44,7 +44,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1 border-b border-border/70 p-4 sm:p-5", className)}
+    className={cn("flex flex-col gap-1.5 border-b border-border/70 p-5 sm:p-6", className)}
     {...props}
   />
 ))
@@ -58,7 +58,7 @@ const CardTitle = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "text-base font-semibold leading-snug tracking-tight font-exo2 [text-wrap:balance]",
+      "font-exo2 text-base font-bold leading-snug tracking-[-0.02em] [text-wrap:balance]",
       className
     )}
     {...props}
@@ -86,7 +86,7 @@ const CardContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("p-4 sm:p-5", className)}
+    className={cn("p-5 sm:p-6", className)}
     {...props}
   />
 ))
@@ -100,7 +100,7 @@ const CardFooter = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex items-center border-t border-border/70 p-4 sm:p-5 gap-2",
+      "flex items-center gap-2 border-t border-border/70 p-5 sm:p-6",
       className
     )}
     {...props}

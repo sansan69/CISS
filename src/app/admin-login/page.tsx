@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LogIn, HomeIcon, Loader2, BarChart3, Users, ShieldCheck } from 'lucide-react';
+import {
+  ArrowRight,
+  ChartBar,
+  House,
+  ShieldCheck,
+  SpinnerGap,
+  UsersThree,
+} from '@phosphor-icons/react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
@@ -215,14 +222,13 @@ export default function AdminLoginPage() {
           className="border border-border/70 bg-card/70 px-3 text-foreground shadow-brand-xs backdrop-blur hover:bg-muted"
         >
           <Link href="/">
-            <HomeIcon className="mr-2 h-4 w-4" /> Home
+            <House className="mr-2 h-4 w-4" /> Home
           </Link>
         </Button>
       </div>
 
       {/* Desktop brand panel */}
       <aside className="relative hidden overflow-hidden bg-brand-blue-darker text-white md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16">
-        <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_10%,rgba(189,156,85,0.3),transparent_28%),linear-gradient(120deg,transparent_55%,rgba(255,255,255,0.05)_55%,rgba(255,255,255,0.05)_56%,transparent_56%)]" />
         <div className="relative flex items-center gap-3 animate-slide-up">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
             <Image
@@ -259,13 +265,13 @@ export default function AdminLoginPage() {
           <div className="mt-8 space-y-3">
             <div className="flex items-center gap-3 text-sm text-white/80">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">
-                <Users className="h-4 w-4 text-accent" />
+                <UsersThree className="h-4 w-4 text-accent" weight="duotone" />
               </div>
               <span>Real-time guard rosters across every site</span>
             </div>
             <div className="flex items-center gap-3 text-sm text-white/80">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/15">
-                <BarChart3 className="h-4 w-4 text-accent" />
+                <ChartBar className="h-4 w-4 text-accent" weight="duotone" />
               </div>
               <span>Automated payroll with Kerala slab compliance</span>
             </div>
@@ -380,11 +386,11 @@ export default function AdminLoginPage() {
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...
+                      <SpinnerGap className="mr-2 h-4 w-4 animate-spin" /> Signing in...
                     </>
                   ) : (
                     <>
-                      <LogIn className="mr-2 h-4 w-4" /> Sign In
+                      Sign In <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}
                 </Button>

@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { authorizedFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
-import { CheckCircle2, Edit3, Eye, FileText, ImageIcon, MapPin, Calendar, Clock, User, Building2, Shield, AlertTriangle, ListChecks } from "lucide-react";
+import { CheckCircle as CheckCircle2, PencilSimple as Edit3, Eye, FileText, ImageIcon, MapPin, Calendar, Clock, User, Buildings as Building2, Shield, Warning as AlertTriangle, ListChecks } from "@phosphor-icons/react";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 
 const STATUS_CONFIG: Record<VisitReportStatus, { label: string; className: string }> = {

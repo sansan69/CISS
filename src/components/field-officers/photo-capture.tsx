@@ -4,7 +4,7 @@ import React, { useRef, useState } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage, auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
-import { Camera, User, ImageIcon, X, Loader2, FileText } from "lucide-react";
+import { Camera, User, ImageIcon, X, SpinnerGap as Loader2, FileText } from "@phosphor-icons/react";
 import { useToast } from "@/hooks/use-toast";
 
 const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-IN", {
