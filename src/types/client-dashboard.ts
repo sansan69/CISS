@@ -56,6 +56,9 @@ export type ClientDashboardVisitReportRow = {
   visitDate: string | null;
   createdAt: string | null;
   status: string;
+  reviewStatus: string;
+  clientStatus: string;
+  locationStatus: string;
   summary: string;
 };
 
@@ -67,6 +70,8 @@ export type ClientDashboardTrainingReportRow = {
   trainingDate: string | null;
   createdAt: string | null;
   status: string;
+  reviewStatus: string;
+  clientStatus: string;
   topic: string;
   attendeeCount: number;
 };

@@ -15,6 +15,7 @@ import { authorizedFetch } from "@/lib/api-client";
 import { Plus, FileText, CheckCircle as CheckCircle2, Eye, ImageIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
+import type { ReportAttachment } from "@/lib/reports/report-schema";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
 import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { VisitReportDetailSheet } from "@/components/field-officers/visit-report-detail-sheet";
@@ -29,6 +30,8 @@ const STATUS_CONFIG: Record<VisitReportStatus, { label: string; className: strin
   draft:     { label: "Draft",     className: "bg-gray-100 text-gray-600" },
   submitted: { label: "Submitted", className: "bg-amber-100 text-amber-700" },
   reviewed:  { label: "Reviewed",  className: "bg-green-100 text-green-700" },
+  superseded:{ label: "Superseded",className: "bg-slate-100 text-slate-600" },
+  archived:  { label: "Archived",  className: "bg-slate-100 text-slate-600" },
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -50,6 +53,12 @@ function isPdfUrl(url: string) {
   return decodeURIComponent(url).toLowerCase().includes(".pdf");
 }
 
+function optionalIso(value: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 async function reportErrorMessage(response: Response, fallback: string) {
   try {
     const data = await response.json();
@@ -64,6 +73,8 @@ export function VisitReportsPanel() {
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
   const isFo = userRole === "fieldOfficer";
+  const isClient = userRole === "client";
+  const visibleTabs = isClient ? TABS.filter((tab) => tab.key === "all" || tab.key === "submitted") : TABS;
   const { clients, isLoading: isLoadingClients } = useClients();
   const reportEndpoint = isFo ? "/api/field-officer/visit-reports" : "/api/admin/visit-reports";
 
@@ -80,11 +91,14 @@ export function VisitReportsPanel() {
   const [showPreview, setShowPreview] = useState(false);
   const [form, setForm] = useState({
     clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "",
+    visitStartedAt: "", visitEndedAt: "", visitPurpose: "", visitMode: "scheduled",
     guardsPresentCount: "", guardsAbsentCount: "", summary: "",
     issuesFound: "", actionsRequired: "", status: "draft" as VisitReportStatus,
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
-  const [visitLocation, setVisitLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [reportId, setReportId] = useState(() => crypto.randomUUID());
+  const [photoAttachments, setPhotoAttachments] = useState<ReportAttachment[]>([]);
+  const [visitLocation, setVisitLocation] = useState<NonNullable<ReportAttachment["captureLocation"]> | null>(null);
   const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
   const visibleSites = sites.filter((site) => {
     if (!isFo || assignedDistricts.length === 0) return true;
@@ -94,6 +108,19 @@ export function VisitReportsPanel() {
   // Review / Detail sheet
   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<FoVisitReport | null>(null);
+
+  const openDetail = async (report: FoVisitReport) => {
+    setSelectedReport(report);
+    setReviewSheetOpen(true);
+    try {
+      const response = await authorizedFetch(`/api/admin/visit-reports/${report.id}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.report) setSelectedReport(data.report as FoVisitReport);
+    } catch {
+      // The list record remains usable if attachment hydration is temporarily unavailable.
+    }
+  };
 
   const loadReports = useCallback(async (tab: Tab) => {
     setIsLoading(true);
@@ -134,13 +161,20 @@ export function VisitReportsPanel() {
     siteName: form.siteName,
     district: form.district,
     visitDate: form.visitDate,
+    visitStartedAt: optionalIso(form.visitStartedAt),
+    visitEndedAt: optionalIso(form.visitEndedAt),
+    visitPurpose: form.visitPurpose,
+    visitMode: form.visitMode,
     guardsPresentCount: parseInt(form.guardsPresentCount) || 0,
     guardsAbsentCount: parseInt(form.guardsAbsentCount) || 0,
     summary: form.summary,
     issuesFound: form.issuesFound,
     actionsRequired: form.actionsRequired,
     status: form.status,
-    photoUrls,
+    reportId,
+    submissionIdempotencyKey: `visit-submit-${reportId}`,
+    photoUrls: [],
+    attachments: photoAttachments.map(({ url: _url, ...item }) => item),
     visitLocation,
   });
 
@@ -168,8 +202,10 @@ export function VisitReportsPanel() {
       toast({ title: "Report created", description: "Visit report saved." });
       setNewSheetOpen(false);
       setShowPreview(false);
-      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "", guardsPresentCount: "", guardsAbsentCount: "", summary: "", issuesFound: "", actionsRequired: "", status: "draft" });
+      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", visitDate: "", visitStartedAt: "", visitEndedAt: "", visitPurpose: "", visitMode: "scheduled", guardsPresentCount: "", guardsAbsentCount: "", summary: "", issuesFound: "", actionsRequired: "", status: "draft" });
       setPhotoUrls([]);
+      setPhotoAttachments([]);
+      setReportId(crypto.randomUUID());
       setVisitLocation(null);
       loadReports(activeTab);
     } catch (error) {
@@ -187,7 +223,12 @@ export function VisitReportsPanel() {
     <div className="flex flex-col gap-6">
       {isFo && (
         <div className="flex justify-end">
-          <Button onClick={() => setNewSheetOpen(true)}>
+          <Button onClick={() => {
+            setReportId(crypto.randomUUID());
+            setPhotoAttachments([]);
+            setPhotoUrls([]);
+            setNewSheetOpen(true);
+          }}>
             <Plus className="mr-1.5 h-4 w-4" /> New Report
           </Button>
         </div>
@@ -232,7 +273,7 @@ export function VisitReportsPanel() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -263,10 +304,10 @@ export function VisitReportsPanel() {
       ) : (
         <div className="space-y-3">
           {reports.map((report) => {
-            const sc = STATUS_CONFIG[report.status];
+            const sc = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.submitted;
             return (
               <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4" onClick={() => { setSelectedReport(report); setReviewSheetOpen(true); }}>
+                <CardContent className="p-4" onClick={() => void openDetail(report)}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -294,7 +335,7 @@ export function VisitReportsPanel() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => { setSelectedReport(report); setReviewSheetOpen(true); }}
+                        onClick={() => void openDetail(report)}
                       >
                         <Eye className="h-3.5 w-3.5 mr-1" />
                         View
@@ -421,6 +462,51 @@ export function VisitReportsPanel() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label>Arrival time</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.visitStartedAt}
+                  onChange={(e) => setForm((f) => ({ ...f, visitStartedAt: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Departure time</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.visitEndedAt}
+                  onChange={(e) => setForm((f) => ({ ...f, visitEndedAt: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Visit type</Label>
+                <Select
+                  value={form.visitMode}
+                  onValueChange={(value) => setForm((f) => ({ ...f, visitMode: value }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="surprise">Surprise</SelectItem>
+                    <SelectItem value="follow_up">Follow-up</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Purpose</Label>
+                <Input
+                  value={form.visitPurpose}
+                  onChange={(e) => setForm((f) => ({ ...f, visitPurpose: e.target.value }))}
+                  placeholder="Routine inspection"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label>Guards Present</Label>
                 <Input
                   type="number"
@@ -477,6 +563,11 @@ export function VisitReportsPanel() {
                 urls={photoUrls}
                 onChange={setPhotoUrls}
                 folder="visitReports"
+                reportId={reportId}
+                reportType="visit"
+                category="visit_photo"
+                attachments={photoAttachments}
+                onAttachmentsChange={setPhotoAttachments}
                 accept="image/*,.pdf"
                 timestampImages
                 allowCamera={true}
@@ -495,6 +586,9 @@ export function VisitReportsPanel() {
                 fileTypeLabel="All image formats (JPG, PNG, HEIC, WEBP) and PDF files accepted. Photos include GPS location stamp."
                 disabled={isSubmitting}
               />
+              <p className="text-xs text-muted-foreground">
+                You may submit after leaving the site. Location is recorded when available but is not currently required.
+              </p>
             </div>
 
             <div className="space-y-1.5">

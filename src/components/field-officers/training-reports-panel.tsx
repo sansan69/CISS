@@ -15,6 +15,7 @@ import { authorizedFetch } from "@/lib/api-client";
 import { Plus, GraduationCap, CheckCircle as CheckCircle2, Eye, ImageIcon, FileText } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
+import type { ReportAttachment } from "@/lib/reports/report-schema";
 import { PhotoCapture } from "@/components/field-officers/photo-capture";
 import { hasSiteUploads, isSiteUploadRequired } from "@/components/field-officers/site-report-upload";
 import { TrainingReportDetailSheet } from "@/components/field-officers/training-report-detail-sheet";
@@ -29,6 +30,8 @@ const STATUS_CONFIG: Record<TrainingReportStatus, { label: string; className: st
   draft:        { label: "Draft",        className: "bg-gray-100 text-gray-600" },
   submitted:    { label: "Submitted",    className: "bg-amber-100 text-amber-700" },
   acknowledged: { label: "Acknowledged", className: "bg-green-100 text-green-700" },
+  superseded:   { label: "Superseded",   className: "bg-slate-100 text-slate-600" },
+  archived:     { label: "Archived",     className: "bg-slate-100 text-slate-600" },
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -50,6 +53,12 @@ function isPdfUrl(url: string) {
   return decodeURIComponent(url).toLowerCase().includes(".pdf");
 }
 
+function optionalIso(value: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 async function reportErrorMessage(response: Response, fallback: string) {
   try {
     const data = await response.json();
@@ -64,6 +73,8 @@ export function TrainingReportsPanel() {
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
   const isFo = userRole === "fieldOfficer";
+  const isClient = userRole === "client";
+  const visibleTabs = isClient ? TABS.filter((tab) => tab.key === "all" || tab.key === "submitted") : TABS;
   const { clients, isLoading: isLoadingClients } = useClients();
   const reportEndpoint = isFo ? "/api/field-officer/training-reports" : "/api/admin/training-reports";
 
@@ -79,13 +90,19 @@ export function TrainingReportsPanel() {
   const [showPreview, setShowPreview] = useState(false);
   const [form, setForm] = useState({
     clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "",
+    trainingStartedAt: "", trainingEndedAt: "", trainingVenue: "",
     durationMinutes: "60", topic: "", description: "", attendeeCount: "",
+    attendeeIds: "", moduleName: "", moduleVersion: "", trainerName: "",
+    learningObjectives: "", assessmentMethod: "", assessmentResult: "not_assessed",
     status: "draft" as TrainingReportStatus,
   });
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
   const [clientReportUrl, setClientReportUrl] = useState<string[]>([]);
-  const [visitLocation, setVisitLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [reportId, setReportId] = useState(() => crypto.randomUUID());
+  const [photoAttachments, setPhotoAttachments] = useState<ReportAttachment[]>([]);
+  const [signedReportAttachments, setSignedReportAttachments] = useState<ReportAttachment[]>([]);
+  const [visitLocation, setVisitLocation] = useState<NonNullable<ReportAttachment["captureLocation"]> | null>(null);
   const { sites, isLoading: isLoadingSites } = useSites(form.clientId, form.clientName);
   const visibleSites = sites.filter((site) => {
     if (!isFo || assignedDistricts.length === 0) return true;
@@ -94,6 +111,19 @@ export function TrainingReportsPanel() {
 
   const [detailReport, setDetailReport] = useState<FoTrainingReport | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+
+  const openDetail = async (report: FoTrainingReport) => {
+    setDetailReport(report);
+    setDetailSheetOpen(true);
+    try {
+      const response = await authorizedFetch(`/api/admin/training-reports/${report.id}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.report) setDetailReport(data.report as FoTrainingReport);
+    } catch {
+      // The list record remains usable if attachment hydration is temporarily unavailable.
+    }
+  };
 
   const loadReports = useCallback(async (tab: Tab) => {
     setIsLoading(true);
@@ -134,15 +164,27 @@ export function TrainingReportsPanel() {
     siteName: form.siteName,
     district: form.district,
     trainingDate: form.trainingDate,
+    trainingStartedAt: optionalIso(form.trainingStartedAt),
+    trainingEndedAt: optionalIso(form.trainingEndedAt),
+    trainingVenue: form.trainingVenue,
     durationMinutes: parseInt(form.durationMinutes) || 60,
     topic: form.topic,
+    moduleName: form.moduleName,
+    moduleVersion: form.moduleVersion,
+    trainerName: form.trainerName,
+    learningObjectives: form.learningObjectives,
     description: form.description,
     attendeeCount: parseInt(form.attendeeCount) || 0,
-    attendeeIds: [],
+    attendeeIds: form.attendeeIds.split(",").map((value) => value.trim()).filter(Boolean),
+    assessmentMethod: form.assessmentMethod,
+    assessmentResult: form.assessmentResult,
     status: form.status,
-    photoUrls,
+    reportId,
+    submissionIdempotencyKey: `training-submit-${reportId}`,
+    photoUrls: [],
     attachmentUrls,
-    clientReportUrl: clientReportUrl[0] ?? null,
+    attachments: [...photoAttachments, ...signedReportAttachments].map(({ url: _url, ...item }) => item),
+    clientReportUrl: null,
     visitLocation,
   });
 
@@ -179,10 +221,13 @@ export function TrainingReportsPanel() {
       });
       setNewSheetOpen(false);
       setShowPreview(false);
-      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "", status: "draft" });
+      setForm({ clientId: "", clientName: "", siteId: "", siteName: "", district: "", trainingDate: "", trainingStartedAt: "", trainingEndedAt: "", trainingVenue: "", durationMinutes: "60", topic: "", description: "", attendeeCount: "", attendeeIds: "", moduleName: "", moduleVersion: "", trainerName: "", learningObjectives: "", assessmentMethod: "", assessmentResult: "not_assessed", status: "draft" });
       setPhotoUrls([]);
       setAttachmentUrls([]);
       setClientReportUrl([]);
+      setPhotoAttachments([]);
+      setSignedReportAttachments([]);
+      setReportId(crypto.randomUUID());
       setVisitLocation(null);
       loadReports(activeTab);
     } catch (error) {
@@ -200,7 +245,14 @@ export function TrainingReportsPanel() {
     <div className="flex flex-col gap-6">
       {isFo && (
         <div className="flex justify-end">
-          <Button onClick={() => setNewSheetOpen(true)}>
+          <Button onClick={() => {
+            setReportId(crypto.randomUUID());
+            setPhotoAttachments([]);
+            setSignedReportAttachments([]);
+            setPhotoUrls([]);
+            setClientReportUrl([]);
+            setNewSheetOpen(true);
+          }}>
             <Plus className="mr-1.5 h-4 w-4" /> New Training Report
           </Button>
         </div>
@@ -245,7 +297,7 @@ export function TrainingReportsPanel() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -276,10 +328,10 @@ export function TrainingReportsPanel() {
       ) : (
         <div className="space-y-3">
           {reports.map((report) => {
-            const sc = STATUS_CONFIG[report.status];
+            const sc = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.submitted;
             return (
               <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4" onClick={() => { setDetailReport(report); setDetailSheetOpen(true); }}>
+                <CardContent className="p-4" onClick={() => void openDetail(report)}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -304,7 +356,7 @@ export function TrainingReportsPanel() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => { setDetailReport(report); setDetailSheetOpen(true); }}
+                        onClick={() => void openDetail(report)}
                       >
                         <Eye className="h-3.5 w-3.5 mr-1" /> View
                       </Button>
@@ -436,12 +488,116 @@ export function TrainingReportsPanel() {
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Start time</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.trainingStartedAt}
+                  onChange={(e) => setForm((f) => ({ ...f, trainingStartedAt: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>End time</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.trainingEndedAt}
+                  onChange={(e) => setForm((f) => ({ ...f, trainingEndedAt: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Attendee employee IDs</Label>
+              <Input
+                value={form.attendeeIds}
+                onChange={(e) => setForm((f) => ({ ...f, attendeeIds: e.target.value }))}
+                placeholder="Comma-separated employee IDs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Assessment method</Label>
+                <Input
+                  value={form.assessmentMethod}
+                  onChange={(e) => setForm((f) => ({ ...f, assessmentMethod: e.target.value }))}
+                  placeholder="Practical, oral, written"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assessment result</Label>
+                <Select
+                  value={form.assessmentResult}
+                  onValueChange={(value) => setForm((f) => ({ ...f, assessmentResult: value }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_assessed">Not assessed</SelectItem>
+                    <SelectItem value="passed">Passed</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="retraining_required">Retraining required</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Training venue</Label>
+              <Input
+                value={form.trainingVenue}
+                onChange={(e) => setForm((f) => ({ ...f, trainingVenue: e.target.value }))}
+                placeholder="Site classroom, guard room, online, etc."
+              />
+              <p className="text-xs text-muted-foreground">
+                The report may be uploaded from any location and at any time.
+              </p>
+            </div>
+
             <div className="space-y-1.5">
               <Label>Topic *</Label>
               <Input
                 value={form.topic}
                 onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
                 placeholder="e.g. Fire Safety Procedures"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Module</Label>
+                <Input
+                  value={form.moduleName}
+                  onChange={(e) => setForm((f) => ({ ...f, moduleName: e.target.value }))}
+                  placeholder="Module name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Module version</Label>
+                <Input
+                  value={form.moduleVersion}
+                  onChange={(e) => setForm((f) => ({ ...f, moduleVersion: e.target.value }))}
+                  placeholder="e.g. 2026.1"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Trainer</Label>
+              <Input
+                value={form.trainerName}
+                onChange={(e) => setForm((f) => ({ ...f, trainerName: e.target.value }))}
+                placeholder="Trainer / field officer name"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Learning objectives</Label>
+              <Textarea
+                rows={2}
+                value={form.learningObjectives}
+                onChange={(e) => setForm((f) => ({ ...f, learningObjectives: e.target.value }))}
+                placeholder="What guards should know or demonstrate after the session"
               />
             </div>
 
@@ -485,6 +641,11 @@ export function TrainingReportsPanel() {
                 urls={photoUrls}
                 onChange={setPhotoUrls}
                 folder="trainingReports"
+                reportId={reportId}
+                reportType="training"
+                category="training_photo"
+                attachments={photoAttachments}
+                onAttachmentsChange={setPhotoAttachments}
                 accept="image/*,.pdf"
                 timestampImages
                 allowCamera={true}
@@ -516,6 +677,11 @@ export function TrainingReportsPanel() {
                 urls={clientReportUrl}
                 onChange={setClientReportUrl}
                 folder="trainingReportFiles"
+                reportId={reportId}
+                reportType="training"
+                category="signed_report"
+                attachments={signedReportAttachments}
+                onAttachmentsChange={setSignedReportAttachments}
                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
                 maxPhotos={1}
                 allowCamera={false}

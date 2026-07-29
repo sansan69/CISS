@@ -1,116 +1,53 @@
 import { NextResponse } from "next/server";
+import type FirebaseFirestore from "@google-cloud/firestore";
+
 import {
   hasAdminAccess,
   hasClientAccess,
   hasFieldOfficerAccess,
-  requireAdminOrFieldOfficer,
   verifyRequestAuth,
   unauthorizedResponse,
-  type AppDecodedToken,
 } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { districtMatches } from "@/lib/districts";
-import type FirebaseFirestore from "@google-cloud/firestore";
+import {
+  firstZodError,
+  isClientVisibleReport,
+  REPORT_SCHEMA_VERSION,
+  trainingReportInputSchema,
+} from "@/lib/reports/report-schema";
+import {
+  canFieldOfficerUseReportDistrict,
+  getFieldOfficerReportProfile,
+  reportCreatedAtMillis,
+  reportMatchesAdminScope,
+  resolveReportSite,
+  serializeReport,
+  serializeReportDate,
+} from "@/lib/reports/report-server";
+import { validateReportAttachments } from "@/lib/reports/report-attachments.server";
+
 export const runtime = "nodejs";
 
-type FieldOfficerProfile = {
-  name: string;
-  stateCode: string;
-  assignedDistricts: string[];
-};
-
-type SiteSnapshotData = {
-  id: string;
-  clientId: string;
-  clientName: string;
-  siteName: string;
-  district: string;
-};
-
-function serializeDate(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") return value;
-  if (value instanceof Date) return value.toISOString();
-  if (typeof (value as { toDate?: unknown }).toDate === "function") {
-    return (value as { toDate(): Date }).toDate().toISOString();
-  }
-  if (typeof (value as { seconds?: unknown }).seconds === "number") {
-    return new Date((value as { seconds: number }).seconds * 1000).toISOString();
-  }
-  if (typeof (value as { _seconds?: unknown })._seconds === "number") {
-    return new Date((value as { _seconds: number })._seconds * 1000).toISOString();
-  }
-  return null;
-}
-
-function createdAtMillis(report: Record<string, unknown>) {
-  const iso = serializeDate(report.createdAt) ?? serializeDate(report.trainingDate);
-  return iso ? new Date(iso).getTime() : 0;
-}
-
-function serializeReport(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot): Record<string, unknown> {
-  const data = doc.data() ?? {};
-  return {
-    id: doc.id,
-    ...data,
-    trainingDate: serializeDate(data.trainingDate),
-    createdAt: serializeDate(data.createdAt),
-    acknowledgedAt: serializeDate(data.acknowledgedAt),
-  };
-}
-
-async function getFieldOfficerProfile(
-  adminDb: FirebaseFirestore.Firestore,
-  decoded: AppDecodedToken,
-): Promise<FieldOfficerProfile> {
-  let name = decoded.name ?? decoded.email ?? "";
-  let stateCode = decoded.stateCode ?? "KL";
-  let assignedDistricts = Array.isArray(decoded.assignedDistricts) ? decoded.assignedDistricts : [];
-
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!foSnapshot.empty) {
-    const foData = foSnapshot.docs[0].data();
-    name = typeof foData.name === "string" ? foData.name : name;
-    stateCode = typeof foData.stateCode === "string" ? foData.stateCode : stateCode;
-    assignedDistricts = Array.isArray(foData.assignedDistricts)
-      ? foData.assignedDistricts.filter((district): district is string => typeof district === "string")
-      : assignedDistricts;
-  }
-
-  return { name, stateCode, assignedDistricts };
-}
-
-async function resolveSite(
-  adminDb: FirebaseFirestore.Firestore,
-  siteId?: string,
-): Promise<SiteSnapshotData | null> {
-  if (!siteId) return null;
-  const snap = await adminDb.collection("sites").doc(siteId).get();
-  if (!snap.exists) return null;
-  const data = snap.data() ?? {};
-  return {
-    id: snap.id,
-    clientId: typeof data.clientId === "string" ? data.clientId : "",
-    clientName: typeof data.clientName === "string" ? data.clientName : "",
-    siteName: typeof data.siteName === "string" ? data.siteName : "",
-    district: typeof data.district === "string" ? data.district : "",
-  };
-}
-
-function canFieldOfficerUseDistrict(profile: FieldOfficerProfile, district?: string) {
-  if (!district) return true;
-  if (profile.assignedDistricts.length === 0) return true;
-  return profile.assignedDistricts.some((assigned) => districtMatches(assigned, district));
+function reportLocationStatus(
+  location: { lat: number; lng: number } | null | undefined,
+  site: Awaited<ReturnType<typeof resolveReportSite>>,
+) {
+  if (!location) return "not_captured";
+  if (site?.latitude === null || site?.longitude === null || !site) return "captured_off_site";
+  return "captured_off_site";
 }
 
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
+    const isAdmin = hasAdminAccess(decoded);
+    const isClient = hasClientAccess(decoded);
+    const isFieldOfficer = hasFieldOfficerAccess(decoded);
+    if (!isAdmin && !isClient && !isFieldOfficer) {
+      return unauthorizedResponse("Report access is not available for this role.", 403);
+    }
+
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
@@ -119,144 +56,198 @@ export async function GET(request: Request) {
     const district = url.searchParams.get("district");
     const startDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
-    const isAdmin = hasAdminAccess(decoded);
-    const isClient = hasClientAccess(decoded);
-
-    let q = adminDb.collection("foTrainingReports") as FirebaseFirestore.Query;
-
-    if (isClient) {
-      q = q.orderBy("createdAt", "desc");
-    } else if (!isAdmin) {
-      q = q.where("fieldOfficerId", "==", decoded.uid);
-    } else if (fieldOfficerId) {
-      q = q.where("fieldOfficerId", "==", fieldOfficerId);
-    } else {
-      q = q.orderBy("createdAt", "desc");
-    }
-
-    const snapshot = await q.limit(isAdmin ? 500 : 300).get();
     const clientScope = isClient ? await resolveClientScope(adminDb, decoded) : null;
+
     if (isClient && !clientScope) {
       return unauthorizedResponse("Client account is not linked to a valid client profile.", 403);
     }
+    if (isClient && status === "draft") {
+      return NextResponse.json({ reports: [], nextCursor: null });
+    }
 
+    let query = adminDb.collection("foTrainingReports") as FirebaseFirestore.Query;
+    if (isClient && clientScope) {
+      query = query.where("clientId", "==", clientScope.clientId).orderBy("createdAt", "desc");
+    } else if (isFieldOfficer) {
+      query = query.where("fieldOfficerId", "==", decoded.uid).orderBy("createdAt", "desc");
+    } else if (decoded.role !== "superAdmin") {
+      query = query.where("stateCode", "==", decoded.stateCode || "KL").orderBy("createdAt", "desc");
+    } else if (fieldOfficerId) {
+      query = query.where("fieldOfficerId", "==", fieldOfficerId).orderBy("createdAt", "desc");
+    } else {
+      query = query.orderBy("createdAt", "desc");
+    }
+
+    const snapshot = await query.limit(250).get();
     const reports = snapshot.docs
-      .map((d) => serializeReport(d))
+      .map((doc) => serializeReport(doc, "trainingDate"))
       .filter((report) => !clientScope || matchesClientScope(report, clientScope))
-      .filter((report) => !status || report.status === status)
+      .filter((report) => !isClient || isClientVisibleReport(report))
+      .filter((report) => !isAdmin || reportMatchesAdminScope(report, decoded))
+      .filter((report) => !status || report.status === status || report.reviewStatus === status)
       .filter((report) => !clientId || report.clientId === clientId)
       .filter((report) => !district || districtMatches(String(report.district ?? ""), district))
       .filter((report) => {
         if (!startDate && !endDate) return true;
-        const dateStr = serializeDate((report as Record<string, unknown>).trainingDate);
-        if (!dateStr) return false;
-        const d = dateStr.slice(0, 10); // YYYY-MM-DD
-        if (startDate && d < startDate) return false;
-        if (endDate && d > endDate) return false;
-        return true;
+        const date = serializeReportDate(report.trainingDate)?.slice(0, 10);
+        if (!date) return false;
+        return (!startDate || date >= startDate) && (!endDate || date <= endDate);
       })
-      .sort((left, right) => createdAtMillis(right) - createdAtMillis(left))
+      .sort(
+        (left, right) =>
+          reportCreatedAtMillis(right, "trainingDate") -
+          reportCreatedAtMillis(left, "trainingDate"),
+      )
       .slice(0, 200);
-    return NextResponse.json({ reports });
+
+    const readerReports = isClient
+      ? reports.map((report) => ({ ...report, reviewNotes: undefined, reviewedBy: undefined }))
+      : reports;
+    return NextResponse.json({ reports: readerReports, nextCursor: null });
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return unauthorizedResponse(msg);
+    const message = error instanceof Error ? error.message : "Could not load training reports.";
+    return unauthorizedResponse(message);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
+    const decoded = await verifyRequestAuth(request);
+    if (!hasFieldOfficerAccess(decoded)) {
+      return unauthorizedResponse("Field officer access required.", 403);
+    }
+
+    const parsed = trainingReportInputSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: firstZodError(parsed.error) }, { status: 400 });
+    }
+    const body = parsed.data;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
+    const profile = await getFieldOfficerReportProfile(adminDb, decoded);
+    const site = await resolveReportSite(adminDb, body.siteId);
 
-    const body = (await request.json()) as {
-      clientId?: string;
-      clientName?: string;
-      siteId?: string;
-      siteName?: string;
-      district?: string;
-      trainingDate?: string;
-      durationMinutes?: number;
-      topic?: string;
-      description?: string;
-      attendeeIds?: string[];
-      attendeeCount?: number;
-      status?: string;
-      photoUrls?: string[];
-      attachmentUrls?: string[];
-      clientReportUrl?: string;
-      visitLocation?: { lat: number; lng: number };
-    };
-
-    if (!body.clientId || !body.trainingDate || !body.topic) {
-      return NextResponse.json({ error: "clientId, trainingDate, and topic are required." }, { status: 400 });
+    if (body.status === "submitted" && !site) {
+      return NextResponse.json({ error: "Select a valid site before submitting." }, { status: 400 });
+    }
+    if (site?.clientId && site.clientId !== body.clientId) {
+      return NextResponse.json(
+        { error: "The selected site does not belong to the selected client." },
+        { status: 400 },
+      );
     }
 
-    // Validate training date format
-    const parsedDate = new Date(body.trainingDate);
-    if (isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ error: "trainingDate must be a valid date." }, { status: 400 });
-    }
-
-    if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
-      return NextResponse.json({ error: "Field officer or admin access required." }, { status: 403 });
-    }
-
-    const profile = await getFieldOfficerProfile(adminDb, decoded);
-    const site = await resolveSite(adminDb, body.siteId);
     const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
-    const status = body.status ?? "submitted";
-
-    // Training reports require at least 1 photo when submitting
-    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 1)) {
+    if (!canFieldOfficerUseReportDistrict(profile, reportDistrict)) {
+      return NextResponse.json({ error: "This site is outside your assigned districts." }, { status: 403 });
+    }
+    const trainingPhotoCount =
+      body.photoUrls.length +
+      body.attachments.filter((item) => item.category === "training_photo").length;
+    if (body.status === "submitted" && trainingPhotoCount < 1) {
       return NextResponse.json(
         { error: "At least one training session photo is required before submitting." },
         { status: 400 },
       );
     }
-
-    const hasClientReport = (body.clientReportUrl && body.clientReportUrl.trim()) !== "";
-    if (status === "submitted" && !hasClientReport) {
+    const hasSignedReport =
+      Boolean(body.clientReportUrl?.trim()) ||
+      body.attachments.some((item) => item.category === "signed_report");
+    if (body.status === "submitted" && !hasSignedReport) {
       return NextResponse.json(
         { error: "A client-signed training report is required before submitting." },
         { status: 400 },
       );
     }
 
-    if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
+    const collection = adminDb.collection("foTrainingReports");
+    const reportRef = body.reportId ? collection.doc(body.reportId) : collection.doc();
+    if (body.attachments.length > 0 && !body.reportId) {
       return NextResponse.json(
-        { error: "This site is outside your assigned districts." },
-        { status: 403 },
+        { error: "A report identifier is required for secure attachments." },
+        { status: 400 },
       );
     }
-
-    const docRef = await adminDb.collection("foTrainingReports").add({
+    if (body.reportId && body.attachments.length > 0) {
+      await validateReportAttachments({
+        attachments: body.attachments,
+        reportType: "training",
+        reportId: body.reportId,
+        uid: decoded.uid,
+      });
+    }
+    const eventRef = adminDb.collection("foReportEvents").doc();
+    const now = FieldValue.serverTimestamp();
+    const submitted = body.status === "submitted";
+    const reportData = {
+      ...body,
+      reportType: "training",
+      schemaVersion: REPORT_SCHEMA_VERSION,
+      revisionNumber: 1,
       fieldOfficerId: decoded.uid,
       fieldOfficerName: profile.name,
-      stateCode: profile.stateCode,
+      fieldOfficerSnapshot: {
+        uid: decoded.uid,
+        name: profile.name,
+        stateCode: profile.stateCode,
+      },
+      stateCode: site?.stateCode || profile.stateCode,
       district: reportDistrict,
       clientId: site?.clientId || body.clientId,
       clientName: site?.clientName || body.clientName || "",
       siteId: site?.id || body.siteId || "",
       siteName: site?.siteName || body.siteName || "",
+      siteSnapshot: site,
       trainingDate: new Date(body.trainingDate),
-      durationMinutes: body.durationMinutes ?? 60,
-      topic: body.topic,
-      description: body.description ?? "",
-      attendeeIds: body.attendeeIds ?? [],
-      attendeeCount: body.attendeeCount ?? 0,
-      photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
-      attachmentUrls: Array.isArray(body.attachmentUrls) ? body.attachmentUrls : [],
-      clientReportUrl: body.clientReportUrl ?? null,
-      visitLocation: body.visitLocation ?? null,
-      status,
-      createdAt: FieldValue.serverTimestamp(),
+      trainingStartedAt: body.trainingStartedAt ? new Date(body.trainingStartedAt) : null,
+      trainingEndedAt: body.trainingEndedAt ? new Date(body.trainingEndedAt) : null,
+      locationStatus: reportLocationStatus(body.visitLocation, site),
+      reviewStatus: "unreviewed",
+      clientStatus: submitted ? "unseen" : null,
+      visibility: submitted ? "client_visible" : "private_draft",
+      submittedAt: submitted ? now : null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await adminDb.runTransaction(async (transaction) => {
+      const existing = await transaction.get(reportRef);
+      if (existing.exists) {
+        const data = existing.data() ?? {};
+        if (
+          body.submissionIdempotencyKey &&
+          data.submissionIdempotencyKey === body.submissionIdempotencyKey &&
+          data.fieldOfficerId === decoded.uid
+        ) {
+          return;
+        }
+        throw new Error("A report with this identifier already exists.");
+      }
+      transaction.create(reportRef, reportData);
+      transaction.create(eventRef, {
+        reportId: reportRef.id,
+        reportType: "training",
+        revisionNumber: 1,
+        action: submitted ? "submitted" : "draft_created",
+        actorId: decoded.uid,
+        actorRole: "fieldOfficer",
+        stateCode: site?.stateCode || profile.stateCode,
+        clientId: site?.clientId || body.clientId,
+        eventAt: now,
+      });
     });
 
-    return NextResponse.json({ id: docRef.id }, { status: 201 });
+    return NextResponse.json(
+      {
+        id: reportRef.id,
+        status: body.status,
+        visibility: submitted ? "client_visible" : "private_draft",
+      },
+      { status: 201 },
+    );
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return unauthorizedResponse(msg);
+    const message = error instanceof Error ? error.message : "Could not save training report.";
+    const status = message.includes("already exists") ? 409 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

@@ -25,6 +25,19 @@ class FakeDocRef {
       data: () => data ?? {},
     };
   }
+
+  async create(data: Record<string, unknown>) {
+    if (this.store.getDoc(this.collectionName, this.id)) {
+      throw new Error("already exists");
+    }
+    this.store.seed(this.collectionName, this.id, data);
+  }
+
+  async update(data: Record<string, unknown>) {
+    const current = this.store.getDoc(this.collectionName, this.id);
+    if (!current) throw new Error("not found");
+    this.store.seed(this.collectionName, this.id, { ...current, ...data });
+  }
 }
 
 class FakeQuery {
@@ -62,8 +75,12 @@ class FakeQuery {
 }
 
 class FakeCollectionRef extends FakeQuery {
-  doc(id: string) {
-    return new FakeDocRef(this.store, this.collectionName, id);
+  doc(id?: string) {
+    return new FakeDocRef(
+      this.store,
+      this.collectionName,
+      id ?? `${this.collectionName}-${this.store.listDocs(this.collectionName).length + 1}`,
+    );
   }
 
   async add(data: Record<string, unknown>) {
@@ -85,6 +102,36 @@ class FakeFirestore {
 
   collection(name: string) {
     return new FakeCollectionRef(this, name);
+  }
+
+  async runTransaction(
+    callback: (transaction: {
+      get(ref: FakeDocRef): ReturnType<FakeDocRef["get"]>;
+      create(ref: FakeDocRef, data: Record<string, unknown>): void;
+      update(ref: FakeDocRef, data: Record<string, unknown>): void;
+    }) => Promise<void>,
+  ) {
+    const pending: Array<{
+      operation: "create" | "update";
+      ref: FakeDocRef;
+      data: Record<string, unknown>;
+    }> = [];
+    await callback({
+      get: (ref) => ref.get(),
+      create: (ref, data) => {
+        pending.push({ operation: "create", ref, data });
+      },
+      update: (ref, data) => {
+        pending.push({ operation: "update", ref, data });
+      },
+    });
+    for (const write of pending) {
+      if (write.operation === "create") {
+        await write.ref.create(write.data);
+      } else {
+        await write.ref.update(write.data);
+      }
+    }
   }
 
   getDoc(collectionName: string, id: string) {
@@ -252,8 +299,10 @@ describe("field officer report submission", () => {
           topic: "Safety briefing",
           durationMinutes: 60,
           attendeeCount: 12,
+          status: "submitted",
           photoUrls: ["https://example.com/training-1.jpg", "https://example.com/training-2.jpg", "https://example.com/training-3.jpg"],
           attachmentUrls: ["https://example.com/training-report.pdf"],
+          clientReportUrl: "https://example.com/client-signed-training-report.pdf",
         }),
       }),
     );
@@ -271,5 +320,115 @@ describe("field officer report submission", () => {
         }),
       }),
     ]);
+  });
+
+  it("keeps submitted visit reports immutable", async () => {
+    const db = new FakeFirestore();
+    db.seed("foVisitReports", "visit-1", {
+      fieldOfficerId: "fo-1",
+      clientId: "client-1",
+      siteId: "site-1",
+      stateCode: "KL",
+      district: "Ernakulam",
+      visitDate: new Date("2026-05-25"),
+      summary: "Original submitted account.",
+      photoUrls: ["https://example.com/visit.jpg"],
+      status: "submitted",
+      visibility: "client_visible",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "fo-1", role: "fieldOfficer" });
+
+    const { PATCH } = await import("../admin/visit-reports/[id]/route");
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/visit-reports/visit-1", {
+        method: "PATCH",
+        body: JSON.stringify({ summary: "Changed after submission." }),
+      }),
+      { params: Promise.resolve({ id: "visit-1" }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(db.getDoc("foVisitReports", "visit-1")?.summary).toBe(
+      "Original submitted account.",
+    );
+  });
+
+  it("revalidates required evidence when a visit draft is submitted", async () => {
+    const db = new FakeFirestore();
+    db.seed("foVisitReports", "visit-draft", {
+      fieldOfficerId: "fo-1",
+      clientId: "client-1",
+      siteId: "site-1",
+      stateCode: "KL",
+      district: "Ernakulam",
+      visitDate: new Date("2026-05-25"),
+      summary: "Draft without evidence.",
+      guardsPresentCount: 2,
+      guardsAbsentCount: 0,
+      photoUrls: [],
+      attachmentUrls: [],
+      status: "draft",
+      visibility: "private_draft",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "fo-1", role: "fieldOfficer" });
+
+    const { PATCH } = await import("../admin/visit-reports/[id]/route");
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/visit-reports/visit-draft", {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "submitted",
+          submissionIdempotencyKey: "submit-visit-draft-1",
+        }),
+      }),
+      { params: Promise.resolve({ id: "visit-draft" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.getDoc("foVisitReports", "visit-draft")?.status).toBe("draft");
+  });
+
+  it("creates a private immutable revision draft from a submitted report", async () => {
+    const db = new FakeFirestore();
+    db.seed("foVisitReports", "visit-current", {
+      fieldOfficerId: "fo-1",
+      clientId: "client-1",
+      siteId: "site-1",
+      stateCode: "KL",
+      district: "Ernakulam",
+      visitDate: new Date("2026-05-25"),
+      summary: "Submitted visit.",
+      photoUrls: ["https://example.com/visit.jpg"],
+      status: "submitted",
+      visibility: "client_visible",
+      reviewStatus: "revision_requested",
+      revisionNumber: 1,
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "fo-1", role: "fieldOfficer" });
+
+    const { POST } = await import("../admin/visit-reports/[id]/revisions/route");
+    const response = await POST(
+      new Request("http://localhost/api/admin/visit-reports/visit-current/revisions", {
+        method: "POST",
+      }),
+      { params: Promise.resolve({ id: "visit-current" }) },
+    );
+
+    expect(response.status).toBe(201);
+    const revisions = db
+      .listDocs("foVisitReports")
+      .filter((row) => row.id !== "visit-current");
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0].data).toEqual(
+      expect.objectContaining({
+        status: "draft",
+        visibility: "private_draft",
+        previousRevisionId: "visit-current",
+        revisionNumber: 2,
+      }),
+    );
   });
 });

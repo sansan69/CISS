@@ -456,7 +456,9 @@ export function ClientOperationsDashboard() {
                           {report.fieldOfficerName} · {report.district || "District pending"}
                         </p>
                       </div>
-                      <Badge variant={report.status === "reviewed" ? "active" : "outline"}>{report.status}</Badge>
+                      <Badge variant={report.clientStatus === "acknowledged" ? "active" : "outline"}>
+                        {report.clientStatus === "acknowledged" ? "Acknowledged" : "New report"}
+                      </Badge>
                     </div>
                     <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{report.summary}</p>
                     <p className="mt-2 text-[11px] text-muted-foreground">{formatDateOnly(report.visitDate || report.createdAt)}</p>
@@ -496,7 +498,9 @@ export function ClientOperationsDashboard() {
                           {report.siteName || "Site"} · {report.attendeeCount} attendees
                         </p>
                       </div>
-                      <Badge variant={report.status === "acknowledged" ? "active" : "outline"}>{report.status}</Badge>
+                      <Badge variant={report.clientStatus === "acknowledged" ? "active" : "outline"}>
+                        {report.clientStatus === "acknowledged" ? "Acknowledged" : "New report"}
+                      </Badge>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {report.fieldOfficerName} · {formatDateOnly(report.trainingDate || report.createdAt)}

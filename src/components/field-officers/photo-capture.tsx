@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { deleteObject, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage, auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Camera, User, ImageIcon, X, SpinnerGap as Loader2, FileText } from "@phosphor-icons/react";
 import { useToast } from "@/hooks/use-toast";
+import type { ReportAttachment } from "@/lib/reports/report-schema";
 
 const INDIA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
@@ -34,10 +35,32 @@ interface PhotoCaptureProps {
   /** Capture device GPS location and include in timestamp overlay */
   captureLocation?: boolean;
   /** Called with GPS coordinates after they are captured */
-  onLocationCaptured?: (pos: { lat: number; lng: number } | null) => void;
+  onLocationCaptured?: (pos: {
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+    capturedAt?: string;
+  } | null) => void;
+  reportId?: string;
+  reportType?: "visit" | "training";
+  category?: ReportAttachment["category"];
+  attachments?: ReportAttachment[];
+  onAttachmentsChange?: (attachments: ReportAttachment[]) => void;
 }
 
-async function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+async function fileSha256(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function getCurrentPosition(): Promise<{
+  lat: number;
+  lng: number;
+  accuracyMeters: number;
+  capturedAt: string;
+} | null> {
   if (typeof navigator === 'undefined' || !navigator.geolocation) return null;
   try {
     const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -48,8 +71,10 @@ async function getCurrentPosition(): Promise<{ lat: number; lng: number } | null
       });
     });
     return {
-      lat: Math.round(pos.coords.latitude * 10000) / 10000,
-      lng: Math.round(pos.coords.longitude * 10000) / 10000,
+      lat: Math.round(pos.coords.latitude * 1000000) / 1000000,
+      lng: Math.round(pos.coords.longitude * 1000000) / 1000000,
+      accuracyMeters: Math.round(pos.coords.accuracy),
+      capturedAt: new Date(pos.timestamp).toISOString(),
     };
   } catch {
     return null;
@@ -166,6 +191,11 @@ export function PhotoCapture({
   fileTypeLabel = "JPG, PNG, PDF allowed.",
   captureLocation = false,
   onLocationCaptured,
+  reportId,
+  reportType,
+  category,
+  attachments = [],
+  onAttachmentsChange,
 }: PhotoCaptureProps) {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
@@ -193,6 +223,7 @@ export function PhotoCapture({
 
     setUploading(true);
     const added: string[] = [];
+    const addedAttachments: ReportAttachment[] = [];
     const errors: string[] = [];
 
     // Capture GPS location once for all photos in this batch (if enabled)
@@ -203,14 +234,57 @@ export function PhotoCapture({
     try {
       for (const file of Array.from(files).slice(0, slotsLeft)) {
         try {
+          if (file.size > 15 * 1024 * 1024) {
+            throw new Error(`${file.name} exceeds the 15 MB limit.`);
+          }
           const timestamp = Date.now();
-          const uploadFile = timestampImages
+          const uploadFile = timestampImages && file.type.startsWith("image/")
             ? await createTimestampedPhoto(file, stampTitle, stampLines, locationLines)
             : file;
-          const path = `foReports/${folder}/${user.uid}/${timestamp}_${uploadFile.name.replace(/\s+/g, "_")}`;
+          const secureUpload = Boolean(
+            reportId && reportType && category && onAttachmentsChange,
+          );
+          const attachmentId = crypto.randomUUID();
+          const extension = uploadFile.name.includes(".")
+            ? uploadFile.name.slice(uploadFile.name.lastIndexOf(".")).toLowerCase().replace(/[^a-z0-9.]/g, "")
+            : "";
+          const path = secureUpload
+            ? `foReports/${reportType}/${user.uid}/${reportId}/${attachmentId}${extension}`
+            : `foReports/${folder}/${user.uid}/${timestamp}_${uploadFile.name.replace(/\s+/g, "_")}`;
+          const sha256 = await fileSha256(uploadFile);
           const snap = await uploadBytes(ref(storage, path), uploadFile, {
             contentType: uploadFile.type || undefined,
+            customMetadata: secureUpload
+              ? {
+                  reportId: reportId!,
+                  uploaderId: user.uid,
+                  attachmentId,
+                  category: category!,
+                  sha256,
+                  originalName: uploadFile.name.slice(0, 255),
+                }
+              : undefined,
           });
+          if (secureUpload) {
+            const uploadedAt = new Date().toISOString();
+            const attachment: ReportAttachment = {
+              id: attachmentId,
+              storagePath: snap.ref.fullPath,
+              category: category!,
+              originalName: uploadFile.name.slice(0, 255),
+              contentType: uploadFile.type || "application/octet-stream",
+              size: uploadFile.size,
+              sha256,
+              uploadedAt,
+              captureLocation: pos
+                ? { ...pos, capturedAt: uploadedAt }
+                : undefined,
+              url: URL.createObjectURL(uploadFile),
+            };
+            addedAttachments.push(attachment);
+            added.push(attachment.url!);
+            continue;
+          }
           // Retry getDownloadURL up to 3 times (transient token/network issues)
           let url: string | null = null;
           for (let attempt = 0; attempt < 3; attempt++) {
@@ -232,6 +306,9 @@ export function PhotoCapture({
       if (added.length > 0) {
         onChange([...urls, ...added]);
       }
+      if (addedAttachments.length > 0 && onAttachmentsChange) {
+        onAttachmentsChange([...attachments, ...addedAttachments]);
+      }
       if (errors.length > 0) {
         toast({
           title: errors.length === 1 ? "1 file failed" : `${errors.length} files failed`,
@@ -247,7 +324,24 @@ export function PhotoCapture({
     }
   };
 
-  const remove = (i: number) => onChange(urls.filter((_, idx) => idx !== i));
+  const remove = async (i: number) => {
+    const attachment = attachments[i];
+    if (attachment && onAttachmentsChange) {
+      try {
+        await deleteObject(ref(storage, attachment.storagePath));
+      } catch (error) {
+        console.error("Could not remove draft attachment:", error);
+        toast({
+          title: "Could not remove file",
+          description: "Please retry before submitting the report.",
+          variant: "destructive",
+        });
+        return;
+      }
+      onAttachmentsChange(attachments.filter((_, index) => index !== i));
+    }
+    onChange(urls.filter((_, idx) => idx !== i));
+  };
   const isPdfUrl = (url: string) => decodeURIComponent(url).toLowerCase().includes(".pdf");
 
   const canAdd = !disabled && !uploading && urls.length < maxPhotos;

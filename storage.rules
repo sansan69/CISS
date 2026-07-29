@@ -54,6 +54,39 @@ service firebase.storage {
       return isSignedIn() && request.auth.token.role == 'fieldOfficer';
     }
 
+    function reportIsDraftOrNotCreated(reportType, reportId) {
+      return (
+        reportType == 'visit' &&
+        (
+          !firestore.exists(/databases/(default)/documents/foVisitReports/$(reportId)) ||
+          firestore.get(/databases/(default)/documents/foVisitReports/$(reportId)).data.status == 'draft'
+        )
+      ) || (
+        reportType == 'training' &&
+        (
+          !firestore.exists(/databases/(default)/documents/foTrainingReports/$(reportId)) ||
+          firestore.get(/databases/(default)/documents/foTrainingReports/$(reportId)).data.status == 'draft'
+        )
+      );
+    }
+
+    // Report-bound private evidence. Reads are issued by the authenticated
+    // application as short-lived signed URLs after report-scope authorization.
+    match /foReports/{reportType}/{uid}/{reportId}/{fileName} {
+      allow read: if false;
+      allow create: if isFieldOfficer()
+        && request.auth.uid == uid
+        && (reportType == 'visit' || reportType == 'training')
+        && isAllowedEnrollmentImageSize()
+        && isDocument()
+        && request.resource.metadata.reportId == reportId
+        && request.resource.metadata.uploaderId == uid;
+      allow delete: if isFieldOfficer()
+        && request.auth.uid == uid
+        && reportIsDraftOrNotCreated(reportType, reportId);
+      allow update: if false;
+    }
+
     // F-01: Field officer report photo uploads — only admin or field officer can read
     match /foReports/{folder}/{uid}/{fileName} {
       allow read: if isAdmin() || isFieldOfficer();

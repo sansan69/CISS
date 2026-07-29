@@ -8,6 +8,7 @@ import {
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { resolveSiteDutyPoints, resolveSiteShift } from "@/lib/shift-utils";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
+import { isClientVisibleReport } from "@/lib/reports/report-schema";
 import type {
   ClientDashboardDutyPointSnapshot,
   ClientDashboardGuardHighlight,
@@ -132,10 +133,10 @@ export async function GET(request: Request) {
       ? adminDb.collection("sites").where("clientId", "==", scope.clientId).get()
       : adminDb.collection("sites").where("clientName", "==", scope.clientName).get();
     const visitReportsPromise = scope.clientId
-      ? adminDb.collection("foVisitReports").where("clientId", "==", scope.clientId).limit(80).get()
+      ? adminDb.collection("foVisitReports").where("clientId", "==", scope.clientId).orderBy("createdAt", "desc").limit(80).get()
       : adminDb.collection("foVisitReports").where("clientName", "==", scope.clientName).limit(80).get();
     const trainingReportsPromise = scope.clientId
-      ? adminDb.collection("foTrainingReports").where("clientId", "==", scope.clientId).limit(80).get()
+      ? adminDb.collection("foTrainingReports").where("clientId", "==", scope.clientId).orderBy("createdAt", "desc").limit(80).get()
       : adminDb.collection("foTrainingReports").where("clientName", "==", scope.clientName).limit(80).get();
     const patrolActivitiesPromise = scope.clientId
       ? adminDb.collection("guardPatrolActivities").where("clientId", "==", scope.clientId).limit(120).get()
@@ -455,6 +456,7 @@ export async function GET(request: Request) {
           ...(doc.data() as Record<string, unknown>),
         }) as DashboardRecord)
         .filter((row) => matchesClientScope(row, scope))
+        .filter((row) => isClientVisibleReport(row))
         .map<ClientDashboardVisitReportRow>((row) => ({
           id: String(row.id),
           fieldOfficerName: normalizeText(row.fieldOfficerName || "Field Officer"),
@@ -463,6 +465,9 @@ export async function GET(request: Request) {
           visitDate: serializeDate(row.visitDate),
           createdAt: serializeDate(row.createdAt),
           status: normalizeText(row.status || "submitted"),
+          reviewStatus: normalizeText(row.reviewStatus || (row.status === "reviewed" ? "reviewed" : "unreviewed")),
+          clientStatus: normalizeText(row.clientStatus || "unseen"),
+          locationStatus: normalizeText(row.locationStatus || "legacy_unverified"),
           summary: normalizeText(row.summary),
         })),
       (row) => row.createdAt ?? row.visitDate,
@@ -475,6 +480,7 @@ export async function GET(request: Request) {
           ...(doc.data() as Record<string, unknown>),
         }) as DashboardRecord)
         .filter((row) => matchesClientScope(row, scope))
+        .filter((row) => isClientVisibleReport(row))
         .map<ClientDashboardTrainingReportRow>((row) => ({
           id: String(row.id),
           fieldOfficerName: normalizeText(row.fieldOfficerName || "Field Officer"),
@@ -483,6 +489,8 @@ export async function GET(request: Request) {
           trainingDate: serializeDate(row.trainingDate),
           createdAt: serializeDate(row.createdAt),
           status: normalizeText(row.status || "submitted"),
+          reviewStatus: normalizeText(row.reviewStatus || (row.status === "acknowledged" ? "reviewed" : "unreviewed")),
+          clientStatus: normalizeText(row.clientStatus || "unseen"),
           topic: normalizeText(row.topic || "Training"),
           attendeeCount: Number(row.attendeeCount ?? 0),
         })),
@@ -537,8 +545,8 @@ export async function GET(request: Request) {
           const date = new Date(row.date);
           return !Number.isNaN(date.getTime()) && date <= next14Days;
         }).length,
-        pendingVisitReports: visitReports.filter((row) => row.status !== "reviewed").length,
-        pendingTrainingReports: trainingReports.filter((row) => row.status !== "acknowledged").length,
+        pendingVisitReports: visitReports.filter((row) => row.clientStatus !== "acknowledged").length,
+        pendingTrainingReports: trainingReports.filter((row) => row.clientStatus !== "acknowledged").length,
         patrolActivitiesToday: patrolActivitiesToday.length,
         hourlyNightChecksToday: patrolActivitiesToday.filter((row) => row.type === "hourly_photo").length,
       },

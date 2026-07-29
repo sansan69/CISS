@@ -17,6 +17,8 @@ const STATUS_CONFIG: Record<VisitReportStatus, { label: string; className: strin
   draft:     { label: "Draft",     className: "bg-gray-100 text-gray-600" },
   submitted: { label: "Submitted", className: "bg-amber-100 text-amber-700" },
   reviewed:  { label: "Reviewed",  className: "bg-green-100 text-green-700" },
+  superseded:{ label: "Superseded",className: "bg-slate-100 text-slate-600" },
+  archived:  { label: "Archived",  className: "bg-slate-100 text-slate-600" },
 };
 
 function fmt(ts: { seconds: number } | string | null | undefined): string {
@@ -50,10 +52,12 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
   const { userRole } = useAppAuth();
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
+  const isClient = userRole === "client";
   const isOwner = report?.fieldOfficerId && userRole === "fieldOfficer";
   const canEdit = report?.status === "draft" && (isAdmin || isOwner);
-  const canAddPhotos = report && (isAdmin || (isOwner && report.status !== "draft"));
-  const canReview = isAdmin && report?.status === "submitted";
+  const canReview = isAdmin && report?.status === "submitted" && report.reviewStatus !== "reviewed";
+  const canCreateRevision = Boolean(isOwner && report?.reviewStatus === "revision_requested" && report.status === "submitted");
+  const canClientAcknowledge = Boolean(isClient && report?.status === "submitted" && report.clientStatus !== "acknowledged");
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -137,26 +141,6 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
     }
   };
 
-  const handleAddPhotos = async () => {
-    if (!report) return;
-    setSaving(true);
-    try {
-      const res = await authorizedFetch(`/api/admin/visit-reports/${report.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoUrls: editPhotoUrls }),
-      });
-      if (!res.ok) throw new Error("Update failed");
-      toast({ title: "Updated", description: "Photos added to report." });
-      setEditing(false);
-      onUpdated();
-    } catch (err) {
-      toast({ title: "Error", description: err instanceof Error ? err.message : "Update failed", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleReview = async () => {
     if (!report) return;
     setReviewing(true);
@@ -177,9 +161,67 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
     }
   };
 
+  const handleRequestRevision = async () => {
+    if (!report) return;
+    if (!reviewNotes.trim()) {
+      toast({ title: "Reason required", description: "Explain what must be corrected.", variant: "destructive" });
+      return;
+    }
+    setReviewing(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/visit-reports/${report.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ reviewStatus: "revision_requested", reviewNotes }),
+      });
+      if (!res.ok) throw new Error("Failed to request revision");
+      toast({ title: "Revision requested", description: "The original submission remains unchanged." });
+      onUpdated();
+      onOpenChange(false);
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to request revision", variant: "destructive" });
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  const handleCreateRevision = async () => {
+    if (!report) return;
+    setSaving(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/visit-reports/${report.id}/revisions`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to create revision");
+      toast({ title: "Revision draft created", description: "Edit the new private draft and submit when ready." });
+      onUpdated();
+      onOpenChange(false);
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create revision", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClientAcknowledge = async () => {
+    if (!report) return;
+    setReviewing(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/visit-reports/${report.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ clientStatus: "acknowledged" }),
+      });
+      if (!res.ok) throw new Error("Failed to acknowledge report");
+      toast({ title: "Report acknowledged" });
+      onUpdated();
+      onOpenChange(false);
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to acknowledge report", variant: "destructive" });
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   if (!report) return null;
 
-  const sc = STATUS_CONFIG[report.status];
+  const sc = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.submitted;
 
   return (
     <Sheet open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setEditing(false); }}>
@@ -214,6 +256,18 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
             <p className="text-sm font-semibold">{report.clientName}</p>
             {report.siteName && <p className="text-sm text-muted-foreground">{report.siteName}</p>}
           </div>
+
+          {(report.visitStartedAt || report.visitEndedAt || report.visitPurpose || report.visitMode) && (
+            <div className="rounded-lg border p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Visit details</p>
+              <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Type:</span> {report.visitMode?.replace("_", " ") || "—"}</div>
+                <div><span className="text-muted-foreground">Purpose:</span> {report.visitPurpose || "—"}</div>
+                <div><span className="text-muted-foreground">Arrival:</span> {fmtDateTime(report.visitStartedAt as unknown as { seconds: number })}</div>
+                <div><span className="text-muted-foreground">Departure:</span> {fmtDateTime(report.visitEndedAt as unknown as { seconds: number })}</div>
+              </div>
+            </div>
+          )}
 
           {/* Guard Counts */}
           <div className="grid grid-cols-2 gap-3">
@@ -289,7 +343,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
               <MapPin className="h-3.5 w-3.5" />GPS Location
             </div>
             {report.visitLocation ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <code className="text-sm bg-muted px-2 py-1 rounded">
                   {report.visitLocation.lat.toFixed(5)}, {report.visitLocation.lng.toFixed(5)}
                 </code>
@@ -300,6 +354,15 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
                 >
                   View on Map
                 </a>
+                <span className="text-xs text-muted-foreground">
+                  {(report.locationStatus || "legacy_unverified").replaceAll("_", " ")}
+                  {typeof report.distanceFromSiteMeters === "number"
+                    ? ` · ${report.distanceFromSiteMeters} m from site`
+                    : ""}
+                  {typeof report.visitLocation.accuracyMeters === "number"
+                    ? ` · ±${report.visitLocation.accuracyMeters} m`
+                    : ""}
+                </span>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No GPS data captured</p>
@@ -312,7 +375,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
               <ImageIcon className="h-3.5 w-3.5" />
               Site Photos ({editing ? editPhotoUrls.length : (report.photoUrls?.length ?? 0)})
             </div>
-            {(editing || canAddPhotos) ? (
+            {editing ? (
               <div className="space-y-3">
                 <PhotoCapture
                   urls={editing ? editPhotoUrls : [...(report.photoUrls ?? [])]}
@@ -330,11 +393,6 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
                   maxPhotos={20}
                   fileTypeLabel="All image formats and PDF files accepted."
                 />
-                {!editing && canAddPhotos && (
-                  <Button onClick={handleAddPhotos} disabled={saving} size="sm">
-                    {saving ? "Saving..." : "Save Photos"}
-                  </Button>
-                )}
               </div>
             ) : (report.photoUrls?.length ?? 0) > 0 ? (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -358,7 +416,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
           </div>
 
           {/* Review Info */}
-          {report.status === "reviewed" && (
+          {(report.status === "reviewed" || report.reviewStatus === "reviewed") && (
             <div className="rounded-lg border border-green-200 bg-green-50 p-4">
               <div className="flex items-center gap-1.5 text-xs text-green-700 font-medium uppercase tracking-wide mb-2">
                 <Shield className="h-3.5 w-3.5" />Reviewed
@@ -383,7 +441,40 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 {reviewing ? "Saving..." : "Mark as Reviewed"}
               </Button>
+              <Button onClick={handleRequestRevision} disabled={reviewing} variant="outline" className="w-full">
+                Request revision
+              </Button>
             </div>
+          )}
+
+          {report.reviewStatus === "revision_requested" && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Revision requested</p>
+              {report.reviewNotes && <p className="mt-1 whitespace-pre-wrap">{report.reviewNotes}</p>}
+            </div>
+          )}
+
+          {(report.auditEvents?.length ?? 0) > 0 && (
+            <div className="rounded-lg border p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Report history</p>
+              <div className="mt-3 space-y-3">
+                {report.auditEvents!.map((event) => (
+                  <div key={event.id} className="border-l-2 border-border pl-3 text-sm">
+                    <p className="font-medium capitalize">{event.action.replaceAll("_", " ")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {event.actorRole || "System"} · {fmtDateTime(event.eventAt as string)}
+                    </p>
+                    {event.note && <p className="mt-1 whitespace-pre-wrap">{event.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {canClientAcknowledge && (
+            <Button onClick={handleClientAcknowledge} disabled={reviewing} className="w-full">
+              Acknowledge report
+            </Button>
           )}
         </div>
 
@@ -405,9 +496,9 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
               </Button>
             </>
           )}
-          {canAddPhotos && !canEdit && !editing && (
-            <Button onClick={() => { setEditPhotoUrls([...(report.photoUrls ?? [])]); setEditing(true); }} variant="outline" className="flex-1">
-              <ImageIcon className="h-4 w-4 mr-1.5" />Add Photos
+          {canCreateRevision && (
+            <Button onClick={handleCreateRevision} disabled={saving} className="flex-1">
+              Create revision draft
             </Button>
           )}
         </div>

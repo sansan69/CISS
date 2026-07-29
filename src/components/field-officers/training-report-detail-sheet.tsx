@@ -18,6 +18,8 @@ const STATUS_CONFIG: Record<TrainingReportStatus, { label: string; className: st
   draft:        { label: "Draft",        className: "bg-gray-100 text-gray-600" },
   submitted:    { label: "Submitted",    className: "bg-amber-100 text-amber-700" },
   acknowledged: { label: "Acknowledged", className: "bg-green-100 text-green-700" },
+  superseded:   { label: "Superseded",   className: "bg-slate-100 text-slate-600" },
+  archived:     { label: "Archived",     className: "bg-slate-100 text-slate-600" },
 };
 
 function fmt(ts: { seconds: number } | string | null | undefined): string {
@@ -51,10 +53,12 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
   const { userRole } = useAppAuth();
   const { toast } = useToast();
   const isAdmin = userRole === "admin" || userRole === "superAdmin";
+  const isClient = userRole === "client";
   const isOwner = report?.fieldOfficerId && userRole === "fieldOfficer";
   const canEdit = report?.status === "draft" && (isAdmin || isOwner);
-  const canAddMedia = report && (isAdmin || (isOwner && report.status !== "draft"));
-  const canAcknowledge = isAdmin && report?.status === "submitted";
+  const canAcknowledge = isAdmin && report?.status === "submitted" && report.reviewStatus !== "reviewed";
+  const canCreateRevision = Boolean(isOwner && report?.reviewStatus === "revision_requested" && report.status === "submitted");
+  const canClientAcknowledge = Boolean(isClient && report?.status === "submitted" && report.clientStatus !== "acknowledged");
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,30 +145,6 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
     }
   };
 
-  const handleAddMedia = async () => {
-    if (!report) return;
-    setSaving(true);
-    try {
-      const res = await authorizedFetch(`/api/admin/training-reports/${report.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          photoUrls: editPhotoUrls,
-          attachmentUrls: editAttachmentUrls,
-          clientReportUrl: editClientReportUrl[0] ?? null,
-        }),
-      });
-      if (!res.ok) throw new Error("Update failed");
-      toast({ title: "Updated", description: "Media added to report." });
-      setEditing(false);
-      onUpdated();
-    } catch (err) {
-      toast({ title: "Error", description: err instanceof Error ? err.message : "Update failed", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleAcknowledge = async () => {
     if (!report) return;
     setAcknowledging(true);
@@ -172,14 +152,71 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
       const res = await authorizedFetch(`/api/admin/training-reports/${report.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "acknowledged" }),
+        body: JSON.stringify({ reviewStatus: "reviewed" }),
       });
       if (!res.ok) throw new Error("Failed");
-      toast({ title: "Acknowledged", description: "Training report acknowledged." });
+      toast({ title: "Reviewed", description: "Training report marked as reviewed." });
       onUpdated();
       onOpenChange(false);
     } catch {
-      toast({ title: "Error", description: "Failed to acknowledge", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to mark reviewed", variant: "destructive" });
+    } finally {
+      setAcknowledging(false);
+    }
+  };
+
+  const handleRequestRevision = async () => {
+    if (!report) return;
+    setAcknowledging(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/training-reports/${report.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          reviewStatus: "revision_requested",
+          reviewNotes: "Please correct the report and submit a new revision.",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Revision requested" });
+      onUpdated();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Error", description: "Failed to request revision", variant: "destructive" });
+    } finally {
+      setAcknowledging(false);
+    }
+  };
+
+  const handleCreateRevision = async () => {
+    if (!report) return;
+    setSaving(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/training-reports/${report.id}/revisions`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to create revision");
+      toast({ title: "Revision draft created" });
+      onUpdated();
+      onOpenChange(false);
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create revision", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClientAcknowledge = async () => {
+    if (!report) return;
+    setAcknowledging(true);
+    try {
+      const res = await authorizedFetch(`/api/admin/training-reports/${report.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ clientStatus: "acknowledged" }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Report acknowledged" });
+      onUpdated();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Error", description: "Failed to acknowledge report", variant: "destructive" });
     } finally {
       setAcknowledging(false);
     }
@@ -187,7 +224,7 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
 
   if (!report) return null;
 
-  const sc = STATUS_CONFIG[report.status];
+  const sc = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.submitted;
 
   return (
     <Sheet open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setEditing(false); }}>
@@ -222,6 +259,32 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
             <p className="text-sm font-semibold">{report.clientName}</p>
             {report.siteName && <p className="text-sm text-muted-foreground">{report.siteName}</p>}
           </div>
+
+          {(report.trainingVenue || report.trainingStartedAt || report.trainingEndedAt || report.trainerName) && (
+            <div className="rounded-lg border p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Session details</p>
+              <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Venue:</span> {report.trainingVenue || "—"}</div>
+                <div><span className="text-muted-foreground">Trainer:</span> {report.trainerName || "—"}</div>
+                <div><span className="text-muted-foreground">Started:</span> {fmtDateTime(report.trainingStartedAt as unknown as { seconds: number })}</div>
+                <div><span className="text-muted-foreground">Ended:</span> {fmtDateTime(report.trainingEndedAt as unknown as { seconds: number })}</div>
+              </div>
+            </div>
+          )}
+
+          {(report.moduleName || report.learningObjectives || report.assessmentMethod) && (
+            <div className="rounded-lg border p-4 text-sm">
+              <p className="font-semibold">
+                {report.moduleName || "Training module"}
+                {report.moduleVersion ? ` · ${report.moduleVersion}` : ""}
+              </p>
+              {report.learningObjectives && <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{report.learningObjectives}</p>}
+              <div className="mt-3 flex flex-wrap gap-4">
+                <span>Assessment: {report.assessmentMethod || "Not specified"}</span>
+                <span>Result: {(report.assessmentResult || "not_assessed").replaceAll("_", " ")}</span>
+              </div>
+            </div>
+          )}
 
           {/* Topic */}
           <div>
@@ -311,10 +374,10 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
               <ImageIcon className="h-3.5 w-3.5" />
               Training Photos ({(editing ? editPhotoUrls.length : (report.photoUrls?.length ?? 0))})
             </div>
-            {(editing || canAddMedia) ? (
+            {editing ? (
               <div className="space-y-3">
                 <PhotoCapture
-                  urls={editing || canAddMedia ? (editing ? editPhotoUrls : [...(report.photoUrls ?? [])]) : [...(report.photoUrls ?? [])]}
+                  urls={editPhotoUrls}
                   onChange={(urls) => setEditPhotoUrls(urls)}
                   folder="trainingReports"
                   accept="image/*,.pdf"
@@ -353,7 +416,7 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
               <FileText className="h-3.5 w-3.5" />Client-Signed Report
             </div>
-            {(editing || canAddMedia) ? (
+            {editing ? (
               <div className="space-y-3">
                 <PhotoCapture
                   urls={editClientReportUrl}
@@ -410,21 +473,56 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
           )}
 
           {/* Acknowledged Info */}
-          {report.status === "acknowledged" && (
+          {(report.status === "acknowledged" || report.reviewStatus === "reviewed") && (
             <div className="rounded-lg border border-green-200 bg-green-50 p-4">
               <div className="flex items-center gap-1.5 text-xs text-green-700 font-medium uppercase tracking-wide mb-2">
-                <Shield className="h-3.5 w-3.5" />Acknowledged
+                <Shield className="h-3.5 w-3.5" />Reviewed
               </div>
               {report.acknowledgedBy && <p className="text-sm">By: {report.acknowledgedBy}</p>}
               {report.acknowledgedAt && <p className="text-xs text-muted-foreground">At: {fmtDateTime(report.acknowledgedAt as unknown as { seconds: number })}</p>}
             </div>
           )}
 
-          {/* Acknowledge Action (Admin only, submitted reports) */}
+          {/* Review actions do not gate client publication. */}
           {canAcknowledge && !editing && (
-            <Button onClick={handleAcknowledge} disabled={acknowledging} className="w-full bg-green-600 hover:bg-green-700">
-              <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              {acknowledging ? "Saving..." : "Acknowledge Report"}
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={handleAcknowledge} disabled={acknowledging} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                {acknowledging ? "Saving..." : "Mark reviewed"}
+              </Button>
+              <Button onClick={handleRequestRevision} disabled={acknowledging} variant="outline">
+                Request revision
+              </Button>
+            </div>
+          )}
+
+          {report.reviewStatus === "revision_requested" && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Revision requested</p>
+              {report.reviewNotes && <p className="mt-1 whitespace-pre-wrap">{report.reviewNotes}</p>}
+            </div>
+          )}
+
+          {(report.auditEvents?.length ?? 0) > 0 && (
+            <div className="rounded-lg border p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Report history</p>
+              <div className="mt-3 space-y-3">
+                {report.auditEvents!.map((event) => (
+                  <div key={event.id} className="border-l-2 border-border pl-3 text-sm">
+                    <p className="font-medium capitalize">{event.action.replaceAll("_", " ")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {event.actorRole || "System"} · {fmtDateTime(event.eventAt as string)}
+                    </p>
+                    {event.note && <p className="mt-1 whitespace-pre-wrap">{event.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {canClientAcknowledge && (
+            <Button onClick={handleClientAcknowledge} disabled={acknowledging} className="w-full">
+              Acknowledge report
             </Button>
           )}
         </div>
@@ -447,18 +545,10 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
               </Button>
             </>
           )}
-          {canAddMedia && !canEdit && !editing && (
-            <Button onClick={() => { setEditPhotoUrls([...(report.photoUrls ?? [])]); setEditAttachmentUrls([...(report.attachmentUrls ?? [])]); setEditClientReportUrl(report.clientReportUrl ? [report.clientReportUrl] : []); setEditing(true); }} variant="outline" className="flex-1">
-              <ImageIcon className="h-4 w-4 mr-1.5" />Add Photos/Files
+          {canCreateRevision && (
+            <Button onClick={handleCreateRevision} disabled={saving} className="flex-1">
+              Create revision draft
             </Button>
-          )}
-          {canAddMedia && editing && !canEdit && (
-            <>
-              <Button onClick={() => setEditing(false)} variant="outline" className="flex-1">Cancel</Button>
-              <Button onClick={handleAddMedia} disabled={saving} className="flex-1">
-                {saving ? "Saving..." : "Save Media"}
-              </Button>
-            </>
           )}
         </div>
       </SheetContent>

@@ -1,116 +1,80 @@
 import { NextResponse } from "next/server";
+import type FirebaseFirestore from "@google-cloud/firestore";
+
 import {
   hasAdminAccess,
   hasClientAccess,
   hasFieldOfficerAccess,
-  requireAdminOrFieldOfficer,
   verifyRequestAuth,
   unauthorizedResponse,
-  type AppDecodedToken,
 } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { districtMatches } from "@/lib/districts";
-import type FirebaseFirestore from "@google-cloud/firestore";
+import {
+  firstZodError,
+  isClientVisibleReport,
+  REPORT_SCHEMA_VERSION,
+  visitReportInputSchema,
+} from "@/lib/reports/report-schema";
+import {
+  canFieldOfficerUseReportDistrict,
+  getFieldOfficerReportProfile,
+  reportCreatedAtMillis,
+  reportMatchesAdminScope,
+  resolveReportSite,
+  serializeReport,
+  serializeReportDate,
+} from "@/lib/reports/report-server";
+import { validateReportAttachments } from "@/lib/reports/report-attachments.server";
+
 export const runtime = "nodejs";
 
-type FieldOfficerProfile = {
-  name: string;
-  stateCode: string;
-  assignedDistricts: string[];
-};
-
-type SiteSnapshotData = {
-  id: string;
-  clientId: string;
-  clientName: string;
-  siteName: string;
-  district: string;
-};
-
-function serializeDate(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") return value;
-  if (value instanceof Date) return value.toISOString();
-  if (typeof (value as { toDate?: unknown }).toDate === "function") {
-    return (value as { toDate(): Date }).toDate().toISOString();
-  }
-  if (typeof (value as { seconds?: unknown }).seconds === "number") {
-    return new Date((value as { seconds: number }).seconds * 1000).toISOString();
-  }
-  if (typeof (value as { _seconds?: unknown })._seconds === "number") {
-    return new Date((value as { _seconds: number })._seconds * 1000).toISOString();
-  }
-  return null;
+function distanceMetres(
+  left: { lat: number; lng: number },
+  right: { lat: number; lng: number },
+) {
+  const radius = 6_371_000;
+  const radians = (value: number) => (value * Math.PI) / 180;
+  const deltaLat = radians(right.lat - left.lat);
+  const deltaLng = radians(right.lng - left.lng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(radians(left.lat)) *
+      Math.cos(radians(right.lat)) *
+      Math.sin(deltaLng / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function createdAtMillis(report: Record<string, unknown>) {
-  const iso = serializeDate(report.createdAt) ?? serializeDate(report.visitDate);
-  return iso ? new Date(iso).getTime() : 0;
-}
-
-function serializeReport(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot): Record<string, unknown> {
-  const data = doc.data() ?? {};
+function classifyVisitLocation(
+  location: { lat: number; lng: number; accuracyMeters?: number } | null | undefined,
+  site: Awaited<ReturnType<typeof resolveReportSite>>,
+) {
+  if (!location) {
+    return { locationStatus: "not_captured", distanceFromSiteMeters: null };
+  }
+  if (!site || site.latitude === null || site.longitude === null) {
+    return { locationStatus: "captured_off_site", distanceFromSiteMeters: null };
+  }
+  const distance = Math.round(
+    distanceMetres(location, { lat: site.latitude, lng: site.longitude }),
+  );
+  const allowedRadius = Math.max(300, Math.ceil(location.accuracyMeters ?? 0));
   return {
-    id: doc.id,
-    ...data,
-    visitDate: serializeDate(data.visitDate),
-    createdAt: serializeDate(data.createdAt),
-    reviewedAt: serializeDate(data.reviewedAt),
+    locationStatus: distance <= allowedRadius ? "verified_on_site" : "captured_off_site",
+    distanceFromSiteMeters: distance,
   };
-}
-
-async function getFieldOfficerProfile(
-  adminDb: FirebaseFirestore.Firestore,
-  decoded: AppDecodedToken,
-): Promise<FieldOfficerProfile> {
-  let name = decoded.name ?? decoded.email ?? "";
-  let stateCode = decoded.stateCode ?? "KL";
-  let assignedDistricts = Array.isArray(decoded.assignedDistricts) ? decoded.assignedDistricts : [];
-
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!foSnapshot.empty) {
-    const foData = foSnapshot.docs[0].data();
-    name = typeof foData.name === "string" ? foData.name : name;
-    stateCode = typeof foData.stateCode === "string" ? foData.stateCode : stateCode;
-    assignedDistricts = Array.isArray(foData.assignedDistricts)
-      ? foData.assignedDistricts.filter((district): district is string => typeof district === "string")
-      : assignedDistricts;
-  }
-
-  return { name, stateCode, assignedDistricts };
-}
-
-async function resolveSite(
-  adminDb: FirebaseFirestore.Firestore,
-  siteId?: string,
-): Promise<SiteSnapshotData | null> {
-  if (!siteId) return null;
-  const snap = await adminDb.collection("sites").doc(siteId).get();
-  if (!snap.exists) return null;
-  const data = snap.data() ?? {};
-  return {
-    id: snap.id,
-    clientId: typeof data.clientId === "string" ? data.clientId : "",
-    clientName: typeof data.clientName === "string" ? data.clientName : "",
-    siteName: typeof data.siteName === "string" ? data.siteName : "",
-    district: typeof data.district === "string" ? data.district : "",
-  };
-}
-
-function canFieldOfficerUseDistrict(profile: FieldOfficerProfile, district?: string) {
-  if (!district) return true;
-  if (profile.assignedDistricts.length === 0) return true;
-  return profile.assignedDistricts.some((assigned) => districtMatches(assigned, district));
 }
 
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
+    const isAdmin = hasAdminAccess(decoded);
+    const isClient = hasClientAccess(decoded);
+    const isFieldOfficer = hasFieldOfficerAccess(decoded);
+    if (!isAdmin && !isClient && !isFieldOfficer) {
+      return unauthorizedResponse("Report access is not available for this role.", 403);
+    }
+
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
@@ -119,132 +83,191 @@ export async function GET(request: Request) {
     const district = url.searchParams.get("district");
     const startDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
-    const isAdmin = hasAdminAccess(decoded);
-    const isClient = hasClientAccess(decoded);
-
-    let q = adminDb.collection("foVisitReports") as FirebaseFirestore.Query;
-
-    if (isClient) {
-      q = q.orderBy("createdAt", "desc");
-    } else if (!isAdmin) {
-      q = q.where("fieldOfficerId", "==", decoded.uid);
-    } else if (fieldOfficerId) {
-      q = q.where("fieldOfficerId", "==", fieldOfficerId);
-    } else {
-      q = q.orderBy("createdAt", "desc");
-    }
-
-    const snapshot = await q.limit(isAdmin ? 500 : 300).get();
     const clientScope = isClient ? await resolveClientScope(adminDb, decoded) : null;
+
     if (isClient && !clientScope) {
       return unauthorizedResponse("Client account is not linked to a valid client profile.", 403);
     }
+    if (isClient && status === "draft") {
+      return NextResponse.json({ reports: [], nextCursor: null });
+    }
 
+    let query = adminDb.collection("foVisitReports") as FirebaseFirestore.Query;
+    if (isClient && clientScope) {
+      query = query.where("clientId", "==", clientScope.clientId).orderBy("createdAt", "desc");
+    } else if (isFieldOfficer) {
+      query = query.where("fieldOfficerId", "==", decoded.uid).orderBy("createdAt", "desc");
+    } else if (decoded.role !== "superAdmin") {
+      query = query.where("stateCode", "==", decoded.stateCode || "KL").orderBy("createdAt", "desc");
+    } else if (fieldOfficerId) {
+      query = query.where("fieldOfficerId", "==", fieldOfficerId).orderBy("createdAt", "desc");
+    } else {
+      query = query.orderBy("createdAt", "desc");
+    }
+
+    const snapshot = await query.limit(250).get();
     const reports = snapshot.docs
-      .map((d) => serializeReport(d))
+      .map((doc) => serializeReport(doc, "visitDate"))
       .filter((report) => !clientScope || matchesClientScope(report, clientScope))
-      .filter((report) => !status || report.status === status)
+      .filter((report) => !isClient || isClientVisibleReport(report))
+      .filter((report) => !isAdmin || reportMatchesAdminScope(report, decoded))
+      .filter((report) => !status || report.status === status || report.reviewStatus === status)
       .filter((report) => !clientId || report.clientId === clientId)
       .filter((report) => !district || districtMatches(String(report.district ?? ""), district))
       .filter((report) => {
         if (!startDate && !endDate) return true;
-        const dateStr = serializeDate((report as Record<string, unknown>).visitDate);
-        if (!dateStr) return false;
-        const d = dateStr.slice(0, 10); // YYYY-MM-DD
-        if (startDate && d < startDate) return false;
-        if (endDate && d > endDate) return false;
-        return true;
+        const date = serializeReportDate(report.visitDate)?.slice(0, 10);
+        if (!date) return false;
+        return (!startDate || date >= startDate) && (!endDate || date <= endDate);
       })
-      .sort((left, right) => createdAtMillis(right) - createdAtMillis(left))
+      .sort(
+        (left, right) =>
+          reportCreatedAtMillis(right, "visitDate") -
+          reportCreatedAtMillis(left, "visitDate"),
+      )
       .slice(0, 200);
-    return NextResponse.json({ reports });
+
+    const readerReports = isClient
+      ? reports.map((report) => ({ ...report, reviewNotes: undefined, reviewedBy: undefined }))
+      : reports;
+    return NextResponse.json({ reports: readerReports, nextCursor: null });
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return unauthorizedResponse(msg);
+    const message = error instanceof Error ? error.message : "Could not load visit reports.";
+    return unauthorizedResponse(message);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
+    const decoded = await verifyRequestAuth(request);
+    if (!hasFieldOfficerAccess(decoded)) {
+      return unauthorizedResponse("Field officer access required.", 403);
+    }
+
+    const parsed = visitReportInputSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: firstZodError(parsed.error) }, { status: 400 });
+    }
+    const body = parsed.data;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
+    const profile = await getFieldOfficerReportProfile(adminDb, decoded);
+    const site = await resolveReportSite(adminDb, body.siteId);
 
-    const body = (await request.json()) as {
-      clientId?: string;
-      clientName?: string;
-      siteId?: string;
-      siteName?: string;
-      district?: string;
-      visitDate?: string;
-      summary?: string;
-      issuesFound?: string;
-      actionsRequired?: string;
-      guardsPresentCount?: number;
-      guardsAbsentCount?: number;
-      status?: string;
-      photoUrls?: string[];
-      visitLocation?: { lat: number; lng: number };
-    };
-
-    if (!body.clientId || !body.visitDate || !body.summary) {
-      return NextResponse.json({ error: "clientId, visitDate, and summary are required." }, { status: 400 });
+    if (body.status === "submitted" && !site) {
+      return NextResponse.json({ error: "Select a valid site before submitting." }, { status: 400 });
     }
-
-    // Validate visit date format
-    const parsedDate = new Date(body.visitDate);
-    if (isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ error: "visitDate must be a valid date." }, { status: 400 });
-    }
-
-    if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
-      return NextResponse.json({ error: "Field officer or admin access required." }, { status: 403 });
-    }
-
-    const profile = await getFieldOfficerProfile(adminDb, decoded);
-    const site = await resolveSite(adminDb, body.siteId);
-    const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
-    const status = body.status ?? "draft";
-
-    // Visit reports require at least 1 photo when submitting
-    if (status === "submitted" && (!Array.isArray(body.photoUrls) || body.photoUrls.length < 1)) {
+    if (site?.clientId && site.clientId !== body.clientId) {
       return NextResponse.json(
-        { error: "At least one photo (guard photo or selfie with guards) is required before submitting." },
+        { error: "The selected site does not belong to the selected client." },
         { status: 400 },
       );
     }
 
-    if (!hasAdminAccess(decoded) && !canFieldOfficerUseDistrict(profile, reportDistrict)) {
+    const reportDistrict = site?.district || body.district || profile.assignedDistricts[0] || "";
+    if (!canFieldOfficerUseReportDistrict(profile, reportDistrict)) {
+      return NextResponse.json({ error: "This site is outside your assigned districts." }, { status: 403 });
+    }
+    const visitPhotoCount =
+      body.photoUrls.length +
+      body.attachments.filter((item) => item.category === "visit_photo").length;
+    if (body.status === "submitted" && visitPhotoCount < 1) {
       return NextResponse.json(
-        { error: "This site is outside your assigned districts." },
-        { status: 403 },
+        { error: "At least one visit photo is required before submitting." },
+        { status: 400 },
       );
     }
 
-    const docRef = await adminDb.collection("foVisitReports").add({
+    const collection = adminDb.collection("foVisitReports");
+    const reportRef = body.reportId ? collection.doc(body.reportId) : collection.doc();
+    if (body.attachments.length > 0 && !body.reportId) {
+      return NextResponse.json(
+        { error: "A report identifier is required for secure attachments." },
+        { status: 400 },
+      );
+    }
+    if (body.reportId && body.attachments.length > 0) {
+      await validateReportAttachments({
+        attachments: body.attachments,
+        reportType: "visit",
+        reportId: body.reportId,
+        uid: decoded.uid,
+      });
+    }
+    const eventRef = adminDb.collection("foReportEvents").doc();
+    const now = FieldValue.serverTimestamp();
+    const submitted = body.status === "submitted";
+    const location = classifyVisitLocation(body.visitLocation, site);
+    const reportData = {
+      ...body,
+      ...location,
+      reportType: "visit",
+      schemaVersion: REPORT_SCHEMA_VERSION,
+      revisionNumber: 1,
       fieldOfficerId: decoded.uid,
       fieldOfficerName: profile.name,
-      stateCode: profile.stateCode,
+      fieldOfficerSnapshot: {
+        uid: decoded.uid,
+        name: profile.name,
+        stateCode: profile.stateCode,
+      },
+      stateCode: site?.stateCode || profile.stateCode,
       district: reportDistrict,
       clientId: site?.clientId || body.clientId,
       clientName: site?.clientName || body.clientName || "",
       siteId: site?.id || body.siteId || "",
       siteName: site?.siteName || body.siteName || "",
+      siteSnapshot: site,
       visitDate: new Date(body.visitDate),
-      summary: body.summary,
-      issuesFound: body.issuesFound ?? "",
-      actionsRequired: body.actionsRequired ?? "",
-      guardsPresentCount: body.guardsPresentCount ?? 0,
-      guardsAbsentCount: body.guardsAbsentCount ?? 0,
-      photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
-      visitLocation: body.visitLocation ?? null,
-      status,
-      createdAt: FieldValue.serverTimestamp(),
+      visitStartedAt: body.visitStartedAt ? new Date(body.visitStartedAt) : null,
+      visitEndedAt: body.visitEndedAt ? new Date(body.visitEndedAt) : null,
+      reviewStatus: "unreviewed",
+      clientStatus: submitted ? "unseen" : null,
+      visibility: submitted ? "client_visible" : "private_draft",
+      submittedAt: submitted ? now : null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await adminDb.runTransaction(async (transaction) => {
+      const existing = await transaction.get(reportRef);
+      if (existing.exists) {
+        const data = existing.data() ?? {};
+        if (
+          body.submissionIdempotencyKey &&
+          data.submissionIdempotencyKey === body.submissionIdempotencyKey &&
+          data.fieldOfficerId === decoded.uid
+        ) {
+          return;
+        }
+        throw new Error("A report with this identifier already exists.");
+      }
+      transaction.create(reportRef, reportData);
+      transaction.create(eventRef, {
+        reportId: reportRef.id,
+        reportType: "visit",
+        revisionNumber: 1,
+        action: submitted ? "submitted" : "draft_created",
+        actorId: decoded.uid,
+        actorRole: "fieldOfficer",
+        stateCode: site?.stateCode || profile.stateCode,
+        clientId: site?.clientId || body.clientId,
+        eventAt: now,
+      });
     });
 
-    return NextResponse.json({ id: docRef.id }, { status: 201 });
+    return NextResponse.json(
+      {
+        id: reportRef.id,
+        status: body.status,
+        visibility: submitted ? "client_visible" : "private_draft",
+        ...location,
+      },
+      { status: 201 },
+    );
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return unauthorizedResponse(msg);
+    const message = error instanceof Error ? error.message : "Could not save visit report.";
+    const status = message.includes("already exists") ? 409 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

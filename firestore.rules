@@ -512,6 +512,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /foReportEvents/{eventId} {
+      allow read, write: if false;
+    }
+
     match /branchExpenses/{docId} {
       allow read, write: if false;
     }

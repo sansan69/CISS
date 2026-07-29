@@ -16,6 +16,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "attendance:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-attendance.mjs",
+    "reports:migrate-v2": "node --env-file-if-exists=.env.local scripts/migrate-field-officer-reports-v2.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {
@@ -50,6 +51,7 @@
     "clsx": "^2.1.1",
     "csv-parse": "^7.0.1",
     "date-fns": "^3.6.0",
+    "file-type": "^20.5.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^12.7.0",
     "framer-motion": "^12.43.0",

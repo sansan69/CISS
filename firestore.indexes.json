@@ -1557,6 +1557,25 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "stateCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "foTrainingReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "fieldOfficerId",
           "order": "ASCENDING"
         },
@@ -1577,6 +1596,44 @@
       "fields": [
         {
           "fieldPath": "clientId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "foReportEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reportId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "eventAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "foVisitReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "stateCode",
           "order": "ASCENDING"
         },
         {
