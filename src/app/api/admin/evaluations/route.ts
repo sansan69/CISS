@@ -5,11 +5,39 @@ import {
   verifyRequestAuth,
   unauthorizedResponse,
 } from "@/lib/server/auth";
+import { canonicalizeDistrictList } from "@/lib/districts";
+import {
+  employeeMatchesAnyDistrict,
+  resolveEmployeeDistrict,
+} from "@/lib/employees/visibility";
 export const runtime = "nodejs";
+
+async function getFieldOfficerDistricts(
+  adminDb: FirebaseFirestore.Firestore,
+  uid: string,
+  claimedDistricts: unknown,
+) {
+  const profile = await adminDb
+    .collection("fieldOfficers")
+    .where("uid", "==", uid)
+    .limit(1)
+    .get();
+  const storedDistricts = profile.empty
+    ? []
+    : profile.docs[0].data().assignedDistricts;
+  const source = Array.isArray(storedDistricts)
+    ? storedDistricts
+    : Array.isArray(claimedDistricts)
+      ? claimedDistricts
+      : [];
+  return canonicalizeDistrictList(
+    source.filter((district): district is string => typeof district === "string"),
+  );
+}
 
 export async function GET(request: Request) {
   try {
-    const decoded = await verifyRequestAuth(request);
+    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const url = new URL(request.url);
     const period = url.searchParams.get("period");
@@ -63,6 +91,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "employeeId, period, and criteria are required." }, { status: 400 });
     }
 
+    const employeeSnapshot = await adminDb.collection("employees").doc(body.employeeId).get();
+    if (!employeeSnapshot.exists) {
+      return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+    }
+    const employee = employeeSnapshot.data() ?? {};
+    if (!hasAdminAccess(decoded)) {
+      const assignedDistricts = await getFieldOfficerDistricts(
+        adminDb,
+        decoded.uid,
+        decoded.assignedDistricts,
+      );
+      if (
+        assignedDistricts.length === 0 ||
+        !employeeMatchesAnyDistrict(employee, assignedDistricts)
+      ) {
+        return unauthorizedResponse(
+          "This employee is outside your assigned districts.",
+          403,
+        );
+      }
+    }
+
+    const employeeName = String(employee.fullName ?? employee.name ?? "");
+    const employeeCode = String(employee.employeeId ?? employee.employeeCode ?? "");
+    const clientId = String(employee.clientId ?? "");
+    const clientName = String(employee.clientName ?? "");
+    const district = resolveEmployeeDistrict(employee);
+
     const c = body.criteria;
     const totalScore =
       (c.punctuality ?? 0) +
@@ -75,11 +131,11 @@ export async function POST(request: Request) {
     const now = new Date();
     const docRef = await adminDb.collection("evaluations").add({
       employeeId: body.employeeId,
-      employeeName: body.employeeName ?? "",
-      employeeCode: body.employeeCode ?? "",
-      clientId: body.clientId ?? "",
-      clientName: body.clientName ?? "",
-      district: body.district ?? "",
+      employeeName,
+      employeeCode,
+      clientId,
+      clientName,
+      district,
       evaluatedBy: decoded.uid,
       evaluatedByName: body.evaluatedByName ?? decoded.email ?? "",
       period: body.period,
@@ -97,7 +153,17 @@ export async function POST(request: Request) {
     });
 
     // Update guardScores aggregate
-    await updateGuardScore(adminDb, body.employeeId, body.employeeName ?? "", body.employeeCode ?? "", body.clientId ?? "", body.clientName ?? "", body.district ?? "", normalizedScore, now);
+    await updateGuardScore(
+      adminDb,
+      body.employeeId,
+      employeeName,
+      employeeCode,
+      clientId,
+      clientName,
+      district,
+      normalizedScore,
+      now,
+    );
 
     return NextResponse.json({ id: docRef.id, normalizedScore });
   } catch (error: any) {

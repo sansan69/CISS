@@ -399,6 +399,12 @@ export default function WorkOrderPage() {
                 where("district", "in", assignedDistricts.slice(0, 30)),
                 where("date", ">=", todayTs),
             );
+        } else if (isClientView && clientInfo?.clientName) {
+            q = query(
+                collection(db, "workOrders"),
+                where("clientName", "==", clientInfo.clientName),
+                where("date", ">=", todayTs),
+            );
         } else {
             q = query(collection(db, "workOrders"), where("date", ">=", todayTs));
         }
@@ -501,15 +507,12 @@ export default function WorkOrderPage() {
                         const assignedFemale = assignedGuards.filter((guard: any) => guard.gender === 'Female').length;
                         const assignedCount = assignedGuards.length;
                         const isReady =
-                            assignedMale === (order.maleGuardsRequired || 0) &&
-                            assignedFemale === (order.femaleGuardsRequired || 0) &&
-                            assignedCount === totalRequired &&
+                            assignedMale >= (order.maleGuardsRequired || 0) &&
+                            assignedFemale >= (order.femaleGuardsRequired || 0) &&
                             totalRequired > 0;
                         const needsReview =
                             order.assignmentReviewRequired === true ||
-                            assignedCount > totalRequired ||
-                            assignedMale > (order.maleGuardsRequired || 0) ||
-                            assignedFemale > (order.femaleGuardsRequired || 0);
+                            order.assignmentStatus === 'review';
                         const statusLabel = assignedCount === 0
                             ? 'Open'
                             : needsReview
@@ -658,14 +661,18 @@ export default function WorkOrderPage() {
                 const maleRequired = current.maleRequired + row.maleRequired;
                 const femaleRequired = current.femaleRequired + row.femaleRequired;
                 const isReady =
-                    assignedMale === maleRequired &&
-                    assignedFemale === femaleRequired &&
-                    assignedCount === totalRequired &&
+                    assignedMale >= maleRequired &&
+                    assignedFemale >= femaleRequired &&
                     totalRequired > 0;
-                const needsReview =
-                    assignedCount > totalRequired ||
-                    assignedMale > maleRequired ||
-                    assignedFemale > femaleRequired;
+                const needsReview = current.orders.some(
+                    (order) =>
+                        order.assignmentReviewRequired === true ||
+                        order.assignmentStatus === 'review',
+                ) || row.orders.some(
+                    (order) =>
+                        order.assignmentReviewRequired === true ||
+                        order.assignmentStatus === 'review',
+                );
                 const statusLabel = assignedCount === 0
                     ? 'Open'
                     : needsReview
@@ -716,8 +723,8 @@ export default function WorkOrderPage() {
                 const assignedCenters = rows.filter(
                     (row) =>
                         row.totalRequired > 0 &&
-                        row.assignedMale === row.maleRequired &&
-                        row.assignedFemale === row.femaleRequired,
+                        row.assignedMale >= row.maleRequired &&
+                        row.assignedFemale >= row.femaleRequired,
                 ).length;
                 const pendingCenters = rows.length - assignedCenters;
                 return {

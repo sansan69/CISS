@@ -2,42 +2,16 @@
 
 import React, { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, documentId, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Download, SpinnerGap as Loader2 } from '@phosphor-icons/react';
-import type { WorkOrder as WorkOrderDoc } from '@/types/work-orders';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
-import { isOperationalWorkOrderClientName } from '@/lib/work-orders';
-import { downloadXlsx } from '@/lib/spreadsheets/browser';
-
-interface SiteDoc {
-  id: string;
-  siteName: string;
-  siteId?: string | null;
-  clientName: string;
-  district: string;
-  state?: string;
-}
-
-interface EmployeeDoc {
-  id: string;
-  firstName: string;
-  lastName: string;
-  gender: string;
-  dateOfBirth?: any;
-  fatherName?: string;
-  motherName?: string;
-  fullAddress?: string;
-  phoneNumber?: string;
-  emailAddress?: string;
-  resourceIdNumber?: string;
-  identityProofType?: string;
-  identityProofNumber?: string;
-}
+import { authorizedFetch } from '@/lib/api-client';
+import { useToast } from '@/hooks/use-toast';
 
 const keralaDistricts = [
   'Thiruvananthapuram',
@@ -58,6 +32,7 @@ const keralaDistricts = [
 ];
 
 export function AssignedGuardsExportPanel() {
+  const { toast } = useToast();
   const [district, setDistrict] = useState<string>('all');
   const [officers, setOfficers] = useState<{ id: string; name: string; uid: string }[]>([]);
   const [selectedOfficer, setSelectedOfficer] = useState<string>('all');
@@ -76,128 +51,68 @@ export function AssignedGuardsExportPanel() {
             uid: (d.data() as any).uid,
           })),
         );
-      } catch {
-        // Intentionally noop; export still works without officer filtering.
+      } catch (error) {
+        console.error('Could not load field officers for export:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Officer filter unavailable',
+          description: 'You can still export by district and date.',
+        });
       }
     })();
-  }, []);
-
-  const buildFiltersDescription = () => {
-    const parts: string[] = [];
-    if (district !== 'all') parts.push(`District=${district}`);
-    if (selectedOfficer !== 'all') {
-      parts.push(`Officer=${officers.find((o) => o.uid === selectedOfficer)?.name || selectedOfficer}`);
-    }
-    if (startDate) parts.push(`From=${startDate}`);
-    if (endDate) parts.push(`To=${endDate}`);
-    return parts.join(', ') || 'All Data';
-  };
+  }, [toast]);
 
   const handleExport = async () => {
     setIsLoading(true);
     try {
-      const sitesSnap = await getDocs(collection(db, 'sites'));
-      const siteById = new Map<string, SiteDoc>(
-        sitesSnap.docs
-          .map((d) => ({ id: d.id, ...(d.data() as any) }))
-          .map((site) => [site.id, site as SiteDoc]),
-      );
-
-      let workOrdersQuery: any = collection(db, 'workOrders');
-      const filters: any[] = [];
-      if (district !== 'all') filters.push(where('district', '==', district));
-      if (startDate) filters.push(where('date', '>=', Timestamp.fromDate(new Date(`${startDate}T00:00:00`))));
-      if (endDate) filters.push(where('date', '<=', Timestamp.fromDate(new Date(`${endDate}T23:59:59`))));
-      if (filters.length) workOrdersQuery = query(workOrdersQuery, ...filters);
-
-      const workOrdersSnapshot = await getDocs(workOrdersQuery);
-      let workOrders = workOrdersSnapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as WorkOrderDoc[];
-      workOrders = workOrders.filter(
-        (workOrder) =>
-          `${workOrder.recordStatus ?? 'active'}`.trim().toLowerCase() === 'active' &&
-          isOperationalWorkOrderClientName(workOrder.clientName),
-      );
-
-      if (selectedOfficer !== 'all') {
-        const officer = officers.find((entry) => entry.uid === selectedOfficer);
-        if (officer) {
-          const officerDoc = (
-            await getDocs(query(collection(db, 'fieldOfficers'), where('uid', '==', officer.uid)))
-          ).docs[0];
-          const assignedDistricts = officerDoc ? (officerDoc.data() as any).assignedDistricts || [] : [];
-          workOrders = workOrders.filter((workOrder) => assignedDistricts.includes(workOrder.district));
-        }
+      if (startDate && endDate && startDate > endDate) {
+        throw new Error('The From Date must be on or before the To Date.');
       }
 
-      const guardIds = Array.from(
-        new Set(workOrders.flatMap((workOrder) => (workOrder.assignedGuards || []).map((guard) => guard.uid))),
+      const params = new URLSearchParams();
+      if (district !== 'all') params.set('district', district);
+      if (selectedOfficer !== 'all') params.set('officerUid', selectedOfficer);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+
+      const response = await authorizedFetch(
+        `/api/admin/work-orders/assigned-guards-export?${params.toString()}`,
       );
-      const employees: Record<string, EmployeeDoc> = {};
-
-      for (let index = 0; index < guardIds.length; index += 10) {
-        const chunk = guardIds.slice(index, index + 10);
-        if (!chunk.length) continue;
-        const employeeSnapshot = await getDocs(query(collection(db, 'employees'), where(documentId(), 'in', chunk)));
-        employeeSnapshot.docs.forEach((d) => {
-          employees[d.id] = d.data() as any;
-        });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Could not prepare the assigned guard export.');
       }
 
-      const rows: any[][] = [];
-      let serialNumber = 1;
-      for (const workOrder of workOrders.sort((a, b) => a.date.toMillis() - b.date.toMillis())) {
-        const site = siteById.get(workOrder.siteId);
-        const guards = workOrder.assignedGuards || [];
-        for (const guard of guards) {
-          const employee = employees[guard.uid] || ({} as any);
-          rows.push([
-            serialNumber++,
-            site?.state || 'Kerala',
-            workOrder.district || '',
-            site?.siteName || workOrder.siteName || '',
-            `${site?.siteId || ''}`,
-            workOrder.examName || workOrder.examCode || "General Duty",
-            `${employee.firstName || guard.name?.split(' ')[0] || ''}`,
-            `${employee.lastName || guard.name?.split(' ').slice(1).join(' ') || ''}`,
-            guard.gender || employee.gender || '',
-            employee.dateOfBirth?.toDate ? employee.dateOfBirth.toDate() : employee.dateOfBirth ? new Date(employee.dateOfBirth) : '',
-            employee.fatherName || '',
-            employee.motherName || '',
-            `${employee.fullAddress || ''}`.replace(/\n/g, ', '),
-            employee.phoneNumber || '',
-            `${employee.emailAddress || ''}`.toLowerCase(),
-            employee.resourceIdNumber || '',
-            employee.identityProofType || '',
-            employee.identityProofNumber || '',
-          ]);
-        }
+      const blob = await response.blob();
+      if (blob.size === 0) {
+        throw new Error('The generated Excel file was empty.');
       }
+      const disposition = response.headers.get('content-disposition') || '';
+      const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const fileName = fileNameMatch?.[1] || 'Assigned_Guards.xlsx';
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-      const headers = [
-        'Sl No.',
-        'State',
-        'City',
-        'Center Name',
-        'Center code',
-        'Exam Name',
-        'First Name of the employee',
-        'Last Name of the employee',
-        'male/female',
-        'date of birth',
-        'father name',
-        'mother name',
-        'Full address',
-        'contact number',
-        'email id',
-        'Resources ID (If available)',
-        'ID Proof Type',
-        'ID proof number',
-      ];
-
-      const fileName = `Assigned_Guards_${buildFiltersDescription().replace(/[^a-zA-Z0-9_\- ,]/g, '')}.xlsx`;
-      await downloadXlsx(fileName, [headers, ...rows], 'Assigned Guards');
+      const rowCount = Number(response.headers.get('x-export-row-count') || 0);
+      toast({
+        title: 'Download started',
+        description: rowCount > 0
+          ? `${rowCount.toLocaleString()} assigned guard record${rowCount === 1 ? '' : 's'} exported.`
+          : 'The assigned guard workbook is downloading.',
+      });
     } catch (error) {
       console.error('Export failed:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Download failed',
+        description: error instanceof Error ? error.message : 'Could not download assigned guard data.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -213,9 +128,9 @@ export function AssignedGuardsExportPanel() {
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="space-y-1.5">
-          <Label>District</Label>
+          <Label htmlFor="assigned-guards-district">District</Label>
           <Select value={district} onValueChange={setDistrict}>
-            <SelectTrigger>
+            <SelectTrigger id="assigned-guards-district">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -229,9 +144,9 @@ export function AssignedGuardsExportPanel() {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Field Officer</Label>
+          <Label htmlFor="assigned-guards-officer">Field Officer</Label>
           <Select value={selectedOfficer} onValueChange={setSelectedOfficer}>
-            <SelectTrigger>
+            <SelectTrigger id="assigned-guards-officer">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -245,12 +160,12 @@ export function AssignedGuardsExportPanel() {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>From Date</Label>
-          <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          <Label htmlFor="assigned-guards-from-date">From Date</Label>
+          <Input id="assigned-guards-from-date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label>To Date</Label>
-          <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          <Label htmlFor="assigned-guards-to-date">To Date</Label>
+          <Input id="assigned-guards-to-date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
         </div>
       </CardContent>
       <CardFooter>

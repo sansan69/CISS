@@ -761,16 +761,13 @@ export default function AssignGuardsPage() {
                         const assignedCount = assignedGuards.length;
                         const assignedMale = assignedGuards.filter((guard) => guard.gender?.trim().toLowerCase() === 'male').length;
                         const assignedFemale = assignedGuards.filter((guard) => guard.gender?.trim().toLowerCase() === 'female').length;
-                        const maleReady = assignedMale === (order.maleGuardsRequired || 0);
-                        const femaleReady = assignedFemale === (order.femaleGuardsRequired || 0);
+                        const maleReady = assignedMale >= (order.maleGuardsRequired || 0);
+                        const femaleReady = assignedFemale >= (order.femaleGuardsRequired || 0);
                         const needsAssignmentReview =
                             order.assignmentReviewRequired === true ||
-                            order.assignmentStatus === 'review' ||
-                            assignedCount > totalRequired ||
-                            assignedMale > (order.maleGuardsRequired || 0) ||
-                            assignedFemale > (order.femaleGuardsRequired || 0);
+                            order.assignmentStatus === 'review';
                         const percent = totalRequired > 0 ? Math.min(100, Math.round((assignedCount / totalRequired) * 100)) : 0;
-                        const isFullyAssigned = !needsAssignmentReview && maleReady && femaleReady && assignedCount === totalRequired && totalRequired > 0;
+                        const isFullyAssigned = !needsAssignmentReview && maleReady && femaleReady && totalRequired > 0;
                         const status = assignedCount === 0 ? 'Unassigned' : needsAssignmentReview ? 'Review' : isFullyAssigned ? 'Fully Assigned' : 'Partial';
 
                         const borderColor = assignedCount === 0 || needsAssignmentReview

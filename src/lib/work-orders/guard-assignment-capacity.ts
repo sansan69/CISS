@@ -19,11 +19,6 @@ function normalizeGender(value: unknown): "male" | "female" | "" {
   return "";
 }
 
-function normalizeRequirement(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
-}
-
 export function countGuardAssignments(
   guards: GuardGenderLike[],
 ): GuardAssignmentCounts {
@@ -39,9 +34,9 @@ export function countGuardAssignments(
 }
 
 export function getGuardAssignmentCapacityIssue(
-  selectedGuards: GuardGenderLike[],
+  _selectedGuards: GuardGenderLike[],
   candidateGender: unknown,
-  requirements: {
+  _requirements: {
     maleGuardsRequired?: unknown;
     femaleGuardsRequired?: unknown;
   },
@@ -52,21 +47,6 @@ export function getGuardAssignmentCapacityIssue(
       title: "Gender information required",
       description:
         "Update this guard’s profile before assigning them to a male or female requirement.",
-    };
-  }
-
-  const counts = countGuardAssignments(selectedGuards);
-  const required =
-    gender === "male"
-      ? normalizeRequirement(requirements.maleGuardsRequired)
-      : normalizeRequirement(requirements.femaleGuardsRequired);
-  const assigned = gender === "male" ? counts.male : counts.female;
-
-  if (assigned >= required) {
-    const label = gender === "male" ? "Male" : "Female";
-    return {
-      title: `${label} requirement already filled`,
-      description: `This work order requires ${required} ${gender} guard${required === 1 ? "" : "s"}. Remove an assigned guard before adding another.`,
     };
   }
 

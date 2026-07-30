@@ -620,6 +620,12 @@ export default function DashboardPage() {
       setIsLoading(false);
       return;
     }
+    if (userRole === 'fieldOfficer') {
+      empQ = query(
+        empQ,
+        where('district', 'in', assignedDistricts.slice(0, 30)),
+      );
+    }
 
     const monthStarts = Array.from({ length: 6 }, (_, i) => startOfMonth(subMonths(new Date(), 5 - i)));
     const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));

@@ -1871,6 +1871,86 @@ describe("TCS exam work order import server slice", () => {
     );
   });
 
+  it("allows assignments above the male and female minimum requirements", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("workOrders", "wo-surplus", {
+      siteId: "site-a",
+      siteName: "Alpha Site",
+      clientName: "TCS",
+      district: "Ernakulam",
+      date: new Date("2026-07-30T00:00:00.000Z"),
+      examCode: "tcs-exam",
+      recordStatus: "active",
+      maleGuardsRequired: 1,
+      femaleGuardsRequired: 1,
+      totalManpower: 2,
+      assignedGuards: [],
+    });
+    adminDb.seed("employees", "guard-m-1", {
+      fullName: "Male Guard One",
+      employeeId: "EMP-M1",
+      gender: "Male",
+      status: "Active",
+      district: "Ernakulam",
+    });
+    adminDb.seed("employees", "guard-m-2", {
+      fullName: "Male Guard Two",
+      employeeId: "EMP-M2",
+      gender: "Male",
+      status: "Active",
+      district: "Ernakulam",
+    });
+    adminDb.seed("employees", "guard-f-1", {
+      fullName: "Female Guard One",
+      employeeId: "EMP-F1",
+      gender: "Female",
+      status: "Active",
+      district: "Ernakulam",
+    });
+    adminDb.seed("employees", "guard-f-2", {
+      fullName: "Female Guard Two",
+      employeeId: "EMP-F2",
+      gender: "Female",
+      status: "Active",
+      district: "Ernakulam",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db: adminDb }));
+
+    const { PATCH } = await import("./api/admin/work-orders/[id]/route");
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/work-orders/wo-surplus", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          assignedGuards: [
+            { uid: "guard-m-1" },
+            { uid: "guard-m-2" },
+            { uid: "guard-f-1" },
+            { uid: "guard-f-2" },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ id: "wo-surplus" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(adminDb.getDoc("workOrders", "wo-surplus")).toEqual(
+      expect.objectContaining({
+        assignmentStatus: "ready",
+        assignmentReviewRequired: false,
+        assignedGuards: expect.arrayContaining([
+          expect.objectContaining({ uid: "guard-m-1", gender: "Male" }),
+          expect.objectContaining({ uid: "guard-m-2", gender: "Male" }),
+          expect.objectContaining({ uid: "guard-f-1", gender: "Female" }),
+          expect.objectContaining({ uid: "guard-f-2", gender: "Female" }),
+        ]),
+      }),
+    );
+  });
+
   it("rejects same-date double assignment of a guard", async () => {
     const adminDb = new FakeFirestore();
     const dutyDate = new Date("2026-04-21T00:00:00.000Z");

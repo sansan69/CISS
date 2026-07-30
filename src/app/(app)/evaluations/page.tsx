@@ -37,6 +37,7 @@ export default function EvaluationsPage() {
   const { toast } = useToast();
   const [token, setToken] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [assignedDistricts, setAssignedDistricts] = useState<string[]>([]);
   const [authUser, setAuthUser] = useState<FirebaseUser | null>(null);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +64,7 @@ export default function EvaluationsPage() {
         try {
           const appUser = await resolveAppUser(user);
           setUserRole(appUser.role);
+          setAssignedDistricts(appUser.assignedDistricts);
         } catch { setUserRole("user"); }
       }
     });
@@ -89,10 +91,18 @@ export default function EvaluationsPage() {
 
   const searchEmployees = useCallback(async (term: string) => {
     if (!term.trim()) { setEmpResults([]); return; }
+    if (userRole === "fieldOfficer" && assignedDistricts.length === 0) {
+      setEmpResults([]);
+      return;
+    }
     setSearchingEmp(true);
     try {
+      const constraints = [where("status", "==", "Active"), limit(10)];
+      if (userRole === "fieldOfficer") {
+        constraints.unshift(where("district", "in", assignedDistricts.slice(0, 30)));
+      }
       const snap = await getDocs(
-        query(collection(db, "employees"), where("status", "==", "Active"), limit(10))
+        query(collection(db, "employees"), ...constraints)
       );
       const lower = term.toLowerCase();
       const results = snap.docs
@@ -101,7 +111,7 @@ export default function EvaluationsPage() {
       setEmpResults(results);
     } catch { setEmpResults([]); }
     finally { setSearchingEmp(false); }
-  }, []);
+  }, [assignedDistricts, userRole]);
 
   useEffect(() => {
     const t = setTimeout(() => searchEmployees(empSearch), 400);

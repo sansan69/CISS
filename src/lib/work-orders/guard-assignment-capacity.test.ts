@@ -16,18 +16,14 @@ describe("guard assignment capacity", () => {
     ).toEqual({ male: 2, female: 1 });
   });
 
-  it("prevents selecting more guards than the work-order requirement", () => {
+  it("allows selecting more guards than the work-order requirement", () => {
     expect(
       getGuardAssignmentCapacityIssue(
         [{ gender: "Male" }],
         "male",
         { maleGuardsRequired: 1, femaleGuardsRequired: 2 },
       ),
-    ).toEqual(
-      expect.objectContaining({
-        title: "Male requirement already filled",
-      }),
-    );
+    ).toBeNull();
   });
 
   it("allows a guard while capacity remains", () => {

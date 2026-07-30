@@ -238,13 +238,6 @@ export async function PATCH(
         const femaleRequired = Math.max(0, Number(workOrder.femaleGuardsRequired ?? 0));
         const maleAssigned = canonicalGuards.filter((guard) => guard.gender === "Male").length;
         const femaleAssigned = canonicalGuards.filter((guard) => guard.gender === "Female").length;
-        if (maleAssigned > maleRequired || femaleAssigned > femaleRequired) {
-          throw new WorkOrderAssignmentError(
-            `Assignment exceeds the requirement: ${maleAssigned}/${maleRequired} male and ${femaleAssigned}/${femaleRequired} female.`,
-            409,
-          );
-        }
-
         if (requestedGuardIds.length > 0 && workOrder.date) {
           const sameDateSnapshot = await transaction.get(
             adminDb.collection("workOrders").where("date", "==", workOrder.date),
@@ -272,8 +265,9 @@ export async function PATCH(
         transaction.update(workOrderRef, {
           assignedGuards: canonicalGuards,
           assignmentVersion,
+          assignmentReviewRequired: false,
           assignmentStatus:
-            maleAssigned === maleRequired && femaleAssigned === femaleRequired
+            maleAssigned >= maleRequired && femaleAssigned >= femaleRequired
               ? "ready"
               : canonicalGuards.length === 0
                 ? "unassigned"

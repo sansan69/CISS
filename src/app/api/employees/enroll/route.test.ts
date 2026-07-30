@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => {
     addedEmployees,
     generateEmployeeId: vi.fn(() => "CISS/TCS/2026-27/001"),
     generateQrCodeDataUrl: vi.fn(() => Promise.resolve("data:image/png;base64,qr")),
+    verifyIdToken: vi.fn(() => Promise.resolve({
+      uid: "admin-user",
+      role: "admin",
+    })),
   };
 });
 
@@ -71,6 +75,9 @@ class FakeCollection {
 }
 
 vi.mock("@/lib/firebaseAdmin", () => ({
+  auth: {
+    verifyIdToken: mocks.verifyIdToken,
+  },
   db: {
     collection: (name: string) => new FakeCollection(name),
     batch: () => {
@@ -139,6 +146,7 @@ describe("POST /api/employees/enroll", () => {
     mocks.addedEmployees.length = 0;
     mocks.generateEmployeeId.mockClear();
     mocks.generateQrCodeDataUrl.mockClear();
+    mocks.verifyIdToken.mockClear();
   });
 
   it("stores standard client enrollments without requiring email and returns the created employee", async () => {
@@ -174,5 +182,52 @@ describe("POST /api/employees/enroll", () => {
         status: "Active",
       },
     });
+  });
+
+  it("allows an authenticated admin submission without a public upload session", async () => {
+    const { POST } = await import("./route");
+    const {
+      enrollmentDraftId: _draftId,
+      enrollmentUploadToken: _uploadToken,
+      ...payload
+    } = buildStandardPayload();
+
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: {
+          Authorization: "Bearer valid-admin-token",
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.verifyIdToken).toHaveBeenCalledWith("valid-admin-token");
+    expect(mocks.addedEmployees).toHaveLength(1);
+  });
+
+  it("still requires an upload session for an unauthenticated public submission", async () => {
+    const { POST } = await import("./route");
+    const {
+      enrollmentDraftId: _draftId,
+      enrollmentUploadToken: _uploadToken,
+      ...payload
+    } = buildStandardPayload();
+
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Enrollment upload session is required.",
+    });
+    expect(mocks.addedEmployees).toHaveLength(0);
   });
 });

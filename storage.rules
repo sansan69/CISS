@@ -22,14 +22,6 @@ service firebase.storage {
       return isImage() || request.resource.contentType == 'application/pdf';
     }
 
-    function isEnrollmentImage() {
-      return isAllowedEnrollmentImageSize() && isImage();
-    }
-
-    function isEnrollmentDocument() {
-      return isAllowedSize() && isDocument();
-    }
-
     function isTrainingContent() {
       return isImage()
         || request.resource.contentType == 'application/pdf'
@@ -94,7 +86,11 @@ service firebase.storage {
         (folder == 'trainingReportFiles' && isAllowedTrainingSize() && isTrainingContent()) ||
         (folder != 'trainingReportFiles' && isAllowedSize() && isDocument())
       );
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && (
+        (folder == 'trainingReportFiles' && isAllowedTrainingSize() && isTrainingContent()) ||
+        (folder != 'trainingReportFiles' && isAllowedSize() && isDocument())
+      );
+      allow delete: if isAdmin();
     }
 
     // Legacy employee file paths. Public attendance can still upload attendance
@@ -104,74 +100,86 @@ service firebase.storage {
     match /employees/{employeeKey}/profilePictures/{fileName} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isAllowedSize() && isImage();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isImage();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/signatures/{fileName} {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isAllowedSize() && isImage();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isImage();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/attendance/{attemptId}/{fileName} {
       allow read: if isSignedIn();
       // Attendance photos are written only by the validated server upload route.
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedEnrollmentImageSize() && isImage();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/idProofs/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/addressProofs/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/serviceBooks/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/armsLicenses/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/aadharCards/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/panCards/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/passports/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/bankDocuments/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     match /employees/{employeeKey}/policeCertificates/{fileName} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
     }
 
     // Training module content — admin upload, signed-in read
@@ -186,67 +194,78 @@ service firebase.storage {
     match /enrollments/{employeeKey}/profilePictures/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/signatures/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/idProofs/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/addressProofs/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/serviceBooks/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/armsLicenses/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/aadharCards/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/panCards/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/passports/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/bankDocuments/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{employeeKey}/policeCertificates/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update, delete: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /{allPaths=**} {

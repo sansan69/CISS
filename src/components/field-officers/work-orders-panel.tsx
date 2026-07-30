@@ -688,25 +688,14 @@ export function WorkOrdersPanel() {
             );
           }, 0);
           const dateNeedsReview = orders.some((order) => {
-            const assignedGuards = Array.isArray(order.assignedGuards) ? order.assignedGuards : [];
-            const assignedMale = assignedGuards.filter(
-              (guard) => String(guard.gender ?? "").trim().toLowerCase() === "male",
-            ).length;
-            const assignedFemale = assignedGuards.filter(
-              (guard) => String(guard.gender ?? "").trim().toLowerCase() === "female",
-            ).length;
-            const required = order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired);
             return (
               order.assignmentReviewRequired === true ||
-              assignedGuards.length > required ||
-              assignedMale > order.maleGuardsRequired ||
-              assignedFemale > order.femaleGuardsRequired
+              order.assignmentStatus === "review"
             );
           });
           const dateIsReady =
             !dateNeedsReview &&
             datePendingCount === 0 &&
-            dateAssignedCount === dateTotalRequired &&
             dateTotalRequired > 0;
           const isCollapsed = collapsedDateKeys.has(dateKey);
           const ToggleIcon = isCollapsed ? ChevronRight : ChevronDown;
@@ -757,15 +746,12 @@ export function WorkOrdersPanel() {
                       ).length;
                       const isFullyAssigned =
                         totalRequired > 0 &&
-                        assignedMale === order.maleGuardsRequired &&
-                        assignedFemale === order.femaleGuardsRequired;
+                        assignedMale >= order.maleGuardsRequired &&
+                        assignedFemale >= order.femaleGuardsRequired;
                       const isUnassigned = assignedCount === 0;
                       const needsAssignmentReview =
                         order.assignmentReviewRequired === true ||
-                        order.assignmentStatus === "review" ||
-                        assignedCount > totalRequired ||
-                        assignedMale > order.maleGuardsRequired ||
-                        assignedFemale > order.femaleGuardsRequired;
+                        order.assignmentStatus === "review";
 
                       const statusColor = needsAssignmentReview
                         ? "text-red-600"

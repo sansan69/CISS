@@ -51,6 +51,10 @@ const assignedGuardsExportPanelSource = readFileSync(
   resolve(process.cwd(), "src/components/work-orders/assigned-guards-export-panel.tsx"),
   "utf8",
 );
+const assignedGuardsExportRouteSource = readFileSync(
+  resolve(process.cwd(), "src/app/api/admin/work-orders/assigned-guards-export/route.ts"),
+  "utf8",
+);
 
 describe("work orders operations surface", () => {
   it("keeps work orders as the single sidebar entry for assignment and export flow", () => {
@@ -145,7 +149,9 @@ describe("work orders operations surface", () => {
     expect(workOrdersSitePageSource).toContain('title: "Assignment not saved"');
     expect(workOrdersPageSource).toContain("recordStatus ?? 'active'");
     expect(workOrdersPageSource).toContain("getWorkOrderExamLabel(order) || 'General Duty'");
-    expect(assignedGuardsExportPanelSource).toContain("'Exam Name'");
-    expect(assignedGuardsExportPanelSource).toContain('workOrder.examName || workOrder.examCode || "General Duty"');
+    expect(assignedGuardsExportPanelSource).toContain("/api/admin/work-orders/assigned-guards-export");
+    expect(assignedGuardsExportPanelSource).toContain("Download failed");
+    expect(assignedGuardsExportRouteSource).toContain('"Exam Name"');
+    expect(assignedGuardsExportRouteSource).toContain("workOrder.examName || workOrder.examCode");
   });
 });

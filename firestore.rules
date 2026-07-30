@@ -112,6 +112,33 @@ service cloud.firestore {
         docDistrict in request.auth.token.assignedDistricts;
     }
 
+    function isFieldOfficerForEmployee() {
+      return isFieldOfficer() &&
+        request.auth.token.assignedDistricts != null && (
+          ('district' in resource.data &&
+            resource.data.district is string &&
+            resource.data.district in request.auth.token.assignedDistricts) ||
+          ('districtName' in resource.data &&
+            resource.data.districtName is string &&
+            resource.data.districtName in request.auth.token.assignedDistricts) ||
+          ('currentDistrict' in resource.data &&
+            resource.data.currentDistrict is string &&
+            resource.data.currentDistrict in request.auth.token.assignedDistricts) ||
+          ('permanentDistrict' in resource.data &&
+            resource.data.permanentDistrict is string &&
+            resource.data.permanentDistrict in request.auth.token.assignedDistricts) ||
+          ('addressDistrict' in resource.data &&
+            resource.data.addressDistrict is string &&
+            resource.data.addressDistrict in request.auth.token.assignedDistricts) ||
+          ('locationDistrict' in resource.data &&
+            resource.data.locationDistrict is string &&
+            resource.data.locationDistrict in request.auth.token.assignedDistricts) ||
+          ('city' in resource.data &&
+            resource.data.city is string &&
+            resource.data.city in request.auth.token.assignedDistricts)
+        );
+    }
+
     // ── Client-user scoping helpers ─────────────────────────────────────────
 
     // True when the document belongs to the signed-in client user's organization
@@ -153,11 +180,13 @@ service cloud.firestore {
     // ── employees ───────────────────────────────────────────────────────────
     // Public profile access now goes through a server route backed by Admin SDK.
     // Raw employee docs are no longer anonymously readable.
-    // Staff can read employee docs; guards can read only their own record;
-    // client users can read employees for their mapped client.
+    // Admin/HR/accounts/compliance can read employee docs. Field officers are
+    // restricted to employees in their assigned districts; guards can read
+    // only their own record; client users can read their mapped client.
 
     match /employees/{employeeId} {
-      allow read: if readStateMatches() && (isStaff() ||
+      allow read: if readStateMatches() && (isAdmin() || isHR() || isAccounts() || isCompliance() ||
+        isFieldOfficerForEmployee() ||
         (isGuard() && (
           employeeId == guardEmployeeDocId() ||
           resource.data.employeeId == guardEmployeeId()
@@ -242,11 +271,17 @@ service cloud.firestore {
 
     match /fcmTokens/{tokenId} {
       allow read: if isAdmin();
-      allow write: if isSignedIn() &&
+      allow create, update: if isSignedIn() &&
         (tokenId == request.auth.uid || tokenId.matches(request.auth.uid + '_.*')) &&
         request.resource.data.uid == request.auth.uid &&
         request.resource.data.token is string &&
-        request.resource.data.platform is string;
+        request.resource.data.platform is string &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'token', 'platform', 'createdAt', 'updatedAt'
+        ]);
+      allow delete: if isSignedIn() &&
+        (tokenId == request.auth.uid || tokenId.matches(request.auth.uid + '_.*')) &&
+        resource.data.uid == request.auth.uid;
     }
 
     // ── attendanceLogs ───────────────────────────────────────────────────────
@@ -310,81 +345,40 @@ service cloud.firestore {
     }
 
     // ── Training & Evaluation ────────────────────────────────────────────────
+    // These workflows use authenticated server routes. Keeping their raw
+    // documents server-only prevents clients from bypassing assignment,
+    // quiz-scoring, evaluation-scope, and award-integrity checks.
 
     match /trainingModules/{moduleId} {
-      // Guards and all signed-in users can read training modules
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /questionBanks/{bankId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow read, write: if false;
 
       match /questions/{questionId} {
-        // Signed-in read is fine; clients get scrubbed versions via server anyway.
-        // Admin manages content.
-        allow read: if isAdmin() || isFieldOfficer();
-        allow create, update, delete: if isAdmin();
+        allow read, write: if false;
       }
     }
 
     match /quizAttempts/{attemptId} {
-      allow read: if isAdmin() || isFieldOfficer() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId());
-      // Guards submit via server route (admin SDK bypasses rules). Lock down client writes.
-      allow create, update, delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /trainingAssignments/{assignmentId} {
-      // Guards can read their own training assignments and update progress
-      allow read: if readStateMatches() && (isAdmin() || isFieldOfficer() ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId()));
-
-      // Guards can update their own assignment progress (progressPercent, status, completedAt)
-      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
-        (isGuard() &&
-          readStateMatches() &&
-          writeStateMatches() &&
-          resource.data.employeeDocId == guardEmployeeDocId() &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['progressPercent', 'status', 'startedAt', 'completedAt']));
-
-      allow create: if isAdmin() && writeStateMatches();
-      allow delete: if isAdmin() && readStateMatches();
+      allow read, write: if false;
     }
 
-    // ── evaluations — FO can only evaluate employees in their assigned districts ──
-
     match /evaluations/{evalId} {
-      allow read: if readStateMatches() && (isAdmin() ||
-        isFieldOfficerForDistrict(resource.data.district) ||
-        (isGuard() && resource.data.employeeDocId == guardEmployeeDocId()));
-
-      // FO can create/update evaluations only for employees in their districts.
-      // For creates where resource.data does not yet exist, validate the incoming document.
-      allow create: if (isAdmin() ||
-        (isFieldOfficer() && request.resource.data.district in request.auth.token.assignedDistricts)) &&
-        writeStateMatches();
-
-      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
-        (isFieldOfficer() &&
-          readStateMatches() &&
-          writeStateMatches() &&
-          resource.data.district in request.auth.token.assignedDistricts &&
-          request.resource.data.district in request.auth.token.assignedDistricts);
-
-      allow delete: if isAdmin() && readStateMatches();
+      allow read, write: if false;
     }
 
     match /guardScores/{employeeId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /awards/{awardId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow read, write: if false;
     }
 
     // ── Payroll & Compliance (admin/accounts/HR only) ─────────────────────────
@@ -452,9 +446,7 @@ service cloud.firestore {
     // Store OTP codes for guard PIN reset - admin only writes, user reads own
 
     match /resetOtps/{otpId} {
-      allow read: if isSignedIn() && resource.data.phone == request.auth.token.phone;
-      allow create: if isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if false;
     }
 
     // ── branches / districts / states (multi-state scaffold) ───────────────
@@ -537,6 +529,38 @@ service cloud.firestore {
     }
 
     match /fieldOfficerAudit/{docId} {
+      allow read, write: if false;
+    }
+
+    match /employeeIds/{docId} {
+      allow read, write: if false;
+    }
+
+    match /enrollments/{docId} {
+      allow read, write: if false;
+    }
+
+    match /guardPatrolActivities/{docId} {
+      allow read, write: if false;
+    }
+
+    match /incidents/{docId} {
+      allow read, write: if false;
+    }
+
+    match /leaveRequests/{docId} {
+      allow read, write: if false;
+    }
+
+    match /notificationReadStates/{docId} {
+      allow read, write: if false;
+    }
+
+    match /regionAutomationJobs/{docId} {
+      allow read, write: if false;
+    }
+
+    match /workOrderImports/{docId} {
       allow read, write: if false;
     }
 

@@ -180,6 +180,8 @@ export default function EmployeeDirectoryPage() {
 
         if (userRole === 'fieldOfficer' && assignedDistricts.length === 0) {
             return null; // Return null to indicate no query should be run
+        } else if (userRole === 'fieldOfficer') {
+            q = query(q, where('district', 'in', assignedDistricts.slice(0, 30)));
         } else if (userRole === 'client' && clientInfo?.clientName) {
             q = query(q, where('clientName', '==', clientInfo.clientName));
         } else if (userRole === 'client' && !clientInfo?.clientName) {
