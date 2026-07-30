@@ -1,17 +1,17 @@
 {
   "platform": "android",
   "packageName": "co.in.ciss.ciss_mobile",
-  "latestVersionName": "1.0.16",
-  "latestVersionCode": 16,
+  "latestVersionName": "1.0.17",
+  "latestVersionCode": 17,
   "minimumSupportedVersionCode": 13,
-  "apkPath": "/downloads/ciss-workforce-1.0.16.apk",
-  "sha256": "42a43e9e70eacb32c96603c2c090c305f8c74293d012782df407de90fd5de51c",
-  "sizeBytes": 86682532,
-  "releaseDate": "2026-07-05",
+  "apkPath": "/downloads/ciss-workforce-1.0.17.apk",
+  "sha256": "97b79b9d56c8e8c3ac728c7afa708cc210ec897f677257dd02d1d7d83ca914a8",
+  "sizeBytes": 87469488,
+  "releaseDate": "2026-07-30",
   "releaseNotes": [
-    "Publishes the latest Flutter Android rebuild with a new version code.",
-    "Adds cancellable in-app APK downloads with integrity verification.",
-    "Includes the latest attendance, regional switching, and production job reliability fixes."
+    "Recovers live guard tracking after application or device restarts.",
+    "Starts tracking after queued attendance is accepted by the server.",
+    "Adds the redesigned guard, field officer, client, and administrator portals."
   ],
   "mandatory": false
 }

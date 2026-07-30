@@ -48,7 +48,8 @@ root-relative fallback.
 
 ## Transitional local hosting
 
-Existing versioned APKs remain in this directory until an external bucket or
-Managed Google Play rollout is ready. Do not add another APK copy to Git. Once
-the manifest points at a verified external asset, remove the historical APKs in
-a separate cleanup commit.
+Existing versioned APKs, including the `1.0.17` transition release, remain in
+this directory until an external bucket or Managed Google Play rollout is
+ready. Do not add another APK copy to Git. Once the manifest points at a
+verified external asset, remove the historical APKs in a separate cleanup
+commit.
