@@ -7,6 +7,19 @@ import { describe, expect, it } from "vitest";
 
 const pagePath = resolve(process.cwd(), "src/components/landing-page.tsx");
 const pageSource = readFileSync(pagePath, "utf8");
+const androidRelease = {
+  platform: "android" as const,
+  packageName: "co.in.ciss.ciss_mobile",
+  latestVersionName: "1.0.16",
+  latestVersionCode: 16,
+  minimumSupportedVersionCode: 13,
+  apkPath: "/downloads/ciss-workforce-1.0.16.apk",
+  sha256: "a".repeat(64),
+  sizeBytes: 86_682_532,
+  releaseDate: "2026-07-05",
+  releaseNotes: ["Verified release."],
+  mandatory: false,
+};
 
 const iconProxy = new Proxy(
   {},
@@ -78,7 +91,12 @@ const moduleMocks: Record<string, unknown> = {
   },
 };
 
-let cachedLandingPage: React.ComponentType | null = null;
+type LandingPageTestProps = {
+  androidRelease: typeof androidRelease;
+  androidDownloadQr: string;
+};
+
+let cachedLandingPage: React.ComponentType<LandingPageTestProps> | null = null;
 
 function loadLandingPage() {
   if (cachedLandingPage) return cachedLandingPage;
@@ -101,7 +119,7 @@ function loadLandingPage() {
   );
 
   cachedLandingPage = (compiledModule.exports.default ??
-    compiledModule.exports) as React.ComponentType;
+    compiledModule.exports) as React.ComponentType<LandingPageTestProps>;
   return cachedLandingPage;
 }
 
@@ -161,7 +179,12 @@ function indexOfText(textContent: string, value: string) {
 describe("landing page surface", () => {
   it("renders the official CISS-themed attendance landing surface", () => {
     const LandingPage = loadLandingPage();
-    const html = renderToStaticMarkup(React.createElement(LandingPage));
+    const html = renderToStaticMarkup(
+      React.createElement(LandingPage, {
+        androidRelease,
+        androidDownloadQr: "data:image/png;base64,ciss",
+      }),
+    );
     const textContent = normalizeTextContent(html);
     const hrefs = extractHrefList(html);
     const images = extractImageData(html);
@@ -209,6 +232,8 @@ describe("landing page surface", () => {
     expect(textContent).toContain("Keep location permission on. A live photo is also required.");
     expect(textContent).toContain("CISS Workforce for Android");
     expect(textContent).toContain("Version 1.0.16 · Official guard app");
+    expect(textContent).toContain("Continue on your Android phone");
+    expect(textContent).toContain("View installation options");
     expect(textContent).toContain("Staff login");
     expect(textContent).toContain("Field officers, clients and administrators");
     expect(textContent).not.toContain("About CISS Workforce");
@@ -226,8 +251,9 @@ describe("landing page surface", () => {
       expect.arrayContaining([{ alt: "CISS Workforce Logo", src: "/ciss-logo.png" }]),
     );
     expect(html).toContain('data-desktop-section="brand"');
-    expect(html).toContain("hidden animate-slide-up xl:block");
-    expect(html).toContain("xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]");
+    expect(html).toContain('data-desktop-section="android-download"');
+    expect(html).toContain("hidden animate-slide-up lg:block");
+    expect(html).toContain("lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]");
     expect(html).toContain('id="attendance-access"');
     expect(html).toContain("dark:bg-card");
     expect(html).toContain('data-mobile-section="header"');

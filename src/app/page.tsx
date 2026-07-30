@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import LandingPage from "@/components/landing-page";
+import {
+  createAndroidDownloadQr,
+  getAndroidRelease,
+} from "@/lib/android-release";
 
 const title = "CISS Workforce | Secure Attendance & Workforce Operations";
 const description =
@@ -35,6 +39,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Page() {
-  return <LandingPage />;
+export default async function Page() {
+  const [androidRelease, androidDownloadQr] = await Promise.all([
+    getAndroidRelease(),
+    createAndroidDownloadQr(),
+  ]);
+
+  return (
+    <LandingPage
+      androidRelease={androidRelease}
+      androidDownloadQr={androidDownloadQr}
+    />
+  );
 }

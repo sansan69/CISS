@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { parseEmployeeIdFromQrText } from "@/lib/qr/employee-qr";
 import { QrScannerDialog } from "@/components/qr-scanner-dialog";
+import type { AndroidRelease } from "@/lib/android-release";
 
 type BeforeInstallPromptChoice = {
   outcome: "accepted" | "dismissed";
@@ -52,8 +53,15 @@ type PortalContext = {
   };
 };
 
+type LandingPageProps = {
+  androidRelease: AndroidRelease;
+  androidDownloadQr: string;
+};
 
-export default function LandingPage() {
+export default function LandingPage({
+  androidRelease,
+  androidDownloadQr,
+}: LandingPageProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -303,7 +311,7 @@ export default function LandingPage() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-2 xl:flex" aria-label="Public navigation">
+          <nav className="hidden items-center gap-2 lg:flex" aria-label="Public navigation">
             <a
               href="https://cissindia.co.in"
               target="_blank"
@@ -321,10 +329,10 @@ export default function LandingPage() {
           </nav>
         </header>
 
-        <div className="grid flex-1 items-start gap-6 py-6 sm:py-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)] xl:items-center xl:gap-16 xl:py-14">
+        <div className="grid flex-1 items-start gap-6 py-6 sm:py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)] lg:items-center lg:gap-10 lg:py-10 xl:gap-16 xl:py-14">
           <section
             data-desktop-section="brand"
-            className="hidden animate-slide-up xl:block xl:pr-4"
+            className="hidden animate-slide-up lg:block lg:pr-2 xl:pr-4"
             aria-labelledby="landing-title"
           >
             <div className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-brand-blue dark:text-accent">
@@ -377,16 +385,50 @@ export default function LandingPage() {
                 Enrol as a new guard
               </Link>
             </div>
+
+            <section
+              data-desktop-section="android-download"
+              className="mt-7 flex max-w-2xl items-center gap-4 border-y border-border/70 py-4"
+              aria-labelledby="desktop-android-download-title"
+            >
+              <Image
+                src={androidDownloadQr}
+                alt="QR code to open the CISS Workforce Android download page"
+                width={84}
+                height={84}
+                unoptimized
+                className="h-[84px] w-[84px] shrink-0 rounded-md"
+              />
+              <div className="min-w-0 flex-1">
+                <p
+                  id="desktop-android-download-title"
+                  className="font-exo2 text-base font-bold text-foreground"
+                >
+                  Continue on your Android phone
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Scan to install CISS Workforce {androidRelease.latestVersionName}.
+                  The same verified release powers attendance and duty tracking.
+                </p>
+                <Link
+                  href="/download"
+                  className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:text-brand-blue-dark dark:hover:text-primary/80"
+                >
+                  View installation options
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </section>
           </section>
 
           <section
             id="attendance-access"
             data-mobile-section="verification"
-            className="relative mx-auto w-full max-w-xl animate-slide-up xl:max-w-none"
+            className="relative mx-auto w-full max-w-xl animate-slide-up lg:max-w-none"
             aria-labelledby="attendance-title"
           >
             <div
-              className="absolute -inset-3 -z-10 hidden translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.04] dark:border-white/[0.06] dark:bg-white/[0.025] xl:block"
+              className="absolute -inset-3 -z-10 hidden translate-x-3 translate-y-3 rounded-[2rem] border border-primary/15 bg-primary/[0.04] dark:border-white/[0.06] dark:bg-white/[0.025] lg:block"
               aria-hidden="true"
             />
             <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-brand-md lg:rounded-[1.75rem] dark:bg-card">
@@ -413,7 +455,7 @@ export default function LandingPage() {
                 <label htmlFor="employee-phone" className="text-sm font-semibold text-foreground">
                   Mobile number
                 </label>
-                <p className="mt-1 hidden text-xs leading-5 text-muted-foreground xl:block">
+                <p className="mt-1 hidden text-xs leading-5 text-muted-foreground lg:block">
                   Enter the 10-digit number linked to the guard profile.
                 </p>
 
@@ -467,7 +509,7 @@ export default function LandingPage() {
                   )}
                 </Button>
 
-                <p className="mt-3 text-center text-xs leading-5 text-muted-foreground xl:hidden">
+                <p className="mt-3 text-center text-xs leading-5 text-muted-foreground lg:hidden">
                   Not registered? Continue with your mobile number. We&apos;ll open the enrolment form.
                 </p>
 
@@ -480,7 +522,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <nav className="mt-5 grid grid-cols-2 gap-3 text-sm xl:hidden" aria-label="Guard access">
+            <nav className="mt-5 grid grid-cols-2 gap-3 text-sm lg:hidden" aria-label="Guard access">
               <Link
                 href="/guard-login"
                 data-action="guard-portal"
@@ -499,7 +541,7 @@ export default function LandingPage() {
 
             <section
               data-mobile-section="android-download"
-              className="mt-4 border-y border-border/70 py-4 xl:hidden"
+              className="mt-4 border-y border-border/70 py-4 lg:hidden"
               aria-labelledby="android-download-title"
             >
               <div className="flex items-center gap-3">
@@ -511,7 +553,7 @@ export default function LandingPage() {
                     CISS Workforce for Android
                   </h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Version 1.0.16 · Official guard app
+                    Version {androidRelease.latestVersionName} · Official guard app
                   </p>
                 </div>
                 <a
@@ -529,7 +571,7 @@ export default function LandingPage() {
 
         <section
           data-mobile-section="quick-access"
-          className="mb-8 hidden overflow-hidden rounded-2xl border border-border/70 bg-card/65 backdrop-blur xl:grid xl:grid-cols-[1.15fr_0.85fr_1fr]"
+          className="mb-8 hidden overflow-hidden rounded-2xl border border-border/70 bg-card/65 backdrop-blur lg:grid lg:grid-cols-[1.15fr_0.85fr_1fr]"
           aria-label="Platform capabilities"
         >
           <div className="flex gap-4 border-b border-border/70 p-5 lg:border-b-0 lg:border-r">
@@ -561,7 +603,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <footer className="hidden flex-col gap-5 border-t border-border/60 py-6 text-xs text-muted-foreground xl:flex xl:flex-row xl:items-center xl:justify-between">
+        <footer className="hidden flex-col gap-5 border-t border-border/60 py-6 text-xs text-muted-foreground lg:flex lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Building2 className="h-4 w-4 text-accent" />
             <p>
@@ -588,7 +630,7 @@ export default function LandingPage() {
 
         <footer
           data-mobile-section="staff-access"
-          className="border-t border-border/70 pb-[max(env(safe-area-inset-bottom),1rem)] pt-5 xl:hidden"
+          className="border-t border-border/70 pb-[max(env(safe-area-inset-bottom),1rem)] pt-5 lg:hidden"
         >
           <Link
             href="/admin-login"
@@ -628,7 +670,7 @@ export default function LandingPage() {
       />
 
       {showInstallPrompt && (
-        <div className="fixed inset-x-0 bottom-0 z-50 hidden px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] animate-slide-up xl:block">
+        <div className="fixed inset-x-0 bottom-0 z-50 hidden px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] animate-slide-up lg:block">
           <div className="mx-auto max-w-md rounded-2xl border border-border/80 bg-card/95 p-4 text-card-foreground shadow-brand-lg backdrop-blur-2xl">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-brand-gold-dark dark:text-accent">

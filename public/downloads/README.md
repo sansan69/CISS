@@ -1,36 +1,54 @@
-# CISS Workforce APK Downloads
+# CISS Workforce Android releases
 
-This directory contains the latest Android APK for field officers and guards.
+The web application uses `ciss-workforce-android.json` as the single source for:
 
-## How to add a new release
+- the landing-page version and release size;
+- the `/download` installation page;
+- `/api/public/download/android`, the stable download redirect; and
+- `/api/public/app-update`, consumed by installed Android applications.
 
-1. Build the release APK from the private `CISS-Mobile` Flutter project:
+## Preferred distribution
+
+Production releases should be published through Managed Google Play. Keep the
+direct APK route as a fallback for unmanaged devices.
+
+Fallback APKs should be stored as immutable, versioned objects in Firebase
+Storage, Google Cloud Storage, or another controlled object store. Add the
+public HTTPS asset URL as `apkUrl` in the manifest:
+
+```json
+{
+  "apkPath": "/downloads/fallback.apk",
+  "apkUrl": "https://releases.example.com/ciss-workforce-1.0.17.apk"
+}
+```
+
+`apkUrl` takes precedence. `apkPath` remains required as an emergency
+root-relative fallback.
+
+## Release procedure
+
+1. Bump `version:` in the private `CISS-Mobile/pubspec.yaml`.
+2. Push and tag the mobile commit with the matching version, such as `v1.0.17`.
+3. The mobile GitHub workflow must pass analysis and tests, production-sign the
+   AAB/APKs, verify the approved certificate, and publish checksums.
+4. Upload the universal APK to the external immutable release location.
+5. Update `ciss-workforce-android.json` with:
+   - version name and code;
+   - minimum supported code;
+   - immutable `apkUrl`;
+   - SHA-256 and exact byte size;
+   - release date and notes.
+6. Verify:
+
    ```bash
-   cd ../CISS-Mobile
-   flutter build apk --release --split-per-abi
+   curl https://cisskerala.site/api/public/app-update
+   curl -I https://cisskerala.site/api/public/download/android
    ```
 
-2. Copy the universal APK to a versioned file and update the latest compatibility copy:
-   ```bash
-   cp build/app/outputs/flutter-apk/app-release.apk public/downloads/ciss-workforce-X.Y.Z.apk
-   cp build/app/outputs/flutter-apk/app-release.apk public/downloads/ciss-workforce-latest.apk
-   ```
+## Transitional local hosting
 
-3. Update `public/downloads/ciss-workforce-android.json` with the versioned APK path, size, and SHA-256.
-
-4. Commit and push (Vercel will auto-deploy):
-   ```bash
-   git add public/downloads/
-   git commit -m "release: mobile app vX.Y.Z"
-   git push origin main
-   ```
-
-5. The public download page uses a non-cached redirect at:
-   ```
-   https://your-domain/api/public/download/android
-   ```
-
-## Notes
-- The `CISS-Mobile` repo is private, so APKs must be distributed through this webapp
-- Vercel already serves APKs with correct `Content-Type: application/vnd.android.package-archive` headers
-- Field officers can download at `/download`
+Existing versioned APKs remain in this directory until an external bucket or
+Managed Google Play rollout is ready. Do not add another APK copy to Git. Once
+the manifest points at a verified external asset, remove the historical APKs in
+a separate cleanup commit.

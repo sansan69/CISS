@@ -1,23 +1,15 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { NextResponse } from "next/server";
-export const runtime = "nodejs";
+import {
+  getAndroidRelease,
+  resolveAndroidApkUrl,
+} from "@/lib/android-release";
 
-type AndroidManifest = {
-  apkPath: string;
-};
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    const manifestPath = path.join(
-      process.cwd(),
-      "public",
-      "downloads",
-      "ciss-workforce-android.json",
-    );
-    const raw = await fs.readFile(manifestPath, "utf8");
-    const manifest = JSON.parse(raw) as AndroidManifest;
-    const target = new URL(manifest.apkPath, new URL(request.url).origin);
+    const release = await getAndroidRelease();
+    const target = resolveAndroidApkUrl(release, new URL(request.url).origin);
 
     return NextResponse.redirect(target, {
       headers: {
