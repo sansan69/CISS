@@ -17,7 +17,9 @@ type FieldOfficerProfile = {
 type AttendanceLog = Record<string, unknown> & { id: string };
 
 function normalizeText(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function toMillis(value: unknown) {
@@ -99,12 +101,14 @@ export async function GET(request: Request) {
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const url = new URL(request.url);
-    const date = normalizeText(url.searchParams.get("date")) || new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const date =
+      normalizeText(url.searchParams.get("date")) ||
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
     const requestedDistrict = normalizeText(url.searchParams.get("district"));
     const isAdmin = hasAdminAccess(decoded);
     const profile = await getFieldOfficerProfile(adminDb, decoded);
@@ -155,10 +159,7 @@ export async function GET(request: Request) {
     const dayEnd = new Date(dayStart);
     dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
     const [snapshot, workOrdersSnapshot] = await Promise.all([
-      attendanceQuery
-        .orderBy("reportedAt", "asc")
-        .limit(5000)
-        .get(),
+      attendanceQuery.limit(5000).get(),
       adminDb
         .collection("workOrders")
         .where("date", ">=", Timestamp.fromDate(dayStart))
@@ -178,7 +179,10 @@ export async function GET(request: Request) {
       )
       .filter((log) => {
         const district = normalizeText(log.district);
-        if (requestedDistrict && !districtMatches(district, requestedDistrict)) {
+        if (
+          requestedDistrict &&
+          !districtMatches(district, requestedDistrict)
+        ) {
           return false;
         }
         if (isAdmin) {
@@ -187,6 +191,22 @@ export async function GET(request: Request) {
         return profile.assignedDistricts.some((assigned) =>
           districtMatches(assigned, district),
         );
+      })
+      // Keep this endpoint independent of a direction-specific composite
+      // index. Firestore's result order is unspecified without orderBy, so
+      // restore the chronological order before grouping check-in/out events.
+      .sort((left, right) => {
+        const leftMillis = Math.max(
+          toMillis(left.reportedAt),
+          toMillis(left.createdAt),
+          toMillis(left.reportedAtClient),
+        );
+        const rightMillis = Math.max(
+          toMillis(right.reportedAt),
+          toMillis(right.createdAt),
+          toMillis(right.reportedAtClient),
+        );
+        return leftMillis - rightMillis;
       });
 
     const grouped = new Map<
@@ -201,6 +221,15 @@ export async function GET(request: Request) {
         dutyPointName: string;
         shiftLabel: string;
         photoUrl: string | null;
+        locationCoords: { lat: number; lon: number } | null;
+        distanceMeters: number | null;
+        gpsAccuracyMeters: number | null;
+        geofenceRadiusAtTime: number | null;
+        isMockLocationSuspected: boolean;
+        mockLocationReason: string | null;
+        photoCompliance: Record<string, unknown> | null;
+        reviewStatus: string | null;
+        requiresAdminReview: boolean;
         checkIn: string | null;
         checkOut: string | null;
         lastMillis: number;
@@ -231,6 +260,31 @@ export async function GET(request: Request) {
           typeof log.photoUrl === "string" && log.photoUrl.trim().length > 0
             ? log.photoUrl
             : null,
+        locationCoords:
+          log.locationCoords && typeof log.locationCoords === "object"
+            ? {
+                lat: Number((log.locationCoords as { lat?: unknown }).lat ?? 0),
+                lon: Number((log.locationCoords as { lon?: unknown }).lon ?? 0),
+              }
+            : null,
+        distanceMeters:
+          typeof log.distanceMeters === "number" ? log.distanceMeters : null,
+        gpsAccuracyMeters:
+          typeof log.gpsAccuracyMeters === "number"
+            ? log.gpsAccuracyMeters
+            : null,
+        geofenceRadiusAtTime:
+          typeof log.geofenceRadiusAtTime === "number"
+            ? log.geofenceRadiusAtTime
+            : null,
+        isMockLocationSuspected: log.isMockLocationSuspected === true,
+        mockLocationReason: normalizeText(log.mockLocationReason) || null,
+        photoCompliance:
+          log.photoCompliance && typeof log.photoCompliance === "object"
+            ? (log.photoCompliance as Record<string, unknown>)
+            : null,
+        reviewStatus: normalizeText(log.reviewStatus) || null,
+        requiresAdminReview: log.requiresAdminReview === true,
         checkIn: null,
         checkOut: null,
         lastMillis: 0,
@@ -244,19 +298,56 @@ export async function GET(request: Request) {
       }
 
       if (millis >= current.lastMillis) {
-        current.guardName = normalizeText(log.employeeName) || current.guardName;
+        current.guardName =
+          normalizeText(log.employeeName) || current.guardName;
         current.guardId = normalizeText(log.employeeId) || current.guardId;
-        current.employeeId = normalizeText(log.employeeId) || current.employeeId;
+        current.employeeId =
+          normalizeText(log.employeeId) || current.employeeId;
         current.siteName = normalizeText(log.siteName) || current.siteName;
-        current.clientName = normalizeText(log.clientName) || current.clientName;
+        current.clientName =
+          normalizeText(log.clientName) || current.clientName;
         current.district = normalizeText(log.district) || current.district;
         current.dutyPointName =
           normalizeText(log.dutyPointName) || current.dutyPointName;
-        current.shiftLabel = normalizeText(log.shiftLabel) || current.shiftLabel;
+        current.shiftLabel =
+          normalizeText(log.shiftLabel) || current.shiftLabel;
         current.photoUrl =
           (typeof log.photoUrl === "string" && log.photoUrl.trim().length > 0
-              ? log.photoUrl
-              : current.photoUrl) || null;
+            ? log.photoUrl
+            : current.photoUrl) || null;
+        if (log.locationCoords && typeof log.locationCoords === "object") {
+          current.locationCoords = {
+            lat: Number((log.locationCoords as { lat?: unknown }).lat ?? 0),
+            lon: Number((log.locationCoords as { lon?: unknown }).lon ?? 0),
+          };
+        }
+        current.distanceMeters =
+          typeof log.distanceMeters === "number"
+            ? log.distanceMeters
+            : current.distanceMeters;
+        current.gpsAccuracyMeters =
+          typeof log.gpsAccuracyMeters === "number"
+            ? log.gpsAccuracyMeters
+            : current.gpsAccuracyMeters;
+        current.geofenceRadiusAtTime =
+          typeof log.geofenceRadiusAtTime === "number"
+            ? log.geofenceRadiusAtTime
+            : current.geofenceRadiusAtTime;
+        current.isMockLocationSuspected =
+          log.isMockLocationSuspected === true ||
+          current.isMockLocationSuspected;
+        current.mockLocationReason =
+          normalizeText(log.mockLocationReason) || current.mockLocationReason;
+        if (log.photoCompliance && typeof log.photoCompliance === "object") {
+          current.photoCompliance = log.photoCompliance as Record<
+            string,
+            unknown
+          >;
+        }
+        current.reviewStatus =
+          normalizeText(log.reviewStatus) || current.reviewStatus;
+        current.requiresAdminReview =
+          log.requiresAdminReview === true || current.requiresAdminReview;
         current.lastMillis = millis;
       }
 
@@ -277,16 +368,25 @@ export async function GET(request: Request) {
         checkOut: value.checkOut,
         dutyPointName: value.dutyPointName,
         shiftLabel: value.shiftLabel,
-        status: value.checkOut != null
-          ? "Checked out"
-          : value.checkIn != null
-            ? "Present"
-            : "Absent",
+        status:
+          value.checkOut != null
+            ? "Checked out"
+            : value.checkIn != null
+              ? "Present"
+              : "Absent",
         photoUrl: value.photoUrl,
+        locationCoords: value.locationCoords,
+        distanceMeters: value.distanceMeters,
+        gpsAccuracyMeters: value.gpsAccuracyMeters,
+        geofenceRadiusAtTime: value.geofenceRadiusAtTime,
+        isMockLocationSuspected: value.isMockLocationSuspected,
+        mockLocationReason: value.mockLocationReason,
+        photoCompliance: value.photoCompliance,
+        reviewStatus: value.reviewStatus,
+        requiresAdminReview: value.requiresAdminReview,
       }))
       .sort((left, right) => {
-        const statusOrder =
-          (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
+        const statusOrder = (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
         if (statusOrder != 0) return statusOrder;
         return left.guardName.localeCompare(right.guardName);
       });
@@ -300,17 +400,11 @@ export async function GET(request: Request) {
       if (employeeId) attendedAssignments.add(`${employeeId}:${site}`);
     }
 
-    const absentAssignments = new Map<
-      string,
-      (typeof attendance)[number]
-    >();
+    const absentAssignments = new Map<string, (typeof attendance)[number]>();
     for (const document of workOrdersSnapshot.docs) {
       const workOrder = document.data() as Record<string, unknown>;
       const district = normalizeText(workOrder.district);
-      if (
-        requestedDistrict &&
-        !districtMatches(district, requestedDistrict)
-      ) {
+      if (requestedDistrict && !districtMatches(district, requestedDistrict)) {
         continue;
       }
       if (
@@ -341,8 +435,7 @@ export async function GET(request: Request) {
         const employeeId = normalizeText(guard.employeeId);
         if (
           attendedAssignments.has(`${guardKey}:${siteKey}`) ||
-          (employeeId &&
-            attendedAssignments.has(`${employeeId}:${siteKey}`))
+          (employeeId && attendedAssignments.has(`${employeeId}:${siteKey}`))
         ) {
           continue;
         }
@@ -362,14 +455,22 @@ export async function GET(request: Request) {
           shiftLabel: normalizeText(workOrder.shiftLabel),
           status: "Absent",
           photoUrl: null,
+          locationCoords: null,
+          distanceMeters: null,
+          gpsAccuracyMeters: null,
+          geofenceRadiusAtTime: null,
+          isMockLocationSuspected: false,
+          mockLocationReason: null,
+          photoCompliance: null,
+          reviewStatus: null,
+          requiresAdminReview: false,
         });
       }
     }
 
     attendance.push(...absentAssignments.values());
     attendance.sort((left, right) => {
-      const statusOrder =
-        (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
+      const statusOrder = (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
       if (statusOrder !== 0) return statusOrder;
       return left.guardName.localeCompare(right.guardName);
     });
