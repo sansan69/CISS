@@ -1,16 +1,16 @@
 {
   "platform": "android",
   "packageName": "co.in.ciss.ciss_mobile",
-  "latestVersionName": "1.0.18",
-  "latestVersionCode": 18,
+  "latestVersionName": "1.0.19",
+  "latestVersionCode": 19,
   "minimumSupportedVersionCode": 13,
-  "apkPath": "/downloads/ciss-workforce-1.0.18.apk",
-  "sha256": "3f5a70e6f8192126f24def79be9c908f31ccbf23820172377c6ff18a408d805d",
+  "apkPath": "/downloads/ciss-workforce-1.0.19.apk",
+  "sha256": "7dfb1ef43e58bd98cec4d69b6a7daf0ba8152f58029c87972b22ca2cc21b6ab1",
   "sizeBytes": 84910968,
-  "releaseDate": "2026-07-31",
+  "releaseDate": "2026-08-01",
   "releaseNotes": [
-    "Adds visible offline sync status and retry controls across guard operations.",
-    "Completes the latest guard, field officer, attendance, reports, and patrol workflows.",
+    "Fixes field-officer attendance synchronization and missing-index failures.",
+    "Fixes the attendance screen layout and startup sync-status crash.",
     "Includes the latest Android stability and responsive layout fixes."
   ],
   "mandatory": false
