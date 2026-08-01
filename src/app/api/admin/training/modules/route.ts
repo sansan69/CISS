@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
+import { requireAdmin, requireAdminOrFieldOfficer, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin(request);
+    await requireAdminOrFieldOfficer(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const snapshot = await adminDb
       .collection("trainingModules")

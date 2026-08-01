@@ -196,6 +196,28 @@ service cloud.firestore {
       allow delete: if isAdmin() && readStateMatches();
     }
 
+    // Aadhaar values are decrypted and served only by exact-account server APIs.
+    // Admin SDK bypasses rules; no browser role may access this collection directly.
+    match /employeeAadhaarPrivate/{employeeId} {
+      allow read, write: if false;
+    }
+
+    match /sensitiveDocumentAuditLogs/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /employees/{employeeId}/consents/{consentId} {
+      allow read, write: if false;
+    }
+
+    match /employees/{employeeId}/documents/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /employees/{employeeId}/aadhaarCorrectionRequests/{requestId} {
+      allow read, write: if false;
+    }
+
     // ── clients / sites / clientLocations ───────────────────────────────────
     // Public enrollment and attendance must use scrubbed server routes.
     // Raw documents include coordinates and operational metadata — direct

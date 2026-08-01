@@ -722,7 +722,6 @@ export default function PublicEmployeeProfilePage() {
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
-                    {employee.aadharNumber && <DetailItem label="Aadhar Number" value={employee.aadharNumber} />}
                     <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     {employee.nationality && <DetailItem label="Nationality" value={employee.nationality} isName />}
@@ -758,7 +757,6 @@ export default function PublicEmployeeProfilePage() {
                             <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
                             <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                            <DocumentItem name="Aadhar Card Copy" url={employee.aadharCardDocumentUrl} type="LNG Statutory Document" />
                             <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />
                             <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />
                             <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />

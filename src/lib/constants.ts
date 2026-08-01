@@ -13,8 +13,29 @@ export const PROOF_TYPES = [
   "Voter ID",
   "Passport",
   "Driving License",
+  "Government Photo ID",
+  "Residence Certificate",
+  "Utility Bill",
+  "Bank Statement",
   "Birth Certificate",
   "School Certificate",
+] as const;
+
+export const IDENTITY_PROOF_TYPES = [
+  "PAN Card",
+  "Voter ID",
+  "Passport",
+  "Driving License",
+  "Government Photo ID",
+] as const;
+
+export const ADDRESS_PROOF_TYPES = [
+  "Voter ID",
+  "Passport",
+  "Driving License",
+  "Residence Certificate",
+  "Utility Bill",
+  "Bank Statement",
 ] as const;
 
 export const EDUCATION_OPTIONS = [

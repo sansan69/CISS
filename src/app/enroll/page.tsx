@@ -53,19 +53,25 @@ import { Download, Key as KeyRound } from "@phosphor-icons/react";
 import type { PDFFont } from 'pdf-lib';
 import {
   EDUCATION_OPTIONS,
+  IDENTITY_PROOF_TYPES,
+  ADDRESS_PROOF_TYPES,
   isLngClientName,
   LNG_JOB_DESIGNATIONS,
   MARITAL_STATUSES,
-  PROOF_TYPES,
   requiresLngArmsLicense,
   requiresLngServiceBook,
 } from "@/lib/constants";
+import {
+  AADHAAR_CONSENT_TEXT,
+  AADHAAR_CONSENT_VERSION,
+} from "@/lib/aadhaar-policy";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
   isRecognizedDistrictName,
 } from "@/lib/districts";
 import { REGION_CODE } from "@/lib/runtime-config";
+import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
 import type { EnrollmentFormConfig } from "@/types/region";
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
@@ -73,7 +79,8 @@ const fileSchema = z.instanceof(File, { message: "This field is required." })
 
 const optionalFileSchema = fileSchema.optional();
 
-const proofTypes = z.enum(PROOF_TYPES);
+const identityProofTypes = z.enum(IDENTITY_PROOF_TYPES);
+const addressProofTypes = z.enum(ADDRESS_PROOF_TYPES);
 const qualificationTypes = z.enum(EDUCATION_OPTIONS);
 const lngDesignationTypes = z.enum(LNG_JOB_DESIGNATIONS);
 const optionalPositiveNumber = z.preprocess(
@@ -137,22 +144,22 @@ const enrollmentFormSchema = z.object({
   // Location & Identification
   district: z.string({ required_error: "District is required." }).min(1, {message: "District is required."}),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
-  aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhar number must be 12 digits." }).optional().or(z.literal('')),
+  aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhaar number must be 12 digits." }),
   nationality: z.string().optional(),
   identificationMark: z.string().optional(),
   heightCm: optionalPositiveNumber,
   weightKg: optionalPositiveNumber,
   
-  identityProofType: proofTypes,
+  identityProofType: identityProofTypes,
   identityProofNumber: z.string().min(1, { message: "ID proof number is required." }),
   identityProofUrlFront: fileSchema,
   identityProofUrlBack: fileSchema,
   
-  addressProofType: proofTypes,
+  addressProofType: addressProofTypes,
   addressProofNumber: z.string().min(1, { message: "Address proof number is required." }),
   addressProofUrlFront: fileSchema,
   addressProofUrlBack: fileSchema,
-  aadharCardDocument: optionalFileSchema,
+  aadharCardDocument: fileSchema,
   panCardDocument: optionalFileSchema,
   
   signatureUrl: fileSchema,
@@ -170,12 +177,19 @@ const enrollmentFormSchema = z.object({
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
-  emailAddress: z.string().optional().or(z.literal('')),
+  emailAddress: z
+    .string()
+    .trim()
+    .min(1, { message: "Email address is required." })
+    .email({ message: "Enter a valid email address." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
   legacyUniqueId: z.string().optional(),
   
   termsAndConditions: z.boolean().refine((val) => val === true, {
     message: "You must accept the terms and conditions to proceed.",
+  }),
+  aadhaarConsentAccepted: z.boolean().refine((val) => val === true, {
+    message: "Consent is required to use Aadhaar for ESIC and EPF registration.",
   }),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
@@ -200,12 +214,6 @@ const enrollmentFormSchema = z.object({
     }
     if (!data.identificationMark || data.identificationMark.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Identification mark is required.", path: ["identificationMark"] });
-    }
-    if (!data.aadharNumber || data.aadharNumber.trim() === "") {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar number is required.", path: ["aadharNumber"] });
-    }
-    if (!data.aadharCardDocument) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar card copy is required.", path: ["aadharCardDocument"] });
     }
     if (!data.panNumber || data.panNumber.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "PAN card number is required.", path: ["panNumber"] });
@@ -244,9 +252,6 @@ const enrollmentFormSchema = z.object({
     }
     if (!data.lastName || data.lastName.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Last name is required.", path: ["lastName"] });
-    }
-    if (data.emailAddress?.trim() && !z.string().email().safeParse(data.emailAddress).success) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid email address or leave it blank.", path: ["emailAddress"] });
     }
   }
 
@@ -301,7 +306,8 @@ type PublicClientsResponse = {
 };
 
 const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
-const idProofOptions = [...PROOF_TYPES];
+const identityProofOptions = [...IDENTITY_PROOF_TYPES];
+const addressProofOptions = [...ADDRESS_PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
 const ENROLLMENT_DRAFT_STORAGE_KEY = "ciss-public-enrollment-draft-v1";
@@ -322,6 +328,10 @@ const DRAFT_FILE_FIELDS: (keyof EnrollmentFormValues)[] = [
   "bankPassbookStatement",
   "policeClearanceCertificate",
 ];
+const SENSITIVE_DRAFT_FIELDS = new Set<keyof EnrollmentFormValues>([
+  "aadharNumber",
+  "aadharCardDocument",
+]);
 const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   clientName: "",
   resourceIdNumber: "",
@@ -361,6 +371,7 @@ const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   phoneNumber: "",
   legacyUniqueId: "",
   termsAndConditions: false,
+  aadhaarConsentAccepted: false,
 };
 const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   joiningDate: "Joining date",
@@ -416,6 +427,7 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   phoneNumber: "Phone number",
   legacyUniqueId: "Legacy unique ID",
   termsAndConditions: "Terms and declaration",
+  aadhaarConsentAccepted: "Aadhaar consent for ESIC/EPF",
 };
 
 const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
@@ -451,8 +463,10 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "addressProofUrlBack",
   "signatureUrl",
   "fullAddress",
+  "emailAddress",
   "phoneNumber",
   "termsAndConditions",
+  "aadhaarConsentAccepted",
 ];
 
 const isFileValue = (value: unknown): value is File =>
@@ -470,6 +484,7 @@ const serializeDraftValues = (values: EnrollmentFormValues): EnrollmentDraft["va
   const serialized: EnrollmentDraft["values"] = {};
 
   for (const [rawKey, value] of Object.entries(values) as [keyof EnrollmentFormValues, unknown][]) {
+    if (SENSITIVE_DRAFT_FIELDS.has(rawKey)) continue;
     if (isFileValue(value) || value === undefined) {
       continue;
     }
@@ -493,6 +508,7 @@ const deserializeDraftValues = (
   const restored: Record<string, unknown> = {};
 
   for (const [rawKey, value] of Object.entries(values) as [keyof EnrollmentFormValues, SerializedDraftValue][]) {
+    if (SENSITIVE_DRAFT_FIELDS.has(rawKey)) continue;
     if (value && typeof value === "object" && "type" in value && value.type === "date") {
       restored[rawKey] = new Date(value.value);
       continue;
@@ -532,6 +548,10 @@ const saveEnrollmentDraftFiles = async (values: Partial<EnrollmentFormValues>) =
     const store = transaction.objectStore(ENROLLMENT_DRAFT_DB_STORE);
 
     DRAFT_FILE_FIELDS.forEach((field) => {
+      if (SENSITIVE_DRAFT_FIELDS.has(field)) {
+        store.delete(field);
+        return;
+      }
       const value = values[field];
       if (isFileValue(value)) {
         store.put({ field, file: value });
@@ -558,6 +578,7 @@ const readEnrollmentDraftFiles = async (): Promise<Partial<Record<keyof Enrollme
     request.onsuccess = () => {
       const files: Partial<Record<keyof EnrollmentFormValues, File>> = {};
       for (const item of request.result as { field: keyof EnrollmentFormValues; file: File }[]) {
+        if (SENSITIVE_DRAFT_FIELDS.has(item.field)) continue;
         files[item.field] = item.file;
       }
       resolve(files);
@@ -692,7 +713,7 @@ const ENROLLMENT_STEPS: {
     key: "review",
     title: "Review",
     description: "Quickly verify the summary and confirm the declaration before submission.",
-    fields: ["termsAndConditions"],
+    fields: ["termsAndConditions", "aadhaarConsentAccepted"],
   },
 ];
 
@@ -718,13 +739,6 @@ function splitLngFullName(rawFullName: string) {
     firstName: parts[0]!,
     lastName: parts.slice(1).join(" "),
   };
-}
-
-function buildLngEnrollmentEmail(uniqueId: string | undefined, phoneNumber: string) {
-  const token =
-    uniqueId?.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase() ||
-    phoneNumber.replace(/\D/g, "");
-  return `${token}@lng-petronet.cisskerala.app`;
 }
 
 const IdNumberInput = ({
@@ -851,8 +865,12 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         if (field.required) required.add(field.key as keyof EnrollmentFormValues);
       }
     }
-    enabled.add("termsAndConditions");
-    required.add("termsAndConditions");
+    enabled.add("emailAddress");
+    required.add("emailAddress");
+    for (const field of MANDATORY_NEW_ENROLLMENT_FIELDS) {
+      enabled.add(field as keyof EnrollmentFormValues);
+      required.add(field as keyof EnrollmentFormValues);
+    }
     return { enabled, required };
   }, [enrollmentConfig]);
 
@@ -1345,11 +1363,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           firstName: data.firstName?.trim() || "",
           lastName: data.lastName?.trim() || "",
         };
-    const normalizedEmail =
-      (data.emailAddress?.trim() || "") ||
-      (isLngEnrollment
-        ? buildLngEnrollmentEmail(data.legacyUniqueId, phoneNumber)
-        : "");
+    const normalizedEmail = data.emailAddress.trim();
     const uploadedUrls: { [key: string]: string | null } = {
         profilePictureUrl: null,
         identityProofUrlFront: null,
@@ -1440,7 +1454,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             passportDocumentUrl: uploadedUrls.passportDocumentUrl || undefined,
             district,
             fullAddress: data.fullAddress,
-            emailAddress: normalizedEmail || undefined,
+            emailAddress: normalizedEmail,
             phoneNumber: data.phoneNumber,
             aadharNumber: data.aadharNumber || undefined,
             nationality: data.nationality || undefined,
@@ -1469,6 +1483,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl || undefined,
             legacyUniqueId: data.legacyUniqueId || undefined,
             termsAccepted: data.termsAndConditions,
+            aadhaarConsentAccepted: data.aadhaarConsentAccepted,
+            aadhaarConsentVersion: AADHAAR_CONSENT_VERSION,
           }),
         });
 
@@ -1577,7 +1593,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     if (isLngClientName(formValues.clientName)) {
       fields = fields.filter(
         (fieldName) =>
-          !["firstName", "lastName", "emailAddress"].includes(fieldName),
+          !["firstName", "lastName"].includes(fieldName),
       );
     } else {
       fields = fields.filter(
@@ -1591,8 +1607,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             "armsLicenseDocument",
             "passportCountryName",
             "passportDocument",
-            "aadharNumber",
-            "aadharCardDocument",
             "panCardDocument",
             "nationality",
             "identificationMark",
@@ -2072,7 +2086,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <h3 className="font-medium text-lg">Identity Proof</h3>
                       <p className="text-sm text-muted-foreground">Front and back stay separate on purpose so the review and verification stay clear.</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{identityProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                           <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
                       </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -2085,7 +2099,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <h3 className="font-medium text-lg">Address Proof</h3>
                       <p className="text-sm text-muted-foreground">Use a different proof type than the identity proof and upload both sides separately.</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{addressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                            <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
                       </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -2094,28 +2108,26 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       </div>
                   </div>
 
-                  {isLngClient && (
-                    <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
-                      <h3 className="font-medium text-lg">LNG Statutory Card Copies</h3>
-                      <p className="text-sm text-muted-foreground">These are stored separately to match the LNG Petronet legacy employee data columns.</p>
+                  <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
+                      <h3 className="font-medium text-lg">Aadhaar for ESIC/EPF</h3>
+                      <p className="text-sm text-muted-foreground">This copy is restricted to the designated Aadhaar administrator and is not shared with clients.</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField control={form.control} name="aadharCardDocument" render={({ field }) => (
                           <FormItem className="text-center">
-                            <FormLabel className="block mb-2">Aadhar Card Copy <span className="text-destructive">*</span></FormLabel>
-                            <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the Aadhar card copy used in the LNG record." />
+                            <FormLabel className="block mb-2">Self-attested Aadhaar Copy <span className="text-destructive">*</span></FormLabel>
+                            <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="JPEG, PNG or PDF. This file is not independently verified by CISS." />
                             <FormMessage />
                           </FormItem>
                         )} />
-                        <FormField control={form.control} name="panCardDocument" render={({ field }) => (
+                        {isLngClient && <FormField control={form.control} name="panCardDocument" render={({ field }) => (
                           <FormItem className="text-center">
                             <FormLabel className="block mb-2">PAN Card Copy <span className="text-destructive">*</span></FormLabel>
                             <ImagePreviewAndUpload fieldName="panCardDocument" preview={panCardPreview} setPreview={setPanCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the PAN card copy used in the LNG record." />
                             <FormMessage />
                           </FormItem>
-                        )} />
+                        )} />}
                       </div>
-                    </div>
-                  )}
+                  </div>
 
                    <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
                       <h3 className="font-medium text-lg">Signature</h3>
@@ -2130,7 +2142,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter your district" list="public-enrollment-districts" /></FormControl><datalist id="public-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Type the district directly. Suggestions are shown when available.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      {isLngClient && <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter 12-digit Aadhar number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                      <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="Enter 12-digit Aadhaar number" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration. It is not saved in browser drafts.</FormDescription><FormMessage /></FormItem>)} />
                       {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="passportCountryName" render={({ field }) => (<FormItem><FormLabel>Passport Country Name</FormLabel><FormControl><Input placeholder="Enter passport country, if applicable" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Optional. Use when the applicant provides passport details instead of Indian statutory documents.</FormDescription><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
@@ -2184,7 +2196,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       )} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address (optional)</FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} value={field.value ?? ""} /></FormControl>{isLngClient && <FormDescription>If left empty, a secure LNG placeholder email will be generated automatically.</FormDescription>}<FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" autoComplete="email" required placeholder="yourname@example.com" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Required for enrollment updates and official communication.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "(Pre-filled from login)" : "This is used for your employee profile and document folder."}</FormDescription><FormMessage /></FormItem>)}/>
                     </div>
                   </FormSection>
@@ -2215,19 +2227,38 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="ID proof back" value={identityProofUrlBackPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof front" value={addressProofUrlFrontPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof back" value={addressProofUrlBackPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Aadhaar copy" value={aadharCardPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Aadhaar number" value={watchedValues?.aadharNumber ? "Entered" : "Missing"} />
                       <ReviewRow label="Signature" value={signatureUrlPreview ? "Ready" : "Missing"} />
                       {isLngClientName(watchedValues?.clientName) && requiresServiceBook && <ReviewRow label="Service book" value={serviceBookPreview ? "Ready" : "Missing"} />}
                       {isLngClientName(watchedValues?.clientName) && requiresArmsLicense && <ReviewRow label="Arms license" value={armsLicensePreview ? "Ready" : "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Contact">
                       <ReviewRow label="Phone" value={watchedValues?.phoneNumber || "Not added"} />
-                      <ReviewRow label="Email" value={watchedValues?.emailAddress || (isLngClientName(watchedValues?.clientName) ? "Will be generated automatically" : "Not added")} />
+                      <ReviewRow label="Email" value={watchedValues?.emailAddress || "Missing"} />
                       <ReviewRow label="District" value={watchedValues?.district || "Not selected"} />
                       <ReviewRow label="Address" value={watchedValues?.fullAddress || "Not added"} />
+                    </ReviewCard>
+                    <ReviewCard title="Consent">
+                      <ReviewRow label="Aadhaar ESIC/EPF consent" value={watchedValues?.aadhaarConsentAccepted ? "Accepted" : "Required"} />
+                      <ReviewRow label="Terms and declaration" value={watchedValues?.termsAndConditions ? "Accepted" : "Required"} />
                     </ReviewCard>
                   </div>
 
                   <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
+                    <div className="rounded-md border bg-background p-4 text-xs text-muted-foreground">
+                      <p className="mb-2 font-semibold text-foreground">Aadhaar use for ESIC and EPF</p>
+                      <p>{AADHAAR_CONSENT_TEXT}</p>
+                    </div>
+                    <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
+                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>I consent to this limited use of my Aadhaar for ESIC and EPF.</FormLabel>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}/>
                     <div className="h-48 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground space-y-2">
                       <p className="font-bold">I. General Eligibility and Compliance</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li><li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li><li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li></ul>
                       <p className="font-bold">II. Employment Terms & Responsibilities</p><ul className="list-disc list-outside pl-4 space-y-1"><li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li><li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li><li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li><li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li></ul>

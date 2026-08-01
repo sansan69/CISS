@@ -5,7 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAppAuth } from "@/context/auth-context";
+import { ADDRESS_PROOF_TYPES, IDENTITY_PROOF_TYPES } from "@/lib/constants";
+import { AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
 import {
   User,
   Phone,
@@ -31,6 +35,9 @@ interface GuardProfileData {
   profilePhotoUrl?: string | null;
   address?: string;
   emailAddress?: string;
+  missingDocuments: Array<"aadhaar" | "identity" | "address">;
+  documentStatus: Record<"aadhaar" | "identity" | "address", "missing" | "complete">;
+  enrollmentPolicy: "legacy" | "three-proof-v1";
 }
 
 function formatDate(dateStr: string): string {
@@ -92,6 +99,11 @@ export default function GuardProfilePage() {
   const [data, setData] = useState<GuardProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingCategory, setUploadingCategory] = useState<"aadhaar" | "identity" | "address" | null>(null);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [correctionMessage, setCorrectionMessage] = useState<string | null>(null);
+  const [requestingCorrection, setRequestingCorrection] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<"identity" | "address" | null>(null);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -120,6 +132,92 @@ export default function GuardProfilePage() {
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  const submitMissingDocument = async (
+    category: "aadhaar" | "identity" | "address",
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (!user) return;
+    const formElement = event.currentTarget;
+    setUploadingCategory(category);
+    setUploadMessage(null);
+    try {
+      const form = new FormData(formElement);
+      form.set("category", category);
+      if (category === "aadhaar") {
+        form.set("consentVersion", AADHAAR_CONSENT_VERSION);
+      }
+      const token = await user.getIdToken();
+      const response = await fetch("/api/guard/profile/documents", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Document upload failed.");
+      formElement.reset();
+      setUploadMessage(
+        category === "aadhaar"
+          ? "Aadhaar submitted successfully. Its details are now visible only to the designated administrator."
+          : `${category === "identity" ? "Identity" : "Address"} proof submitted successfully.`,
+      );
+      await fetchProfile();
+    } catch (uploadError) {
+      setUploadMessage(uploadError instanceof Error ? uploadError.message : "Document upload failed.");
+    } finally {
+      setUploadingCategory(null);
+    }
+  };
+
+  const requestAadhaarCorrection = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) return;
+    const formElement = event.currentTarget;
+    setRequestingCorrection(true);
+    setCorrectionMessage(null);
+    try {
+      const reason = String(new FormData(formElement).get("reason") || "");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/guard/profile/aadhaar-correction", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Correction request failed.");
+      formElement.reset();
+      setCorrectionMessage("Your Aadhaar correction request has been sent to the designated administrator.");
+    } catch (correctionError) {
+      setCorrectionMessage(correctionError instanceof Error ? correctionError.message : "Correction request failed.");
+    } finally {
+      setRequestingCorrection(false);
+    }
+  };
+
+  const viewOwnProof = async (category: "identity" | "address") => {
+    if (!user) return;
+    setViewingDocument(category);
+    setUploadMessage(null);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/guard/profile/documents?category=${category}&side=front`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Document could not be opened.");
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (viewError) {
+      setUploadMessage(viewError instanceof Error ? viewError.message : "Document could not be opened.");
+    } finally {
+      setViewingDocument(null);
+    }
+  };
 
   if (loading) return <ProfileSkeleton />;
 
@@ -239,6 +337,87 @@ export default function GuardProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {(data.documentStatus.identity === "complete" || data.documentStatus.address === "complete") && (
+        <Card className="rounded-xl">
+          <CardContent className="space-y-3 p-4">
+            <div>
+              <h2 className="font-semibold">Your submitted proofs</h2>
+              <p className="mt-1 text-xs text-muted-foreground">You may view your identity and address proofs. Aadhaar is never available from the guard profile.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {data.documentStatus.identity === "complete" && <Button type="button" size="sm" variant="outline" disabled={viewingDocument !== null} onClick={() => void viewOwnProof("identity")}>View identity proof</Button>}
+              {data.documentStatus.address === "complete" && <Button type="button" size="sm" variant="outline" disabled={viewingDocument !== null} onClick={() => void viewOwnProof("address")}>View address proof</Button>}
+            </div>
+            {uploadMessage && <p role="status" className="text-sm">{uploadMessage}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {data.enrollmentPolicy === "legacy" && data.missingDocuments.length > 0 && (
+        <Card className="rounded-xl">
+          <CardContent className="space-y-5 p-4">
+            <div>
+              <h2 className="font-semibold">Complete missing documents</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Optional for guards enrolled before the three-proof policy. Missing documents do not affect attendance, payroll, or deployment.
+              </p>
+            </div>
+
+            {data.missingDocuments.includes("aadhaar") && (
+              <form className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void submitMissingDocument("aadhaar", event)}>
+                <p className="text-sm font-medium">Add Aadhaar for ESIC/EPF</p>
+                <Input name="aadhaarNumber" type="password" inputMode="numeric" autoComplete="off" maxLength={12} required placeholder="12-digit Aadhaar number" />
+                <Input name="front" type="file" accept="image/jpeg,image/png,application/pdf" required />
+                <p className="text-xs text-muted-foreground">{AADHAAR_CONSENT_TEXT}</p>
+                <label className="flex items-start gap-2 text-xs">
+                  <input name="consentAccepted" value="true" type="checkbox" required className="mt-0.5 h-4 w-4" />
+                  <span>I consent to this limited Aadhaar use for ESIC and EPF.</span>
+                </label>
+                <Button type="submit" size="sm" disabled={uploadingCategory !== null}>Submit Aadhaar</Button>
+              </form>
+            )}
+
+            {(["identity", "address"] as const).filter((category) => data.missingDocuments.includes(category)).map((category) => {
+              const options = category === "identity" ? IDENTITY_PROOF_TYPES : ADDRESS_PROOF_TYPES;
+              return (
+                <form key={category} className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void submitMissingDocument(category, event)}>
+                  <p className="text-sm font-medium">Add {category} proof</p>
+                  <select name="documentType" required className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                    <option value="">Select document type</option>
+                    {options.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                  <Input name="documentNumber" required maxLength={64} placeholder="Document number" />
+                  <label className="block text-xs text-muted-foreground">Front page<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                  <label className="block text-xs text-muted-foreground">Back page, if applicable<Input className="mt-1" name="back" type="file" accept="image/jpeg,image/png,application/pdf" /></label>
+                  <Button type="submit" size="sm" disabled={uploadingCategory !== null}>Submit {category} proof</Button>
+                </form>
+              );
+            })}
+            {uploadMessage && <p role="status" className="text-sm">{uploadMessage}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {data.documentStatus.aadhaar === "complete" && (
+        <Card className="rounded-xl">
+          <CardContent className="space-y-3 p-4">
+            <div>
+              <h2 className="font-semibold">Aadhaar correction</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Your Aadhaar is on file but cannot be viewed here. Request a correction if the submitted number or copy is wrong.
+              </p>
+            </div>
+            <form className="space-y-3" onSubmit={(event) => void requestAadhaarCorrection(event)}>
+              <textarea name="reason" required minLength={10} maxLength={500} className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Explain what needs to be corrected" />
+              <Button type="submit" size="sm" variant="outline" disabled={requestingCorrection}>
+                {requestingCorrection ? "Sending…" : "Request correction"}
+              </Button>
+            </form>
+            {correctionMessage && <p role="status" className="text-sm">{correctionMessage}</p>}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

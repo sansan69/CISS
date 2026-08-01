@@ -2,13 +2,15 @@ import { z } from "zod";
 import {
   EDUCATION_OPTIONS,
   GENDER_OPTIONS,
+  IDENTITY_PROOF_TYPES,
+  ADDRESS_PROOF_TYPES,
   isLngClientName,
   LNG_JOB_DESIGNATIONS,
   MARITAL_STATUSES,
-  PROOF_TYPES,
   requiresLngArmsLicense,
   requiresLngServiceBook,
 } from "@/lib/constants";
+import { AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
 
 const lngDesignationSchema = z.enum(LNG_JOB_DESIGNATIONS);
 
@@ -31,7 +33,7 @@ export const enrollmentSubmissionSchema = z
     otherQualification: z.string().trim().optional(),
     district: z.string().trim().min(1),
     panNumber: z.string().trim().optional(),
-    aadharNumber: z.string().trim().optional(),
+    aadharNumber: z.string().trim().regex(/^\d{12}$/),
     nationality: z.string().trim().optional(),
     identificationMark: z.string().trim().optional(),
     heightCm: z.number().finite().positive().optional(),
@@ -44,15 +46,22 @@ export const enrollmentSubmissionSchema = z
     armsLicenseDocumentUrl: z.string().url().optional(),
     passportCountryName: z.string().trim().optional(),
     passportDocumentUrl: z.string().url().optional(),
-    identityProofType: z.enum(PROOF_TYPES),
+    identityProofType: z.enum(IDENTITY_PROOF_TYPES),
     identityProofNumber: z.string().min(1),
     identityProofUrlFront: z.string().url(),
     identityProofUrlBack: z.string().url(),
-    addressProofType: z.enum(PROOF_TYPES),
+    addressProofType: z.enum(ADDRESS_PROOF_TYPES),
     addressProofNumber: z.string().min(1),
     addressProofUrlFront: z.string().url(),
     addressProofUrlBack: z.string().url(),
-    aadharCardDocumentUrl: z.string().url().optional(),
+    aadharCardDocumentUrl: z.string().trim().refine(
+      (value) =>
+        z.string().url().safeParse(value).success ||
+        /^enrollments\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(value) ||
+        /^employees\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(value) ||
+        /^restrictedAadhaarStaging\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(value),
+      "A valid Aadhaar document reference is required.",
+    ),
     panCardDocumentUrl: z.string().url().optional(),
     signatureUrl: z.string().url(),
     policeClearanceCertificateUrl: z.string().url().optional(),
@@ -64,10 +73,16 @@ export const enrollmentSubmissionSchema = z
     branchName: z.string().trim().optional(),
     bankPassbookStatementUrl: z.string().url().optional(),
     fullAddress: z.string().min(10),
-    emailAddress: z.string().trim().optional(),
+    emailAddress: z
+      .string()
+      .trim()
+      .min(1, { message: "Email address is required." })
+      .email({ message: "Please enter a valid email address." }),
     phoneNumber: z.string().regex(/^\d{10}$/),
     legacyUniqueId: z.string().trim().optional(),
-    termsAccepted: z.boolean().optional(),
+    termsAccepted: z.literal(true),
+    aadhaarConsentAccepted: z.literal(true),
+    aadhaarConsentVersion: z.literal(AADHAAR_CONSENT_VERSION),
   })
   .superRefine((data, ctx) => {
     if (
@@ -106,21 +121,6 @@ export const enrollmentSubmissionSchema = z
         });
       }
 
-      if (!data.aadharNumber?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Aadhar number is required for LNG Petronet enrollment.",
-          path: ["aadharNumber"],
-        });
-      }
-
-      if (!data.aadharCardDocumentUrl) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Aadhar card copy is required for LNG Petronet enrollment.",
-          path: ["aadharCardDocumentUrl"],
-        });
-      }
 
       if (!data.panNumber?.trim()) {
         ctx.addIssue({
@@ -201,15 +201,6 @@ export const enrollmentSubmissionSchema = z
           path: ["armsLicenseDocumentUrl"],
         });
       }
-    } else if (
-      data.emailAddress?.trim() &&
-      !z.string().email().safeParse(data.emailAddress).success
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Please enter a valid email address.",
-        path: ["emailAddress"],
-      });
     }
   });
 

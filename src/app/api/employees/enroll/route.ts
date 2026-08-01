@@ -23,9 +23,17 @@ import {
 } from "@/types/enrollment";
 import { enrollmentDraftTokenMatches } from "@/lib/server/enrollment-draft";
 import {
-  requireAdminLike,
+  requireAadhaarAdministratorToken,
   verifyRequestAuth,
+  type AppDecodedToken,
 } from "@/lib/server/auth";
+import {
+  AADHAAR_CONSENT_TEXT_HASH,
+  deleteStorageObjectIfPresent,
+  encryptAadhaarNumber,
+  moveAadhaarSourceToRestrictedStorage,
+} from "@/lib/server/aadhaar";
+import { assertEnrollmentDocumentReferences } from "@/lib/server/enrollment-documents";
 export const runtime = "nodejs";
 
 function buildSearchableFields(data: EnrollmentSubmission, employeeId: string) {
@@ -79,25 +87,21 @@ function splitFullNameForStorage(rawFullName: string) {
   };
 }
 
-function buildLngFallbackEmail(payload: EnrollmentSubmission) {
-  const uniqueToken =
-    payload.legacyUniqueId?.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase() ||
-    payload.phoneNumber;
-  return `${uniqueToken}@lng-petronet.cisskerala.app`;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const authorization = request.headers.get("authorization");
     let isAdminSubmission = false;
+    let submissionActor: AppDecodedToken | null = null;
 
     if (authorization) {
       try {
-        requireAdminLike(await verifyRequestAuth(request));
+        submissionActor = requireAadhaarAdministratorToken(
+          await verifyRequestAuth(request, true),
+        );
         isAdminSubmission = true;
       } catch {
         return NextResponse.json(
-          { error: "A valid admin session is required." },
+          { error: "The designated Aadhaar administrator account is required." },
           { status: 403 },
         );
       }
@@ -124,7 +128,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const { db: adminDb } = await import("@/lib/firebaseAdmin");
+    const { db: adminDb, storage } = await import("@/lib/firebaseAdmin");
     const { Timestamp } = await import("firebase-admin/firestore");
 
     const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
@@ -154,9 +158,7 @@ export async function POST(request: NextRequest) {
     }
     const isLngEnrollment = isLngClientName(payload.clientName);
     const canonicalClientName = isLngEnrollment ? LNG_CLIENT_NAME : payload.clientName;
-    const normalizedEmail =
-      (payload.emailAddress?.trim() || "").toLowerCase() ||
-      (isLngEnrollment ? buildLngFallbackEmail(payload) : "");
+    const normalizedEmail = payload.emailAddress.trim().toLowerCase();
     const normalizedFullNameInput = payload.fullNameInput?.trim() || "";
     const enrollmentConfig = await fetchEnrollmentConfig(adminDb);
     const configErrors = validateEnrollmentSubmissionAgainstConfig(
@@ -174,6 +176,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await assertEnrollmentDocumentReferences(
+      payload as unknown as Record<string, unknown>,
+      {
+        bucketName: storage.bucket().name,
+        flow: isAdminSubmission ? "admin" : "public",
+        draftId: isAdminSubmission ? undefined : draftId,
+        phoneNumber: normalizedPhone,
+      },
+      storage.bucket(),
+    );
+
     const nameParts =
       isLngEnrollment && normalizedFullNameInput
         ? splitFullNameForStorage(normalizedFullNameInput)
@@ -187,13 +200,11 @@ export async function POST(request: NextRequest) {
       .where("phoneNumber", "==", normalizedPhone)
       .limit(1)
       .get();
-    const emailPromise = normalizedEmail
-      ? adminDb
-          .collection("employees")
-          .where("emailAddress", "==", normalizedEmail)
-          .limit(1)
-          .get()
-      : Promise.resolve(null);
+    const emailPromise = adminDb
+      .collection("employees")
+      .where("emailAddress", "==", normalizedEmail)
+      .limit(1)
+      .get();
 
     const [phoneSnapshot, emailSnapshot] = await Promise.all([
       phonePromise,
@@ -236,6 +247,13 @@ export async function POST(request: NextRequest) {
       normalizedPhone,
     );
     const now = Timestamp.now();
+    const docRef = adminDb.collection("employees").doc();
+    const consentRef = docRef.collection("consents").doc();
+    const aadhaarEncryption = await encryptAadhaarNumber(payload.aadharNumber);
+    const restrictedAadhaar = await moveAadhaarSourceToRestrictedStorage({
+      employeeDocId: docRef.id,
+      source: payload.aadharCardDocumentUrl,
+    });
 
     const employeeData = {
       employeeId,
@@ -268,6 +286,21 @@ export async function POST(request: NextRequest) {
       status: "Active",
       createdAt: now,
       updatedAt: now,
+      enrollmentPolicy: {
+        version: "three-proof-v1",
+        applicable: true,
+        appliedAt: now,
+      },
+      documentCompletion: {
+        aadhaar: "complete",
+        identity: "complete",
+        address: "complete",
+        updatedAt: now,
+      },
+      consentCompliance: {
+        aadhaarEsicEpfConsentVersion: payload.aadhaarConsentVersion,
+        completedAt: now,
+      },
       identityProofType: payload.identityProofType,
       identityProofNumber: payload.identityProofNumber,
       identityProofUrlFront: payload.identityProofUrlFront,
@@ -302,7 +335,6 @@ export async function POST(request: NextRequest) {
         otherQualification: payload.otherQualification.toUpperCase(),
       }),
       ...(payload.panNumber && { panNumber: payload.panNumber.toUpperCase() }),
-      ...(payload.aadharNumber && { aadharNumber: payload.aadharNumber }),
       ...(payload.nationality && { nationality: payload.nationality.toUpperCase() }),
       ...(payload.identificationMark && {
         identificationMark: payload.identificationMark.toUpperCase(),
@@ -330,9 +362,6 @@ export async function POST(request: NextRequest) {
       ...(payload.legacyUniqueId && { legacyUniqueId: payload.legacyUniqueId }),
       ...(payload.epfUanNumber && { epfUanNumber: payload.epfUanNumber }),
       ...(payload.esicNumber && { esicNumber: payload.esicNumber }),
-      ...(payload.aadharCardDocumentUrl && {
-        aadharCardDocumentUrl: payload.aadharCardDocumentUrl,
-      }),
       ...(payload.panCardDocumentUrl && {
         panCardDocumentUrl: payload.panCardDocumentUrl,
       }),
@@ -343,7 +372,6 @@ export async function POST(request: NextRequest) {
       ...(payload.termsAccepted === true && { termsAcceptedAt: now }),
     };
 
-    const docRef = adminDb.collection("employees").doc();
     const batch = adminDb.batch();
     batch.create(
       employeeIdRegistryRef(adminDb, employeeId),
@@ -357,6 +385,77 @@ export async function POST(request: NextRequest) {
       }),
     );
     batch.set(docRef, employeeData);
+    batch.set(adminDb.collection("employeeAadhaarPrivate").doc(docRef.id), {
+      employeeDocId: docRef.id,
+      ...aadhaarEncryption,
+      aadhaarLast4: payload.aadharNumber.slice(-4),
+      documentStoragePath: restrictedAadhaar.documentStoragePath,
+      originalFileName: restrictedAadhaar.originalFileName,
+      contentType: restrictedAadhaar.contentType,
+      purpose: "esic_epf_registration",
+      employeeProvided: true,
+      verificationStatus: "not_independently_verified",
+      consentId: consentRef.id,
+      uploadedByType: isAdminSubmission ? "admin" : "guard",
+      uploadedByUid: submissionActor?.uid || `enrollment:${draftId}`,
+      uploadedAt: now,
+      updatedAt: now,
+      retentionPolicy: "employment_plus_90_days",
+      status: "complete",
+    });
+    batch.set(consentRef, {
+      type: "aadhaar_esic_epf",
+      noticeVersion: payload.aadhaarConsentVersion,
+      noticeTextHash: AADHAAR_CONSENT_TEXT_HASH,
+      accepted: true,
+      acceptedAt: now,
+      employeeName: fullName,
+      signatureStoragePath: payload.signatureUrl,
+      enrollmentId: draftId || null,
+      source: isAdminSubmission ? "admin_enrollment" : "public_enrollment",
+      employeeId,
+      uploaderUid: submissionActor?.uid || null,
+      status: "active",
+    });
+    batch.set(docRef.collection("documents").doc(), {
+      category: "identity",
+      documentType: payload.identityProofType,
+      documentNumberMasked: payload.identityProofNumber.slice(-4).padStart(payload.identityProofNumber.length, "*"),
+      frontStoragePath: payload.identityProofUrlFront,
+      backStoragePath: payload.identityProofUrlBack,
+      purpose: "client_identity_registration",
+      employeeProvided: true,
+      verificationStatus: "not_independently_verified",
+      uploadedAt: now,
+      uploadedThroughEnrollmentId: draftId || null,
+      retentionPolicy: "employment_plus_90_days",
+      accessClassification: "client_shareable_with_grant",
+      status: "active",
+    });
+    batch.set(docRef.collection("documents").doc(), {
+      category: "address",
+      documentType: payload.addressProofType,
+      documentNumberMasked: payload.addressProofNumber.slice(-4).padStart(payload.addressProofNumber.length, "*"),
+      frontStoragePath: payload.addressProofUrlFront,
+      backStoragePath: payload.addressProofUrlBack,
+      purpose: "client_address_registration",
+      employeeProvided: true,
+      verificationStatus: "not_independently_verified",
+      uploadedAt: now,
+      uploadedThroughEnrollmentId: draftId || null,
+      retentionPolicy: "employment_plus_90_days",
+      accessClassification: "client_shareable_with_grant",
+      status: "active",
+    });
+    batch.set(adminDb.collection("sensitiveDocumentAuditLogs").doc(), {
+      action: "aadhaar_submitted",
+      employeeDocId: docRef.id,
+      category: "aadhaar",
+      purpose: "esic_epf_registration",
+      actorUid: submissionActor?.uid || null,
+      actorType: isAdminSubmission ? "admin" : "guard",
+      at: now,
+    });
     if (draftRef) {
       batch.update(draftRef, {
         status: "completed",
@@ -366,7 +465,15 @@ export async function POST(request: NextRequest) {
         tokenHash: null,
       });
     }
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (error) {
+      await deleteStorageObjectIfPresent(restrictedAadhaar.documentStoragePath);
+      throw error;
+    }
+    if (restrictedAadhaar.sourcePath !== restrictedAadhaar.documentStoragePath) {
+      await deleteStorageObjectIfPresent(restrictedAadhaar.sourcePath);
+    }
 
     return NextResponse.json({
       id: docRef.id,
@@ -385,7 +492,7 @@ export async function POST(request: NextRequest) {
 
     console.error("Enrollment API failed:", error);
     return NextResponse.json(
-      { error: error?.message || "Could not save employee record." },
+      { error: "Could not securely save the employee record." },
       { status: 500 },
     );
   }

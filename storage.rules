@@ -42,6 +42,19 @@ service firebase.storage {
       );
     }
 
+    // Restricted Aadhaar files are uploaded and streamed only by server routes.
+    match /restrictedEmployeeAadhaar/{employeeId}/{fileName} {
+      allow read, write: if false;
+    }
+
+    match /restrictedAadhaarStaging/{uid}/{fileName} {
+      allow read, write: if false;
+    }
+
+    match /restrictedEmployeeConsent/{employeeId}/{fileName} {
+      allow read, write: if false;
+    }
+
     function isFieldOfficer() {
       return isSignedIn() && request.auth.token.role == 'fieldOfficer';
     }
@@ -148,10 +161,7 @@ service firebase.storage {
     }
 
     match /employees/{employeeKey}/aadharCards/{fileName} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && isAllowedSize() && isDocument();
-      allow update: if isAdmin() && isAllowedSize() && isDocument();
-      allow delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /employees/{employeeKey}/panCards/{fileName} {
@@ -234,10 +244,7 @@ service firebase.storage {
     }
 
     match /enrollments/{employeeKey}/aadharCards/{fileName} {
-      allow read: if isAdmin();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /enrollments/{employeeKey}/panCards/{fileName} {

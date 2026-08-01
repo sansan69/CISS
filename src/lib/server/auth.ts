@@ -12,7 +12,10 @@ export type AppDecodedToken = DecodedIdToken & {
   employeeDocId?: string;
 };
 
-export async function verifyRequestAuth(request: Request): Promise<AppDecodedToken> {
+export async function verifyRequestAuth(
+  request: Request,
+  checkRevoked = false,
+): Promise<AppDecodedToken> {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
     throw new Error("Missing bearer token.");
@@ -20,7 +23,7 @@ export async function verifyRequestAuth(request: Request): Promise<AppDecodedTok
 
   const token = authorization.slice("Bearer ".length).trim();
   const { auth: adminAuth } = await import("@/lib/firebaseAdmin");
-  return adminAuth.verifyIdToken(token) as Promise<AppDecodedToken>;
+  return adminAuth.verifyIdToken(token, checkRevoked) as Promise<AppDecodedToken>;
 }
 
 export function hasAdminAccess(decodedToken: Pick<AppDecodedToken, "admin" | "role" | "email">) {
@@ -56,6 +59,33 @@ export function requireAdminOrFieldOfficer(decodedToken: AppDecodedToken) {
 export async function requireAdmin(request: Request) {
   const decodedToken = await verifyRequestAuth(request);
   return requireAdminLike(decodedToken);
+}
+
+export const AADHAAR_ADMIN_EMAIL = "admin@cisskerala.app";
+
+/**
+ * Aadhaar access is intentionally narrower than ordinary administrator access.
+ * Keep this check server-side: client-side role or email checks are UX only.
+ */
+export function requireAadhaarAdministratorToken(decodedToken: AppDecodedToken) {
+  const normalizedEmail = decodedToken.email?.trim().toLowerCase();
+  const hasAdministratorClaim =
+    decodedToken.admin === true || decodedToken.role === "admin";
+
+  if (
+    normalizedEmail !== AADHAAR_ADMIN_EMAIL ||
+    decodedToken.email_verified !== true ||
+    !hasAdministratorClaim
+  ) {
+    throw new Error("Aadhaar administrator access required.");
+  }
+
+  return decodedToken;
+}
+
+export async function requireAadhaarAdministrator(request: Request) {
+  const decodedToken = await verifyRequestAuth(request, true);
+  return requireAadhaarAdministratorToken(decodedToken);
 }
 
 export async function requireSuperAdmin(request: Request) {

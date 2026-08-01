@@ -17,6 +17,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "attendance:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-attendance.mjs",
     "reports:migrate-v2": "node --env-file-if-exists=.env.local scripts/migrate-field-officer-reports-v2.mjs",
+    "aadhaar:migrate": "node --env-file-if-exists=.env.local scripts/migrate-aadhaar-private.mjs",
+    "aadhaar:migrate:apply": "node --env-file-if-exists=.env.local scripts/migrate-aadhaar-private.mjs --apply",
+    "aadhaar:audit-security": "node --env-file-if-exists=.env.local scripts/audit-aadhaar-security.mjs",
+    "aadhaar:repair-legacy-documents": "node --env-file-if-exists=.env.local scripts/repair-aadhaar-legacy-documents.mjs",
+    "aadhaar:reconcile-security": "node --env-file-if-exists=.env.local scripts/reconcile-aadhaar-security.mjs",
+    "documents:backfill-policy": "node --env-file-if-exists=.env.local scripts/backfill-employee-document-policy.mjs",
+    "documents:backfill-policy:apply": "node --env-file-if-exists=.env.local scripts/backfill-employee-document-policy.mjs --apply",
     "postinstall": "patch-package"
   },
   "dependencies": {

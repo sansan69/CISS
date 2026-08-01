@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
     verifyIdToken: vi.fn(() => Promise.resolve({
       uid: "admin-user",
       role: "admin",
+      email: "admin@cisskerala.app",
+      email_verified: true,
     })),
   };
 });
@@ -69,31 +71,40 @@ class FakeCollection {
         }
         return { exists: false, data: () => undefined };
       },
+      collection(name: string) {
+        return new FakeCollection(`${ref.path}/${name}`);
+      },
     };
     return ref;
   }
 }
 
-vi.mock("@/lib/firebaseAdmin", () => ({
+  vi.mock("@/lib/firebaseAdmin", () => ({
   auth: {
     verifyIdToken: mocks.verifyIdToken,
   },
-  db: {
+    db: {
     collection: (name: string) => new FakeCollection(name),
     batch: () => {
       let employeePayload: Record<string, unknown> | null = null;
       return {
         create: vi.fn(),
         update: vi.fn(),
-        set: vi.fn((_ref: unknown, payload: Record<string, unknown>) => {
-          employeePayload = payload;
+        set: vi.fn((ref: { path?: string }, payload: Record<string, unknown>) => {
+          if (/^employees\/[^/]+$/.test(ref?.path || "")) employeePayload = payload;
         }),
         commit: vi.fn(async () => {
           if (employeePayload) mocks.addedEmployees.push(employeePayload);
         }),
       };
+      },
     },
-  },
+    storage: {
+      bucket: () => ({
+        name: "test-bucket",
+        file: () => ({ exists: vi.fn(async () => [true]) }),
+      }),
+    },
 }));
 
 vi.mock("firebase-admin/firestore", () => ({
@@ -108,6 +119,24 @@ vi.mock("@/lib/qr", () => ({
   generateQrCodeDataUrl: mocks.generateQrCodeDataUrl,
 }));
 
+vi.mock("@/lib/server/aadhaar", () => ({
+  AADHAAR_CONSENT_TEXT_HASH: "consent-hash",
+  encryptAadhaarNumber: vi.fn(async () => ({
+    aadhaarNumberEncrypted: "encrypted",
+    encryptionIv: "iv",
+    encryptionTag: "tag",
+    encryptedDataKey: "wrapped",
+    encryptionKeyVersion: "kms-key",
+  })),
+  moveAadhaarSourceToRestrictedStorage: vi.fn(async () => ({
+    documentStoragePath: "restrictedEmployeeAadhaar/employee-doc-1/aadhaar.pdf",
+    originalFileName: "aadhaar.pdf",
+    contentType: "application/pdf",
+    sourcePath: "enrollments/draft-test-123/aadharCards/aadhaar.pdf",
+  })),
+  deleteStorageObjectIfPresent: vi.fn(async () => undefined),
+}));
+
 function buildStandardPayload(overrides: Record<string, unknown> = {}) {
   return {
     enrollmentDraftId: "draft-test-123",
@@ -115,7 +144,7 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
     joiningDate: "2026-04-30T18:30:00.000Z",
     clientName: "TCS",
     resourceIdNumber: "TCS-RESOURCE-001",
-    profilePictureUrl: "https://example.com/profile.png",
+    profilePictureUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FprofilePictures%2Fprofile.png?alt=media&token=test",
     firstName: "Standard",
     lastName: "Guard",
     fatherName: "Standard Father",
@@ -127,16 +156,21 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
     district: "Ernakulam",
     identityProofType: "PAN Card",
     identityProofNumber: "AABCT1234C",
-    identityProofUrlFront: "https://example.com/id-front.png",
-    identityProofUrlBack: "https://example.com/id-back.png",
-    addressProofType: "Aadhar Card",
-    addressProofNumber: "123456789012",
-    addressProofUrlFront: "https://example.com/address-front.png",
-    addressProofUrlBack: "https://example.com/address-back.png",
-    signatureUrl: "https://example.com/signature.png",
+    identityProofUrlFront: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FidProofs%2Fid-front.png?alt=media&token=test",
+    identityProofUrlBack: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FidProofs%2Fid-back.png?alt=media&token=test",
+    addressProofType: "Voter ID",
+    addressProofNumber: "ABC1234567",
+    addressProofUrlFront: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FaddressProofs%2Faddress-front.png?alt=media&token=test",
+    addressProofUrlBack: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FaddressProofs%2Faddress-back.png?alt=media&token=test",
+    aadharNumber: "123456789012",
+    aadharCardDocumentUrl: "enrollments/draft-test-123/aadharCards/aadhaar.pdf",
+    signatureUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2Fsignatures%2Fsignature.png?alt=media&token=test",
     fullAddress: "Standard House, Standard Road, Ernakulam, Kerala - 682001",
+    emailAddress: "Standard.Guard@example.com",
     phoneNumber: "9012345690",
     termsAccepted: true,
+    aadhaarConsentAccepted: true,
+    aadhaarConsentVersion: "aadhaar-esic-epf-v1",
     ...overrides,
   };
 }
@@ -149,7 +183,7 @@ describe("POST /api/employees/enroll", () => {
     mocks.verifyIdToken.mockClear();
   });
 
-  it("stores standard client enrollments without requiring email and returns the created employee", async () => {
+  it("stores the required email in normalized form and returns the created employee", async () => {
     const { POST } = await import("./route");
 
     const response = await POST(
@@ -170,7 +204,7 @@ describe("POST /api/employees/enroll", () => {
       employeeId: "CISS/TCS/2026-27/001",
       clientName: "TCS",
       fullName: "STANDARD GUARD",
-      emailAddress: "",
+      emailAddress: "standard.guard@example.com",
       phoneNumber: "9012345690",
       district: "Ernakulam",
       status: "Active",
@@ -178,11 +212,32 @@ describe("POST /api/employees/enroll", () => {
         fullName: "STANDARD GUARD",
         employeeId: "CISS/TCS/2026-27/001",
         clientName: "TCS",
-        profilePictureUrl: "https://example.com/profile.png",
+        profilePictureUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FprofilePictures%2Fprofile.png?alt=media&token=test",
         status: "Active",
       },
     });
   });
+
+  it.each([undefined, "", "not-an-email"])(
+    "rejects enrollment when required email is invalid: %s",
+    async (emailAddress) => {
+      const { POST } = await import("./route");
+
+      const response = await POST(
+        new NextRequest("https://example.com/api/employees/enroll", {
+          method: "POST",
+          body: JSON.stringify(buildStandardPayload({ emailAddress })),
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mocks.addedEmployees).toHaveLength(0);
+      const body = await response.json();
+      expect(body.error).toBe("Invalid enrollment data.");
+      expect(body.details.fieldErrors.emailAddress).toBeTruthy();
+    },
+  );
 
   it("allows an authenticated admin submission without a public upload session", async () => {
     const { POST } = await import("./route");
@@ -191,6 +246,16 @@ describe("POST /api/employees/enroll", () => {
       enrollmentUploadToken: _uploadToken,
       ...payload
     } = buildStandardPayload();
+    for (const [key, path] of Object.entries({
+      profilePictureUrl: "profilePictures/profile.png",
+      identityProofUrlFront: "idProofs/id-front.png",
+      identityProofUrlBack: "idProofs/id-back.png",
+      addressProofUrlFront: "addressProofs/address-front.png",
+      addressProofUrlBack: "addressProofs/address-back.png",
+      signatureUrl: "signatures/signature.png",
+    })) {
+      (payload as Record<string, unknown>)[key] = `https://firebasestorage.googleapis.com/v0/b/test-bucket/o/${encodeURIComponent(`employees/9012345690/${path}`)}?alt=media&token=test`;
+    }
 
     const response = await POST(
       new NextRequest("https://example.com/api/employees/enroll", {
@@ -204,7 +269,7 @@ describe("POST /api/employees/enroll", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.verifyIdToken).toHaveBeenCalledWith("valid-admin-token");
+    expect(mocks.verifyIdToken).toHaveBeenCalledWith("valid-admin-token", true);
     expect(mocks.addedEmployees).toHaveLength(1);
   });
 

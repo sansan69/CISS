@@ -18,7 +18,7 @@ import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, 
 import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, type User as FirebaseUser } from 'firebase/auth';
 import { ref, getBytes } from 'firebase/storage';
 
 
@@ -118,7 +118,7 @@ const keralaDistricts = [
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
 ];
-const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"];
+const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate"];
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
@@ -175,11 +175,11 @@ const employeeUpdateSchema = z.object({
   ifscCode: z.string().optional().or(z.literal('')),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format.").optional().or(z.literal('')),
   
-  identityProofType: proofTypes,
-  identityProofNumber: z.string().min(5, "ID Proof number is required."),
+  identityProofType: proofTypes.optional(),
+  identityProofNumber: z.string().optional().or(z.literal('')),
   
-  addressProofType: proofTypes,
-  addressProofNumber: z.string().min(5, { message: "Address proof number is required." }),
+  addressProofType: proofTypes.optional(),
+  addressProofNumber: z.string().optional().or(z.literal('')),
 
   epfUanNumber: z.string().optional(),
   esicNumber: z.string().optional(),
@@ -193,7 +193,7 @@ const employeeUpdateSchema = z.object({
   if (data.educationalQualification === "Any Other Qualification" && (!data.otherQualification || data.otherQualification.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please specify your qualification.", path: ["otherQualification"] });
   }
-  if (data.identityProofType === data.addressProofType) {
+  if (data.identityProofType && data.addressProofType && data.identityProofType === data.addressProofType) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Identity proof and address proof must be different types.", path: ["addressProofType"] });
   }
 });
@@ -404,6 +404,12 @@ export default function AdminEmployeeProfilePage() {
   const [resetPinReason, setResetPinReason] = useState("");
   const [isResettingPin, setIsResettingPin] = useState(false);
   const [isResettingAttendanceState, setIsResettingAttendanceState] = useState(false);
+  const [aadhaarStatus, setAadhaarStatus] = useState<'loading' | 'missing' | 'complete'>('loading');
+  const [revealedAadhaar, setRevealedAadhaar] = useState<string | null>(null);
+  const [aadhaarPassword, setAadhaarPassword] = useState('');
+  const [isAadhaarBusy, setIsAadhaarBusy] = useState(false);
+  const [aadhaarHasConsent, setAadhaarHasConsent] = useState(false);
+  const [aadhaarCorrectionRequest, setAadhaarCorrectionRequest] = useState<{ id: string; reason: string } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -414,6 +420,109 @@ export default function AdminEmployeeProfilePage() {
   }, []);
 
   const isAdminView = !isAuthLoading && currentUser !== null;
+  const isDesignatedAadhaarAdmin =
+    currentUser?.email?.trim().toLowerCase() === 'admin@cisskerala.app' &&
+    currentUser.emailVerified;
+
+  const fetchAadhaarStatus = useCallback(async () => {
+    if (!currentUser || !isDesignatedAadhaarAdmin || !employeeIdFromUrl) return;
+    const token = await currentUser.getIdToken();
+    const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (response.ok) {
+      const body = await response.json();
+      setAadhaarStatus(body.status === 'complete' ? 'complete' : 'missing');
+      setAadhaarHasConsent(body.hasConsent === true);
+      setAadhaarCorrectionRequest(body.correctionRequest || null);
+    } else {
+      setAadhaarStatus('missing');
+    }
+  }, [currentUser, employeeIdFromUrl, isDesignatedAadhaarAdmin]);
+
+  useEffect(() => { void fetchAadhaarStatus(); }, [fetchAadhaarStatus]);
+
+  useEffect(() => {
+    const hide = () => { if (document.visibilityState !== 'visible') setRevealedAadhaar(null); };
+    document.addEventListener('visibilitychange', hide);
+    return () => document.removeEventListener('visibilitychange', hide);
+  }, []);
+
+  const reauthenticateAadhaarAdmin = async () => {
+    if (!currentUser?.email || !aadhaarPassword) throw new Error('Enter the administrator password.');
+    await reauthenticateWithCredential(
+      currentUser,
+      EmailAuthProvider.credential(currentUser.email, aadhaarPassword),
+    );
+    setAadhaarPassword('');
+    return currentUser.getIdToken(true);
+  };
+
+  const revealAadhaar = async () => {
+    setIsAadhaarBusy(true);
+    try {
+      const token = await reauthenticateAadhaarAdmin();
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar?reveal=true`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Could not reveal Aadhaar.');
+      setRevealedAadhaar(body.aadhaarNumber);
+    } catch (aadhaarError) {
+      toast({ variant: 'destructive', title: 'Aadhaar access denied', description: aadhaarError instanceof Error ? aadhaarError.message : 'Could not reveal Aadhaar.' });
+    } finally {
+      setIsAadhaarBusy(false);
+    }
+  };
+
+  const viewAadhaarDocument = async () => {
+    setIsAadhaarBusy(true);
+    try {
+      const token = await reauthenticateAadhaarAdmin();
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar/document`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Could not open Aadhaar copy.');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (aadhaarError) {
+      toast({ variant: 'destructive', title: 'Aadhaar access denied', description: aadhaarError instanceof Error ? aadhaarError.message : 'Could not open Aadhaar.' });
+    } finally {
+      setIsAadhaarBusy(false);
+    }
+  };
+
+  const uploadAdminAadhaar = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!currentUser) return;
+    const formElement = event.currentTarget;
+    setIsAadhaarBusy(true);
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: new FormData(formElement),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Could not save Aadhaar.');
+      formElement.reset();
+      setAadhaarStatus('complete');
+      setAadhaarCorrectionRequest(null);
+      toast({ title: 'Aadhaar saved', description: 'The number and copy are now in restricted storage.' });
+    } catch (aadhaarError) {
+      toast({ variant: 'destructive', title: 'Aadhaar was not saved', description: aadhaarError instanceof Error ? aadhaarError.message : 'Could not save Aadhaar.' });
+    } finally {
+      setIsAadhaarBusy(false);
+    }
+  };
 
   const form = useForm<EmployeeUpdateValues>({
     resolver: zodResolver(employeeUpdateSchema),
@@ -636,13 +745,24 @@ export default function AdminEmployeeProfilePage() {
   async function handleSaveChanges(data: EmployeeUpdateValues) {
     if (!employee) return;
     const legacy = employee as any;
+    const isThreeProofEnrollment = legacy.enrollmentPolicy?.version === 'three-proof-v1';
+    const hasIdentityFront = Boolean(employee.identityProofUrlFront || legacy.idProofDocumentUrlFront || legacy.idProofDocumentUrl);
+    const hasIdentityBack = Boolean(employee.identityProofUrlBack || legacy.idProofDocumentUrlBack);
+    const hasAddressFront = Boolean(employee.addressProofUrlFront);
+    const hasAddressBack = Boolean(employee.addressProofUrlBack);
+    const isAddingIdentity = Boolean(newIdentityProofUrlFront || newIdentityProofUrlBack);
+    const isAddingAddress = Boolean(newAddressProofUrlFront || newAddressProofUrlBack);
     
     // Custom check for mandatory file fields, considering legacy data
     if (!newProfilePicture && !employee.profilePictureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Profile Picture is required."}); return; }
-    if (!newIdentityProofUrlFront && !employee.identityProofUrlFront && !legacy.idProofDocumentUrlFront && !legacy.idProofDocumentUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Front) is required."}); return; }
-    if (!newIdentityProofUrlBack && !employee.identityProofUrlBack && !legacy.idProofDocumentUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Back) is required."}); return; }
-    if (!newAddressProofUrlFront && !employee.addressProofUrlFront) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Front) is required."}); return; }
-    if (!newAddressProofUrlBack && !employee.addressProofUrlBack) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Back) is required."}); return; }
+    if (isThreeProofEnrollment && !newIdentityProofUrlFront && !hasIdentityFront) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Front) is required."}); return; }
+    if (isThreeProofEnrollment && !newIdentityProofUrlBack && !hasIdentityBack) { toast({ variant: "destructive", title: "Missing Document", description: "Identity Proof (Back) is required."}); return; }
+    if (isThreeProofEnrollment && !newAddressProofUrlFront && !hasAddressFront) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Front) is required."}); return; }
+    if (isThreeProofEnrollment && !newAddressProofUrlBack && !hasAddressBack) { toast({ variant: "destructive", title: "Missing Document", description: "Address Proof (Back) is required."}); return; }
+    if ((isThreeProofEnrollment || isAddingIdentity) && (!data.identityProofType || !data.identityProofNumber || data.identityProofNumber.trim().length < 5)) { toast({ variant: "destructive", title: "Identity proof details required", description: "Select the identity proof type and enter its document number."}); return; }
+    if ((isThreeProofEnrollment || isAddingAddress) && (!data.addressProofType || !data.addressProofNumber || data.addressProofNumber.trim().length < 5)) { toast({ variant: "destructive", title: "Address proof details required", description: "Select the address proof type and enter its document number."}); return; }
+    if (isAddingIdentity && !newIdentityProofUrlFront && !hasIdentityFront) { toast({ variant: "destructive", title: "Identity proof front required", description: "Upload the front page to add this missing proof."}); return; }
+    if (isAddingAddress && !newAddressProofUrlFront && !hasAddressFront) { toast({ variant: "destructive", title: "Address proof front required", description: "Upload the front page to add this missing proof."}); return; }
     if (!newSignatureUrl && !employee.signatureUrl) { toast({ variant: "destructive", title: "Missing Document", description: "Signature is required."}); return; }
     
     // Bank passbook is optional
@@ -715,7 +835,16 @@ export default function AdminEmployeeProfilePage() {
             formPayload.otherQualification = "";
         }
 
-        const finalPayload = { ...formPayload, ...updatedUrls };
+        const finalPayload: Record<string, any> = { ...formPayload, ...updatedUrls };
+
+        if (newIdentityProofUrlFront) {
+            finalPayload['documentCompletion.identity'] = 'complete';
+            finalPayload['documentCompletion.updatedAt'] = serverTimestamp();
+        }
+        if (newAddressProofUrlFront) {
+            finalPayload['documentCompletion.address'] = 'complete';
+            finalPayload['documentCompletion.updatedAt'] = serverTimestamp();
+        }
         
         if (finalPayload.fullName || finalPayload.phoneNumber || finalPayload.employeeId || finalPayload.firstName || finalPayload.lastName) {
              const nameParts = (finalPayload.fullName || employee.fullName).toUpperCase().split(' ').filter(Boolean);
@@ -777,6 +906,22 @@ export default function AdminEmployeeProfilePage() {
       )
     )
   );
+
+  const employeeDocumentData = employee as (Employee & {
+    enrollmentPolicy?: { version?: string };
+    documentCompletion?: { aadhaar?: string; identity?: string; address?: string };
+    idProofDocumentUrlFront?: string;
+    idProofDocumentUrl?: string;
+    aadharCardDocumentUrl?: string;
+  }) | null;
+  const employeePolicy = employeeDocumentData?.enrollmentPolicy?.version === 'three-proof-v1' ? 'three-proof-v1' : 'legacy';
+  const identityStatus = employeeDocumentData?.documentCompletion?.identity === 'complete' || Boolean(employeeDocumentData?.identityProofUrlFront || employeeDocumentData?.idProofDocumentUrlFront || employeeDocumentData?.idProofDocumentUrl) ? 'complete' : 'missing';
+  const addressStatus = employeeDocumentData?.documentCompletion?.address === 'complete' || Boolean(employeeDocumentData?.addressProofUrlFront) ? 'complete' : 'missing';
+  const displayedAadhaarStatus = isDesignatedAadhaarAdmin
+    ? aadhaarStatus
+    : employeeDocumentData?.documentCompletion?.aadhaar === 'complete' || Boolean(employeeDocumentData?.aadharCardDocumentUrl)
+      ? 'complete'
+      : 'missing';
 
   const handleRegenerateEmployeeId = async () => {
     if (!employee) return;
@@ -1557,7 +1702,6 @@ export default function AdminEmployeeProfilePage() {
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <DetailItem label="PAN Number" value={employee.panNumber} />
-                    {employee.aadharNumber && <DetailItem label="Aadhar Number" value={employee.aadharNumber} />}
                     <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     {employee.nationality && <DetailItem label="Nationality" value={employee.nationality} isName />}
@@ -1569,6 +1713,58 @@ export default function AdminEmployeeProfilePage() {
                     {employee.passportCountryName && <DetailItem label="Passport Country" value={employee.passportCountryName} isName />}
                     <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
                     <DetailItem label="ESIC Number" value={employee.esicNumber} />
+                  </div>
+                  <div className="mt-5 rounded-xl border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">Document completion</p>
+                        <p className="text-xs text-muted-foreground">Restricted to admin@cisskerala.app for ESIC and EPF administration.</p>
+                      </div>
+                      <Badge variant="outline">{employeePolicy === 'legacy' ? 'Legacy · optional' : 'Three-proof v1'}</Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant={displayedAadhaarStatus === 'complete' ? 'default' : 'outline'}>Aadhaar: {displayedAadhaarStatus === 'loading' ? 'Checking' : displayedAadhaarStatus === 'complete' ? 'On file' : 'Missing'}</Badge>
+                      <Badge variant={identityStatus === 'complete' ? 'default' : 'outline'}>Identity: {identityStatus === 'complete' ? 'On file' : 'Missing'}</Badge>
+                      <Badge variant={addressStatus === 'complete' ? 'default' : 'outline'}>Address: {addressStatus === 'complete' ? 'On file' : 'Missing'}</Badge>
+                    </div>
+                    {isDesignatedAadhaarAdmin ? (
+                      <div className="mt-4 space-y-3">
+                        {displayedAadhaarStatus === 'complete' ? (
+                          <>
+                            <Input type="password" autoComplete="current-password" value={aadhaarPassword} onChange={(event) => setAadhaarPassword(event.target.value)} placeholder="Re-enter admin password" />
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" size="sm" variant="outline" onClick={() => void revealAadhaar()} disabled={isAadhaarBusy}>Reveal Aadhaar</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => void viewAadhaarDocument()} disabled={isAadhaarBusy}>View Aadhaar copy</Button>
+                              {revealedAadhaar && <Button type="button" size="sm" variant="ghost" onClick={() => setRevealedAadhaar(null)}>Hide</Button>}
+                            </div>
+                            {revealedAadhaar && <p className="font-mono text-lg tracking-wider" aria-live="polite">{revealedAadhaar}</p>}
+                            {aadhaarCorrectionRequest && (
+                              <form className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void uploadAdminAadhaar(event)}>
+                                <div>
+                                  <p className="text-sm font-medium">Pending correction request</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">{aadhaarCorrectionRequest.reason}</p>
+                                </div>
+                                <input type="hidden" name="replace" value="true" />
+                                <input type="hidden" name="correctionRequestId" value={aadhaarCorrectionRequest.id} />
+                                <Input name="aadhaarNumber" type="password" inputMode="numeric" autoComplete="off" maxLength={12} required placeholder="Correct 12-digit Aadhaar number" />
+                                <label className="block text-xs text-muted-foreground">Correct self-attested Aadhaar copy<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                                {!aadhaarHasConsent && <label className="block text-xs text-muted-foreground">Employee-signed Aadhaar consent form<Input className="mt-1" name="signedConsent" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>}
+                                <Button type="submit" size="sm" disabled={isAadhaarBusy}>Replace after correction request</Button>
+                              </form>
+                            )}
+                          </>
+                        ) : (
+                          <form className="space-y-3" onSubmit={(event) => void uploadAdminAadhaar(event)}>
+                            <Input name="aadhaarNumber" type="password" inputMode="numeric" autoComplete="off" maxLength={12} required placeholder="12-digit Aadhaar number" />
+                            <label className="block text-xs text-muted-foreground">Self-attested Aadhaar copy<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                            <label className="block text-xs text-muted-foreground">Employee-signed Aadhaar consent form<Input className="mt-1" name="signedConsent" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                            <Button type="submit" size="sm" disabled={isAadhaarBusy}>Add restricted Aadhaar</Button>
+                          </form>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-muted-foreground">Aadhaar number and copy are hidden for this account.</p>
+                    )}
                   </div>
                 </TabsContent>
                 <TabsContent value="qr">
@@ -1599,7 +1795,6 @@ export default function AdminEmployeeProfilePage() {
                             <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
                             <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
                             <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                            <DocumentItem name="Aadhar Card Copy" url={employee.aadharCardDocumentUrl} type="LNG Statutory Document" />
                             <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />
                             <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />
                             <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />

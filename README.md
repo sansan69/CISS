@@ -56,6 +56,15 @@ For server-side functionality like PDF generation to work, you must configure en
     -   Copy the resulting Base64 string and add it as the value for this environment variable in Vercel.
 3.  **`DEFAULT_GEOFENCE_RADIUS_METERS`** (Optional): Default attendance radius when a site does not define its own geofence. Defaults to `150`.
 4.  **`OPENCAGE_API_KEY`**: Required for server-side site geocoding.
+5.  **`AADHAAR_KMS_KEY_NAME`**: Required for Aadhaar envelope encryption. Set it to the full Google Cloud KMS CryptoKey resource name and grant the application service account only the KMS encrypt/decrypt permissions it needs.
+
+### Aadhaar security deployment order
+
+1. Schedule a short enrollment maintenance window. Create the Cloud KMS key and configure `AADHAAR_KMS_KEY_NAME` in every application and migration environment.
+2. Run `npm run aadhaar:migrate`, review the candidate totals, and back up Firestore and Storage.
+3. Deploy the application together with the updated Firestore and Storage rules. The rules block browser access to private, staged, and legacy Aadhaar paths.
+4. During the same maintenance window, run `npm run aadhaar:migrate:apply` with production Firebase credentials.
+5. Confirm that the migration reports no failures and that legacy plaintext fields are gone before reopening enrollment and Aadhaar administration.
 
 ---
 

@@ -420,10 +420,10 @@ function mapRowToEmployee(row, sequenceNumber) {
     armsLicenseNumber: normalizeText(row[COLUMN.armsLicenseNumber]) || undefined,
     armsLicenseSourceUrl: normalizeText(row[COLUMN.armsLicenseDoc]) || undefined,
     epfUanNumber: normalizeText(row[COLUMN.epfoUanNumber]) || undefined,
-    identityProofType: "Aadhar Card",
-    identityProofNumber: normalizeAadhar(row[COLUMN.aadharNumber]) || "",
-    addressProofType: "PAN Card",
-    addressProofNumber: normalizePan(row[COLUMN.panCardNumber]) || "",
+    identityProofType: normalizePan(row[COLUMN.panCardNumber]) ? "PAN Card" : undefined,
+    identityProofNumber: normalizePan(row[COLUMN.panCardNumber]) || undefined,
+    addressProofType: undefined,
+    addressProofNumber: undefined,
     sourceTimestamp: parseTimestamp(row[COLUMN.timestamp]),
     sourceStatus: normalizeText(row[COLUMN.status]) || undefined,
     sourceHash: createHash("sha1").update(JSON.stringify(row)).digest("hex"),
@@ -511,7 +511,7 @@ async function importEmployees({ dryRun = false, limit = null }) {
   async function processEmployee(mapped, index) {
     const duplicateLegacyIdCount = mapped.legacyUniqueId ? legacyIdCounts.get(mapped.legacyUniqueId) || 0 : 0;
     const employeeId = duplicateLegacyIdCount > 1
-      ? `${mapped.legacyUniqueId}-${(mapped.phoneNumber || mapped.aadharNumber || String(index + 1)).slice(-4)}`
+      ? `${mapped.legacyUniqueId}-${(mapped.phoneNumber || String(index + 1)).slice(-4)}`
       : mapped.legacyUniqueId || mapped.fallbackEmployeeId;
     const emailAddress = buildLngFallbackEmail(employeeId, mapped.phoneNumber);
     const existing = await findExistingEmployeeDoc(db, employeeId, mapped.phoneNumber, emailAddress);
@@ -536,12 +536,10 @@ async function importEmployees({ dryRun = false, limit = null }) {
         mapped.driveUrls.signature && !documentUrls.signatureUrl
           ? safeUploadDriveDocument(bucket, mapped.driveUrls.signature, `employees/${employeeKey}/signatures/signature`, "signature", employeeId)
           : Promise.resolve(documentUrls.signatureUrl),
-        mapped.driveUrls.aadharCopy && !documentUrls.identityProofUrlFront
-          ? safeUploadDriveDocument(bucket, mapped.driveUrls.aadharCopy, `employees/${employeeKey}/idProofs/aadhar-front`, "aadharCopy", employeeId)
+        mapped.driveUrls.panCopy && !documentUrls.identityProofUrlFront
+          ? safeUploadDriveDocument(bucket, mapped.driveUrls.panCopy, `employees/${employeeKey}/idProofs/pan-front`, "panCopy", employeeId)
           : Promise.resolve(documentUrls.identityProofUrlFront),
-        mapped.driveUrls.panCopy && !documentUrls.addressProofUrlFront
-          ? safeUploadDriveDocument(bucket, mapped.driveUrls.panCopy, `employees/${employeeKey}/addressProofs/pan-front`, "panCopy", employeeId)
-          : Promise.resolve(documentUrls.addressProofUrlFront),
+        Promise.resolve(documentUrls.addressProofUrlFront),
         mapped.driveUrls.passbookCopy && !documentUrls.bankPassbookStatementUrl
           ? safeUploadDriveDocument(bucket, mapped.driveUrls.passbookCopy, `employees/${employeeKey}/bankDocuments/passbook`, "passbookCopy", employeeId)
           : Promise.resolve(documentUrls.bankPassbookStatementUrl),
@@ -596,7 +594,7 @@ async function importEmployees({ dryRun = false, limit = null }) {
       bankName: mapped.bankName || FieldValue.delete(),
       branchName: mapped.branchName || FieldValue.delete(),
       panNumber: mapped.panNumber || FieldValue.delete(),
-      aadharNumber: mapped.aadharNumber || FieldValue.delete(),
+      aadharNumber: FieldValue.delete(),
       nationality: mapped.nationality || FieldValue.delete(),
       identificationMark: mapped.identificationMark || FieldValue.delete(),
       heightCm: mapped.heightCm ?? FieldValue.delete(),

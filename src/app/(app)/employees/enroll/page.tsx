@@ -50,9 +50,11 @@ import {
   isEnrollmentFileSelectionValid,
 } from "@/lib/enrollmentFiles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
-import { EDUCATION_OPTIONS, isLngClientName, LNG_JOB_DESIGNATIONS, MARITAL_STATUSES, PROOF_TYPES, requiresLngArmsLicense, requiresLngServiceBook } from "@/lib/constants";
+import { ADDRESS_PROOF_TYPES, EDUCATION_OPTIONS, IDENTITY_PROOF_TYPES, isLngClientName, LNG_JOB_DESIGNATIONS, MARITAL_STATUSES, requiresLngArmsLicense, requiresLngServiceBook } from "@/lib/constants";
+import { AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
@@ -66,7 +68,8 @@ const fileSchema = z.instanceof(File, { message: "This field is required." })
 
 const optionalFileSchema = fileSchema.optional();
 
-const proofTypes = z.enum(PROOF_TYPES);
+const identityProofTypes = z.enum(IDENTITY_PROOF_TYPES);
+const addressProofTypes = z.enum(ADDRESS_PROOF_TYPES);
 const qualificationTypes = z.enum(EDUCATION_OPTIONS);
 const lngDesignationTypes = z.enum(LNG_JOB_DESIGNATIONS);
 const optionalPositiveNumber = z.preprocess(
@@ -86,13 +89,6 @@ function splitLngFullName(rawFullName: string) {
   if (parts.length === 0) return { firstName: "", lastName: "" };
   if (parts.length === 1) return { firstName: parts[0]!, lastName: parts[0]! };
   return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") };
-}
-
-function buildLngEnrollmentEmail(uniqueId: string | undefined, phoneNumber: string) {
-  const token =
-    uniqueId?.trim().replace(/[^a-zA-Z0-9]/g, "").toLowerCase() ||
-    phoneNumber.replace(/\D/g, "");
-  return `${token}@lng-petronet.cisskerala.app`;
 }
 
 const enrollmentFormSchema = z.object({
@@ -144,22 +140,22 @@ const enrollmentFormSchema = z.object({
   // Location & Identification
   district: z.string({ required_error: "District is required." }),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
-  aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhar number must be 12 digits." }).optional().or(z.literal('')),
+  aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhaar number must be 12 digits." }),
   nationality: z.string().optional(),
   identificationMark: z.string().optional(),
   heightCm: optionalPositiveNumber,
   weightKg: optionalPositiveNumber,
   
-  identityProofType: proofTypes,
+  identityProofType: identityProofTypes,
   identityProofNumber: z.string().min(1, { message: "ID proof number is required." }),
   identityProofUrlFront: fileSchema,
   identityProofUrlBack: fileSchema,
   
-  addressProofType: proofTypes,
+  addressProofType: addressProofTypes,
   addressProofNumber: z.string().min(1, { message: "Address proof number is required." }),
   addressProofUrlFront: fileSchema,
   addressProofUrlBack: fileSchema,
-  aadharCardDocument: optionalFileSchema,
+  aadharCardDocument: fileSchema,
   panCardDocument: optionalFileSchema,
   
   signatureUrl: fileSchema,
@@ -177,9 +173,15 @@ const enrollmentFormSchema = z.object({
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
-  emailAddress: z.string().email({ message: "Invalid email address." }).optional().or(z.literal('')),
+  emailAddress: z
+    .string()
+    .trim()
+    .min(1, { message: "Email address is required." })
+    .email({ message: "Invalid email address." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: "Phone number must be 10 digits." }),
   legacyUniqueId: z.string().optional(),
+  termsAndConditions: z.boolean().refine((value) => value, "Enrollment declaration is required."),
+  aadhaarConsentAccepted: z.boolean().refine((value) => value, "Aadhaar consent is required."),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource ID number is required for TCS client.", path: ["resourceIdNumber"] });
@@ -203,12 +205,6 @@ const enrollmentFormSchema = z.object({
     }
     if (!data.identificationMark || data.identificationMark.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Identification mark is required.", path: ["identificationMark"] });
-    }
-    if (!data.aadharNumber || data.aadharNumber.trim() === "") {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar number is required.", path: ["aadharNumber"] });
-    }
-    if (!data.aadharCardDocument) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Aadhar card copy is required.", path: ["aadharCardDocument"] });
     }
     if (!data.panNumber || data.panNumber.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "PAN card number is required.", path: ["panNumber"] });
@@ -248,9 +244,6 @@ const enrollmentFormSchema = z.object({
     if (!data.lastName || data.lastName.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Last name is required.", path: ["lastName"] });
     }
-    if (data.emailAddress?.trim() && !z.string().email().safeParse(data.emailAddress).success) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid email address or leave it blank.", path: ["emailAddress"] });
-    }
   }
   
   // --- Zod Level Validation for ID Numbers ---
@@ -284,7 +277,8 @@ type PublicClientsResponse = {
 };
 
 const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
-const idProofOptions = [...PROOF_TYPES];
+const identityProofOptions = [...IDENTITY_PROOF_TYPES];
+const addressProofOptions = [...ADDRESS_PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
 
@@ -431,6 +425,8 @@ export default function EnrollEmployeePage() {
         emailAddress: '',
         phoneNumber: '',
         legacyUniqueId: '',
+        termsAndConditions: false,
+        aadhaarConsentAccepted: false,
      },
   });
 
@@ -673,8 +669,22 @@ export default function EnrollEmployeePage() {
                 const fileToUpload = await prepareFileForUpload(file);
                 assertEnrollmentUploadSize(fileToUpload);
                 const path = buildEnrollmentStoragePath(phoneNumber, folder, fileStem, fileToUpload);
-                const url = await uploadFileToStorage(fileToUpload, path);
-                uploadedUrls[key] = url;
+                if (folder === "aadharCards") {
+                  const formData = new FormData();
+                  formData.set("file", fileToUpload);
+                  const staged = await authorizedFetch("/api/admin/aadhaar/stage", {
+                    method: "POST",
+                    body: formData,
+                  });
+                  const stagedBody = await staged.json();
+                  if (!staged.ok || !stagedBody.storagePath) {
+                    throw new Error(stagedBody.error || "Aadhaar upload failed.");
+                  }
+                  uploadedUrls[key] = stagedBody.storagePath;
+                } else {
+                  const url = await uploadFileToStorage(fileToUpload, path);
+                  uploadedUrls[key] = url;
+                }
             } catch (err) {
                 handleUploadError(err, name);
             }
@@ -712,7 +722,7 @@ export default function EnrollEmployeePage() {
           passportDocumentUrl: uploadedUrls.passportDocumentUrl || undefined,
           district,
           fullAddress: data.fullAddress,
-          emailAddress: data.emailAddress?.trim() || undefined,
+          emailAddress: data.emailAddress.trim(),
           phoneNumber: data.phoneNumber,
           identityProofType: data.identityProofType,
           identityProofNumber: data.identityProofNumber,
@@ -740,6 +750,9 @@ export default function EnrollEmployeePage() {
           epfUanNumber: data.epfUanNumber || undefined,
           esicNumber: data.esicNumber || undefined,
           policeClearanceCertificateUrl: uploadedUrls.policeClearanceCertificateUrl || undefined,
+          termsAccepted: data.termsAndConditions,
+          aadhaarConsentAccepted: data.aadhaarConsentAccepted,
+          aadhaarConsentVersion: AADHAAR_CONSENT_VERSION,
         }),
       });
 
@@ -1134,7 +1147,7 @@ export default function EnrollEmployeePage() {
                 <div className="p-4 border rounded-lg mt-4 space-y-4">
                     <h3 className="font-medium text-lg">Identity Proof (Name, DOB, Father's Name)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{identityProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -1147,7 +1160,7 @@ export default function EnrollEmployeePage() {
                 <div className="p-4 border rounded-lg mt-6 space-y-4">
                     <h3 className="font-medium text-lg">Address Proof</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{addressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -1156,29 +1169,28 @@ export default function EnrollEmployeePage() {
                     </div>
                 </div>
 
-                {isLngClient && (
-                  <div className="p-4 border rounded-lg mt-6 space-y-4">
-                    <h3 className="font-medium text-lg">LNG Statutory Card Copies</h3>
+                <div className="p-4 border rounded-lg mt-6 space-y-4">
+                    <h3 className="font-medium text-lg">Aadhaar for ESIC/EPF</h3>
+                    <p className="text-sm text-muted-foreground">Restricted to admin@cisskerala.app and never shared with clients.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="aadharCardDocument" render={({ field }) => (
                         <FormItem className="text-center">
-                          <FormLabel className="block mb-2">Aadhar Card Copy <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel className="block mb-2">Self-attested Aadhaar Copy <span className="text-destructive">*</span></FormLabel>
                           <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
-                          <FormDescription>Dedicated LNG Aadhar copy.</FormDescription>
+                          <FormDescription>Employee-provided document; CISS does not independently verify it.</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )} />
-                      <FormField control={form.control} name="panCardDocument" render={({ field }) => (
+                      {isLngClient && <FormField control={form.control} name="panCardDocument" render={({ field }) => (
                         <FormItem className="text-center">
                           <FormLabel className="block mb-2">PAN Card Copy <span className="text-destructive">*</span></FormLabel>
                           <ImagePreviewAndUpload fieldName="panCardDocument" preview={panCardPreview} setPreview={setPanCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
                           <FormDescription>Dedicated LNG PAN copy.</FormDescription>
                           <FormMessage />
                         </FormItem>
-                      )} />
+                      )} />}
                     </div>
-                  </div>
-                )}
+                </div>
 
                 {/* Signature */}
                  <div className="p-4 border rounded-lg mt-6 space-y-4">
@@ -1192,7 +1204,7 @@ export default function EnrollEmployeePage() {
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter district" list="admin-enrollment-districts" /></FormControl><datalist id="admin-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
-                    {isLngClient && <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter 12-digit Aadhar number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                    <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="Enter 12-digit Aadhaar number" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration.</FormDescription><FormMessage /></FormItem>)} />
                     {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && <FormField control={form.control} name="passportCountryName" render={({ field }) => (<FormItem><FormLabel>Passport Country Name</FormLabel><FormControl><Input placeholder="Enter passport country, if applicable" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
@@ -1281,9 +1293,20 @@ export default function EnrollEmployeePage() {
                   )} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                    <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address (optional)</FormLabel><FormControl><Input type="email" placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>For official communications, if available</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" autoComplete="email" required placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>Required for enrollment updates and official communication.</FormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormDescription>Your primary contact number</FormDescription><FormMessage /></FormItem>)} />
                 </div>
+              </section>
+
+              <section className="space-y-4 rounded-xl border p-4">
+                <p className="text-sm font-semibold">Aadhaar use for ESIC and EPF</p>
+                <p className="text-xs text-muted-foreground">{AADHAAR_CONSENT_TEXT}</p>
+                <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has accepted this Aadhaar consent.</FormLabel><FormMessage/></div></FormItem>
+                )}/>
+                <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee confirms the information and documents are correct.</FormLabel><FormMessage/></div></FormItem>
+                )}/>
               </section>
 
               <div className="flex justify-end pt-6">

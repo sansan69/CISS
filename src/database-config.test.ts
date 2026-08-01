@@ -90,6 +90,7 @@ describe("database access configuration", () => {
     );
 
     for (const collection of [
+      "employeeAadhaarPrivate",
       "awards",
       "employeeIds",
       "enrollments",
@@ -105,6 +106,7 @@ describe("database access configuration", () => {
       "trainingAssignments",
       "trainingModules",
       "workOrderImports",
+      "sensitiveDocumentAuditLogs",
     ]) {
       expect(rules).toMatch(
         new RegExp(
@@ -125,6 +127,15 @@ describe("database access configuration", () => {
     );
     expect(rules).toMatch(
       /match \/enrollments\/\{employeeKey\}\/profilePictures\/\{fileName\}[\s\S]*?allow create: if false;[\s\S]*?allow update: if false;/,
+    );
+    expect(rules).toMatch(
+      /match \/restrictedEmployeeAadhaar\/\{employeeId\}\/\{fileName\}[\s\S]*?allow read, write: if false;/,
+    );
+    expect(rules).toMatch(
+      /match \/employees\/\{employeeKey\}\/aadharCards\/\{fileName\}[\s\S]*?allow read, write: if false;/,
+    );
+    expect(rules).toMatch(
+      /match \/enrollments\/\{employeeKey\}\/aadharCards\/\{fileName\}[\s\S]*?allow read, write: if false;/,
     );
   });
 

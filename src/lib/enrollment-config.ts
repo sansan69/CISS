@@ -2,6 +2,9 @@ import type { Firestore } from "firebase-admin/firestore";
 
 import type { EnrollmentFormConfig, EnrollmentFormFieldConfig } from "@/types/region";
 import { DEFAULT_ENROLLMENT_FORM_CONFIG } from "@/lib/region-wizard";
+import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
+
+export { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
 
 export async function fetchEnrollmentConfig(adminDb?: Firestore): Promise<EnrollmentFormConfig> {
   if (!adminDb) {
@@ -80,6 +83,7 @@ export function validateEnrollmentField(
 }
 
 const SUBMISSION_FIELD_ALIASES: Record<string, string> = {
+  termsAndConditions: "termsAccepted",
   profilePicture: "profilePictureUrl",
   identityProofFront: "identityProofUrlFront",
   identityProofBack: "identityProofUrlBack",
@@ -104,7 +108,34 @@ export function validateEnrollmentSubmissionAgainstConfig(
   payload: Record<string, unknown>,
   clientName?: string,
 ): string[] {
-  return getEnabledFields(config, clientName)
+  const configuredFields = getEnabledFields(config, clientName);
+  const mandatoryFields = MANDATORY_NEW_ENROLLMENT_FIELDS.map((key, index) => ({
+    key,
+    label: key === "aadharNumber"
+      ? "Aadhaar number"
+      : key === "aadharCardDocument"
+        ? "Aadhaar copy"
+        : key === "aadhaarConsentAccepted"
+          ? "Aadhaar consent"
+          : key === "termsAndConditions"
+            ? "Terms and declaration"
+            : key,
+    enabled: true,
+    required: true,
+    order: Number.MAX_SAFE_INTEGER - MANDATORY_NEW_ENROLLMENT_FIELDS.length + index,
+  }));
+  const fields = [
+    ...configuredFields.map((field) => {
+      const mandatory = mandatoryFields.find((candidate) => candidate.key === field.key);
+      return mandatory
+        ? { ...field, enabled: true, required: true, label: mandatory.label }
+        : field;
+    }),
+    ...mandatoryFields.filter(
+      (mandatory) => !configuredFields.some((configured) => configured.key === mandatory.key),
+    ),
+  ];
+  return fields
     .map((field) => validateEnrollmentField(field, getSubmissionValue(payload, field.key)))
     .filter((message): message is string => Boolean(message));
 }

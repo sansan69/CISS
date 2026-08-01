@@ -153,6 +153,11 @@ export async function GET(request: Request) {
           : String(row.date ?? ""),
         totalManpower: Number(row.totalManpower ?? Number(row.maleGuardsRequired ?? 0) + Number(row.femaleGuardsRequired ?? 0)),
         assignedCount: Array.isArray(row.assignedGuards) ? row.assignedGuards.length : 0,
+        maleGuardsRequired: Number(row.maleGuardsRequired ?? 0),
+        femaleGuardsRequired: Number(row.femaleGuardsRequired ?? 0),
+        assignedGuards: Array.isArray(row.assignedGuards) ? row.assignedGuards : [],
+        assignmentReviewRequired: row.assignmentReviewRequired === true,
+        assignmentStatus: normalizeText(row.assignmentStatus),
         latitude: siteMetaById.get(siteIdString)?.latitude ?? null,
         longitude: siteMetaById.get(siteIdString)?.longitude ?? null,
       }))

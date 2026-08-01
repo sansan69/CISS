@@ -33,8 +33,8 @@ function buildLngPayload(
     identityProofNumber: "AABCT1234C",
     identityProofUrlFront: "https://example.com/id-front.png",
     identityProofUrlBack: "https://example.com/id-back.png",
-    addressProofType: "Aadhar Card",
-    addressProofNumber: "123456789012",
+    addressProofType: "Voter ID",
+    addressProofNumber: "ABC1234567",
     addressProofUrlFront: "https://example.com/address-front.png",
     addressProofUrlBack: "https://example.com/address-back.png",
     aadharCardDocumentUrl: "https://example.com/aadhar.pdf",
@@ -49,6 +49,8 @@ function buildLngPayload(
     branchName: "ERNAKULAM MAIN",
     legacyUniqueId: "DUMMY-LNG-CODEX-REGRESSION",
     termsAccepted: true,
+    aadhaarConsentAccepted: true,
+    aadhaarConsentVersion: "aadhaar-esic-epf-v1",
     ...overrides,
   };
 }
@@ -74,28 +76,36 @@ function buildStandardPayload(
     identityProofNumber: "AABCT1234C",
     identityProofUrlFront: "https://example.com/id-front.png",
     identityProofUrlBack: "https://example.com/id-back.png",
-    addressProofType: "Aadhar Card",
-    addressProofNumber: "123456789012",
+    addressProofType: "Voter ID",
+    addressProofNumber: "ABC1234567",
     addressProofUrlFront: "https://example.com/address-front.png",
     addressProofUrlBack: "https://example.com/address-back.png",
+    aadharNumber: "123456789012",
+    aadharCardDocumentUrl: "https://example.com/aadhar.pdf",
     signatureUrl: "https://example.com/signature.png",
     fullAddress: "Standard House, Standard Road, Ernakulam, Kerala - 682001",
+    emailAddress: "standard.guard@example.com",
     phoneNumber: "9012345690",
     termsAccepted: true,
+    aadhaarConsentAccepted: true,
+    aadhaarConsentVersion: "aadhaar-esic-epf-v1",
     ...overrides,
   };
 }
 
 describe("enrollmentSubmissionSchema", () => {
-  it("accepts standard client submissions without an employee email address", () => {
-    const parsed = enrollmentSubmissionSchema.safeParse(
-      buildStandardPayload({
-        emailAddress: undefined,
-      }),
-    );
+  it.each([undefined, "", "not-an-email"])(
+    "rejects standard client submissions with invalid required email %s",
+    (emailAddress) => {
+      const parsed = enrollmentSubmissionSchema.safeParse(
+        buildStandardPayload({
+          emailAddress,
+        }),
+      );
 
-    expect(parsed.success).toBe(true);
-  });
+      expect(parsed.success).toBe(false);
+    },
+  );
 
   it("accepts the LNG payload shape proven by the live browser enrollment flow", () => {
     const parsed = enrollmentSubmissionSchema.safeParse(buildLngPayload());
@@ -103,7 +113,7 @@ describe("enrollmentSubmissionSchema", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("accepts LNG client aliases without requiring a real email address", () => {
+  it("requires a valid email for LNG client aliases", () => {
     const parsed = enrollmentSubmissionSchema.safeParse(
       buildLngPayload({
         clientName: "Petronet LNG",
@@ -111,11 +121,11 @@ describe("enrollmentSubmissionSchema", () => {
       }),
     );
 
-    expect(parsed.success).toBe(true);
+    expect(parsed.success).toBe(false);
   });
 
   it.each(["Petronet LNG Ltd", "LNG Petronet Ltd."])(
-    "accepts LNG Ltd alias %s without requiring a real email address",
+    "requires email for LNG Ltd alias %s",
     (clientName) => {
       const parsed = enrollmentSubmissionSchema.safeParse(
         buildLngPayload({
@@ -124,14 +134,13 @@ describe("enrollmentSubmissionSchema", () => {
         }),
       );
 
-      expect(parsed.success).toBe(true);
+      expect(parsed.success).toBe(false);
     },
   );
 
-  it("still accepts LNG submissions when optional banking and email fields are omitted", () => {
+  it("still accepts LNG submissions when optional banking fields are omitted", () => {
     const parsed = enrollmentSubmissionSchema.safeParse(
       buildLngPayload({
-        emailAddress: undefined,
         bankAccountNumber: undefined,
         ifscCode: undefined,
         bankName: undefined,
@@ -143,21 +152,23 @@ describe("enrollmentSubmissionSchema", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("requires dedicated Aadhar and PAN copies for LNG Petronet enrollment", () => {
-    const parsed = enrollmentSubmissionSchema.safeParse(
+  it("requires an Aadhaar copy for every enrollment and a PAN copy for LNG", () => {
+    const missingAadhaar = enrollmentSubmissionSchema.safeParse(
       buildLngPayload({
         aadharCardDocumentUrl: undefined,
-        panCardDocumentUrl: undefined,
       }),
     );
+    expect(missingAadhaar.success).toBe(false);
+    if (!missingAadhaar.success) {
+      expect(missingAadhaar.error.flatten().fieldErrors.aadharCardDocumentUrl).toBeTruthy();
+    }
 
-    expect(parsed.success).toBe(false);
-
-    if (!parsed.success) {
-      expect(parsed.error.flatten().fieldErrors.aadharCardDocumentUrl).toContain(
-        "Aadhar card copy is required for LNG Petronet enrollment.",
-      );
-      expect(parsed.error.flatten().fieldErrors.panCardDocumentUrl).toContain(
+    const missingPan = enrollmentSubmissionSchema.safeParse(
+      buildLngPayload({ panCardDocumentUrl: undefined }),
+    );
+    expect(missingPan.success).toBe(false);
+    if (!missingPan.success) {
+      expect(missingPan.error.flatten().fieldErrors.panCardDocumentUrl).toContain(
         "PAN card copy is required for LNG Petronet enrollment.",
       );
     }

@@ -89,16 +89,21 @@ export async function POST(request: NextRequest) {
 
     const bucket = storage.bucket();
     const storageFile = bucket.file(path);
-    const downloadToken = crypto.randomUUID();
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Aadhaar must never receive a bearer-style Firebase download token. The
+    // enrollment API moves this temporary object into server-only storage.
+    const isAadhaar = folder === "aadharCards";
+    const downloadToken = isAadhaar ? null : crypto.randomUUID();
 
     await storageFile.save(buffer, {
       resumable: false,
       metadata: {
         contentType: file.type || "application/octet-stream",
-        metadata: {
-          firebaseStorageDownloadTokens: downloadToken,
-        },
+        cacheControl: isAadhaar ? "no-store, private, max-age=0" : undefined,
+        metadata: downloadToken
+          ? { firebaseStorageDownloadTokens: downloadToken }
+          : {},
       },
     });
     await enrollmentSnap.ref.update({
@@ -106,7 +111,9 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      url: buildDownloadUrl(bucket.name, path, downloadToken),
+      url: isAadhaar
+        ? path
+        : buildDownloadUrl(bucket.name, path, downloadToken!),
     });
   } catch (error: any) {
     console.error("Public enrollment upload failed:", error);

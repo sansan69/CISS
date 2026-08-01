@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
+import { documentCompletionFromEmployee } from "@/lib/server/aadhaar";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -14,6 +15,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Employee not found." }, { status: 404 });
     }
     const empData = empDoc.data()!;
+    const aadhaarPrivate = await adminDb
+      .collection("employeeAadhaarPrivate")
+      .doc(guard.employeeDocId)
+      .get();
+    const documentStatus = documentCompletionFromEmployee(
+      empData,
+      aadhaarPrivate.exists && aadhaarPrivate.data()?.status === "complete",
+    );
+    const missingDocuments = (
+      Object.entries(documentStatus) as [keyof typeof documentStatus, string][]
+    )
+      .filter(([, status]) => status === "missing")
+      .map(([category]) => category);
 
     let joiningDate: string | undefined;
     if (empData.joiningDate) {
@@ -61,7 +75,13 @@ export async function GET(request: Request) {
       bankAccountNumber: empData.bankAccountNumber ?? null,
       bankIfscCode: empData.bankIfscCode ?? null,
       bankName: empData.bankName ?? null,
-    });
+      documentStatus,
+      missingDocuments,
+      enrollmentPolicy:
+        empData.enrollmentPolicy?.version === "three-proof-v1"
+          ? "three-proof-v1"
+          : "legacy",
+    }, { headers: { "Cache-Control": "no-store, private" } });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Internal server error.";
     if (
