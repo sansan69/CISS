@@ -64,17 +64,14 @@ import {
 } from "@/lib/constants";
 import {
   AADHAAR_CONSENT_TEXT,
-  AADHAAR_CONSENT_MALAYALAM,
   AADHAAR_CONSENT_VERSION,
 } from "@/lib/aadhaar-policy";
 import {
-  ENROLLMENT_TERMS_MALAYALAM,
   ENROLLMENT_TERMS_TEXT,
-  GUARD_UNDERTAKING_MALAYALAM,
   GUARD_UNDERTAKING_TEXT,
   GUARD_UNDERTAKING_VERSION,
 } from "@/lib/enrollment-consents";
-import { ENROLLMENT_HINTS } from "@/lib/enrollment-hints";
+import { getEnrollmentFieldLabel } from "@/lib/enrollment-hints";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
@@ -1691,7 +1688,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       const fields = step.fields
         .filter((fieldName) => !configuredFields || configuredFields.enabled.has(fieldName))
         .filter((fieldName) => Boolean(form.getFieldState(fieldName).error))
-        .map((fieldName) => FIELD_LABELS[fieldName] || step.title);
+        .map((fieldName) => FIELD_LABELS[fieldName] || getEnrollmentFieldLabel(fieldName) || step.title);
 
       return {
         stepIndex,
@@ -1946,26 +1943,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   </AlertDescription>
                 </Alert>
               )}
-
-              <section className="rounded-2xl border bg-muted/20 p-4" aria-label="Bilingual enrollment guidance">
-                <div className="mb-3">
-                  <p className="text-sm font-semibold">How to complete this step</p>
-                  <p className="text-xs text-muted-foreground">English and Malayalam instructions are shown for every item.</p>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {ENROLLMENT_STEPS[currentStep].fields.map((fieldName) => {
-                    const hint = ENROLLMENT_HINTS[fieldName];
-                    if (!hint) return null;
-                    return (
-                      <div key={fieldName} className="rounded-xl border bg-background px-3 py-2">
-                        <p className="text-xs font-semibold text-foreground">{FIELD_LABELS[fieldName] ?? fieldName}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{hint.english}</p>
-                        <p className="mt-1 text-xs text-primary/80">Malayalam: {hint.malayalam}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
 
               {currentStep === 0 && (
                 <FormSection title="Client Information">
@@ -2289,40 +2266,36 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   </div>
 
                   <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
-                    <div className="rounded-md border bg-background p-4 text-xs text-muted-foreground">
-                      <p className="mb-2 font-semibold text-foreground">Aadhaar use for ESIC and EPF</p>
-                      <p>{AADHAAR_CONSENT_TEXT}</p>
-                      <p className="mt-2 border-t pt-2">Malayalam: {AADHAAR_CONSENT_MALAYALAM}</p>
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">Consent and agreement</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">Please confirm these points before completing registration.</p>
+                    </div>
+                    <div className="rounded-lg bg-background p-4 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">By enrolling, you agree to:</p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        <li>provide accurate information and genuine documents;</li>
+                        <li>follow CISS, client, and site-safety instructions;</li>
+                        <li>report on time, stay alert, protect property, and keep information confidential;</li>
+                        <li>complete required training and report incidents promptly.</li>
+                      </ul>
+                      <p className="mt-2">Your wages, PF, ESI, leave, overtime, and other statutory rights remain protected.</p>
+                    </div>
+                    <div className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">Aadhaar for ESIC and EPF</p>
+                      <p className="mt-1">CISS will use your Aadhaar only for ESIC, EPFO, and related statutory processing. It will not be used for client registration or shared with the client.</p>
                     </div>
                     <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel>I consent to this limited use of my Aadhaar for ESIC and EPF.</FormLabel>
-                          <p className="text-xs text-muted-foreground">Malayalam: ഔദ്യോഗിക സംവിധാനങ്ങളിലൂടെ മാത്രം ആധാർ ESIC, EPF നിയമപരമായ നടപടികൾക്കായി ഉപയോഗിക്കാൻ ഞാൻ സമ്മതിക്കുന്നു.</p>
+                          <FormLabel>I consent to the limited use of my Aadhaar for ESIC, EPFO, and related statutory processing.</FormLabel>
                           <FormMessage />
                         </div>
                       </FormItem>
                     )}/>
-                    <div className="h-48 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground space-y-2">
-                      <p className="mb-2 font-bold">Terms and Conditions of Enrollment (English)</p>
-                      <p className="whitespace-pre-line">{ENROLLMENT_TERMS_TEXT}</p>
-                        <p className="mt-3 border-t pt-3 font-bold">Terms and Conditions (Malayalam)</p>
-                        <p className="whitespace-pre-line">{ENROLLMENT_TERMS_MALAYALAM}</p>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground whitespace-pre-line">
-                        <p className="mb-2 font-bold text-foreground">CISS Guard Undertaking (English)</p>
-                        <p>{GUARD_UNDERTAKING_TEXT}</p>
-                      </div>
-                      <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground whitespace-pre-line">
-                        <p className="mb-2 font-bold text-foreground">Guard Undertaking (Malayalam)</p>
-                        <p>{GUARD_UNDERTAKING_MALAYALAM}</p>
-                      </div>
-                    </div>
                     <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
                         <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
-                          <div className="space-y-1 leading-none"><FormLabel>I have reviewed the summary and agree to the Terms and Conditions of Enrollment.</FormLabel><FormMessage /></div>
+                          <div className="space-y-1 leading-none"><FormLabel>I confirm that my information and documents are correct and agree to the enrollment terms.</FormLabel><FormMessage /></div>
                         </FormItem>
                       )}
                     />
@@ -2330,13 +2303,29 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel>I have read and understood the CISS Guard Undertaking, including duties, verification, conduct, property, and statutory-rights clauses, and I agree to comply subject to applicable law.</FormLabel>
-                          <p className="text-xs text-muted-foreground">Malayalam: CISS Guard Undertaking വായിച്ച് മനസ്സിലാക്കി; ചുമതലകൾ, പരിശോധന, പെരുമാറ്റം, സ്വത്ത്, നിയമപരമായ അവകാശങ്ങൾ എന്നിവ സംബന്ധിച്ച നിബന്ധനകൾ ബാധകമായ നിയമങ്ങൾ അനുസരിച്ച് പാലിക്കാൻ ഞാൻ സമ്മതിക്കുന്നു.</p>
-                          <p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p>
+                          <FormLabel>I agree to follow CISS guard duties, client/site rules, and lawful instructions.</FormLabel>
+                          <p className="text-xs text-muted-foreground">Your uploaded signature is used as the undertaking signature; no separate undertaking signature is required.</p>
                           <FormMessage />
                         </div>
                       </FormItem>
                     )}/>
+                    <details className="rounded-lg border bg-background px-4 py-3 text-sm text-muted-foreground">
+                      <summary className="cursor-pointer font-medium text-foreground">View full legal wording</summary>
+                      <div className="mt-3 space-y-4 whitespace-pre-line border-t pt-3">
+                        <div>
+                          <p className="mb-1 font-semibold text-foreground">Aadhaar consent notice</p>
+                          <p>{AADHAAR_CONSENT_TEXT}</p>
+                        </div>
+                        <div>
+                          <p className="mb-1 font-semibold text-foreground">Enrollment terms</p>
+                          <p>{ENROLLMENT_TERMS_TEXT}</p>
+                        </div>
+                        <div>
+                          <p className="mb-1 font-semibold text-foreground">CISS Guard Undertaking</p>
+                          <p>{GUARD_UNDERTAKING_TEXT}</p>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 </FormSection>
               )}

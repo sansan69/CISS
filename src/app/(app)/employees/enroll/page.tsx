@@ -54,15 +54,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { ADDRESS_PROOF_TYPES, EDUCATION_OPTIONS, getAddressProofTypesForIdentity, IDENTITY_PROOF_TYPES, isLngClientName, LNG_JOB_DESIGNATIONS, MARITAL_STATUSES, requiresLngArmsLicense, requiresLngServiceBook } from "@/lib/constants";
-import { AADHAAR_CONSENT_MALAYALAM, AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
+import { AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
 import {
-  ENROLLMENT_TERMS_MALAYALAM,
   ENROLLMENT_TERMS_TEXT,
-  GUARD_UNDERTAKING_MALAYALAM,
   GUARD_UNDERTAKING_TEXT,
   GUARD_UNDERTAKING_VERSION,
 } from "@/lib/enrollment-consents";
-import { ENROLLMENT_HINTS } from "@/lib/enrollment-hints";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
@@ -871,20 +868,6 @@ export default function EnrollEmployeePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" className="space-y-8">
-              <section className="rounded-2xl border bg-muted/20 p-4" aria-label="Bilingual enrollment guidance">
-                <p className="text-sm font-semibold">Enrollment guidance — English + Malayalam</p>
-                <p className="mt-1 text-xs text-muted-foreground">Use these instructions while completing each field. Required items are marked with *.</p>
-                <div className="mt-3 grid max-h-80 gap-3 overflow-y-auto md:grid-cols-2">
-                  {Object.entries(ENROLLMENT_HINTS).map(([fieldName, hint]) => (
-                    <div key={fieldName} className="rounded-xl border bg-background px-3 py-2">
-                      <p className="text-xs font-semibold text-foreground">{fieldName}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{hint.english}</p>
-                      <p className="mt-1 text-xs text-primary/80">Malayalam: {hint.malayalam}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1325,26 +1308,50 @@ export default function EnrollEmployeePage() {
               </section>
 
               <section className="space-y-4 rounded-xl border p-4">
-                <p className="text-sm font-semibold">Aadhaar use for ESIC and EPF</p>
-                <p className="text-xs text-muted-foreground">{AADHAAR_CONSENT_TEXT}</p>
-                <p className="text-xs text-muted-foreground">Malayalam: {AADHAAR_CONSENT_MALAYALAM}</p>
+                <div>
+                  <h2 className="text-base font-semibold">Consent and agreement</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Please confirm these points before completing registration.</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">By enrolling, you agree to:</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    <li>provide accurate information and genuine documents;</li>
+                    <li>follow CISS, client, and site-safety instructions;</li>
+                    <li>report on time, stay alert, protect property, and keep information confidential;</li>
+                    <li>complete required training and report incidents promptly.</li>
+                  </ul>
+                  <p className="mt-2">Your wages, PF, ESI, leave, overtime, and other statutory rights remain protected.</p>
+                </div>
+                <div className="rounded-lg border bg-background p-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Aadhaar for ESIC and EPF</p>
+                  <p className="mt-1">CISS will use your Aadhaar only for ESIC, EPFO, and related statutory processing. It will not be used for client registration or shared with the client.</p>
+                </div>
                 <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
-                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has accepted this Aadhaar consent for ESIC, EPF, and related statutory processing only.</FormLabel><p className="text-xs text-muted-foreground">Malayalam: ESIC, EPF, ബന്ധപ്പെട്ട നിയമപരമായ നടപടികൾക്കായി മാത്രം ആധാർ ഉപയോഗിക്കാൻ ജീവനക്കാരൻ സമ്മതിച്ചു.</p><FormMessage/></div></FormItem>
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>I consent to the limited use of my Aadhaar for ESIC, EPFO, and related statutory processing.</FormLabel><FormMessage/></div></FormItem>
                 )}/>
                 <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
-                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee confirms the information and documents are correct.</FormLabel><FormMessage/></div></FormItem>
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>I confirm that my information and documents are correct and agree to the enrollment terms.</FormLabel><FormMessage/></div></FormItem>
                 )}/>
-                <div className="grid gap-3 md:grid-cols-2 rounded-md border bg-background p-3 text-xs text-muted-foreground">
-                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (English)</p><p>{ENROLLMENT_TERMS_TEXT}</p></div>
-                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (Malayalam)</p><p>{ENROLLMENT_TERMS_MALAYALAM}</p></div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 rounded-md border bg-background p-3 text-xs text-muted-foreground">
-                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">CISS Guard Undertaking (English)</p><p>{GUARD_UNDERTAKING_TEXT}</p></div>
-                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Guard Undertaking (Malayalam)</p><p>{GUARD_UNDERTAKING_MALAYALAM}</p></div>
-                </div>
                 <FormField control={form.control} name="guardUndertakingAccepted" render={({ field }) => (
-                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has read and accepted the CISS Guard Undertaking, including duties and compliance responsibilities, subject to applicable law.</FormLabel><p className="text-xs text-muted-foreground">Malayalam: ജീവനക്കാരൻ CISS Guard Undertaking വായിച്ച് മനസ്സിലാക്കി; ചുമതലകളും നിയമാനുസൃത ഉത്തരവാദിത്തങ്ങളും ബാധകമായ നിയമങ്ങൾ അനുസരിച്ച് പാലിക്കാൻ സമ്മതിച്ചു.</p><p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p><FormMessage/></div></FormItem>
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>I agree to follow CISS guard duties, client/site rules, and lawful instructions.</FormLabel><p className="text-xs text-muted-foreground">Your uploaded signature is used as the undertaking signature; no separate undertaking signature is required.</p><FormMessage/></div></FormItem>
                 )}/>
+                <details className="rounded-lg border bg-background px-3 py-2 text-sm text-muted-foreground">
+                  <summary className="cursor-pointer font-medium text-foreground">View full legal wording</summary>
+                  <div className="mt-3 space-y-4 whitespace-pre-line border-t pt-3">
+                    <div>
+                      <p className="mb-1 font-semibold text-foreground">Aadhaar consent notice</p>
+                      <p>{AADHAAR_CONSENT_TEXT}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-semibold text-foreground">Enrollment terms</p>
+                      <p>{ENROLLMENT_TERMS_TEXT}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-semibold text-foreground">CISS Guard Undertaking</p>
+                      <p>{GUARD_UNDERTAKING_TEXT}</p>
+                    </div>
+                  </div>
+                </details>
               </section>
 
               <div className="flex justify-end pt-6">
