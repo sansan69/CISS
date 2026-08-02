@@ -54,15 +54,25 @@ function useDebounce<T>(value: T, delay: number): T {
 
 const getPendingDetails = (employee: Employee): string[] => {
     const pending: string[] = [];
+    const completion = employee.documentCompletion;
     if (!employee.profilePictureUrl) pending.push("Profile Picture");
-    if (!employee.signatureUrl) pending.push("Signature");
-    if (!employee.identityProofUrlFront) pending.push("ID Proof (Front)");
-    if (!employee.identityProofUrlBack) pending.push("ID Proof (Back)");
-    if (!employee.addressProofUrlFront) pending.push("Address Proof (Front)");
-    if (!employee.addressProofUrlBack) pending.push("Address Proof (Back)");
-    if (!employee.panNumber) pending.push("PAN Number");
-    if (!employee.bankAccountNumber || !employee.ifscCode || !employee.bankName) pending.push("Bank Details");
-    if (!employee.bankPassbookStatementUrl) pending.push("Bank Document");
+    const hasSignature = completion?.signature === "complete" || Boolean(employee.signatureUrl);
+    const hasIdentity = completion?.identity === "complete" || Boolean(employee.identityProofUrlFront);
+    const hasAddress = completion?.address === "complete" || Boolean(employee.addressProofUrlFront);
+    if (completion) {
+        if (!hasSignature) pending.push("Signature");
+        if (!hasIdentity) pending.push("Identity Proof");
+        if (!hasAddress) pending.push("Address Proof");
+    } else {
+        if (!hasSignature) pending.push("Signature");
+        if (!employee.identityProofUrlFront) pending.push("ID Proof (Front)");
+        if (!employee.identityProofUrlBack) pending.push("ID Proof (Back)");
+        if (!employee.addressProofUrlFront) pending.push("Address Proof (Front)");
+        if (!employee.addressProofUrlBack) pending.push("Address Proof (Back)");
+        if (!employee.panNumber) pending.push("PAN Number");
+        if (!employee.bankAccountNumber || !employee.ifscCode || !employee.bankName) pending.push("Bank Details");
+        if (!employee.bankPassbookStatementUrl) pending.push("Bank Document");
+    }
     return pending;
 };
 
@@ -74,6 +84,7 @@ export default function EmployeeDirectoryPage() {
     // User auth state
     const { userRole, assignedDistricts, clientInfo } = useAppAuth();
     const isClientView = userRole === 'client';
+    const isReadOnlyDirectory = isClientView || userRole === 'fieldOfficer';
     
     // Filters state - source of truth is the URL search params
     const client = searchParams.get('client') || 'all';
@@ -204,6 +215,45 @@ export default function EmployeeDirectoryPage() {
     const fetchData = useCallback(async (direction: 'next' | 'prev' | 'first' = 'first') => {
         setIsLoading(true);
         setError(null);
+
+        if (userRole === 'client' || userRole === 'fieldOfficer') {
+            try {
+                const params = new URLSearchParams({ limit: '500', includeInactive: 'true' });
+                if (userRole === 'fieldOfficer') {
+                    assignedDistricts.forEach((assignedDistrict) => params.append('district', assignedDistrict));
+                }
+                const endpoint = userRole === 'client' ? '/api/client/guards' : '/api/field-officer/guards';
+                const response = await authorizedFetch(`${endpoint}?${params.toString()}`);
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(body.error || 'Failed to fetch guards.');
+
+                const allGuards = (body.guards ?? []) as Employee[];
+                const term = debouncedSearchTerm.trim().toLowerCase();
+                const filteredGuards = allGuards
+                    .filter((guard) => status === 'all' || guard.status === status)
+                    .filter((guard) => district === 'all' || guard.district === district)
+                    .filter((guard) => !term || [guard.fullName, guard.employeeId, guard.phoneNumber]
+                        .filter(Boolean)
+                        .some((value) => String(value).toLowerCase().includes(term)))
+                    .sort((left, right) => (left.fullName || left.employeeId || '').localeCompare(right.fullName || right.employeeId || ''));
+                const targetPage = direction === 'next' ? currentPage + 1 : direction === 'prev' ? Math.max(1, currentPage - 1) : 1;
+                const totalPages = Math.max(1, Math.ceil(filteredGuards.length / ITEMS_PER_PAGE));
+                const boundedPage = Math.min(targetPage, totalPages);
+                const startIndex = (boundedPage - 1) * ITEMS_PER_PAGE;
+                setEmployees(filteredGuards.slice(startIndex, startIndex + ITEMS_PER_PAGE));
+                setCurrentPage(boundedPage);
+                setHasPreviousPage(boundedPage > 1);
+                setHasNextPage(startIndex + ITEMS_PER_PAGE < filteredGuards.length);
+                setFirstVisible(null);
+                setLastVisible(null);
+                return;
+            } catch (err: any) {
+                setError(err?.message || 'Failed to fetch guards.');
+                return;
+            } finally {
+                setIsLoading(false);
+            }
+        }
         
         const baseQuery = buildBaseQuery();
         if (!baseQuery) {
@@ -542,7 +592,13 @@ export default function EmployeeDirectoryPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Employee List</CardTitle>
-                    <CardDescription>{isClientView ? "A read-only directory of guards linked to your client." : "A directory of all personnel in the system."}</CardDescription>
+                    <CardDescription>
+                        {isClientView
+                            ? "A read-only directory of guards linked to your client."
+                            : userRole === 'fieldOfficer'
+                                ? "A read-only directory of guards in your assigned districts."
+                                : "A directory of all personnel in the system."}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {userRole === 'superAdmin' && superAdminWarnings.length > 0 && (
@@ -711,7 +767,7 @@ export default function EmployeeDirectoryPage() {
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> {isClientView ? 'View Profile' : 'View / Edit'}</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => router.push(`/employees/${emp.id}?${searchParams.toString()}`)}><Eye className="mr-2 h-4 w-4" /> {isReadOnlyDirectory ? 'View Profile' : 'View / Edit'}</DropdownMenuItem>
                                                             {userRole === 'admin' && (
                                                                 <>
                                                                     <DropdownMenuSeparator />

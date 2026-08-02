@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { hasClientAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
+import { serializeGuardProfileView } from "@/lib/server/guard-profile-view";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -37,27 +38,21 @@ export async function GET(request: Request) {
     const guards = Array.from(docsById.values())
       .map((doc) => {
         const data = doc.data() as Record<string, unknown>;
+        const profile = serializeGuardProfileView(doc.id, data);
         return {
-          id: doc.id,
-          employeeId: normalizeText(data.employeeId || data.employeeCode || data.guardId || doc.id),
-          employeeCode: normalizeText(data.employeeCode || data.guardId || data.employeeId),
-          fullName:
-            normalizeText(data.fullName || data.name) ||
-            normalizeText([data.firstName, data.lastName].filter(Boolean).join(" ")) ||
-            "Guard",
-          phoneNumber: normalizeText(data.phoneNumber || data.mobileNumber || data.phone),
+          ...profile,
           clientId: normalizeText(data.clientId),
           clientName: normalizeText(data.clientName),
-          district: normalizeText(data.district),
-          status: normalizeText(data.status || "Active"),
-          siteName: normalizeText(data.siteName || data.assignedSiteName),
+          district: normalizeText(data.district) || profile.district,
         };
       })
       .filter((guard) => matchesClientScope(guard, scope))
       .sort((left, right) => left.fullName.localeCompare(right.fullName))
       .slice(0, limit);
 
-    return NextResponse.json({ guards });
+    return NextResponse.json({ guards }, {
+      headers: { "Cache-Control": "no-store, private" },
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to load guards.";
     return NextResponse.json({ error: message }, { status: message.includes("access required") ? 403 : 500 });

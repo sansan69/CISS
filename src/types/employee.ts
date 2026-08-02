@@ -101,6 +101,13 @@ export const employeeSchema = z.object({
     })
     .optional(),
   department: z.string().optional(),
+  documentCompletion: z.object({
+    aadhaar: z.enum(["missing", "complete"]).optional(),
+    identity: z.enum(["missing", "complete"]).optional(),
+    address: z.enum(["missing", "complete"]).optional(),
+    signature: z.enum(["missing", "complete"]).optional(),
+  }).optional(),
+  enrollmentPolicy: z.object({ version: z.enum(["legacy", "three-proof-v1"]).optional() }).optional(),
 });
 
 export interface Employee {
@@ -191,4 +198,11 @@ export interface Employee {
     status: "Active" | "Inactive" | "OnLeave" | "Exited";
   };
   department?: string;
+  documentCompletion?: {
+    aadhaar?: "missing" | "complete";
+    identity?: "missing" | "complete";
+    address?: "missing" | "complete";
+    signature?: "missing" | "complete";
+  };
+  enrollmentPolicy?: { version?: "legacy" | "three-proof-v1" };
 }

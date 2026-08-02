@@ -6,6 +6,7 @@ import {
   getDistrictFirestoreQueryValues,
 } from "@/lib/districts";
 import { employeeMatchesAnyDistrict, resolveEmployeeDistrict } from "@/lib/employees/visibility";
+import { serializeGuardProfileView } from "@/lib/server/guard-profile-view";
 export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
       .filter(Boolean);
     const assignedDistricts = await getAssignedDistricts(adminDb, decoded);
     const isAdmin = hasAdminAccess(decoded);
+    const includeInactive = new URL(request.url).searchParams.get("includeInactive") === "true";
     const districtScope = requestedDistricts.length > 0
       ? requestedDistricts.filter((district) =>
           isAdmin || assignedDistricts.some((assigned) => districtMatches(assigned, district)),
@@ -58,7 +60,9 @@ export async function GET(request: Request) {
       : assignedDistricts;
 
     if (!isAdmin && districtScope.length === 0) {
-      return NextResponse.json({ guards: [] });
+      return NextResponse.json({ guards: [] }, {
+        headers: { "Cache-Control": "no-store, private" },
+      });
     }
 
     const employeeDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
@@ -98,38 +102,24 @@ export async function GET(request: Request) {
 
     const guards = Array.from(employeeDocs.values())
       .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
-      .filter((employee) => normalizeText(employee.status || "Active").toLowerCase() === "active")
+      .filter((employee) => includeInactive || normalizeText(employee.status || "Active").toLowerCase() === "active")
       .filter((employee) => {
         if (districtScope.length === 0) return true;
         return employeeMatchesAnyDistrict(employee, districtScope);
       })
-      .map((employee) => ({
-        id: String(employee.id),
-        fullName: normalizeText(employee.fullName || employee.name || "Guard"),
-        employeeId: normalizeText(employee.employeeId),
-        clientName: normalizeText(employee.clientName),
-        district: resolveEmployeeDistrict(employee),
-        gender: normalizeText(employee.gender),
-        phoneNumber: normalizeText(employee.phoneNumber),
-        status: normalizeText(employee.status || "Active"),
-        joiningDate:
-          typeof employee.joiningDate === "string"
-            ? employee.joiningDate
-            : typeof (employee.joiningDate as { toDate?: unknown } | undefined)?.toDate === "function"
-              ? ((employee.joiningDate as { toDate: () => Date }).toDate()).toISOString()
-              : "",
-        resourceIdNumber: normalizeText(employee.resourceIdNumber),
-        address: normalizeText(employee.address),
-        profilePictureUrl:
-          typeof employee.profilePictureUrl === "string"
-            ? employee.profilePictureUrl
-            : typeof employee.profilePhotoUrl === "string"
-              ? employee.profilePhotoUrl
-              : null,
-      }))
+      .map((employee) => {
+        const profile = serializeGuardProfileView(String(employee.id), employee);
+        return {
+          ...profile,
+          district: resolveEmployeeDistrict(employee),
+          joiningDate: profile.joiningDate || "",
+        };
+      })
       .sort((left, right) => left.fullName.localeCompare(right.fullName));
 
-    return NextResponse.json({ guards });
+    return NextResponse.json({ guards }, {
+      headers: { "Cache-Control": "no-store, private" },
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Could not load guards.";
     return unauthorizedResponse(message, 401);

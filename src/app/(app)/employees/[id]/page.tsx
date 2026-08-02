@@ -42,6 +42,7 @@ import { EDUCATION_OPTIONS } from "@/lib/constants";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { useAppAuth } from "@/context/auth-context";
 import { districtMatches } from "@/lib/districts";
+import { authorizedFetch } from "@/lib/api-client";
 
 // #region PDF Text Helper Functions
 // Normalize weird whitespace, keep intended line breaks as separators.
@@ -234,8 +235,22 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null | Dat
   );
 };
 
+function formatEmployeeDate(value: unknown, pattern: string) {
+  if (!value) return "—";
+  try {
+    const date = value instanceof Date
+      ? value
+      : typeof value === "object" && typeof (value as { toDate?: unknown }).toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : new Date(String(value));
+    return Number.isNaN(date.getTime()) ? "—" : format(date, pattern);
+  } catch {
+    return "—";
+  }
+}
 
-const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({ name, url, type }) => (
+
+const DocumentItem: React.FC<{ name: string, url?: string, type?: string, onView?: () => void }> = ({ name, url, type, onView }) => (
     <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center gap-3">
             <FileUp className="h-5 w-5 text-primary" />
@@ -244,12 +259,18 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string }> = ({
                 {type && <p className="text-xs text-muted-foreground">{type}</p>}
             </div>
         </div>
-        {url ? (
-            <Button variant="outline" size="sm" asChild>
-                <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
-                    <Download className="mr-2 h-4 w-4" /> View/Download
-                </a>
-            </Button>
+        {url || onView ? (
+            onView ? (
+              <Button variant="outline" size="sm" onClick={onView} data-ai-hint={`${type || 'document'} document`}>
+                <Download className="mr-2 h-4 w-4" /> View document
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" asChild>
+                  <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
+                      <Download className="mr-2 h-4 w-4" /> View/Download
+                  </a>
+              </Button>
+            )
         ) : (
             <Badge variant="outline">Not Uploaded</Badge>
         )}
@@ -404,6 +425,7 @@ export default function AdminEmployeeProfilePage() {
   const [resetPinReason, setResetPinReason] = useState("");
   const [isResettingPin, setIsResettingPin] = useState(false);
   const [isResettingAttendanceState, setIsResettingAttendanceState] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<string | null>(null);
   const [aadhaarStatus, setAadhaarStatus] = useState<'loading' | 'missing' | 'complete'>('loading');
   const [revealedAadhaar, setRevealedAadhaar] = useState<string | null>(null);
   const [aadhaarPassword, setAadhaarPassword] = useState('');
@@ -419,8 +441,10 @@ export default function AdminEmployeeProfilePage() {
     return () => unsubscribe();
   }, []);
 
-  const isAdminView = !isAuthLoading && currentUser !== null;
+  const isAdminView = !isAuthLoading && (userRole === "admin" || userRole === "superAdmin");
+  const isReadOnlyViewer = !isAdminView;
   const isDesignatedAadhaarAdmin =
+    isAdminView &&
     currentUser?.email?.trim().toLowerCase() === 'admin@cisskerala.app' &&
     currentUser.emailVerified;
 
@@ -524,6 +548,33 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
+  const viewGuardDocument = async (category: string) => {
+    if (!employee || viewingDocument) return;
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) {
+      toast({ variant: "destructive", title: "Popup blocked", description: "Allow popups to view this document." });
+      return;
+    }
+    setViewingDocument(category);
+    try {
+      const response = await authorizedFetch(
+        `/api/employees/profile/${encodeURIComponent(employee.id)}/document?category=${encodeURIComponent(category)}`,
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Could not load document.");
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      popup.location.href = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (documentError) {
+      popup.close();
+      toast({ variant: "destructive", title: "Document unavailable", description: documentError instanceof Error ? documentError.message : "Could not load document." });
+    } finally {
+      setViewingDocument(null);
+    }
+  };
+
   const form = useForm<EmployeeUpdateValues>({
     resolver: zodResolver(employeeUpdateSchema),
     defaultValues: {
@@ -568,12 +619,22 @@ export default function AdminEmployeeProfilePage() {
     setIsLoading(true);
     setError(null);
     try {
+      if (!isAdminView) {
+        const response = await authorizedFetch(`/api/employees/profile/${encodeURIComponent(employeeIdFromUrl)}`);
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.profile) {
+          throw new Error(body.error || "Could not load the guard profile.");
+        }
+        setEmployee(body.profile as Employee);
+        return;
+      }
+
       const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
       const employeeDocSnap = await getDoc(employeeDocRef);
 
       if (employeeDocSnap.exists()) {
         const data = employeeDocSnap.data();
-        
+
         const formattedData: Employee = {
           ...data,
           id: employeeDocSnap.id,
@@ -594,7 +655,7 @@ export default function AdminEmployeeProfilePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [employeeIdFromUrl, toast]);
+  }, [employeeIdFromUrl, isAdminView, toast]);
   
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -910,13 +971,39 @@ export default function AdminEmployeeProfilePage() {
   const employeeDocumentData = employee as (Employee & {
     enrollmentPolicy?: { version?: string };
     documentCompletion?: { aadhaar?: string; identity?: string; address?: string };
+    documentAvailability?: {
+      identityFront?: boolean;
+      identityBack?: boolean;
+      addressFront?: boolean;
+      addressBack?: boolean;
+    };
     idProofDocumentUrlFront?: string;
+    idProofDocumentUrlBack?: string;
     idProofDocumentUrl?: string;
     aadharCardDocumentUrl?: string;
   }) | null;
   const employeePolicy = employeeDocumentData?.enrollmentPolicy?.version === 'three-proof-v1' ? 'three-proof-v1' : 'legacy';
   const identityStatus = employeeDocumentData?.documentCompletion?.identity === 'complete' || Boolean(employeeDocumentData?.identityProofUrlFront || employeeDocumentData?.idProofDocumentUrlFront || employeeDocumentData?.idProofDocumentUrl) ? 'complete' : 'missing';
   const addressStatus = employeeDocumentData?.documentCompletion?.address === 'complete' || Boolean(employeeDocumentData?.addressProofUrlFront) ? 'complete' : 'missing';
+  const hasIdentityFrontDocument = Boolean(
+    employeeDocumentData?.documentAvailability?.identityFront ||
+    employeeDocumentData?.identityProofUrlFront ||
+    employeeDocumentData?.idProofDocumentUrlFront ||
+    employeeDocumentData?.idProofDocumentUrl,
+  );
+  const hasIdentityBackDocument = Boolean(
+    employeeDocumentData?.documentAvailability?.identityBack ||
+    employeeDocumentData?.identityProofUrlBack ||
+    employeeDocumentData?.idProofDocumentUrlBack,
+  );
+  const hasAddressFrontDocument = Boolean(
+    employeeDocumentData?.documentAvailability?.addressFront ||
+    employeeDocumentData?.addressProofUrlFront,
+  );
+  const hasAddressBackDocument = Boolean(
+    employeeDocumentData?.documentAvailability?.addressBack ||
+    employeeDocumentData?.addressProofUrlBack,
+  );
   const displayedAadhaarStatus = isDesignatedAadhaarAdmin
     ? aadhaarStatus
     : employeeDocumentData?.documentCompletion?.aadhaar === 'complete' || Boolean(employeeDocumentData?.aadharCardDocumentUrl)
@@ -1559,20 +1646,22 @@ export default function AdminEmployeeProfilePage() {
                 )}
                 {employee.joiningDate && (
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                    <CalendarIcon size={10} /> Joined {employee.joiningDate?.toDate ? format(employee.joiningDate.toDate(), "MMM yyyy") : "—"}
+                    <CalendarIcon size={10} /> Joined {formatEmployeeDate(employee.joiningDate, "MMM yyyy")}
                   </span>
                 )}
               </div>
             </div>
           </div>
           <div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto">
-            <Button
-              onClick={() => router.push(`/attendance?employeeId=${encodeURIComponent(employee.id)}`)}
-              className="flex-1 sm:flex-none"
-            >
-              <CalendarCheck className="mr-2 h-4 w-4" />
-              Mark Attendance
-            </Button>
+            {userRole !== "client" && (
+              <Button
+                onClick={() => router.push(`/attendance?employeeId=${encodeURIComponent(employee.id)}`)}
+                className="flex-1 sm:flex-none"
+              >
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                Mark Attendance
+              </Button>
+            )}
             {isAdminView && (
               <>
               <Button onClick={() => toggleEditMode()} className="flex-1 sm:flex-none">
@@ -1615,12 +1704,12 @@ export default function AdminEmployeeProfilePage() {
 
         {!isEditing && (
           <Tabs defaultValue="personal" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto">
+            <TabsList className={`grid w-full grid-cols-2 ${isAdminView ? "md:grid-cols-5" : "md:grid-cols-4"} gap-2 h-auto`}>
               <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
               <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
-              <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>
+              {isAdminView && <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>}
               <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
-              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />QR & Docs</TabsTrigger>
+              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />{isAdminView ? "QR & Docs" : "Documents"}</TabsTrigger>
             </TabsList>
             <Card className="mt-4">
               <CardContent className="pt-6">
@@ -1644,7 +1733,7 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="Phone Number" value={employee.phoneNumber} />
                     <DetailItem label="Email Address" value={employee.emailAddress} />
                      <div className="md:col-span-2">
-                        <DetailItem label="Full Address" value={employee.fullAddress.replace(/\n/g, ", ")} isAddress />
+                        <DetailItem label="Full Address" value={employee.fullAddress?.replace(/\n/g, ", ")} isAddress />
                      </div>
                   </div>
                 </TabsContent>
@@ -1701,7 +1790,7 @@ export default function AdminEmployeeProfilePage() {
                 <TabsContent value="identification">
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <DetailItem label="PAN Number" value={employee.panNumber} />
+                    {isAdminView && <DetailItem label="PAN Number" value={employee.panNumber} />}
                     <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     {employee.nationality && <DetailItem label="Nationality" value={employee.nationality} isName />}
@@ -1711,10 +1800,10 @@ export default function AdminEmployeeProfilePage() {
                     {employee.serviceBookNumber && <DetailItem label="Service Book Number" value={employee.serviceBookNumber} />}
                     {employee.armsLicenseNumber && <DetailItem label="Arms License Number" value={employee.armsLicenseNumber} />}
                     {employee.passportCountryName && <DetailItem label="Passport Country" value={employee.passportCountryName} isName />}
-                    <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />
-                    <DetailItem label="ESIC Number" value={employee.esicNumber} />
+                    {isAdminView && <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />}
+                    {isAdminView && <DetailItem label="ESIC Number" value={employee.esicNumber} />}
                   </div>
-                  <div className="mt-5 rounded-xl border p-4">
+                  {!isReadOnlyViewer && <div className="mt-5 rounded-xl border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="font-medium">Document completion</p>
@@ -1765,7 +1854,7 @@ export default function AdminEmployeeProfilePage() {
                     ) : (
                       <p className="mt-3 text-xs text-muted-foreground">Aadhaar number and copy are hidden for this account.</p>
                     )}
-                  </div>
+                  </div>}
                 </TabsContent>
                 <TabsContent value="qr">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1789,17 +1878,37 @@ export default function AdminEmployeeProfilePage() {
                         <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                         <div className="space-y-3">
                             <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                            <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />
-                            <DocumentItem name="Identity Proof (Front)" url={employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl} type={employee.identityProofType || (employee as any).idProofType} />
-                            <DocumentItem name="Identity Proof (Back)" url={employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack} type={employee.identityProofType || (employee as any).idProofType} />
-                            <DocumentItem name="Address Proof (Front)" url={employee.addressProofUrlFront} type={employee.addressProofType} />
-                            <DocumentItem name="Address Proof (Back)" url={employee.addressProofUrlBack} type={employee.addressProofType} />
-                            <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />
-                            <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />
-                            <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />
-                            <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />
-                            <DocumentItem name="Passport Copy" url={employee.passportDocumentUrl} type="Passport" />
-                            <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />
+                            {isAdminView && <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />}
+                            <DocumentItem
+                              name="Identity Proof (Front)"
+                              url={isAdminView ? (employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl) : undefined}
+                              onView={!isAdminView && hasIdentityFrontDocument ? () => void viewGuardDocument("identity-front") : undefined}
+                              type={employee.identityProofType || (employee as any).idProofType}
+                            />
+                            <DocumentItem
+                              name="Identity Proof (Back)"
+                              url={isAdminView ? (employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack) : undefined}
+                              onView={!isAdminView && hasIdentityBackDocument ? () => void viewGuardDocument("identity-back") : undefined}
+                              type={employee.identityProofType || (employee as any).idProofType}
+                            />
+                            <DocumentItem
+                              name="Address Proof (Front)"
+                              url={isAdminView ? employee.addressProofUrlFront : undefined}
+                              onView={!isAdminView && hasAddressFrontDocument ? () => void viewGuardDocument("address-front") : undefined}
+                              type={employee.addressProofType}
+                            />
+                            <DocumentItem
+                              name="Address Proof (Back)"
+                              url={isAdminView ? employee.addressProofUrlBack : undefined}
+                              onView={!isAdminView && hasAddressBackDocument ? () => void viewGuardDocument("address-back") : undefined}
+                              type={employee.addressProofType}
+                            />
+                            {isAdminView && <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />}
+                            {isAdminView && <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />}
+                            {isAdminView && <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />}
+                            {isAdminView && <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />}
+                            {isAdminView && <DocumentItem name="Passport Copy" url={employee.passportDocumentUrl} type="Passport" />}
+                            {isAdminView && <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />}
                         </div>
                     </div>
                   </div>
