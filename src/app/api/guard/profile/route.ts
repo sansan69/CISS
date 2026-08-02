@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
 import { documentCompletionFromEmployee } from "@/lib/server/aadhaar";
+import { normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Employee not found." }, { status: 404 });
     }
     const empData = empDoc.data()!;
+    const documentFields = normalizeEmployeeDocumentFields(empData);
     const aadhaarPrivate = await adminDb
       .collection("employeeAadhaarPrivate")
       .doc(guard.employeeDocId)
@@ -38,17 +40,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Normalise document URLs from the employee record.
-    // Both URL fields and Firestore upload metadata maps are supported.
-    const docUrl = (field: unknown): string | null => {
-      if (typeof field === "string" && field.trim()) return field.trim();
-      if (field && typeof field === "object" && "url" in (field as Record<string, unknown>)) {
-        const url = (field as Record<string, unknown>).url;
-        return typeof url === "string" && url.trim() ? url.trim() : null;
-      }
-      return null;
-    };
-
     return NextResponse.json({
       fullName: empData.fullName ?? empData.name ?? "",
       employeeId: guard.employeeId,
@@ -59,19 +50,19 @@ export async function GET(request: Request) {
       gender: empData.gender ?? null,
       joiningDate: joiningDate ?? null,
       resourceIdNumber: empData.resourceIdNumber ?? null,
-      profilePhotoUrl: empData.profilePhotoUrl ?? empData.profilePictureUrl ?? null,
+      profilePhotoUrl: documentFields.profilePictureUrl ?? null,
       address: empData.fullAddress ?? empData.address ?? null,
       emailAddress: empData.emailAddress ?? null,
       // ── Document fields ─────────────────────────────────────────────
-      idProofType: empData.idProofType ?? null,
-      idProofNumber: empData.idProofNumber ?? null,
-      idProofFrontUrl: docUrl(empData.idProofFrontUrl ?? empData.idProofFront),
-      idProofBackUrl: docUrl(empData.idProofBackUrl ?? empData.idProofBack),
-      addressProofType: empData.addressProofType ?? null,
-      addressProofNumber: empData.addressProofNumber ?? null,
-      addressProofFrontUrl: docUrl(empData.addressProofFrontUrl ?? empData.addressProofFront),
-      addressProofBackUrl: docUrl(empData.addressProofBackUrl ?? empData.addressProofBack),
-      signatureUrl: docUrl(empData.signatureUrl ?? empData.signature),
+      idProofType: documentFields.identityProofType ?? null,
+      idProofNumber: documentFields.identityProofNumber ?? null,
+      idProofFrontUrl: documentFields.identityProofUrlFront ?? null,
+      idProofBackUrl: documentFields.identityProofUrlBack ?? null,
+      addressProofType: documentFields.addressProofType ?? null,
+      addressProofNumber: documentFields.addressProofNumber ?? null,
+      addressProofFrontUrl: documentFields.addressProofUrlFront ?? null,
+      addressProofBackUrl: documentFields.addressProofUrlBack ?? null,
+      signatureUrl: documentFields.signatureUrl ?? null,
       bankAccountNumber: empData.bankAccountNumber ?? null,
       bankIfscCode: empData.bankIfscCode ?? null,
       bankName: empData.bankName ?? null,

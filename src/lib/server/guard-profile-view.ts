@@ -2,6 +2,7 @@ import { normalizeText } from "@/lib/server/mobile-api-utils";
 import { resolveEmployeeDistrict } from "@/lib/employees/visibility";
 import { canonicalizeDistrictList } from "@/lib/districts";
 import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
+import { documentReference, normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
 import {
   hasAdminAccess,
   hasClientAccess,
@@ -18,15 +19,6 @@ function serializeDate(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "object" && typeof (value as TimestampLike).toDate === "function") {
     return (value as TimestampLike).toDate!().toISOString();
-  }
-  return null;
-}
-
-function documentUrl(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (value && typeof value === "object" && "url" in (value as Record<string, unknown>)) {
-    const url = (value as Record<string, unknown>).url;
-    return typeof url === "string" && url.trim() ? url.trim() : null;
   }
   return null;
 }
@@ -51,12 +43,11 @@ export function serializeGuardProfileView(
   ) || "Guard";
   const firstName = normalizeText(data.firstName) || fullName.split(/\s+/)[0] || "Guard";
   const lastName = normalizeText(data.lastName) || fullName.split(/\s+/).slice(1).join(" ");
-  const identityFront = documentUrl(
-    data.identityProofUrlFront ?? data.idProofDocumentUrlFront ?? data.idProofDocumentUrl,
-  );
-  const identityBack = documentUrl(data.identityProofUrlBack ?? data.idProofDocumentUrlBack);
-  const addressFront = documentUrl(data.addressProofUrlFront ?? data.addressProofFrontUrl);
-  const addressBack = documentUrl(data.addressProofUrlBack ?? data.addressProofBackUrl);
+  const documentFields = normalizeEmployeeDocumentFields(data);
+  const identityFront = documentFields.identityProofUrlFront;
+  const identityBack = documentFields.identityProofUrlBack;
+  const addressFront = documentFields.addressProofUrlFront;
+  const addressBack = documentFields.addressProofUrlBack;
   const completion = (data.documentCompletion || {}) as Record<string, unknown>;
 
   return {
@@ -90,12 +81,12 @@ export function serializeGuardProfileView(
     fullAddress: normalizeText(data.fullAddress || data.address),
     address: normalizeText(data.fullAddress || data.address),
     siteName: normalizeText(data.siteName || data.assignedSiteName),
-    profilePictureUrl: documentUrl(data.profilePictureUrl ?? data.profilePhotoUrl),
-    qrCodeUrl: documentUrl(data.qrCodeUrl),
-    identityProofType: normalizeText(data.identityProofType || data.idProofType),
-    identityProofNumber: normalizeText(data.identityProofNumber || data.idProofNumber),
-    addressProofType: normalizeText(data.addressProofType),
-    addressProofNumber: normalizeText(data.addressProofNumber),
+    profilePictureUrl: documentFields.profilePictureUrl,
+    qrCodeUrl: documentReference(data.qrCodeUrl) ?? null,
+    identityProofType: normalizeText(documentFields.identityProofType),
+    identityProofNumber: normalizeText(documentFields.identityProofNumber),
+    addressProofType: normalizeText(documentFields.addressProofType),
+    addressProofNumber: normalizeText(documentFields.addressProofNumber),
     documentAvailability: {
       identityFront: Boolean(identityFront),
       identityBack: Boolean(identityBack),
@@ -105,7 +96,7 @@ export function serializeGuardProfileView(
     documentCompletion: {
       identity: completionStatus(completion.identity, Boolean(identityFront)),
       address: completionStatus(completion.address, Boolean(addressFront)),
-      signature: completionStatus(completion.signature, Boolean(data.signatureUrl ?? data.signature)),
+      signature: completionStatus(completion.signature, Boolean(documentFields.signatureUrl)),
     },
     enrollmentPolicy: {
       version: (data.enrollmentPolicy as Record<string, unknown> | undefined)?.version === "three-proof-v1"

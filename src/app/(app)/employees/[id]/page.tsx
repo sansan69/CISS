@@ -38,11 +38,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { PDFFont } from 'pdf-lib';
-import { EDUCATION_OPTIONS } from "@/lib/constants";
+import { EDUCATION_OPTIONS, isLngClientName } from "@/lib/constants";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { useAppAuth } from "@/context/auth-context";
 import { districtMatches } from "@/lib/districts";
 import { authorizedFetch } from "@/lib/api-client";
+import { normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
 
 // #region PDF Text Helper Functions
 // Normalize weird whitespace, keep intended line breaks as separators.
@@ -443,6 +444,9 @@ export default function AdminEmployeeProfilePage() {
 
   const isAdminView = !isAuthLoading && (userRole === "admin" || userRole === "superAdmin");
   const isReadOnlyViewer = !isAdminView;
+  // These documents belong to the LNG Petronet workflow. Do not expose
+  // stale LNG fields on profiles currently assigned to another client.
+  const showLngPetronetDocuments = isLngClientName(employee?.clientName);
   const isDesignatedAadhaarAdmin =
     isAdminView &&
     currentUser?.email?.trim().toLowerCase() === 'admin@cisskerala.app' &&
@@ -634,9 +638,11 @@ export default function AdminEmployeeProfilePage() {
 
       if (employeeDocSnap.exists()) {
         const data = employeeDocSnap.data();
+        const documentFields = normalizeEmployeeDocumentFields(data);
 
         const formattedData: Employee = {
           ...data,
+          ...documentFields,
           id: employeeDocSnap.id,
         } as Employee;
         setEmployee(formattedData);
@@ -1797,9 +1803,9 @@ export default function AdminEmployeeProfilePage() {
                     {employee.identificationMark && <DetailItem label="Identification Mark" value={employee.identificationMark} />}
                     {typeof employee.heightCm === 'number' && <DetailItem label="Height (cm)" value={employee.heightCm} />}
                     {typeof employee.weightKg === 'number' && <DetailItem label="Weight (kg)" value={employee.weightKg} />}
-                    {employee.serviceBookNumber && <DetailItem label="Service Book Number" value={employee.serviceBookNumber} />}
-                    {employee.armsLicenseNumber && <DetailItem label="Arms License Number" value={employee.armsLicenseNumber} />}
-                    {employee.passportCountryName && <DetailItem label="Passport Country" value={employee.passportCountryName} isName />}
+                    {showLngPetronetDocuments && employee.serviceBookNumber && <DetailItem label="Service Book Number" value={employee.serviceBookNumber} />}
+                    {showLngPetronetDocuments && employee.armsLicenseNumber && <DetailItem label="Arms License Number" value={employee.armsLicenseNumber} />}
+                    {showLngPetronetDocuments && employee.passportCountryName && <DetailItem label="Passport Country" value={employee.passportCountryName} isName />}
                     {isAdminView && <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />}
                     {isAdminView && <DetailItem label="ESIC Number" value={employee.esicNumber} />}
                   </div>
@@ -1904,10 +1910,10 @@ export default function AdminEmployeeProfilePage() {
                               type={employee.addressProofType}
                             />
                             {isAdminView && <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />}
-                            {isAdminView && <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />}
-                            {isAdminView && <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />}
-                            {isAdminView && <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />}
-                            {isAdminView && <DocumentItem name="Passport Copy" url={employee.passportDocumentUrl} type="Passport" />}
+                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />}
+                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />}
+                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />}
+                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="Passport Copy" url={employee.passportDocumentUrl} type="Passport" />}
                             {isAdminView && <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />}
                         </div>
                     </div>

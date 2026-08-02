@@ -59,7 +59,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
       employeeId: "G-001",
       clientName: "Acme Security",
       district: "Ernakulam",
-      identityProofUrlFront: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/employees%2F9999999999%2FidProofs%2Fid-front.png?alt=media",
+      idProofFrontUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/employees%2F9999999999%2FidProofs%2Fid-front.png?alt=media",
     });
     vi.doMock("@/lib/firebaseAdmin", () => ({
       db,

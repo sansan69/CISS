@@ -7,10 +7,33 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CATEGORY_FIELDS = {
-  "identity-front": ["identityProofUrlFront", "idProofDocumentUrlFront", "idProofDocumentUrl"],
-  "identity-back": ["identityProofUrlBack", "idProofDocumentUrlBack"],
-  "address-front": ["addressProofUrlFront", "addressProofFrontUrl"],
-  "address-back": ["addressProofUrlBack", "addressProofBackUrl"],
+  "identity-front": [
+    "identityProofUrlFront",
+    "idProofFrontUrl",
+    "idProofFront",
+    "idProofDocumentUrlFront",
+    "idProofDocumentUrl",
+    "identityProofDocumentUrlFront",
+  ],
+  "identity-back": [
+    "identityProofUrlBack",
+    "idProofBackUrl",
+    "idProofBack",
+    "idProofDocumentUrlBack",
+    "identityProofDocumentUrlBack",
+  ],
+  "address-front": [
+    "addressProofUrlFront",
+    "addressProofFrontUrl",
+    "addressProofFront",
+    "addressProofDocumentUrlFront",
+  ],
+  "address-back": [
+    "addressProofUrlBack",
+    "addressProofBackUrl",
+    "addressProofBack",
+    "addressProofDocumentUrlBack",
+  ],
 } as const;
 
 function resolveStoragePath(source: string, bucketName: string) {

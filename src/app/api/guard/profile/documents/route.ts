@@ -16,6 +16,7 @@ import {
   validateAadhaarNumber,
 } from "@/lib/server/aadhaar";
 import { ADDRESS_PROOF_TYPES, IDENTITY_PROOF_TYPES } from "@/lib/constants";
+import { normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
 
 export const runtime = "nodejs";
 
@@ -75,13 +76,14 @@ export async function GET(request: Request) {
     const employeeSnap = await db.collection("employees").doc(guard.employeeDocId).get();
     if (!employeeSnap.exists) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
     const employee = employeeSnap.data() as Record<string, unknown>;
+    const documentFields = normalizeEmployeeDocumentFields(employee);
     const rawPath = category === "identity"
       ? side === "front"
-        ? employee.identityProofUrlFront || employee.idProofDocumentUrlFront || employee.idProofDocumentUrl
-        : employee.identityProofUrlBack || employee.idProofDocumentUrlBack
+        ? documentFields.identityProofUrlFront
+        : documentFields.identityProofUrlBack
       : side === "front"
-        ? employee.addressProofUrlFront || employee.addressProofDocumentUrlFront
-        : employee.addressProofUrlBack || employee.addressProofDocumentUrlBack;
+        ? documentFields.addressProofUrlFront
+        : documentFields.addressProofUrlBack;
     const bucket = storage.bucket();
     const path = sameBucketDocumentPath(rawPath, bucket.name);
     if (!path) return NextResponse.json({ error: "This proof page is not available." }, { status: 404 });

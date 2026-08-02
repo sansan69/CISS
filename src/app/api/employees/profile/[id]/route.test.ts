@@ -111,14 +111,14 @@ describe("GET /api/employees/profile/[id]", () => {
       fullAddress: "Guard House, Ernakulam",
       identityProofType: "PAN Card",
       identityProofNumber: "ABCDE1234F",
-      identityProofUrlFront: "https://example.com/id-front.png",
+      idProofFrontUrl: "https://example.com/id-front.png",
       addressProofType: "Voter ID",
       addressProofNumber: "VOTER-001",
-      addressProofUrlFront: "https://example.com/address-front.png",
+      addressProofFrontUrl: "https://example.com/address-front.png",
       aadharNumber: "123456789012",
       aadharCardDocumentUrl: "https://example.com/aadhaar.pdf",
       bankAccountNumber: "1234567890",
-      signatureUrl: "https://example.com/signature.png",
+      signature: "https://example.com/signature.png",
       documentCompletion: { identity: "complete", address: "complete" },
     });
 
