@@ -38,7 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { PDFFont } from 'pdf-lib';
-import { EDUCATION_OPTIONS, isLngClientName } from "@/lib/constants";
+import { EDUCATION_OPTIONS, getAddressProofTypesForIdentity, IDENTITY_PROOF_TYPES, isLngClientName } from "@/lib/constants";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { useAppAuth } from "@/context/auth-context";
 import { districtMatches } from "@/lib/districts";
@@ -120,7 +120,7 @@ const keralaDistricts = [
   "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
   "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod", "Lakshadweep"
 ];
-const idProofOptions = ["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate"];
+const idProofOptions = [...IDENTITY_PROOF_TYPES];
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
@@ -665,6 +665,8 @@ export default function AdminEmployeeProfilePage() {
   const watchStatus = form.watch('status');
   const watchMaritalStatus = form.watch('maritalStatus');
   const watchEducationalQualification = form.watch("educationalQualification");
+  const watchIdentityProofType = form.watch("identityProofType");
+  const availableAddressProofOptions = getAddressProofTypesForIdentity(watchIdentityProofType);
 
 
   const fetchEmployee = useCallback(async () => {
@@ -2117,7 +2119,7 @@ export default function AdminEmployeeProfilePage() {
                     <div className="p-4 border rounded-lg mt-4 space-y-4">
                         <h4 className="font-medium text-md">Identity Proof (Name, DOB, etc.)</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={(value) => { field.onChange(value); if (form.getValues("addressProofType") === value) form.resetField("addressProofType"); }} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="identityProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -2129,7 +2131,7 @@ export default function AdminEmployeeProfilePage() {
                     <div className="p-4 border rounded-lg mt-6 space-y-4">
                         <h4 className="font-medium text-md">Address Proof</h4>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{idProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{availableAddressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="addressProofNumber" render={({ field }) => (<FormItem><FormLabel>Document Number</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">

@@ -11,6 +11,7 @@ import {
   requiresLngServiceBook,
 } from "@/lib/constants";
 import { AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
+import { GUARD_UNDERTAKING_VERSION } from "@/lib/enrollment-consents";
 
 const lngDesignationSchema = z.enum(LNG_JOB_DESIGNATIONS);
 
@@ -83,6 +84,8 @@ export const enrollmentSubmissionSchema = z
     termsAccepted: z.literal(true),
     aadhaarConsentAccepted: z.literal(true),
     aadhaarConsentVersion: z.literal(AADHAAR_CONSENT_VERSION),
+    guardUndertakingAccepted: z.literal(true),
+    guardUndertakingVersion: z.literal(GUARD_UNDERTAKING_VERSION),
   })
   .superRefine((data, ctx) => {
     if (

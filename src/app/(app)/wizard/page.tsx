@@ -251,9 +251,10 @@ function StepEnrollmentConfig({ onSave, submitting }: any) {
   const config = {
     sections: {
       personal: { label: "Personal Info", fields: ["firstName", "lastName", "fatherName", "motherName", "dateOfBirth", "gender", "maritalStatus", "educationalQualification", "resourceIdNumber"] },
-      documents: { label: "Documents", fields: ["identityProofType", "identityProofNumber", "addressProofType", "addressProofNumber", "signatureUrl"] },
+      documents: { label: "Documents", fields: ["identityProofType", "identityProofNumber", "addressProofType", "addressProofNumber", "aadharCardDocument", "signatureUrl"] },
       bank: { label: "Bank Details", fields: ["bankAccountNumber", "ifscCode", "bankName"] },
       details: { label: "Other Details", fields: ["district", "fullAddress", "emailAddress", "clientName", "joiningDate"] },
+      review: { label: "Review and consent", fields: ["termsAndConditions", "aadhaarConsentAccepted", "guardUndertakingAccepted"] },
     },
   };
 

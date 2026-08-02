@@ -1,5 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { isLngClientName } from "./constants";
+import {
+  ADDRESS_PROOF_TYPES,
+  getAddressProofTypesForIdentity,
+  IDENTITY_PROOF_TYPES,
+  isLngClientName,
+} from "./constants";
+
+describe("proof type options", () => {
+  it("keeps identity and address proof options purpose-specific", () => {
+    expect(IDENTITY_PROOF_TYPES).toEqual([
+      "PAN Card",
+      "Voter ID",
+      "Driving License",
+      "Passport",
+      "School Certificate",
+      "Birth Certificate",
+    ]);
+    expect(ADDRESS_PROOF_TYPES).toEqual([
+      "Voter ID",
+      "Passport",
+      "Driving License",
+    ]);
+  });
+
+  it("removes the selected identity proof from address options", () => {
+    expect(getAddressProofTypesForIdentity("Voter ID")).toEqual([
+      "Passport",
+      "Driving License",
+    ]);
+    expect(getAddressProofTypesForIdentity("PAN Card")).toEqual([
+      "Voter ID",
+      "Passport",
+      "Driving License",
+    ]);
+  });
+});
 
 describe("isLngClientName", () => {
   it.each([

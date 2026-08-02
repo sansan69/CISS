@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAppAuth } from "@/context/auth-context";
-import { ADDRESS_PROOF_TYPES, IDENTITY_PROOF_TYPES } from "@/lib/constants";
+import { getAddressProofTypesForIdentity, IDENTITY_PROOF_TYPES } from "@/lib/constants";
 import { AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
 import {
   User,
@@ -35,6 +35,8 @@ interface GuardProfileData {
   profilePhotoUrl?: string | null;
   address?: string;
   emailAddress?: string;
+  idProofType?: string | null;
+  addressProofType?: string | null;
   missingDocuments: Array<"aadhaar" | "identity" | "address">;
   documentStatus: Record<"aadhaar" | "identity" | "address", "missing" | "complete">;
   enrollmentPolicy: "legacy" | "three-proof-v1";
@@ -379,7 +381,9 @@ export default function GuardProfilePage() {
             )}
 
             {(["identity", "address"] as const).filter((category) => data.missingDocuments.includes(category)).map((category) => {
-              const options = category === "identity" ? IDENTITY_PROOF_TYPES : ADDRESS_PROOF_TYPES;
+              const options = category === "identity"
+                ? IDENTITY_PROOF_TYPES.filter((option) => option !== data.addressProofType)
+                : getAddressProofTypesForIdentity(data.idProofType);
               return (
                 <form key={category} className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void submitMissingDocument(category, event)}>
                   <p className="text-sm font-medium">Add {category} proof</p>

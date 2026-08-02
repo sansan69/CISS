@@ -93,14 +93,14 @@ export async function POST(request: NextRequest) {
 
     // Aadhaar must never receive a bearer-style Firebase download token. The
     // enrollment API moves this temporary object into server-only storage.
-    const isAadhaar = folder === "aadharCards";
-    const downloadToken = isAadhaar ? null : crypto.randomUUID();
+    const isRestrictedDocument = folder === "aadharCards";
+    const downloadToken = isRestrictedDocument ? null : crypto.randomUUID();
 
     await storageFile.save(buffer, {
       resumable: false,
       metadata: {
         contentType: file.type || "application/octet-stream",
-        cacheControl: isAadhaar ? "no-store, private, max-age=0" : undefined,
+        cacheControl: isRestrictedDocument ? "no-store, private, max-age=0" : undefined,
         metadata: downloadToken
           ? { firebaseStorageDownloadTokens: downloadToken }
           : {},
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      url: isAadhaar
+      url: isRestrictedDocument
         ? path
         : buildDownloadUrl(bucket.name, path, downloadToken!),
     });

@@ -24,19 +24,23 @@ export const PROOF_TYPES = [
 export const IDENTITY_PROOF_TYPES = [
   "PAN Card",
   "Voter ID",
-  "Passport",
   "Driving License",
-  "Government Photo ID",
+  "Passport",
+  "School Certificate",
+  "Birth Certificate",
 ] as const;
 
 export const ADDRESS_PROOF_TYPES = [
   "Voter ID",
   "Passport",
   "Driving License",
-  "Residence Certificate",
-  "Utility Bill",
-  "Bank Statement",
 ] as const;
+
+export function getAddressProofTypesForIdentity(
+  identityProofType?: string | null,
+) {
+  return ADDRESS_PROOF_TYPES.filter((proofType) => proofType !== identityProofType);
+}
 
 export const EDUCATION_OPTIONS = [
   "Primary School",

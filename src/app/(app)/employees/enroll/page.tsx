@@ -53,8 +53,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
-import { ADDRESS_PROOF_TYPES, EDUCATION_OPTIONS, IDENTITY_PROOF_TYPES, isLngClientName, LNG_JOB_DESIGNATIONS, MARITAL_STATUSES, requiresLngArmsLicense, requiresLngServiceBook } from "@/lib/constants";
-import { AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
+import { ADDRESS_PROOF_TYPES, EDUCATION_OPTIONS, getAddressProofTypesForIdentity, IDENTITY_PROOF_TYPES, isLngClientName, LNG_JOB_DESIGNATIONS, MARITAL_STATUSES, requiresLngArmsLicense, requiresLngServiceBook } from "@/lib/constants";
+import { AADHAAR_CONSENT_MANGLISH, AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
+import {
+  ENROLLMENT_TERMS_MANGLISH,
+  ENROLLMENT_TERMS_TEXT,
+  GUARD_UNDERTAKING_MANGLISH,
+  GUARD_UNDERTAKING_TEXT,
+  GUARD_UNDERTAKING_VERSION,
+} from "@/lib/enrollment-consents";
+import { ENROLLMENT_HINTS } from "@/lib/enrollment-hints";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
@@ -182,6 +190,7 @@ const enrollmentFormSchema = z.object({
   legacyUniqueId: z.string().optional(),
   termsAndConditions: z.boolean().refine((value) => value, "Enrollment declaration is required."),
   aadhaarConsentAccepted: z.boolean().refine((value) => value, "Aadhaar consent is required."),
+  guardUndertakingAccepted: z.boolean().refine((value) => value, "Guard undertaking consent is required."),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource ID number is required for TCS client.", path: ["resourceIdNumber"] });
@@ -278,7 +287,6 @@ type PublicClientsResponse = {
 
 const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
 const identityProofOptions = [...IDENTITY_PROOF_TYPES];
-const addressProofOptions = [...ADDRESS_PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
 
@@ -427,6 +435,7 @@ export default function EnrollEmployeePage() {
         legacyUniqueId: '',
         termsAndConditions: false,
         aadhaarConsentAccepted: false,
+        guardUndertakingAccepted: false,
      },
   });
 
@@ -434,6 +443,8 @@ export default function EnrollEmployeePage() {
   const watchLngJobDesignation = form.watch("lngJobDesignation");
   const watchMaritalStatus = form.watch("maritalStatus");
   const watchEducationalQualification = form.watch("educationalQualification");
+  const watchIdentityProofType = form.watch("identityProofType");
+  const addressProofOptions = getAddressProofTypesForIdentity(watchIdentityProofType);
   const isLngClient = isLngClientName(watchClientName);
   const requiresServiceBook = isLngClient && requiresLngServiceBook(watchLngJobDesignation);
   const requiresArmsLicense = isLngClient && requiresLngArmsLicense(watchLngJobDesignation);
@@ -753,6 +764,8 @@ export default function EnrollEmployeePage() {
           termsAccepted: data.termsAndConditions,
           aadhaarConsentAccepted: data.aadhaarConsentAccepted,
           aadhaarConsentVersion: AADHAAR_CONSENT_VERSION,
+          guardUndertakingAccepted: data.guardUndertakingAccepted,
+          guardUndertakingVersion: GUARD_UNDERTAKING_VERSION,
         }),
       });
 
@@ -857,7 +870,20 @@ export default function EnrollEmployeePage() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" className="space-y-8">
+              <section className="rounded-2xl border bg-muted/20 p-4" aria-label="Bilingual enrollment guidance">
+                <p className="text-sm font-semibold">Enrollment guidance — English + Manglish</p>
+                <p className="mt-1 text-xs text-muted-foreground">Use these instructions while completing each field. Required items are marked with *.</p>
+                <div className="mt-3 grid max-h-80 gap-3 overflow-y-auto md:grid-cols-2">
+                  {Object.entries(ENROLLMENT_HINTS).map(([fieldName, hint]) => (
+                    <div key={fieldName} className="rounded-xl border bg-background px-3 py-2">
+                      <p className="text-xs font-semibold text-foreground">{fieldName}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{hint.english}</p>
+                      <p className="mt-1 text-xs text-primary/80">Manglish: {hint.manglish}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
               
               <section>
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Client Information</h2>
@@ -1147,7 +1173,7 @@ export default function EnrollEmployeePage() {
                 <div className="p-4 border rounded-lg mt-4 space-y-4">
                     <h3 className="font-medium text-lg">Identity Proof (Name, DOB, Father's Name)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{identityProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={(value) => { field.onChange(value); if (form.getValues("addressProofType") === value) form.resetField("addressProofType"); }} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{identityProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -1160,7 +1186,7 @@ export default function EnrollEmployeePage() {
                 <div className="p-4 border rounded-lg mt-6 space-y-4">
                     <h3 className="font-medium text-lg">Address Proof</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{addressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{addressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -1203,8 +1229,8 @@ export default function EnrollEmployeePage() {
                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Statutory & Location Details</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter district" list="admin-enrollment-districts" /></FormControl><datalist id="admin-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Your current district of residence</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="Enter 12-digit Aadhaar number" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration.</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input {...field} type="text" inputMode="text" autoComplete="new-password" autoCorrect="off" autoCapitalize="characters" spellCheck={false} data-1p-ignore="true" data-lpignore="true" data-bwignore="true" placeholder="Enter PAN card number" onChange={(event) => field.onChange(event.target.value.toUpperCase())} /></FormControl><FormDescription>E.g., ABCDE1234F (optional)</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} type="password" inputMode="numeric" autoComplete="new-password" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" maxLength={12} placeholder="Enter 12-digit Aadhaar number" value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration.</FormDescription><FormMessage /></FormItem>)} />
                     {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && <FormField control={form.control} name="passportCountryName" render={({ field }) => (<FormItem><FormLabel>Passport Country Name</FormLabel><FormControl><Input placeholder="Enter passport country, if applicable" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                     {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
@@ -1293,7 +1319,7 @@ export default function EnrollEmployeePage() {
                   )} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                    <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" autoComplete="email" required placeholder="yourname@example.com" {...field} /></FormControl><FormDescription>Required for enrollment updates and official communication.</FormDescription><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} type="email" autoComplete="off" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" required placeholder="yourname@example.com" /></FormControl><FormDescription>Required for enrollment updates and official communication.</FormDescription><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} /></FormControl><FormDescription>Your primary contact number</FormDescription><FormMessage /></FormItem>)} />
                 </div>
               </section>
@@ -1301,11 +1327,23 @@ export default function EnrollEmployeePage() {
               <section className="space-y-4 rounded-xl border p-4">
                 <p className="text-sm font-semibold">Aadhaar use for ESIC and EPF</p>
                 <p className="text-xs text-muted-foreground">{AADHAAR_CONSENT_TEXT}</p>
+                <p className="text-xs text-muted-foreground">Manglish: {AADHAAR_CONSENT_MANGLISH}</p>
                 <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
-                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has accepted this Aadhaar consent.</FormLabel><FormMessage/></div></FormItem>
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has accepted this Aadhaar consent for ESIC, EPF, and related statutory processing only.</FormLabel><p className="text-xs text-muted-foreground">Manglish: Employee Aadhaar ESIC, EPF, related statutory processing-inu mathram use cheyyan sammathichu.</p><FormMessage/></div></FormItem>
                 )}/>
                 <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
                   <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee confirms the information and documents are correct.</FormLabel><FormMessage/></div></FormItem>
+                )}/>
+                <div className="grid gap-3 md:grid-cols-2 rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (English)</p><p>{ENROLLMENT_TERMS_TEXT}</p></div>
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (Manglish)</p><p>{ENROLLMENT_TERMS_MANGLISH}</p></div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">CISS Guard Undertaking (English)</p><p>{GUARD_UNDERTAKING_TEXT}</p></div>
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Guard Undertaking (Manglish)</p><p>{GUARD_UNDERTAKING_MANGLISH}</p></div>
+                </div>
+                <FormField control={form.control} name="guardUndertakingAccepted" render={({ field }) => (
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has read and accepted the CISS Guard Undertaking, including duties and compliance responsibilities, subject to applicable law.</FormLabel><p className="text-xs text-muted-foreground">Manglish: Employee CISS Guard Undertaking vaayichu manassilaakki, duty/compliance responsibilities paalikkaan (applicable law anusarichu) sammathichu.</p><p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p><FormMessage/></div></FormItem>
                 )}/>
               </section>
 

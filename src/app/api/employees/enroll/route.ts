@@ -34,6 +34,12 @@ import {
   moveAadhaarSourceToRestrictedStorage,
 } from "@/lib/server/aadhaar";
 import { assertEnrollmentDocumentReferences } from "@/lib/server/enrollment-documents";
+import {
+  ENROLLMENT_TERMS_TEXT_HASH,
+  ENROLLMENT_TERMS_VERSION,
+  GUARD_UNDERTAKING_TEXT_HASH,
+  GUARD_UNDERTAKING_VERSION,
+} from "@/lib/server/enrollment-consents";
 export const runtime = "nodejs";
 
 function buildSearchableFields(data: EnrollmentSubmission, employeeId: string) {
@@ -299,6 +305,8 @@ export async function POST(request: NextRequest) {
       },
       consentCompliance: {
         aadhaarEsicEpfConsentVersion: payload.aadhaarConsentVersion,
+        enrollmentTermsVersion: ENROLLMENT_TERMS_VERSION,
+        guardUndertakingVersion: payload.guardUndertakingVersion,
         completedAt: now,
       },
       identityProofType: payload.identityProofType,
@@ -370,6 +378,10 @@ export async function POST(request: NextRequest) {
       }),
       termsAccepted: payload.termsAccepted === true,
       ...(payload.termsAccepted === true && { termsAcceptedAt: now }),
+      guardUndertakingAccepted: payload.guardUndertakingAccepted === true,
+      ...(payload.guardUndertakingAccepted === true && {
+        guardUndertakingAcceptedAt: now,
+      }),
     };
 
     const batch = adminDb.batch();
@@ -408,6 +420,34 @@ export async function POST(request: NextRequest) {
       noticeVersion: payload.aadhaarConsentVersion,
       noticeTextHash: AADHAAR_CONSENT_TEXT_HASH,
       accepted: true,
+      acceptedAt: now,
+      employeeName: fullName,
+      signatureStoragePath: payload.signatureUrl,
+      enrollmentId: draftId || null,
+      source: isAdminSubmission ? "admin_enrollment" : "public_enrollment",
+      employeeId,
+      uploaderUid: submissionActor?.uid || null,
+      status: "active",
+    });
+    batch.set(docRef.collection("consents").doc(), {
+      type: "enrollment_terms",
+      noticeVersion: ENROLLMENT_TERMS_VERSION,
+      noticeTextHash: ENROLLMENT_TERMS_TEXT_HASH,
+      accepted: payload.termsAccepted === true,
+      acceptedAt: now,
+      employeeName: fullName,
+      signatureStoragePath: payload.signatureUrl,
+      enrollmentId: draftId || null,
+      source: isAdminSubmission ? "admin_enrollment" : "public_enrollment",
+      employeeId,
+      uploaderUid: submissionActor?.uid || null,
+      status: "active",
+    });
+    batch.set(docRef.collection("consents").doc(), {
+      type: "guard_undertaking",
+      noticeVersion: GUARD_UNDERTAKING_VERSION,
+      noticeTextHash: GUARD_UNDERTAKING_TEXT_HASH,
+      accepted: payload.guardUndertakingAccepted === true,
       acceptedAt: now,
       employeeName: fullName,
       signatureStoragePath: payload.signatureUrl,

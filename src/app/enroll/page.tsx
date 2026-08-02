@@ -55,6 +55,7 @@ import {
   EDUCATION_OPTIONS,
   IDENTITY_PROOF_TYPES,
   ADDRESS_PROOF_TYPES,
+  getAddressProofTypesForIdentity,
   isLngClientName,
   LNG_JOB_DESIGNATIONS,
   MARITAL_STATUSES,
@@ -63,8 +64,17 @@ import {
 } from "@/lib/constants";
 import {
   AADHAAR_CONSENT_TEXT,
+  AADHAAR_CONSENT_MANGLISH,
   AADHAAR_CONSENT_VERSION,
 } from "@/lib/aadhaar-policy";
+import {
+  ENROLLMENT_TERMS_MANGLISH,
+  ENROLLMENT_TERMS_TEXT,
+  GUARD_UNDERTAKING_MANGLISH,
+  GUARD_UNDERTAKING_TEXT,
+  GUARD_UNDERTAKING_VERSION,
+} from "@/lib/enrollment-consents";
+import { ENROLLMENT_HINTS } from "@/lib/enrollment-hints";
 import {
   canonicalizeDistrictName,
   getDefaultDistrictSuggestions,
@@ -191,6 +201,9 @@ const enrollmentFormSchema = z.object({
   aadhaarConsentAccepted: z.boolean().refine((val) => val === true, {
     message: "Consent is required to use Aadhaar for ESIC and EPF registration.",
   }),
+  guardUndertakingAccepted: z.boolean().refine((val) => val === true, {
+    message: "You must accept the Guard Undertaking to proceed.",
+  }),
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource ID number is required for TCS client.", path: ["resourceIdNumber"] });
@@ -307,7 +320,6 @@ type PublicClientsResponse = {
 
 const districtSuggestions = getDefaultDistrictSuggestions(REGION_CODE);
 const identityProofOptions = [...IDENTITY_PROOF_TYPES];
-const addressProofOptions = [...ADDRESS_PROOF_TYPES];
 const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
 const ENROLLMENT_DRAFT_STORAGE_KEY = "ciss-public-enrollment-draft-v1";
@@ -372,6 +384,7 @@ const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   legacyUniqueId: "",
   termsAndConditions: false,
   aadhaarConsentAccepted: false,
+  guardUndertakingAccepted: false,
 };
 const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   joiningDate: "Joining date",
@@ -428,6 +441,7 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   legacyUniqueId: "Legacy unique ID",
   termsAndConditions: "Terms and declaration",
   aadhaarConsentAccepted: "Aadhaar consent for ESIC/EPF",
+  guardUndertakingAccepted: "Guard undertaking consent",
 };
 
 const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
@@ -468,6 +482,7 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "phoneNumber",
   "termsAndConditions",
   "aadhaarConsentAccepted",
+  "guardUndertakingAccepted",
 ];
 
 const isFileValue = (value: unknown): value is File =>
@@ -714,7 +729,7 @@ const ENROLLMENT_STEPS: {
     key: "review",
     title: "Review",
     description: "Quickly verify the summary and confirm the declaration before submission.",
-    fields: ["termsAndConditions", "aadhaarConsentAccepted"],
+    fields: ["termsAndConditions", "aadhaarConsentAccepted", "guardUndertakingAccepted"],
   },
 ];
 
@@ -849,6 +864,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const watchMaritalStatus = form.watch("maritalStatus");
   const watchEducationalQualification = form.watch("educationalQualification");
   const watchLngJobDesignation = form.watch("lngJobDesignation");
+  const watchIdentityProofType = form.watch("identityProofType");
+  const addressProofOptions = getAddressProofTypesForIdentity(watchIdentityProofType);
   const watchedValues = useWatch({ control: form.control });
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
@@ -1486,6 +1503,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             termsAccepted: data.termsAndConditions,
             aadhaarConsentAccepted: data.aadhaarConsentAccepted,
             aadhaarConsentVersion: AADHAAR_CONSENT_VERSION,
+            guardUndertakingAccepted: data.guardUndertakingAccepted,
+            guardUndertakingVersion: GUARD_UNDERTAKING_VERSION,
           }),
         });
 
@@ -1797,7 +1816,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         </CardHeader>
         <CardContent className="px-0 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} className="space-y-8 pb-28 sm:pb-32">
+            <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} autoComplete="off" className="space-y-8 pb-28 sm:pb-32">
               <div className="rounded-[20px] border bg-muted/10 p-3 sm:p-4">
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -1927,6 +1946,26 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   </AlertDescription>
                 </Alert>
               )}
+
+              <section className="rounded-2xl border bg-muted/20 p-4" aria-label="Bilingual enrollment guidance">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold">How to complete this step</p>
+                  <p className="text-xs text-muted-foreground">English and Manglish instructions are shown for every item.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {ENROLLMENT_STEPS[currentStep].fields.map((fieldName) => {
+                    const hint = ENROLLMENT_HINTS[fieldName];
+                    if (!hint) return null;
+                    return (
+                      <div key={fieldName} className="rounded-xl border bg-background px-3 py-2">
+                        <p className="text-xs font-semibold text-foreground">{FIELD_LABELS[fieldName] ?? fieldName}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{hint.english}</p>
+                        <p className="mt-1 text-xs text-primary/80">Manglish: {hint.manglish}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
 
               {currentStep === 0 && (
                 <FormSection title="Client Information">
@@ -2087,7 +2126,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <h3 className="font-medium text-lg">Identity Proof</h3>
                       <p className="text-sm text-muted-foreground">Front and back stay separate on purpose so the review and verification stay clear.</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{identityProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="identityProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={(value) => { field.onChange(value); if (form.getValues("addressProofType") === value) form.resetField("addressProofType"); }} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select ID proof type" /></SelectTrigger></FormControl><SelectContent>{identityProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                           <IdNumberInput control={form.control} name="identityProofNumber" label="Document Number" />
                       </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -2100,7 +2139,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <h3 className="font-medium text-lg">Address Proof</h3>
                       <p className="text-sm text-muted-foreground">Use a different proof type than the identity proof and upload both sides separately.</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{addressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="addressProofType" render={({ field }) => ( <FormItem><FormLabel>Document Type <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Address proof type" /></SelectTrigger></FormControl><SelectContent>{addressProofOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                            <IdNumberInput control={form.control} name="addressProofNumber" label="Document Number" />
                       </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -2142,8 +2181,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   <FormSection title="Statutory & Other Details">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter your district" list="public-enrollment-districts" /></FormControl><datalist id="public-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Type the district directly. Suggestions are shown when available.</FormDescription><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input placeholder="Enter PAN card number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="Enter 12-digit Aadhaar number" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration. It is not saved in browser drafts.</FormDescription><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input {...field} type="text" inputMode="text" autoComplete="new-password" autoCorrect="off" autoCapitalize="characters" spellCheck={false} data-1p-ignore="true" data-lpignore="true" data-bwignore="true" placeholder="Enter PAN card number" onChange={(event) => field.onChange(event.target.value.toUpperCase())} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} type="password" inputMode="numeric" autoComplete="new-password" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" maxLength={12} placeholder="Enter 12-digit Aadhaar number" value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration. It is not saved in browser drafts.</FormDescription><FormMessage /></FormItem>)} />
                       {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="passportCountryName" render={({ field }) => (<FormItem><FormLabel>Passport Country Name</FormLabel><FormControl><Input placeholder="Enter passport country, if applicable" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Optional. Use when the applicant provides passport details instead of Indian statutory documents.</FormDescription><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
@@ -2244,6 +2283,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <ReviewCard title="Consent">
                       <ReviewRow label="Aadhaar ESIC/EPF consent" value={watchedValues?.aadhaarConsentAccepted ? "Accepted" : "Required"} />
                       <ReviewRow label="Terms and declaration" value={watchedValues?.termsAndConditions ? "Accepted" : "Required"} />
+                      <ReviewRow label="Guard undertaking" value={watchedValues?.guardUndertakingAccepted ? "Accepted" : "Required"} />
+                      <ReviewRow label="Undertaking signature evidence" value={signatureUrlPreview ? "Employee signature uploaded" : "Required"} />
                     </ReviewCard>
                   </div>
 
@@ -2251,21 +2292,33 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="rounded-md border bg-background p-4 text-xs text-muted-foreground">
                       <p className="mb-2 font-semibold text-foreground">Aadhaar use for ESIC and EPF</p>
                       <p>{AADHAAR_CONSENT_TEXT}</p>
+                      <p className="mt-2 border-t pt-2">Manglish: {AADHAAR_CONSENT_MANGLISH}</p>
                     </div>
                     <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>I consent to this limited use of my Aadhaar for ESIC and EPF.</FormLabel>
+                          <p className="text-xs text-muted-foreground">Manglish: Aadhaar ESIC/EPF statutory processing official systems vazhi mathram upayogikkan njan sammathikkunnu.</p>
                           <FormMessage />
                         </div>
                       </FormItem>
                     )}/>
                     <div className="h-48 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground space-y-2">
-                      <p className="font-bold">I. General Eligibility and Compliance</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I confirm I meet the eligibility criteria under the PSARA Act, 2005 and Kerala state rules, including age (18-65), physical fitness, and Indian citizenship.</li><li>I understand my enrollment is provisional and subject to a successful background and character verification by the relevant authorities.</li><li>I agree to complete all mandatory training and refresher courses as required by the company and regulatory bodies.</li></ul>
-                      <p className="font-bold">II. Employment Terms & Responsibilities</p><ul className="list-disc list-outside pl-4 space-y-1"><li>My employment terms, including working hours, wages, and leaves, will be governed by applicable labour laws.</li><li>I will perform my duties diligently, maintain strict discipline, protect client property, and follow all lawful instructions.</li><li>I will maintain strict confidentiality of all client and company information and will not disclose it to any unauthorized person.</li><li>I will report for duty on time, in uniform, and will not consume intoxicating substances on duty, use unauthorized force, or abandon my post without proper relief.</li></ul>
-                      <p className="font-bold">III. Disciplinary Action</p><ul className="list-disc list-outside pl-4 space-y-1"><li>I understand that any breach of these terms, misconduct, or violation of laws can lead to disciplinary action, up to and including termination of employment.</li></ul>
-                      <p className="font-bold">IV. Declaration</p><p>I hereby declare that I have read, understood, and agree to abide by all the terms and conditions stated above for my enrollment. I confirm that all information and documents provided by me are true and correct to the best of my knowledge.</p>
+                      <p className="mb-2 font-bold">Terms and Conditions of Enrollment (English)</p>
+                      <p className="whitespace-pre-line">{ENROLLMENT_TERMS_TEXT}</p>
+                      <p className="mt-3 border-t pt-3 font-bold">Terms and Conditions (Manglish)</p>
+                      <p className="whitespace-pre-line">{ENROLLMENT_TERMS_MANGLISH}</p>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground whitespace-pre-line">
+                        <p className="mb-2 font-bold text-foreground">CISS Guard Undertaking (English)</p>
+                        <p>{GUARD_UNDERTAKING_TEXT}</p>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground whitespace-pre-line">
+                        <p className="mb-2 font-bold text-foreground">Guard Undertaking (Manglish)</p>
+                        <p>{GUARD_UNDERTAKING_MANGLISH}</p>
+                      </div>
                     </div>
                     <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
                         <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
@@ -2273,6 +2326,17 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         </FormItem>
                       )}
                     />
+                    <FormField control={form.control} name="guardUndertakingAccepted" render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
+                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>I have read and understood the CISS Guard Undertaking, including duties, verification, conduct, property, and statutory-rights clauses, and I agree to comply subject to applicable law.</FormLabel>
+                          <p className="text-xs text-muted-foreground">Manglish: Njan CISS Guard Undertaking vaayichu manassilaakki; duty, verification, conduct, property, statutory rights enniva paalikkaan (applicable law anusarichu) sammathikkunnu.</p>
+                          <p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}/>
                   </div>
                 </FormSection>
               )}

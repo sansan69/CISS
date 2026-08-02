@@ -84,6 +84,7 @@ export function validateEnrollmentField(
 
 const SUBMISSION_FIELD_ALIASES: Record<string, string> = {
   termsAndConditions: "termsAccepted",
+  guardUndertakingAccepted: "guardUndertakingAccepted",
   profilePicture: "profilePictureUrl",
   identityProofFront: "identityProofUrlFront",
   identityProofBack: "identityProofUrlBack",
@@ -126,6 +127,8 @@ export function validateEnrollmentSubmissionAgainstConfig(
                   ? "Aadhaar consent"
                   : key === "termsAndConditions"
                     ? "Terms and declaration"
+                    : key === "guardUndertakingAccepted"
+                      ? "Guard undertaking consent"
                     : key,
     enabled: true,
     required: true,

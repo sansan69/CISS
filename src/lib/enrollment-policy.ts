@@ -19,4 +19,5 @@ export const MANDATORY_NEW_ENROLLMENT_FIELDS = [
   "emailAddress",
   "termsAndConditions",
   "aadhaarConsentAccepted",
+  "guardUndertakingAccepted",
 ] as const;

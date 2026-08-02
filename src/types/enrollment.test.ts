@@ -52,6 +52,8 @@ function buildLngPayload(
     termsAccepted: true,
     aadhaarConsentAccepted: true,
     aadhaarConsentVersion: "aadhaar-esic-epf-v1",
+    guardUndertakingAccepted: true,
+    guardUndertakingVersion: "guard-undertaking-v1",
     ...overrides,
   };
 }
@@ -91,6 +93,8 @@ function buildStandardPayload(
     termsAccepted: true,
     aadhaarConsentAccepted: true,
     aadhaarConsentVersion: "aadhaar-esic-epf-v1",
+    guardUndertakingAccepted: true,
+    guardUndertakingVersion: "guard-undertaking-v1",
     ...overrides,
   };
 }
@@ -162,6 +166,21 @@ describe("enrollmentSubmissionSchema", () => {
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
       expect(parsed.error.flatten().fieldErrors.bankPassbookStatementUrl).toBeTruthy();
+    }
+  });
+
+  it("rejects the same proof type for identity and address", () => {
+    const parsed = enrollmentSubmissionSchema.safeParse({
+      ...buildStandardPayload(),
+      identityProofType: "Voter ID",
+      addressProofType: "Voter ID",
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.addressProofType).toContain(
+        "Identity proof and address proof must be different types.",
+      );
     }
   });
 

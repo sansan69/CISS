@@ -124,6 +124,7 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
+
     match /employees/{employeeKey}/attendance/{attemptId}/{fileName} {
       allow read: if isSignedIn();
       // Attendance photos are written only by the validated server upload route.
@@ -246,6 +247,7 @@ service firebase.storage {
     match /enrollments/{employeeKey}/aadharCards/{fileName} {
       allow read, write: if false;
     }
+
 
     match /enrollments/{employeeKey}/panCards/{fileName} {
       allow read: if isAdmin();

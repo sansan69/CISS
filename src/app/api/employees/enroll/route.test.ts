@@ -172,6 +172,8 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
     termsAccepted: true,
     aadhaarConsentAccepted: true,
     aadhaarConsentVersion: "aadhaar-esic-epf-v1",
+    guardUndertakingAccepted: true,
+    guardUndertakingVersion: "guard-undertaking-v1",
     ...overrides,
   };
 }

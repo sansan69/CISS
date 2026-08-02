@@ -65,6 +65,7 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
       fields: [
         { key: "termsAndConditions", label: "Terms and declaration", enabled: true, required: true, order: 1 },
         { key: "aadhaarConsentAccepted", label: "Aadhaar ESIC/EPF consent", enabled: true, required: true, order: 2 },
+        { key: "guardUndertakingAccepted", label: "Guard undertaking consent", enabled: true, required: true, order: 3 },
       ],
     },
   },
