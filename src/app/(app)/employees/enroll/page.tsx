@@ -54,11 +54,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { ADDRESS_PROOF_TYPES, EDUCATION_OPTIONS, getAddressProofTypesForIdentity, IDENTITY_PROOF_TYPES, isLngClientName, LNG_JOB_DESIGNATIONS, MARITAL_STATUSES, requiresLngArmsLicense, requiresLngServiceBook } from "@/lib/constants";
-import { AADHAAR_CONSENT_MANGLISH, AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
+import { AADHAAR_CONSENT_MALAYALAM, AADHAAR_CONSENT_TEXT, AADHAAR_CONSENT_VERSION } from "@/lib/aadhaar-policy";
 import {
-  ENROLLMENT_TERMS_MANGLISH,
+  ENROLLMENT_TERMS_MALAYALAM,
   ENROLLMENT_TERMS_TEXT,
-  GUARD_UNDERTAKING_MANGLISH,
+  GUARD_UNDERTAKING_MALAYALAM,
   GUARD_UNDERTAKING_TEXT,
   GUARD_UNDERTAKING_VERSION,
 } from "@/lib/enrollment-consents";
@@ -872,14 +872,14 @@ export default function EnrollEmployeePage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" className="space-y-8">
               <section className="rounded-2xl border bg-muted/20 p-4" aria-label="Bilingual enrollment guidance">
-                <p className="text-sm font-semibold">Enrollment guidance — English + Manglish</p>
+                <p className="text-sm font-semibold">Enrollment guidance — English + Malayalam</p>
                 <p className="mt-1 text-xs text-muted-foreground">Use these instructions while completing each field. Required items are marked with *.</p>
                 <div className="mt-3 grid max-h-80 gap-3 overflow-y-auto md:grid-cols-2">
                   {Object.entries(ENROLLMENT_HINTS).map(([fieldName, hint]) => (
                     <div key={fieldName} className="rounded-xl border bg-background px-3 py-2">
                       <p className="text-xs font-semibold text-foreground">{fieldName}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{hint.english}</p>
-                      <p className="mt-1 text-xs text-primary/80">Manglish: {hint.manglish}</p>
+                      <p className="mt-1 text-xs text-primary/80">Malayalam: {hint.malayalam}</p>
                     </div>
                   ))}
                 </div>
@@ -1327,23 +1327,23 @@ export default function EnrollEmployeePage() {
               <section className="space-y-4 rounded-xl border p-4">
                 <p className="text-sm font-semibold">Aadhaar use for ESIC and EPF</p>
                 <p className="text-xs text-muted-foreground">{AADHAAR_CONSENT_TEXT}</p>
-                <p className="text-xs text-muted-foreground">Manglish: {AADHAAR_CONSENT_MANGLISH}</p>
+                <p className="text-xs text-muted-foreground">Malayalam: {AADHAAR_CONSENT_MALAYALAM}</p>
                 <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
-                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has accepted this Aadhaar consent for ESIC, EPF, and related statutory processing only.</FormLabel><p className="text-xs text-muted-foreground">Manglish: Employee Aadhaar ESIC, EPF, related statutory processing-inu mathram use cheyyan sammathichu.</p><FormMessage/></div></FormItem>
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has accepted this Aadhaar consent for ESIC, EPF, and related statutory processing only.</FormLabel><p className="text-xs text-muted-foreground">Malayalam: ESIC, EPF, ബന്ധപ്പെട്ട നിയമപരമായ നടപടികൾക്കായി മാത്രം ആധാർ ഉപയോഗിക്കാൻ ജീവനക്കാരൻ സമ്മതിച്ചു.</p><FormMessage/></div></FormItem>
                 )}/>
                 <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
                   <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee confirms the information and documents are correct.</FormLabel><FormMessage/></div></FormItem>
                 )}/>
                 <div className="grid gap-3 md:grid-cols-2 rounded-md border bg-background p-3 text-xs text-muted-foreground">
                   <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (English)</p><p>{ENROLLMENT_TERMS_TEXT}</p></div>
-                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (Manglish)</p><p>{ENROLLMENT_TERMS_MANGLISH}</p></div>
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Terms and Conditions (Malayalam)</p><p>{ENROLLMENT_TERMS_MALAYALAM}</p></div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 rounded-md border bg-background p-3 text-xs text-muted-foreground">
                   <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">CISS Guard Undertaking (English)</p><p>{GUARD_UNDERTAKING_TEXT}</p></div>
-                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Guard Undertaking (Manglish)</p><p>{GUARD_UNDERTAKING_MANGLISH}</p></div>
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-line"><p className="mb-2 font-semibold text-foreground">Guard Undertaking (Malayalam)</p><p>{GUARD_UNDERTAKING_MALAYALAM}</p></div>
                 </div>
                 <FormField control={form.control} name="guardUndertakingAccepted" render={({ field }) => (
-                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has read and accepted the CISS Guard Undertaking, including duties and compliance responsibilities, subject to applicable law.</FormLabel><p className="text-xs text-muted-foreground">Manglish: Employee CISS Guard Undertaking vaayichu manassilaakki, duty/compliance responsibilities paalikkaan (applicable law anusarichu) sammathichu.</p><p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p><FormMessage/></div></FormItem>
+                  <FormItem className="flex items-start gap-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><div><FormLabel>The employee has read and accepted the CISS Guard Undertaking, including duties and compliance responsibilities, subject to applicable law.</FormLabel><p className="text-xs text-muted-foreground">Malayalam: ജീവനക്കാരൻ CISS Guard Undertaking വായിച്ച് മനസ്സിലാക്കി; ചുമതലകളും നിയമാനുസൃത ഉത്തരവാദിത്തങ്ങളും ബാധകമായ നിയമങ്ങൾ അനുസരിച്ച് പാലിക്കാൻ സമ്മതിച്ചു.</p><p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p><FormMessage/></div></FormItem>
                 )}/>
               </section>
 

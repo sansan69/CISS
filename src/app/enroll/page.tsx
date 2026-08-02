@@ -64,13 +64,13 @@ import {
 } from "@/lib/constants";
 import {
   AADHAAR_CONSENT_TEXT,
-  AADHAAR_CONSENT_MANGLISH,
+  AADHAAR_CONSENT_MALAYALAM,
   AADHAAR_CONSENT_VERSION,
 } from "@/lib/aadhaar-policy";
 import {
-  ENROLLMENT_TERMS_MANGLISH,
+  ENROLLMENT_TERMS_MALAYALAM,
   ENROLLMENT_TERMS_TEXT,
-  GUARD_UNDERTAKING_MANGLISH,
+  GUARD_UNDERTAKING_MALAYALAM,
   GUARD_UNDERTAKING_TEXT,
   GUARD_UNDERTAKING_VERSION,
 } from "@/lib/enrollment-consents";
@@ -1950,7 +1950,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
               <section className="rounded-2xl border bg-muted/20 p-4" aria-label="Bilingual enrollment guidance">
                 <div className="mb-3">
                   <p className="text-sm font-semibold">How to complete this step</p>
-                  <p className="text-xs text-muted-foreground">English and Manglish instructions are shown for every item.</p>
+                  <p className="text-xs text-muted-foreground">English and Malayalam instructions are shown for every item.</p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {ENROLLMENT_STEPS[currentStep].fields.map((fieldName) => {
@@ -1960,7 +1960,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <div key={fieldName} className="rounded-xl border bg-background px-3 py-2">
                         <p className="text-xs font-semibold text-foreground">{FIELD_LABELS[fieldName] ?? fieldName}</p>
                         <p className="mt-1 text-xs text-muted-foreground">{hint.english}</p>
-                        <p className="mt-1 text-xs text-primary/80">Manglish: {hint.manglish}</p>
+                        <p className="mt-1 text-xs text-primary/80">Malayalam: {hint.malayalam}</p>
                       </div>
                     );
                   })}
@@ -2292,14 +2292,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="rounded-md border bg-background p-4 text-xs text-muted-foreground">
                       <p className="mb-2 font-semibold text-foreground">Aadhaar use for ESIC and EPF</p>
                       <p>{AADHAAR_CONSENT_TEXT}</p>
-                      <p className="mt-2 border-t pt-2">Manglish: {AADHAAR_CONSENT_MANGLISH}</p>
+                      <p className="mt-2 border-t pt-2">Malayalam: {AADHAAR_CONSENT_MALAYALAM}</p>
                     </div>
                     <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>I consent to this limited use of my Aadhaar for ESIC and EPF.</FormLabel>
-                          <p className="text-xs text-muted-foreground">Manglish: Aadhaar ESIC/EPF statutory processing official systems vazhi mathram upayogikkan njan sammathikkunnu.</p>
+                          <p className="text-xs text-muted-foreground">Malayalam: ഔദ്യോഗിക സംവിധാനങ്ങളിലൂടെ മാത്രം ആധാർ ESIC, EPF നിയമപരമായ നടപടികൾക്കായി ഉപയോഗിക്കാൻ ഞാൻ സമ്മതിക്കുന്നു.</p>
                           <FormMessage />
                         </div>
                       </FormItem>
@@ -2307,8 +2307,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="h-48 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground space-y-2">
                       <p className="mb-2 font-bold">Terms and Conditions of Enrollment (English)</p>
                       <p className="whitespace-pre-line">{ENROLLMENT_TERMS_TEXT}</p>
-                      <p className="mt-3 border-t pt-3 font-bold">Terms and Conditions (Manglish)</p>
-                      <p className="whitespace-pre-line">{ENROLLMENT_TERMS_MANGLISH}</p>
+                        <p className="mt-3 border-t pt-3 font-bold">Terms and Conditions (Malayalam)</p>
+                        <p className="whitespace-pre-line">{ENROLLMENT_TERMS_MALAYALAM}</p>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground whitespace-pre-line">
@@ -2316,8 +2316,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         <p>{GUARD_UNDERTAKING_TEXT}</p>
                       </div>
                       <div className="max-h-72 overflow-y-auto rounded-md border bg-background p-4 text-xs text-muted-foreground whitespace-pre-line">
-                        <p className="mb-2 font-bold text-foreground">Guard Undertaking (Manglish)</p>
-                        <p>{GUARD_UNDERTAKING_MANGLISH}</p>
+                        <p className="mb-2 font-bold text-foreground">Guard Undertaking (Malayalam)</p>
+                        <p>{GUARD_UNDERTAKING_MALAYALAM}</p>
                       </div>
                     </div>
                     <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
@@ -2331,7 +2331,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>I have read and understood the CISS Guard Undertaking, including duties, verification, conduct, property, and statutory-rights clauses, and I agree to comply subject to applicable law.</FormLabel>
-                          <p className="text-xs text-muted-foreground">Manglish: Njan CISS Guard Undertaking vaayichu manassilaakki; duty, verification, conduct, property, statutory rights enniva paalikkaan (applicable law anusarichu) sammathikkunnu.</p>
+                          <p className="text-xs text-muted-foreground">Malayalam: CISS Guard Undertaking വായിച്ച് മനസ്സിലാക്കി; ചുമതലകൾ, പരിശോധന, പെരുമാറ്റം, സ്വത്ത്, നിയമപരമായ അവകാശങ്ങൾ എന്നിവ സംബന്ധിച്ച നിബന്ധനകൾ ബാധകമായ നിയമങ്ങൾ അനുസരിച്ച് പാലിക്കാൻ ഞാൻ സമ്മതിക്കുന്നു.</p>
                           <p className="text-xs text-muted-foreground">The employee signature uploaded above is used as the undertaking signature evidence; no separate undertaking signature is required.</p>
                           <FormMessage />
                         </div>
