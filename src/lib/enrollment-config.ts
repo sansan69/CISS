@@ -96,6 +96,7 @@ const SUBMISSION_FIELD_ALIASES: Record<string, string> = {
   armsLicenseDocument: "armsLicenseDocumentUrl",
   passportDocument: "passportDocumentUrl",
   aadharCardDocument: "aadharCardDocumentUrl",
+  aadharCardDocumentBack: "aadharCardDocumentBackUrl",
   panCardDocument: "panCardDocumentUrl",
   policeClearanceCertificate: "policeClearanceCertificateUrl",
 };
@@ -118,7 +119,9 @@ export function validateEnrollmentSubmissionAgainstConfig(
         : key === "profilePicture"
           ? "Profile picture"
           : key === "aadharCardDocument"
-            ? "Aadhaar copy"
+            ? "Aadhaar front copy"
+            : key === "aadharCardDocumentBack"
+              ? "Aadhaar back copy"
             : key === "bankPassbookStatement"
               ? "Bank passbook/statement"
               : key === "emailAddress"

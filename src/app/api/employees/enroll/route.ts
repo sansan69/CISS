@@ -42,6 +42,8 @@ import {
 } from "@/lib/server/enrollment-consents";
 export const runtime = "nodejs";
 
+type RestrictedEnrollmentAadhaar = Awaited<ReturnType<typeof moveAadhaarSourceToRestrictedStorage>>;
+
 function buildSearchableFields(data: EnrollmentSubmission, employeeId: string) {
   const nameParts = `${data.firstName} ${data.lastName}`
     .toUpperCase()
@@ -94,6 +96,7 @@ function splitFullNameForStorage(rawFullName: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const movedAadhaarDocuments: RestrictedEnrollmentAadhaar[] = [];
   try {
     const authorization = request.headers.get("authorization");
     let isAdminSubmission = false;
@@ -256,10 +259,16 @@ export async function POST(request: NextRequest) {
     const docRef = adminDb.collection("employees").doc();
     const consentRef = docRef.collection("consents").doc();
     const aadhaarEncryption = await encryptAadhaarNumber(payload.aadharNumber);
-    const restrictedAadhaar = await moveAadhaarSourceToRestrictedStorage({
+    const restrictedAadhaarFront = await moveAadhaarSourceToRestrictedStorage({
       employeeDocId: docRef.id,
       source: payload.aadharCardDocumentUrl,
     });
+    movedAadhaarDocuments.push(restrictedAadhaarFront);
+    const restrictedAadhaarBack = await moveAadhaarSourceToRestrictedStorage({
+      employeeDocId: docRef.id,
+      source: payload.aadharCardDocumentBackUrl,
+    });
+    movedAadhaarDocuments.push(restrictedAadhaarBack);
 
     const employeeData = {
       employeeId,
@@ -401,9 +410,15 @@ export async function POST(request: NextRequest) {
       employeeDocId: docRef.id,
       ...aadhaarEncryption,
       aadhaarLast4: payload.aadharNumber.slice(-4),
-      documentStoragePath: restrictedAadhaar.documentStoragePath,
-      originalFileName: restrictedAadhaar.originalFileName,
-      contentType: restrictedAadhaar.contentType,
+      documentStoragePath: restrictedAadhaarFront.documentStoragePath,
+      originalFileName: restrictedAadhaarFront.originalFileName,
+      contentType: restrictedAadhaarFront.contentType,
+      additionalDocuments: [{
+        side: "back",
+        documentStoragePath: restrictedAadhaarBack.documentStoragePath,
+        originalFileName: restrictedAadhaarBack.originalFileName,
+        contentType: restrictedAadhaarBack.contentType,
+      }],
       purpose: "esic_epf_registration",
       employeeProvided: true,
       verificationStatus: "not_independently_verified",
@@ -508,18 +523,20 @@ export async function POST(request: NextRequest) {
     try {
       await batch.commit();
     } catch (error) {
-      await deleteStorageObjectIfPresent(restrictedAadhaar.documentStoragePath);
+      await Promise.all(movedAadhaarDocuments.map((document) => deleteStorageObjectIfPresent(document.documentStoragePath)));
       throw error;
     }
-    if (restrictedAadhaar.sourcePath !== restrictedAadhaar.documentStoragePath) {
-      await deleteStorageObjectIfPresent(restrictedAadhaar.sourcePath);
-    }
+    await Promise.allSettled(movedAadhaarDocuments.map((document) => deleteStorageObjectIfPresent(document.sourcePath)));
+    movedAadhaarDocuments.length = 0;
 
     return NextResponse.json({
       id: docRef.id,
       employeeId,
     });
   } catch (error: any) {
+    await Promise.all(
+      movedAadhaarDocuments.map((document) => deleteStorageObjectIfPresent(document.documentStoragePath)),
+    );
     if (error?.name === "ZodError") {
       return NextResponse.json(
         {

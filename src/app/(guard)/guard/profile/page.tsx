@@ -370,7 +370,8 @@ export default function GuardProfilePage() {
               <form className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void submitMissingDocument("aadhaar", event)}>
                 <p className="text-sm font-medium">Add Aadhaar for ESIC/EPF</p>
                 <Input name="aadhaarNumber" type="password" inputMode="numeric" autoComplete="off" maxLength={12} required placeholder="12-digit Aadhaar number" />
-                <Input name="front" type="file" accept="image/jpeg,image/png,application/pdf" required />
+                <label className="block text-xs text-muted-foreground">Upload Aadhaar front side<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                <label className="block text-xs text-muted-foreground">Upload Aadhaar back side<Input className="mt-1" name="back" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
                 <p className="text-xs text-muted-foreground">{AADHAAR_CONSENT_TEXT}</p>
                 <label className="flex items-start gap-2 text-xs">
                   <input name="consentAccepted" value="true" type="checkbox" required className="mt-0.5 h-4 w-4" />

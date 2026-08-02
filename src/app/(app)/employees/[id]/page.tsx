@@ -480,6 +480,7 @@ export default function AdminEmployeeProfilePage() {
   const [aadhaarPassword, setAadhaarPassword] = useState('');
   const [isAadhaarBusy, setIsAadhaarBusy] = useState(false);
   const [aadhaarHasConsent, setAadhaarHasConsent] = useState(false);
+  const [aadhaarHasBackDocument, setAadhaarHasBackDocument] = useState(false);
   const [aadhaarCorrectionRequest, setAadhaarCorrectionRequest] = useState<{ id: string; reason: string } | null>(null);
 
   useEffect(() => {
@@ -511,9 +512,11 @@ export default function AdminEmployeeProfilePage() {
       const body = await response.json();
       setAadhaarStatus(body.status === 'complete' ? 'complete' : 'missing');
       setAadhaarHasConsent(body.hasConsent === true);
+      setAadhaarHasBackDocument(body.hasBackDocument === true);
       setAadhaarCorrectionRequest(body.correctionRequest || null);
     } else {
       setAadhaarStatus('missing');
+      setAadhaarHasBackDocument(false);
     }
   }, [currentUser, employeeIdFromUrl, isDesignatedAadhaarAdmin]);
 
@@ -553,23 +556,23 @@ export default function AdminEmployeeProfilePage() {
     }
   };
 
-  const viewAadhaarDocument = async () => {
+  const viewAadhaarDocument = async (side: 'front' | 'back') => {
     setIsAadhaarBusy(true);
     try {
       const token = await reauthenticateAadhaarAdmin();
-      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar/document`, {
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar/document?side=${side}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || 'Could not open Aadhaar copy.');
+        throw new Error(body.error || `Could not open Aadhaar ${side} side.`);
       }
       const objectUrl = URL.createObjectURL(await response.blob());
       window.open(objectUrl, '_blank', 'noopener,noreferrer');
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     } catch (aadhaarError) {
-      toast({ variant: 'destructive', title: 'Aadhaar access denied', description: aadhaarError instanceof Error ? aadhaarError.message : 'Could not open Aadhaar.' });
+      toast({ variant: 'destructive', title: 'Aadhaar access denied', description: aadhaarError instanceof Error ? aadhaarError.message : `Could not open Aadhaar ${side} side.` });
     } finally {
       setIsAadhaarBusy(false);
     }
@@ -591,6 +594,7 @@ export default function AdminEmployeeProfilePage() {
       if (!response.ok) throw new Error(body.error || 'Could not save Aadhaar.');
       formElement.reset();
       setAadhaarStatus('complete');
+      setAadhaarHasBackDocument(body.hasBackDocument === true);
       setAadhaarCorrectionRequest(null);
       toast({ title: 'Aadhaar saved', description: 'The number and copy are now in restricted storage.' });
     } catch (aadhaarError) {
@@ -1879,7 +1883,8 @@ export default function AdminEmployeeProfilePage() {
                             <Input type="password" autoComplete="current-password" value={aadhaarPassword} onChange={(event) => setAadhaarPassword(event.target.value)} placeholder="Re-enter admin password" />
                             <div className="flex flex-wrap gap-2">
                               <Button type="button" size="sm" variant="outline" onClick={() => void revealAadhaar()} disabled={isAadhaarBusy}>Reveal Aadhaar</Button>
-                              <Button type="button" size="sm" variant="outline" onClick={() => void viewAadhaarDocument()} disabled={isAadhaarBusy}>View Aadhaar copy</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => void viewAadhaarDocument('front')} disabled={isAadhaarBusy}>View Aadhaar front</Button>
+                              {aadhaarHasBackDocument ? <Button type="button" size="sm" variant="outline" onClick={() => void viewAadhaarDocument('back')} disabled={isAadhaarBusy}>View Aadhaar back</Button> : <Badge variant="outline">Back side missing</Badge>}
                               {revealedAadhaar && <Button type="button" size="sm" variant="ghost" onClick={() => setRevealedAadhaar(null)}>Hide</Button>}
                             </div>
                             {revealedAadhaar && <p className="font-mono text-lg tracking-wider" aria-live="polite">{revealedAadhaar}</p>}
@@ -1892,16 +1897,25 @@ export default function AdminEmployeeProfilePage() {
                                 <input type="hidden" name="replace" value="true" />
                                 <input type="hidden" name="correctionRequestId" value={aadhaarCorrectionRequest.id} />
                                 <Input name="aadhaarNumber" type="password" inputMode="numeric" autoComplete="off" maxLength={12} required placeholder="Correct 12-digit Aadhaar number" />
-                                <label className="block text-xs text-muted-foreground">Correct self-attested Aadhaar copy<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                                <label className="block text-xs text-muted-foreground">Upload Aadhaar front side<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                                <label className="block text-xs text-muted-foreground">Upload Aadhaar back side<Input className="mt-1" name="back" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
                                 {!aadhaarHasConsent && <label className="block text-xs text-muted-foreground">Employee-signed Aadhaar consent form<Input className="mt-1" name="signedConsent" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>}
                                 <Button type="submit" size="sm" disabled={isAadhaarBusy}>Replace after correction request</Button>
+                              </form>
+                            )}
+                            {!aadhaarHasBackDocument && !aadhaarCorrectionRequest && (
+                              <form className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void uploadAdminAadhaar(event)}>
+                                <input type="hidden" name="backOnly" value="true" />
+                                <label className="block text-xs text-muted-foreground">Upload Aadhaar back side<Input className="mt-1" name="back" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                                <Button type="submit" size="sm" disabled={isAadhaarBusy}>Add Aadhaar back side</Button>
                               </form>
                             )}
                           </>
                         ) : (
                           <form className="space-y-3" onSubmit={(event) => void uploadAdminAadhaar(event)}>
                             <Input name="aadhaarNumber" type="password" inputMode="numeric" autoComplete="off" maxLength={12} required placeholder="12-digit Aadhaar number" />
-                            <label className="block text-xs text-muted-foreground">Self-attested Aadhaar copy<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                            <label className="block text-xs text-muted-foreground">Upload Aadhaar front side<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                            <label className="block text-xs text-muted-foreground">Upload Aadhaar back side<Input className="mt-1" name="back" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
                             <label className="block text-xs text-muted-foreground">Employee-signed Aadhaar consent form<Input className="mt-1" name="signedConsent" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
                             <Button type="submit" size="sm" disabled={isAadhaarBusy}>Add restricted Aadhaar</Button>
                           </form>

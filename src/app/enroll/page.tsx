@@ -167,6 +167,7 @@ const enrollmentFormSchema = z.object({
   addressProofUrlFront: fileSchema,
   addressProofUrlBack: fileSchema,
   aadharCardDocument: fileSchema,
+  aadharCardDocumentBack: fileSchema,
   panCardDocument: optionalFileSchema,
   
   signatureUrl: fileSchema,
@@ -332,6 +333,7 @@ const DRAFT_FILE_FIELDS: (keyof EnrollmentFormValues)[] = [
   "serviceBookDocument",
   "armsLicenseDocument",
   "aadharCardDocument",
+  "aadharCardDocumentBack",
   "panCardDocument",
   "passportDocument",
   "bankPassbookStatement",
@@ -340,6 +342,7 @@ const DRAFT_FILE_FIELDS: (keyof EnrollmentFormValues)[] = [
 const SENSITIVE_DRAFT_FIELDS = new Set<keyof EnrollmentFormValues>([
   "aadharNumber",
   "aadharCardDocument",
+  "aadharCardDocumentBack",
 ]);
 const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   clientName: "",
@@ -422,6 +425,7 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   addressProofUrlFront: "Address proof front",
   addressProofUrlBack: "Address proof back",
   aadharCardDocument: "Aadhar card copy",
+  aadharCardDocumentBack: "Aadhar card back copy",
   panCardDocument: "PAN card copy",
   signatureUrl: "Signature",
   policeClearanceCertificate: "Police clearance certificate",
@@ -459,6 +463,7 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "panNumber",
   "aadharNumber",
   "aadharCardDocument",
+  "aadharCardDocumentBack",
   "panCardDocument",
   "nationality",
   "identificationMark",
@@ -629,6 +634,7 @@ type CameraField =
   | "serviceBookDocument"
   | "armsLicenseDocument"
   | "aadharCardDocument"
+  | "aadharCardDocumentBack"
   | "panCardDocument"
   | "passportDocument"
   | "bankPassbookStatement"
@@ -690,6 +696,7 @@ const ENROLLMENT_STEPS: {
       "addressProofUrlFront",
       "addressProofUrlBack",
       "aadharCardDocument",
+      "aadharCardDocumentBack",
       "panCardDocument",
       "signatureUrl",
     ],
@@ -815,6 +822,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [serviceBookPreview, setServiceBookPreview] = React.useState<string | null>(null);
   const [armsLicensePreview, setArmsLicensePreview] = React.useState<string | null>(null);
   const [aadharCardPreview, setAadharCardPreview] = React.useState<string | null>(null);
+  const [aadharCardBackPreview, setAadharCardBackPreview] = React.useState<string | null>(null);
   const [panCardPreview, setPanCardPreview] = React.useState<string | null>(null);
   const [passportPreview, setPassportPreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
@@ -953,6 +961,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       case "aadharCardDocument":
         setAadharCardPreview(previewUrl);
         break;
+      case "aadharCardDocumentBack":
+        setAadharCardBackPreview(previewUrl);
+        break;
       case "panCardDocument":
         setPanCardPreview(previewUrl);
         break;
@@ -1006,6 +1017,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       setAddressProofUrlBackPreview(null);
       setSignatureUrlPreview(null);
       setAadharCardPreview(null);
+      setAadharCardBackPreview(null);
       setPanCardPreview(null);
       setPassportPreview(null);
       setBankPassbookPreview(null);
@@ -1389,6 +1401,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         serviceBookDocumentUrl: null,
         armsLicenseDocumentUrl: null,
         aadharCardDocumentUrl: null,
+        aadharCardDocumentBackUrl: null,
         panCardDocumentUrl: null,
         passportDocumentUrl: null,
         bankPassbookStatementUrl: null,
@@ -1416,6 +1429,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             { name: "Service Book", file: data.serviceBookDocument, folder: "serviceBooks", fileStem: "service_book", key: 'serviceBookDocumentUrl' },
             { name: "Arms License", file: data.armsLicenseDocument, folder: "armsLicenses", fileStem: "arms_license", key: 'armsLicenseDocumentUrl' },
             { name: "Aadhar Card", file: data.aadharCardDocument, folder: "aadharCards", fileStem: "aadhar", key: 'aadharCardDocumentUrl' },
+            { name: "Aadhar Card Back", file: data.aadharCardDocumentBack, folder: "aadharCards", fileStem: "aadhar_back", key: 'aadharCardDocumentBackUrl' },
             { name: "PAN Card", file: data.panCardDocument, folder: "panCards", fileStem: "pan", key: 'panCardDocumentUrl' },
             { name: "Passport", file: data.passportDocument, folder: "passports", fileStem: "passport", key: 'passportDocumentUrl' },
             { name: "Bank Document", file: data.bankPassbookStatement, folder: "bankDocuments", fileStem: "bank", key: 'bankPassbookStatementUrl' },
@@ -1485,6 +1499,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             addressProofUrlFront: uploadedUrls.addressProofUrlFront,
             addressProofUrlBack: uploadedUrls.addressProofUrlBack,
             aadharCardDocumentUrl: uploadedUrls.aadharCardDocumentUrl || undefined,
+            aadharCardDocumentBackUrl: uploadedUrls.aadharCardDocumentBackUrl || undefined,
             panCardDocumentUrl: uploadedUrls.panCardDocumentUrl || undefined,
             signatureUrl: uploadedUrls.signatureUrl,
             bankAccountNumber: data.bankAccountNumber || undefined,
@@ -2128,11 +2143,28 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                   <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
                       <h3 className="font-medium text-lg">Aadhaar for ESIC/EPF</h3>
                       <p className="text-sm text-muted-foreground">This copy is restricted to the designated Aadhaar administrator and is not shared with clients.</p>
+                      <div className="max-w-xl">
+                        <FormField control={form.control} name="aadharNumber" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel>
+                            <FormControl><Input {...field} type="password" inputMode="numeric" autoComplete="new-password" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" maxLength={12} placeholder="Enter 12-digit Aadhaar number" value={field.value ?? ""} /></FormControl>
+                            <FormDescription>Used only for ESIC and EPF registration. It is not saved in browser drafts.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField control={form.control} name="aadharCardDocument" render={({ field }) => (
                           <FormItem className="text-center">
-                            <FormLabel className="block mb-2">Self-attested Aadhaar Copy <span className="text-destructive">*</span></FormLabel>
-                            <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="JPEG, PNG or PDF. This file is not independently verified by CISS." />
+                            <FormLabel className="block mb-2">Upload your Aadhaar front side <span className="text-destructive">*</span></FormLabel>
+                            <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="JPEG, PNG or PDF." />
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="aadharCardDocumentBack" render={({ field }) => (
+                          <FormItem className="text-center">
+                            <FormLabel className="block mb-2">Upload your Aadhaar back side <span className="text-destructive">*</span></FormLabel>
+                            <ImagePreviewAndUpload fieldName="aadharCardDocumentBack" preview={aadharCardBackPreview} setPreview={setAadharCardBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="JPEG, PNG or PDF." />
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -2159,7 +2191,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField control={form.control} name="district" render={({ field }) => ( <FormItem><FormLabel>District <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} value={field.value ?? ""} placeholder="Enter your district" list="public-enrollment-districts" /></FormControl><datalist id="public-enrollment-districts">{districtSuggestions.map(dist => <option key={dist} value={dist} />)}</datalist><FormDescription>Type the district directly. Suggestions are shown when available.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="panNumber" render={({ field }) => (<FormItem><FormLabel>PAN Card Number</FormLabel><FormControl><Input {...field} type="text" inputMode="text" autoComplete="new-password" autoCorrect="off" autoCapitalize="characters" spellCheck={false} data-1p-ignore="true" data-lpignore="true" data-bwignore="true" placeholder="Enter PAN card number" onChange={(event) => field.onChange(event.target.value.toUpperCase())} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="aadharNumber" render={({ field }) => (<FormItem><FormLabel>Aadhaar Number <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} type="password" inputMode="numeric" autoComplete="new-password" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" maxLength={12} placeholder="Enter 12-digit Aadhaar number" value={field.value ?? ""} /></FormControl><FormDescription>Used only for ESIC and EPF registration. It is not saved in browser drafts.</FormDescription><FormMessage /></FormItem>)} />
                       {isLngClient && <FormField control={form.control} name="nationality" render={({ field }) => (<FormItem><FormLabel>Nationality <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter nationality" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="passportCountryName" render={({ field }) => (<FormItem><FormLabel>Passport Country Name</FormLabel><FormControl><Input placeholder="Enter passport country, if applicable" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Optional. Use when the applicant provides passport details instead of Indian statutory documents.</FormDescription><FormMessage /></FormItem>)} />}
                       {isLngClient && <FormField control={form.control} name="identificationMark" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Identification Mark <span className="text-destructive">*</span></FormLabel><FormControl><Textarea placeholder="Enter visible identification mark" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
@@ -2244,7 +2275,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="ID proof back" value={identityProofUrlBackPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof front" value={addressProofUrlFrontPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof back" value={addressProofUrlBackPreview ? "Ready" : "Missing"} />
-                      <ReviewRow label="Aadhaar copy" value={aadharCardPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Aadhaar front" value={aadharCardPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Aadhaar back" value={aadharCardBackPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Aadhaar number" value={watchedValues?.aadharNumber ? "Entered" : "Missing"} />
                       <ReviewRow label="Signature" value={signatureUrlPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Bank passbook/statement" value={bankPassbookPreview ? "Ready" : "Missing"} />
@@ -2279,10 +2311,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         <li>complete required training and report incidents promptly.</li>
                       </ul>
                       <p className="mt-2">Your wages, PF, ESI, leave, overtime, and other statutory rights remain protected.</p>
-                    </div>
-                    <div className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">Aadhaar for ESIC and EPF</p>
-                      <p className="mt-1">CISS will use your Aadhaar only for ESIC, EPFO, and related statutory processing. It will not be used for client registration or shared with the client.</p>
                     </div>
                     <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">

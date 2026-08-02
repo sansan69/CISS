@@ -4,6 +4,7 @@ import {
 } from "./auth";
 import {
   documentCompletionFromEmployee,
+  restrictedAadhaarDocument,
   restrictedAadhaarPaths,
   validateAadhaarNumber,
 } from "./aadhaar";
@@ -56,14 +57,18 @@ describe("Aadhaar restricted access", () => {
   });
 
   it("collects only employee-scoped restricted files for replacement or deletion", () => {
-    expect(restrictedAadhaarPaths({
+    const record = {
       documentStoragePath: "restrictedEmployeeAadhaar/employee-1/front.jpg",
       additionalDocuments: [
-        { documentStoragePath: "restrictedEmployeeAadhaar/employee-1/back.jpg" },
+        { side: "back", documentStoragePath: "restrictedEmployeeAadhaar/employee-1/back.jpg" },
         { documentStoragePath: "restrictedEmployeeAadhaar/employee-2/not-owned.jpg" },
         { documentStoragePath: "employees/employee-1/aadharCards/legacy.jpg" },
       ],
-    }, "employee-1")).toEqual([
+    };
+    expect(restrictedAadhaarDocument(record, "employee-1", "back")?.documentStoragePath).toBe(
+      "restrictedEmployeeAadhaar/employee-1/back.jpg",
+    );
+    expect(restrictedAadhaarPaths(record, "employee-1")).toEqual([
       "restrictedEmployeeAadhaar/employee-1/front.jpg",
       "restrictedEmployeeAadhaar/employee-1/back.jpg",
     ]);

@@ -38,6 +38,7 @@ const ENROLLMENT_FIELD_LABELS: Record<string, string> = {
   addressProofUrlFront: "Address proof — front",
   addressProofUrlBack: "Address proof — back",
   aadharCardDocument: "Aadhaar copy",
+  aadharCardDocumentBack: "Aadhaar back copy",
   panCardDocument: "PAN card copy",
   signatureUrl: "Signature",
   policeClearanceCertificate: "Police clearance certificate",

@@ -8,6 +8,7 @@ import {
   encryptAadhaarNumber,
   isAadhaarInfrastructureError,
   restrictedAadhaarPaths,
+  restrictedAadhaarDocument,
   saveRestrictedAadhaarBuffer,
   validateAadhaarNumber,
 } from "@/lib/server/aadhaar";
@@ -33,9 +34,12 @@ export async function GET(
     const employee = await findEmployeeById(db, id);
     if (!employee) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
     const privateSnap = await db.collection("employeeAadhaarPrivate").doc(employee.id).get();
-    if (!privateSnap.exists || privateSnap.data()?.status !== "complete") {
+    const privateData = privateSnap.data() as Record<string, unknown> | undefined;
+    const frontDocument = restrictedAadhaarDocument(privateData, employee.id, "front");
+    const backDocument = restrictedAadhaarDocument(privateData, employee.id, "back");
+    if (!privateSnap.exists || privateData?.status !== "complete" || !frontDocument) {
       return NextResponse.json(
-        { status: "missing" },
+        { status: "missing", hasFrontDocument: Boolean(frontDocument), hasBackDocument: Boolean(backDocument) },
         { headers: { "Cache-Control": "no-store, private" } },
       );
     }
@@ -60,6 +64,8 @@ export async function GET(
           status: "complete",
           canReveal: true,
           hasDocument: true,
+          hasFrontDocument: true,
+          hasBackDocument: Boolean(backDocument),
           hasConsent: typeof privateSnap.data()?.consentId === "string",
           correctionRequest,
         },
@@ -94,7 +100,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  let newAadhaarPath: string | null = null;
+  let newAadhaarPaths: string[] = [];
   let consentEvidencePath: string | null = null;
   try {
     const admin = await requireAadhaarAdministrator(request);
@@ -106,8 +112,62 @@ export async function POST(
     const employeeData = employee.data() as Record<string, unknown>;
     const existing = await db.collection("employeeAadhaarPrivate").doc(employee.id).get();
     const replace = formData.get("replace") === "true";
+    const backOnly = formData.get("backOnly") === "true";
     const correctionRequestId = String(formData.get("correctionRequestId") || "").trim();
     const existingComplete = existing.exists && existing.data()?.status === "complete";
+    if (backOnly) {
+      if (!existingComplete || replace || correctionRequestId) {
+        return NextResponse.json({ error: "A complete Aadhaar record is required before adding the back side." }, { status: 400 });
+      }
+      const backFile = formData.get("back");
+      if (!(backFile instanceof File)) {
+        return NextResponse.json({ error: "Aadhaar back side is required." }, { status: 400 });
+      }
+      const storedBack = await saveRestrictedAadhaarBuffer({
+        employeeDocId: employee.id,
+        buffer: Buffer.from(await backFile.arrayBuffer()),
+        originalFileName: backFile.name,
+      });
+      newAadhaarPaths = [storedBack.documentStoragePath];
+      const now = Timestamp.now();
+      const existingData = existing.data() as Record<string, unknown>;
+      const existingAdditionalDocuments = Array.isArray(existingData.additionalDocuments)
+        ? existingData.additionalDocuments.filter((value): value is Record<string, unknown> => !!value && typeof value === "object" && (value as Record<string, unknown>).side !== "back")
+        : [];
+      const batch = db.batch();
+      batch.update(db.collection("employeeAadhaarPrivate").doc(employee.id), {
+        additionalDocuments: [
+          ...existingAdditionalDocuments,
+          {
+            side: "back",
+            documentStoragePath: storedBack.documentStoragePath,
+            originalFileName: storedBack.originalFileName,
+            contentType: storedBack.contentType,
+          },
+        ],
+        updatedAt: now,
+      });
+      batch.update(employee.ref, { updatedAt: now });
+      batch.set(db.collection("sensitiveDocumentAuditLogs").doc(), {
+        action: "aadhaar_back_submitted",
+        employeeDocId: employee.id,
+        category: "aadhaar",
+        side: "back",
+        purpose: "esic_epf_registration",
+        actorUid: admin.uid,
+        actorType: "admin",
+        at: now,
+      });
+      await batch.commit();
+      const previousBackPath = restrictedAadhaarDocument(existingData, employee.id, "back")?.documentStoragePath;
+      if (previousBackPath && previousBackPath !== storedBack.documentStoragePath) {
+        await Promise.allSettled([deleteStorageObjectIfPresent(previousBackPath)]);
+      }
+      return NextResponse.json(
+        { status: "complete", hasFrontDocument: true, hasBackDocument: true },
+        { headers: { "Cache-Control": "no-store, private" } },
+      );
+    }
     if (existingComplete && !replace) {
       return NextResponse.json({ error: "Aadhaar is already on file." }, { status: 409 });
     }
@@ -124,9 +184,10 @@ export async function POST(
       }
     }
     const number = validateAadhaarNumber(String(formData.get("aadhaarNumber") || ""));
-    const aadhaarFile = formData.get("front");
-    if (!(aadhaarFile instanceof File)) {
-      return NextResponse.json({ error: "Aadhaar copy is required." }, { status: 400 });
+    const aadhaarFrontFile = formData.get("front");
+    const aadhaarBackFile = formData.get("back");
+    if (!(aadhaarFrontFile instanceof File) || !(aadhaarBackFile instanceof File)) {
+      return NextResponse.json({ error: "Upload both Aadhaar front and back sides." }, { status: 400 });
     }
 
     const suppliedConsentId = String(formData.get("consentId") || "").trim();
@@ -161,14 +222,20 @@ export async function POST(
       });
     }
 
-    const aadhaarBuffer = Buffer.from(await aadhaarFile.arrayBuffer());
+    const aadhaarFrontBuffer = Buffer.from(await aadhaarFrontFile.arrayBuffer());
+    const aadhaarBackBuffer = Buffer.from(await aadhaarBackFile.arrayBuffer());
     const encryption = await encryptAadhaarNumber(number);
-    const stored = await saveRestrictedAadhaarBuffer({
+    const storedFront = await saveRestrictedAadhaarBuffer({
       employeeDocId: employee.id,
-      buffer: aadhaarBuffer,
-      originalFileName: aadhaarFile.name,
+      buffer: aadhaarFrontBuffer,
+      originalFileName: aadhaarFrontFile.name,
     });
-    newAadhaarPath = stored.documentStoragePath;
+    const storedBack = await saveRestrictedAadhaarBuffer({
+      employeeDocId: employee.id,
+      buffer: aadhaarBackBuffer,
+      originalFileName: aadhaarBackFile.name,
+    });
+    newAadhaarPaths = [storedFront.documentStoragePath, storedBack.documentStoragePath];
     const now = Timestamp.now();
     const batch = db.batch();
     if (!effectiveConsentId) {
@@ -190,9 +257,15 @@ export async function POST(
       employeeDocId: employee.id,
       ...encryption,
       aadhaarLast4: number.slice(-4),
-      documentStoragePath: stored.documentStoragePath,
-      originalFileName: stored.originalFileName,
-      contentType: stored.contentType,
+      documentStoragePath: storedFront.documentStoragePath,
+      originalFileName: storedFront.originalFileName,
+      contentType: storedFront.contentType,
+      additionalDocuments: [{
+        side: "back",
+        documentStoragePath: storedBack.documentStoragePath,
+        originalFileName: storedBack.originalFileName,
+        contentType: storedBack.contentType,
+      }],
       purpose: "esic_epf_registration",
       employeeProvided: true,
       verificationStatus: "not_independently_verified",
@@ -230,15 +303,15 @@ export async function POST(
     const previousPaths = restrictedAadhaarPaths(
       existing.data() as Record<string, unknown> | undefined,
       employee.id,
-    ).filter((path) => path !== stored.documentStoragePath);
-    await Promise.all(previousPaths.map(deleteStorageObjectIfPresent));
+    ).filter((path) => !newAadhaarPaths.includes(path));
+    await Promise.allSettled(previousPaths.map(deleteStorageObjectIfPresent));
     return NextResponse.json(
-      { status: "complete" },
+      { status: "complete", hasFrontDocument: true, hasBackDocument: true },
       { headers: { "Cache-Control": "no-store, private" } },
     );
   } catch (error) {
     await Promise.all([
-      newAadhaarPath ? deleteStorageObjectIfPresent(newAadhaarPath) : Promise.resolve(),
+      ...newAadhaarPaths.map(deleteStorageObjectIfPresent),
       consentEvidencePath ? deleteStorageObjectIfPresent(consentEvidencePath) : Promise.resolve(),
     ]);
     const internal = isAadhaarInfrastructureError(error);

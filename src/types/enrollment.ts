@@ -15,6 +15,16 @@ import { GUARD_UNDERTAKING_VERSION } from "@/lib/enrollment-consents";
 
 const lngDesignationSchema = z.enum(LNG_JOB_DESIGNATIONS);
 
+const aadhaarDocumentReferenceSchema = (message: string) =>
+  z.string().trim().refine(
+    (value) =>
+      z.string().url().safeParse(value).success ||
+      /^enrollments\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(value) ||
+      /^employees\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(value) ||
+      /^restrictedAadhaarStaging\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(value),
+    message,
+  );
+
 export const enrollmentSubmissionSchema = z
   .object({
     joiningDate: z.string().datetime(),
@@ -55,14 +65,8 @@ export const enrollmentSubmissionSchema = z
     addressProofNumber: z.string().min(1),
     addressProofUrlFront: z.string().url(),
     addressProofUrlBack: z.string().url(),
-    aadharCardDocumentUrl: z.string().trim().refine(
-      (value) =>
-        z.string().url().safeParse(value).success ||
-        /^enrollments\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(value) ||
-        /^employees\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(value) ||
-        /^restrictedAadhaarStaging\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(value),
-      "A valid Aadhaar document reference is required.",
-    ),
+    aadharCardDocumentUrl: aadhaarDocumentReferenceSchema("A valid Aadhaar front document reference is required."),
+    aadharCardDocumentBackUrl: aadhaarDocumentReferenceSchema("A valid Aadhaar back document reference is required."),
     panCardDocumentUrl: z.string().url().optional(),
     signatureUrl: z.string().url(),
     policeClearanceCertificateUrl: z.string().url().optional(),

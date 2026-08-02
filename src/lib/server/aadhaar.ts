@@ -218,6 +218,55 @@ export async function saveRestrictedAadhaarBuffer(args: {
   };
 }
 
+export type RestrictedAadhaarDocument = {
+  side: "front" | "back";
+  documentStoragePath: string;
+  originalFileName?: string;
+  contentType?: string;
+};
+
+export function restrictedAadhaarDocuments(
+  record: Record<string, unknown> | undefined,
+  employeeDocId: string,
+): RestrictedAadhaarDocument[] {
+  const prefix = `restrictedEmployeeAadhaar/${employeeDocId}/`;
+  const documents: RestrictedAadhaarDocument[] = [];
+  const frontPath = record?.documentStoragePath;
+  if (typeof frontPath === "string" && frontPath.startsWith(prefix)) {
+    documents.push({
+      side: "front",
+      documentStoragePath: frontPath,
+      originalFileName: typeof record?.originalFileName === "string" ? record.originalFileName : undefined,
+      contentType: typeof record?.contentType === "string" ? record.contentType : undefined,
+    });
+  }
+  const additionalDocuments = Array.isArray(record?.additionalDocuments)
+    ? record.additionalDocuments
+    : [];
+  for (const value of additionalDocuments) {
+    if (!value || typeof value !== "object") continue;
+    const document = value as Record<string, unknown>;
+    const path = document.documentStoragePath;
+    if (typeof path !== "string" || !path.startsWith(prefix)) continue;
+    documents.push({
+      side: document.side === "front" ? "front" : "back",
+      documentStoragePath: path,
+      originalFileName: typeof document.originalFileName === "string" ? document.originalFileName : undefined,
+      contentType: typeof document.contentType === "string" ? document.contentType : undefined,
+    });
+  }
+  return documents;
+}
+
+export function restrictedAadhaarDocument(
+  record: Record<string, unknown> | undefined,
+  employeeDocId: string,
+  side: "front" | "back",
+) {
+  const documents = restrictedAadhaarDocuments(record, employeeDocId).filter((document) => document.side === side);
+  return documents.at(-1) || null;
+}
+
 export async function moveAadhaarSourceToRestrictedStorage(args: {
   employeeDocId: string;
   source: string;
@@ -248,20 +297,9 @@ export function restrictedAadhaarPaths(
   record: Record<string, unknown> | undefined,
   employeeDocId: string,
 ) {
-  const documents = [
-    record,
-    ...(Array.isArray(record?.additionalDocuments)
-      ? record.additionalDocuments.filter(
-          (value): value is Record<string, unknown> =>
-            !!value && typeof value === "object",
-        )
-      : []),
-  ];
-  const prefix = `restrictedEmployeeAadhaar/${employeeDocId}/`;
-  return Array.from(new Set(documents.flatMap((document) => {
-    const path = document?.documentStoragePath;
-    return typeof path === "string" && path.startsWith(prefix) ? [path] : [];
-  })));
+  return Array.from(new Set(
+    restrictedAadhaarDocuments(record, employeeDocId).map((document) => document.documentStoragePath),
+  ));
 }
 
 export function documentCompletionFromEmployee(

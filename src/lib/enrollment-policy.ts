@@ -14,6 +14,7 @@ export const MANDATORY_NEW_ENROLLMENT_FIELDS = [
   "addressProofUrlBack",
   "aadharNumber",
   "aadharCardDocument",
+  "aadharCardDocumentBack",
   "signatureUrl",
   "bankPassbookStatement",
   "emailAddress",

@@ -128,11 +128,13 @@ vi.mock("@/lib/server/aadhaar", () => ({
     encryptedDataKey: "wrapped",
     encryptionKeyVersion: "kms-key",
   })),
-  moveAadhaarSourceToRestrictedStorage: vi.fn(async () => ({
-    documentStoragePath: "restrictedEmployeeAadhaar/employee-doc-1/aadhaar.pdf",
-    originalFileName: "aadhaar.pdf",
+  moveAadhaarSourceToRestrictedStorage: vi.fn(async ({ source }: { source: string }) => ({
+    documentStoragePath: source.includes("aadhaar_back")
+      ? "restrictedEmployeeAadhaar/employee-doc-1/aadhaar_back.pdf"
+      : "restrictedEmployeeAadhaar/employee-doc-1/aadhaar.pdf",
+    originalFileName: source.includes("aadhaar_back") ? "aadhaar_back.pdf" : "aadhaar.pdf",
     contentType: "application/pdf",
-    sourcePath: "enrollments/draft-test-123/aadharCards/aadhaar.pdf",
+    sourcePath: source,
   })),
   deleteStorageObjectIfPresent: vi.fn(async () => undefined),
 }));
@@ -164,6 +166,7 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
     addressProofUrlBack: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FaddressProofs%2Faddress-back.png?alt=media&token=test",
     aadharNumber: "123456789012",
     aadharCardDocumentUrl: "enrollments/draft-test-123/aadharCards/aadhaar.pdf",
+    aadharCardDocumentBackUrl: "enrollments/draft-test-123/aadharCards/aadhaar_back.pdf",
     signatureUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2Fsignatures%2Fsignature.png?alt=media&token=test",
     bankPassbookStatementUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FbankDocuments%2Fbank.png?alt=media&token=test",
     fullAddress: "Standard House, Standard Road, Ernakulam, Kerala - 682001",

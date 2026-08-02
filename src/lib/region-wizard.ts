@@ -30,8 +30,9 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
         { key: "addressProofNumber", label: "Address Proof Number", enabled: true, required: true, order: 6 },
         { key: "addressProofUrlFront", label: "Address Proof Front Image", enabled: true, required: true, order: 7 },
         { key: "addressProofUrlBack", label: "Address Proof Back Image", enabled: true, required: true, order: 8 },
-        { key: "aadharCardDocument", label: "Aadhaar Copy", enabled: true, required: true, order: 9 },
-        { key: "signatureUrl", label: "Signature Image", enabled: true, required: true, order: 10 },
+        { key: "aadharCardDocument", label: "Aadhaar Front Copy", enabled: true, required: true, order: 9 },
+        { key: "aadharCardDocumentBack", label: "Aadhaar Back Copy", enabled: true, required: true, order: 10 },
+        { key: "signatureUrl", label: "Signature Image", enabled: true, required: true, order: 11 },
       ],
     },
     bank: {

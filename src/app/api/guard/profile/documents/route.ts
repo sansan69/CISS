@@ -152,15 +152,26 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Aadhaar consent is required." }, { status: 400 });
       }
       const number = validateAadhaarNumber(String(formData.get("aadhaarNumber") || ""));
-      const file = await validatedFile(formData.get("front"));
-      if (!file) throw new Error("Aadhaar copy is required.");
+      const frontValue = formData.get("front");
+      const backValue = formData.get("back");
+      if (!(frontValue instanceof File) || !(backValue instanceof File)) {
+        throw new Error("Upload both Aadhaar front and back sides.");
+      }
+      const file = await validatedFile(frontValue);
+      const backFile = await validatedFile(backValue);
+      if (!file || !backFile) throw new Error("Upload both Aadhaar front and back sides.");
       const encryption = await encryptAadhaarNumber(number);
-      const stored = await saveRestrictedAadhaarBuffer({
+      const storedFront = await saveRestrictedAadhaarBuffer({
         employeeDocId: guard.employeeDocId,
         buffer: file.buffer,
         originalFileName: file.originalName,
       });
-      uploadedPaths = [stored.documentStoragePath];
+      const storedBack = await saveRestrictedAadhaarBuffer({
+        employeeDocId: guard.employeeDocId,
+        buffer: backFile.buffer,
+        originalFileName: backFile.originalName,
+      });
+      uploadedPaths = [storedFront.documentStoragePath, storedBack.documentStoragePath];
       const consentRef = employeeRef.collection("consents").doc();
       batch.set(consentRef, {
         type: "aadhaar_esic_epf",
@@ -179,9 +190,15 @@ export async function POST(request: Request) {
         employeeDocId: guard.employeeDocId,
         ...encryption,
         aadhaarLast4: number.slice(-4),
-        documentStoragePath: stored.documentStoragePath,
-        originalFileName: stored.originalFileName,
-        contentType: stored.contentType,
+        documentStoragePath: storedFront.documentStoragePath,
+        originalFileName: storedFront.originalFileName,
+        contentType: storedFront.contentType,
+        additionalDocuments: [{
+          side: "back",
+          documentStoragePath: storedBack.documentStoragePath,
+          originalFileName: storedBack.originalFileName,
+          contentType: storedBack.contentType,
+        }],
         purpose: "esic_epf_registration",
         employeeProvided: true,
         verificationStatus: "not_independently_verified",
