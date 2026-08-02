@@ -46,4 +46,32 @@ describe("normalizeEmployeeDocumentFields", () => {
       addressProofType: "Voter ID",
     });
   });
+
+  it("normalizes optional documents saved under legacy aliases", () => {
+    expect(normalizeEmployeeDocumentFields({
+      bankPassbookUrl: "bank.pdf",
+      panCardUrl: { downloadURL: "pan.pdf" },
+      serviceBookSourceUrl: "service-book.pdf",
+      armsLicenseCopyUrl: "arms.pdf",
+      passportCopyUrl: "passport.pdf",
+      pccUrl: "pcc.pdf",
+    })).toMatchObject({
+      bankPassbookStatementUrl: "bank.pdf",
+      panCardDocumentUrl: "pan.pdf",
+      serviceBookDocumentUrl: "service-book.pdf",
+      armsLicenseDocumentUrl: "arms.pdf",
+      passportDocumentUrl: "passport.pdf",
+      policeClearanceCertificateUrl: "pcc.pdf",
+    });
+  });
+
+  it("accepts storage metadata objects as document references", () => {
+    expect(normalizeEmployeeDocumentFields({
+      identityProofUrlFront: { storagePath: "employees/guard/id-front.png" },
+      addressProofUrlBack: { downloadUrl: "https://example.test/address-back.png" },
+    })).toMatchObject({
+      identityProofUrlFront: "employees/guard/id-front.png",
+      addressProofUrlBack: "https://example.test/address-back.png",
+    });
+  });
 });

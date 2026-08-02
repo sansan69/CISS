@@ -69,6 +69,7 @@ export async function assertEnrollmentDocumentReferences(
     ["addressProofUrlFront", "Address proof front", "addressProofs"],
     ["addressProofUrlBack", "Address proof back", "addressProofs"],
     ["signatureUrl", "Signature", "signatures"],
+    ["bankPassbookStatementUrl", "Bank document", "bankDocuments"],
   ] as const;
   for (const [key, label, folder] of required) {
     await assertEnrollmentStorageFile(payload[key], label, folder, context, bucket);
@@ -79,7 +80,6 @@ export async function assertEnrollmentDocumentReferences(
     ["armsLicenseDocumentUrl", "Arms license document", "armsLicenses"],
     ["passportDocumentUrl", "Passport document", "passports"],
     ["panCardDocumentUrl", "PAN card copy", "panCards"],
-    ["bankPassbookStatementUrl", "Bank document", "bankDocuments"],
     ["policeClearanceCertificateUrl", "Police clearance certificate", "policeCertificates"],
   ] as const;
   for (const [key, label, folder] of optional) {

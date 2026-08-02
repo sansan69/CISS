@@ -165,6 +165,7 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
     aadharNumber: "123456789012",
     aadharCardDocumentUrl: "enrollments/draft-test-123/aadharCards/aadhaar.pdf",
     signatureUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2Fsignatures%2Fsignature.png?alt=media&token=test",
+    bankPassbookStatementUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FbankDocuments%2Fbank.png?alt=media&token=test",
     fullAddress: "Standard House, Standard Road, Ernakulam, Kerala - 682001",
     emailAddress: "Standard.Guard@example.com",
     phoneNumber: "9012345690",
@@ -253,6 +254,7 @@ describe("POST /api/employees/enroll", () => {
       addressProofUrlFront: "addressProofs/address-front.png",
       addressProofUrlBack: "addressProofs/address-back.png",
       signatureUrl: "signatures/signature.png",
+      bankPassbookStatementUrl: "bankDocuments/bank.png",
     })) {
       (payload as Record<string, unknown>)[key] = `https://firebasestorage.googleapis.com/v0/b/test-bucket/o/${encodeURIComponent(`employees/9012345690/${path}`)}?alt=media&token=test`;
     }

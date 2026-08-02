@@ -15,13 +15,22 @@ export type EmployeeDocumentFields = {
   addressProofNumber?: string;
   addressProofUrlFront?: string;
   addressProofUrlBack?: string;
+  bankPassbookStatementUrl?: string;
+  panCardDocumentUrl?: string;
+  serviceBookDocumentUrl?: string;
+  armsLicenseDocumentUrl?: string;
+  passportDocumentUrl?: string;
+  policeClearanceCertificateUrl?: string;
 };
 
 export function documentReference(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim()) return value.trim();
-  if (value && typeof value === "object" && "url" in (value as Record<string, unknown>)) {
-    const url = (value as Record<string, unknown>).url;
-    if (typeof url === "string" && url.trim()) return url.trim();
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["url", "downloadURL", "downloadUrl", "uri", "path", "storagePath", "fullPath"]) {
+      const reference = record[key];
+      if (typeof reference === "string" && reference.trim()) return reference.trim();
+    }
   }
   return undefined;
 }
@@ -45,7 +54,7 @@ function firstStringValue(...values: unknown[]): string | undefined {
 export function normalizeEmployeeDocumentFields(
   data: Record<string, unknown>,
 ): EmployeeDocumentFields {
-  return {
+  const fields: EmployeeDocumentFields = {
     profilePictureUrl: firstDocumentReference(
       data.profilePictureUrl,
       data.profilePhotoUrl,
@@ -94,6 +103,69 @@ export function normalizeEmployeeDocumentFields(
       data.addressProofDocumentUrlBack,
     ),
   };
+
+  const optionalDocumentAliases: Array<[
+    keyof Pick<
+      EmployeeDocumentFields,
+      | "bankPassbookStatementUrl"
+      | "panCardDocumentUrl"
+      | "serviceBookDocumentUrl"
+      | "armsLicenseDocumentUrl"
+      | "passportDocumentUrl"
+      | "policeClearanceCertificateUrl"
+    >,
+    unknown[],
+  ]> = [
+    [
+      "bankPassbookStatementUrl",
+      [
+        data.bankPassbookStatementUrl,
+        data.bankPassbookStatement,
+        data.bankDocumentUrl,
+        data.bankPassbookUrl,
+        data.passbookDocumentUrl,
+        data.bankProofUrl,
+        data.bankStatementUrl,
+      ],
+    ],
+    [
+      "panCardDocumentUrl",
+      [data.panCardDocumentUrl, data.panCardUrl, data.panDocumentUrl],
+    ],
+    [
+      "serviceBookDocumentUrl",
+      [data.serviceBookDocumentUrl, data.serviceBookUrl, data.serviceBookSourceUrl],
+    ],
+    [
+      "armsLicenseDocumentUrl",
+      [
+        data.armsLicenseDocumentUrl,
+        data.armsLicenseUrl,
+        data.armsLicenseSourceUrl,
+        data.armsLicenseCopyUrl,
+      ],
+    ],
+    [
+      "passportDocumentUrl",
+      [data.passportDocumentUrl, data.passportUrl, data.passportCopyUrl],
+    ],
+    [
+      "policeClearanceCertificateUrl",
+      [
+        data.policeClearanceCertificateUrl,
+        data.policeClearanceUrl,
+        data.pccUrl,
+        data.policeCertificateUrl,
+      ],
+    ],
+  ];
+
+  for (const [field, aliases] of optionalDocumentAliases) {
+    const reference = firstDocumentReference(...aliases);
+    if (reference) fields[field] = reference;
+  }
+
+  return fields;
 }
 
 function stringValue(value: unknown): string | undefined {

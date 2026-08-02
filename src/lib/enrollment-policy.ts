@@ -3,6 +3,7 @@
  * browser-safe because the public enrollment form imports the policy.
  */
 export const MANDATORY_NEW_ENROLLMENT_FIELDS = [
+  "profilePicture",
   "identityProofType",
   "identityProofNumber",
   "identityProofUrlFront",
@@ -14,6 +15,8 @@ export const MANDATORY_NEW_ENROLLMENT_FIELDS = [
   "aadharNumber",
   "aadharCardDocument",
   "signatureUrl",
+  "bankPassbookStatement",
+  "emailAddress",
   "termsAndConditions",
   "aadhaarConsentAccepted",
 ] as const;

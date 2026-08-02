@@ -19,7 +19,7 @@ import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, type User as FirebaseUser } from 'firebase/auth';
-import { ref, getBytes } from 'firebase/storage';
+import { ref, getBytes, getDownloadURL } from 'firebase/storage';
 
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -277,6 +277,54 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string, onView
         )}
     </div>
 );
+
+const ADMIN_DOCUMENT_URL_FIELDS = [
+  "profilePictureUrl",
+  "signatureUrl",
+  "identityProofUrlFront",
+  "identityProofUrlBack",
+  "addressProofUrlFront",
+  "addressProofUrlBack",
+  "bankPassbookStatementUrl",
+  "panCardDocumentUrl",
+  "serviceBookDocumentUrl",
+  "armsLicenseDocumentUrl",
+  "passportDocumentUrl",
+  "policeClearanceCertificateUrl",
+] as const satisfies ReadonlyArray<keyof Employee>;
+
+function isExternalDocumentUrl(value: string) {
+  return /^(?:https?:|data:|blob:)/i.test(value);
+}
+
+/**
+ * Older imports stored a Firebase Storage path instead of a download URL.
+ * Resolve those paths before rendering the admin-only document links so a
+ * stored upload is not incorrectly reported as unavailable.
+ */
+async function resolveAdminDocumentUrls(employee: Employee): Promise<Employee> {
+  const resolvedEntries = await Promise.all(
+    ADMIN_DOCUMENT_URL_FIELDS.map(async (field) => {
+      const value = employee[field];
+      if (typeof value !== "string" || !value.trim() || isExternalDocumentUrl(value)) {
+        return [field, value] as const;
+      }
+
+      try {
+        return [field, await getDownloadURL(ref(storage, value))] as const;
+      } catch {
+        // Preserve the original value so the admin can still see that a
+        // document was stored even if its object needs a permissions repair.
+        return [field, value] as const;
+      }
+    }),
+  );
+
+  return {
+    ...employee,
+    ...Object.fromEntries(resolvedEntries),
+  } as Employee;
+}
 
 // Employee ID Generation Logic
 const abbreviateClientName = (clientName: string): string => {
@@ -645,7 +693,7 @@ export default function AdminEmployeeProfilePage() {
           ...documentFields,
           id: employeeDocSnap.id,
         } as Employee;
-        setEmployee(formattedData);
+        setEmployee(await resolveAdminDocumentUrls(formattedData));
       } else {
         setError("Employee not found with the provided ID.");
         toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
@@ -2006,7 +2054,7 @@ export default function AdminEmployeeProfilePage() {
                         />
                       )}
                       <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" required {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="fullAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel>Full Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
                     </div>

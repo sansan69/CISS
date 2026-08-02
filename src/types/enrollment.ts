@@ -71,7 +71,7 @@ export const enrollmentSubmissionSchema = z
     ifscCode: z.string().trim().optional(),
     bankName: z.string().trim().optional(),
     branchName: z.string().trim().optional(),
-    bankPassbookStatementUrl: z.string().url().optional(),
+    bankPassbookStatementUrl: z.string().url(),
     fullAddress: z.string().min(10),
     emailAddress: z
       .string()

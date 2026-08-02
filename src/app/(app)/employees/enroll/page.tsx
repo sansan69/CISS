@@ -169,7 +169,7 @@ const enrollmentFormSchema = z.object({
   ifscCode: z.string().optional().or(z.literal('')),
   bankName: z.string().optional().or(z.literal('')),
   branchName: z.string().optional().or(z.literal('')),
-  bankPassbookStatement: optionalFileSchema,
+  bankPassbookStatement: fileSchema,
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
@@ -1267,7 +1267,7 @@ export default function EnrollEmployeePage() {
                     name="bankPassbookStatement"
                     render={({ field }) => ( 
                        <FormItem className="mt-6 text-center">
-                        <FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel>
+                        <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         <ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
                         <FormDescription>Upload or take photo of bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
                         <FormMessage />

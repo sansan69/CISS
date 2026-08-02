@@ -111,15 +111,22 @@ export function validateEnrollmentSubmissionAgainstConfig(
   const configuredFields = getEnabledFields(config, clientName);
   const mandatoryFields = MANDATORY_NEW_ENROLLMENT_FIELDS.map((key, index) => ({
     key,
-    label: key === "aadharNumber"
-      ? "Aadhaar number"
-      : key === "aadharCardDocument"
-        ? "Aadhaar copy"
-        : key === "aadhaarConsentAccepted"
-          ? "Aadhaar consent"
-          : key === "termsAndConditions"
-            ? "Terms and declaration"
-            : key,
+    label:
+      key === "aadharNumber"
+        ? "Aadhaar number"
+        : key === "profilePicture"
+          ? "Profile picture"
+          : key === "aadharCardDocument"
+            ? "Aadhaar copy"
+            : key === "bankPassbookStatement"
+              ? "Bank passbook/statement"
+              : key === "emailAddress"
+                ? "Email address"
+                : key === "aadhaarConsentAccepted"
+                  ? "Aadhaar consent"
+                  : key === "termsAndConditions"
+                    ? "Terms and declaration"
+                    : key,
     enabled: true,
     required: true,
     order: Number.MAX_SAFE_INTEGER - MANDATORY_NEW_ENROLLMENT_FIELDS.length + index,

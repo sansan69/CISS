@@ -3,7 +3,7 @@ import { validateEnrollmentSubmissionAgainstConfig } from "./enrollment-config";
 import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "./enrollment-policy";
 
 describe("new enrollment mandatory document policy", () => {
-  it("keeps the three proofs and both consents required even when remote config disables fields", () => {
+  it("keeps mandatory proofs, bank document, email, and consents required even when remote config disables fields", () => {
     const config = {
       sections: {
         documents: {
@@ -27,9 +27,12 @@ describe("new enrollment mandatory document policy", () => {
       "identityProofUrlFront is required",
       "addressProofType is required",
       "addressProofNumber is required",
+      "Profile picture is required",
       "Aadhaar number is required",
       "Aadhaar copy is required",
       "signatureUrl is required",
+      "Bank passbook/statement is required",
+      "Email address is required",
       "Terms and declaration is required",
       "Aadhaar consent is required",
     ]));

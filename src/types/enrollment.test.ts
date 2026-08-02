@@ -47,6 +47,7 @@ function buildLngPayload(
     ifscCode: "SBIN0008622",
     bankName: "STATE BANK OF INDIA",
     branchName: "ERNAKULAM MAIN",
+    bankPassbookStatementUrl: "https://example.com/bank-statement.png",
     legacyUniqueId: "DUMMY-LNG-CODEX-REGRESSION",
     termsAccepted: true,
     aadhaarConsentAccepted: true,
@@ -83,6 +84,7 @@ function buildStandardPayload(
     aadharNumber: "123456789012",
     aadharCardDocumentUrl: "https://example.com/aadhar.pdf",
     signatureUrl: "https://example.com/signature.png",
+    bankPassbookStatementUrl: "https://example.com/bank-statement.png",
     fullAddress: "Standard House, Standard Road, Ernakulam, Kerala - 682001",
     emailAddress: "standard.guard@example.com",
     phoneNumber: "9012345690",
@@ -138,7 +140,7 @@ describe("enrollmentSubmissionSchema", () => {
     },
   );
 
-  it("still accepts LNG submissions when optional banking fields are omitted", () => {
+  it("still accepts LNG submissions when optional banking details are omitted", () => {
     const parsed = enrollmentSubmissionSchema.safeParse(
       buildLngPayload({
         bankAccountNumber: undefined,
@@ -150,6 +152,17 @@ describe("enrollmentSubmissionSchema", () => {
     );
 
     expect(parsed.success).toBe(true);
+  });
+
+  it("requires a bank passbook or statement for every enrollment", () => {
+    const parsed = enrollmentSubmissionSchema.safeParse(
+      buildStandardPayload({ bankPassbookStatementUrl: undefined }),
+    );
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.bankPassbookStatementUrl).toBeTruthy();
+    }
   });
 
   it("requires an Aadhaar copy for every enrollment and a PAN copy for LNG", () => {

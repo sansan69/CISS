@@ -173,7 +173,7 @@ const enrollmentFormSchema = z.object({
   ifscCode: z.string().optional().or(z.literal('')),
   bankName: z.string().optional().or(z.literal('')),
   branchName: z.string().optional(),
-  bankPassbookStatement: optionalFileSchema,
+  bankPassbookStatement: fileSchema,
 
   // Contact Information
   fullAddress: z.string().min(10, { message: "Full address is required (min 10 chars)." }),
@@ -462,6 +462,7 @@ const BASE_REQUIRED_FIELDS: (keyof EnrollmentFormValues)[] = [
   "addressProofUrlFront",
   "addressProofUrlBack",
   "signatureUrl",
+  "bankPassbookStatement",
   "fullAddress",
   "emailAddress",
   "phoneNumber",
@@ -2181,7 +2182,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className={isLngClient ? "" : "md:col-span-2"}><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       {isLngClient && <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name</FormLabel><FormControl><Input placeholder="Enter branch name" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Optional. Add it if available on the bank document.</FormDescription><FormMessage /></FormItem>)} />}
                     </div>
-                    <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement</FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} optional helperText="Optional. A clear copy helps speed up verification." /><FormMessage /></FormItem>)}/>
+                    <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Required for employee enrollment and payroll verification." /><FormMessage /></FormItem>)}/>
                   </FormSection>
 
                   <FormSection title="Contact Information">
@@ -2230,6 +2231,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="Aadhaar copy" value={aadharCardPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Aadhaar number" value={watchedValues?.aadharNumber ? "Entered" : "Missing"} />
                       <ReviewRow label="Signature" value={signatureUrlPreview ? "Ready" : "Missing"} />
+                      <ReviewRow label="Bank passbook/statement" value={bankPassbookPreview ? "Ready" : "Missing"} />
                       {isLngClientName(watchedValues?.clientName) && requiresServiceBook && <ReviewRow label="Service book" value={serviceBookPreview ? "Ready" : "Missing"} />}
                       {isLngClientName(watchedValues?.clientName) && requiresArmsLicense && <ReviewRow label="Arms license" value={armsLicensePreview ? "Ready" : "Missing"} />}
                     </ReviewCard>

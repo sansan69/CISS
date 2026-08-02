@@ -41,7 +41,7 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
         { key: "ifscCode", label: "IFSC Code", enabled: false, required: false, order: 2 },
         { key: "bankName", label: "Bank Name", enabled: false, required: false, order: 3 },
         { key: "branchName", label: "Branch Name", enabled: false, required: false, order: 4 },
-        { key: "bankPassbookStatementUrl", label: "Bank Passbook Statement", enabled: false, required: false, order: 5 },
+        { key: "bankPassbookStatement", label: "Bank Passbook Statement", enabled: true, required: true, order: 5 },
       ],
     },
     details: {
