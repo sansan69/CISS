@@ -29,6 +29,7 @@ import {
 } from "@/lib/server/auth";
 import {
   AADHAAR_CONSENT_TEXT_HASH,
+  assertAadhaarSourceOwnership,
   deleteStorageObjectIfPresent,
   encryptAadhaarNumber,
   moveAadhaarSourceToRestrictedStorage,
@@ -195,6 +196,12 @@ export async function POST(request: NextRequest) {
       },
       storage.bucket(),
     );
+
+    const aadhaarSourceContext = isAdminSubmission
+      ? { flow: "admin" as const, adminUid: submissionActor!.uid }
+      : { flow: "public" as const, draftId };
+    assertAadhaarSourceOwnership(payload.aadharCardDocumentUrl, aadhaarSourceContext);
+    assertAadhaarSourceOwnership(payload.aadharCardDocumentBackUrl, aadhaarSourceContext);
 
     const nameParts =
       isLngEnrollment && normalizedFullNameInput
@@ -545,6 +552,10 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+    }
+
+    if (error?.name === "AadhaarSourceOwnershipError") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     console.error("Enrollment API failed:", error);

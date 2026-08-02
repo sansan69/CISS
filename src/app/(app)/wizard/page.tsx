@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SpinnerGap as Loader2, CheckCircle as CheckCircle2, ArrowRight, Buildings as Building2, MapPin, Users, NotePencil as FileEdit, ShieldCheck, Sparkle as Sparkles } from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
+import { DEFAULT_ENROLLMENT_FORM_CONFIG } from "@/lib/region-wizard";
 
 const WIZARD_STEPS = [
   { key: "profile", label: "State Profile", icon: Building2 },
@@ -248,25 +249,17 @@ function StepDistricts({ onSave, submitting }: any) {
 }
 
 function StepEnrollmentConfig({ onSave, submitting }: any) {
-  const config = {
-    sections: {
-      personal: { label: "Personal Info", fields: ["firstName", "lastName", "fatherName", "motherName", "dateOfBirth", "gender", "maritalStatus", "educationalQualification", "resourceIdNumber"] },
-      documents: { label: "Documents", fields: ["identityProofType", "identityProofNumber", "addressProofType", "addressProofNumber", "aadharCardDocument", "aadharCardDocumentBack", "signatureUrl"] },
-      bank: { label: "Bank Details", fields: ["bankAccountNumber", "ifscCode", "bankName"] },
-      details: { label: "Other Details", fields: ["district", "fullAddress", "emailAddress", "clientName", "joiningDate"] },
-      review: { label: "Review and consent", fields: ["termsAndConditions", "aadhaarConsentAccepted", "guardUndertakingAccepted"] },
-    },
-  };
-
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">All fields are enabled by default. You can customize these later in Settings.</p>
-      {Object.entries(config.sections).map(([key, section]) => (
+      {Object.entries(DEFAULT_ENROLLMENT_FORM_CONFIG.sections).map(([key, section]) => (
         <div key={key}>
           <p className="text-sm font-semibold mb-2">{section.label}</p>
           <div className="flex flex-wrap gap-2">
-            {section.fields.map((f: string) => (
-              <Badge key={f} variant="outline" className="bg-green-50 text-green-700 border-green-200">{f}</Badge>
+            {section.fields.filter((field) => field.enabled).sort((a, b) => a.order - b.order).map((field) => (
+              <Badge key={field.key} variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                {field.label}{field.required ? " *" : ""}
+              </Badge>
             ))}
           </div>
         </div>

@@ -28,14 +28,14 @@ const aadhaarDocumentReferenceSchema = (message: string) =>
 export const enrollmentSubmissionSchema = z
   .object({
     joiningDate: z.string().datetime(),
-    clientName: z.string().min(1),
+    clientName: z.string().trim().min(1),
     resourceIdNumber: z.string().trim().optional(),
     profilePictureUrl: z.string().url(),
     fullNameInput: z.string().trim().optional(),
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-    fatherName: z.string().min(2),
-    motherName: z.string().min(2),
+    firstName: z.string().trim().min(1),
+    lastName: z.string().trim().min(1),
+    fatherName: z.string().trim().min(2),
+    motherName: z.string().trim().min(2),
     dateOfBirth: z.string().datetime(),
     gender: z.enum(GENDER_OPTIONS),
     maritalStatus: z.enum(MARITAL_STATUSES),
@@ -58,11 +58,11 @@ export const enrollmentSubmissionSchema = z
     passportCountryName: z.string().trim().optional(),
     passportDocumentUrl: z.string().url().optional(),
     identityProofType: z.enum(IDENTITY_PROOF_TYPES),
-    identityProofNumber: z.string().min(1),
+    identityProofNumber: z.string().trim().min(1),
     identityProofUrlFront: z.string().url(),
     identityProofUrlBack: z.string().url(),
     addressProofType: z.enum(ADDRESS_PROOF_TYPES),
-    addressProofNumber: z.string().min(1),
+    addressProofNumber: z.string().trim().min(1),
     addressProofUrlFront: z.string().url(),
     addressProofUrlBack: z.string().url(),
     aadharCardDocumentUrl: aadhaarDocumentReferenceSchema("A valid Aadhaar front document reference is required."),
@@ -100,6 +100,43 @@ export const enrollmentSubmissionSchema = z
         code: z.ZodIssueCode.custom,
         message: "Please specify your qualification.",
         path: ["otherQualification"],
+      });
+    }
+
+    const dateOfBirth = new Date(data.dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - dateOfBirth.getFullYear();
+    const birthdayHasNotOccurred =
+      today.getMonth() < dateOfBirth.getMonth() ||
+      (today.getMonth() === dateOfBirth.getMonth() && today.getDate() < dateOfBirth.getDate());
+    if (birthdayHasNotOccurred) age -= 1;
+    if (age < 18) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Employee must be at least 18 years old.",
+        path: ["dateOfBirth"],
+      });
+    } else if (age >= 65) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Employee must be under 65 years old.",
+        path: ["dateOfBirth"],
+      });
+    }
+
+    if (data.maritalStatus === "Married" && !data.spouseName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Spouse name is required if married.",
+        path: ["spouseName"],
+      });
+    }
+
+    if (data.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(data.panNumber)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid PAN number format (e.g., ABCDE1234F).",
+        path: ["panNumber"],
       });
     }
 

@@ -697,6 +697,7 @@ const ENROLLMENT_STEPS: {
       "addressProofUrlBack",
       "aadharCardDocument",
       "aadharCardDocumentBack",
+      "aadharNumber",
       "panCardDocument",
       "signatureUrl",
     ],
@@ -708,9 +709,6 @@ const ENROLLMENT_STEPS: {
     fields: [
       "district",
       "panNumber",
-      "aadharNumber",
-      "passportCountryName",
-      "passportDocument",
       "nationality",
       "identificationMark",
       "heightCm",
@@ -2142,7 +2140,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
                   <div className="p-4 border rounded-lg mt-6 space-y-4 bg-muted/20">
                       <h3 className="font-medium text-lg">Aadhaar for ESIC/EPF</h3>
-                      <p className="text-sm text-muted-foreground">This copy is restricted to the designated Aadhaar administrator and is not shared with clients.</p>
                       <div className="max-w-xl">
                         <FormField control={form.control} name="aadharNumber" render={({ field }) => (
                           <FormItem>

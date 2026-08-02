@@ -99,7 +99,7 @@ function splitLngFullName(rawFullName: string) {
 const enrollmentFormSchema = z.object({
   // Client Information
   joiningDate: z.date({ required_error: "Joining date is required." }),
-  clientName: z.string({ required_error: "Client name is required." }),
+  clientName: z.string({ required_error: "Client name is required." }).min(1, { message: "Client name is required." }),
   resourceIdNumber: z.string().optional(),
 
   // Personal Information
@@ -143,7 +143,7 @@ const enrollmentFormSchema = z.object({
   passportDocument: optionalFileSchema,
 
   // Location & Identification
-  district: z.string({ required_error: "District is required." }),
+  district: z.string({ required_error: "District is required." }).min(1, { message: "District is required." }),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, { message: "Invalid PAN number format (e.g., ABCDE1234F)." }).optional().or(z.literal('')),
   aadharNumber: z.string().regex(/^\d{12}$/, { message: "Aadhaar number must be 12 digits." }),
   nationality: z.string().optional(),
@@ -1188,7 +1188,6 @@ export default function EnrollEmployeePage() {
 
                 <div className="p-4 border rounded-lg mt-6 space-y-4">
                     <h3 className="font-medium text-lg">Aadhaar for ESIC/EPF</h3>
-                    <p className="text-sm text-muted-foreground">Restricted to admin@cisskerala.app and never shared with clients.</p>
                     <div className="max-w-xl">
                       <FormField control={form.control} name="aadharNumber" render={({ field }) => (
                         <FormItem>

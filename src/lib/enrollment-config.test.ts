@@ -1,8 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { validateEnrollmentSubmissionAgainstConfig } from "./enrollment-config";
+import {
+  normalizeEnrollmentFormConfig,
+  validateEnrollmentSubmissionAgainstConfig,
+} from "./enrollment-config";
 import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "./enrollment-policy";
 
 describe("new enrollment mandatory document policy", () => {
+  it("merges newer fields into an older saved configuration and protects mandatory settings", () => {
+    const config = normalizeEnrollmentFormConfig({
+      sections: {
+        documents: {
+          label: "Old documents",
+          fields: [{ key: "identityProofType", label: "Old identity", enabled: false, required: false, order: 1 }],
+        },
+        details: {
+          label: "Old details",
+          fields: [{ key: "aadharNumber", label: "Old Aadhaar", enabled: false, required: false, order: 1 }],
+        },
+      },
+    });
+    const documentKeys = config.sections.documents.fields.map((field) => field.key);
+    expect(documentKeys).toContain("aadharCardDocumentBack");
+    expect(config.sections.documents.fields.find((field) => field.key === "identityProofType")).toMatchObject({
+      label: "Old identity",
+      enabled: true,
+      required: true,
+    });
+    expect(config.sections.documents.fields.map((field) => field.key)).toContain("aadharNumber");
+    expect(config.sections.details.fields.map((field) => field.key)).not.toContain("aadharNumber");
+    expect(config.sections.details.fields.map((field) => field.key)).toContain("emailAddress");
+  });
+
   it("keeps mandatory proofs, bank document, email, and consents required even when remote config disables fields", () => {
     const config = {
       sections: {

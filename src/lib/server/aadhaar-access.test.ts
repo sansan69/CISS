@@ -3,6 +3,7 @@ import {
   requireAadhaarAdministratorToken,
 } from "./auth";
 import {
+  assertAadhaarSourceOwnership,
   documentCompletionFromEmployee,
   restrictedAadhaarDocument,
   restrictedAadhaarPaths,
@@ -37,6 +38,21 @@ describe("Aadhaar restricted access", () => {
   it("performs syntax validation without claiming Aadhaar verification", () => {
     expect(validateAadhaarNumber("1234 5678 9012")).toBe("123456789012");
     expect(() => validateAadhaarNumber("1234")).toThrow();
+  });
+
+  it("only accepts Aadhaar files from the active draft or admin staging session", () => {
+    expect(assertAadhaarSourceOwnership(
+      "enrollments/draft-123/aadharCards/front.pdf",
+      { flow: "public", draftId: "draft-123" },
+    )).toBe("enrollments/draft-123/aadharCards/front.pdf");
+    expect(() => assertAadhaarSourceOwnership(
+      "employees/other-employee/aadharCards/front.pdf",
+      { flow: "public", draftId: "draft-123" },
+    )).toThrow();
+    expect(assertAadhaarSourceOwnership(
+      "restrictedAadhaarStaging/admin-uid/front.pdf",
+      { flow: "admin", adminUid: "admin-uid" },
+    )).toBe("restrictedAadhaarStaging/admin-uid/front.pdf");
   });
 
   it("grandfathers missing legacy documents and recognizes legacy field names", () => {

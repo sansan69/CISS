@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/page-header";
 import { SpinnerGap as Loader2, FloppyDisk as Save, ArrowUp, ArrowDown, Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
 import type { EnrollmentFormConfig, EnrollmentFormFieldConfig } from "@/types/region";
+import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
 
 export default function EnrollmentFormSettingsPage() {
   const router = useRouter();
@@ -125,6 +126,9 @@ export default function EnrollmentFormSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {section.fields.map((field, fieldIndex) => (
+              (() => {
+                const isMandatory = MANDATORY_NEW_ENROLLMENT_FIELDS.includes(field.key as typeof MANDATORY_NEW_ENROLLMENT_FIELDS[number]);
+                return (
               <div
                 key={field.key}
                 className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
@@ -148,9 +152,9 @@ export default function EnrollmentFormSettingsPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-1.5">
                     <Switch
-                      checked={field.required}
+                      checked={isMandatory || field.required}
                       onCheckedChange={(checked) => updateField(sectionKey, fieldIndex, { required: checked })}
-                      disabled={!field.enabled}
+                      disabled={!field.enabled || isMandatory}
                       id={`required-${field.key}`}
                     />
                     <Label htmlFor={`required-${field.key}`} className="text-xs text-muted-foreground">Req</Label>
@@ -160,11 +164,14 @@ export default function EnrollmentFormSettingsPage() {
                     size="sm"
                     className="h-8 w-8 p-0"
                     onClick={() => updateField(sectionKey, fieldIndex, { enabled: !field.enabled })}
+                    disabled={isMandatory}
                   >
                     {field.enabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
+                );
+              })()
             ))}
           </CardContent>
         </Card>

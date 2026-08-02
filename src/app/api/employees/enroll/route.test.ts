@@ -121,6 +121,7 @@ vi.mock("@/lib/qr", () => ({
 
 vi.mock("@/lib/server/aadhaar", () => ({
   AADHAAR_CONSENT_TEXT_HASH: "consent-hash",
+  assertAadhaarSourceOwnership: vi.fn(() => undefined),
   encryptAadhaarNumber: vi.fn(async () => ({
     aadhaarNumberEncrypted: "encrypted",
     encryptionIv: "iv",

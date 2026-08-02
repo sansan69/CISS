@@ -186,6 +186,18 @@ describe("enrollmentSubmissionSchema", () => {
     }
   });
 
+  it("enforces age, spouse, and PAN rules at the API boundary", () => {
+    expect(enrollmentSubmissionSchema.safeParse(
+      buildStandardPayload({ dateOfBirth: "2012-01-01T00:00:00.000Z" }),
+    ).success).toBe(false);
+    expect(enrollmentSubmissionSchema.safeParse(
+      buildStandardPayload({ maritalStatus: "Married", spouseName: "" }),
+    ).success).toBe(false);
+    expect(enrollmentSubmissionSchema.safeParse(
+      buildStandardPayload({ panNumber: "not-a-pan" }),
+    ).success).toBe(false);
+  });
+
   it("requires an Aadhaar copy for every enrollment and a PAN copy for LNG", () => {
     const missingAadhaar = enrollmentSubmissionSchema.safeParse(
       buildLngPayload({

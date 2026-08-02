@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
-import { normalizeText } from "@/lib/server/mobile-api-utils";
+import { ADDRESS_PROOF_TYPES, IDENTITY_PROOF_TYPES } from "@/lib/constants";
 export const runtime = "nodejs";
+
+function sanitizeProofTypes(value: unknown, allowed: readonly string[]) {
+  const allowedSet = new Set(allowed);
+  return Array.from(new Set(
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string" && allowedSet.has(item))
+      : allowed,
+  ));
+}
+
+function enrollmentProofDefaults() {
+  return {
+    allowedIdTypes: [...IDENTITY_PROOF_TYPES],
+    allowedAddressProofTypes: [...ADDRESS_PROOF_TYPES],
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -16,8 +32,7 @@ export async function GET(request: Request) {
       // Return sensible defaults
       return NextResponse.json({
         enabled: true,
-        allowedIdTypes: ["Aadhaar", "Voter ID", "PAN", "Driving License", "Passport"],
-        allowedAddressProofTypes: ["Aadhaar", "Voter ID", "Utility Bill", "Rental Agreement", "Bank Statement"],
+        ...enrollmentProofDefaults(),
         requireBankDetails: true,
         requireSignature: true,
         maxFileSizeMb: 5,
@@ -26,14 +41,13 @@ export async function GET(request: Request) {
     }
 
     const configData = configSnap.data() as Record<string, unknown>;
+    const defaults = enrollmentProofDefaults();
+    const allowedIdTypes = sanitizeProofTypes(configData.allowedIdTypes, IDENTITY_PROOF_TYPES);
+    const allowedAddressProofTypes = sanitizeProofTypes(configData.allowedAddressProofTypes, ADDRESS_PROOF_TYPES);
     return NextResponse.json({
       enabled: configData.enabled ?? true,
-      allowedIdTypes: Array.isArray(configData.allowedIdTypes)
-        ? configData.allowedIdTypes
-        : ["Aadhaar", "Voter ID", "PAN", "Driving License", "Passport"],
-      allowedAddressProofTypes: Array.isArray(configData.allowedAddressProofTypes)
-        ? configData.allowedAddressProofTypes
-        : ["Aadhaar", "Voter ID", "Utility Bill", "Rental Agreement", "Bank Statement"],
+      allowedIdTypes: allowedIdTypes.length ? allowedIdTypes : defaults.allowedIdTypes,
+      allowedAddressProofTypes: allowedAddressProofTypes.length ? allowedAddressProofTypes : defaults.allowedAddressProofTypes,
       requireBankDetails: configData.requireBankDetails ?? true,
       requireSignature: configData.requireSignature ?? true,
       maxFileSizeMb: (configData.maxFileSizeMb as number) ?? 5,
@@ -62,20 +76,23 @@ export async function PATCH(request: NextRequest) {
     const { FieldValue } = await import("firebase-admin/firestore");
 
     const configRef = adminDb.collection("config").doc("enrollment");
+    const existing = (await configRef.get()).data() as Record<string, unknown> | undefined;
     const update: Record<string, unknown> = {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
     if (body.enabled !== undefined) update.enabled = Boolean(body.enabled);
-    if (body.allowedIdTypes !== undefined) {
-      update.allowedIdTypes = Array.isArray(body.allowedIdTypes)
-        ? body.allowedIdTypes.filter((t: unknown): t is string => typeof t === "string")
-        : [];
-    }
-    if (body.allowedAddressProofTypes !== undefined) {
-      update.allowedAddressProofTypes = Array.isArray(body.allowedAddressProofTypes)
-        ? body.allowedAddressProofTypes.filter((t: unknown): t is string => typeof t === "string")
-        : [];
+    if (body.allowedIdTypes !== undefined || body.allowedAddressProofTypes !== undefined) {
+      const selectedIdentityTypes = sanitizeProofTypes(
+        body.allowedIdTypes ?? existing?.allowedIdTypes,
+        IDENTITY_PROOF_TYPES,
+      );
+      const selectedAddressTypes = sanitizeProofTypes(
+        body.allowedAddressProofTypes ?? existing?.allowedAddressProofTypes,
+        ADDRESS_PROOF_TYPES,
+      );
+      update.allowedIdTypes = selectedIdentityTypes;
+      update.allowedAddressProofTypes = selectedAddressTypes;
     }
     if (body.requireBankDetails !== undefined) update.requireBankDetails = Boolean(body.requireBankDetails);
     if (body.requireSignature !== undefined) update.requireSignature = Boolean(body.requireSignature);

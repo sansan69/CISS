@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAdminLike, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
-import { DEFAULT_ENROLLMENT_FORM_CONFIG } from "@/lib/region-wizard";
+import {
+  fetchEnrollmentConfig,
+  normalizeEnrollmentFormConfig,
+} from "@/lib/enrollment-config";
 import type { EnrollmentFormConfig } from "@/types/region";
 export const runtime = "nodejs";
 
@@ -30,11 +33,7 @@ export async function GET(request: Request) {
   try {
     await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const configSnap = await adminDb.collection("enrollmentFormConfig").doc("global").get();
-    if (configSnap.exists) {
-      return NextResponse.json({ config: configSnap.data() });
-    }
-    return NextResponse.json({ config: DEFAULT_ENROLLMENT_FORM_CONFIG, source: "defaults" });
+    return NextResponse.json({ config: await fetchEnrollmentConfig(adminDb) });
   } catch (error: any) {
     return unauthorizedResponse(error?.message || "Unauthorized");
   }
@@ -45,7 +44,7 @@ async function saveEnrollmentConfig(request: Request) {
     await requireAdminLike(await verifyRequestAuth(request));
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const body = await request.json().catch(() => ({}));
-    const config = body.config ?? DEFAULT_ENROLLMENT_FORM_CONFIG;
+    const config = normalizeEnrollmentFormConfig(body.config);
 
     if (!isEnrollmentFormConfig(config)) {
       return NextResponse.json(
@@ -54,12 +53,12 @@ async function saveEnrollmentConfig(request: Request) {
       );
     }
 
-    await adminDb.collection("enrollmentFormConfig").doc("global").set(config, { merge: true });
+    await adminDb.collection("enrollmentFormConfig").doc("global").set(config);
     await adminDb.collection("regionSetupProgress").doc("default").set(
       { steps: { enrollmentConfig: true }, currentStep: 3 },
       { merge: true },
     );
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, config });
   } catch (error: any) {
     return unauthorizedResponse(error?.message || "Unauthorized");
   }

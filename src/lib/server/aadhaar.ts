@@ -19,6 +19,13 @@ const ALLOWED_FILE_TYPES = new Map([
   ["application/pdf", "pdf"],
 ]);
 
+export class AadhaarSourceOwnershipError extends Error {
+  constructor() {
+    super("Aadhaar source does not belong to this enrollment session.");
+    this.name = "AadhaarSourceOwnershipError";
+  }
+}
+
 type KmsEnvelope = {
   aadhaarNumberEncrypted: string;
   encryptionIv: string;
@@ -168,6 +175,22 @@ function resolveSameBucketPath(source: string) {
     !/^restrictedAadhaarStaging\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(path)
   ) {
     throw new Error("Aadhaar source path is not allowed.");
+  }
+  return path;
+}
+
+export function assertAadhaarSourceOwnership(
+  source: string,
+  context:
+    | { flow: "public"; draftId: string }
+    | { flow: "admin"; adminUid: string },
+) {
+  const path = resolveSameBucketPath(source);
+  const prefix = context.flow === "public"
+    ? `enrollments/${context.draftId}/aadharCards/`
+    : `restrictedAadhaarStaging/${context.adminUid}/`;
+  if (!path.startsWith(prefix)) {
+    throw new AadhaarSourceOwnershipError();
   }
   return path;
 }
