@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hasAdminAccess, hasClientAccess, hasFieldOfficerAccess, verifyRequestAuth } from "@/lib/server/auth";
 import { findEmployeeById } from "@/lib/server/employee-document-access";
 import { assertGuardProfileScope } from "@/lib/server/guard-profile-view";
+import { documentReference, normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,8 +80,16 @@ export async function GET(
     const data = employee.data() as Record<string, unknown>;
     await assertGuardProfileScope(db, decoded, data);
 
+    const documentFields = normalizeEmployeeDocumentFields(data);
+    const normalizedSources: Record<keyof typeof CATEGORY_FIELDS, unknown> = {
+      "identity-front": documentFields.identityProofUrlFront,
+      "identity-back": documentFields.identityProofUrlBack,
+      "address-front": documentFields.addressProofUrlFront,
+      "address-back": documentFields.addressProofUrlBack,
+    };
     const fields = CATEGORY_FIELDS[category as keyof typeof CATEGORY_FIELDS];
-    const source = fields.map((field) => data[field]).find((value) => typeof value === "string" && value.trim());
+    const source = documentReference(normalizedSources[category as keyof typeof CATEGORY_FIELDS])
+      || fields.map((field) => documentReference(data[field])).find(Boolean);
     if (typeof source !== "string") {
       return NextResponse.json({ error: "Document is not on file." }, { status: 404 });
     }

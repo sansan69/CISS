@@ -86,6 +86,41 @@ describe("GET /api/employees/profile/[id]/document", () => {
     expect(await response.text()).toBe("proof");
   });
 
+  it("streams legacy document references saved as metadata objects", async () => {
+    const db = new FakeDb();
+    db.seedClient("client-user", { clientId: "client-1", clientName: "Acme Security" });
+    db.seedEmployee("guard-legacy", {
+      employeeId: "G-LEGACY",
+      clientName: "Acme Security",
+      district: "Ernakulam",
+      idProofDocumentUrlFront: {
+        storagePath: "employees/9999999999/idProofs/legacy-front.png",
+      },
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db,
+      storage: {
+        bucket: () => ({
+          name: "test-bucket",
+          file: () => ({
+            download: async () => [Buffer.from("legacy-proof")],
+            getMetadata: async () => [{ contentType: "image/png" }],
+          }),
+        }),
+      },
+    }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "client-user", role: "client" });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/employees/profile/guard-legacy?category=identity-front"),
+      { params: Promise.resolve({ id: "guard-legacy" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("legacy-proof");
+  });
+
   it("rejects an unsupported document category", async () => {
     const db = new FakeDb();
     vi.doMock("@/lib/firebaseAdmin", () => ({ db }));

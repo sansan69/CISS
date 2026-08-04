@@ -24,6 +24,8 @@
     "aadhaar:reconcile-security": "node --env-file-if-exists=.env.local scripts/reconcile-aadhaar-security.mjs",
     "documents:backfill-policy": "node --env-file-if-exists=.env.local scripts/backfill-employee-document-policy.mjs",
     "documents:backfill-policy:apply": "node --env-file-if-exists=.env.local scripts/backfill-employee-document-policy.mjs --apply",
+    "documents:audit-storage": "node --env-file-if-exists=.env.local scripts/audit-repair-employee-documents.mjs",
+    "documents:repair-storage": "node --env-file-if-exists=.env.local scripts/audit-repair-employee-documents.mjs --apply",
     "postinstall": "patch-package"
   },
   "dependencies": {

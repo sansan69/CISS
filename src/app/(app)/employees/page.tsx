@@ -31,11 +31,21 @@ import { useClients } from '@/lib/hooks/use-clients';
 import type { RegionRecord } from '@/types/region';
 import { KERALA_DISTRICTS } from '@/lib/districts';
 import { employeeMatchesAnyDistrict } from '@/lib/employees/visibility';
+import { normalizeEmployeeDocumentFields } from '@/lib/employee-document-fields';
 
 const ITEMS_PER_PAGE = 10;
 interface ClientOption { id: string; name: string; }
 
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
+
+function employeeFromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData>): Employee {
+    const data = snapshot.data() as Record<string, unknown>;
+    return {
+        ...data,
+        ...normalizeEmployeeDocumentFields(data),
+        id: snapshot.id,
+    } as Employee;
+}
 
 // A custom hook for debouncing a value
 function useDebounce<T>(value: T, delay: number): T {
@@ -327,7 +337,7 @@ export default function EmployeeDirectoryPage() {
                     snap.docs.forEach((d: any) => {
                         if (!seen.has(d.id)) {
                             seen.add(d.id);
-                            merged.push({ id: d.id, ...(d.data() as any) } as Employee);
+                            merged.push(employeeFromSnapshot(d));
                         }
                     });
                 });
@@ -353,7 +363,7 @@ export default function EmployeeDirectoryPage() {
                 const orderedFoQuery = query(baseQuery, orderBy('createdAt', 'desc')) as Query;
                 const documentSnapshots = await getDocs(orderedFoQuery);
                 const allVisibleEmployees = documentSnapshots.docs
-                    .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee))
+                    .map(employeeFromSnapshot)
                     .filter((employee) => employeeMatchesAnyDistrict(employee, assignedDistricts));
                 const targetPage = direction === 'next' ? currentPage + 1 : direction === 'prev' ? Math.max(1, currentPage - 1) : 1;
                 const totalPages = Math.max(1, Math.ceil(allVisibleEmployees.length / ITEMS_PER_PAGE));
@@ -384,7 +394,7 @@ export default function EmployeeDirectoryPage() {
             }
 
             const documentSnapshots = await getDocs(finalQuery);
-            const fetchedEmployees = documentSnapshots.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Employee));
+            const fetchedEmployees = documentSnapshots.docs.map(employeeFromSnapshot);
             setEmployees(fetchedEmployees);
 
             if (!documentSnapshots.empty) {

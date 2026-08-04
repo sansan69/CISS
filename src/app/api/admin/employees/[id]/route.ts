@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
+import { documentReference, normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
 export const runtime = "nodejs";
 
 export async function GET(
@@ -64,18 +65,8 @@ function _serializeEmployee(
       : String(data.joiningDate)
     : null;
 
-  const docUrl = (field: unknown): string | null => {
-    if (typeof field === "string" && field.trim()) return field.trim();
-    if (
-      field &&
-      typeof field === "object" &&
-      "url" in (field as Record<string, unknown>)
-    ) {
-      const url = (field as Record<string, unknown>).url;
-      return typeof url === "string" && url.trim() ? url.trim() : null;
-    }
-    return null;
-  };
+  const documentFields = normalizeEmployeeDocumentFields(data);
+  const docUrl = (field: unknown): string | null => documentReference(field) ?? null;
 
   return {
     id: docId,
@@ -99,20 +90,31 @@ function _serializeEmployee(
     gender: normalizeText(data.gender),
     guardAuthUid: normalizeText(data.guardAuthUid),
     // ── Document fields ──────────────────────────────────────────
-    idProofType: normalizeText(data.idProofType),
-    idProofNumber: normalizeText(data.idProofNumber),
-    idProofFrontUrl: docUrl(data.idProofFrontUrl ?? data.idProofFront),
-    idProofBackUrl: docUrl(data.idProofBackUrl ?? data.idProofBack),
-    addressProofType: normalizeText(data.addressProofType),
-    addressProofNumber: normalizeText(data.addressProofNumber),
-    addressProofFrontUrl: docUrl(
-      data.addressProofFrontUrl ?? data.addressProofFront,
-    ),
-    addressProofBackUrl: docUrl(
-      data.addressProofBackUrl ?? data.addressProofBack,
-    ),
-    signatureUrl: docUrl(data.signatureUrl ?? data.signature),
-    profilePhotoUrl: docUrl(data.profilePhotoUrl ?? data.profilePictureUrl),
+    idProofType: normalizeText(documentFields.identityProofType),
+    idProofNumber: normalizeText(documentFields.identityProofNumber),
+    idProofFrontUrl: docUrl(documentFields.identityProofUrlFront),
+    idProofBackUrl: docUrl(documentFields.identityProofUrlBack),
+    // Keep both the legacy response names and the canonical names so older
+    // admin consumers do not silently lose uploaded documents.
+    identityProofType: normalizeText(documentFields.identityProofType),
+    identityProofNumber: normalizeText(documentFields.identityProofNumber),
+    identityProofUrlFront: docUrl(documentFields.identityProofUrlFront),
+    identityProofUrlBack: docUrl(documentFields.identityProofUrlBack),
+    addressProofType: normalizeText(documentFields.addressProofType),
+    addressProofNumber: normalizeText(documentFields.addressProofNumber),
+    addressProofFrontUrl: docUrl(documentFields.addressProofUrlFront),
+    addressProofBackUrl: docUrl(documentFields.addressProofUrlBack),
+    addressProofUrlFront: docUrl(documentFields.addressProofUrlFront),
+    addressProofUrlBack: docUrl(documentFields.addressProofUrlBack),
+    signatureUrl: docUrl(documentFields.signatureUrl),
+    profilePhotoUrl: docUrl(documentFields.profilePictureUrl),
+    profilePictureUrl: docUrl(documentFields.profilePictureUrl),
+    bankPassbookStatementUrl: docUrl(documentFields.bankPassbookStatementUrl),
+    panCardDocumentUrl: docUrl(documentFields.panCardDocumentUrl),
+    serviceBookDocumentUrl: docUrl(documentFields.serviceBookDocumentUrl),
+    armsLicenseDocumentUrl: docUrl(documentFields.armsLicenseDocumentUrl),
+    passportDocumentUrl: docUrl(documentFields.passportDocumentUrl),
+    policeClearanceCertificateUrl: docUrl(documentFields.policeClearanceCertificateUrl),
     // ── Bank fields ──────────────────────────────────────────────
     bankAccountNumber: normalizeText(data.bankAccountNumber),
     bankIfscCode: normalizeText(data.bankIfscCode),

@@ -14,7 +14,7 @@ import { PencilSimple as Edit3, User, Briefcase, Money as Banknote, ShieldCheck,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
 import { db, auth, storage } from '@/lib/firebase';
-import { doc, getDoc, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, Timestamp, updateDoc, serverTimestamp, collection, query, orderBy, getDocs, getDocsFromServer, deleteField, where, limit } from 'firebase/firestore';
 import { format, subYears, addYears } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -465,6 +465,7 @@ export default function AdminEmployeeProfilePage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const employeeFetchIdRef = useRef(0);
   
   const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
   const [isJoiningDatePopoverOpen, setIsJoiningDatePopoverOpen] = useState(false);
@@ -674,6 +675,11 @@ export default function AdminEmployeeProfilePage() {
 
 
   const fetchEmployee = useCallback(async () => {
+    // Auth resolves asynchronously. Do not issue the initial redacted request
+    // while the role is still unknown: it can otherwise finish after the full
+    // admin request and overwrite the document fields with a restricted view.
+    if (isAuthLoading) return;
+    const fetchId = ++employeeFetchIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -683,12 +689,30 @@ export default function AdminEmployeeProfilePage() {
         if (!response.ok || !body.profile) {
           throw new Error(body.error || "Could not load the guard profile.");
         }
+        if (fetchId !== employeeFetchIdRef.current) return;
         setEmployee(body.profile as Employee);
         return;
       }
 
-      const employeeDocRef = doc(db, "employees", employeeIdFromUrl);
-      const employeeDocSnap = await getDoc(employeeDocRef);
+      // Profiles must reflect the authoritative document state. Bypass any
+      // stale client cache because document references are repaired and
+      // normalized server-side over time.
+      let employeeDocSnap = await getDocFromServer(doc(db, "employees", employeeIdFromUrl));
+
+      // A few imported records are opened by employee code rather than their
+      // Firestore document id. Resolve those links as the server profile route
+      // does, so the same record (and its documents) is shown consistently.
+      if (!employeeDocSnap.exists()) {
+        for (const field of ["employeeId", "employeeCode", "guardId", "phoneNumber"] as const) {
+          const matches = await getDocsFromServer(
+            query(collection(db, "employees"), where(field, "==", employeeIdFromUrl), limit(1)),
+          );
+          if (!matches.empty) {
+            employeeDocSnap = matches.docs[0];
+            break;
+          }
+        }
+      }
 
       if (employeeDocSnap.exists()) {
         const data = employeeDocSnap.data();
@@ -699,12 +723,16 @@ export default function AdminEmployeeProfilePage() {
           ...documentFields,
           id: employeeDocSnap.id,
         } as Employee;
-        setEmployee(await resolveAdminDocumentUrls(formattedData));
+        const resolvedEmployee = await resolveAdminDocumentUrls(formattedData);
+        if (fetchId !== employeeFetchIdRef.current) return;
+        setEmployee(resolvedEmployee);
       } else {
+        if (fetchId !== employeeFetchIdRef.current) return;
         setError("Employee not found with the provided ID.");
         toast({ variant: "destructive", title: "Not Found", description: "No employee record found for this ID."});
       }
     } catch (err: any) {
+      if (fetchId !== employeeFetchIdRef.current) return;
       console.error("Error fetching employee:", err);
       let message = "Failed to fetch employee data.";
       if(err.code === 'permission-denied') {
@@ -713,9 +741,9 @@ export default function AdminEmployeeProfilePage() {
       setError(message);
       toast({ variant: "destructive", title: "Fetch Error", description: message});
     } finally {
-      setIsLoading(false);
+      if (fetchId === employeeFetchIdRef.current) setIsLoading(false);
     }
-  }, [employeeIdFromUrl, isAdminView, toast]);
+  }, [employeeIdFromUrl, isAdminView, isAuthLoading, toast]);
   
   useEffect(() => {
     if (!employeeIdFromUrl) {
@@ -723,8 +751,8 @@ export default function AdminEmployeeProfilePage() {
       setIsLoading(false);
       return;
     }
-    fetchEmployee();
-  }, [employeeIdFromUrl, fetchEmployee]);
+    if (!isAuthLoading) void fetchEmployee();
+  }, [employeeIdFromUrl, fetchEmployee, isAuthLoading]);
   
   useEffect(() => {
     setIsEditing(isAdminView && searchParams.get('edit') === 'true');
