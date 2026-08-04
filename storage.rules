@@ -193,6 +193,13 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
+    match /employees/{employeeKey}/qualificationCertificates/{fileName} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isAllowedSize() && isDocument();
+      allow update: if isAdmin() && isAllowedSize() && isDocument();
+      allow delete: if isAdmin();
+    }
+
     // Training module content — admin upload, signed-in read
     match /trainingModules/{fileName=**} {
       allow read: if isSignedIn();
@@ -271,6 +278,13 @@ service firebase.storage {
     }
 
     match /enrollments/{employeeKey}/policeCertificates/{fileName} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /enrollments/{employeeKey}/qualificationCertificates/{fileName} {
       allow read: if isAdmin();
       allow create: if false;
       allow update: if false;

@@ -141,6 +141,8 @@ const enrollmentFormSchema = z.object({
   
   educationalQualification: qualificationTypes,
   otherQualification: z.string().optional(),
+  qualificationName: z.string().optional(),
+  qualificationCertificate: optionalFileSchema,
   lngJobDesignation: lngDesignationTypes.optional(),
   serviceBookNumber: z.string().optional(),
   serviceBookDocument: optionalFileSchema,
@@ -206,6 +208,12 @@ const enrollmentFormSchema = z.object({
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource ID number is required for TCS client.", path: ["resourceIdNumber"] });
+  }
+  if (data.clientName === "TCS" && !data.qualificationName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Name of qualification is required for TCS.", path: ["qualificationName"] });
+  }
+  if (data.clientName === "TCS" && !data.qualificationCertificate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Highest qualification certificate is required for TCS.", path: ["qualificationCertificate"] });
   }
   if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Spouse name is required if marital status is Married.", path: ["spouseName"] });
@@ -343,6 +351,7 @@ const DRAFT_FILE_FIELDS: (keyof EnrollmentFormValues)[] = [
   "passportDocument",
   "bankPassbookStatement",
   "policeClearanceCertificate",
+  "qualificationCertificate",
 ];
 const SENSITIVE_DRAFT_FIELDS = new Set<keyof EnrollmentFormValues>([
   "aadharNumber",
@@ -362,6 +371,7 @@ const DEFAULT_ENROLLMENT_VALUES: Partial<EnrollmentFormValues> = {
   spouseName: "",
   educationalQualification: undefined,
   otherQualification: "",
+  qualificationName: "",
   lngJobDesignation: undefined,
   serviceBookNumber: "",
   armsLicenseNumber: "",
@@ -407,6 +417,8 @@ const FIELD_LABELS: Partial<Record<keyof EnrollmentFormValues, string>> = {
   spouseName: "Spouse name",
   educationalQualification: "Educational qualification",
   otherQualification: "Other qualification",
+  qualificationName: "Name of qualification",
+  qualificationCertificate: "Highest qualification certificate",
   lngJobDesignation: "Job designation",
   serviceBookNumber: "Service book number",
   serviceBookDocument: "Service book document",
@@ -643,7 +655,8 @@ type CameraField =
   | "panCardDocument"
   | "passportDocument"
   | "bankPassbookStatement"
-  | "policeClearanceCertificate";
+  | "policeClearanceCertificate"
+  | "qualificationCertificate";
 
 interface ActualEnrollmentFormProps {
   initialPhoneNumberFromQuery?: string | null;
@@ -678,6 +691,8 @@ const ENROLLMENT_STEPS: {
       "spouseName",
       "educationalQualification",
       "otherQualification",
+      "qualificationName",
+      "qualificationCertificate",
       "lngJobDesignation",
       "serviceBookNumber",
       "serviceBookDocument",
@@ -765,6 +780,7 @@ type EnrollmentUploadUrls = {
   passportDocumentUrl: string | null;
   bankPassbookStatementUrl: string | null;
   policeClearanceCertificateUrl: string | null;
+  qualificationCertificateUrl: string | null;
 };
 
 type EnrollmentSubmissionSession = {
@@ -792,6 +808,7 @@ function emptyEnrollmentUploadUrls(): EnrollmentUploadUrls {
     passportDocumentUrl: null,
     bankPassbookStatementUrl: null,
     policeClearanceCertificateUrl: null,
+    qualificationCertificateUrl: null,
   };
 }
 
@@ -879,6 +896,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [passportPreview, setPassportPreview] = React.useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = React.useState<string | null>(null);
   const [policeCertPreview, setPoliceCertPreview] = React.useState<string | null>(null);
+  const [qualificationCertificatePreview, setQualificationCertificatePreview] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
@@ -1027,6 +1045,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       case "policeClearanceCertificate":
         setPoliceCertPreview(previewUrl);
         break;
+      case "qualificationCertificate":
+        setQualificationCertificatePreview(previewUrl);
+        break;
     }
   }, []);
 
@@ -1069,6 +1090,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       setAddressProofUrlFrontPreview(null);
       setAddressProofUrlBackPreview(null);
       setSignatureUrlPreview(null);
+      setQualificationCertificatePreview(null);
       setAadharCardPreview(null);
       setAadharCardBackPreview(null);
       setPanCardPreview(null);
@@ -1491,6 +1513,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             { name: "Passport", file: data.passportDocument, folder: "passports", fileStem: "passport", key: 'passportDocumentUrl' },
             { name: "Bank Document", file: data.bankPassbookStatement, folder: "bankDocuments", fileStem: "bank", key: 'bankPassbookStatementUrl' },
             { name: "Police Certificate", file: data.policeClearanceCertificate, folder: "policeCertificates", fileStem: "pcc", key: 'policeClearanceCertificateUrl' },
+            { name: "Highest Qualification Certificate", file: data.qualificationCertificate, folder: "qualificationCertificates", fileStem: "qualification", key: 'qualificationCertificateUrl' },
         ];
 
         for (const { name, file, folder, fileStem, key } of filesToUpload) {
@@ -1538,6 +1561,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             spouseName: data.spouseName || undefined,
             educationalQualification: data.educationalQualification,
             otherQualification: data.otherQualification || undefined,
+            qualificationName: data.qualificationName || undefined,
+            qualificationCertificateUrl: uploadedUrls.qualificationCertificateUrl || undefined,
             lngJobDesignation: data.lngJobDesignation || undefined,
             jobDesignation: data.lngJobDesignation || undefined,
             serviceBookNumber: data.serviceBookNumber || undefined,
@@ -1710,7 +1735,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     }
 
     if (formValues.clientName === "TCS") {
-      fields.push("resourceIdNumber");
+      fields.push("resourceIdNumber", "qualificationName", "qualificationCertificate");
     }
     if (isLngClientName(formValues.clientName)) {
       fields.push(
@@ -2114,6 +2139,16 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       )}
                     />
                     {watchEducationalQualification === "Any Other Qualification" && <FormField control={form.control} name="otherQualification" render={({ field }) => (<FormItem><FormLabel>Please Specify Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Tech in Computer Science" {...field} /></FormControl><FormMessage /></FormItem>)}/>}
+                    {watchClientName === "TCS" && (
+                      <>
+                        <FormField control={form.control} name="qualificationName" render={({ field }) => (
+                          <FormItem><FormLabel>Name of Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Com, Plus Two, SSLC" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Enter the exact course or qualification shown on the certificate.</FormDescription><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="qualificationCertificate" render={() => (
+                          <FormItem className="text-center md:col-span-2"><FormLabel className="block mb-2">Highest Qualification Certificate <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="qualificationCertificate" preview={qualificationCertificatePreview} setPreview={setQualificationCertificatePreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Required for TCS. Upload a clear image or PDF of the highest qualification certificate." /><FormMessage /></FormItem>
+                        )} />
+                      </>
+                    )}
                     {isLngClient && (
                       <FormField control={form.control} name="lngJobDesignation" render={({ field }) => (
                         <FormItem className="md:col-span-2">
@@ -2328,12 +2363,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <ReviewRow label="DOB" value={watchedValues?.dateOfBirth ? format(watchedValues.dateOfBirth, "dd-MM-yyyy") : "Not added"} />
                       <ReviewRow label="Gender" value={watchedValues?.gender || "Not selected"} />
                       <ReviewRow label="Qualification" value={watchedValues?.educationalQualification || "Not selected"} />
+                      {watchedValues?.clientName === "TCS" && <ReviewRow label="Name of qualification" value={watchedValues?.qualificationName || "Missing"} />}
                       {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Designation" value={watchedValues?.lngJobDesignation || "Not selected"} />}
                       {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Height" value={watchedValues?.heightCm ? `${watchedValues.heightCm} cm` : "Missing"} />}
                       {isLngClientName(watchedValues?.clientName) && <ReviewRow label="Weight" value={watchedValues?.weightKg ? `${watchedValues.weightKg} kg` : "Missing"} />}
                     </ReviewCard>
                     <ReviewCard title="Documents">
                       <ReviewRow label="Profile picture" value={profilePicPreview ? "Ready" : "Missing"} />
+                      {watchedValues?.clientName === "TCS" && <ReviewRow label="Qualification certificate" value={qualificationCertificatePreview ? "Ready" : "Missing"} />}
                       <ReviewRow label="ID proof front" value={identityProofUrlFrontPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="ID proof back" value={identityProofUrlBackPreview ? "Ready" : "Missing"} />
                       <ReviewRow label="Address proof front" value={addressProofUrlFrontPreview ? "Ready" : "Missing"} />

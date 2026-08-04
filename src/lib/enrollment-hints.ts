@@ -15,6 +15,8 @@ const ENROLLMENT_FIELD_LABELS: Record<string, string> = {
   spouseName: "Spouse's name",
   educationalQualification: "Highest qualification",
   otherQualification: "Other qualification",
+  qualificationName: "Name of qualification",
+  qualificationCertificate: "Highest qualification certificate",
   lngJobDesignation: "LNG job designation",
   serviceBookNumber: "Service book number",
   serviceBookDocument: "Service book copy",

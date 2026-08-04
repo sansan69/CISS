@@ -55,6 +55,8 @@ export const employeeSchema = z.object({
   passportDocumentUrl: z.string().optional(),
   educationalQualification: employeeQualificationSchema.optional(),
   otherQualification: z.string().optional(),
+  qualificationName: z.string().optional(),
+  qualificationCertificateUrl: z.string().optional(),
   identityProofType: z.string().optional(),
   identityProofNumber: z.string().optional(),
   identityProofUrlFront: z.string().optional(),
@@ -154,6 +156,8 @@ export interface Employee {
     | "Doctorate"
     | "Any Other Qualification";
   otherQualification?: string;
+  qualificationName?: string;
+  qualificationCertificateUrl?: string;
   identityProofType?: string;
   identityProofNumber?: string;
   identityProofUrlFront?: string;

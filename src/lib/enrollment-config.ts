@@ -88,10 +88,23 @@ export function normalizeEnrollmentFormConfig(value: unknown): EnrollmentFormCon
     }
   }
 
-  const clientOverrides = stored.clientOverrides && typeof stored.clientOverrides === "object"
-    ? stored.clientOverrides as EnrollmentFormConfig["clientOverrides"]
-    : undefined;
-  return clientOverrides ? { sections, clientOverrides } : { sections };
+  const storedOverrides = stored.clientOverrides && typeof stored.clientOverrides === "object"
+    ? stored.clientOverrides as NonNullable<EnrollmentFormConfig["clientOverrides"]>
+    : {};
+  const defaultOverrides = DEFAULT_ENROLLMENT_FORM_CONFIG.clientOverrides || {};
+  const clientOverrides: NonNullable<EnrollmentFormConfig["clientOverrides"]> = {};
+  for (const clientName of new Set([...Object.keys(defaultOverrides), ...Object.keys(storedOverrides)])) {
+    const defaultClient = defaultOverrides[clientName] || {};
+    const storedClient = storedOverrides[clientName] || {};
+    clientOverrides[clientName] = {};
+    for (const sectionName of new Set([...Object.keys(defaultClient), ...Object.keys(storedClient)])) {
+      clientOverrides[clientName]![sectionName] = {
+        ...(defaultClient[sectionName] || {}),
+        ...(storedClient[sectionName] || {}),
+      };
+    }
+  }
+  return Object.keys(clientOverrides).length ? { sections, clientOverrides } : { sections };
 }
 
 export async function fetchEnrollmentConfig(adminDb?: Firestore): Promise<EnrollmentFormConfig> {
@@ -158,6 +171,7 @@ const SUBMISSION_FIELD_ALIASES: Record<string, string> = {
   aadharCardDocumentBack: "aadharCardDocumentBackUrl",
   panCardDocument: "panCardDocumentUrl",
   policeClearanceCertificate: "policeClearanceCertificateUrl",
+  qualificationCertificate: "qualificationCertificateUrl",
 };
 
 function getSubmissionValue(payload: Record<string, unknown>, key: string) {

@@ -126,7 +126,7 @@ const genderOptions = ["Male", "Female", "Other"];
 const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
 const educationOptions = [...EDUCATION_OPTIONS];
 interface ClientOption { id: string; name: string; }
-type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate";
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate" | "qualificationCertificate";
 
 
 const proofTypes = z.enum(["PAN Card", "Voter ID", "Driving License", "Passport", "Birth Certificate", "School Certificate", "Aadhar Card"]);
@@ -163,6 +163,7 @@ const employeeUpdateSchema = z.object({
   spouseName: z.string().optional(),
   educationalQualification: qualificationTypes,
   otherQualification: z.string().optional(),
+  qualificationName: z.string().optional(),
   district: z.string(),
   fullAddress: z.string().min(10, "Address is required."),
   phoneNumber: z.string().regex(/^\d{10}$/, "Must be 10 digits."),
@@ -304,6 +305,7 @@ const ADMIN_DOCUMENT_URL_FIELDS = [
   "armsLicenseDocumentUrl",
   "passportDocumentUrl",
   "policeClearanceCertificateUrl",
+  "qualificationCertificateUrl",
 ] as const satisfies ReadonlyArray<keyof Employee>;
 
 function isExternalDocumentUrl(value: string) {
@@ -460,6 +462,7 @@ export default function AdminEmployeeProfilePage() {
   const [newSignatureUrl, setNewSignatureUrl] = useState<File | null>(null);
   const [newBankPassbookStatement, setNewBankPassbookStatement] = useState<File | null>(null);
   const [newPoliceClearanceCertificate, setNewPoliceClearanceCertificate] = useState<File | null>(null);
+  const [newQualificationCertificate, setNewQualificationCertificate] = useState<File | null>(null);
 
   // State for file previews
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
@@ -470,6 +473,7 @@ export default function AdminEmployeeProfilePage() {
   const [signatureUrlPreview, setSignatureUrlPreview] = useState<string | null>(null);
   const [bankPassbookPreview, setBankPassbookPreview] = useState<string | null>(null);
   const [policeCertificatePreview, setPoliceCertificatePreview] = useState<string | null>(null);
+  const [qualificationCertificatePreview, setQualificationCertificatePreview] = useState<string | null>(null);
   
   // State for camera dialog
   const [activeCameraField, setActiveCameraField] = useState<CameraField | null>(null);
@@ -688,6 +692,7 @@ export default function AdminEmployeeProfilePage() {
       spouseName: "",
       educationalQualification: undefined,
       otherQualification: "",
+      qualificationName: "",
       district: "",
       fullAddress: "",
       phoneNumber: "",
@@ -820,6 +825,7 @@ export default function AdminEmployeeProfilePage() {
         epfUanNumber: getInitialValue('epfUanNumber', ''),
         esicNumber: getInitialValue('esicNumber', ''),
         otherQualification: getInitialValue('otherQualification', ''),
+        qualificationName: getInitialValue('qualificationName', ''),
         identityProofType: (employee.identityProofType || legacy.idProofType) as any,
         identityProofNumber: (employee.identityProofNumber || legacy.idProofNumber) ?? '',
         addressProofType: employee.addressProofType as any,
@@ -928,6 +934,7 @@ export default function AdminEmployeeProfilePage() {
         case 'signatureUrl': setNewSignatureUrl(file); setSignatureUrlPreview(previewUrl); break;
         case 'bankPassbookStatement': setNewBankPassbookStatement(file); setBankPassbookPreview(previewUrl); break;
         case 'policeClearanceCertificate': setNewPoliceClearanceCertificate(file); setPoliceCertificatePreview(previewUrl); break;
+        case 'qualificationCertificate': setNewQualificationCertificate(file); setQualificationCertificatePreview(previewUrl); break;
       }
       closeCameraDialog();
     }
@@ -994,6 +1001,7 @@ export default function AdminEmployeeProfilePage() {
             { file: newSignatureUrl, oldUrl: employee.signatureUrl, path: `employees/${employee.phoneNumber}/signatures/${Date.now()}_sig.jpg`, key: 'signatureUrl', isImage: true },
             { file: newBankPassbookStatement, oldUrl: employee.bankPassbookStatementUrl, path: `employees/${employee.phoneNumber}/bankDocuments/${Date.now()}_bank.${newBankPassbookStatement?.name.split('.').pop()}`, key: 'bankPassbookStatementUrl', isImage: newBankPassbookStatement?.type.startsWith("image/") ?? false },
             { file: newPoliceClearanceCertificate, oldUrl: employee.policeClearanceCertificateUrl, path: `employees/${employee.phoneNumber}/policeCertificates/${Date.now()}_pcc.${newPoliceClearanceCertificate?.name.split('.').pop()}`, key: 'policeClearanceCertificateUrl', isImage: newPoliceClearanceCertificate?.type.startsWith("image/") ?? false },
+            { file: newQualificationCertificate, oldUrl: employee.qualificationCertificateUrl, path: `employees/${employee.phoneNumber}/qualificationCertificates/${Date.now()}_qualification.${newQualificationCertificate?.name.split('.').pop()}`, key: 'qualificationCertificateUrl', isImage: newQualificationCertificate?.type.startsWith("image/") ?? false },
         ];
 
         for (const job of uploadJobs) {
@@ -1115,6 +1123,7 @@ export default function AdminEmployeeProfilePage() {
       armsLicense?: boolean;
       passport?: boolean;
       policeClearance?: boolean;
+      qualificationCertificate?: boolean;
     };
     idProofDocumentUrlFront?: string;
     idProofDocumentUrlBack?: string;
@@ -1151,6 +1160,7 @@ export default function AdminEmployeeProfilePage() {
   const hasArmsLicenseDocument = Boolean(employeeDocumentData?.documentAvailability?.armsLicense || employeeDocumentData?.armsLicenseDocumentUrl);
   const hasPassportDocument = Boolean(employeeDocumentData?.documentAvailability?.passport || employeeDocumentData?.passportDocumentUrl);
   const hasPoliceClearanceDocument = Boolean(employeeDocumentData?.documentAvailability?.policeClearance || employeeDocumentData?.policeClearanceCertificateUrl);
+  const hasQualificationCertificate = Boolean(employeeDocumentData?.documentAvailability?.qualificationCertificate || employeeDocumentData?.qualificationCertificateUrl);
   const displayedAadhaarStatus = isDesignatedAadhaarAdmin
     ? aadhaarStatus
     : employeeDocumentData?.documentCompletion?.aadhaar === 'complete' || Boolean(employeeDocumentData?.aadharCardDocumentUrl)
@@ -1872,6 +1882,7 @@ export default function AdminEmployeeProfilePage() {
                     <DetailItem label="Marital Status" value={employee.maritalStatus} />
                     {employee.maritalStatus === "Married" && <DetailItem label="Spouse Name" value={employee.spouseName} isName />}
                     <DetailItem label="Educational Qualification" value={employee.educationalQualification === 'Any Other Qualification' ? employee.otherQualification : employee.educationalQualification} />
+                    <DetailItem label="Name of Qualification" value={employee.qualificationName} />
                     <DetailItem label="District" value={employee.district} isName />
                   </div>
                   <Separator className="my-6" />
@@ -2076,6 +2087,7 @@ export default function AdminEmployeeProfilePage() {
                             {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Arms License" url={isAdminView ? employee.armsLicenseDocumentUrl : undefined} onView={isFieldOfficerView && hasArmsLicenseDocument ? () => void viewGuardDocument("arms-license") : undefined} onDownload={isFieldOfficerView && hasArmsLicenseDocument ? () => void downloadGuardDocument("arms-license") : undefined} type="Arms License" />}
                             {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Passport Copy" url={isAdminView ? employee.passportDocumentUrl : undefined} onView={isFieldOfficerView && hasPassportDocument ? () => void viewGuardDocument("passport") : undefined} onDownload={isFieldOfficerView && hasPassportDocument ? () => void downloadGuardDocument("passport") : undefined} type="Passport" />}
                             {canViewOperationalDetails && <DocumentItem name="Police Clearance Certificate" url={isAdminView ? employee.policeClearanceCertificateUrl : undefined} onView={isFieldOfficerView && hasPoliceClearanceDocument ? () => void viewGuardDocument("police-clearance") : undefined} onDownload={isFieldOfficerView && hasPoliceClearanceDocument ? () => void downloadGuardDocument("police-clearance") : undefined} type="Police Verification" />}
+                            <DocumentItem name="Highest Qualification Certificate" url={isAdminView ? employee.qualificationCertificateUrl : undefined} onView={!isAdminView && hasQualificationCertificate ? () => void viewGuardDocument("qualification-certificate") : undefined} onDownload={!isAdminView && hasQualificationCertificate ? () => void downloadGuardDocument("qualification-certificate") : undefined} type={employee.qualificationName || "Education Certificate"} />
                         </div>
                     </div>
                   </div>
@@ -2166,6 +2178,7 @@ export default function AdminEmployeeProfilePage() {
                           )}
                         />
                       )}
+                      <FormField control={form.control} name="qualificationName" render={({ field }) => (<FormItem><FormLabel>Name of Qualification</FormLabel><FormControl><Input placeholder="e.g., B.Com, Plus Two, SSLC" {...field} value={field.value ?? ''} /></FormControl><FormDescription>Required for new TCS enrollments; may be added to older guards when available.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormDescription>Cannot be changed after enrollment.</FormDescription><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" required {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="district" render={({ field }) => (<FormItem><FormLabel>District</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{keralaDistricts.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -2260,6 +2273,7 @@ export default function AdminEmployeeProfilePage() {
                           <ImageInputWithPreview label="Signature" currentUrl={employee.signatureUrl} preview={signatureUrlPreview} setFile={setNewSignatureUrl} setPreview={setSignatureUrlPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('signatureUrl')} isSignature={true} onRemove={() => handleRemoveFile('signatureUrl', setNewSignatureUrl, setSignatureUrlPreview)} canRemove={isAdminView}/>
                           <ImageInputWithPreview label="Bank Document" currentUrl={employee.bankPassbookStatementUrl} preview={bankPassbookPreview} setFile={setNewBankPassbookStatement} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={() => openCamera('bankPassbookStatement')} onRemove={() => handleRemoveFile('bankPassbookStatementUrl', setNewBankPassbookStatement, setBankPassbookPreview)} canRemove={isAdminView}/>
                           <ImageInputWithPreview label="Police Clearance Certificate" currentUrl={employee.policeClearanceCertificateUrl} preview={policeCertificatePreview} setFile={setNewPoliceClearanceCertificate} setPreview={setPoliceCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('policeClearanceCertificate')} onRemove={() => handleRemoveFile('policeClearanceCertificateUrl', setNewPoliceClearanceCertificate, setPoliceCertificatePreview)} canRemove={isAdminView}/>
+                          <ImageInputWithPreview label="Highest Qualification Certificate" currentUrl={employee.qualificationCertificateUrl} preview={qualificationCertificatePreview} setFile={setNewQualificationCertificate} setPreview={setQualificationCertificatePreview} handleFileChange={handleFileChange} openCamera={() => openCamera('qualificationCertificate')} onRemove={() => handleRemoveFile('qualificationCertificateUrl', setNewQualificationCertificate, setQualificationCertificatePreview)} canRemove={isAdminView}/>
                       </div>
                   </section>
                 </CardContent>

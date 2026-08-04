@@ -135,6 +135,8 @@ const enrollmentFormSchema = z.object({
   
   educationalQualification: qualificationTypes,
   otherQualification: z.string().optional(),
+  qualificationName: z.string().optional(),
+  qualificationCertificate: optionalFileSchema,
   lngJobDesignation: lngDesignationTypes.optional(),
   serviceBookNumber: z.string().optional(),
   serviceBookDocument: optionalFileSchema,
@@ -193,6 +195,12 @@ const enrollmentFormSchema = z.object({
 }).superRefine((data, ctx) => {
   if (data.clientName === "TCS" && (!data.resourceIdNumber || data.resourceIdNumber.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Resource ID number is required for TCS client.", path: ["resourceIdNumber"] });
+  }
+  if (data.clientName === "TCS" && !data.qualificationName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Name of qualification is required for TCS.", path: ["qualificationName"] });
+  }
+  if (data.clientName === "TCS" && !data.qualificationCertificate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Highest qualification certificate is required for TCS.", path: ["qualificationCertificate"] });
   }
   if (data.maritalStatus === "Married" && (!data.spouseName || data.spouseName.trim() === "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Spouse name is required if married.", path: ["spouseName"] });
@@ -294,7 +302,7 @@ const maritalStatuses = [...MARITAL_STATUSES];
 const educationOptions = [...EDUCATION_OPTIONS];
 
 
-type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate" | "serviceBookDocument" | "armsLicenseDocument" | "aadharCardDocument" | "aadharCardDocumentBack" | "panCardDocument" | "passportDocument";
+type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate" | "serviceBookDocument" | "armsLicenseDocument" | "aadharCardDocument" | "aadharCardDocumentBack" | "panCardDocument" | "passportDocument" | "qualificationCertificate";
 
 function buildEnrollmentStoragePath(
   phoneNumber: string,
@@ -380,6 +388,7 @@ export default function EnrollEmployeePage() {
   const [aadharCardBackPreview, setAadharCardBackPreview] = React.useState<string | null>(null);
   const [panCardPreview, setPanCardPreview] = React.useState<string | null>(null);
   const [passportPreview, setPassportPreview] = React.useState<string | null>(null);
+  const [qualificationCertificatePreview, setQualificationCertificatePreview] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [availableClients, setAvailableClients] = useState<ClientOption[]>([]);
@@ -412,6 +421,7 @@ export default function EnrollEmployeePage() {
         spouseName: '',
         educationalQualification: undefined,
         otherQualification: '',
+        qualificationName: '',
         lngJobDesignation: undefined,
         serviceBookNumber: '',
         armsLicenseNumber: '',
@@ -579,6 +589,7 @@ export default function EnrollEmployeePage() {
             case "aadharCardDocumentBack": setAadharCardBackPreview(previewUrl); break;
             case "panCardDocument": setPanCardPreview(previewUrl); break;
             case "passportDocument": setPassportPreview(previewUrl); break;
+            case "qualificationCertificate": setQualificationCertificatePreview(previewUrl); break;
         }
         
         toast({ title: "Photo Captured", description: `${activeCameraField.replace(/([A-Z])/g, ' $1').trim()} photo taken.` });
@@ -655,6 +666,7 @@ export default function EnrollEmployeePage() {
         aadharCardDocumentBackUrl: null,
         panCardDocumentUrl: null,
         passportDocumentUrl: null,
+        qualificationCertificateUrl: null,
     };
 
     try {
@@ -678,6 +690,7 @@ export default function EnrollEmployeePage() {
             { name: "Aadhar Card Back", file: data.aadharCardDocumentBack, folder: "aadharCards", fileStem: "aadhar_back", key: 'aadharCardDocumentBackUrl' },
             { name: "PAN Card", file: data.panCardDocument, folder: "panCards", fileStem: "pan", key: 'panCardDocumentUrl' },
             { name: "Passport", file: data.passportDocument, folder: "passports", fileStem: "passport", key: 'passportDocumentUrl' },
+            { name: "Highest Qualification Certificate", file: data.qualificationCertificate, folder: "qualificationCertificates", fileStem: "qualification", key: 'qualificationCertificateUrl' },
         ];
 
 
@@ -731,6 +744,8 @@ export default function EnrollEmployeePage() {
           spouseName: data.spouseName || undefined,
           educationalQualification: data.educationalQualification,
           otherQualification: data.otherQualification || undefined,
+          qualificationName: data.qualificationName || undefined,
+          qualificationCertificateUrl: uploadedUrls.qualificationCertificateUrl || undefined,
           lngJobDesignation: data.lngJobDesignation || undefined,
           jobDesignation: data.lngJobDesignation || undefined,
           serviceBookNumber: data.serviceBookNumber || undefined,
@@ -1118,6 +1133,16 @@ export default function EnrollEmployeePage() {
                       )}
                     />
                   )}
+                  {watchClientName === "TCS" && (
+                    <>
+                      <FormField control={form.control} name="qualificationName" render={({ field }) => (
+                        <FormItem><FormLabel>Name of Qualification <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="e.g., B.Com, Plus Two, SSLC" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Enter the exact qualification shown on the certificate.</FormDescription><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="qualificationCertificate" render={() => (
+                        <FormItem className="text-center md:col-span-2"><FormLabel className="block mb-2">Highest Qualification Certificate <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="qualificationCertificate" preview={qualificationCertificatePreview} setPreview={setQualificationCertificatePreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Required for TCS. Upload a clear image or PDF." /><FormMessage /></FormItem>
+                      )} />
+                    </>
+                  )}
                   {isLngClient && (
                     <FormField control={form.control} name="lngJobDesignation" render={({ field }) => (
                       <FormItem className="md:col-span-2">
@@ -1440,7 +1465,8 @@ const ImagePreviewAndUpload: React.FC<{
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>, fieldName: any, setPreview: any) => void;
   openCamera: (fieldName: any) => void;
   isSignature?: boolean;
-}> = ({ fieldName, preview, setPreview, handleFileChange, openCamera, isSignature }) => {
+  helperText?: string;
+}> = ({ fieldName, preview, setPreview, handleFileChange, openCamera, isSignature, helperText }) => {
     return (
         <div>
             {preview && (preview === "/pdf-icon.png" ? 
@@ -1453,6 +1479,7 @@ const ImagePreviewAndUpload: React.FC<{
                 <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Take Photo</Button>
             </div>
             <FormControl><Input id={`${fieldName}Input`} type="file" className="hidden" accept={ENROLLMENT_DOCUMENT_ACCEPT} onChange={(e) => handleFileChange(e, fieldName, setPreview)} /></FormControl>
+            {helperText && <p className="mt-2 text-xs text-muted-foreground">{helperText}</p>}
         </div>
     );
 };

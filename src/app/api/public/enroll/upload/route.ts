@@ -21,10 +21,11 @@ const ALLOWED_FOLDERS = new Set([
   "passports",
   "bankDocuments",
   "policeCertificates",
+  "qualificationCertificates",
 ]);
 
 function isSafeEnrollmentPath(path: string) {
-  return /^enrollments\/[A-Za-z0-9_-]+\/(profilePictures|signatures|idProofs|addressProofs|serviceBooks|armsLicenses|aadharCards|panCards|passports|bankDocuments|policeCertificates)\/[A-Za-z0-9._-]+$/.test(
+  return /^enrollments\/[A-Za-z0-9_-]+\/(profilePictures|signatures|idProofs|addressProofs|serviceBooks|armsLicenses|aadharCards|panCards|passports|bankDocuments|policeCertificates|qualificationCertificates)\/[A-Za-z0-9._-]+$/.test(
     path,
   );
 }

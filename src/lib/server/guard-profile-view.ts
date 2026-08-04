@@ -65,6 +65,7 @@ export function serializeGuardProfileView(
     spouseName: normalizeText(data.spouseName),
     educationalQualification: normalizeText(data.educationalQualification),
     otherQualification: normalizeText(data.otherQualification),
+    qualificationName: normalizeText(data.qualificationName),
     nationality: normalizeText(data.nationality),
     identificationMark: normalizeText(data.identificationMark),
     heightCm: typeof data.heightCm === "number" ? data.heightCm : null,
@@ -92,6 +93,7 @@ export function serializeGuardProfileView(
       identityBack: Boolean(identityBack),
       addressFront: Boolean(addressFront),
       addressBack: Boolean(addressBack),
+      qualificationCertificate: Boolean(documentFields.qualificationCertificateUrl),
     },
     documentCompletion: {
       identity: completionStatus(completion.identity, Boolean(identityFront)),
@@ -146,6 +148,7 @@ export function serializeFieldOfficerGuardProfileView(
       armsLicense: Boolean(documents.armsLicenseDocumentUrl),
       passport: Boolean(documents.passportDocumentUrl),
       policeClearance: Boolean(documents.policeClearanceCertificateUrl),
+      qualificationCertificate: Boolean(documents.qualificationCertificateUrl),
     },
   };
 }

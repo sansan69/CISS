@@ -300,6 +300,7 @@ export async function POST(request: NextRequest) {
       gender: payload.gender,
       maritalStatus: payload.maritalStatus,
       educationalQualification: payload.educationalQualification,
+      qualificationName: payload.qualificationName,
       district,
       fullAddress: payload.fullAddress.toUpperCase(),
       emailAddress: normalizedEmail,
@@ -350,6 +351,9 @@ export async function POST(request: NextRequest) {
       ...(payload.branchName && { branchName: payload.branchName.toUpperCase() }),
       ...(payload.bankPassbookStatementUrl && {
         bankPassbookStatementUrl: payload.bankPassbookStatementUrl,
+      }),
+      ...(payload.qualificationCertificateUrl && {
+        qualificationCertificateUrl: payload.qualificationCertificateUrl,
       }),
       ...(payload.resourceIdNumber && { resourceIdNumber: payload.resourceIdNumber }),
       ...(payload.spouseName && {

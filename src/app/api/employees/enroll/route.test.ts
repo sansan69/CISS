@@ -156,6 +156,8 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
     gender: "Male",
     maritalStatus: "Unmarried",
     educationalQualification: "Graduation",
+    qualificationName: "Bachelor of Commerce",
+    qualificationCertificateUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FqualificationCertificates%2Fqualification.pdf?alt=media&token=test",
     district: "Ernakulam",
     identityProofType: "PAN Card",
     identityProofNumber: "AABCT1234C",
@@ -261,6 +263,7 @@ describe("POST /api/employees/enroll", () => {
       addressProofUrlBack: "addressProofs/address-back.png",
       signatureUrl: "signatures/signature.png",
       bankPassbookStatementUrl: "bankDocuments/bank.png",
+      qualificationCertificateUrl: "qualificationCertificates/qualification.pdf",
     })) {
       (payload as Record<string, unknown>)[key] = `https://firebasestorage.googleapis.com/v0/b/test-bucket/o/${encodeURIComponent(`employees/9012345690/${path}`)}?alt=media&token=test`;
     }

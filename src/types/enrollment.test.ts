@@ -20,6 +20,8 @@ function buildLngPayload(
     gender: "Male",
     maritalStatus: "Unmarried",
     educationalQualification: "Graduation",
+    qualificationName: "Bachelor of Commerce",
+    qualificationCertificateUrl: "https://example.com/qualification.pdf",
     district: "Ernakulam",
     panNumber: "AABCT1234C",
     aadharNumber: "123456789012",
@@ -75,6 +77,8 @@ function buildStandardPayload(
     gender: "Male",
     maritalStatus: "Unmarried",
     educationalQualification: "Graduation",
+    qualificationName: "Bachelor of Commerce",
+    qualificationCertificateUrl: "https://example.com/qualification.pdf",
     district: "Ernakulam",
     identityProofType: "PAN Card",
     identityProofNumber: "AABCT1234C",
@@ -102,6 +106,13 @@ function buildStandardPayload(
 }
 
 describe("enrollmentSubmissionSchema", () => {
+  it("requires qualification details and certificate only for new TCS enrollments", () => {
+    expect(enrollmentSubmissionSchema.safeParse(buildStandardPayload({ qualificationName: undefined })).success).toBe(false);
+    expect(enrollmentSubmissionSchema.safeParse(buildStandardPayload({ qualificationCertificateUrl: undefined })).success).toBe(false);
+    expect(enrollmentSubmissionSchema.safeParse(buildStandardPayload()).success).toBe(true);
+    expect(enrollmentSubmissionSchema.safeParse(buildLngPayload()).success).toBe(true);
+  });
+
   it.each([undefined, "", "not-an-email"])(
     "rejects standard client submissions with invalid required email %s",
     (emailAddress) => {

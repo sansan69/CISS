@@ -42,6 +42,8 @@ export const enrollmentSubmissionSchema = z
     spouseName: z.string().trim().optional(),
     educationalQualification: z.enum(EDUCATION_OPTIONS),
     otherQualification: z.string().trim().optional(),
+    qualificationName: z.string().trim().optional(),
+    qualificationCertificateUrl: z.string().url().optional(),
     district: z.string().trim().min(1),
     panNumber: z.string().trim().optional(),
     aadharNumber: z.string().trim().regex(/^\d{12}$/),
@@ -92,6 +94,14 @@ export const enrollmentSubmissionSchema = z
     guardUndertakingVersion: z.literal(GUARD_UNDERTAKING_VERSION),
   })
   .superRefine((data, ctx) => {
+    if (data.clientName.trim().toUpperCase() === "TCS") {
+      if (!data.qualificationName) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Name of qualification is required for TCS enrollment.", path: ["qualificationName"] });
+      }
+      if (!data.qualificationCertificateUrl) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Highest qualification certificate is required for TCS enrollment.", path: ["qualificationCertificateUrl"] });
+      }
+    }
     if (
       data.educationalQualification === "Any Other Qualification" &&
       !data.otherQualification

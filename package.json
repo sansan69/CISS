@@ -28,6 +28,8 @@
     "documents:repair-storage": "node --env-file-if-exists=.env.local scripts/audit-repair-employee-documents.mjs --apply",
     "enrollment:audit-client-profiles": "node --env-file-if-exists=.env.local scripts/backfill-client-enrollment-profiles.mjs",
     "enrollment:repair-client-profiles": "node --env-file-if-exists=.env.local scripts/backfill-client-enrollment-profiles.mjs --apply",
+    "enrollment:audit-tcs-qualification": "node --env-file-if-exists=.env.local scripts/enable-tcs-qualification-certificate.mjs",
+    "enrollment:enable-tcs-qualification": "node --env-file-if-exists=.env.local scripts/enable-tcs-qualification-certificate.mjs --apply",
     "postinstall": "patch-package"
   },
   "dependencies": {

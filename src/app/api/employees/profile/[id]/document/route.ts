@@ -56,6 +56,7 @@ const CATEGORY_FIELDS = {
     "pccUrl",
     "policeCertificateUrl",
   ],
+  "qualification-certificate": ["qualificationCertificateUrl", "highestQualificationDocumentUrl", "educationCertificateUrl"],
 } as const;
 
 const CLIENT_DOCUMENT_CATEGORIES = new Set([
@@ -63,11 +64,12 @@ const CLIENT_DOCUMENT_CATEGORIES = new Set([
   "identity-back",
   "address-front",
   "address-back",
+  "qualification-certificate",
 ]);
 
 function resolveStoragePath(source: string, bucketName: string) {
   const trimmed = source.trim();
-  const allowed = /^(employees|enrollments)\/[A-Za-z0-9_-]+\/(profilePictures|signatures|idProofs|addressProofs|bankDocuments|panCards|serviceBooks|armsLicenses|passports|policeCertificates)\/[A-Za-z0-9._-]+$/;
+  const allowed = /^(employees|enrollments)\/[A-Za-z0-9_-]+\/(profilePictures|signatures|idProofs|addressProofs|bankDocuments|panCards|serviceBooks|armsLicenses|passports|policeCertificates|qualificationCertificates)\/[A-Za-z0-9._-]+$/;
   if (allowed.test(trimmed)) return trimmed;
 
   let url: URL;
@@ -125,6 +127,7 @@ export async function GET(
       "arms-license": documentFields.armsLicenseDocumentUrl,
       passport: documentFields.passportDocumentUrl,
       "police-clearance": documentFields.policeClearanceCertificateUrl,
+      "qualification-certificate": documentFields.qualificationCertificateUrl,
     };
     const fields = CATEGORY_FIELDS[category as keyof typeof CATEGORY_FIELDS];
     const source = documentReference(normalizedSources[category as keyof typeof CATEGORY_FIELDS])

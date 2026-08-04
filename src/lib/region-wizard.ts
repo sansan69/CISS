@@ -17,6 +17,7 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
         { key: "spouseName", label: "Spouse Name", enabled: true, required: false, order: 10 },
         { key: "educationalQualification", label: "Educational Qualification", enabled: true, required: true, order: 11 },
         { key: "otherQualification", label: "Other Qualification", enabled: true, required: false, order: 12 },
+        { key: "qualificationName", label: "Name of Qualification", enabled: false, required: false, order: 12.1 },
         { key: "lngJobDesignation", label: "Job Designation", enabled: true, required: false, order: 13 },
         { key: "serviceBookNumber", label: "Service Book Number", enabled: true, required: false, order: 14 },
         { key: "serviceBookDocument", label: "Service Book Document", enabled: true, required: false, order: 15 },
@@ -43,6 +44,7 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
         { key: "aadharNumber", label: "Aadhaar Number", enabled: true, required: true, order: 11 },
         { key: "panCardDocument", label: "PAN Card Copy", enabled: true, required: false, order: 12 },
         { key: "signatureUrl", label: "Signature Image", enabled: true, required: true, order: 13 },
+        { key: "qualificationCertificate", label: "Highest Qualification Certificate", enabled: false, required: false, order: 14 },
       ],
     },
     bank: {
@@ -87,6 +89,10 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
     TCS: {
       personal: {
         resourceIdNumber: { enabled: true, required: true },
+        qualificationName: { enabled: true, required: true },
+      },
+      documents: {
+        qualificationCertificate: { enabled: true, required: true },
       },
     },
     "LNG Petronet": {

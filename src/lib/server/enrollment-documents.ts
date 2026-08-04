@@ -81,6 +81,7 @@ export async function assertEnrollmentDocumentReferences(
     ["passportDocumentUrl", "Passport document", "passports"],
     ["panCardDocumentUrl", "PAN card copy", "panCards"],
     ["policeClearanceCertificateUrl", "Police clearance certificate", "policeCertificates"],
+    ["qualificationCertificateUrl", "Highest qualification certificate", "qualificationCertificates"],
   ] as const;
   for (const [key, label, folder] of optional) {
     if (payload[key] !== undefined && payload[key] !== null && payload[key] !== "") {

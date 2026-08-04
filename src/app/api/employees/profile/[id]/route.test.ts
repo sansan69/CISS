@@ -149,6 +149,7 @@ describe("GET /api/employees/profile/[id]", () => {
       identityBack: false,
       addressFront: true,
       addressBack: false,
+      qualificationCertificate: false,
     });
   });
 

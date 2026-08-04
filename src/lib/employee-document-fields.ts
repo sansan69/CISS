@@ -21,6 +21,7 @@ export type EmployeeDocumentFields = {
   armsLicenseDocumentUrl?: string;
   passportDocumentUrl?: string;
   policeClearanceCertificateUrl?: string;
+  qualificationCertificateUrl?: string;
 };
 
 export function documentReference(value: unknown): string | undefined {
@@ -113,6 +114,7 @@ export function normalizeEmployeeDocumentFields(
       | "armsLicenseDocumentUrl"
       | "passportDocumentUrl"
       | "policeClearanceCertificateUrl"
+      | "qualificationCertificateUrl"
     >,
     unknown[],
   ]> = [
@@ -157,6 +159,10 @@ export function normalizeEmployeeDocumentFields(
         data.pccUrl,
         data.policeCertificateUrl,
       ],
+    ],
+    [
+      "qualificationCertificateUrl",
+      [data.qualificationCertificateUrl, data.highestQualificationDocumentUrl, data.educationCertificateUrl],
     ],
   ];
 
