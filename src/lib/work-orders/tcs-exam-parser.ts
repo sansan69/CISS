@@ -723,8 +723,32 @@ export function parseTcsExamWorkbook(
 
   const combinedRows: TcsExamSourceRow[] = [];
   const warnings = [...emptySheetWarnings, ...results.flatMap((result) => result.warnings)];
+  const parsedRows = results.flatMap((result) => result.rows);
+  const locationsBySiteCode = new Map<string, Set<string>>();
+  for (const row of parsedRows) {
+    const siteCode = row.siteId?.trim().toLowerCase();
+    if (!siteCode) continue;
+    const locationKey = `${row.siteName.trim().toLowerCase()}|district:${row.district.trim().toLowerCase()}`;
+    const locations = locationsBySiteCode.get(siteCode) ?? new Set<string>();
+    locations.add(locationKey);
+    locationsBySiteCode.set(siteCode, locations);
+  }
+  const ambiguousSiteCodes = new Set(
+    Array.from(locationsBySiteCode.entries())
+      .filter(([, locations]) => locations.size > 1)
+      .map(([siteCode]) => siteCode),
+  );
+  for (const siteCode of ambiguousSiteCodes) {
+    warnings.push({
+      code: "ambiguous_site_code",
+      message: `The repeated TC code "${siteCode}" identifies multiple centres, so centre name and district were used instead.`,
+    });
+  }
   const seenRows = new Map<string, TcsExamSourceRow>();
-  for (const row of results.flatMap((result) => result.rows)) {
+  for (const parsedRow of parsedRows) {
+    const row = parsedRow.siteId && ambiguousSiteCodes.has(parsedRow.siteId.trim().toLowerCase())
+      ? { ...parsedRow, siteId: undefined }
+      : parsedRow;
     const siteKey = row.siteId?.trim().toLowerCase()
       ? `id:${row.siteId.trim().toLowerCase()}`
       : `name:${row.siteName.trim().toLowerCase()}|district:${row.district.trim().toLowerCase()}`;

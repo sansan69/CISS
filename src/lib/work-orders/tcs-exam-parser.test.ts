@@ -87,6 +87,35 @@ describe("parseTcsExamWorkbook", () => {
     expect(result.rows.map((row) => row.date)).toEqual(["2026-05-23", "2026-05-24"]);
   });
 
+  it("uses centre name and district when a placeholder TC code is repeated across venues", () => {
+    const workbook = workbookFromRows([
+      ["S.No", "ZONE", "STATE", "CITY", "TC CODE", "CENTER", "TC Address", 46243, "", 46244, ""],
+      ["", "", "", "", "", "", "", "MALE", "FEMALE", "MALE", "FEMALE"],
+      [4, "South 2", "Kerala", "Thrissur", "IBA Mode", "Government Engineering College, Thrissur", "Ramavarmapuram", 2, 2, 2, 2],
+      [5, "South 2", "Kerala", "Palakkad", "IBA Mode", "NSS College of Engineering, Palakkad", "Akathethara", 2, 2, 2, 2],
+    ]);
+
+    const result = parseTcsExamWorkbook(
+      workbook,
+      "Adhoc Security Guards Requirment for IBA PNQT Exam on 09 and 10 Aug 2026.xlsx",
+    );
+
+    expect(result.rows).toHaveLength(4);
+    expect(result.siteCount).toBe(2);
+    expect(result.totalMale).toBe(8);
+    expect(result.totalFemale).toBe(8);
+    expect(result.rows.every((row) => row.siteId === undefined)).toBe(true);
+    expect(result.rows.map((row) => `${row.siteName}|${row.district}`)).toEqual([
+      "Government Engineering College, Thrissur|Thrissur",
+      "Government Engineering College, Thrissur|Thrissur",
+      "NSS College of Engineering, Palakkad|Palakkad",
+      "NSS College of Engineering, Palakkad|Palakkad",
+    ]);
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: "ambiguous_site_code",
+    }));
+  });
+
   it("rounds XLSX date-only objects that land seconds before local midnight", () => {
     const workbook = workbookFromRows([
       ["District", "Site", new Date(2026, 4, 22, 23, 59, 50), ""],
