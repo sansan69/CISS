@@ -251,7 +251,13 @@ function formatEmployeeDate(value: unknown, pattern: string) {
 }
 
 
-const DocumentItem: React.FC<{ name: string, url?: string, type?: string, onView?: () => void }> = ({ name, url, type, onView }) => (
+const DocumentItem: React.FC<{
+  name: string;
+  url?: string;
+  type?: string;
+  onView?: () => void;
+  onDownload?: () => void;
+}> = ({ name, url, type, onView, onDownload }) => (
     <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center gap-3">
             <FileUp className="h-5 w-5 text-primary" />
@@ -260,11 +266,18 @@ const DocumentItem: React.FC<{ name: string, url?: string, type?: string, onView
                 {type && <p className="text-xs text-muted-foreground">{type}</p>}
             </div>
         </div>
-        {url || onView ? (
+        {url || onView || onDownload ? (
             onView ? (
-              <Button variant="outline" size="sm" onClick={onView} data-ai-hint={`${type || 'document'} document`}>
-                <Download className="mr-2 h-4 w-4" /> View document
-              </Button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={onView} data-ai-hint={`${type || 'document'} document`}>
+                  View
+                </Button>
+                {onDownload && (
+                  <Button variant="outline" size="sm" onClick={onDownload}>
+                    <Download className="mr-2 h-4 w-4" /> Download
+                  </Button>
+                )}
+              </div>
             ) : (
               <Button variant="outline" size="sm" asChild>
                   <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
@@ -493,6 +506,8 @@ export default function AdminEmployeeProfilePage() {
   }, []);
 
   const isAdminView = !isAuthLoading && (userRole === "admin" || userRole === "superAdmin");
+  const isFieldOfficerView = !isAuthLoading && userRole === "fieldOfficer";
+  const canViewOperationalDetails = isAdminView || isFieldOfficerView;
   const isReadOnlyViewer = !isAdminView;
   // These documents belong to the LNG Petronet workflow. Do not expose
   // stale LNG fields on profiles currently assigned to another client.
@@ -627,6 +642,34 @@ export default function AdminEmployeeProfilePage() {
     } catch (documentError) {
       popup.close();
       toast({ variant: "destructive", title: "Document unavailable", description: documentError instanceof Error ? documentError.message : "Could not load document." });
+    } finally {
+      setViewingDocument(null);
+    }
+  };
+
+  const downloadGuardDocument = async (category: string) => {
+    if (!employee || viewingDocument) return;
+    setViewingDocument(category);
+    try {
+      const response = await authorizedFetch(
+        `/api/employees/profile/${encodeURIComponent(employee.id)}/document?category=${encodeURIComponent(category)}&download=true`,
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Could not download document.");
+      }
+      const disposition = response.headers.get("content-disposition") || "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `${category}-document`;
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (documentError) {
+      toast({ variant: "destructive", title: "Download unavailable", description: documentError instanceof Error ? documentError.message : "Could not download document." });
     } finally {
       setViewingDocument(null);
     }
@@ -1064,6 +1107,14 @@ export default function AdminEmployeeProfilePage() {
       identityBack?: boolean;
       addressFront?: boolean;
       addressBack?: boolean;
+      profilePicture?: boolean;
+      signature?: boolean;
+      bank?: boolean;
+      panCard?: boolean;
+      serviceBook?: boolean;
+      armsLicense?: boolean;
+      passport?: boolean;
+      policeClearance?: boolean;
     };
     idProofDocumentUrlFront?: string;
     idProofDocumentUrlBack?: string;
@@ -1092,6 +1143,14 @@ export default function AdminEmployeeProfilePage() {
     employeeDocumentData?.documentAvailability?.addressBack ||
     employeeDocumentData?.addressProofUrlBack,
   );
+  const hasSignatureDocument = Boolean(employeeDocumentData?.documentAvailability?.signature || employeeDocumentData?.signatureUrl);
+  const hasProfilePictureDocument = Boolean(employeeDocumentData?.documentAvailability?.profilePicture || employeeDocumentData?.profilePictureUrl);
+  const hasBankDocument = Boolean(employeeDocumentData?.documentAvailability?.bank || employeeDocumentData?.bankPassbookStatementUrl);
+  const hasPanCardDocument = Boolean(employeeDocumentData?.documentAvailability?.panCard || employeeDocumentData?.panCardDocumentUrl);
+  const hasServiceBookDocument = Boolean(employeeDocumentData?.documentAvailability?.serviceBook || employeeDocumentData?.serviceBookDocumentUrl);
+  const hasArmsLicenseDocument = Boolean(employeeDocumentData?.documentAvailability?.armsLicense || employeeDocumentData?.armsLicenseDocumentUrl);
+  const hasPassportDocument = Boolean(employeeDocumentData?.documentAvailability?.passport || employeeDocumentData?.passportDocumentUrl);
+  const hasPoliceClearanceDocument = Boolean(employeeDocumentData?.documentAvailability?.policeClearance || employeeDocumentData?.policeClearanceCertificateUrl);
   const displayedAadhaarStatus = isDesignatedAadhaarAdmin
     ? aadhaarStatus
     : employeeDocumentData?.documentCompletion?.aadhaar === 'complete' || Boolean(employeeDocumentData?.aadharCardDocumentUrl)
@@ -1792,12 +1851,12 @@ export default function AdminEmployeeProfilePage() {
 
         {!isEditing && (
           <Tabs defaultValue="personal" className="w-full">
-            <TabsList className={`grid w-full grid-cols-2 ${isAdminView ? "md:grid-cols-5" : "md:grid-cols-4"} gap-2 h-auto`}>
+            <TabsList className={`grid w-full grid-cols-2 ${canViewOperationalDetails ? "md:grid-cols-5" : "md:grid-cols-4"} gap-2 h-auto`}>
               <TabsTrigger value="personal" className="py-2"><User className="mr-2 h-4 w-4 md:inline-block" />Personal</TabsTrigger>
               <TabsTrigger value="employment" className="py-2"><Briefcase className="mr-2 h-4 w-4 md:inline-block" />Employment</TabsTrigger>
-              {isAdminView && <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>}
+              {canViewOperationalDetails && <TabsTrigger value="bank" className="py-2"><Banknote className="mr-2 h-4 w-4 md:inline-block" />Bank</TabsTrigger>}
               <TabsTrigger value="identification" className="py-2"><ShieldCheck className="mr-2 h-4 w-4 md:inline-block" />Identification</TabsTrigger>
-              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />{isAdminView ? "QR & Docs" : "Documents"}</TabsTrigger>
+              <TabsTrigger value="qr" className="py-2"><QrCode className="mr-2 h-4 w-4 md:inline-block" />{canViewOperationalDetails ? "QR & Docs" : "Documents"}</TabsTrigger>
             </TabsList>
             <Card className="mt-4">
               <CardContent className="pt-6">
@@ -1878,7 +1937,7 @@ export default function AdminEmployeeProfilePage() {
                 <TabsContent value="identification">
                   <CardTitle className="mb-4">Identification Details</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    {isAdminView && <DetailItem label="PAN Number" value={employee.panNumber} />}
+                    {canViewOperationalDetails && <DetailItem label="PAN Number" value={employee.panNumber} />}
                     <DetailItem label="Identity Proof" value={`${employee.identityProofType || (employee as any).idProofType || 'N/A'} - ${employee.identityProofNumber || (employee as any).idProofNumber || 'N/A'}`} />
                     <DetailItem label="Address Proof" value={`${employee.addressProofType || 'N/A'} - ${employee.addressProofNumber || 'N/A'}`} />
                     {employee.nationality && <DetailItem label="Nationality" value={employee.nationality} isName />}
@@ -1888,8 +1947,8 @@ export default function AdminEmployeeProfilePage() {
                     {showLngPetronetDocuments && employee.serviceBookNumber && <DetailItem label="Service Book Number" value={employee.serviceBookNumber} />}
                     {showLngPetronetDocuments && employee.armsLicenseNumber && <DetailItem label="Arms License Number" value={employee.armsLicenseNumber} />}
                     {showLngPetronetDocuments && employee.passportCountryName && <DetailItem label="Passport Country" value={employee.passportCountryName} isName />}
-                    {isAdminView && <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />}
-                    {isAdminView && <DetailItem label="ESIC Number" value={employee.esicNumber} />}
+                    {canViewOperationalDetails && <DetailItem label="EPF UAN Number" value={employee.epfUanNumber} />}
+                    {canViewOperationalDetails && <DetailItem label="ESIC Number" value={employee.esicNumber} />}
                   </div>
                   {!isReadOnlyViewer && <div className="mt-5 rounded-xl border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1975,38 +2034,48 @@ export default function AdminEmployeeProfilePage() {
                     <div>
                         <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                         <div className="space-y-3">
-                            <DocumentItem name="Profile Picture" url={employee.profilePictureUrl} type="Employee Photo" />
-                            {isAdminView && <DocumentItem name="Signature" url={employee.signatureUrl} type="Employee Signature" />}
+                            <DocumentItem name="Profile Picture" url={isFieldOfficerView ? undefined : employee.profilePictureUrl} onView={isFieldOfficerView && hasProfilePictureDocument ? () => void viewGuardDocument("profile-picture") : undefined} onDownload={isFieldOfficerView && hasProfilePictureDocument ? () => void downloadGuardDocument("profile-picture") : undefined} type="Employee Photo" />
+                            {canViewOperationalDetails && <DocumentItem
+                              name="Signature"
+                              url={isAdminView ? employee.signatureUrl : undefined}
+                              onView={isFieldOfficerView && hasSignatureDocument ? () => void viewGuardDocument("signature") : undefined}
+                              onDownload={isFieldOfficerView && hasSignatureDocument ? () => void downloadGuardDocument("signature") : undefined}
+                              type="Employee Signature"
+                            />}
                             <DocumentItem
                               name="Identity Proof (Front)"
                               url={isAdminView ? (employee.identityProofUrlFront || (employee as any).idProofDocumentUrlFront || (employee as any).idProofDocumentUrl) : undefined}
                               onView={!isAdminView && hasIdentityFrontDocument ? () => void viewGuardDocument("identity-front") : undefined}
+                              onDownload={isFieldOfficerView && hasIdentityFrontDocument ? () => void downloadGuardDocument("identity-front") : undefined}
                               type={employee.identityProofType || (employee as any).idProofType}
                             />
                             <DocumentItem
                               name="Identity Proof (Back)"
                               url={isAdminView ? (employee.identityProofUrlBack || (employee as any).idProofDocumentUrlBack) : undefined}
                               onView={!isAdminView && hasIdentityBackDocument ? () => void viewGuardDocument("identity-back") : undefined}
+                              onDownload={isFieldOfficerView && hasIdentityBackDocument ? () => void downloadGuardDocument("identity-back") : undefined}
                               type={employee.identityProofType || (employee as any).idProofType}
                             />
                             <DocumentItem
                               name="Address Proof (Front)"
                               url={isAdminView ? employee.addressProofUrlFront : undefined}
                               onView={!isAdminView && hasAddressFrontDocument ? () => void viewGuardDocument("address-front") : undefined}
+                              onDownload={isFieldOfficerView && hasAddressFrontDocument ? () => void downloadGuardDocument("address-front") : undefined}
                               type={employee.addressProofType}
                             />
                             <DocumentItem
                               name="Address Proof (Back)"
                               url={isAdminView ? employee.addressProofUrlBack : undefined}
                               onView={!isAdminView && hasAddressBackDocument ? () => void viewGuardDocument("address-back") : undefined}
+                              onDownload={isFieldOfficerView && hasAddressBackDocument ? () => void downloadGuardDocument("address-back") : undefined}
                               type={employee.addressProofType}
                             />
-                            {isAdminView && <DocumentItem name="Bank Passbook/Statement" url={employee.bankPassbookStatementUrl} type="Bank Document" />}
-                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="PAN Card Copy" url={employee.panCardDocumentUrl} type="LNG Statutory Document" />}
-                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="Service Book" url={employee.serviceBookDocumentUrl} type="LNG Service Book" />}
-                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="Arms License" url={employee.armsLicenseDocumentUrl} type="Arms License" />}
-                            {isAdminView && showLngPetronetDocuments && <DocumentItem name="Passport Copy" url={employee.passportDocumentUrl} type="Passport" />}
-                            {isAdminView && <DocumentItem name="Police Clearance Certificate" url={employee.policeClearanceCertificateUrl} type="Police Verification" />}
+                            {canViewOperationalDetails && <DocumentItem name="Bank Passbook/Statement" url={isAdminView ? employee.bankPassbookStatementUrl : undefined} onView={isFieldOfficerView && hasBankDocument ? () => void viewGuardDocument("bank") : undefined} onDownload={isFieldOfficerView && hasBankDocument ? () => void downloadGuardDocument("bank") : undefined} type="Bank Document" />}
+                            {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="PAN Card Copy" url={isAdminView ? employee.panCardDocumentUrl : undefined} onView={isFieldOfficerView && hasPanCardDocument ? () => void viewGuardDocument("pan-card") : undefined} onDownload={isFieldOfficerView && hasPanCardDocument ? () => void downloadGuardDocument("pan-card") : undefined} type="LNG Statutory Document" />}
+                            {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Service Book" url={isAdminView ? employee.serviceBookDocumentUrl : undefined} onView={isFieldOfficerView && hasServiceBookDocument ? () => void viewGuardDocument("service-book") : undefined} onDownload={isFieldOfficerView && hasServiceBookDocument ? () => void downloadGuardDocument("service-book") : undefined} type="LNG Service Book" />}
+                            {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Arms License" url={isAdminView ? employee.armsLicenseDocumentUrl : undefined} onView={isFieldOfficerView && hasArmsLicenseDocument ? () => void viewGuardDocument("arms-license") : undefined} onDownload={isFieldOfficerView && hasArmsLicenseDocument ? () => void downloadGuardDocument("arms-license") : undefined} type="Arms License" />}
+                            {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Passport Copy" url={isAdminView ? employee.passportDocumentUrl : undefined} onView={isFieldOfficerView && hasPassportDocument ? () => void viewGuardDocument("passport") : undefined} onDownload={isFieldOfficerView && hasPassportDocument ? () => void downloadGuardDocument("passport") : undefined} type="Passport" />}
+                            {canViewOperationalDetails && <DocumentItem name="Police Clearance Certificate" url={isAdminView ? employee.policeClearanceCertificateUrl : undefined} onView={isFieldOfficerView && hasPoliceClearanceDocument ? () => void viewGuardDocument("police-clearance") : undefined} onDownload={isFieldOfficerView && hasPoliceClearanceDocument ? () => void downloadGuardDocument("police-clearance") : undefined} type="Police Verification" />}
                         </div>
                     </div>
                   </div>

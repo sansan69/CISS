@@ -108,6 +108,48 @@ export function serializeGuardProfileView(
 
 export type GuardProfileView = ReturnType<typeof serializeGuardProfileView>;
 
+/**
+ * Field officers need the enrollment and deployment record for guards they
+ * supervise. Aadhaar remains deliberately excluded because it is managed by
+ * the separate encrypted, consent-controlled Aadhaar workflow.
+ */
+export function serializeFieldOfficerGuardProfileView(
+  docId: string,
+  data: Record<string, unknown>,
+) {
+  const profile = serializeGuardProfileView(docId, data);
+  const documents = normalizeEmployeeDocumentFields(data);
+
+  return {
+    ...profile,
+    regionCode: normalizeText(data.regionCode),
+    regionName: normalizeText(data.regionName),
+    department: normalizeText(data.department),
+    panNumber: normalizeText(data.panNumber),
+    serviceBookNumber: normalizeText(data.serviceBookNumber),
+    armsLicenseNumber: normalizeText(data.armsLicenseNumber),
+    passportCountryName: normalizeText(data.passportCountryName),
+    legacyUniqueId: normalizeText(data.legacyUniqueId),
+    epfUanNumber: normalizeText(data.epfUanNumber),
+    esicNumber: normalizeText(data.esicNumber),
+    bankName: normalizeText(data.bankName),
+    bankAccountNumber: normalizeText(data.bankAccountNumber),
+    ifscCode: normalizeText(data.ifscCode),
+    branchName: normalizeText(data.branchName),
+    documentAvailability: {
+      ...profile.documentAvailability,
+      profilePicture: Boolean(documents.profilePictureUrl),
+      signature: Boolean(documents.signatureUrl),
+      bank: Boolean(documents.bankPassbookStatementUrl),
+      panCard: Boolean(documents.panCardDocumentUrl),
+      serviceBook: Boolean(documents.serviceBookDocumentUrl),
+      armsLicense: Boolean(documents.armsLicenseDocumentUrl),
+      passport: Boolean(documents.passportDocumentUrl),
+      policeClearance: Boolean(documents.policeClearanceCertificateUrl),
+    },
+  };
+}
+
 export async function assertGuardProfileScope(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,

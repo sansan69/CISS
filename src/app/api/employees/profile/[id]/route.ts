@@ -7,7 +7,11 @@ import {
   verifyRequestAuth,
 } from "@/lib/server/auth";
 import { findEmployeeById } from "@/lib/server/employee-document-access";
-import { assertGuardProfileScope, serializeGuardProfileView } from "@/lib/server/guard-profile-view";
+import {
+  assertGuardProfileScope,
+  serializeFieldOfficerGuardProfileView,
+  serializeGuardProfileView,
+} from "@/lib/server/guard-profile-view";
 
 export const runtime = "nodejs";
 
@@ -32,7 +36,9 @@ export async function GET(
     const data = employeeSnap.data() as Record<string, unknown>;
     await assertGuardProfileScope(adminDb, decoded, data);
 
-    const profile = serializeGuardProfileView(employeeSnap.id, data);
+    const profile = hasFieldOfficerAccess(decoded)
+      ? serializeFieldOfficerGuardProfileView(employeeSnap.id, data)
+      : serializeGuardProfileView(employeeSnap.id, data);
     return NextResponse.json({ profile }, {
       headers: { "Cache-Control": "no-store, private" },
     });

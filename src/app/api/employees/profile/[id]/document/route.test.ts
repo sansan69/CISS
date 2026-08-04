@@ -13,6 +13,7 @@ vi.mock("@/lib/server/auth", () => ({
 class FakeDb {
   private readonly employees = new Map<string, Record<string, unknown>>();
   private readonly clients = new Map<string, Record<string, unknown>>();
+  private readonly fieldOfficers = new Map<string, Record<string, unknown>>();
 
   seedEmployee(id: string, value: Record<string, unknown>) {
     this.employees.set(id, value);
@@ -22,8 +23,16 @@ class FakeDb {
     this.clients.set(id, value);
   }
 
+  seedFieldOfficer(id: string, value: Record<string, unknown>) {
+    this.fieldOfficers.set(id, value);
+  }
+
   collection(name: string) {
-    const values = name === "employees" ? this.employees : this.clients;
+    const values = name === "employees"
+      ? this.employees
+      : name === "fieldOfficers"
+        ? this.fieldOfficers
+        : this.clients;
     return {
       add: async () => undefined,
       doc: (id: string) => ({
@@ -133,5 +142,53 @@ describe("GET /api/employees/profile/[id]/document", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("downloads an assigned guard service book for a field officer", async () => {
+    const db = new FakeDb();
+    db.seedFieldOfficer("fo-record", { uid: "fo-1", assignedDistricts: ["Ernakulam"] });
+    db.seedEmployee("guard-lng", {
+      employeeId: "G-LNG",
+      clientName: "LNG Petronet",
+      district: "Ernakulam",
+      serviceBookDocumentUrl: "employees/guard-lng/serviceBooks/service-book.pdf",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db,
+      storage: {
+        bucket: () => ({
+          name: "test-bucket",
+          file: () => ({
+            download: async () => [Buffer.from("service-book")],
+            getMetadata: async () => [{ contentType: "application/pdf" }],
+          }),
+        }),
+      },
+    }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "fo-1", role: "fieldOfficer" });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/employees/profile/guard-lng/document?category=service-book&download=true"),
+      { params: Promise.resolve({ id: "guard-lng" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="service-book.pdf"');
+    expect(await response.text()).toBe("service-book");
+  });
+
+  it("does not expose bank documents to client accounts", async () => {
+    const db = new FakeDb();
+    verifyRequestAuthMock.mockResolvedValue({ uid: "client-user", role: "client" });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/employees/profile/guard-1/document?category=bank"),
+      { params: Promise.resolve({ id: "guard-1" }) },
+    );
+
+    expect(response.status).toBe(403);
   });
 });

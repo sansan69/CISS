@@ -181,4 +181,56 @@ describe("GET /api/employees/profile/[id]", () => {
 
     expect(response.status).toBe(403);
   });
+
+  it("returns operational details and document availability for an assigned field officer", async () => {
+    const db = new FakeDb();
+    db.seed("fieldOfficers", "fo-record", { uid: "fo-1", assignedDistricts: ["Ernakulam"] });
+    db.seed("employees", "guard-4", {
+      employeeId: "G-004",
+      fullName: "Guard Four",
+      clientName: "LNG Petronet",
+      district: "Ernakulam",
+      panNumber: "ABCDE1234F",
+      epfUanNumber: "100200300400",
+      bankName: "Federal Bank",
+      bankAccountNumber: "1234567890",
+      ifscCode: "FDRL0000001",
+      branchName: "Kochi",
+      serviceBookNumber: "SB-004",
+      signatureUrl: "employees/guard-4/signatures/signature.png",
+      bankPassbookStatementUrl: "employees/guard-4/bankDocuments/passbook.pdf",
+      serviceBookDocumentUrl: "employees/guard-4/serviceBooks/service-book.pdf",
+      profilePictureUrl: "employees/guard-4/profilePictures/profile.png",
+      aadharNumber: "123456789012",
+      aadharCardDocumentUrl: "employees/guard-4/aadharCards/aadhaar.pdf",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "fo-1", role: "fieldOfficer" });
+
+    const { GET } = await import("./route");
+    const response = await GET(new Request("http://localhost/api/employees/profile/guard-4"), {
+      params: Promise.resolve({ id: "guard-4" }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.profile).toMatchObject({
+      panNumber: "ABCDE1234F",
+      epfUanNumber: "100200300400",
+      bankName: "Federal Bank",
+      bankAccountNumber: "1234567890",
+      branchName: "Kochi",
+      serviceBookNumber: "SB-004",
+      documentAvailability: {
+        profilePicture: true,
+        signature: true,
+        bank: true,
+        serviceBook: true,
+      },
+    });
+    expect(body.profile).not.toHaveProperty("aadharNumber");
+    expect(body.profile).not.toHaveProperty("aadharCardDocumentUrl");
+    expect(body.profile).not.toHaveProperty("signatureUrl");
+    expect(body.profile).not.toHaveProperty("bankPassbookStatementUrl");
+  });
 });

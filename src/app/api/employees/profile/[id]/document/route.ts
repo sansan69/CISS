@@ -8,6 +8,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CATEGORY_FIELDS = {
+  "profile-picture": ["profilePictureUrl", "profilePhotoUrl", "profilePhoto"],
+  signature: ["signatureUrl", "signature", "signatureDocumentUrl"],
   "identity-front": [
     "identityProofUrlFront",
     "idProofFrontUrl",
@@ -35,11 +37,37 @@ const CATEGORY_FIELDS = {
     "addressProofBack",
     "addressProofDocumentUrlBack",
   ],
+  bank: [
+    "bankPassbookStatementUrl",
+    "bankPassbookStatement",
+    "bankDocumentUrl",
+    "bankPassbookUrl",
+    "passbookDocumentUrl",
+    "bankProofUrl",
+    "bankStatementUrl",
+  ],
+  "pan-card": ["panCardDocumentUrl", "panCardUrl", "panDocumentUrl"],
+  "service-book": ["serviceBookDocumentUrl", "serviceBookUrl", "serviceBookSourceUrl"],
+  "arms-license": ["armsLicenseDocumentUrl", "armsLicenseUrl", "armsLicenseSourceUrl", "armsLicenseCopyUrl"],
+  passport: ["passportDocumentUrl", "passportUrl", "passportCopyUrl"],
+  "police-clearance": [
+    "policeClearanceCertificateUrl",
+    "policeClearanceUrl",
+    "pccUrl",
+    "policeCertificateUrl",
+  ],
 } as const;
+
+const CLIENT_DOCUMENT_CATEGORIES = new Set([
+  "identity-front",
+  "identity-back",
+  "address-front",
+  "address-back",
+]);
 
 function resolveStoragePath(source: string, bucketName: string) {
   const trimmed = source.trim();
-  const allowed = /^(employees|enrollments)\/[A-Za-z0-9_-]+\/(idProofs|addressProofs)\/[A-Za-z0-9._-]+$/;
+  const allowed = /^(employees|enrollments)\/[A-Za-z0-9_-]+\/(profilePictures|signatures|idProofs|addressProofs|bankDocuments|panCards|serviceBooks|armsLicenses|passports|policeCertificates)\/[A-Za-z0-9._-]+$/;
   if (allowed.test(trimmed)) return trimmed;
 
   let url: URL;
@@ -73,6 +101,9 @@ export async function GET(
     if (!(category in CATEGORY_FIELDS)) {
       return NextResponse.json({ error: "A valid document category is required." }, { status: 400 });
     }
+    if (hasClientAccess(decoded) && !CLIENT_DOCUMENT_CATEGORIES.has(category)) {
+      return NextResponse.json({ error: "This document is not available to client accounts." }, { status: 403 });
+    }
     const { id } = await params;
     const { db, storage } = await import("@/lib/firebaseAdmin");
     const employee = await findEmployeeById(db, id);
@@ -82,10 +113,18 @@ export async function GET(
 
     const documentFields = normalizeEmployeeDocumentFields(data);
     const normalizedSources: Record<keyof typeof CATEGORY_FIELDS, unknown> = {
+      "profile-picture": documentFields.profilePictureUrl,
+      signature: documentFields.signatureUrl,
       "identity-front": documentFields.identityProofUrlFront,
       "identity-back": documentFields.identityProofUrlBack,
       "address-front": documentFields.addressProofUrlFront,
       "address-back": documentFields.addressProofUrlBack,
+      bank: documentFields.bankPassbookStatementUrl,
+      "pan-card": documentFields.panCardDocumentUrl,
+      "service-book": documentFields.serviceBookDocumentUrl,
+      "arms-license": documentFields.armsLicenseDocumentUrl,
+      passport: documentFields.passportDocumentUrl,
+      "police-clearance": documentFields.policeClearanceCertificateUrl,
     };
     const fields = CATEGORY_FIELDS[category as keyof typeof CATEGORY_FIELDS];
     const source = documentReference(normalizedSources[category as keyof typeof CATEGORY_FIELDS])
@@ -97,8 +136,9 @@ export async function GET(
     const [buffer] = await storage.bucket().file(path).download();
     const [metadata] = await storage.bucket().file(path).getMetadata();
     const contentType = typeof metadata.contentType === "string" ? metadata.contentType : "application/octet-stream";
+    const shouldDownload = new URL(request.url).searchParams.get("download") === "true";
     await db.collection("sensitiveDocumentAuditLogs").add({
-      action: "guard_profile_document_viewed",
+      action: shouldDownload ? "guard_profile_document_downloaded" : "guard_profile_document_viewed",
       employeeDocId: employee.id,
       category,
       actorUid: decoded.uid,
@@ -106,10 +146,12 @@ export async function GET(
       at: new Date(),
     });
 
+    const rawFilename = path.split("/").pop() || `${category}-document`;
+    const filename = rawFilename.replace(/[^A-Za-z0-9._-]/g, "_");
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": "inline",
+        "Content-Disposition": `${shouldDownload ? "attachment" : "inline"}; filename="${filename}"`,
         "Cache-Control": "no-store, private, max-age=0",
         "X-Content-Type-Options": "nosniff",
       },
