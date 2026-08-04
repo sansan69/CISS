@@ -146,18 +146,30 @@ describe("enrollmentSubmissionSchema", () => {
     },
   );
 
-  it("still accepts LNG submissions when optional banking details are omitted", () => {
+  it("still accepts LNG submissions when optional account details are omitted", () => {
     const parsed = enrollmentSubmissionSchema.safeParse(
       buildLngPayload({
         bankAccountNumber: undefined,
         ifscCode: undefined,
         bankName: undefined,
-        branchName: undefined,
         legacyUniqueId: undefined,
       }),
     );
 
     expect(parsed.success).toBe(true);
+  });
+
+  it("requires the LNG branch name retained from the historical setup", () => {
+    const parsed = enrollmentSubmissionSchema.safeParse(
+      buildLngPayload({ branchName: undefined }),
+    );
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.branchName).toContain(
+        "Branch name is required for LNG Petronet enrollment.",
+      );
+    }
   });
 
   it("requires a bank passbook or statement for every enrollment", () => {

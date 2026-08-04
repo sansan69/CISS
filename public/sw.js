@@ -1,7 +1,7 @@
 // A robust, production-ready service worker.
 // See: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
 
-const CACHE_NAME = 'ciss-workforce-cache-v5'; // Increment version to force update
+const CACHE_NAME = 'ciss-workforce-cache-v6'; // Enrollment profile/config cache refresh
 const APP_SHELL_URLS = [
   '/',
   '/guard/dashboard',
@@ -73,6 +73,14 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(event.request, { cache: 'no-store' }));
     return;
   }
+
+  // Never cache API responses or authenticated requests. Apart from avoiding
+  // stale data, this prevents one signed-in user's response from being reused
+  // by another browser session.
+  if (event.request.url.includes('/api/') || event.request.headers.has('Authorization')) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
   
   // For navigation requests (loading the app pages), use a network-first strategy.
   // This ensures users always get the latest HTML if they are online.
@@ -99,21 +107,21 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // For _next/static chunks (hashed filenames), use network-first to prevent
-  // serving stale JS bundles after deploys.
+  // Hashed Next.js assets are immutable. Serve cached chunks immediately and
+  // only go to the network on the first request (or after a cache miss).
   if (event.request.url.includes('/_next/static/')) {
     event.respondWith(
       (async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
         try {
           const networkResponse = await fetch(event.request);
           if (networkResponse && networkResponse.status === 200) {
-            const cache = await caches.open(CACHE_NAME);
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
         } catch (err) {
-          const cache = await caches.open(CACHE_NAME);
-          const cached = await cache.match(event.request);
           return cached || new Response('Offline', { status: 503 });
         }
       })()

@@ -7,8 +7,10 @@ import type {
 } from "@/types/region";
 import { DEFAULT_ENROLLMENT_FORM_CONFIG } from "@/lib/region-wizard";
 import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
+import { getEnabledFields } from "@/lib/enrollment-config-client";
 
 export { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
+export { getEnabledFields } from "@/lib/enrollment-config-client";
 
 function isFieldConfig(value: unknown): value is EnrollmentFormFieldConfig {
   if (!value || typeof value !== "object") return false;
@@ -112,35 +114,6 @@ export async function fetchEnrollmentConfig(adminDb?: Firestore): Promise<Enroll
   } catch {
     return normalizeEnrollmentFormConfig(DEFAULT_ENROLLMENT_FORM_CONFIG);
   }
-}
-
-export function getEnabledFields(
-  config: EnrollmentFormConfig,
-  clientName?: string,
-): EnrollmentFormFieldConfig[] {
-  const allFields: EnrollmentFormFieldConfig[] = [];
-
-  for (const section of Object.values(config.sections)) {
-    for (const field of section.fields) {
-      if (!field.enabled) continue;
-
-      let resolved = { ...field };
-
-      if (clientName && config.clientOverrides?.[clientName]) {
-        const overrides = config.clientOverrides[clientName];
-        for (const [sectionKey, fieldOverrides] of Object.entries(overrides)) {
-          const override = fieldOverrides[field.key as keyof typeof fieldOverrides];
-          if (override) {
-            resolved = { ...resolved, ...override };
-          }
-        }
-      }
-
-      allFields.push(resolved);
-    }
-  }
-
-  return allFields.sort((a, b) => a.order - b.order);
 }
 
 export function getEnabledSections(

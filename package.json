@@ -26,6 +26,8 @@
     "documents:backfill-policy:apply": "node --env-file-if-exists=.env.local scripts/backfill-employee-document-policy.mjs --apply",
     "documents:audit-storage": "node --env-file-if-exists=.env.local scripts/audit-repair-employee-documents.mjs",
     "documents:repair-storage": "node --env-file-if-exists=.env.local scripts/audit-repair-employee-documents.mjs --apply",
+    "enrollment:audit-client-profiles": "node --env-file-if-exists=.env.local scripts/backfill-client-enrollment-profiles.mjs",
+    "enrollment:repair-client-profiles": "node --env-file-if-exists=.env.local scripts/backfill-client-enrollment-profiles.mjs --apply",
     "postinstall": "patch-package"
   },
   "dependencies": {

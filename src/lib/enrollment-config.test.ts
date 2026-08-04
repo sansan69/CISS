@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getEnabledFields,
   normalizeEnrollmentFormConfig,
   validateEnrollmentSubmissionAgainstConfig,
 } from "./enrollment-config";
@@ -88,5 +89,29 @@ describe("new enrollment mandatory document policy", () => {
     expect(validateEnrollmentSubmissionAgainstConfig(config, {})).toContain(
       "Aadhaar number is required",
     );
+  });
+
+  it("allows a normalized client override to enable a globally disabled field", () => {
+    const config = normalizeEnrollmentFormConfig({
+      sections: {
+        personal: {
+          label: "Personal",
+          fields: [{ key: "serviceBookDocument", label: "Service Book", enabled: false, required: false, order: 1 }],
+        },
+      },
+      clientOverrides: {
+        "LNG Petronet": {
+          personal: {
+            serviceBookDocument: { enabled: true, required: true },
+          },
+        },
+      },
+    });
+
+    const fields = getEnabledFields(config, "Petronet LNG Ltd.");
+    expect(fields.find((field) => field.key === "serviceBookDocument")).toMatchObject({
+      enabled: true,
+      required: true,
+    });
   });
 });

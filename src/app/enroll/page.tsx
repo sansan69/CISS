@@ -33,7 +33,6 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   dataURLtoFile,
-  deleteFileFromStorage,
   ENROLLMENT_DOCUMENT_ACCEPT,
   ENROLLMENT_IMAGE_ACCEPT,
   getUploadFileExtension,
@@ -79,7 +78,9 @@ import {
 } from "@/lib/districts";
 import { REGION_CODE } from "@/lib/runtime-config";
 import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
+import { getEnabledFields } from "@/lib/enrollment-config-client";
 import type { EnrollmentFormConfig } from "@/types/region";
+import type { ClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
   .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 5MB are allowed.");
@@ -241,6 +242,9 @@ const enrollmentFormSchema = z.object({
     if (!data.weightKg) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Weight is required.", path: ["weightKg"] });
     }
+    if (!data.branchName || data.branchName.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Branch name is required for LNG Petronet.", path: ["branchName"] });
+    }
     if (requiresLngServiceBook(data.lngJobDesignation)) {
       if (!data.serviceBookNumber || data.serviceBookNumber.trim() === "") {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Service book number is required.", path: ["serviceBookNumber"] });
@@ -309,6 +313,7 @@ type EnrollmentDraft = {
 interface ClientOption {
   id: string;
   name: string;
+  enrollmentProfile?: ClientEnrollmentProfile;
 }
 
 type PublicClientsResponse = {
@@ -745,6 +750,55 @@ function buildEnrollmentStoragePath(
   return `enrollments/${draftId}/${folder}/${Date.now()}_${fileStem}.${extension}`;
 }
 
+type EnrollmentUploadUrls = {
+  profilePictureUrl: string | null;
+  identityProofUrlFront: string | null;
+  identityProofUrlBack: string | null;
+  addressProofUrlFront: string | null;
+  addressProofUrlBack: string | null;
+  signatureUrl: string | null;
+  serviceBookDocumentUrl: string | null;
+  armsLicenseDocumentUrl: string | null;
+  aadharCardDocumentUrl: string | null;
+  aadharCardDocumentBackUrl: string | null;
+  panCardDocumentUrl: string | null;
+  passportDocumentUrl: string | null;
+  bankPassbookStatementUrl: string | null;
+  policeClearanceCertificateUrl: string | null;
+};
+
+type EnrollmentSubmissionSession = {
+  draftId: string;
+  uploadToken: string;
+  expiresAt: string;
+  phoneNumber: string;
+  uploadedUrls: EnrollmentUploadUrls;
+  fileFingerprints: Partial<Record<keyof EnrollmentUploadUrls, string>>;
+};
+
+function emptyEnrollmentUploadUrls(): EnrollmentUploadUrls {
+  return {
+    profilePictureUrl: null,
+    identityProofUrlFront: null,
+    identityProofUrlBack: null,
+    addressProofUrlFront: null,
+    addressProofUrlBack: null,
+    signatureUrl: null,
+    serviceBookDocumentUrl: null,
+    armsLicenseDocumentUrl: null,
+    aadharCardDocumentUrl: null,
+    aadharCardDocumentBackUrl: null,
+    panCardDocumentUrl: null,
+    passportDocumentUrl: null,
+    bankPassbookStatementUrl: null,
+    policeClearanceCertificateUrl: null,
+  };
+}
+
+function enrollmentFileFingerprint(file: File) {
+  return [file.name, file.size, file.type, file.lastModified].join(":");
+}
+
 function splitLngFullName(rawFullName: string) {
   const parts = rawFullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) {
@@ -855,6 +909,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [enrollmentConfig, setEnrollmentConfig] = useState<EnrollmentFormConfig | null>(null);
   const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submissionSessionRef = useRef<EnrollmentSubmissionSession | null>(null);
 
 
   const form = useForm<EnrollmentFormValues>({
@@ -872,19 +927,17 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const watchedValues = useWatch({ control: form.control });
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
   const [pinStatus, setPinStatus] = useState<'found' | 'not_found' | 'idle'>('idle');
-  const isLngClient = isLngClientName(watchClientName);
+  const selectedClientProfile = availableClients.find((client) => client.name === watchClientName)?.enrollmentProfile;
+  const isLngClient = selectedClientProfile === "lng-petronet" || isLngClientName(watchClientName);
   const requiresServiceBook = requiresLngServiceBook(watchLngJobDesignation);
   const requiresArmsLicense = requiresLngArmsLicense(watchLngJobDesignation);
   const configuredFields = useMemo(() => {
     if (!enrollmentConfig) return null;
     const enabled = new Set<keyof EnrollmentFormValues>();
     const required = new Set<keyof EnrollmentFormValues>();
-    for (const section of Object.values(enrollmentConfig.sections)) {
-      for (const field of section.fields) {
-        if (!field.enabled) continue;
-        enabled.add(field.key as keyof EnrollmentFormValues);
-        if (field.required) required.add(field.key as keyof EnrollmentFormValues);
-      }
+    for (const field of getEnabledFields(enrollmentConfig, watchClientName)) {
+      enabled.add(field.key as keyof EnrollmentFormValues);
+      if (field.required) required.add(field.key as keyof EnrollmentFormValues);
     }
     enabled.add("emailAddress");
     required.add("emailAddress");
@@ -893,7 +946,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       required.add(field as keyof EnrollmentFormValues);
     }
     return { enabled, required };
-  }, [enrollmentConfig]);
+  }, [enrollmentConfig, watchClientName]);
 
   useEffect(() => {
     const loadEnrollmentConfig = async () => {
@@ -988,6 +1041,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   }, [form, setPreviewForField]);
 
   const clearDraft = async (options?: { resetForm?: boolean; keepPhoneNumber?: boolean }) => {
+    submissionSessionRef.current = null;
+
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(ENROLLMENT_DRAFT_STORAGE_KEY);
     }
@@ -1389,33 +1444,37 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           lastName: data.lastName?.trim() || "",
         };
     const normalizedEmail = data.emailAddress.trim();
-    const uploadedUrls: { [key: string]: string | null } = {
-        profilePictureUrl: null,
-        identityProofUrlFront: null,
-        identityProofUrlBack: null,
-        addressProofUrlFront: null,
-        addressProofUrlBack: null,
-        signatureUrl: null,
-        serviceBookDocumentUrl: null,
-        armsLicenseDocumentUrl: null,
-        aadharCardDocumentUrl: null,
-        aadharCardDocumentBackUrl: null,
-        panCardDocumentUrl: null,
-        passportDocumentUrl: null,
-        bankPassbookStatementUrl: null,
-        policeClearanceCertificateUrl: null,
-    };
 
     try {
-        const draftResponse = await fetch("/api/public/enroll/draft", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phoneNumber }),
-        });
-        const draft = await draftResponse.json();
-        if (!draftResponse.ok || !draft?.draftId || !draft?.uploadToken) {
-          throw new Error(draft?.error || "Could not start enrollment.");
+        let session = submissionSessionRef.current;
+        const sessionExpiresAt = session ? Date.parse(session.expiresAt) : 0;
+        if (
+          !session ||
+          session.phoneNumber !== phoneNumber ||
+          !Number.isFinite(sessionExpiresAt) ||
+          sessionExpiresAt <= Date.now()
+        ) {
+          const draftResponse = await fetch("/api/public/enroll/draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phoneNumber }),
+          });
+          const draft = await draftResponse.json().catch(() => null);
+          if (!draftResponse.ok || !draft?.draftId || !draft?.uploadToken || !draft?.expiresAt) {
+            throw new Error(draft?.error || "Could not start enrollment. Please try again.");
+          }
+          session = {
+            draftId: draft.draftId,
+            uploadToken: draft.uploadToken,
+            expiresAt: draft.expiresAt,
+            phoneNumber,
+            uploadedUrls: emptyEnrollmentUploadUrls(),
+            fileFingerprints: {},
+          };
+          submissionSessionRef.current = session;
         }
+
+        const uploadedUrls = session.uploadedUrls;
 
         const filesToUpload: { name: string; file?: File; folder: string; fileStem: string; key: keyof typeof uploadedUrls }[] = [
             { name: "Profile Picture", file: data.profilePicture, folder: "profilePictures", fileStem: "profile", key: 'profilePictureUrl' },
@@ -1436,13 +1495,21 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
         for (const { name, file, folder, fileStem, key } of filesToUpload) {
             if (!file) continue;
+            const fingerprint = enrollmentFileFingerprint(file);
+            if (
+              uploadedUrls[key] &&
+              session.fileFingerprints[key] === fingerprint
+            ) {
+              continue;
+            }
             toast({ title: `Uploading ${name}...`});
             try {
                 const fileToUpload = await prepareFileForUpload(file);
                 assertEnrollmentUploadSize(fileToUpload);
-                const path = buildEnrollmentStoragePath(draft.draftId, folder, fileStem, fileToUpload);
-                const url = await uploadEnrollmentFileViaApi(fileToUpload, path, draft.uploadToken);
+                const path = buildEnrollmentStoragePath(session.draftId, folder, fileStem, fileToUpload);
+                const url = await uploadEnrollmentFileViaApi(fileToUpload, path, session.uploadToken);
                 uploadedUrls[key] = url;
+                session.fileFingerprints[key] = fingerprint;
             } catch (err: any) {
                  throw new Error(`Upload failed for ${name}: ${err.message}`);
             }
@@ -1454,8 +1521,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            enrollmentDraftId: draft.draftId,
-            enrollmentUploadToken: draft.uploadToken,
+            enrollmentDraftId: session.draftId,
+            enrollmentUploadToken: session.uploadToken,
             joiningDate: data.joiningDate.toISOString(),
             clientName: data.clientName,
             resourceIdNumber: data.resourceIdNumber || undefined,
@@ -1518,7 +1585,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           }),
         });
 
-        const responseBody = await response.json();
+        const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
           const fieldErrors = responseBody?.details?.fieldErrors;
           let highlightedFieldCount = 0;
@@ -1569,6 +1636,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         });
 
         await clearDraft({ resetForm: true, keepPhoneNumber: !!initialPhoneNumberFromQuery });
+        submissionSessionRef.current = null;
         setCompletionState({
           id: responseBody.id,
           employeeId: responseBody.employeeId,
@@ -1581,16 +1649,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         });
 
     } catch (error: any) {
-        await Promise.allSettled(
-          Object.values(uploadedUrls)
-            .filter((url): url is string => Boolean(url))
-            .map((url) => deleteFileFromStorage(url)),
-        );
         console.error("Detailed Registration or Upload Error: ", error, error.stack);
         toast({
             variant: "destructive",
             title: "Registration Failed",
-            description: error.message || "An unexpected error occurred.",
+            description: `${error.message || "An unexpected error occurred."} Your uploaded documents are preserved for a retry on this page.`,
             duration: 9000,
         });
     } finally {
@@ -1658,6 +1721,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         "identificationMark",
         "heightCm",
         "weightKg",
+        "branchName",
       );
       if (requiresLngServiceBook(formValues.lngJobDesignation)) {
         fields.push("serviceBookNumber", "serviceBookDocument");
@@ -2067,13 +2131,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       )} />
                     )}
                   </div>
-                  {isLngClient && requiresServiceBook && (
+                  {isLngClient && (
                     <div className="mt-8 rounded-2xl border bg-muted/20 p-4 space-y-4">
                       <h3 className="font-medium text-lg">Service Book Details</h3>
+                      <p className="text-sm text-muted-foreground">{requiresServiceBook ? "Required for the selected LNG designation." : "Optional for the selected designation; add it when the employee has a service book."}</p>
                       <div className="grid grid-cols-1 gap-6">
                         <FormField control={form.control} name="serviceBookNumber" render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Service Book Number <span className="text-destructive">*</span></FormLabel>
+                            <FormLabel>Service Book Number {requiresServiceBook && <span className="text-destructive">*</span>}</FormLabel>
                             <FormControl><Input placeholder="Enter service book number" {...field} value={field.value ?? ""} /></FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2081,27 +2146,28 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       </div>
                       <FormField control={form.control} name="serviceBookDocument" render={({ field }) => (
                         <FormItem className="text-center">
-                          <FormLabel className="block mb-2">Service Book Document <span className="text-destructive">*</span></FormLabel>
-                          <ImagePreviewAndUpload fieldName="serviceBookDocument" preview={serviceBookPreview} setPreview={setServiceBookPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the service book page showing service details." />
+                          <FormLabel className="block mb-2">Service Book Document {requiresServiceBook && <span className="text-destructive">*</span>}</FormLabel>
+                          <ImagePreviewAndUpload fieldName="serviceBookDocument" preview={serviceBookPreview} setPreview={setServiceBookPreview} handleFileChange={handleFileChange} openCamera={openCamera} optional={!requiresServiceBook} helperText="Upload the service book page showing service details." />
                           <FormMessage />
                         </FormItem>
                       )} />
                     </div>
                   )}
-                  {isLngClient && requiresArmsLicense && (
+                  {isLngClient && (
                     <div className="mt-8 rounded-2xl border bg-muted/20 p-4 space-y-4">
                       <h3 className="font-medium text-lg">Arms License Details</h3>
+                      <p className="text-sm text-muted-foreground">{requiresArmsLicense ? "Required for the selected armed-guard designation." : "Optional for the selected designation; add it only when an arms license applies."}</p>
                       <FormField control={form.control} name="armsLicenseNumber" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Arms License Number <span className="text-destructive">*</span></FormLabel>
+                          <FormLabel>Arms License Number {requiresArmsLicense && <span className="text-destructive">*</span>}</FormLabel>
                           <FormControl><Input placeholder="Enter arms license number" {...field} value={field.value ?? ""} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={form.control} name="armsLicenseDocument" render={({ field }) => (
                         <FormItem className="text-center">
-                          <FormLabel className="block mb-2">Arms License Copy <span className="text-destructive">*</span></FormLabel>
-                          <ImagePreviewAndUpload fieldName="armsLicenseDocument" preview={armsLicensePreview} setPreview={setArmsLicensePreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Upload the latest arms license copy." />
+                          <FormLabel className="block mb-2">Arms License Copy {requiresArmsLicense && <span className="text-destructive">*</span>}</FormLabel>
+                          <ImagePreviewAndUpload fieldName="armsLicenseDocument" preview={armsLicensePreview} setPreview={setArmsLicensePreview} handleFileChange={handleFileChange} openCamera={openCamera} optional={!requiresArmsLicense} helperText="Upload the latest arms license copy." />
                           <FormMessage />
                         </FormItem>
                       )} />
@@ -2224,7 +2290,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormMessage /></FormItem>)} />
                       <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className={isLngClient ? "" : "md:col-span-2"}><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      {isLngClient && <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name</FormLabel><FormControl><Input placeholder="Enter branch name" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Optional. Add it if available on the bank document.</FormDescription><FormMessage /></FormItem>)} />}
+                      {isLngClient && <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter branch name" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Required for the LNG Petronet bank record.</FormDescription><FormMessage /></FormItem>)} />}
                     </div>
                     <FormField control={form.control} name="bankPassbookStatement" render={({ field }) => ( <FormItem className="mt-6 text-center"><FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel><ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Required for employee enrollment and payroll verification." /><FormMessage /></FormItem>)}/>
                   </FormSection>

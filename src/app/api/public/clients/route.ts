@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import { dedupeClientOptions } from "@/lib/client-options";
+import { resolveClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,11 @@ function mapClient(id: string, data: Record<string, unknown>) {
     (typeof data.clientName === "string" && data.clientName.trim()) ||
     "";
 
-  return { id, name };
+  return {
+    id,
+    name,
+    enrollmentProfile: resolveClientEnrollmentProfile(data.enrollmentProfile, name),
+  };
 }
 
 export async function GET() {

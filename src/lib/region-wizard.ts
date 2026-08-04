@@ -89,6 +89,33 @@ export const DEFAULT_ENROLLMENT_FORM_CONFIG: EnrollmentFormConfig = {
         resourceIdNumber: { enabled: true, required: true },
       },
     },
+    "LNG Petronet": {
+      personal: {
+        fullNameInput: { enabled: true, required: true },
+        firstName: { enabled: false, required: false },
+        lastName: { enabled: false, required: false },
+        lngJobDesignation: { enabled: true, required: true },
+        serviceBookNumber: { enabled: true, required: false },
+        serviceBookDocument: { enabled: true, required: false },
+        armsLicenseNumber: { enabled: true, required: false },
+        armsLicenseDocument: { enabled: true, required: false },
+        passportCountryName: { enabled: true, required: false },
+        passportDocument: { enabled: true, required: false },
+      },
+      documents: {
+        panCardDocument: { enabled: true, required: true },
+      },
+      bank: {
+        branchName: { enabled: true, required: true },
+      },
+      details: {
+        nationality: { enabled: true, required: true },
+        identificationMark: { enabled: true, required: true },
+        heightCm: { enabled: true, required: true },
+        weightKg: { enabled: true, required: true },
+        legacyUniqueId: { enabled: true, required: false },
+      },
+    },
   },
 };
 

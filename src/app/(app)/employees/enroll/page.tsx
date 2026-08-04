@@ -66,6 +66,7 @@ import {
   isRecognizedDistrictName,
 } from "@/lib/districts";
 import { REGION_CODE } from "@/lib/runtime-config";
+import type { ClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
 
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
@@ -228,6 +229,9 @@ const enrollmentFormSchema = z.object({
     if (!data.weightKg) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Weight is required.", path: ["weightKg"] });
     }
+    if (!data.branchName || data.branchName.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Branch name is required for LNG Petronet.", path: ["branchName"] });
+    }
     if (requiresLngServiceBook(data.lngJobDesignation)) {
       if (!data.serviceBookNumber || data.serviceBookNumber.trim() === "") {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Service book number is required.", path: ["serviceBookNumber"] });
@@ -276,6 +280,7 @@ type EnrollmentFormValues = z.infer<typeof enrollmentFormSchema>;
 interface ClientOption {
   id: string;
   name: string;
+  enrollmentProfile?: ClientEnrollmentProfile;
 }
 
 type PublicClientsResponse = {
@@ -444,7 +449,8 @@ export default function EnrollEmployeePage() {
   const watchEducationalQualification = form.watch("educationalQualification");
   const watchIdentityProofType = form.watch("identityProofType");
   const addressProofOptions = getAddressProofTypesForIdentity(watchIdentityProofType);
-  const isLngClient = isLngClientName(watchClientName);
+  const selectedClientProfile = availableClients.find((client) => client.name === watchClientName)?.enrollmentProfile;
+  const isLngClient = selectedClientProfile === "lng-petronet" || isLngClientName(watchClientName);
   const requiresServiceBook = isLngClient && requiresLngServiceBook(watchLngJobDesignation);
   const requiresArmsLicense = isLngClient && requiresLngArmsLicense(watchLngJobDesignation);
   const fullAddress = useWatch({ control: form.control, name: 'fullAddress' });
@@ -1129,26 +1135,28 @@ export default function EnrollEmployeePage() {
                     )} />
                   )}
                 </div>
-                {isLngClient && requiresServiceBook && (
+                {isLngClient && (
                   <div className="mt-8 rounded-2xl border bg-muted/20 p-4 space-y-4">
                     <h3 className="font-medium text-lg">Service Book Details</h3>
-                    <FormField control={form.control} name="serviceBookNumber" render={({ field }) => (<FormItem><FormLabel>Service Book Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter service book number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                    <p className="text-sm text-muted-foreground">{requiresServiceBook ? "Required for the selected LNG designation." : "Optional for the selected designation."}</p>
+                    <FormField control={form.control} name="serviceBookNumber" render={({ field }) => (<FormItem><FormLabel>Service Book Number {requiresServiceBook && <span className="text-destructive">*</span>}</FormLabel><FormControl><Input placeholder="Enter service book number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="serviceBookDocument" render={({ field }) => (
                       <FormItem className="text-center">
-                        <FormLabel className="block mb-2">Service Book Document <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel className="block mb-2">Service Book Document {requiresServiceBook && <span className="text-destructive">*</span>}</FormLabel>
                         <ImagePreviewAndUpload fieldName="serviceBookDocument" preview={serviceBookPreview} setPreview={setServiceBookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
                         <FormMessage />
                       </FormItem>
                     )} />
                   </div>
                 )}
-                {isLngClient && requiresArmsLicense && (
+                {isLngClient && (
                   <div className="mt-8 rounded-2xl border bg-muted/20 p-4 space-y-4">
                     <h3 className="font-medium text-lg">Arms License Details</h3>
-                    <FormField control={form.control} name="armsLicenseNumber" render={({ field }) => (<FormItem><FormLabel>Arms License Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter arms license number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                    <p className="text-sm text-muted-foreground">{requiresArmsLicense ? "Required for the selected armed-guard designation." : "Optional for the selected designation."}</p>
+                    <FormField control={form.control} name="armsLicenseNumber" render={({ field }) => (<FormItem><FormLabel>Arms License Number {requiresArmsLicense && <span className="text-destructive">*</span>}</FormLabel><FormControl><Input placeholder="Enter arms license number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="armsLicenseDocument" render={({ field }) => (
                       <FormItem className="text-center">
-                        <FormLabel className="block mb-2">Arms License Copy <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel className="block mb-2">Arms License Copy {requiresArmsLicense && <span className="text-destructive">*</span>}</FormLabel>
                         <ImagePreviewAndUpload fieldName="armsLicenseDocument" preview={armsLicensePreview} setPreview={setArmsLicensePreview} handleFileChange={handleFileChange} openCamera={openCamera} />
                         <FormMessage />
                       </FormItem>
@@ -1291,7 +1299,7 @@ export default function EnrollEmployeePage() {
                     <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (<FormItem><FormLabel>Bank Account Number</FormLabel><FormControl><Input placeholder="Enter bank account number" {...field} /></FormControl><FormDescription>Salary deposit account</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="ifscCode" render={({ field }) => (<FormItem><FormLabel>IFSC Code</FormLabel><FormControl><Input placeholder="Enter bank IFSC code" {...field} /></FormControl><FormDescription>11-character branch code</FormDescription><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="bankName" render={({ field }) => (<FormItem className={isLngClient ? "" : "md:col-span-2"}><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="Full name of your bank" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    {isLngClient && <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name</FormLabel><FormControl><Input placeholder="Enter branch name" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
+                    {isLngClient && <FormField control={form.control} name="branchName" render={({ field }) => (<FormItem><FormLabel>Branch Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter branch name" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />}
                  </div>
                  <FormField
                     control={form.control}

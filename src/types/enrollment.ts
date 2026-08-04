@@ -214,6 +214,14 @@ export const enrollmentSubmissionSchema = z
         });
       }
 
+      if (!data.branchName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Branch name is required for LNG Petronet enrollment.",
+          path: ["branchName"],
+        });
+      }
+
       if (requiresLngServiceBook(data.lngJobDesignation) && !data.serviceBookNumber?.trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

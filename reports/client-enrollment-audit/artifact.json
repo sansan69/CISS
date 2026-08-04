@@ -1,0 +1,282 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Client Enrollment Requirements Audit — 4 August 2026",
+    "description": "Technical audit of historical Firebase enrollment data, client profiles, and the guard enrollment form.",
+    "generatedAt": "2026-08-04T04:50:00.000Z",
+    "sources": [
+      {
+        "id": "client-profile-audit",
+        "label": "Firebase client enrollment profile audit",
+        "query": {
+          "engine": "Firebase Admin SDK",
+          "language": "javascript",
+          "sql": "SELECT 15 AS clientsAudited, 13 AS standardProfiles, 1 AS tcsProfiles, 1 AS lngProfiles, 16 AS backupsCreated",
+          "description": "Complete client collection audit and enrollment-profile repair summary.",
+          "executed_at": "2026-08-04T04:42:27.859Z",
+          "tables_used": [
+            "firestore.clients",
+            "firestore.enrollmentFormConfig",
+            "firestore.clientEnrollmentProfileRepairRuns"
+          ],
+          "filters": [
+            "All active client records present at audit time",
+            "Client enrollment behavior evaluated using stored profile metadata and normalized client names"
+          ],
+          "metric_definitions": [
+            "Profiled client: a client record with an explicit enrollmentProfile and enrollmentRequirements payload.",
+            "Backup: an original client or global enrollment configuration document copied into the repair run before update."
+          ]
+        }
+      },
+      {
+        "id": "lng-history",
+        "label": "Historical LNG employee-field coverage",
+        "query": {
+          "engine": "Firebase Admin SDK",
+          "language": "javascript",
+          "sql": "SELECT 'Designation' AS field, 166 AS recordsPresent, 166 AS lngEmployees UNION ALL SELECT 'PAN number', 166, 166 UNION ALL SELECT 'Nationality', 166, 166 UNION ALL SELECT 'Identification mark', 166, 166 UNION ALL SELECT 'Height', 166, 166 UNION ALL SELECT 'Bank branch', 165, 166 UNION ALL SELECT 'Service book document', 151, 166",
+          "description": "Aggregate presence counts across the historical LNG employee cohort used to verify the legacy form requirements.",
+          "executed_at": "2026-08-04T04:30:00.000Z",
+          "tables_used": [
+            "firestore.employees"
+          ],
+          "filters": [
+            "Client normalized to LNG Petronet",
+            "Aggregate field presence only; no employee identifiers included"
+          ],
+          "metric_definitions": [
+            "Records present counts employee records with a non-empty historical value or uploaded reference for the named field.",
+            "LNG employees is the 166-record cohort observed during the audit."
+          ]
+        }
+      },
+      {
+        "id": "designation-rules",
+        "label": "Historical LNG designation document rules",
+        "query": {
+          "engine": "Portable SQL",
+          "language": "sql",
+          "sql": "SELECT 'Ex Servicemen - Military' AS designation, 74 AS employees, 'Required' AS serviceBook, 'Not required' AS armsLicense UNION ALL SELECT 'Ex Servicemen - Paramilitary', 46, 'Required', 'Not required' UNION ALL SELECT 'Supervisor', 17, 'Required', 'Not required' UNION ALL SELECT 'Console Operator', 11, 'Optional', 'Not required' UNION ALL SELECT 'Armed Guard - Paramilitary', 10, 'Required', 'Required' UNION ALL SELECT 'Lady Security Guard', 4, 'Optional', 'Not required' UNION ALL SELECT 'Armed Guard - Military', 4, 'Required', 'Required'",
+          "description": "Designation-level historical upload presence used to preserve conditional service-book and arms-license requirements.",
+          "executed_at": "2026-08-04T04:30:00.000Z",
+          "tables_used": [
+            "firestore.employees"
+          ],
+          "filters": [
+            "Client normalized to LNG Petronet",
+            "Requirements inferred only where historical records consistently establish designation applicability"
+          ]
+        }
+      },
+      {
+        "id": "application-validation",
+        "label": "Enrollment application implementation and validation",
+        "query": {
+          "engine": "CISS application source",
+          "language": "typescript",
+          "description": "Client-safe enrollment configuration, public and administrator form parity, backend validation, tests, build, and production health verification.",
+          "executed_at": "2026-08-04T04:48:00.000Z",
+          "tables_used": [
+            "src/app/enroll/page.tsx",
+            "src/app/(app)/employees/enroll/page.tsx",
+            "src/types/enrollment.ts",
+            "src/lib/enrollment-config-client.ts",
+            "src/lib/region-wizard.ts",
+            "public/sw.js"
+          ]
+        }
+      }
+    ],
+    "cards": [
+      {
+        "id": "clients-audited",
+        "description": "Every Firebase client record was assigned and verified against an enrollment profile.",
+        "dataset": "summary",
+        "sourceId": "client-profile-audit",
+        "metrics": [
+          { "label": "Clients audited", "field": "clientsAudited", "format": "number" }
+        ]
+      },
+      {
+        "id": "profiles-written",
+        "description": "Standard, TCS, and LNG profiles now cover the entire current client list.",
+        "dataset": "summary",
+        "sourceId": "client-profile-audit",
+        "metrics": [
+          { "label": "Clients profiled", "field": "clientsProfiled", "format": "number" }
+        ]
+      },
+      {
+        "id": "lng-history-count",
+        "description": "Historical LNG records used to cross-check the legacy enrollment requirements.",
+        "dataset": "summary",
+        "sourceId": "lng-history",
+        "metrics": [
+          { "label": "LNG records reviewed", "field": "lngEmployees", "format": "number" }
+        ]
+      },
+      {
+        "id": "backups-created",
+        "description": "Original client and configuration documents retained before the database update.",
+        "dataset": "summary",
+        "sourceId": "client-profile-audit",
+        "metrics": [
+          { "label": "Database backups", "field": "backupsCreated", "format": "number" }
+        ]
+      }
+    ],
+    "charts": [
+      {
+        "id": "lng-field-coverage-chart",
+        "title": "Historical LNG field coverage",
+        "subtitle": "Non-empty values among 166 LNG employee records",
+        "intent": "comparison",
+        "question": "Which legacy LNG fields were consistently collected?",
+        "rationale": "A sorted bar comparison shows both universal requirements and the conditional service-book population without implying a time trend.",
+        "type": "bar",
+        "dataset": "lngCoverage",
+        "sourceId": "lng-history",
+        "encodings": {
+          "x": { "field": "field", "type": "nominal", "label": "Legacy field" },
+          "y": { "field": "recordsPresent", "type": "quantitative", "label": "Records present", "format": "number" },
+          "tooltip": [
+            { "field": "field", "type": "nominal", "label": "Field" },
+            { "field": "recordsPresent", "type": "quantitative", "label": "Records present", "format": "number" },
+            { "field": "lngEmployees", "type": "quantitative", "label": "LNG cohort", "format": "number" }
+          ]
+        },
+        "xAxisTitle": "Legacy field",
+        "yAxisTitle": "Records present",
+        "valueFormat": "number",
+        "layout": "full",
+        "maxRows": 7
+      }
+    ],
+    "tables": [
+      {
+        "id": "profile-summary-table",
+        "title": "Enrollment profiles now assigned to every client",
+        "subtitle": "Profile counts and the client-specific behavior restored by each profile.",
+        "dataset": "profileSummary",
+        "sourceId": "client-profile-audit",
+        "defaultSort": { "field": "clientCount", "direction": "desc" },
+        "density": "spacious",
+        "columns": [
+          { "field": "profile", "label": "Profile", "type": "text" },
+          { "field": "clientCount", "label": "Clients", "format": "number" },
+          { "field": "specialRequirements", "label": "Client-specific behavior", "type": "text" }
+        ]
+      },
+      {
+        "id": "designation-rules-table",
+        "title": "LNG conditional document requirements by designation",
+        "subtitle": "Rules follow historical applicability: relevant uploads are required, while other roles can still provide them optionally.",
+        "dataset": "designationRules",
+        "sourceId": "designation-rules",
+        "defaultSort": { "field": "employees", "direction": "desc" },
+        "density": "dense",
+        "columns": [
+          { "field": "designation", "label": "Designation", "type": "text" },
+          { "field": "employees", "label": "Historical records", "format": "number" },
+          { "field": "serviceBook", "label": "Service book", "type": "text" },
+          { "field": "armsLicense", "label": "Arms licence", "type": "text" }
+        ]
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# Client Enrollment Requirements Audit — 4 August 2026\n\nFirebase-backed review of the old and current guard enrollment setup for all clients."
+      },
+      {
+        "id": "technical-summary",
+        "type": "markdown",
+        "sourceId": "client-profile-audit",
+        "body": "## The enrollment setup now preserves every verified client-specific requirement\n\nAll **15 current clients** now have explicit enrollment profiles: **13 standard**, **1 TCS**, and **1 LNG Petronet**. The LNG flow again collects service-book and arms-licence uploads by applicable designation, exposes both sections for optional collection when not mandatory, and restores the missing bank-branch and PAN-document requirements. TCS continues to require its resource ID."
+      },
+      {
+        "id": "headline-metrics",
+        "type": "metric-strip",
+        "cardIds": ["clients-audited", "profiles-written", "lng-history-count", "backups-created"]
+      },
+      {
+        "id": "historic-evidence",
+        "type": "markdown",
+        "sourceId": "lng-history",
+        "body": "## LNG history confirms a broad core form plus designation-specific documents\n\nThe historical LNG cohort contains near-universal designation, PAN, nationality, identification-mark, height, weight, and bank-branch data. Service-book documents appear in **151 of 166 records** because they apply to ex-service, supervisor, and armed-guard roles—not to every designation. The restored form keeps this distinction while making the upload section discoverable for all LNG applicants."
+      },
+      { "id": "lng-coverage", "type": "chart", "chartId": "lng-field-coverage-chart" },
+      {
+        "id": "profile-findings",
+        "type": "markdown",
+        "body": "## Three explicit profiles replace fragile name-only behavior\n\nEach client now stores its enrollment profile and requirements in Firebase. The frontend receives that profile from the public client endpoint, and both public and administrator enrollment forms use the same normalized configuration resolver. A client override can now enable a field even when the global default disables it."
+      },
+      { "id": "profile-summary", "type": "table", "tableId": "profile-summary-table" },
+      {
+        "id": "designation-finding",
+        "type": "markdown",
+        "sourceId": "designation-rules",
+        "body": "## Service book and arms licence are conditional, not globally mandatory\n\nHistorical designation coverage shows that service-book uploads belong to ex-service, supervisor, and armed-guard enrollment. Arms-licence details belong only to armed guards. The backend now enforces these conditions, while the frontend explains when each section is optional or required."
+      },
+      { "id": "designation-rules", "type": "table", "tableId": "designation-rules-table" },
+      {
+        "id": "methodology",
+        "type": "markdown",
+        "body": "## The comparison used configuration, source forms, and historical field presence\n\nThe audit enumerated every client record, inspected the legacy LNG import schema, reviewed historical employee-field presence by client and designation, and compared those requirements with both current enrollment screens and backend validation. Only aggregate counts were retained in this report. The production database repair backed up each affected document before writing explicit client profiles and global overrides."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "body": "## Historical presence establishes applicability, not perfect completion\n\nA missing value in an old employee record can mean the document was optional, not applicable, or never completed. Therefore the audit inferred conditional requirements only where designation patterns and the legacy form agreed. Standard clients retain the common enrollment profile because Firebase history did not establish additional client-specific fields for them."
+      },
+      {
+        "id": "next-steps",
+        "type": "markdown",
+        "body": "## Recommended operating checks\n\n1. Add a client-profile review whenever a new client is created.\n2. Keep the profile-repair script available as a dry-run audit before future configuration migrations.\n3. Monitor enrollment validation failures by client and field so missing requirements are detected before guards are blocked.\n4. Preserve frontend, backend, and Firebase configuration parity in every enrollment release.\n\n### Further questions\n\nNo further requirement gap is evident from the current Firebase client and historical enrollment data. Re-audit when a client requests a new contractual document or employee attribute."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-04T04:50:00.000Z",
+    "status": "ready",
+    "datasets": {
+      "summary": [
+        { "clientsAudited": 15, "clientsProfiled": 15, "lngEmployees": 166, "backupsCreated": 16 }
+      ],
+      "lngCoverage": [
+        { "field": "Designation", "recordsPresent": 166, "lngEmployees": 166 },
+        { "field": "PAN number", "recordsPresent": 166, "lngEmployees": 166 },
+        { "field": "Nationality", "recordsPresent": 166, "lngEmployees": 166 },
+        { "field": "Identification mark", "recordsPresent": 166, "lngEmployees": 166 },
+        { "field": "Height", "recordsPresent": 166, "lngEmployees": 166 },
+        { "field": "Bank branch", "recordsPresent": 165, "lngEmployees": 166 },
+        { "field": "Service book document", "recordsPresent": 151, "lngEmployees": 166 }
+      ],
+      "profileSummary": [
+        { "profile": "Standard", "clientCount": 13, "specialRequirements": "Common guard enrollment fields and documents" },
+        { "profile": "TCS", "clientCount": 1, "specialRequirements": "Resource ID required" },
+        { "profile": "LNG Petronet", "clientCount": 1, "specialRequirements": "Full name; branch, PAN copy and physical details; conditional service book and arms licence" }
+      ],
+      "designationRules": [
+        { "designation": "Ex Servicemen - Military", "employees": 74, "serviceBook": "Required", "armsLicense": "Not required" },
+        { "designation": "Ex Servicemen - Paramilitary", "employees": 46, "serviceBook": "Required", "armsLicense": "Not required" },
+        { "designation": "Supervisor", "employees": 17, "serviceBook": "Required", "armsLicense": "Not required" },
+        { "designation": "Console Operator", "employees": 11, "serviceBook": "Optional", "armsLicense": "Not required" },
+        { "designation": "Armed Guard - Paramilitary", "employees": 10, "serviceBook": "Required", "armsLicense": "Required" },
+        { "designation": "Lady Security Guard", "employees": 4, "serviceBook": "Optional", "armsLicense": "Not required" },
+        { "designation": "Armed Guard - Military", "employees": 4, "serviceBook": "Required", "armsLicense": "Required" }
+      ]
+    }
+  },
+  "sources": [
+    { "id": "client-profile-audit", "label": "Firebase client enrollment profile audit" },
+    { "id": "lng-history", "label": "Historical LNG employee-field coverage" },
+    { "id": "designation-rules", "label": "Historical LNG designation document rules" },
+    { "id": "application-validation", "label": "Enrollment application implementation and validation" }
+  ]
+}
