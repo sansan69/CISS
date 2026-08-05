@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-type Doc = { id: string; data: () => Record<string, unknown> };
+type Doc = {
+  id: string;
+  data: () => Record<string, unknown>;
+  createTime?: { toMillis: () => number };
+};
 
 class FakeSnapshot {
   constructor(public readonly docs: Doc[]) {}
@@ -45,7 +49,13 @@ class FakeQuery {
           return data[filter.field] === filter.value;
         }),
       )
-      .map(({ id, data }) => ({ id, data: () => data }));
+      .map(({ id, data }) => ({
+        id,
+        data: () => data,
+        createTime: typeof data.__createTime === "string"
+          ? { toMillis: () => Date.parse(data.__createTime as string) }
+          : undefined,
+      }));
     return new FakeSnapshot(typeof this.limitCount === "number" ? docs.slice(0, this.limitCount) : docs);
   }
 }
@@ -229,6 +239,55 @@ describe("field officer guards route", () => {
         employeeId: "G-LEGACY",
         district: "Ernakulam",
       }),
+    ]);
+  });
+
+  it("orders the employee list by enrollment date descending across current and legacy timestamps", async () => {
+    const db = new FakeFirestore();
+    db.seed("fieldOfficers", "fo-1", {
+      uid: "fo-1",
+      assignedDistricts: ["Kollam"],
+    });
+    db.seed("employees", "old-alpha", {
+      fullName: "Aaron Old Guard",
+      employeeId: "G-OLD",
+      district: "Kollam",
+      status: "Active",
+      createdAt: { _seconds: 1_767_225_600, _nanoseconds: 0 },
+    });
+    db.seed("employees", "legacy-middle", {
+      fullName: "Middle Legacy Guard",
+      employeeId: "G-MIDDLE",
+      district: "Kollam",
+      status: "Active",
+      __createTime: "2026-07-15T08:00:00.000Z",
+    });
+    db.seed("employees", "new-zulu", {
+      fullName: "Zulu New Guard",
+      employeeId: "G-NEW",
+      district: "Kollam",
+      status: "Active",
+      createdAt: "2026-08-05T08:00:00.000Z",
+    });
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({
+      uid: "fo-1",
+      role: "fieldOfficer",
+      assignedDistricts: ["Kollam"],
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/field-officer/guards?district=Kollam"),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toEqual([
+      "G-NEW",
+      "G-MIDDLE",
+      "G-OLD",
     ]);
   });
 });

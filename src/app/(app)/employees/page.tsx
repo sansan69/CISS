@@ -244,8 +244,13 @@ export default function EmployeeDirectoryPage() {
                     .filter((guard) => district === 'all' || guard.district === district)
                     .filter((guard) => !term || [guard.fullName, guard.employeeId, guard.phoneNumber]
                         .filter(Boolean)
-                        .some((value) => String(value).toLowerCase().includes(term)))
-                    .sort((left, right) => (left.fullName || left.employeeId || '').localeCompare(right.fullName || right.employeeId || ''));
+                        .some((value) => String(value).toLowerCase().includes(term)));
+                // Field-officer results arrive in descending enrollment order.
+                // Preserve that order through filtering and pagination; the
+                // client directory keeps its existing alphabetical behavior.
+                if (userRole === 'client') {
+                    filteredGuards.sort((left, right) => (left.fullName || left.employeeId || '').localeCompare(right.fullName || right.employeeId || ''));
+                }
                 const targetPage = direction === 'next' ? currentPage + 1 : direction === 'prev' ? Math.max(1, currentPage - 1) : 1;
                 const totalPages = Math.max(1, Math.ceil(filteredGuards.length / ITEMS_PER_PAGE));
                 const boundedPage = Math.min(targetPage, totalPages);

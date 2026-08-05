@@ -13,6 +13,70 @@ function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+type TimestampLike = {
+  _nanoseconds?: number;
+  _seconds?: number;
+  nanoseconds?: number;
+  seconds?: number;
+  toDate?: () => Date;
+  toMillis?: () => number;
+};
+
+function toEpochMillis(value: unknown): number {
+  if (!value) return 0;
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : 0;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return 0;
+    return Math.abs(value) < 1_000_000_000_000 ? value * 1_000 : value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (typeof value === "object") {
+    const timestamp = value as TimestampLike;
+    if (typeof timestamp.toMillis === "function") {
+      const millis = timestamp.toMillis();
+      return Number.isFinite(millis) ? millis : 0;
+    }
+    if (typeof timestamp.toDate === "function") {
+      return toEpochMillis(timestamp.toDate());
+    }
+
+    const seconds = timestamp.seconds ?? timestamp._seconds;
+    const nanoseconds = timestamp.nanoseconds ?? timestamp._nanoseconds ?? 0;
+    if (typeof seconds === "number" && Number.isFinite(seconds)) {
+      return (seconds * 1_000) + (Number.isFinite(nanoseconds) ? nanoseconds / 1_000_000 : 0);
+    }
+  }
+
+  return 0;
+}
+
+function enrollmentTime(
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+  employee: Record<string, unknown>,
+) {
+  // `createdAt` is written by the enrollment endpoint. The aliases support
+  // older imports, while Firestore's document creation time is the safest
+  // fallback for legacy records that did not store an enrollment timestamp.
+  const storedEnrollmentTime = [
+    employee.createdAt,
+    employee.enrollmentDate,
+    employee.enrolledAt,
+    employee.registeredAt,
+  ]
+    .map(toEpochMillis)
+    .find((value) => value > 0);
+
+  return storedEnrollmentTime
+    || toEpochMillis(doc.createTime)
+    || toEpochMillis(employee.joiningDate);
+}
+
 async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
@@ -101,21 +165,32 @@ export async function GET(request: Request) {
     }
 
     const guards = Array.from(employeeDocs.values())
-      .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) } as Record<string, unknown> & { id: string }))
-      .filter((employee) => includeInactive || normalizeText(employee.status || "Active").toLowerCase() === "active")
-      .filter((employee) => {
+      .map((doc) => {
+        const employee = {
+          id: doc.id,
+          ...(doc.data() as Record<string, unknown>),
+        } as Record<string, unknown> & { id: string };
+        return { doc, employee, enrollmentTime: enrollmentTime(doc, employee) };
+      })
+      .filter(({ employee }) => includeInactive || normalizeText(employee.status || "Active").toLowerCase() === "active")
+      .filter(({ employee }) => {
         if (districtScope.length === 0) return true;
         return employeeMatchesAnyDistrict(employee, districtScope);
       })
-      .map((employee) => {
+      .sort((left, right) => {
+        const byEnrollment = right.enrollmentTime - left.enrollmentTime;
+        if (byEnrollment !== 0) return byEnrollment;
+        const byName = normalizeText(left.employee.fullName).localeCompare(normalizeText(right.employee.fullName));
+        return byName || left.doc.id.localeCompare(right.doc.id);
+      })
+      .map(({ employee }) => {
         const profile = serializeGuardProfileView(String(employee.id), employee);
         return {
           ...profile,
           district: resolveEmployeeDistrict(employee),
           joiningDate: profile.joiningDate || "",
         };
-      })
-      .sort((left, right) => left.fullName.localeCompare(right.fullName));
+      });
 
     return NextResponse.json({ guards }, {
       headers: { "Cache-Control": "no-store, private" },
