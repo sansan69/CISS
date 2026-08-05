@@ -130,6 +130,39 @@ describe("GET /api/employees/profile/[id]/document", () => {
     expect(await response.text()).toBe("legacy-proof");
   });
 
+  it("streams documents saved as a bucket URI", async () => {
+    const db = new FakeDb();
+    db.seedClient("client-user", { clientId: "client-1", clientName: "Acme Security" });
+    db.seedEmployee("guard-storage-uri", {
+      employeeId: "G-STORAGE",
+      clientName: "Acme Security",
+      district: "Ernakulam",
+      idProofFrontUrl: "gs://test-bucket/employees/9999999999/idProofs/id-front.png",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db,
+      storage: {
+        bucket: () => ({
+          name: "test-bucket",
+          file: () => ({
+            download: async () => [Buffer.from("storage-proof")],
+            getMetadata: async () => [{ contentType: "image/png" }],
+          }),
+        }),
+      },
+    }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "client-user", role: "client" });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/employees/profile/guard-storage-uri/document?category=identity-front"),
+      { params: Promise.resolve({ id: "guard-storage-uri" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("storage-proof");
+  });
+
   it("rejects an unsupported document category", async () => {
     const db = new FakeDb();
     vi.doMock("@/lib/firebaseAdmin", () => ({ db }));

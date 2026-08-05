@@ -70,7 +70,28 @@ const CLIENT_DOCUMENT_CATEGORIES = new Set([
 function resolveStoragePath(source: string, bucketName: string) {
   const trimmed = source.trim();
   const allowed = /^(employees|enrollments)\/[A-Za-z0-9_-]+\/(profilePictures|signatures|idProofs|addressProofs|bankDocuments|panCards|serviceBooks|armsLicenses|passports|policeCertificates|qualificationCertificates)\/[A-Za-z0-9._-]+$/;
+  const validatePath = (path: string) => {
+    let decodedPath: string;
+    try {
+      decodedPath = decodeURIComponent(path);
+    } catch {
+      throw new Error("Invalid document reference.");
+    }
+    if (!allowed.test(decodedPath)) throw new Error("Document path is not allowed.");
+    return decodedPath;
+  };
+
   if (allowed.test(trimmed)) return trimmed;
+
+  // Older imports sometimes retained the canonical Storage URI instead of a
+  // Firebase download URL. Accept it only when it points at this bucket.
+  if (trimmed.startsWith("gs://")) {
+    const separator = trimmed.indexOf("/", "gs://".length);
+    if (separator < 0 || trimmed.slice("gs://".length, separator) !== bucketName) {
+      throw new Error("Document belongs to a different storage bucket.");
+    }
+    return validatePath(trimmed.slice(separator + 1));
+  }
 
   let url: URL;
   try {
@@ -78,16 +99,31 @@ function resolveStoragePath(source: string, bucketName: string) {
   } catch {
     throw new Error("Invalid document reference.");
   }
-  if (url.protocol !== "https:" || url.hostname !== "firebasestorage.googleapis.com") {
+  if (url.protocol !== "https:") {
     throw new Error("Document is not stored in the configured Firebase bucket.");
   }
-  const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/([^/]+)$/);
-  if (!match || decodeURIComponent(match[1]!) !== bucketName) {
+
+  const firebaseMatch = url.hostname === "firebasestorage.googleapis.com"
+    ? url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/)
+    : null;
+  const cloudStorageHosts = ["storage.googleapis.com", "storage.cloud.google.com"];
+  const cloudStorageMatch = cloudStorageHosts.includes(url.hostname)
+    ? url.pathname.match(/^\/download\/storage\/v1\/b\/([^/]+)\/o\/(.+)$/)
+    : null;
+  const pathStyleMatch = cloudStorageHosts.includes(url.hostname)
+    ? url.pathname.match(/^\/([^/]+)\/(.+)$/)
+    : null;
+  const match = firebaseMatch || cloudStorageMatch;
+  if (match) {
+    if (decodeURIComponent(match[1]!) !== bucketName) {
+      throw new Error("Document belongs to a different storage bucket.");
+    }
+    return validatePath(match[2]!);
+  }
+  if (!pathStyleMatch || decodeURIComponent(pathStyleMatch[1]!) !== bucketName) {
     throw new Error("Document belongs to a different storage bucket.");
   }
-  const path = decodeURIComponent(match[2]!);
-  if (!allowed.test(path)) throw new Error("Document path is not allowed.");
-  return path;
+  return validatePath(pathStyleMatch[2]!);
 }
 
 export async function GET(

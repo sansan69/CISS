@@ -626,10 +626,22 @@ export default function AdminEmployeeProfilePage() {
 
   const viewGuardDocument = async (category: string) => {
     if (!employee || viewingDocument) return;
-    const popup = window.open("", "_blank", "noopener,noreferrer");
+    // Open the tab synchronously while the click is still a trusted browser
+    // gesture. Adding `noopener` to this about:blank window makes some mobile
+    // browsers return a null/unusable WindowProxy, leaving the viewer blank.
+    const popup = window.open("about:blank", "_blank");
     if (!popup) {
       toast({ variant: "destructive", title: "Popup blocked", description: "Allow popups to view this document." });
       return;
+    }
+    try {
+      popup.document.title = "Loading document…";
+      // The window starts as same-origin about:blank. Detach it before the
+      // authenticated document is displayed so it cannot retain an opener.
+      popup.opener = null;
+    } catch {
+      // Some browsers do not expose the about:blank document; navigation below
+      // still works and the popup remains a valid document target.
     }
     setViewingDocument(category);
     try {
