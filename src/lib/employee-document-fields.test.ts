@@ -55,6 +55,7 @@ describe("normalizeEmployeeDocumentFields", () => {
       armsLicenseCopyUrl: "arms.pdf",
       passportCopyUrl: "passport.pdf",
       pccUrl: "pcc.pdf",
+      highestQualificationDocumentUrl: "qualification.pdf",
     })).toMatchObject({
       bankPassbookStatementUrl: "bank.pdf",
       panCardDocumentUrl: "pan.pdf",
@@ -62,6 +63,7 @@ describe("normalizeEmployeeDocumentFields", () => {
       armsLicenseDocumentUrl: "arms.pdf",
       passportDocumentUrl: "passport.pdf",
       policeClearanceCertificateUrl: "pcc.pdf",
+      qualificationCertificateUrl: "qualification.pdf",
     });
   });
 

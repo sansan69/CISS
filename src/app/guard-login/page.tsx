@@ -128,7 +128,7 @@ export default function GuardLoginPage() {
       }
 
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
-      router.push("/guard/dashboard");
+      window.location.replace("/guard/dashboard");
     } catch {
       toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
     } finally {
@@ -298,7 +298,7 @@ export default function GuardLoginPage() {
       }
       await signInWithCustomToken(auth, data.token as string);
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
-      router.push("/guard/dashboard");
+      window.location.replace("/guard/dashboard");
     } catch {
       toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
     } finally {

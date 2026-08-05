@@ -108,6 +108,7 @@ export const employeeSchema = z.object({
     identity: z.enum(["missing", "complete"]).optional(),
     address: z.enum(["missing", "complete"]).optional(),
     signature: z.enum(["missing", "complete"]).optional(),
+    qualification: z.enum(["missing", "complete"]).optional(),
   }).optional(),
   enrollmentPolicy: z.object({ version: z.enum(["legacy", "three-proof-v1"]).optional() }).optional(),
 });

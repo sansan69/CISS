@@ -3,6 +3,7 @@ import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
 import { documentCompletionFromEmployee } from "@/lib/server/aadhaar";
 import { normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
+import { guardQualificationDocumentStatus } from "@/lib/guard-profile-documents";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -25,11 +26,20 @@ export async function GET(request: Request) {
       empData,
       aadhaarPrivate.exists && aadhaarPrivate.data()?.status === "complete",
     );
-    const missingDocuments = (
+    const qualificationDocument = guardQualificationDocumentStatus(empData.clientName, documentFields);
+    const qualificationStatus = qualificationDocument.status;
+    const completeDocumentStatus = {
+      ...documentStatus,
+      qualification: qualificationStatus,
+    } as const;
+    const missingDocuments: Array<"aadhaar" | "identity" | "address" | "qualification"> = (
       Object.entries(documentStatus) as [keyof typeof documentStatus, string][]
     )
       .filter(([, status]) => status === "missing")
       .map(([category]) => category);
+    if (qualificationDocument.required && qualificationStatus === "missing") {
+      missingDocuments.push("qualification");
+    }
 
     let joiningDate: string | undefined;
     if (empData.joiningDate) {
@@ -50,6 +60,8 @@ export async function GET(request: Request) {
       gender: empData.gender ?? null,
       joiningDate: joiningDate ?? null,
       resourceIdNumber: empData.resourceIdNumber ?? null,
+      educationalQualification: empData.educationalQualification ?? null,
+      qualificationName: empData.qualificationName ?? null,
       profilePhotoUrl: documentFields.profilePictureUrl ?? null,
       address: empData.fullAddress ?? empData.address ?? null,
       emailAddress: empData.emailAddress ?? null,
@@ -66,7 +78,7 @@ export async function GET(request: Request) {
       bankAccountNumber: empData.bankAccountNumber ?? null,
       bankIfscCode: empData.bankIfscCode ?? null,
       bankName: empData.bankName ?? null,
-      documentStatus,
+      documentStatus: completeDocumentStatus,
       missingDocuments,
       enrollmentPolicy:
         empData.enrollmentPolicy?.version === "three-proof-v1"

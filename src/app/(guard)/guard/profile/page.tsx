@@ -32,13 +32,15 @@ interface GuardProfileData {
   gender?: string;
   joiningDate?: string;
   resourceIdNumber?: string;
+  educationalQualification?: string | null;
+  qualificationName?: string | null;
   profilePhotoUrl?: string | null;
   address?: string;
   emailAddress?: string;
   idProofType?: string | null;
   addressProofType?: string | null;
-  missingDocuments: Array<"aadhaar" | "identity" | "address">;
-  documentStatus: Record<"aadhaar" | "identity" | "address", "missing" | "complete">;
+  missingDocuments: Array<"aadhaar" | "identity" | "address" | "qualification">;
+  documentStatus: Record<"aadhaar" | "identity" | "address" | "qualification", "missing" | "complete">;
   enrollmentPolicy: "legacy" | "three-proof-v1";
 }
 
@@ -101,11 +103,11 @@ export default function GuardProfilePage() {
   const [data, setData] = useState<GuardProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploadingCategory, setUploadingCategory] = useState<"aadhaar" | "identity" | "address" | null>(null);
+  const [uploadingCategory, setUploadingCategory] = useState<"aadhaar" | "identity" | "address" | "qualification" | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [correctionMessage, setCorrectionMessage] = useState<string | null>(null);
   const [requestingCorrection, setRequestingCorrection] = useState(false);
-  const [viewingDocument, setViewingDocument] = useState<"identity" | "address" | null>(null);
+  const [viewingDocument, setViewingDocument] = useState<"identity" | "address" | "qualification" | null>(null);
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -136,7 +138,7 @@ export default function GuardProfilePage() {
   }, [fetchProfile]);
 
   const submitMissingDocument = async (
-    category: "aadhaar" | "identity" | "address",
+    category: "aadhaar" | "identity" | "address" | "qualification",
     event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
@@ -162,7 +164,9 @@ export default function GuardProfilePage() {
       setUploadMessage(
         category === "aadhaar"
           ? "Aadhaar submitted successfully. Its details are now visible only to the designated administrator."
-          : `${category === "identity" ? "Identity" : "Address"} proof submitted successfully.`,
+          : category === "qualification"
+            ? "Highest qualification certificate submitted successfully."
+            : `${category === "identity" ? "Identity" : "Address"} proof submitted successfully.`,
       );
       await fetchProfile();
     } catch (uploadError) {
@@ -197,7 +201,7 @@ export default function GuardProfilePage() {
     }
   };
 
-  const viewOwnProof = async (category: "identity" | "address") => {
+  const viewOwnProof = async (category: "identity" | "address" | "qualification") => {
     if (!user) return;
     setViewingDocument(category);
     setUploadMessage(null);
@@ -317,6 +321,18 @@ export default function GuardProfilePage() {
           />
           <Separator />
           <InfoRow
+            icon={IdCard}
+            label="Highest Qualification"
+            value={data.educationalQualification || "—"}
+          />
+          <Separator />
+          <InfoRow
+            icon={IdCard}
+            label="Name of Qualification"
+            value={data.qualificationName || "—"}
+          />
+          <Separator />
+          <InfoRow
             icon={Building2}
             label="Client"
             value={data.clientName}
@@ -340,29 +356,30 @@ export default function GuardProfilePage() {
         </CardContent>
       </Card>
 
-      {(data.documentStatus.identity === "complete" || data.documentStatus.address === "complete") && (
+      {(data.documentStatus.identity === "complete" || data.documentStatus.address === "complete" || data.documentStatus.qualification === "complete") && (
         <Card className="rounded-xl">
           <CardContent className="space-y-3 p-4">
             <div>
               <h2 className="font-semibold">Your submitted proofs</h2>
-              <p className="mt-1 text-xs text-muted-foreground">You may view your identity and address proofs. Aadhaar is never available from the guard profile.</p>
+              <p className="mt-1 text-xs text-muted-foreground">You may view your identity, address, and qualification proofs. Aadhaar is never available from the guard profile.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {data.documentStatus.identity === "complete" && <Button type="button" size="sm" variant="outline" disabled={viewingDocument !== null} onClick={() => void viewOwnProof("identity")}>View identity proof</Button>}
               {data.documentStatus.address === "complete" && <Button type="button" size="sm" variant="outline" disabled={viewingDocument !== null} onClick={() => void viewOwnProof("address")}>View address proof</Button>}
+              {data.documentStatus.qualification === "complete" && <Button type="button" size="sm" variant="outline" disabled={viewingDocument !== null} onClick={() => void viewOwnProof("qualification")}>View qualification certificate</Button>}
             </div>
             {uploadMessage && <p role="status" className="text-sm">{uploadMessage}</p>}
           </CardContent>
         </Card>
       )}
 
-      {data.enrollmentPolicy === "legacy" && data.missingDocuments.length > 0 && (
+      {data.missingDocuments.length > 0 && (
         <Card className="rounded-xl">
           <CardContent className="space-y-5 p-4">
             <div>
               <h2 className="font-semibold">Complete missing documents</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Optional for guards enrolled before the three-proof policy. Missing documents do not affect attendance, payroll, or deployment.
+                Add the documents that are not yet on file. Missing documents do not block attendance or access to the rest of the portal.
               </p>
             </div>
 
@@ -378,6 +395,15 @@ export default function GuardProfilePage() {
                   <span>I consent to this limited Aadhaar use for ESIC and EPF.</span>
                 </label>
                 <Button type="submit" size="sm" disabled={uploadingCategory !== null}>Submit Aadhaar</Button>
+              </form>
+            )}
+
+            {data.missingDocuments.includes("qualification") && (
+              <form className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void submitMissingDocument("qualification", event)}>
+                <p className="text-sm font-medium">Add highest qualification certificate</p>
+                <Input name="qualificationName" required minLength={2} maxLength={120} placeholder="Name of qualification, e.g. B.Com or Plus Two" defaultValue={data.qualificationName || ""} />
+                <label className="block text-xs text-muted-foreground">Certificate image or PDF<Input className="mt-1" name="front" type="file" accept="image/jpeg,image/png,application/pdf" required /></label>
+                <Button type="submit" size="sm" disabled={uploadingCategory !== null}>Submit qualification certificate</Button>
               </form>
             )}
 

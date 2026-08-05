@@ -17,6 +17,7 @@ import {
 } from "@/lib/server/aadhaar";
 import { ADDRESS_PROOF_TYPES, IDENTITY_PROOF_TYPES } from "@/lib/constants";
 import { normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
+import { guardRequiresQualificationCertificate } from "@/lib/guard-profile-documents";
 
 export const runtime = "nodejs";
 
@@ -51,14 +52,14 @@ function normalizedDocumentType(category: "identity" | "address", value: string)
 function sameBucketDocumentPath(value: unknown, bucketName: string) {
   if (typeof value !== "string" || !value.trim()) return null;
   const trimmed = value.trim();
-  if (/^employees\/[A-Za-z0-9_-]+\/(idProofs|addressProofs)\/[A-Za-z0-9._-]+$/.test(trimmed)) return trimmed;
+  if (/^employees\/[A-Za-z0-9_-]+\/(idProofs|addressProofs|qualificationCertificates)\/[A-Za-z0-9._-]+$/.test(trimmed)) return trimmed;
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "https:" || url.hostname !== "firebasestorage.googleapis.com") return null;
     const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/([^/]+)$/);
     if (!match || decodeURIComponent(match[1]!) !== bucketName) return null;
     const path = decodeURIComponent(match[2]!);
-    return /^employees\/[A-Za-z0-9_-]+\/(idProofs|addressProofs)\/[A-Za-z0-9._-]+$/.test(path) ? path : null;
+    return /^employees\/[A-Za-z0-9_-]+\/(idProofs|addressProofs|qualificationCertificates)\/[A-Za-z0-9._-]+$/.test(path) ? path : null;
   } catch {
     return null;
   }
@@ -70,14 +71,19 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const category = url.searchParams.get("category");
     const side = url.searchParams.get("side") === "back" ? "back" : "front";
-    if (category !== "identity" && category !== "address") {
-      return NextResponse.json({ error: "Only identity and address proofs can be viewed." }, { status: 400 });
+    if (category !== "identity" && category !== "address" && category !== "qualification") {
+      return NextResponse.json({ error: "A valid document category is required." }, { status: 400 });
     }
     const employeeSnap = await db.collection("employees").doc(guard.employeeDocId).get();
     if (!employeeSnap.exists) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
     const employee = employeeSnap.data() as Record<string, unknown>;
+    if (category === "qualification" && !guardRequiresQualificationCertificate(employee.clientName)) {
+      return NextResponse.json({ error: "A qualification certificate is not required for this client." }, { status: 400 });
+    }
     const documentFields = normalizeEmployeeDocumentFields(employee);
-    const rawPath = category === "identity"
+    const rawPath = category === "qualification"
+      ? documentFields.qualificationCertificateUrl
+      : category === "identity"
       ? side === "front"
         ? documentFields.identityProofUrlFront
         : documentFields.identityProofUrlBack
@@ -118,10 +124,10 @@ export async function POST(request: Request) {
     const guard = await requireGuard(request);
     const formData = await request.formData();
     const categoryValue = String(formData.get("category") || "");
-    if (!new Set(["aadhaar", "identity", "address"]).has(categoryValue)) {
+    if (!new Set(["aadhaar", "identity", "address", "qualification"]).has(categoryValue)) {
       return NextResponse.json({ error: "Invalid document category." }, { status: 400 });
     }
-    const category = categoryValue as "aadhaar" | "identity" | "address";
+    const category = categoryValue as "aadhaar" | "identity" | "address" | "qualification";
 
     const employeeRef = db.collection("employees").doc(guard.employeeDocId);
     const [employeeSnap, aadhaarSnap] = await Promise.all([
@@ -130,11 +136,18 @@ export async function POST(request: Request) {
     ]);
     if (!employeeSnap.exists) return NextResponse.json({ error: "Employee not found." }, { status: 404 });
     const employee = employeeSnap.data() as Record<string, unknown>;
+    if (category === "qualification" && !guardRequiresQualificationCertificate(employee.clientName)) {
+      return NextResponse.json({ error: "A qualification certificate is not required for this client." }, { status: 400 });
+    }
     const completion = documentCompletionFromEmployee(
       employee,
       aadhaarSnap.exists && aadhaarSnap.data()?.status === "complete",
     );
-    if (completion[category as keyof typeof completion] === "complete") {
+    const employeeDocuments = normalizeEmployeeDocumentFields(employee);
+    const alreadyComplete = category === "qualification"
+      ? Boolean(employeeDocuments.qualificationCertificateUrl)
+      : completion[category as keyof typeof completion] === "complete";
+    if (alreadyComplete) {
       return NextResponse.json(
         { error: "This document is already on file. Contact the administrator for corrections." },
         { status: 409 },
@@ -210,6 +223,36 @@ export async function POST(request: Request) {
         retentionPolicy: "employment_plus_90_days",
         status: "complete",
       });
+    } else if (category === "qualification") {
+      const qualificationName = String(formData.get("qualificationName") || "").trim();
+      if (qualificationName.length < 2 || qualificationName.length > 120) {
+        return NextResponse.json({ error: "Enter the name of the qualification shown on the certificate." }, { status: 400 });
+      }
+      const document = await validatedFile(formData.get("front"));
+      if (!document) throw new Error("Qualification certificate is required.");
+      const documentPath = `employees/${guard.employeeDocId}/qualificationCertificates/${crypto.randomUUID()}_qualification.${document.extension}`;
+      await storage.bucket().file(documentPath).save(document.buffer, {
+        resumable: false,
+        metadata: { contentType: document.contentType, cacheControl: "no-store, private, max-age=0", metadata: {} },
+      });
+      uploadedPaths.push(documentPath);
+      batch.update(employeeRef, {
+        qualificationName,
+        qualificationCertificateUrl: documentPath,
+      });
+      batch.set(employeeRef.collection("documents").doc(), {
+        category,
+        qualificationName,
+        storagePath: documentPath,
+        purpose: "tcs_highest_qualification_registration",
+        employeeProvided: true,
+        verificationStatus: "not_independently_verified",
+        uploadedAt: now,
+        uploadedThroughEnrollmentId: null,
+        retentionPolicy: "employment_plus_90_days",
+        accessClassification: "client_shareable_with_grant",
+        status: "active",
+      });
     } else {
       const documentType = normalizedDocumentType(
         category,
@@ -280,7 +323,11 @@ export async function POST(request: Request) {
       action: "guard_document_submitted",
       employeeDocId: guard.employeeDocId,
       category,
-      purpose: category === "aadhaar" ? "esic_epf_registration" : `client_${category}_registration`,
+      purpose: category === "aadhaar"
+        ? "esic_epf_registration"
+        : category === "qualification"
+          ? "tcs_highest_qualification_registration"
+          : `client_${category}_registration`,
       actorUid: guard.uid,
       actorType: "guard",
       at: now,
