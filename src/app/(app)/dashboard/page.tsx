@@ -24,6 +24,7 @@ import {
   WarningCircle as AlertIcon,
 } from "@phosphor-icons/react";
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
 import { db } from '@/lib/firebase';
 import {
   collection, query, where,
@@ -36,8 +37,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { useAppAuth } from '@/context/auth-context';
 import { EmptyState } from "@/components/ui/empty-state";
@@ -46,11 +45,23 @@ import { authorizedFetch } from "@/lib/api-client";
 import { PageHeader } from "@/components/layout/page-header";
 import type { RegionOverviewCard, SuperAdminOverviewSummary } from "@/types/region";
 import { DashboardStats } from "@/components/dashboard/stats";
-import { DashboardCharts } from "@/components/dashboard/charts";
 import { DashboardActions } from "@/components/dashboard/actions";
-import { ClientOperationsDashboard } from "@/components/dashboard/client-operations-dashboard";
-import LiveGuardsSection from "@/components/dashboard/live-guards-section";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
+
+// Keep charts, maps, and the client dashboard out of the initial dashboard
+// bundle. They are role-specific and can load after the shell is interactive.
+const DashboardCharts = dynamic(
+  () => import("@/components/dashboard/charts").then((mod) => ({ default: mod.DashboardCharts })),
+  { ssr: false, loading: () => <div className="h-48 rounded-2xl bg-muted/40 animate-pulse" /> },
+);
+const ClientOperationsDashboard = dynamic(
+  () => import("@/components/dashboard/client-operations-dashboard").then((mod) => ({ default: mod.ClientOperationsDashboard })),
+  { ssr: false },
+);
+const LiveGuardsSection = dynamic(
+  () => import("@/components/dashboard/live-guards-section"),
+  { ssr: false, loading: () => <div className="h-64 rounded-2xl bg-muted/40 animate-pulse" /> },
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -601,6 +612,57 @@ export default function DashboardPage() {
       return;
     }
     if (userRole === null) return;
+
+    // Field officers already have a consolidated, permission-scoped endpoint.
+    // Use one request for dashboard summaries instead of three live listeners
+    // that each download a large collection before rendering the shell.
+    if (userRole === 'fieldOfficer') {
+      if (assignedDistricts.length === 0) {
+        setIsLoading(false);
+        return;
+      }
+      let active = true;
+      setIsLoading(true);
+      authorizedFetch('/api/field-officer/dashboard')
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || 'Failed to load dashboard data.');
+          if (!active) return;
+          const totalGuards = Number(data.totalGuards ?? 0);
+          const activeGuards = Number(data.activeGuards ?? 0);
+          setStats({
+            total: totalGuards,
+            active: activeGuards,
+            inactiveOrExited: Number(
+              data.inactiveOrExited ?? Math.max(0, totalGuards - activeGuards),
+            ),
+          });
+          setTodayAttendanceDocs(
+            Array.from({ length: Number(data.attendanceSummary?.checkedInToday ?? 0) }, (_, index) => ({ id: index })),
+          );
+          setUpcomingDuties(
+            (data.upcomingWorkOrders ?? []).slice(0, 10).map((row: any) => ({
+              id: String(row.id),
+              siteName: row.siteName,
+              clientName: row.clientName,
+              district: row.district,
+              date: new Date(row.date),
+              totalManpower: row.totalManpower,
+            })),
+          );
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setError(error instanceof Error ? error.message : 'Failed to load dashboard data.');
+        })
+        .finally(() => {
+          if (active) setIsLoading(false);
+        });
+      return () => {
+        active = false;
+      };
+    }
+
     const cleanups: Array<() => void> = [];
     const firstFired = { emp: false };
 

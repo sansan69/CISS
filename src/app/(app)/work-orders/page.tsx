@@ -34,7 +34,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { authorizedFetch } from '@/lib/api-client';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { startOfToday, format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -398,15 +398,19 @@ export default function WorkOrderPage() {
                 collection(db, "workOrders"),
                 where("district", "in", assignedDistricts.slice(0, 30)),
                 where("date", ">=", todayTs),
+                orderBy("date", "asc"),
+                limit(100),
             );
         } else if (isClientView && clientInfo?.clientName) {
             q = query(
                 collection(db, "workOrders"),
                 where("clientName", "==", clientInfo.clientName),
                 where("date", ">=", todayTs),
+                orderBy("date", "asc"),
+                limit(100),
             );
         } else {
-            q = query(collection(db, "workOrders"), where("date", ">=", todayTs));
+            q = query(collection(db, "workOrders"), where("date", ">=", todayTs), orderBy("date", "asc"), limit(100));
         }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {

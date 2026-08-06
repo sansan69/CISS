@@ -120,11 +120,24 @@ export async function GET(request: Request) {
       trainingReportsSnap,
       attendanceSnap,
     ] = await Promise.all([
-      adminDb.collection("employees").where("status", "==", "Active").get(),
+      adminDb
+        .collection("employees")
+        .select(
+          "status",
+          "district",
+          "districtName",
+          "currentDistrict",
+          "permanentDistrict",
+          "addressDistrict",
+          "locationDistrict",
+          "city",
+        )
+        .get(),
       adminDb
         .collection("workOrders")
         .where("date", ">=", Timestamp.fromDate(startOfToday()))
         .orderBy("date", "asc")
+        .limit(100)
         .get(),
       adminDb
         .collection("foVisitReports")
@@ -479,15 +492,21 @@ export async function GET(request: Request) {
     const underAssignedSites = todaySiteBriefs.filter(
       (site) => site.assignedGuards < site.requiredGuards,
     ).length;
+    const activeGuards = employees.filter(
+      (employee) => normalizeText(employee.status) === "Active",
+    ).length;
+    const inactiveOrExited = employees.filter((employee) => {
+      const status = normalizeText(employee.status);
+      return status === "Inactive" || status === "Exited";
+    }).length;
 
     return NextResponse.json({
       name: profile.name,
       stateCode: profile.stateCode,
       assignedDistricts,
       totalGuards: employees.length,
-      activeGuards: employees.filter(
-        (employee) => normalizeText(employee.status) === "Active",
-      ).length,
+      activeGuards,
+      inactiveOrExited,
       totalSitesInScope,
       attendanceSummary: {
         date: todayKey,

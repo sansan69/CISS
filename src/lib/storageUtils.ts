@@ -6,7 +6,10 @@ const DEFAULT_IMAGE_COMPRESSION_OPTIONS = {
   maxWidth: 1024,
   maxHeight: 1024,
   quality: 0.7,
-  targetMimeType: "image/jpeg",
+  // WebP is broadly supported by the portal and is substantially smaller
+  // than the camera JPEG/PNG files guards commonly upload. Keep PDFs and
+  // unsupported image formats unchanged below.
+  targetMimeType: "image/webp",
 } as const;
 
 const COMPRESSIBLE_IMAGE_TYPES = new Set([
@@ -83,7 +86,7 @@ export async function compressImage(
             reject(new Error('Canvas to Blob conversion failed'));
           }
         },
-        options.targetMimeType || 'image/jpeg', // Default to JPEG for compression
+        options.targetMimeType || 'image/webp', // Default to WebP for compression
         options.quality
       );
     };

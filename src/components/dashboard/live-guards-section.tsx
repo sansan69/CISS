@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,10 @@ export default function LiveGuardsSection({
     if (clientName && clientName.trim()) {
       q = query(q, where("clientName", "==", clientName.trim()));
     }
+    // Keep the live map responsive on large deployments. The freshest
+    // locations are the useful ones; opening the full list can still be done
+    // from the dedicated attendance/location views.
+    q = query(q, orderBy("updatedAt", "desc"), limit(250));
 
     const unsub = onSnapshot(
       q,

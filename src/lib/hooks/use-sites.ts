@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, or, query, where } from "firebase/firestore";
 import type { ManagedSite } from "@/types/location";
 import { siteBelongsToClient, sortSitesByName } from "@/lib/sites/site-directory";
 
@@ -11,8 +11,21 @@ export function useSites(clientId?: string, clientName?: string) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Reports only need the selected client's sites. Query that scope in
+    // Firestore instead of subscribing to every site and filtering locally.
+    // Admin screens without a client scope retain the full directory.
+    const sitesQuery = clientId && clientName
+      ? query(
+          collection(db, "sites"),
+          or(where("clientId", "==", clientId), where("clientName", "==", clientName)),
+        )
+      : clientId
+        ? query(collection(db, "sites"), where("clientId", "==", clientId))
+      : clientName
+        ? query(collection(db, "sites"), where("clientName", "==", clientName))
+        : collection(db, "sites");
     const unsubscribe = onSnapshot(
-      collection(db, "sites"),
+      sitesQuery,
       (snapshot) => {
         const nextSites = snapshot.docs
           .map((doc) => {

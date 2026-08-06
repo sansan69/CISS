@@ -33,7 +33,8 @@ import { KERALA_DISTRICTS } from '@/lib/districts';
 import { employeeMatchesAnyDistrict } from '@/lib/employees/visibility';
 import { normalizeEmployeeDocumentFields } from '@/lib/employee-document-fields';
 
-const ITEMS_PER_PAGE = 10;
+// Keep the first render useful without downloading an entire directory.
+const ITEMS_PER_PAGE = 25;
 interface ClientOption { id: string; name: string; }
 
 const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
