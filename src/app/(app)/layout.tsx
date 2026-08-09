@@ -11,6 +11,7 @@ import {
   CaretRight,
   DotsThree,
   List,
+  MagnifyingGlass,
   SignOut,
   SidebarSimple,
   X,
@@ -41,6 +42,8 @@ import { LogoutDialog } from '@/components/common/logout-dialog';
 import { AuthContext } from '@/context/auth-context';
 import { toast } from '@/hooks/use-toast';
 import { PageTransition } from '@/components/motion/page-transition';
+import { CommandPalette } from '@/components/common/command-palette';
+import { LiveClock } from '@/components/common/live-clock';
 import {
   bottomNavItems,
   getVisibleGroups,
@@ -556,6 +559,7 @@ function MobileHeader({
   onLogout,
   userRole,
   pathname,
+  onOpenPalette,
 }: {
   isSettingsPage: boolean;
   onMenuClick: () => void;
@@ -563,6 +567,7 @@ function MobileHeader({
   onLogout: () => void;
   userRole: string | null;
   pathname: string;
+  onOpenPalette: () => void;
 }) {
   const pageLabel = getCurrentPageLabel(pathname, userRole);
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
@@ -599,6 +604,13 @@ function MobileHeader({
       </div>
 
       <div className="flex items-center gap-1.5">
+        <button
+          onClick={onOpenPalette}
+          aria-label="Search pages"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.97]"
+        >
+          <MagnifyingGlass className="h-5 w-5" weight="bold" />
+        </button>
         {isSettingsPage && (
           <Button
             variant="ghost"
@@ -688,6 +700,7 @@ function DesktopTopBar({
   pathname,
   onSidebarToggle,
   sidebarCollapsed,
+  onOpenPalette,
 }: {
   user: User;
   onLogout: () => void;
@@ -695,6 +708,7 @@ function DesktopTopBar({
   pathname: string;
   onSidebarToggle: () => void;
   sidebarCollapsed: boolean;
+  onOpenPalette: () => void;
 }) {
   const pageLabel = getCurrentPageLabel(pathname, userRole);
   const initials = (user?.displayName || user?.email || 'A').slice(0, 2).toUpperCase();
@@ -713,7 +727,23 @@ function DesktopTopBar({
         <h2 className="text-sm font-semibold text-foreground truncate">{pageLabel}</h2>
       </div>
 
-      <DropdownMenu>
+      <div className="flex items-center gap-3">
+        {/* Command palette trigger */}
+        <button
+          onClick={onOpenPalette}
+          className="group flex h-9 w-44 items-center gap-2 rounded-lg border border-border/80 bg-card px-3 text-left transition-[border-color,background-color,box-shadow] duration-150 ease-spring hover:border-primary/40 hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 active:scale-[0.99] lg:w-56"
+          aria-label="Open command palette"
+        >
+          <MagnifyingGlass className="h-4 w-4 shrink-0 text-muted-foreground/70 group-hover:text-primary" />
+          <span className="flex-1 truncate text-[13px] text-muted-foreground">Search…</span>
+          <kbd className="hidden shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground sm:inline">
+            ⌘K
+          </kbd>
+        </button>
+
+        <LiveClock showDate className="hidden lg:flex" />
+
+        <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-muted transition-colors group">
             <div className="text-right hidden sm:block">
@@ -745,7 +775,8 @@ function DesktopTopBar({
             Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }
@@ -770,6 +801,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const prevPathname = useRef(pathname);
 
   // Restore sidebar preference from localStorage
@@ -971,6 +1003,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           onLogout={handleLogout}
           userRole={userRole}
           pathname={pathname}
+          onOpenPalette={() => setPaletteOpen(true)}
         />
 
         {/* Desktop top bar */}
@@ -981,6 +1014,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           pathname={pathname}
           onSidebarToggle={toggleSidebar}
           sidebarCollapsed={sidebarCollapsed}
+          onOpenPalette={() => setPaletteOpen(true)}
         />
 
         {/* Page content */}
@@ -1010,6 +1044,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         />
       )}
     </div>
+
+    {/* ── ⌘K Command Palette ── */}
+    <CommandPalette
+      open={paletteOpen}
+      onOpenChange={setPaletteOpen}
+      onLogout={handleLogout}
+    />
     </AuthContext.Provider>
 
     <LogoutDialog

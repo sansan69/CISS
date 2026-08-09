@@ -43,6 +43,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { authorizedFetch } from "@/lib/api-client";
 import { PageHeader } from "@/components/layout/page-header";
+import { LiveClock } from "@/components/common/live-clock";
 import type { RegionOverviewCard, SuperAdminOverviewSummary } from "@/types/region";
 import { DashboardStats } from "@/components/dashboard/stats";
 import { DashboardActions } from "@/components/dashboard/actions";
@@ -884,7 +885,6 @@ export default function DashboardPage() {
   }
 
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'there';
-  const todayLabel = format(new Date(), "EEEE, d MMM");
 
   if (isSuperAdmin) {
     return (
@@ -916,12 +916,9 @@ export default function DashboardPage() {
             Workforce status and frequently used tools in one place.
           </p>
         </div>
-        <time
-          dateTime={format(new Date(), "yyyy-MM-dd")}
-          className="w-fit rounded-full border border-border/70 bg-card px-3 py-1.5 text-[11px] font-semibold text-muted-foreground shadow-brand-xs"
-        >
-          {todayLabel}
-        </time>
+        <div className="w-fit rounded-full border border-border/70 bg-card px-3 py-1.5 shadow-brand-xs">
+          <LiveClock pulse={false} align="left" className="gap-1.5" />
+        </div>
       </header>
 
       {userRole === 'client' ? (
