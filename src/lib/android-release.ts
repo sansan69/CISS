@@ -46,11 +46,16 @@ const androidReleaseSchema = z
 
 export type AndroidRelease = z.infer<typeof androidReleaseSchema>;
 
+let cachedAndroidRelease: AndroidRelease | null = null;
+let cachedAndroidDownloadQr: string | null = null;
+
 export function parseAndroidRelease(value: unknown): AndroidRelease {
   return androidReleaseSchema.parse(value);
 }
 
 export async function getAndroidRelease(): Promise<AndroidRelease> {
+  if (cachedAndroidRelease) return cachedAndroidRelease;
+
   const manifestPath = path.join(
     process.cwd(),
     "public",
@@ -58,7 +63,8 @@ export async function getAndroidRelease(): Promise<AndroidRelease> {
     "ciss-workforce-android.json",
   );
   const raw = await fs.readFile(manifestPath, "utf8");
-  return parseAndroidRelease(JSON.parse(raw));
+  cachedAndroidRelease = parseAndroidRelease(JSON.parse(raw));
+  return cachedAndroidRelease;
 }
 
 export function resolveAndroidApkUrl(
@@ -73,7 +79,9 @@ export function formatReleaseSize(sizeBytes: number): string {
 }
 
 export async function createAndroidDownloadQr(): Promise<string> {
-  return QRCode.toDataURL(`${ANDROID_DOWNLOAD_PAGE_URL}/download`, {
+  if (cachedAndroidDownloadQr) return cachedAndroidDownloadQr;
+
+  cachedAndroidDownloadQr = await QRCode.toDataURL(`${ANDROID_DOWNLOAD_PAGE_URL}/download`, {
     width: 240,
     margin: 1,
     errorCorrectionLevel: "M",
@@ -82,4 +90,5 @@ export async function createAndroidDownloadQr(): Promise<string> {
       light: "#F4F7FB",
     },
   });
+  return cachedAndroidDownloadQr;
 }

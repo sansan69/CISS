@@ -27,7 +27,6 @@ import { normalizeScannerError } from "@/lib/qr/scanner-support";
 import { startSafeHybridQrScanner } from "@/lib/qr/scanner-engine";
 import type { QrScannerErrorCode, QrScannerSession } from "@/lib/qr/scanner-types";
 import { signInWithCustomToken } from "firebase/auth";
-import { requestNotificationPermission, registerFCMToken } from "@/lib/fcm";
 
 type PhoneStep = "phone" | "pin";
 
@@ -117,14 +116,13 @@ export default function GuardLoginPage() {
       }
 
       if (auth.currentUser) {
-        try {
+        const uid = auth.currentUser.uid;
+        void import('@/lib/fcm').then(async ({ requestNotificationPermission, registerFCMToken }) => {
           const token = await requestNotificationPermission();
-          if (token) {
-            await registerFCMToken(auth.currentUser.uid, token);
-          }
-        } catch {
+          if (token) await registerFCMToken(uid, token);
+        }).catch(() => {
           // FCM registration optional — non-fatal
-        }
+        });
       }
 
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });

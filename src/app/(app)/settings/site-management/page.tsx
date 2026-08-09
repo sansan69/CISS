@@ -650,20 +650,22 @@ export default function SiteManagementPage() {
         const fetchFilterData = async () => {
             setIsFilterDataLoading(true);
             try {
-                const clientsSnapshot = await getDocs(query(collection(db, 'clients'), orderBy('name')));
+                const [clientsSnapshot, clientLocationsSnapshot, officersSnapshot] = await Promise.all([
+                    getDocs(query(collection(db, 'clients'), orderBy('name'))),
+                    getDocs(query(collection(db, 'clientLocations'), orderBy('clientName'))),
+                    getDocs(query(collection(db, 'fieldOfficers'), orderBy('name'))),
+                ]);
                 setClients(
                     dedupeClientOptions(
                         clientsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name } as ClientOption)),
                     ),
                 );
 
-                const clientLocationsSnapshot = await getDocs(query(collection(db, 'clientLocations'), orderBy('clientName')));
                 setClientLocations(clientLocationsSnapshot.docs.map((clientLocationDoc) => ({
                     id: clientLocationDoc.id,
                     ...(clientLocationDoc.data() as any),
                 } as ClientLocationOption)));
 
-                const officersSnapshot = await getDocs(query(collection(db, 'fieldOfficers'), orderBy('name')));
                 setFieldOfficers(officersSnapshot.docs.map((doc) => {
                     const raw = doc.data() as { name?: string; assignedDistricts?: Array<string | null | undefined> };
                     return {

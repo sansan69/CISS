@@ -4,8 +4,11 @@ import { useEffect } from 'react';
 
 export default function PwaLoader() {
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      // Register ASAP; no need to wait for window load. Works on HTTPS or localhost.
+    if (!('serviceWorker' in navigator)) return;
+
+    const register = () => {
+      // Register after the first page has loaded so installation does not
+      // compete with critical HTML, CSS, and JavaScript requests.
       navigator.serviceWorker.register('/sw.js')
         .then(registration => {
           console.log('SW registered:', registration.scope);
@@ -22,7 +25,16 @@ export default function PwaLoader() {
         .catch(err => {
           console.log('SW registration failed:', err);
         });
+
+    };
+
+    if (document.readyState === 'complete') {
+      window.setTimeout(register, 0);
+    } else {
+      window.addEventListener('load', register, { once: true });
     }
+
+    return () => window.removeEventListener('load', register);
   }, []);
 
   return null;

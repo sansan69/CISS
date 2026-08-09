@@ -19,7 +19,6 @@ import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { auth, ensureAuthPersistence } from '@/lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   buildClientPortalAuthEmail,
@@ -158,14 +157,13 @@ export default function AdminLoginPage() {
       }
 
       if (auth.currentUser) {
-        try {
+        const uid = auth.currentUser.uid;
+        void import('@/lib/fcm').then(async ({ requestNotificationPermission, registerFCMToken }) => {
           const token = await requestNotificationPermission();
-          if (token) {
-            await registerFCMToken(auth.currentUser.uid, token);
-          }
-        } catch (error) {
+          if (token) await registerFCMToken(uid, token);
+        }).catch((error) => {
           console.warn('Failed to register FCM token:', error);
-        }
+        });
       }
 
       if (rememberEmail) {

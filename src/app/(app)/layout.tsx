@@ -32,7 +32,6 @@ import {
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { requestNotificationPermission, registerFCMToken } from '@/lib/fcm';
 import { cn } from '@/lib/utils';
 import { canonicalizeDistrictList } from '@/lib/districts';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -825,35 +824,56 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           );
 
           if (appUser.role === 'guard') {
+            setIsLoadingAuth(false);
             router.replace('/guard/dashboard');
             return;
           }
 
-          try {
-            const token = await requestNotificationPermission();
-            if (token) {
-              await registerFCMToken(user.uid, token);
+          // The application shell is ready once auth and role resolution finish.
+          // Push registration is optional and must never delay the first page.
+          setIsLoadingAuth(false);
+          const scheduleBackgroundWork = (work: () => void) => {
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+              window.requestIdleCallback(work, { timeout: 3000 });
+            } else {
+              globalThis.setTimeout(work, 1000);
             }
-          } catch {
-            // FCM registration optional — non-fatal
-          }
+          };
+
+          scheduleBackgroundWork(() => {
+            void (async () => {
+              try {
+                const { requestNotificationPermission, registerFCMToken } = await import('@/lib/fcm');
+                const token = await requestNotificationPermission();
+                if (token) {
+                  await registerFCMToken(user.uid, token);
+                }
+              } catch {
+                // FCM registration optional — non-fatal
+              }
+            })();
+          });
 
           // Regional setup wizard: redirect admin users if setup not complete
           if (appUser.role === 'admin' && !currentIsSuperAdmin && currentPathname !== '/wizard' && currentPathname !== '/admin-login') {
-            try {
-              const adminToken = await user.getIdToken();
-              const wizardRes = await fetch('/api/wizard/profile', {
-                headers: { Authorization: `Bearer ${adminToken}` },
-              });
-              if (wizardRes.ok) {
-                const wizardData = await wizardRes.json();
-                if (!wizardData.setupComplete) {
-                  router.replace('/wizard');
+            scheduleBackgroundWork(() => {
+              void (async () => {
+                try {
+                  const adminToken = await user.getIdToken();
+                  const wizardRes = await fetch('/api/wizard/profile', {
+                    headers: { Authorization: `Bearer ${adminToken}` },
+                  });
+                  if (wizardRes.ok) {
+                    const wizardData = await wizardRes.json();
+                    if (!wizardData.setupComplete) {
+                      router.replace('/wizard');
+                    }
+                  }
+                } catch {
+                  // Non-critical — if wizard check fails, let dashboard load
                 }
-              }
-            } catch {
-              // Non-critical — if wizard check fails, let dashboard load
-            }
+              })();
+            });
           }
         } catch (err) {
           // Distinguish network/auth errors from "no role" case

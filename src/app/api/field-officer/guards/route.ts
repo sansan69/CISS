@@ -109,8 +109,12 @@ export async function GET(request: Request) {
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const requestedDistricts = new URL(request.url)
-      .searchParams
+    const { searchParams } = new URL(request.url);
+    const resultLimit = Math.min(
+      Math.max(Number.parseInt(searchParams.get("limit") || "300", 10) || 300, 1),
+      500,
+    );
+    const requestedDistricts = searchParams
       .getAll("district")
       .map(normalizeText)
       .filter(Boolean);
@@ -131,7 +135,7 @@ export async function GET(request: Request) {
 
     const employeeDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
     if (isAdmin && districtScope.length === 0) {
-      const snapshot = await adminDb.collection("employees").get();
+      const snapshot = await adminDb.collection("employees").limit(resultLimit).get();
       snapshot.docs.forEach((doc) => employeeDocs.set(doc.id, doc));
     } else {
       // Firestore supports at most 30 values in an `in` query. Query only the
@@ -155,7 +159,7 @@ export async function GET(request: Request) {
       const snapshots = await Promise.all(
         districtFields.flatMap((field) =>
           chunks.map((districts) =>
-            adminDb.collection("employees").where(field, "in", districts).get(),
+            adminDb.collection("employees").where(field, "in", districts).limit(resultLimit).get(),
           ),
         ),
       );
@@ -178,10 +182,13 @@ export async function GET(request: Request) {
         return employeeMatchesAnyDistrict(employee, districtScope);
       })
       .sort((left, right) => {
+        const byName = normalizeText(left.employee.fullName).localeCompare(
+          normalizeText(right.employee.fullName),
+        );
+        if (byName !== 0) return byName;
         const byEnrollment = right.enrollmentTime - left.enrollmentTime;
         if (byEnrollment !== 0) return byEnrollment;
-        const byName = normalizeText(left.employee.fullName).localeCompare(normalizeText(right.employee.fullName));
-        return byName || left.doc.id.localeCompare(right.doc.id);
+        return left.doc.id.localeCompare(right.doc.id);
       })
       .map(({ employee }) => {
         const profile = serializeGuardProfileView(String(employee.id), employee);
@@ -191,8 +198,9 @@ export async function GET(request: Request) {
           joiningDate: profile.joiningDate || "",
         };
       });
+    const limitedGuards = guards.slice(0, resultLimit);
 
-    return NextResponse.json({ guards }, {
+    return NextResponse.json({ guards: limitedGuards }, {
       headers: { "Cache-Control": "no-store, private" },
     });
   } catch (error: unknown) {

@@ -15,24 +15,24 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const ip = getClientIp(request);
-    const rateLimit = await checkRateLimit(
-      buildRateLimitKey("enrollment-draft", ip),
-      { maxRequests: 5, windowMs: 60 * 60 * 1000, failClosed: true },
-    );
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many enrollment attempts. Please wait and try again." },
-        { status: 429 },
-      );
-    }
-
     const body = (await request.json()) as { phoneNumber?: unknown };
     const phoneNumber = String(body.phoneNumber ?? "").replace(/\D/g, "");
     if (!/^\d{10}$/.test(phoneNumber)) {
       return NextResponse.json(
         { error: "A valid 10-digit phone number is required." },
         { status: 400 },
+      );
+    }
+
+    const ip = getClientIp(request);
+    const rateLimit = await checkRateLimit(
+      buildRateLimitKey("enrollment-draft", `${ip}:${phoneNumber}`),
+      { maxRequests: 10, windowMs: 60 * 60 * 1000, failClosed: true },
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many enrollment attempts. Please wait and try again." },
+        { status: 429 },
       );
     }
 

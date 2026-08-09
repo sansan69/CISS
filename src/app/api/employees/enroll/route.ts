@@ -32,6 +32,7 @@ import {
   assertAadhaarSourceOwnership,
   deleteStorageObjectIfPresent,
   encryptAadhaarNumber,
+  isAadhaarInfrastructureError,
   moveAadhaarSourceToRestrictedStorage,
 } from "@/lib/server/aadhaar";
 import { assertEnrollmentDocumentReferences } from "@/lib/server/enrollment-documents";
@@ -560,6 +561,17 @@ export async function POST(request: NextRequest) {
 
     if (error?.name === "AadhaarSourceOwnershipError") {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (isAadhaarInfrastructureError(error)) {
+      console.error("Enrollment Aadhaar infrastructure failed:", error);
+      return NextResponse.json(
+        {
+          error: "Enrollment security service is temporarily unavailable. Your documents are preserved; please retry shortly.",
+          retryable: true,
+        },
+        { status: 503 },
+      );
     }
 
     console.error("Enrollment API failed:", error);

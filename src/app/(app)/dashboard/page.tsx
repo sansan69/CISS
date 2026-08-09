@@ -688,6 +688,7 @@ export default function DashboardPage() {
         where('district', 'in', assignedDistricts.slice(0, 30)),
       );
     }
+    empQ = query(empQ, limit(2000));
 
     const monthStarts = Array.from({ length: 6 }, (_, i) => startOfMonth(subMonths(new Date(), 5 - i)));
     const monthLabels = monthStarts.map(d => format(d, 'MMM yyyy'));
@@ -810,7 +811,8 @@ export default function DashboardPage() {
               timeZone: 'Asia/Kolkata',
             }).format(new Date()),
           ),
-          orderBy('reportedAt', 'desc')
+          orderBy('reportedAt', 'desc'),
+          limit(2000)
         ),
         (snap) => setTodayAttendanceDocs(snap.docs.map(d => d.data() as any)),
         (error) => {

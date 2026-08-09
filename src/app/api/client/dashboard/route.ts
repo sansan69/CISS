@@ -109,29 +109,44 @@ export async function GET(request: Request) {
     const next14Days = new Date(today);
     next14Days.setDate(next14Days.getDate() + 14);
 
-    const employeesPromise = adminDb
+    const employeeQuery = adminDb
       .collection("employees")
-      .where("clientName", "==", scope.clientName)
+      .where("clientName", "==", scope.clientName);
+    const employeesPromise = employeeQuery.limit(6).get();
+    const employeeCountPromise = employeeQuery.count().get();
+    const activeEmployeeCountPromise = employeeQuery.where("status", "==", "Active").count().get();
+    const inactiveEmployeeCountPromise = employeeQuery
+      .where("status", "in", ["Inactive", "Exited"])
+      .count()
       .get();
     const siteAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("clientName", "==", scope.clientName)
       .where("attendanceDate", "==", todayKey)
       .orderBy("reportedAt", "desc")
+      .limit(2000)
       .get();
     const employeeAttendancePromise = adminDb
       .collection("attendanceLogs")
       .where("employeeClientName", "==", scope.clientName)
       .where("attendanceDate", "==", todayKey)
       .orderBy("reportedAt", "desc")
+      .limit(2000)
       .get();
     const workOrdersPromise: Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }> =
       isOperationalClient
-        ? (adminDb.collection("workOrders").where("clientName", "==", OPERATIONAL_CLIENT_NAME).get() as any)
+        ? (adminDb
+            .collection("workOrders")
+            .where("clientName", "==", OPERATIONAL_CLIENT_NAME)
+            .where("date", ">=", today)
+            .where("date", "<=", next14Days)
+            .orderBy("date", "asc")
+            .limit(500)
+            .get() as any)
         : Promise.resolve({ docs: [] });
     const sitesPromise = scope.clientId
-      ? adminDb.collection("sites").where("clientId", "==", scope.clientId).get()
-      : adminDb.collection("sites").where("clientName", "==", scope.clientName).get();
+      ? adminDb.collection("sites").where("clientId", "==", scope.clientId).limit(500).get()
+      : adminDb.collection("sites").where("clientName", "==", scope.clientName).limit(500).get();
     const visitReportsPromise = scope.clientId
       ? adminDb.collection("foVisitReports").where("clientId", "==", scope.clientId).orderBy("createdAt", "desc").limit(80).get()
       : adminDb.collection("foVisitReports").where("clientName", "==", scope.clientName).limit(80).get();
@@ -144,6 +159,9 @@ export async function GET(request: Request) {
 
     const [
       employeesSnapshot,
+      employeeCountSnapshot,
+      activeEmployeeCountSnapshot,
+      inactiveEmployeeCountSnapshot,
       siteAttendanceSnapshot,
       employeeAttendanceSnapshot,
       workOrdersSnapshot,
@@ -153,6 +171,9 @@ export async function GET(request: Request) {
       patrolActivitiesSnapshot,
     ] = await Promise.all([
       employeesPromise,
+      employeeCountPromise,
+      activeEmployeeCountPromise,
+      inactiveEmployeeCountPromise,
       siteAttendancePromise,
       employeeAttendancePromise,
       workOrdersPromise,
@@ -167,11 +188,9 @@ export async function GET(request: Request) {
       ...(doc.data() as Record<string, unknown>),
     })) as DashboardRecord[];
 
-    const totalGuards = employees.length;
-    const activeGuards = employees.filter((employee) => employee.status === "Active").length;
-    const inactiveGuards = employees.filter(
-      (employee) => employee.status === "Inactive" || employee.status === "Exited",
-    ).length;
+    const totalGuards = employeeCountSnapshot.data().count ?? 0;
+    const activeGuards = activeEmployeeCountSnapshot.data().count ?? 0;
+    const inactiveGuards = inactiveEmployeeCountSnapshot.data().count ?? 0;
 
     const guardHighlights: ClientDashboardGuardHighlight[] = employees
       .map((employee) => ({

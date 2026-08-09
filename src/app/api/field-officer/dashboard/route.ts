@@ -122,6 +122,7 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       adminDb
         .collection("employees")
+        .where("status", "==", "Active")
         .select(
           "status",
           "district",
@@ -132,12 +133,13 @@ export async function GET(request: Request) {
           "locationDistrict",
           "city",
         )
+        .limit(2000)
         .get(),
       adminDb
         .collection("workOrders")
         .where("date", ">=", Timestamp.fromDate(startOfToday()))
         .orderBy("date", "asc")
-        .limit(100)
+        .limit(500)
         .get(),
       adminDb
         .collection("foVisitReports")

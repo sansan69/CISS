@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, onSnapshot, orderBy, query, where, Timestamp, type DocumentData, type QuerySnapshot } from "firebase/firestore";
+import { collection, limit, onSnapshot, orderBy, query, where, Timestamp, type DocumentData, type QuerySnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -147,13 +147,15 @@ export default function AttendanceLogsPage() {
         collection(db, "attendanceLogs"),
         where("clientName", "==", clientInfo.clientName),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc")
+        orderBy("reportedAt", "desc"),
+        limit(2000)
       );
       const employeeClientQuery = query(
         collection(db, "attendanceLogs"),
         where("employeeClientName", "==", clientInfo.clientName),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc")
+        orderBy("reportedAt", "desc"),
+        limit(2000)
       );
       const siteLogs = new Map<string, AttendanceLog>();
       const employeeLogs = new Map<string, AttendanceLog>();
@@ -207,7 +209,8 @@ export default function AttendanceLogsPage() {
         collection(db, "attendanceLogs"),
         where("district", "in", assignedDistricts),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc")
+        orderBy("reportedAt", "desc"),
+        limit(2000)
       );
       const unsubscribe = onSnapshot(
         logsQuery,
@@ -231,7 +234,8 @@ export default function AttendanceLogsPage() {
       const logsQuery = query(
         collection(db, "attendanceLogs"),
         where("attendanceDate", "==", selectedAttendanceDate),
-        orderBy("reportedAt", "desc")
+        orderBy("reportedAt", "desc"),
+        limit(2000)
       );
       const unsubscribe = onSnapshot(
         logsQuery,

@@ -9,6 +9,13 @@ const mocks = vi.hoisted(() => {
     addedEmployees,
     generateEmployeeId: vi.fn(() => "CISS/TCS/2026-27/001"),
     generateQrCodeDataUrl: vi.fn(() => Promise.resolve("data:image/png;base64,qr")),
+    encryptAadhaarNumber: vi.fn(async () => ({
+      aadhaarNumberEncrypted: "encrypted",
+      encryptionIv: "iv",
+      encryptionTag: "tag",
+      encryptedDataKey: "wrapped",
+      encryptionKeyVersion: "kms-key",
+    })),
     verifyIdToken: vi.fn(() => Promise.resolve({
       uid: "admin-user",
       role: "admin",
@@ -122,13 +129,9 @@ vi.mock("@/lib/qr", () => ({
 vi.mock("@/lib/server/aadhaar", () => ({
   AADHAAR_CONSENT_TEXT_HASH: "consent-hash",
   assertAadhaarSourceOwnership: vi.fn(() => undefined),
-  encryptAadhaarNumber: vi.fn(async () => ({
-    aadhaarNumberEncrypted: "encrypted",
-    encryptionIv: "iv",
-    encryptionTag: "tag",
-    encryptedDataKey: "wrapped",
-    encryptionKeyVersion: "kms-key",
-  })),
+  encryptAadhaarNumber: mocks.encryptAadhaarNumber,
+  isAadhaarInfrastructureError: (error: unknown) =>
+    error instanceof Error && /AADHAAR_KMS|Cloud KMS/.test(error.message),
   moveAadhaarSourceToRestrictedStorage: vi.fn(async ({ source }: { source: string }) => ({
     documentStoragePath: source.includes("aadhaar_back")
       ? "restrictedEmployeeAadhaar/employee-doc-1/aadhaar_back.pdf"
@@ -190,6 +193,14 @@ describe("POST /api/employees/enroll", () => {
     mocks.generateEmployeeId.mockClear();
     mocks.generateQrCodeDataUrl.mockClear();
     mocks.verifyIdToken.mockClear();
+    mocks.encryptAadhaarNumber.mockReset();
+    mocks.encryptAadhaarNumber.mockResolvedValue({
+      aadhaarNumberEncrypted: "encrypted",
+      encryptionIv: "iv",
+      encryptionTag: "tag",
+      encryptedDataKey: "wrapped",
+      encryptionKeyVersion: "kms-key",
+    });
   });
 
   it("stores the required email in normalized form and returns the created employee", async () => {
@@ -303,6 +314,28 @@ describe("POST /api/employees/enroll", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "Enrollment upload session is required.",
+    });
+    expect(mocks.addedEmployees).toHaveLength(0);
+  });
+
+  it("returns a retryable service error when Aadhaar encryption is unavailable", async () => {
+    mocks.encryptAadhaarNumber.mockRejectedValueOnce(
+      new Error("AADHAAR_KMS_KEY_NAME is not configured correctly."),
+    );
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(buildStandardPayload()),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "Enrollment security service is temporarily unavailable. Your documents are preserved; please retry shortly.",
+      retryable: true,
     });
     expect(mocks.addedEmployees).toHaveLength(0);
   });

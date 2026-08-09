@@ -285,9 +285,9 @@ describe("field officer guards route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toEqual([
-      "G-NEW",
-      "G-MIDDLE",
       "G-OLD",
+      "G-MIDDLE",
+      "G-NEW",
     ]);
   });
 });
