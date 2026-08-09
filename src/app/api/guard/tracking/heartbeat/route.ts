@@ -27,6 +27,8 @@ const heartbeatSchema = z.object({
   capturedAt: z.string().datetime().optional(),
   batteryLevel: z.number().finite().min(0).max(1).nullable().optional(),
   speed: z.number().finite().min(0).max(150).nullable().optional(),
+  wifiConnected: z.boolean().nullable().optional(),
+  networkType: z.string().trim().max(32).nullable().optional(),
 });
 
 const HEARTBEAT_RATE_LIMIT = {
@@ -267,6 +269,8 @@ export async function POST(request: Request) {
       geofenceRadius,
       batteryLevel: body.batteryLevel ?? null,
       speed: body.speed ?? null,
+      wifiConnected: body.wifiConnected ?? null,
+      networkType: normalizeText(body.networkType) || null,
       trackingSource: "guard_portal",
     };
 
@@ -303,6 +307,8 @@ export async function POST(request: Request) {
         isOutOfZone: resolved.isOutOfZone,
         speed: body.speed ?? null,
         batteryLevel: locationData.batteryLevel,
+        wifiConnected: body.wifiConnected ?? null,
+        networkType: normalizeText(body.networkType) || null,
         clientCapturedAt: locationData.clientCapturedAt,
         recordedAt: now,
         expiresAt: Timestamp.fromDate(buildLocationHistoryExpiry(nowDate)),

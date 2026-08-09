@@ -173,6 +173,10 @@ describe("guard tracking heartbeat", () => {
         lat: 10.01,
         lng: 76,
         accuracy: 12,
+        batteryLevel: 0.73,
+        speed: 4.2,
+        wifiConnected: true,
+        networkType: "wifi",
         capturedAt: new Date().toISOString(),
       }),
     );
@@ -194,6 +198,10 @@ describe("guard tracking heartbeat", () => {
       district: "Ernakulam",
       zoneStatus: "out_of_zone",
       isOutOfZone: true,
+      batteryLevel: 0.73,
+      speed: 4.2,
+      wifiConnected: true,
+      networkType: "wifi",
     });
 
     const history = [...db.writes.entries()].find(([path]) =>
@@ -205,6 +213,10 @@ describe("guard tracking heartbeat", () => {
       clientName: "Test Client",
       district: "Ernakulam",
       attendanceSessionId: "session-1",
+      batteryLevel: 0.73,
+      speed: 4.2,
+      wifiConnected: true,
+      networkType: "wifi",
     });
   });
 });
