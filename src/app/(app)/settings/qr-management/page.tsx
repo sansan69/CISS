@@ -166,10 +166,10 @@ export default function QrManagementPage() {
           )}
 
           {generationStatus === 'success' && (
-            <Alert variant="default" className="bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700">
-              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-              <AlertTitle className="text-green-700 dark:text-green-300">Generation Successful</AlertTitle>
-              <AlertDescription className="text-green-600 dark:text-green-400">
+            <Alert variant="default" className="bg-success/10 border-success/30 ">
+              <CheckCircle className="h-4 w-4 text-success " />
+              <AlertTitle className="text-success ">Generation Successful</AlertTitle>
+              <AlertDescription className="text-success ">
                 All QR codes have been successfully regenerated and updated.
               </AlertDescription>
             </Alert>

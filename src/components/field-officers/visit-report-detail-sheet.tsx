@@ -14,11 +14,11 @@ import { CheckCircle as CheckCircle2, PencilSimple as Edit3, Eye, FileText, Imag
 import type { FoVisitReport, VisitReportStatus } from "@/types/branch";
 
 const STATUS_CONFIG: Record<VisitReportStatus, { label: string; className: string }> = {
-  draft:     { label: "Draft",     className: "bg-gray-100 text-gray-600" },
-  submitted: { label: "Submitted", className: "bg-amber-100 text-amber-700" },
-  reviewed:  { label: "Reviewed",  className: "bg-green-100 text-green-700" },
-  superseded:{ label: "Superseded",className: "bg-slate-100 text-slate-600" },
-  archived:  { label: "Archived",  className: "bg-slate-100 text-slate-600" },
+  draft:     { label: "Draft",     className: "bg-muted text-muted-foreground" },
+  submitted: { label: "Submitted", className: "bg-warning/15 text-warning-strong" },
+  reviewed:  { label: "Reviewed",  className: "bg-success/15 text-success" },
+  superseded:{ label: "Superseded",className: "bg-muted text-muted-foreground" },
+  archived:  { label: "Archived",  className: "bg-muted text-muted-foreground" },
 };
 
 function fmt(ts: { seconds: number } | string | null | undefined): string {
@@ -275,7 +275,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">
                 <User className="h-3.5 w-3.5" />Guards Present
               </div>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-2xl font-bold text-success">
                 {editing ? (
                   <input
                     type="number" min="0" value={editPresent}
@@ -289,7 +289,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">
                 <User className="h-3.5 w-3.5" />Guards Absent
               </div>
-              <p className="text-2xl font-bold text-red-500">
+              <p className="text-2xl font-bold text-destructive">
                 {editing ? (
                   <input
                     type="number" min="0" value={editAbsent}
@@ -417,8 +417,8 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
 
           {/* Review Info */}
           {(report.status === "reviewed" || report.reviewStatus === "reviewed") && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-              <div className="flex items-center gap-1.5 text-xs text-green-700 font-medium uppercase tracking-wide mb-2">
+            <div className="rounded-lg border border-success/30 bg-success/10 p-4">
+              <div className="flex items-center gap-1.5 text-xs text-success font-medium uppercase tracking-wide mb-2">
                 <Shield className="h-3.5 w-3.5" />Reviewed
               </div>
               {report.reviewedBy && <p className="text-sm">By: {report.reviewedBy}</p>}
@@ -437,7 +437,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
                 onChange={(e) => setReviewNotes(e.target.value)}
                 placeholder="Add review comments..."
               />
-              <Button onClick={handleReview} disabled={reviewing} className="w-full bg-green-600 hover:bg-green-700">
+              <Button onClick={handleReview} disabled={reviewing} className="w-full bg-success hover:bg-success/90">
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 {reviewing ? "Saving..." : "Mark as Reviewed"}
               </Button>
@@ -448,7 +448,7 @@ export function VisitReportDetailSheet({ open, onOpenChange, report, onUpdated }
           )}
 
           {report.reviewStatus === "revision_requested" && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning-strong">
               <p className="font-semibold">Revision requested</p>
               {report.reviewNotes && <p className="mt-1 whitespace-pre-wrap">{report.reviewNotes}</p>}
             </div>

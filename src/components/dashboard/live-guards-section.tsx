@@ -302,11 +302,11 @@ export default function LiveGuardsSection({
               onClick={() => setHealthFilter(healthFilter === "live" ? "all" : "live")}
               className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                 healthFilter === "live"
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-emerald-200 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100"
+                  ? "border-success bg-success text-white"
+                  : "border-success/30 bg-success/5 text-success hover:bg-success/15"
               }`}
             >
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="h-2 w-2 rounded-full bg-success" />
               {inZone} in zone
             </button>
             <button
@@ -333,8 +333,8 @@ export default function LiveGuardsSection({
                 }
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                   healthFilter === "out_of_zone"
-                    ? "border-red-600 bg-red-600 text-white"
-                    : "border-red-200 bg-red-50/50 text-red-700 hover:bg-red-100"
+                    ? "border-destructive bg-destructive text-white"
+                    : "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15"
                 }`}
               >
                 <AlertTriangle className="h-3 w-3" />
@@ -348,8 +348,8 @@ export default function LiveGuardsSection({
                 onClick={() => setHealthFilter(healthFilter === "stale" ? "all" : "stale")}
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                   healthFilter === "stale"
-                    ? "border-amber-600 bg-amber-600 text-white"
-                    : "border-amber-200 bg-amber-50/50 text-amber-700 hover:bg-amber-100"
+                    ? "border-warning bg-warning text-white"
+                    : "border-warning/30 bg-warning/5 text-warning-strong hover:bg-warning/15"
                 }`}
               >
                 <WifiOff className="h-3 w-3" />
@@ -363,8 +363,8 @@ export default function LiveGuardsSection({
                 onClick={() => setHealthFilter(healthFilter === "delayed" ? "all" : "delayed")}
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                   healthFilter === "delayed"
-                    ? "border-amber-600 bg-amber-600 text-white"
-                    : "border-amber-200 bg-amber-50/50 text-amber-700 hover:bg-amber-100"
+                    ? "border-warning bg-warning text-white"
+                    : "border-warning/30 bg-warning/5 text-warning-strong hover:bg-warning/15"
                 }`}
               >
                 <Clock className="h-3 w-3" />
@@ -382,8 +382,8 @@ export default function LiveGuardsSection({
                 }
                 className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
                   healthFilter === "poor_accuracy"
-                    ? "border-violet-600 bg-violet-600 text-white"
-                    : "border-violet-200 bg-violet-50/50 text-violet-700 hover:bg-violet-100"
+                    ? "border-primary bg-primary text-white"
+                    : "border-primary/30 bg-primary/5 text-primary hover:bg-primary/15"
                 }`}
               >
                 <AlertTriangle className="h-3 w-3" />
@@ -401,7 +401,7 @@ export default function LiveGuardsSection({
             ))}
           </div>
         ) : locationsError ? (
-          <div className="px-6 py-10 text-center text-sm text-red-700">
+          <div className="px-6 py-10 text-center text-sm text-destructive">
             <AlertTriangle className="mx-auto mb-2 h-8 w-8 opacity-60" />
             <p>{locationsError}</p>
           </div>
@@ -488,7 +488,7 @@ export default function LiveGuardsSection({
             <div
               className={`flex flex-col gap-3 md:flex-row ${
                 isFullscreen
-                  ? "fixed inset-2 z-[100] overflow-auto rounded-2xl border bg-background p-3 shadow-2xl md:inset-4"
+                  ? "fixed inset-2 z-[100] overflow-auto rounded-2xl border bg-background p-3 shadow-brand-lg md:inset-4"
                   : ""
               }`}
             >
@@ -499,7 +499,7 @@ export default function LiveGuardsSection({
                     title="Fit all visible guards"
                     variant="secondary"
                     size="sm"
-                    className="h-9 bg-background/95 shadow"
+                    className="h-9 bg-background/95 shadow-brand-sm"
                     onClick={() => requestViewport("fit_all")}
                   >
                     <Crosshair className="mr-1.5 h-4 w-4" />
@@ -511,7 +511,7 @@ export default function LiveGuardsSection({
                       title="Zoom to guards needing attention"
                       variant="secondary"
                       size="sm"
-                      className="h-9 bg-background/95 text-red-700 shadow"
+                      className="h-9 bg-background/95 text-destructive shadow-brand-sm"
                       onClick={() => requestViewport("fit_alerts")}
                     >
                       <AlertTriangle className="mr-1.5 h-4 w-4" />
@@ -523,7 +523,7 @@ export default function LiveGuardsSection({
                     title="Reset map"
                     variant="secondary"
                     size="icon"
-                    className="h-9 w-9 bg-background/95 shadow"
+                    className="h-9 w-9 bg-background/95 shadow-brand-sm"
                     onClick={() => requestViewport("reset")}
                   >
                     <MapIcon className="h-4 w-4" />
@@ -533,20 +533,20 @@ export default function LiveGuardsSection({
                     title={isFullscreen ? "Exit full screen" : "Full screen"}
                     variant="secondary"
                     size="icon"
-                    className="h-9 w-9 bg-background/95 shadow"
+                    className="h-9 w-9 bg-background/95 shadow-brand-sm"
                     onClick={() => setIsFullscreen((value) => !value)}
                   >
                     {isFullscreen ? <X className="h-4 w-4" /> : <ArrowsOut className="h-4 w-4" />}
                   </Button>
                 </div>
-                <div className="absolute bottom-6 left-3 z-[500] rounded-lg border bg-background/95 px-2.5 py-2 text-[10px] shadow">
+                <div className="absolute bottom-6 left-3 z-[500] rounded-lg border bg-background/95 px-2.5 py-2 text-[10px] shadow-brand-sm">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-semibold text-foreground">Guard status</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-emerald-500" />In zone</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-red-600" />Out of zone</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-violet-600" />Weak GPS</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-amber-600" />Delayed</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-gray-500" />Stale</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-success" />In zone</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-destructive" />Out of zone</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-primary" />Weak GPS</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-warning" />Delayed</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-muted-foreground/50" />Stale</span>
                     <span className="flex items-center gap-1"><i className="h-2 w-2 rotate-45 rounded-[2px] bg-[#b58b32]" />Site</span>
                   </div>
                 </div>
@@ -590,12 +590,12 @@ export default function LiveGuardsSection({
                     >
                       <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                         health === "out_of_zone"
-                          ? "bg-red-500"
+                          ? "bg-destructive"
                           : health === "poor_accuracy"
-                            ? "bg-violet-500"
+                            ? "bg-primary"
                             : health === "live"
-                              ? "bg-emerald-500"
-                              : "bg-amber-500"
+                              ? "bg-success"
+                              : "bg-warning"
                       }`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{loc.guardName}</p>
@@ -692,12 +692,12 @@ export default function LiveGuardsSection({
                     <div
                       className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${
                         health === "out_of_zone"
-                          ? "bg-red-100 text-red-700"
+                          ? "bg-destructive/15 text-destructive"
                           : health === "poor_accuracy"
-                          ? "bg-violet-100 text-violet-700"
+                          ? "bg-primary/15 text-primary"
                           : health !== "live"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-emerald-100 text-emerald-700"
+                          ? "bg-warning/15 text-warning-strong"
+                          : "bg-success/15 text-success"
                       }`}
                     >
                       {loc.guardName?.charAt(0)?.toUpperCase() || "G"}
@@ -705,12 +705,12 @@ export default function LiveGuardsSection({
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
                         health === "out_of_zone"
-                          ? "bg-red-500"
+                          ? "bg-destructive"
                           : health === "poor_accuracy"
-                            ? "bg-violet-500"
+                            ? "bg-primary"
                             : health === "live"
-                              ? "bg-emerald-500"
-                              : "bg-amber-500"
+                              ? "bg-success"
+                              : "bg-warning"
                       }`}
                     />
                   </div>
@@ -738,7 +738,7 @@ export default function LiveGuardsSection({
                     </Badge>
                   )}
                   {health === "stale" && (
-                    <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0 border-amber-300 text-amber-700">
+                    <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0 border-warning/40 text-warning-strong">
                       STALE
                     </Badge>
                   )}

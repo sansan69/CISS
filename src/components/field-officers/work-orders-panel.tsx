@@ -203,7 +203,7 @@ const AssignGuardsDialog: React.FC<{
                     <span
                       className={`ml-1.5 h-5 w-5 rounded-full text-[11px] font-bold flex items-center justify-center ${
                         selectedGuards.length >= workOrder.totalManpower
-                          ? "bg-green-500 text-white"
+                          ? "bg-success text-white"
                           : "bg-primary text-primary-foreground"
                       }`}
                     >
@@ -404,7 +404,7 @@ const AssignGuardsDialog: React.FC<{
                   <p className="text-[10px] text-muted-foreground mt-0.5">Female</p>
                 </div>
                 <div className="py-2">
-                  <p className={`text-base font-bold leading-none ${selectedGuards.length >= workOrder.totalManpower ? "text-green-600" : "text-primary"}`}>{selectedGuards.length}</p>
+                  <p className={`text-base font-bold leading-none ${selectedGuards.length >= workOrder.totalManpower ? "text-success" : "text-primary"}`}>{selectedGuards.length}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Total</p>
                 </div>
               </div>
@@ -710,7 +710,7 @@ export function WorkOrdersPanel() {
                 className="flex w-full items-start justify-between gap-3 border-b bg-muted/30 px-4 py-3 text-left transition-colors hover:bg-muted/50"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background shadow-sm">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background shadow-brand-sm">
                     <ToggleIcon className="h-4 w-4" />
                   </span>
                   <div className="min-w-0">
@@ -754,12 +754,12 @@ export function WorkOrdersPanel() {
                         order.assignmentStatus === "review";
 
                       const statusColor = needsAssignmentReview
-                        ? "text-red-600"
+                        ? "text-destructive"
                         : isUnassigned
-                        ? "text-red-600"
+                        ? "text-destructive"
                         : isFullyAssigned
-                          ? "text-green-600"
-                          : "text-amber-600";
+                          ? "text-success"
+                          : "text-warning-strong";
 
                       const statusLabel = needsAssignmentReview
                         ? "Review"
@@ -769,12 +769,12 @@ export function WorkOrdersPanel() {
                             ? "Ready"
                             : "Partial";
                       const statusBadgeClass = needsAssignmentReview
-                        ? "bg-red-100 text-red-700 border-red-200"
+                        ? "bg-destructive/15 text-destructive border-destructive/30"
                         : isUnassigned
-                        ? "bg-red-100 text-red-700 border-red-200"
+                        ? "bg-destructive/15 text-destructive border-destructive/30"
                         : isFullyAssigned
-                          ? "bg-green-100 text-green-700 border-green-200"
-                          : "bg-amber-100 text-amber-700 border-amber-200";
+                          ? "bg-success/15 text-success border-success/30"
+                          : "bg-warning/15 text-warning-strong border-warning/30";
 
                       return (
                         <div key={order.id} className="p-4">

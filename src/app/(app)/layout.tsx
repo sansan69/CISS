@@ -106,7 +106,7 @@ function SidebarNavLink({
             className={cn(
               'flex h-10 w-10 items-center justify-center rounded-xl transition-colors duration-200 active:scale-[0.97]',
               active
-                ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-brand-sm'
                 : 'text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
             )}
             aria-current={active ? 'page' : undefined}
@@ -135,7 +135,7 @@ function SidebarNavLink({
         'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold',
         'transition-colors duration-200 active:scale-[0.99]',
         active
-          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-brand-sm'
           : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       )}
       aria-current={active ? 'page' : undefined}

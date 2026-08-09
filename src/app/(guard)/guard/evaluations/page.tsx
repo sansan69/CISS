@@ -71,16 +71,16 @@ export default function GuardEvaluationsPage() {
           <Skeleton className="h-32 rounded-2xl" />
         </div>
       ) : evaluations.length === 0 ? (
-        <Card className="rounded-2xl border-0 shadow-sm">
+        <Card className="rounded-2xl border-0 shadow-brand-sm">
           <CardContent className="py-14 text-center">
-            <Star className="mx-auto h-10 w-10 text-gray-300" />
-            <p className="mt-3 text-sm font-medium text-gray-700">No evaluations yet</p>
+            <Star className="mx-auto h-10 w-10 text-muted-foreground/70" />
+            <p className="mt-3 text-sm font-medium text-muted-foreground">No evaluations yet</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
           {evaluations.map((evaluation) => (
-            <Card key={evaluation.id} className="rounded-2xl border-0 shadow-sm">
+            <Card key={evaluation.id} className="rounded-2xl border-0 shadow-brand-sm">
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -92,7 +92,7 @@ export default function GuardEvaluationsPage() {
                   </span>
                 </div>
                 {evaluation.criteria ? (
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     {Object.entries(evaluation.criteria).map(([key, value]) => (
                       <div key={key} className="rounded-xl bg-muted/50 px-3 py-2">
                         <p className="capitalize">{key.replace(/([A-Z])/g, " $1")}</p>
@@ -102,7 +102,7 @@ export default function GuardEvaluationsPage() {
                   </div>
                 ) : null}
                 {evaluation.comments ? (
-                  <p className="rounded-xl bg-muted/50 px-3 py-3 text-sm text-gray-700">{evaluation.comments}</p>
+                  <p className="rounded-xl bg-muted/50 px-3 py-3 text-sm text-muted-foreground">{evaluation.comments}</p>
                 ) : (
                   <p className="inline-flex items-center text-xs text-muted-foreground">
                     <BadgeCheck className="mr-1.5 h-3.5 w-3.5" />

@@ -154,7 +154,7 @@ export default function BankDetailPage() {
                   <p className="text-sm font-semibold">{idx + 1}. {q.prompt}</p>
                   <ul className="mt-2 space-y-1 text-xs">
                     {q.options.map((opt, i) => (
-                      <li key={i} className={`flex items-center gap-1.5 ${i === q.correctIndex ? "font-medium text-green-700" : "text-muted-foreground"}`}>
+                      <li key={i} className={`flex items-center gap-1.5 ${i === q.correctIndex ? "font-medium text-success" : "text-muted-foreground"}`}>
                         {i === q.correctIndex && <CheckCircle2 className="h-3.5 w-3.5" />}
                         <span>{String.fromCharCode(65 + i)}. {opt}</span>
                       </li>

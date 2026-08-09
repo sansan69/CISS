@@ -156,7 +156,7 @@ export default function ClientsPage() {
           {clients.map((client) => (
             <Card
               key={client.id}
-              className="cursor-pointer hover:shadow-md transition-shadow group"
+              className="cursor-pointer hover:shadow-brand-md transition-shadow group"
               onClick={() => router.push(`/settings/clients/${client.id}`)}
             >
               <CardHeader className="pb-3">

@@ -96,9 +96,9 @@ export default function GuardSetupPage() {
       </header>
 
       {success ? (
-        <Card className="shadow-lg text-center">
+        <Card className="shadow-brand-lg text-center">
           <CardContent className="pt-8 pb-8 space-y-4">
-            <CheckCircle2 className="h-14 w-14 mx-auto text-green-500" />
+            <CheckCircle2 className="h-14 w-14 mx-auto text-success" />
             <h2 className="text-lg font-semibold">PIN Set Successfully!</h2>
             <p className="text-sm text-muted-foreground">
               You can now sign in to the Guard Portal using your phone number and PIN.
@@ -109,7 +109,7 @@ export default function GuardSetupPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="shadow-lg">
+        <Card className="shadow-brand-lg">
           <CardHeader>
             <CardTitle className="text-center text-lg">
               {step === 1 ? "Step 1 of 2 — Verify Identity" : "Step 2 of 2 — Choose PIN"}

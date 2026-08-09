@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { SpinnerGap as Loader2, FloppyDisk as Save, ArrowUp, ArrowDown, Eye, EyeSlash as EyeOff } from "@phosphor-icons/react";
 import type { EnrollmentFormConfig, EnrollmentFormFieldConfig } from "@/types/region";
 import { MANDATORY_NEW_ENROLLMENT_FIELDS } from "@/lib/enrollment-policy";
+import { PageLoading } from "@/components/common/page-loading";
 
 export default function EnrollmentFormSettingsPage() {
   const router = useRouter();
@@ -84,9 +85,7 @@ export default function EnrollmentFormSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-40">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <PageLoading />
     );
   }
 

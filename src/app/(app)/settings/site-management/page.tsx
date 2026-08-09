@@ -73,6 +73,7 @@ import {
 } from '@/lib/districts';
 import { REGION_CODE } from '@/lib/runtime-config';
 import { dedupeClientOptions } from '@/lib/client-options';
+import { PageLoading } from "@/components/common/page-loading";
 
 
 type Site = ManagedSite;
@@ -1316,7 +1317,7 @@ export default function SiteManagementPage() {
                         <p className="text-sm text-muted-foreground">No sites currently need coordinate review.</p>
                     ) : (
                         <>
-                            <div className="rounded-lg border bg-amber-50/70 p-3 text-sm text-amber-900">
+                            <div className="rounded-lg border bg-warning/10 p-3 text-sm text-warning-strong">
                                 {needsReviewSites.length} site(s) currently need coordinate verification or manual correction.
                             </div>
                             <div className="space-y-2">
@@ -1370,7 +1371,7 @@ export default function SiteManagementPage() {
                         </div>
                         {file && (
                             <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
-                                <FileCheck2 className="h-5 w-5 text-green-500" />
+                                <FileCheck2 className="h-5 w-5 text-success" />
                                 <span>{file.name}</span>
                             </div>
                         )}
@@ -1415,7 +1416,7 @@ export default function SiteManagementPage() {
                                 readOnly
                             />
                             <p className="mt-2 text-xs text-muted-foreground">
-                                Entries marked with ❌ or ⚠️ could not be geocoded automatically. For those sites, open them in
+                                Entries marked as failed or warning could not be geocoded automatically. For those sites, open them in
                                 the editor and manually paste the latitude/longitude (for example from Google Maps: right‑click
                                 on the map &rarr; “What&apos;s here?” &rarr; copy the decimal coordinates).
                             </p>
@@ -1830,19 +1831,19 @@ export default function SiteManagementPage() {
                     <CardHeader>
                         <CardTitle>Import Results</CardTitle>
                         <CardDescription className="flex flex-col sm:flex-row flex-wrap gap-x-4 gap-y-2">
-                            <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-4 w-4"/>Successful: {successCount}</span>
-                            <span className="flex items-center gap-1 text-yellow-600"><AlertTriangle className="h-4 w-4"/>Duplicates (Skipped): {duplicateCount}</span>
-                            <span className="flex items-center gap-1 text-red-600"><AlertTriangle className="h-4 w-4"/>Failed: {errorCount}</span>
+                            <span className="flex items-center gap-1 text-success"><CheckCircle className="h-4 w-4"/>Successful: {successCount}</span>
+                            <span className="flex items-center gap-1 text-warning-strong"><AlertTriangle className="h-4 w-4"/>Duplicates (Skipped): {duplicateCount}</span>
+                            <span className="flex items-center gap-1 text-destructive"><AlertTriangle className="h-4 w-4"/>Failed: {errorCount}</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="max-h-96 overflow-y-auto">
                        <div className="space-y-2">
                             {processedRecords.map((record, index) => (
-                                <div key={index} className={`p-3 border rounded-md ${record.status === 'success' ? 'bg-green-50 border-green-200' : record.status === 'duplicate' ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
+                                <div key={index} className={`p-3 border rounded-md ${record.status === 'success' ? 'bg-success/10 border-success/30' : record.status === 'duplicate' ? 'bg-warning/10 border-warning/30' : 'bg-destructive/10 border-destructive/30'}`}>
                                     <p className="font-semibold text-sm">
                                         {record.data['Site Name']} ({record.data['Client Name'] || OPERATIONAL_CLIENT_NAME})
                                     </p>
-                                    <p className={`text-xs ${record.status === 'success' ? 'text-green-700' : record.status === 'duplicate' ? 'text-yellow-700' : 'text-red-700'}`}>
+                                    <p className={`text-xs ${record.status === 'success' ? 'text-success' : record.status === 'duplicate' ? 'text-warning-strong' : 'text-destructive'}`}>
                                         {record.message}
                                     </p>
                                 </div>
@@ -1949,7 +1950,7 @@ export default function SiteManagementPage() {
                         </div>
                     </div>
                      {isLoadingSites ? (
-                        <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                        <PageLoading />
                     ) : sites.length === 0 ? (
                         <p className="text-center text-muted-foreground py-10">No sites found for the selected filters.</p>
                     ) : (
@@ -1959,8 +1960,8 @@ export default function SiteManagementPage() {
                                 return (
                                     <div
                                         key={site.id}
-                                        className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg shadow-sm ${
-                                            isSelected ? 'bg-red-50/40 border-red-300' : ''
+                                        className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg shadow-brand-sm ${
+                                            isSelected ? 'bg-destructive/5 border-destructive/40' : ''
                                         }`}
                                     >
                                         <div className="flex items-start gap-3 flex-1 mb-2 sm:mb-0">

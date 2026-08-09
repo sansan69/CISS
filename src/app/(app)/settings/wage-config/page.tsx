@@ -420,7 +420,7 @@ export default function WageConfigPage() {
                       active
                         ? "bg-brand-blue text-white"
                         : done
-                          ? "bg-green-100 text-green-700"
+                          ? "bg-success/15 text-success"
                           : "bg-muted text-muted-foreground",
                     )}
                   >
@@ -550,7 +550,7 @@ export default function WageConfigPage() {
                               {humanizeCategory(field.category)}
                             </span>
                             {field.formulaSources.length ? (
-                              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-blue-700">
+                              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase text-primary">
                                 {field.formulaSources.join(" + ")}
                               </span>
                             ) : null}

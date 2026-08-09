@@ -41,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toValidAttendanceDate } from "@/lib/attendance/date-value";
 import { Label } from "@/components/ui/label";
+import { PageLoading } from "@/components/common/page-loading";
 
 type AttendanceLog = FirestoreAttendanceLog;
 
@@ -475,7 +476,7 @@ export default function AttendanceLogsPage() {
         </div>
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Distance</p>
-          <p className={log.distanceMeters != null ? (log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600") : ""}>
+          <p className={log.distanceMeters != null ? (log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-destructive font-medium" : "text-success") : ""}>
             {log.distanceMeters != null
               ? (log.distanceMeters < 1000 ? `${Math.round(log.distanceMeters)} m` : `${(log.distanceMeters / 1000).toFixed(1)} km`)
               : "—"}
@@ -616,7 +617,7 @@ export default function AttendanceLogsPage() {
             <TableCell className="hidden lg:table-cell text-sm">
               {log.distanceMeters != null ? (
                 <div>
-                  <span className={log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-red-600 font-medium" : "text-green-600"}>
+                  <span className={log.distanceMeters > (log.geofenceRadiusAtTime ?? 200) ? "text-destructive font-medium" : "text-success"}>
                     {log.distanceMeters < 1000
                       ? `${Math.round(log.distanceMeters)} m`
                       : `${(log.distanceMeters / 1000).toFixed(1)} km`}
@@ -805,9 +806,7 @@ export default function AttendanceLogsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <PageLoading />
           ) : filteredLogs.length === 0 ? (
             <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
               No attendance records match the current filters.
@@ -967,7 +966,7 @@ export default function AttendanceLogsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Distance from site</p>
-                    <p className={`font-medium ${selectedLog.distanceMeters != null && selectedLog.distanceMeters > (selectedLog.geofenceRadiusAtTime ?? 200) ? "text-red-600" : ""}`}>
+                    <p className={`font-medium ${selectedLog.distanceMeters != null && selectedLog.distanceMeters > (selectedLog.geofenceRadiusAtTime ?? 200) ? "text-destructive" : ""}`}>
                       {selectedLog.distanceMeters != null
                         ? selectedLog.distanceMeters < 1000
                           ? `${Math.round(selectedLog.distanceMeters)} m`
@@ -1026,10 +1025,10 @@ export default function AttendanceLogsPage() {
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingShoes ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}Shoes: {selectedLog.photoCompliance.missingShoes ? "Missing" : "OK"}</div>
-                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingIdCard ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}ID Card: {selectedLog.photoCompliance.missingIdCard ? "Missing" : "OK"}</div>
-                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.uniformIssue ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}Uniform: {selectedLog.photoCompliance.uniformIssue ? "Issue" : "OK"}</div>
-                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.fullBodyVisible ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <XCircle className="h-3.5 w-3.5 text-destructive" />}Full body: {selectedLog.photoCompliance.fullBodyVisible ? "Visible" : "Not visible"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingShoes ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-success" />}Shoes: {selectedLog.photoCompliance.missingShoes ? "Missing" : "OK"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.missingIdCard ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-success" />}ID Card: {selectedLog.photoCompliance.missingIdCard ? "Missing" : "OK"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.uniformIssue ? <XCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle2 className="h-3.5 w-3.5 text-success" />}Uniform: {selectedLog.photoCompliance.uniformIssue ? "Issue" : "OK"}</div>
+                        <div className="flex items-center gap-1">{selectedLog.photoCompliance.fullBodyVisible ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <XCircle className="h-3.5 w-3.5 text-destructive" />}Full body: {selectedLog.photoCompliance.fullBodyVisible ? "Visible" : "Not visible"}</div>
                       </div>
                     </div>
                   </>

@@ -29,13 +29,13 @@ function StatusBadge({ status }: { status: BatchGeocodeResult["status"] }) {
   switch (status) {
     case "updated":
       return (
-        <Badge variant="outline" className="gap-1 text-green-700 border-green-200 bg-green-50">
+        <Badge variant="outline" className="gap-1 text-success border-success/30 bg-success/10">
           <CheckCircle2 className="h-3 w-3" /> Updated
         </Badge>
       );
     case "kept":
       return (
-        <Badge variant="outline" className="gap-1 text-blue-700 border-blue-200 bg-blue-50">
+        <Badge variant="outline" className="gap-1 text-primary border-primary/30 bg-primary/10">
           <SkipForward className="h-3 w-3" /> Kept
         </Badge>
       );
@@ -47,13 +47,13 @@ function StatusBadge({ status }: { status: BatchGeocodeResult["status"] }) {
       );
     case "no_result":
       return (
-        <Badge variant="outline" className="gap-1 text-amber-700 border-amber-200 bg-amber-50">
+        <Badge variant="outline" className="gap-1 text-warning-strong border-warning/30 bg-warning/10">
           <AlertTriangle className="h-3 w-3" /> No result
         </Badge>
       );
     case "failed":
       return (
-        <Badge variant="outline" className="gap-1 text-red-700 border-red-200 bg-red-50">
+        <Badge variant="outline" className="gap-1 text-destructive border-destructive/30 bg-destructive/10">
           <XCircle className="h-3 w-3" /> Failed
         </Badge>
       );
@@ -219,7 +219,7 @@ export default function GeocodeCoordinatesPage() {
           {results.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <CheckCircle2 className="h-8 w-8 mx-auto text-green-500 mb-3" />
+                <CheckCircle2 className="h-8 w-8 mx-auto text-success mb-3" />
                 <p className="font-medium">All coordinates are already set</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   No sites needed geocoding with the current options.
@@ -234,22 +234,22 @@ export default function GeocodeCoordinatesPage() {
                   {counts && (
                     <div className="flex flex-wrap gap-2">
                       {counts.updated > 0 && (
-                        <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
+                        <Badge variant="outline" className="text-success border-success/30 bg-success/10">
                           {counts.updated} updated
                         </Badge>
                       )}
                       {counts.kept > 0 && (
-                        <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-50">
+                        <Badge variant="outline" className="text-primary border-primary/30 bg-primary/10">
                           {counts.kept} kept
                         </Badge>
                       )}
                       {counts.noResult > 0 && (
-                        <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50">
+                        <Badge variant="outline" className="text-warning-strong border-warning/30 bg-warning/10">
                           {counts.noResult} no result
                         </Badge>
                       )}
                       {counts.failed > 0 && (
-                        <Badge variant="outline" className="text-red-700 border-red-200 bg-red-50">
+                        <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10">
                           {counts.failed} failed
                         </Badge>
                       )}

@@ -21,6 +21,7 @@ import { resolveAppUser } from "@/lib/auth/roles";
 import type { User as FirebaseUser } from "firebase/auth";
 import type { Evaluation } from "@/types/evaluation";
 import type { Employee } from "@/types/employee";
+import { PageLoading } from "@/components/common/page-loading";
 
 const CURRENT_PERIOD = format(new Date(), "yyyy-MM");
 
@@ -221,9 +222,7 @@ export default function EvaluationsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-        </div>
+        <PageLoading />
       ) : evaluations.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-center">
@@ -266,7 +265,7 @@ export default function EvaluationsPage() {
                 )}
               </div>
               {empResults.length > 0 && !selectedEmp && (
-                <div className="border rounded-md bg-white shadow-md divide-y max-h-40 overflow-y-auto">
+                <div className="border rounded-md bg-card shadow-brand-md divide-y max-h-40 overflow-y-auto">
                   {empResults.map((emp) => (
                     <button
                       key={emp.id}
@@ -283,10 +282,10 @@ export default function EvaluationsPage() {
                 </div>
               )}
               {selectedEmp && (
-                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md text-sm">
-                  <User className="h-4 w-4 text-green-700 shrink-0" />
-                  <span className="font-medium text-green-700">{selectedEmp.fullName}</span>
-                  <span className="text-green-600">· {selectedEmp.clientName}</span>
+                <div className="flex items-center gap-2 p-2 bg-success/10 border border-success/30 rounded-md text-sm">
+                  <User className="h-4 w-4 text-success shrink-0" />
+                  <span className="font-medium text-success">{selectedEmp.fullName}</span>
+                  <span className="text-success">· {selectedEmp.clientName}</span>
                   {autoComplianceRate !== null && (
                     <Badge variant="secondary" className="ml-auto text-xs">
                       Uniform: {Math.round(autoComplianceRate * 100)}%
@@ -354,8 +353,8 @@ export default function EvaluationsPage() {
 
 function EvaluationRow({ evaluation }: { evaluation: Evaluation }) {
   const score = evaluation.normalizedScore;
-  const scoreColor = score >= 80 ? "text-green-600" : score >= 60 ? "text-amber-600" : "text-red-600";
-  const scoreBg = score >= 80 ? "bg-green-50 border-green-200" : score >= 60 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200";
+  const scoreColor = score >= 80 ? "text-success" : score >= 60 ? "text-warning-strong" : "text-destructive";
+  const scoreBg = score >= 80 ? "bg-success/10 border-success/30" : score >= 60 ? "bg-warning/10 border-warning/30" : "bg-destructive/10 border-destructive/30";
 
   return (
     <Card>

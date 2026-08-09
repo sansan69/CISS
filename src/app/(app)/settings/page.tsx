@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
+import { PageLoading } from "@/components/common/page-loading";
 
 type SettingsCard = {
   title: string;
@@ -100,7 +101,7 @@ export default function SettingsPage() {
   const regionSettings = visibleOptions.filter((opt) => opt.group === "region");
 
   if (authStatus === "loading") {
-    return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <PageLoading />;
   }
 
   if (authStatus !== "admin") {
@@ -171,21 +172,21 @@ export default function SettingsPage() {
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
             {regionSettings.map((option) => (
-              <Card key={option.title} className="flex flex-col border-amber-200/50">
+              <Card key={option.title} className="flex flex-col border-warning/30">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <CardTitle className="text-base font-semibold sm:text-lg">{option.title}</CardTitle>
-                        <Badge variant="outline" className="text-[10px] h-5 border-amber-300 text-amber-700 bg-amber-50">Super Admin</Badge>
+                        <Badge variant="outline" className="text-[10px] h-5 border-warning/40 text-warning-strong bg-warning/10">Super Admin</Badge>
                       </div>
                       <CardDescription className="mt-1">{option.description}</CardDescription>
                     </div>
-                    <option.icon className="h-7 w-7 shrink-0 text-amber-500 sm:h-8 sm:w-8" />
+                    <option.icon className="h-7 w-7 shrink-0 text-warning sm:h-8 sm:w-8" />
                   </div>
                 </CardHeader>
                 <CardContent className="mt-auto">
-                  <Button asChild variant="outline" className="w-full justify-between px-4 py-3 border-amber-300/50">
+                  <Button asChild variant="outline" className="w-full justify-between px-4 py-3 border-warning/40">
                     <Link href={option.href}>
                       <span className="text-left">Open {option.title}</span>
                       <ChevronRight className="h-4 w-4" />

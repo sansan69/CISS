@@ -105,9 +105,9 @@ function getGreeting() {
 // ─────────────────────────────────────────────────────────────────────────────
 const quickActions = [
   { label: "Attendance",  href: "/attendance",       icon: QrCode,    color: "bg-brand-blue/10 text-brand-blue" },
-  { label: "Enroll",      href: "/employees/enroll", icon: UserPlus,  color: "bg-green-50 text-green-700" },
-  { label: "Work Orders", href: "/work-orders",      icon: Briefcase, color: "bg-amber-50 text-amber-700" },
-  { label: "Leaderboard", href: "/leaderboard",      icon: Star,      color: "bg-purple-50 text-purple-700" },
+  { label: "Enroll",      href: "/employees/enroll", icon: UserPlus,  color: "bg-success/10 text-success" },
+  { label: "Work Orders", href: "/work-orders",      icon: Briefcase, color: "bg-warning/10 text-warning-strong" },
+  { label: "Leaderboard", href: "/leaderboard",      icon: Star,      color: "bg-primary/10 text-primary" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,9 +135,9 @@ function SkeletonRow() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function coverageColor(pct: number) {
-  if (pct >= 70) return { bar: "bg-emerald-500", text: "text-emerald-600", bg: "bg-emerald-50" };
-  if (pct >= 35) return { bar: "bg-amber-400",   text: "text-amber-600",   bg: "bg-amber-50" };
-  return               { bar: "bg-red-400",       text: "text-red-600",     bg: "bg-red-50" };
+  if (pct >= 70) return { bar: "bg-success", text: "text-success", bg: "bg-success/10" };
+  if (pct >= 35) return { bar: "bg-warning/80",   text: "text-warning-strong",   bg: "bg-warning/10" };
+  return               { bar: "bg-destructive/80",       text: "text-destructive",     bg: "bg-destructive/10" };
 }
 
 function ClientCoverageCards({ data, isLoading }: { data: ClientCoverage[]; isLoading: boolean }) {
@@ -202,7 +202,7 @@ function ClientCoverageCards({ data, isLoading }: { data: ClientCoverage[]; isLo
                   {Math.round(client.coveragePct)}% on duty
                 </span>
                 {client.mockLocationAlerts > 0 && (
-                  <span className="flex items-center gap-0.5 text-[10px] text-red-500 font-semibold">
+                  <span className="flex items-center gap-0.5 text-[10px] text-destructive font-semibold">
                     <AlertTriangle className="h-3 w-3" />
                     {client.mockLocationAlerts}
                   </span>
@@ -253,7 +253,7 @@ function ClientStrengthTable({ data, isLoading }: { data: ClientCoverage[]; isLo
                       <p className="text-sm font-semibold truncate">{client.clientName}</p>
                       <div className="flex items-center gap-2 shrink-0">
                         {client.mockLocationAlerts > 0 && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-red-500">
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-destructive">
                             <AlertTriangle className="h-3 w-3" />
                             {client.mockLocationAlerts} alert{client.mockLocationAlerts > 1 ? 's' : ''}
                           </span>
@@ -303,8 +303,8 @@ function ClientStrengthTable({ data, isLoading }: { data: ClientCoverage[]; isLo
 // ─────────────────────────────────────────────────────────────────────────────
 const statDefs = [
   { key: "total",           label: "Total Guards",     barColor: "bg-brand-blue",   icon: Users,     iconBg: "bg-brand-blue/10 text-brand-blue" },
-  { key: "active",          label: "Active",           barColor: "bg-emerald-500",  icon: UserCheck, iconBg: "bg-emerald-50 text-emerald-700" },
-  { key: "inactiveOrExited",label: "Inactive / Exited",barColor: "bg-red-400",      icon: UserMinus, iconBg: "bg-red-50 text-red-500" },
+  { key: "active",          label: "Active",           barColor: "bg-success",  icon: UserCheck, iconBg: "bg-success/10 text-success" },
+  { key: "inactiveOrExited",label: "Inactive / Exited",barColor: "bg-destructive/80",      icon: UserMinus, iconBg: "bg-destructive/10 text-destructive" },
 ];
 
 function StatGrid({ stats, isLoading }: { stats: DashboardStats | null; isLoading: boolean }) {
@@ -493,7 +493,7 @@ function SuperAdminOverviewPanel({
                       </div>
                     ) : null}
                     {region.connectionNote ? (
-                      <p className="text-xs text-amber-700">{region.connectionNote}</p>
+                      <p className="text-xs text-warning-strong">{region.connectionNote}</p>
                     ) : null}
                   </div>
                   <Button asChild variant="outline" size="sm">
@@ -502,7 +502,7 @@ function SuperAdminOverviewPanel({
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Employees</p><p className="mt-1 text-xl font-bold">{region.totals.employees}</p></div>
-                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Active</p><p className="mt-1 text-xl font-bold text-emerald-600">{region.totals.activeEmployees}</p></div>
+                  <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Active</p><p className="mt-1 text-xl font-bold text-success">{region.totals.activeEmployees}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Clients</p><p className="mt-1 text-xl font-bold">{region.totals.clients}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Field Officers</p><p className="mt-1 text-xl font-bold">{region.totals.fieldOfficers}</p></div>
                   <div className="rounded-xl bg-muted/40 p-3"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attendance Today</p><p className="mt-1 text-xl font-bold">{region.totals.attendanceToday}</p><p className="text-[10px] text-muted-foreground">{region.totals.upcomingWorkOrders} work orders</p></div>
@@ -904,7 +904,7 @@ export default function DashboardPage() {
       <header className="animate-slide-down flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Operations overview
             </p>

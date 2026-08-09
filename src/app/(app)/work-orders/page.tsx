@@ -68,6 +68,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { PageLoading } from "@/components/common/page-loading";
 
 type WorkspaceTab = 'assignments' | 'assigned-guards-export';
 
@@ -523,12 +524,12 @@ export default function WorkOrderPage() {
                                 ? 'Ready'
                                 : 'Partial';
                         const statusClassName = assignedCount === 0
-                            ? 'border-red-200 bg-red-50 text-red-700'
+                            ? 'border-destructive/30 bg-destructive/10 text-destructive'
                             : needsReview
-                                ? 'border-red-200 bg-red-50 text-red-700'
+                                ? 'border-destructive/30 bg-destructive/10 text-destructive'
                             : isReady
-                                ? 'border-green-200 bg-green-50 text-green-700'
-                                : 'border-amber-200 bg-amber-50 text-amber-800';
+                                ? 'border-success/30 bg-success/10 text-success'
+                                : 'border-warning/30 bg-warning/10 text-warning-strong';
 
                         return {
                             orders: [order],
@@ -683,12 +684,12 @@ export default function WorkOrderPage() {
                         ? 'Ready'
                         : 'Partial';
                 const statusClassName = assignedCount === 0
-                    ? 'border-red-200 bg-red-50 text-red-700'
+                    ? 'border-destructive/30 bg-destructive/10 text-destructive'
                     : needsReview
-                        ? 'border-red-200 bg-red-50 text-red-700'
+                        ? 'border-destructive/30 bg-destructive/10 text-destructive'
                     : isReady
-                        ? 'border-green-200 bg-green-50 text-green-700'
-                        : 'border-amber-200 bg-amber-50 text-amber-800';
+                        ? 'border-success/30 bg-success/10 text-success'
+                        : 'border-warning/30 bg-warning/10 text-warning-strong';
 
                 existing.rows[existingSiteIndex] = {
                     ...current,
@@ -1065,7 +1066,7 @@ export default function WorkOrderPage() {
                                     <div className="rounded-lg border bg-muted/30">
                                         <div className="flex items-center justify-between border-b px-3 py-2">
                                             <div className="flex items-center gap-2 text-sm font-medium">
-                                                <FileCheck2 className="h-4 w-4 text-green-600" />
+                                                <FileCheck2 className="h-4 w-4 text-success" />
                                                 {files.length} file{files.length === 1 ? '' : 's'} ready
                                             </div>
                                             <Button
@@ -1128,25 +1129,25 @@ export default function WorkOrderPage() {
                                             </div>
                                             <div className="rounded-md bg-muted px-3 py-2">
                                                 <p className="text-xs text-muted-foreground">Added</p>
-                                                <p className="text-lg font-semibold tabular-nums text-green-700">
+                                                <p className="text-lg font-semibold tabular-nums text-success">
                                                     {importPreview.diffRows.filter((row) => row.status === 'added').length}
                                                 </p>
                                             </div>
                                             <div className="rounded-md bg-muted px-3 py-2">
                                                 <p className="text-xs text-muted-foreground">Changed</p>
-                                                <p className="text-lg font-semibold tabular-nums text-amber-700">
+                                                <p className="text-lg font-semibold tabular-nums text-warning-strong">
                                                     {importPreview.diffRows.filter((row) => row.status === 'updated').length}
                                                 </p>
                                             </div>
                                             <div className="rounded-md bg-muted px-3 py-2">
                                                 <p className="text-xs text-muted-foreground">Cancelled</p>
-                                                <p className="text-lg font-semibold tabular-nums text-red-700">
+                                                <p className="text-lg font-semibold tabular-nums text-destructive">
                                                     {importPreview.diffRows.filter((row) => row.status === 'cancelled').length}
                                                 </p>
                                             </div>
                                         </div>
                                         {importPreview.duplicateMessage && (
-                                            <div className={`rounded-md border px-3 py-2 text-sm ${importPreview.duplicateState === 'overlap' && importMode === 'revision' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                                            <div className={`rounded-md border px-3 py-2 text-sm ${importPreview.duplicateState === 'overlap' && importMode === 'revision' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning-strong'}`}>
                                                 <p className="font-medium">{importPreview.duplicateMessage}</p>
                                                 {importPreview.duplicateState === 'overlap' && importMode === 'revision' && (
                                                     <p className="mt-1 text-xs">This is expected for revision imports. Existing work orders will be updated and missing ones will be cancelled.</p>
@@ -1157,10 +1158,10 @@ export default function WorkOrderPage() {
                                             </div>
                                         )}
                                         {importPreview.duplicateState !== 'none' && importMode === 'new' && (
-                                            <div className="grid gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-blue-950 sm:grid-cols-[minmax(0,1fr)_260px] sm:items-center">
+                                            <div className="grid gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-3 text-primary sm:grid-cols-[minmax(0,1fr)_260px] sm:items-center">
                                                 <div>
                                                     <p className="text-sm font-semibold">Duplicate handling for re-upload</p>
-                                                    <p className="mt-1 text-xs text-blue-800">
+                                                    <p className="mt-1 text-xs text-primary">
                                                         Replace updates matching site/date work orders. Omit skips matching rows and imports only new site/date rows.
                                                     </p>
                                                 </div>
@@ -1217,13 +1218,13 @@ export default function WorkOrderPage() {
                                                             .map((row) => {
                                                                 const status = row.status;
                                                                 const statusColors: Record<string, string> = {
-                                                                    added: 'text-green-600 bg-green-50',
-                                                                    updated: 'text-amber-600 bg-amber-50',
+                                                                    added: 'text-success bg-success/10',
+                                                                    updated: 'text-warning-strong bg-warning/10',
                                                                     unchanged: 'text-muted-foreground',
-                                                                    cancelled: 'text-red-600 bg-red-50',
+                                                                    cancelled: 'text-destructive bg-destructive/10',
                                                                 };
                                                                 return (
-                                                                    <TableRow key={row.key} className={status === 'cancelled' ? 'bg-red-50/50' : ''}>
+                                                                    <TableRow key={row.key} className={status === 'cancelled' ? 'bg-destructive/10' : ''}>
                                                                         <TableCell className="text-xs tabular-nums">{row.date}</TableCell>
                                                                         <TableCell className="text-xs font-medium">{row.siteName}</TableCell>
                                                                         <TableCell className="text-xs">{row.district}</TableCell>
@@ -1433,9 +1434,7 @@ export default function WorkOrderPage() {
                         </CardHeader>
                         <CardContent>
                             {isLoading ? (
-                                <div className="flex h-24 items-center justify-center">
-                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                </div>
+                                <PageLoading className="h-24" label="Loading import preview…" />
                             ) : allWorkOrderRows.length === 0 ? (
                                 <div className="rounded-lg border border-dashed py-10 text-center">
                                     <p className="font-medium">No upcoming duties found.</p>
@@ -1472,7 +1471,7 @@ export default function WorkOrderPage() {
                                                     aria-controls={`work-orders-date-${group.dateKey}`}
                                                 >
                                                     <div className="flex min-w-0 items-start gap-3">
-                                                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background shadow-sm">
+                                                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background shadow-brand-sm">
                                                             <ToggleIcon className="h-4 w-4" />
                                                         </span>
                                                         <div className="min-w-0">

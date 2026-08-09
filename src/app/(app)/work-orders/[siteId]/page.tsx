@@ -44,6 +44,7 @@ import {
     countGuardAssignments,
     getGuardAssignmentCapacityIssue,
 } from '@/lib/work-orders/guard-assignment-capacity';
+import { PageLoading } from "@/components/common/page-loading";
 
 type WorkOrderExamFields = Pick<
     WorkOrder,
@@ -191,7 +192,7 @@ const AssignGuardsDialog: React.FC<{
                                         Assigned
                                         <span className={`ml-1.5 h-5 w-5 rounded-full text-[11px] font-bold flex items-center justify-center ${
                                             selectedGuards.length >= workOrder.totalManpower
-                                                ? 'bg-green-500 text-white'
+                                                ? 'bg-success text-white'
                                                 : 'bg-primary text-primary-foreground'
                                         }`}>
                                             {selectedGuards.length}
@@ -698,10 +699,7 @@ export default function AssignGuardsPage() {
     /* ── Loading / Error states ── */
     if (isLoading) {
         return (
-            <div className="flex flex-col justify-center items-center h-40 gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Loading schedules…</p>
-            </div>
+            <PageLoading label="Loading schedules…" />
         );
     }
 
@@ -775,17 +773,17 @@ export default function AssignGuardsPage() {
                             : isFullyAssigned ? 'border-l-green-500' : 'border-l-amber-400';
 
                         const statusBadge = assignedCount === 0 || needsAssignmentReview
-                            ? 'bg-red-100 text-red-700 border-red-200'
+                            ? 'bg-destructive/15 text-destructive border-destructive/30'
                             : isFullyAssigned
-                                ? 'bg-green-100 text-green-700 border-green-200'
-                                : 'bg-amber-100 text-amber-800 border-amber-200';
+                                ? 'bg-success/15 text-success border-success/30'
+                                : 'bg-warning/15 text-warning-strong border-warning/30';
 
                         const countColor = assignedCount === 0 || needsAssignmentReview
-                            ? 'text-red-600'
-                            : isFullyAssigned ? 'text-green-600' : 'text-amber-600';
+                            ? 'text-destructive'
+                            : isFullyAssigned ? 'text-success' : 'text-warning-strong';
 
                         return (
-                            <div key={order.id} className={`rounded-xl border-l-4 border bg-card shadow-sm overflow-hidden ${borderColor}`}>
+                            <div key={order.id} className={`rounded-xl border-l-4 border bg-card shadow-brand-sm overflow-hidden ${borderColor}`}>
                                 {/* Date + Status */}
                                 <div className="flex items-start justify-between px-4 pt-4 pb-3">
                                     <div>

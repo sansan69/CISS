@@ -141,11 +141,11 @@ export default function RunPayrollPage() {
             <React.Fragment key={sNum}>
               <div className={cn(
                 "flex items-center gap-1.5 text-sm",
-                isActive ? "text-brand-blue font-medium" : isDone ? "text-green-600 font-medium" : "text-muted-foreground"
+                isActive ? "text-brand-blue font-medium" : isDone ? "text-success font-medium" : "text-muted-foreground"
               )}>
                 <div className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                  isDone ? "bg-green-500 text-white" :
+                  isDone ? "bg-success text-white" :
                   isActive ? "bg-brand-blue text-white" :
                   "bg-muted text-muted-foreground"
                 )}>
@@ -154,7 +154,7 @@ export default function RunPayrollPage() {
                 <span className="hidden sm:inline">{sLabel}</span>
               </div>
               {i < displaySteps.length - 1 && (
-                <div className={cn("flex-1 h-px", isDone ? "bg-green-400" : "bg-border")} />
+                <div className={cn("flex-1 h-px", isDone ? "bg-success/80" : "bg-border")} />
               )}
             </React.Fragment>
           );
@@ -223,7 +223,7 @@ export default function RunPayrollPage() {
           <CardContent className="space-y-5">
             {/* Existing cycle warning */}
             {validation.existingCycle && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-strong">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium">Cycle already exists</p>
@@ -241,18 +241,18 @@ export default function RunPayrollPage() {
                 <p className="text-xl font-bold">{validation.totalEmployees}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Total Employees</p>
               </div>
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
-                <p className="text-xl font-bold text-green-700">{validation.readyCount}</p>
-                <p className="text-xs text-green-600 mt-0.5">Ready to Process</p>
+              <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-center">
+                <p className="text-xl font-bold text-success">{validation.readyCount}</p>
+                <p className="text-xs text-success mt-0.5">Ready to Process</p>
               </div>
               <div className={cn(
                 "rounded-lg border p-3 text-center",
-                validation.skippedCount > 0 ? "border-amber-200 bg-amber-50" : "bg-muted/30"
+                validation.skippedCount > 0 ? "border-warning/30 bg-warning/10" : "bg-muted/30"
               )}>
-                <p className={cn("text-xl font-bold", validation.skippedCount > 0 ? "text-amber-700" : "")}>
+                <p className={cn("text-xl font-bold", validation.skippedCount > 0 ? "text-warning-strong" : "")}>
                   {validation.skippedCount}
                 </p>
-                <p className={cn("text-xs mt-0.5", validation.skippedCount > 0 ? "text-amber-600" : "text-muted-foreground")}>
+                <p className={cn("text-xs mt-0.5", validation.skippedCount > 0 ? "text-warning-strong" : "text-muted-foreground")}>
                   Will be Skipped
                 </p>
               </div>
@@ -261,15 +261,15 @@ export default function RunPayrollPage() {
             {/* Skipped employees list */}
             {validation.skipped.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-medium text-amber-700 flex items-center gap-1">
+                <p className="text-xs font-medium text-warning-strong flex items-center gap-1">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   Skipped — no wage config for their client:
                 </p>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-amber-200 bg-amber-50/50 divide-y divide-amber-100">
+                <div className="max-h-40 overflow-y-auto rounded-md border border-warning/30 bg-warning/5 divide-y divide-warning/15">
                   {validation.skipped.map((emp) => (
                     <div key={emp.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                      <span className="font-medium text-amber-900">{emp.name}</span>
-                      <span className="text-amber-600">{emp.reason}</span>
+                      <span className="font-medium text-warning-strong">{emp.name}</span>
+                      <span className="text-warning-strong">{emp.reason}</span>
                     </div>
                   ))}
                 </div>
@@ -321,42 +321,42 @@ export default function RunPayrollPage() {
 
       {/* Step 5: Done */}
       {step === 5 && result && (
-        <Card className="border-green-200 bg-green-50/50">
+        <Card className="border-success/30 bg-success/5">
           <CardContent className="py-10 flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
+            <div className="w-16 h-16 rounded-full bg-success/15 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-success" />
             </div>
             <div>
-              <h3 className="font-bold text-lg text-green-800">Payroll Processed!</h3>
-              <p className="text-sm text-green-700 mt-1">Period: {period}</p>
+              <h3 className="font-exo2 font-bold text-lg text-success">Payroll Processed!</h3>
+              <p className="text-sm text-success mt-1">Period: {period}</p>
             </div>
             <div className="grid grid-cols-3 gap-6 w-full max-w-sm">
               <div>
-                <p className="text-2xl font-bold text-green-800">{result.totalEmployees}</p>
-                <p className="text-xs text-green-600">Processed</p>
+                <p className="text-2xl font-bold text-success">{result.totalEmployees}</p>
+                <p className="text-xs text-success">Processed</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-green-800">₹{(result.totalGross / 1000).toFixed(0)}K</p>
-                <p className="text-xs text-green-600">Gross</p>
+                <p className="text-2xl font-bold text-success">₹{(result.totalGross / 1000).toFixed(0)}K</p>
+                <p className="text-xs text-success">Gross</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-green-800">₹{(result.totalNetPay / 1000).toFixed(0)}K</p>
-                <p className="text-xs text-green-600">Net Pay</p>
+                <p className="text-2xl font-bold text-success">₹{(result.totalNetPay / 1000).toFixed(0)}K</p>
+                <p className="text-xs text-success">Net Pay</p>
               </div>
             </div>
 
             {result.skippedCount > 0 && (
-              <div className="w-full max-w-sm rounded-lg border border-amber-200 bg-amber-50 p-3 text-left">
-                <p className="text-xs font-medium text-amber-800 flex items-center gap-1 mb-1.5">
+              <div className="w-full max-w-sm rounded-lg border border-warning/30 bg-warning/10 p-3 text-left">
+                <p className="text-xs font-medium text-warning-strong flex items-center gap-1 mb-1.5">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {result.skippedCount} employee{result.skippedCount > 1 ? "s" : ""} skipped (no wage config):
                 </p>
                 <div className="space-y-0.5">
                   {result.skippedEmployees.slice(0, 5).map((emp, i) => (
-                    <p key={i} className="text-xs text-amber-700">• {emp.name}</p>
+                    <p key={i} className="text-xs text-warning-strong">• {emp.name}</p>
                   ))}
                   {result.skippedEmployees.length > 5 && (
-                    <p className="text-xs text-amber-600">...and {result.skippedEmployees.length - 5} more</p>
+                    <p className="text-xs text-warning-strong">...and {result.skippedEmployees.length - 5} more</p>
                   )}
                 </div>
               </div>

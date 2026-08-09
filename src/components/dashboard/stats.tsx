@@ -65,7 +65,7 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
 
   const toneStyles: Record<StatDefinition["tone"], string> = {
     brand: "bg-brand-blue/10 text-brand-blue dark:bg-primary/15 dark:text-primary",
-    success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    success: "bg-success/10 text-success ",
     neutral: "bg-muted text-muted-foreground",
     accent: "bg-accent/15 text-brand-gold-dark dark:text-accent",
   };
@@ -102,7 +102,7 @@ export function DashboardStats({ role, stats, roleSpecific }: DashboardStatsProp
       ))}
       </div>
       <div className="flex items-center gap-2 border-t border-border/70 bg-muted/25 px-4 py-2 text-[11px] text-muted-foreground sm:px-5">
-        <Activity className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <Activity className="h-3.5 w-3.5 text-success " aria-hidden="true" />
         Live data updates automatically
       </div>
     </section>

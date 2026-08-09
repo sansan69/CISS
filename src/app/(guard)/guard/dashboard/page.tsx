@@ -178,12 +178,12 @@ export default function GuardDashboardPage() {
   if (error) {
     return (
       <div className="p-4">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-          <p className="text-red-600 text-sm font-medium">Failed to load</p>
-          <p className="text-red-500 text-xs mt-1">{error}</p>
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-center">
+          <p className="text-destructive text-sm font-medium">Failed to load</p>
+          <p className="text-destructive text-xs mt-1">{error}</p>
           <button
             onClick={fetchDashboard}
-            className="mt-3 text-xs font-semibold text-red-600 underline"
+            className="mt-3 text-xs font-semibold text-destructive underline"
           >
             Retry
           </button>
@@ -200,7 +200,7 @@ export default function GuardDashboardPage() {
       <div className="animate-slide-up stagger-1">
         <div className="flex items-center gap-4">
           {data.profilePhotoUrl ? (
-            <div className="relative h-14 w-14 rounded-full overflow-hidden ring-2 ring-white shadow-md shrink-0">
+            <div className="relative h-14 w-14 rounded-full overflow-hidden ring-2 ring-white shadow-brand-md shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={data.profilePhotoUrl}
@@ -236,22 +236,22 @@ export default function GuardDashboardPage() {
         <div
           className={`animate-slide-up stagger-2 rounded-xl border p-3 flex items-center gap-3 ${
             data.attendanceStatus.lastStatus === "In"
-              ? "bg-green-50 border-green-200"
+              ? "bg-success/10 border-success/30"
               : "bg-muted/50 border-border"
           }`}
         >
           <div
             className={`flex h-9 w-9 items-center justify-center rounded-full ${
               data.attendanceStatus.lastStatus === "In"
-                ? "bg-green-100"
-                : "bg-gray-200"
+                ? "bg-success/15"
+                : "bg-muted"
             }`}
           >
             <div
               className={`h-3 w-3 rounded-full ${
                 data.attendanceStatus.lastStatus === "In"
-                  ? "bg-green-500 animate-pulse"
-                  : "bg-gray-400"
+                  ? "bg-success animate-pulse"
+                  : "bg-muted-foreground/50"
               }`}
             />
           </div>
@@ -271,8 +271,8 @@ export default function GuardDashboardPage() {
             variant="outline"
             className={
               data.attendanceStatus.lastStatus === "In"
-                ? "text-green-700 border-green-300 bg-green-50 text-xs shrink-0"
-                : "text-gray-600 border-gray-300 bg-muted/50 text-xs shrink-0"
+                ? "text-success border-success/40 bg-success/10 text-xs shrink-0"
+                : "text-muted-foreground border-border bg-muted/50 text-xs shrink-0"
             }
           >
             {data.attendanceStatus.lastStatus}
@@ -286,14 +286,14 @@ export default function GuardDashboardPage() {
           label="Present this month"
           value={data.attendanceStats.presentDays}
           icon={CalendarCheck}
-          colorClass="bg-green-500/10 text-green-500"
+          colorClass="bg-success/10 text-success"
           index={0}
         />
         <StatCard
           label="Absent this month"
           value={data.attendanceStats.absentDays}
           icon={Clock}
-          colorClass="bg-red-500/10 text-red-500"
+          colorClass="bg-destructive/10 text-destructive"
           index={1}
         />
         <StatCard
@@ -315,7 +315,7 @@ export default function GuardDashboardPage() {
       </div>
 
       {/* Next Shift */}
-      <Card className="rounded-xl shadow-sm border-0">
+      <Card className="rounded-xl shadow-brand-sm border-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">
@@ -370,7 +370,7 @@ export default function GuardDashboardPage() {
       <div className="grid grid-cols-2 gap-2.5 animate-slide-up stagger-4">
         <Link
           href="/guard/attendance"
-          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:brightness-[0.92] hover:border-primary/30 hover:shadow-sm select-none shadow-sm"
+          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:brightness-[0.92] hover:border-primary/30 hover:shadow-brand-sm select-none shadow-brand-sm"
         >
           <div
             className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0 bg-primary/10"
@@ -384,7 +384,7 @@ export default function GuardDashboardPage() {
         </Link>
         <Link
           href="/guard/training"
-          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:brightness-[0.92] hover:border-primary/30 hover:shadow-sm select-none shadow-sm"
+          className="flex items-center gap-3 bg-card rounded-xl border border-border/60 p-4 transition-all duration-150 ease-out active:brightness-[0.92] hover:border-primary/30 hover:shadow-brand-sm select-none shadow-brand-sm"
         >
           <div
             className="flex items-center justify-center h-10 w-10 rounded-xl shrink-0 bg-accent/10"
@@ -399,7 +399,7 @@ export default function GuardDashboardPage() {
       </div>
 
       {/* Recent Attendance */}
-      <Card className="rounded-xl shadow-sm border-0">
+      <Card className="rounded-xl shadow-brand-sm border-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">
@@ -454,8 +454,8 @@ export default function GuardDashboardPage() {
                     variant="outline"
                     className={
                       log.status === "In"
-                        ? "text-green-700 border-green-300 bg-green-50 text-[11px] px-2 py-0.5"
-                        : "text-orange-700 border-orange-300 bg-orange-50 text-[11px] px-2 py-0.5"
+                        ? "text-success border-success/40 bg-success/10 text-[11px] px-2 py-0.5"
+                        : "text-warning-strong border-warning/40 bg-warning/10 text-[11px] px-2 py-0.5"
                     }
                   >
                     {log.status}

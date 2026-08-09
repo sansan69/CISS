@@ -107,7 +107,7 @@ export function AttendanceCalendar({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-brand-sm overflow-hidden">
       {/* Month header */}
       <div className="flex items-center justify-between px-4 py-3 bg-primary">
         <button
@@ -135,7 +135,7 @@ export function AttendanceCalendar({
       </div>
 
       {/* Day labels row */}
-      <div className="grid grid-cols-7 border-b border-gray-100">
+      <div className="grid grid-cols-7 border-b border-border">
         {DAY_LABELS.map((label) => (
           <div
             key={label}
@@ -168,8 +168,8 @@ export function AttendanceCalendar({
                   key={cell.dateStr}
                   className={cn(
                     "h-9 flex items-center justify-center rounded-full text-xs font-medium transition-all",
-                    isPresent && "bg-green-500 text-white",
-                    isOut && "bg-orange-500 text-white",
+                    isPresent && "bg-success text-white",
+                    isOut && "bg-warning text-white",
                     !isPresent && !isOut && future && "text-muted-foreground/60",
                     !isPresent && !isOut && sunday && "text-destructive",
                     !isPresent && !isOut && !future && !sunday && "text-foreground",
@@ -190,13 +190,13 @@ export function AttendanceCalendar({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-100">
+      <div className="flex items-center gap-4 px-4 py-3 border-t border-border">
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-full bg-green-500" />
+          <div className="h-3 w-3 rounded-full bg-success" />
           <span className="text-[11px] text-muted-foreground">Present</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-full bg-orange-500" />
+          <div className="h-3 w-3 rounded-full bg-warning" />
           <span className="text-[11px] text-muted-foreground">Out</span>
         </div>
         <div className="flex items-center gap-1.5">

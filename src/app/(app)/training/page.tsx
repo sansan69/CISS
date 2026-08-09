@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SpinnerGap as Loader2, Plus, BookOpen, Clock, Target, Pencil, Trash as Trash2, GraduationCap, Shield, Scales as Scale, Users, Lightning as Zap, CloudArrowUp as UploadCloud, FileText, FileImage, Presentation } from "@phosphor-icons/react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { TrainingModule, TrainingCategory, TrainingContentType } from "@/types/training";
+import { PageLoading } from "@/components/common/page-loading";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const ACCEPTED_MIME: Record<string, TrainingContentType> = {
@@ -47,11 +48,11 @@ function contentIcon(type?: TrainingContentType) {
 }
 
 const CATEGORY_CONFIG: Record<TrainingCategory, { label: string; icon: React.ElementType; color: string }> = {
-  safety: { label: "Safety", icon: Shield, color: "bg-red-100 text-red-700" },
-  legal: { label: "Legal", icon: Scale, color: "bg-purple-100 text-purple-700" },
-  conduct: { label: "Conduct", icon: Users, color: "bg-blue-100 text-blue-700" },
-  skills: { label: "Skills", icon: GraduationCap, color: "bg-green-100 text-green-700" },
-  emergency: { label: "Emergency", icon: Zap, color: "bg-amber-100 text-amber-700" },
+  safety: { label: "Safety", icon: Shield, color: "bg-destructive/15 text-destructive" },
+  legal: { label: "Legal", icon: Scale, color: "bg-primary/15 text-primary" },
+  conduct: { label: "Conduct", icon: Users, color: "bg-primary/15 text-primary" },
+  skills: { label: "Skills", icon: GraduationCap, color: "bg-success/15 text-success" },
+  emergency: { label: "Emergency", icon: Zap, color: "bg-warning/15 text-warning-strong" },
 };
 
 export default function TrainingPage() {
@@ -262,9 +263,7 @@ export default function TrainingPage() {
       />
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-        </div>
+        <PageLoading />
       ) : modules.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-center">

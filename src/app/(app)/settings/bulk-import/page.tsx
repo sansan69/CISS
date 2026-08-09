@@ -430,7 +430,7 @@ export default function BulkImportPage() {
                     </div>
                     {file && (
                         <div className="flex items-center gap-2 p-2 border rounded-md bg-muted text-sm">
-                            <FileCheck2 className="h-5 w-5 text-green-500" />
+                            <FileCheck2 className="h-5 w-5 text-success" />
                             <span>{file.name}</span>
                         </div>
                     )}
@@ -448,18 +448,18 @@ export default function BulkImportPage() {
                     <CardHeader>
                         <CardTitle>Import Results</CardTitle>
                         <CardDescription className="flex flex-col sm:flex-row gap-4">
-                            <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-4 w-4"/>Successful: {successCount}</span>
-                            <span className="flex items-center gap-1 text-red-600"><AlertTriangle className="h-4 w-4"/>Failed: {errorCount}</span>
+                            <span className="flex items-center gap-1 text-success"><CheckCircle className="h-4 w-4"/>Successful: {successCount}</span>
+                            <span className="flex items-center gap-1 text-destructive"><AlertTriangle className="h-4 w-4"/>Failed: {errorCount}</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="max-h-96 overflow-y-auto">
                        <div className="space-y-2">
                             {processedRecords.map((record, index) => (
-                                <div key={index} className={`p-3 border rounded-md ${record.status === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                <div key={index} className={`p-3 border rounded-md ${record.status === 'success' ? 'bg-success/10 border-success/30' : 'bg-destructive/10 border-destructive/30'}`}>
                                     <p className="font-semibold text-sm">
                                         Row {index + 2}: {record.data.firstName} {record.data.lastName || ''} ({record.data.phoneNumber || 'No Phone'})
                                     </p>
-                                    <p className={`text-xs ${record.status === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+                                    <p className={`text-xs ${record.status === 'success' ? 'text-success' : 'text-destructive'}`}>
                                         {record.message}
                                     </p>
                                 </div>

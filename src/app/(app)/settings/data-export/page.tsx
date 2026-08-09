@@ -740,7 +740,7 @@ export default function DataExportPage() {
                     {generationStatus !== 'idle' && (
                         <CardFooter>
                            {generationStatus === 'generating' && <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Processing...</AlertTitle><AlertDescription>Your export is being generated. Processed {processedCount} of {totalCount} records.</AlertDescription></Alert>}
-                           {generationStatus === 'complete' && <Alert variant="default" className="bg-green-50 border-green-200"><CheckCircle className="h-4 w-4 text-green-600" /><AlertTitle className="text-green-800">Export Complete</AlertTitle><AlertDescription className="text-green-700">The file(s) should be in your downloads folder.</AlertDescription></Alert>}
+                           {generationStatus === 'complete' && <Alert variant="default" className="bg-success/10 border-success/30"><CheckCircle className="h-4 w-4 text-success" /><AlertTitle className="text-success">Export Complete</AlertTitle><AlertDescription className="text-success">The file(s) should be in your downloads folder.</AlertDescription></Alert>}
                            {generationStatus === 'error' && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Export Error</AlertTitle><AlertDescription>The export could not be completed. Please check the console for details.</AlertDescription></Alert>}
                         </CardFooter>
                     )}

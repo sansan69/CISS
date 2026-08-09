@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { DotsThree as MoreHorizontal, MagnifyingGlass as Search, UserPlus, Eye, SpinnerGap as Loader2, WarningCircle as AlertCircle, CheckCircle, Trash as Trash2, Warning as WarningIcon, CalendarIcon, CaretLeft as ChevronLeft, CaretRight as ChevronRight, ShieldWarning as ShieldAlert } from '@phosphor-icons/react';
+import { DotsThree as MoreHorizontal, MagnifyingGlass as Search, UserPlus, Eye, SpinnerGap as Loader2, WarningCircle as AlertCircle, CheckCircle, Trash as Trash2, Warning as WarningIcon, CalendarIcon, CaretLeft as ChevronLeft, CaretRight as ChevronRight, ShieldWarning as ShieldAlert, Phone } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
@@ -618,7 +618,7 @@ export default function EmployeeDirectoryPage() {
                 </CardHeader>
                 <CardContent>
                     {userRole === 'superAdmin' && superAdminWarnings.length > 0 && (
-                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        <div className="mb-4 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning-strong">
                             {superAdminWarnings.join(' ')}
                         </div>
                     )}
@@ -657,8 +657,8 @@ export default function EmployeeDirectoryPage() {
                                                     {[emp.regionName, emp.clientName, emp.employeeId, emp.district].filter(Boolean).join(' • ')}
                                                 </div>
                                                 {emp.phoneNumber && (
-                                                    <div className="mt-0.5 break-words text-xs text-muted-foreground">
-                                                        📞 {emp.phoneNumber}
+                                                    <div className="mt-0.5 flex items-center gap-1 break-words text-xs text-muted-foreground">
+                                                        <Phone className="h-3 w-3 shrink-0" /> {emp.phoneNumber}
                                                     </div>
                                                 )}
                                                 {emp.createdAt && (() => {
@@ -667,14 +667,14 @@ export default function EmployeeDirectoryPage() {
                                                     return (
                                                         <div className="mt-1 flex items-center gap-1.5">
                                                             <span className="text-xs text-muted-foreground">Enrolled {format(d, 'dd MMM yyyy')}</span>
-                                                            {isNew && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-200">New</Badge>}
+                                                            {isNew && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-success/15 text-success border-success/30">New</Badge>}
                                                         </div>
                                                     );
                                                 })()}
                                                 {pendingItems.length === 0 ? (
-                                                    <div className="mt-1 text-xs text-green-600">Complete</div>
+                                                    <div className="mt-1 text-xs text-success">Complete</div>
                                                 ) : (
-                                                    <div className="mt-1 text-xs text-amber-600">
+                                                    <div className="mt-1 text-xs text-warning-strong">
                                                         {pendingItems.slice(0, 2).join(', ')}
                                                         {pendingItems.length > 2 ? ` +${pendingItems.length - 2} more` : ''}
                                                     </div>
@@ -752,18 +752,18 @@ export default function EmployeeDirectoryPage() {
                                                         return (
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-xs text-muted-foreground whitespace-nowrap">{format(d, 'dd MMM yyyy')}</span>
-                                                                {isNew && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-200">New</Badge>}
+                                                                {isNew && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-success/15 text-success border-success/30">New</Badge>}
                                                             </div>
                                                         );
                                                     })() : <span className="text-xs text-muted-foreground">—</span>}
                                                 </TableCell>
                                                 <TableCell>
                                                     {pendingItems.length === 0 ? (
-                                                        <div className="flex items-center gap-1.5 text-green-600"><CheckCircle className="h-4 w-4" /> <span className="text-xs">Complete</span></div>
+                                                        <div className="flex items-center gap-1.5 text-success"><CheckCircle className="h-4 w-4" /> <span className="text-xs">Complete</span></div>
                                                     ) : (
                                                         <Popover>
                                                             <PopoverTrigger asChild>
-                                                                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 text-amber-600 px-2 h-auto py-1" onClick={(e) => e.stopPropagation()}>
+                                                                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 text-warning-strong px-2 h-auto py-1" onClick={(e) => e.stopPropagation()}>
                                                                     <WarningIcon className="h-4 w-4" /> <span className="text-xs">{pendingItems.length} Pending</span>
                                                                 </Button>
                                                             </PopoverTrigger>

@@ -71,6 +71,7 @@
 
     --warning:             38  92% 50%;
     --warning-foreground:  214 40% 10%;
+    --warning-strong:      28  87% 37%;  /* amber-700 — legible warning text on light surfaces */
 
     --ring:                206 98% 26%;
     --radius:              0.875rem;

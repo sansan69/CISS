@@ -39,10 +39,12 @@ const GUARD_ICON_SVG = (color: string) => `
   <circle cx="16" cy="14" r="4" fill="white" opacity="0.75"/>
 </svg>`;
 
+// Leaflet markers need literal hex (divIcon/canvas can't resolve CSS vars).
+// Values mirror the semantic tokens: success, destructive, primary, warning, muted.
 export const STATUS_COLORS: Record<GuardLocationHealth, string> = {
-  live: "#16a34a",
+  live: "#15803d",
   out_of_zone: "#dc2626",
-  poor_accuracy: "#7c3aed",
+  poor_accuracy: "#014c85",
   delayed: "#d97706",
   stale: "#6b7280",
 };
@@ -117,7 +119,7 @@ function createGuardIcon(color: string) {
 }
 
 function createClusterIcon(count: number, alerts: number) {
-  const color = alerts > 0 ? "#dc2626" : "#0f2747";
+  const color = alerts > 0 ? "#dc2626" : "#013a6b";
   return L.divIcon({
     className: "",
     html: `<div role="img" aria-label="${count} guards${alerts ? `, ${alerts} alerts` : ""}" style="width:44px;height:44px;border-radius:9999px;background:${color};border:3px solid white;box-shadow:0 4px 16px rgba(15,39,71,.35);display:grid;place-items:center;color:white;font:700 13px system-ui">${count}</div>`,
@@ -127,7 +129,7 @@ function createClusterIcon(count: number, alerts: number) {
 }
 
 function createSiteIcon(alerts: number) {
-  const color = alerts > 0 ? "#dc2626" : "#b58b32";
+  const color = alerts > 0 ? "#dc2626" : "#bd9c55";
   return L.divIcon({
     className: "",
     html: `<div role="img" aria-label="Site${alerts ? " with guard alert" : ""}" style="width:20px;height:20px;transform:rotate(45deg);background:${color};border:3px solid white;box-shadow:0 2px 8px rgba(15,39,71,.35);border-radius:4px"></div>`,
@@ -274,8 +276,8 @@ function ClusteredGuardMarkers({
                 center={[location.lat, location.lng]}
                 radius={location.accuracy}
                 pathOptions={{
-                  color: "#2563eb",
-                  fillColor: "#60a5fa",
+                  color: "#014c85",
+                  fillColor: "#0261a8",
                   fillOpacity: 0.08,
                   weight: 1,
                 }}
@@ -416,8 +418,8 @@ export function LiveGuardMap({
               center={[site.lat, site.lng]}
               radius={site.radius}
               pathOptions={{
-                color: site.alerts > 0 ? "#dc2626" : "#b58b32",
-                fillColor: site.alerts > 0 ? "#dc2626" : "#b58b32",
+                color: site.alerts > 0 ? "#dc2626" : "#bd9c55",
+                fillColor: site.alerts > 0 ? "#dc2626" : "#bd9c55",
                 fillOpacity: 0.04,
                 weight: 1.5,
                 dashArray: "5 5",
@@ -437,7 +439,7 @@ export function LiveGuardMap({
                 <p className="font-semibold">{site.name}</p>
                 {site.clientName ? <p>{site.clientName}</p> : null}
                 <p>{site.guards} guard{site.guards === 1 ? "" : "s"} on duty</p>
-                <p style={{ color: site.alerts > 0 ? "#dc2626" : "#16a34a" }}>
+                <p style={{ color: site.alerts > 0 ? "#dc2626" : "#15803d" }}>
                   {site.alerts > 0
                     ? `${site.alerts} need attention`
                     : "All reporting normally"}

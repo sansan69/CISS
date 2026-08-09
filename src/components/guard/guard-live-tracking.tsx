@@ -89,10 +89,10 @@ export function GuardLiveTracking() {
       aria-live="polite"
       className={`border-b px-4 py-3 ${
         isHealthy
-          ? "border-emerald-200 bg-emerald-50"
+          ? "border-success/30 bg-success/10"
           : needsAction
-            ? "border-red-200 bg-red-50"
-            : "border-amber-200 bg-amber-50"
+            ? "border-destructive/30 bg-destructive/10"
+            : "border-warning/30 bg-warning/10"
       }`}
     >
       <div className="mx-auto flex max-w-md items-start gap-3">

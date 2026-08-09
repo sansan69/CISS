@@ -44,6 +44,7 @@ import { useAppAuth } from "@/context/auth-context";
 import { districtMatches } from "@/lib/districts";
 import { authorizedFetch } from "@/lib/api-client";
 import { normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
+import { PageLoading } from "@/components/common/page-loading";
 
 // #region PDF Text Helper Functions
 // Normalize weird whitespace, keep intended line breaks as separators.
@@ -1686,10 +1687,7 @@ export default function AdminEmployeeProfilePage() {
 
   if (isLoading || isAuthLoading) {
     return (
-      <div className="flex flex-col justify-center items-center min-h-[calc(100vh-200px)] gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading profile…</p>
-      </div>
+      <PageLoading label="Loading profile…" className="min-h-[calc(100vh-200px)]" />
     );
   }
 
@@ -1792,14 +1790,14 @@ export default function AdminEmployeeProfilePage() {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4">
-            <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
+            <Avatar className="h-24 w-24 border-4 border-primary shadow-brand-md">
               <AvatarImage src={employee.profilePictureUrl} alt={employee.fullName || 'Employee profile picture'} />
               <AvatarFallback className="text-3xl">
                 {employee.fullName?.split(' ').map(n => n[0]).join('') || 'U'}
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{toTitleCase(employee.fullName)}</h1>
+              <h1 className="font-exo2 text-2xl sm:text-3xl font-bold leading-tight tracking-[-0.035em]">{toTitleCase(employee.fullName)}</h1>
               <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge variant={getStatusBadgeVariant(employee.status)}>{employee.status}</Badge>
@@ -2040,7 +2038,7 @@ export default function AdminEmployeeProfilePage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <CardTitle className="mb-4">Employee QR Code</CardTitle>
-                        <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
+                        <div className="flex flex-col items-center p-4 border rounded-md shadow-brand-sm bg-muted/20">
                             {employee.qrCodeUrl ? (
                                 <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
                             ) : (
@@ -2310,10 +2308,10 @@ export default function AdminEmployeeProfilePage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              <div className="rounded-xl bg-slate-50 p-3 text-sm">
-                <p className="font-medium text-slate-900">{toTitleCase(employee.fullName)}</p>
-                <p className="text-slate-600">{employee.employeeId}</p>
-                <p className="text-slate-600">{employee.district}</p>
+              <div className="rounded-xl bg-muted/60 p-3 text-sm">
+                <p className="font-medium text-foreground">{toTitleCase(employee.fullName)}</p>
+                <p className="text-muted-foreground">{employee.employeeId}</p>
+                <p className="text-muted-foreground">{employee.district}</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reset-pin">New PIN</Label>

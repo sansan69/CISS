@@ -866,7 +866,7 @@ const IdNumberInput = ({
                             <Input placeholder={`Enter ${label}`} {...field} />
                         </FormControl>
                         <div className="absolute inset-y-0 right-3 flex items-center">
-                            {isValid === true && <CheckCircleIcon className="h-5 w-5 text-green-500" />}
+                            {isValid === true && <CheckCircleIcon className="h-5 w-5 text-success" />}
                             {isValid === false && <X className="h-5 w-5 text-destructive" />}
                         </div>
                     </div>
@@ -1850,8 +1850,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-2xl border border-border/70 bg-card p-8 text-center shadow-brand-md">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircleIcon className="w-10 h-10 text-green-600" />
+          <div className="w-20 h-20 bg-success/15 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircleIcon className="w-10 h-10 text-success" />
           </div>
 
           <h1 className="mb-2 text-2xl font-bold text-foreground">Registration complete</h1>
@@ -1897,7 +1897,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             </Button>
           </div>
 
-          <p className="text-xs text-slate-400 mt-6">
+          <p className="text-xs text-muted-foreground mt-6">
             Save your Employee ID. You will need it to log in.
           </p>
         </div>
@@ -1990,9 +1990,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         type="button"
                         className={cn(
                           "min-w-0 rounded-lg border px-2.5 py-2 text-left transition",
-                          isActive && "border-primary bg-primary text-primary-foreground shadow-sm",
+                          isActive && "border-primary bg-primary text-primary-foreground shadow-brand-sm",
                           isComplete && "border-primary/30 bg-primary/10 text-primary",
-                          stepErrorCount > 0 && !isActive && "border-amber-300 bg-amber-50 text-amber-900",
+                          stepErrorCount > 0 && !isActive && "border-warning/40 bg-warning/10 text-warning-strong",
                           !isActive && !isComplete && stepErrorCount === 0 && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
                         )}
                         onClick={() => void goToStep(index)}
@@ -2015,7 +2015,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
               </div>
 
               {submissionIssues.length > 0 && (
-                <Alert variant="destructive" className="rounded-2xl border-red-200 bg-red-50 text-red-950">
+                <Alert variant="destructive" className="rounded-2xl border-destructive/30 bg-destructive/10 text-destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Required information is still missing</AlertTitle>
                   <AlertDescription className="mt-3 space-y-3">
@@ -2027,7 +2027,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="border-red-200 bg-background text-red-900 hover:bg-red-100"
+                          className="border-destructive/30 bg-background text-destructive hover:bg-destructive/15"
                           onClick={() => jumpToStep(issue.stepIndex)}
                         >
                           {issue.title} ({issue.fields.length})
@@ -2036,9 +2036,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
                       {submissionIssues.map((issue) => (
-                        <div key={`${issue.title}-fields`} className="rounded-xl border border-red-200 bg-background px-3 py-2">
-                          <p className="text-sm font-semibold text-red-900">{issue.title}</p>
-                          <p className="mt-1 text-sm text-red-800">{issue.fields.join(", ")}</p>
+                        <div key={`${issue.title}-fields`} className="rounded-xl border border-destructive/30 bg-background px-3 py-2">
+                          <p className="text-sm font-semibold text-destructive">{issue.title}</p>
+                          <p className="mt-1 text-sm text-destructive">{issue.fields.join(", ")}</p>
                         </div>
                       ))}
                     </div>
@@ -2335,8 +2335,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <FormField control={form.control} name="fullAddress" render={({ field }) => ( 
                         <FormItem>
                             <div className="flex justify-between items-center"><FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
-                                {pinStatus === 'found' && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
-                                {pinStatus === 'not_found' && <span className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
+                                {pinStatus === 'found' && <span className="text-xs text-success flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
+                                {pinStatus === 'not_found' && <span className="text-xs text-warning-strong flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
                             </div><FormControl><Textarea placeholder="Enter your complete residential address, including PIN code" {...field} /></FormControl><FormMessage />
                         </FormItem>
                       )} />
@@ -2413,7 +2413,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       <p className="mt-2">Your wages, PF, ESI, leave, overtime, and other statutory rights remain protected.</p>
                     </div>
                     <FormField control={form.control} name="aadhaarConsentAccepted" render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-brand-sm">
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>I consent to the limited use of my Aadhaar for ESIC, EPFO, and related statutory processing.</FormLabel>
@@ -2422,13 +2422,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       </FormItem>
                     )}/>
                     <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-brand-sm"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                           <div className="space-y-1 leading-none"><FormLabel>I confirm that my information and documents are correct and agree to the enrollment terms.</FormLabel><FormMessage /></div>
                         </FormItem>
                       )}
                     />
                     <FormField control={form.control} name="guardUndertakingAccepted" render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-sm">
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border bg-background p-4 shadow-brand-sm">
                         <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>I agree to follow CISS guard duties, client/site rules, and lawful instructions.</FormLabel>
@@ -2525,7 +2525,7 @@ const ImagePreviewAndUpload: React.FC<{
     return (
         <div className="rounded-2xl border bg-background p-4">
             <div className="mb-3 flex items-center justify-between gap-3 text-xs">
-                <span className={cn("rounded-full px-2.5 py-1 font-medium", preview ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}>
+                <span className={cn("rounded-full px-2.5 py-1 font-medium", preview ? "bg-success/15 text-success" : "bg-warning/15 text-warning-strong")}>
                     {preview ? "Ready to upload" : optional ? "Optional" : "Required"}
                 </span>
                 <span className="text-right text-muted-foreground">
@@ -2536,7 +2536,7 @@ const ImagePreviewAndUpload: React.FC<{
                 <Image src={preview} alt="PDF icon" width={80} height={100} className="mx-auto mb-2 border object-contain h-32 bg-white rounded" data-ai-hint="document pdf"/> :
                 <Image src={preview} alt={`${fieldName} Preview`} width={200} height={isSignature ? 100 : 120} className="mx-auto mb-2 border object-contain h-32 rounded" data-ai-hint="id document"/>
             )}
-            {!preview && <div className="flex items-center justify-center h-32 w-full bg-slate-200 dark:bg-slate-800 border-2 border-dashed rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
+            {!preview && <div className="flex items-center justify-center h-32 w-full bg-muted border-2 border-dashed rounded-md mb-2"><FileUp className="h-12 w-12 text-muted-foreground"/></div> }
             <div className="flex flex-col justify-center gap-2 sm:flex-row">
                 <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`${fieldName}Input`)?.click()}><Upload className="mr-2 h-4 w-4"/> Upload</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => openCamera(fieldName)}><Camera className="mr-2 h-4 w-4"/> Camera</Button>

@@ -90,12 +90,12 @@ export function WorkOrderRevisionNotices() {
   if (pendingEvents.length === 0) return null;
 
   return (
-    <Card className="border-amber-200 bg-amber-50/40">
+    <Card className="border-warning/30 bg-warning/5">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <RefreshCw className="h-4 w-4 text-amber-700" />
+              <RefreshCw className="h-4 w-4 text-warning-strong" />
               Work-order changes to review
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -129,7 +129,7 @@ export function WorkOrderRevisionNotices() {
                     Female {event.previousFemaleGuardsRequired} → {event.femaleGuardsRequired}
                   </p>
                   {needsReview && (
-                    <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-amber-800">
+                    <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-warning-strong">
                       <AlertTriangle className="h-4 w-4" />
                       {event.affectedGuardCount} assigned guard{event.affectedGuardCount === 1 ? "" : "s"} need review or reassignment.
                     </p>

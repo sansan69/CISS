@@ -27,12 +27,12 @@ import type { PayrollCycle, PayrollEntry, PayrollCycleStatus } from "@/types/pay
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<PayrollCycleStatus, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-gray-100 text-gray-700" },
-  processing: { label: "Processing", className: "bg-blue-100 text-blue-700" },
-  review: { label: "In Review", className: "bg-amber-100 text-amber-700" },
-  finalized: { label: "Finalized", className: "bg-green-100 text-green-700" },
-  paid: { label: "Paid", className: "bg-emerald-100 text-emerald-700" },
-  failed: { label: "Failed", className: "bg-red-100 text-red-700" },
+  draft: { label: "Draft", className: "bg-muted text-muted-foreground" },
+  processing: { label: "Processing", className: "bg-primary/15 text-primary" },
+  review: { label: "In Review", className: "bg-warning/15 text-warning-strong" },
+  finalized: { label: "Finalized", className: "bg-success/15 text-success" },
+  paid: { label: "Paid", className: "bg-success/15 text-success" },
+  failed: { label: "Failed", className: "bg-destructive/15 text-destructive" },
 };
 
 export default function PayrollCyclePage({
@@ -338,16 +338,16 @@ export default function PayrollCyclePage({
                       </td>
 
                       <td className="px-4 py-3 text-right">₹{entry.earnings.grossEarnings.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right hidden lg:table-cell text-red-600">
+                      <td className="px-4 py-3 text-right hidden lg:table-cell text-destructive">
                         ₹{entry.deductions.totalDeductions.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">₹{entry.netPay.toLocaleString()}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={cn(
                           "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-                          entry.status === "finalized" ? "bg-green-100 text-green-700" :
-                          entry.status === "adjusted" ? "bg-blue-100 text-blue-700" :
-                          "bg-gray-100 text-gray-600"
+                          entry.status === "finalized" ? "bg-success/15 text-success" :
+                          entry.status === "adjusted" ? "bg-primary/15 text-primary" :
+                          "bg-muted text-muted-foreground"
                         )}>
                           {entry.status}
                         </span>

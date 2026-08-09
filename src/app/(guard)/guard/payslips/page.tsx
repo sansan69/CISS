@@ -63,16 +63,16 @@ export default function GuardPayslipsPage() {
           <Skeleton className="h-28 rounded-2xl" />
         </div>
       ) : payslips.length === 0 ? (
-        <Card className="rounded-2xl border-0 shadow-sm">
+        <Card className="rounded-2xl border-0 shadow-brand-sm">
           <CardContent className="py-14 text-center">
-            <Wallet className="mx-auto h-10 w-10 text-gray-300" />
-            <p className="mt-3 text-sm font-medium text-gray-700">No payslips available yet</p>
+            <Wallet className="mx-auto h-10 w-10 text-muted-foreground/70" />
+            <p className="mt-3 text-sm font-medium text-muted-foreground">No payslips available yet</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
           {payslips.map((payslip) => (
-            <Card key={payslip.id} className="rounded-2xl border-0 shadow-sm">
+            <Card key={payslip.id} className="rounded-2xl border-0 shadow-brand-sm">
               <CardContent className="flex items-center justify-between gap-3 p-4">
                 <div>
                   <p className="text-sm font-semibold text-foreground">{payslip.period || "Payslip"}</p>
@@ -86,7 +86,7 @@ export default function GuardPayslipsPage() {
                     Open
                   </Link>
                 ) : (
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                     Waiting
                   </span>
                 )}

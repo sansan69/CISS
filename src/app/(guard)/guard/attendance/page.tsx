@@ -128,12 +128,12 @@ export default function GuardAttendancePage() {
   if (error) {
     return (
       <div className="p-4">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-          <p className="text-red-600 text-sm font-medium">Failed to load</p>
-          <p className="text-red-500 text-xs mt-1">{error}</p>
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-center">
+          <p className="text-destructive text-sm font-medium">Failed to load</p>
+          <p className="text-destructive text-xs mt-1">{error}</p>
           <button
             onClick={() => fetchAttendance(currentMonthDate)}
-            className="mt-3 text-xs font-semibold text-red-600 underline"
+            className="mt-3 text-xs font-semibold text-destructive underline"
           >
             Retry
           </button>
@@ -158,15 +158,15 @@ export default function GuardAttendancePage() {
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-          <p className="text-2xl font-bold text-green-600">{presentDays}</p>
+        <div className="bg-card rounded-xl shadow-brand-sm p-4 text-center">
+          <p className="text-2xl font-bold text-success">{presentDays}</p>
           <p className="text-xs text-muted-foreground mt-0.5">Present</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
-          <p className="text-2xl font-bold text-red-500">{data?.absentDays ?? 0}</p>
+        <div className="bg-card rounded-xl shadow-brand-sm p-4 text-center">
+          <p className="text-2xl font-bold text-destructive">{data?.absentDays ?? 0}</p>
           <p className="text-xs text-muted-foreground mt-0.5">Absent</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 text-center">
+        <div className="bg-card rounded-xl shadow-brand-sm p-4 text-center">
           <p className="text-2xl font-bold text-primary">{data?.workingDays ?? data?.absentDays != null ? (presentDays + (data?.absentDays ?? 0)) : presentDays}</p>
           <p className="text-xs text-muted-foreground mt-0.5">Working days</p>
         </div>
@@ -174,20 +174,20 @@ export default function GuardAttendancePage() {
 
       {/* Log list */}
       {logs.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-6 text-center">
+        <div className="bg-card rounded-xl shadow-brand-sm p-6 text-center">
           <p className="text-sm text-muted-foreground">
             No attendance records for this month
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700 px-1">
+          <h2 className="text-sm font-semibold text-muted-foreground px-1">
             All Records
           </h2>
           {logs.map((log) => (
             <div
               key={log.id}
-              className="flex items-center gap-3 bg-white rounded-xl shadow-sm p-3"
+              className="flex items-center gap-3 bg-card rounded-xl shadow-brand-sm p-3"
             >
               {/* Date badge */}
               <div
@@ -224,7 +224,7 @@ export default function GuardAttendancePage() {
                       ? `${Math.round(log.distanceMeters)} m`
                       : `${(log.distanceMeters / 1000).toFixed(1)} km`}
                     {log.distanceMeters > 200 && (
-                      <span className="text-red-400 ml-1">• Outside fence</span>
+                      <span className="text-destructive/80 ml-1">• Outside fence</span>
                     )}
                   </p>
                 )}
@@ -250,8 +250,8 @@ export default function GuardAttendancePage() {
                 variant="outline"
                 className={
                   log.status === "In"
-                    ? "text-green-700 border-green-300 bg-green-50 text-[11px] px-2 py-0.5 shrink-0"
-                    : "text-orange-700 border-orange-300 bg-orange-50 text-[11px] px-2 py-0.5 shrink-0"
+                    ? "text-success border-success/40 bg-success/10 text-[11px] px-2 py-0.5 shrink-0"
+                    : "text-warning-strong border-warning/40 bg-warning/10 text-[11px] px-2 py-0.5 shrink-0"
                 }
               >
                 {log.status}

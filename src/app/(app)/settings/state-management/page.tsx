@@ -651,8 +651,9 @@ export default function RegionOnboardingPage() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {checklistItems(region).map((item) => (
-                      <Badge key={item.label} variant="outline" className="text-[11px]">
-                        {item.done ? "✓" : "•"} {item.label}
+                      <Badge key={item.label} variant="outline" className="gap-1 text-[11px]">
+                        {item.done ? <CheckCircle2 className="h-3 w-3 text-success" weight="fill" /> : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" aria-hidden />}
+                        {item.label}
                       </Badge>
                     ))}
                   </div>
@@ -697,7 +698,7 @@ export default function RegionOnboardingPage() {
                   <div className="mt-3 space-y-2">
                     {selectedChecklist.map((item) => (
                       <div key={item.label} className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className={`h-4 w-4 ${item.done ? "text-green-600" : "text-muted-foreground"}`} />
+                        <CheckCircle2 className={`h-4 w-4 ${item.done ? "text-success" : "text-muted-foreground"}`} />
                         <span>{item.label}</span>
                       </div>
                     ))}
@@ -810,10 +811,10 @@ export default function RegionOnboardingPage() {
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-3">
                   {guidedSetupSteps.map((step) => (
-                    <Card key={step.label} className={step.done ? "border-green-600/40 bg-green-50/50" : "border-dashed"}>
+                    <Card key={step.label} className={step.done ? "border-success/40 bg-success/5" : "border-dashed"}>
                       <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className={`h-4 w-4 ${step.done ? "text-green-600" : "text-muted-foreground"}`} />
+                          <CheckCircle2 className={`h-4 w-4 ${step.done ? "text-success" : "text-muted-foreground"}`} />
                           {step.label}
                         </CardTitle>
                         <CardDescription className="text-xs leading-5">
@@ -1043,11 +1044,11 @@ export default function RegionOnboardingPage() {
                     <div className="space-y-1.5">
                       {automationJob.steps?.map((step: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-sm">
-                          <span className={`h-2 w-2 rounded-full ${step.status === "completed" ? "bg-green-500" : step.status === "failed" ? "bg-red-500" : step.status === "running" ? "bg-amber-500 animate-pulse" : "bg-gray-300"}`} />
+                          <span className={`h-2 w-2 rounded-full ${step.status === "completed" ? "bg-success" : step.status === "failed" ? "bg-destructive" : step.status === "running" ? "bg-warning animate-pulse" : "bg-muted-foreground/30"}`} />
                           <span className="flex-1">{step.stepId}</span>
-                          {step.status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                          {step.status === "failed" && <span className="text-red-500 text-xs">{step.error}</span>}
-                          {step.status === "skipped" && <span className="text-gray-400 text-xs">Skipped</span>}
+                          {step.status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-success" />}
+                          {step.status === "failed" && <span className="text-destructive text-xs">{step.error}</span>}
+                          {step.status === "skipped" && <span className="text-muted-foreground text-xs">Skipped</span>}
                           {step.elapsedMs ? <span className="text-xs text-muted-foreground">{(step.elapsedMs / 1000).toFixed(1)}s</span> : null}
                         </div>
                       ))}
@@ -1071,7 +1072,7 @@ export default function RegionOnboardingPage() {
                     <div className="space-y-1.5">
                       {readinessResult.checks?.map((check: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-sm">
-                          {check.passed ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
+                          {check.passed ? <CheckCircle2 className="h-3.5 w-3.5 text-success" /> : <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
                           <span className="flex-1">{check.label}</span>
                           <span className="text-xs text-muted-foreground">{check.passed ? "OK" : check.message}</span>
                         </div>
@@ -1096,7 +1097,7 @@ export default function RegionOnboardingPage() {
                     </div>
                     {domainResult && (
                       <div className="text-sm space-y-1 text-muted-foreground">
-                        <p className="text-green-600 font-medium">Domain added: {domainResult.domain}</p>
+                        <p className="text-success font-medium">Domain added: {domainResult.domain}</p>
                         <p className="text-xs">{domainResult.dnsInstruction}</p>
                       </div>
                     )}

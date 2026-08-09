@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { SpinnerGap as Loader2, CheckCircle as CheckCircle2, ArrowRight, Buildings as Building2, MapPin, Users, NotePencil as FileEdit, ShieldCheck, Sparkle as Sparkles } from "@phosphor-icons/react";
 import { authorizedFetch } from "@/lib/api-client";
 import { DEFAULT_ENROLLMENT_FORM_CONFIG } from "@/lib/region-wizard";
+import { PageLoading } from "@/components/common/page-loading";
 
 const WIZARD_STEPS = [
   { key: "profile", label: "State Profile", icon: Building2 },
@@ -89,9 +90,7 @@ export default function WizardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <PageLoading className="min-h-[100dvh]" />
     );
   }
 
@@ -105,7 +104,7 @@ export default function WizardPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
             <Sparkles className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold">Welcome to Your State Dashboard</h1>
+          <h1 className="font-exo2 text-3xl font-bold leading-tight tracking-[-0.035em]">Welcome to Your State Dashboard</h1>
           <p className="mt-2 text-muted-foreground">
             Complete the setup steps below to configure your region.
           </p>
@@ -257,7 +256,7 @@ function StepEnrollmentConfig({ onSave, submitting }: any) {
           <p className="text-sm font-semibold mb-2">{section.label}</p>
           <div className="flex flex-wrap gap-2">
             {section.fields.filter((field) => field.enabled).sort((a, b) => a.order - b.order).map((field) => (
-              <Badge key={field.key} variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <Badge key={field.key} variant="outline" className="bg-success/10 text-success border-success/30">
                 {field.label}{field.required ? " *" : ""}
               </Badge>
             ))}
@@ -353,9 +352,9 @@ function StepVerify({ onComplete, submitting }: any) {
           <div className="space-y-2">
             {Object.entries(checks).map(([key, passed]) => (
               <div key={key} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-                {passed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <span className="h-5 w-5 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">!</span>}
-                <span className={passed ? "text-green-700" : "text-red-700"}>{key.charAt(0).toUpperCase() + key.slice(1)}</span>
-                {passed ? <span className="ml-auto text-green-600 text-xs">Passed</span> : <span className="ml-auto text-red-600 text-xs">Missing</span>}
+                {passed ? <CheckCircle2 className="h-5 w-5 text-success" /> : <span className="h-5 w-5 rounded-full bg-destructive/15 text-destructive flex items-center justify-center text-xs font-bold">!</span>}
+                <span className={passed ? "text-success" : "text-destructive"}>{key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                {passed ? <span className="ml-auto text-success text-xs">Passed</span> : <span className="ml-auto text-destructive text-xs">Missing</span>}
               </div>
             ))}
           </div>

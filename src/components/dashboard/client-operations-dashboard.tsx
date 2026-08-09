@@ -70,7 +70,7 @@ const summaryCards = [
     key: "checkedInToday",
     label: "Checked In Today",
     icon: CalendarCheck,
-    color: "bg-emerald-50 text-emerald-700",
+    color: "bg-success/10 text-success",
   },
   {
     key: "onDutyNow",
@@ -82,19 +82,19 @@ const summaryCards = [
     key: "deploymentsToday",
     label: "Planned Deployments",
     icon: Briefcase,
-    color: "bg-amber-50 text-amber-700",
+    color: "bg-warning/10 text-warning-strong",
   },
   {
     key: "pendingVisitReports",
     label: "Reports Awaiting Review",
     icon: FileText,
-    color: "bg-slate-100 text-slate-700",
+    color: "bg-muted text-muted-foreground",
   },
   {
     key: "hourlyNightChecksToday",
     label: "Night Checks Today",
     icon: Footprints,
-    color: "bg-sky-50 text-sky-700",
+    color: "bg-primary/10 text-primary",
   },
 ] as const;
 

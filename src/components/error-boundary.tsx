@@ -40,7 +40,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-background p-8">
           <div className="flex flex-col items-center gap-4 max-w-md text-center">
             <AlertTriangle className="h-12 w-12 text-destructive" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+            <h1 className="text-2xl font-bold text-foreground">
               Something went wrong
             </h1>
             <p className="text-sm text-muted-foreground">{this.state.message}</p>

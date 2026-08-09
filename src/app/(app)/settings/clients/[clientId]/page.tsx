@@ -912,9 +912,9 @@ export default function ClientDashboardPage() {
     lngString?: string;
   }) => {
     if (hasUsableSiteGps(record)) {
-      return <Badge variant="outline" className="text-[10px] gap-1 text-green-700 border-green-200 bg-green-50"><CheckCircle2 className="h-2.5 w-2.5" />GPS set</Badge>;
+      return <Badge variant="outline" className="text-[10px] gap-1 text-success border-success/30 bg-success/10"><CheckCircle2 className="h-2.5 w-2.5" />GPS set</Badge>;
     }
-    return <Badge variant="outline" className="text-[10px] gap-1 text-amber-700 border-amber-200 bg-amber-50"><AlertCircle className="h-2.5 w-2.5" />No GPS</Badge>;
+    return <Badge variant="outline" className="text-[10px] gap-1 text-warning-strong border-warning/30 bg-warning/10"><AlertCircle className="h-2.5 w-2.5" />No GPS</Badge>;
   };
 
   const coordinateSummary = (record: {
@@ -1426,7 +1426,7 @@ export default function ClientDashboardPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {enabled ? (
-                            <Eye className="h-4 w-4 text-green-600" />
+                            <Eye className="h-4 w-4 text-success" />
                           ) : (
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
                           )}

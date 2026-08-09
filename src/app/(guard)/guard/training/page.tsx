@@ -84,16 +84,16 @@ export default function GuardTrainingPage() {
           <Skeleton className="h-28 rounded-2xl" />
         </div>
       ) : assignments.length === 0 ? (
-        <Card className="rounded-2xl border-0 shadow-sm">
+        <Card className="rounded-2xl border-0 shadow-brand-sm">
           <CardContent className="py-14 text-center">
-            <GraduationCap className="mx-auto h-10 w-10 text-gray-300" />
-            <p className="mt-3 text-sm font-medium text-gray-700">No training assigned yet</p>
+            <GraduationCap className="mx-auto h-10 w-10 text-muted-foreground/70" />
+            <p className="mt-3 text-sm font-medium text-muted-foreground">No training assigned yet</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
           {assignments.map((assignment) => (
-            <Card key={assignment.id} className="rounded-2xl border-0 shadow-sm">
+            <Card key={assignment.id} className="rounded-2xl border-0 shadow-brand-sm">
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -102,7 +102,7 @@ export default function GuardTrainingPage() {
                       {assignment.moduleCategory || "General"} · Assigned {formatTs(assignment.assignedAt)}
                     </p>
                   </div>
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-700">
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium capitalize text-muted-foreground">
                     {assignment.status || "assigned"}
                   </span>
                 </div>

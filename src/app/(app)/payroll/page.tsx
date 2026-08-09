@@ -14,12 +14,12 @@ import { Play, Eye, Users, CurrencyInr as IndianRupee, Money as Banknote, Shield
 import type { PayrollCycle, PayrollCycleStatus } from "@/types/payroll";
 
 const STATUS_CONFIG: Record<PayrollCycleStatus, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-gray-100 text-gray-700" },
-  processing: { label: "Processing", className: "bg-blue-100 text-blue-700" },
-  review: { label: "Review", className: "bg-amber-100 text-amber-700" },
-  finalized: { label: "Finalized", className: "bg-green-100 text-green-700" },
-  paid: { label: "Paid", className: "bg-emerald-100 text-emerald-700" },
-  failed: { label: "Failed", className: "bg-red-100 text-red-700" },
+  draft: { label: "Draft", className: "bg-muted text-muted-foreground" },
+  processing: { label: "Processing", className: "bg-primary/15 text-primary" },
+  review: { label: "Review", className: "bg-warning/15 text-warning-strong" },
+  finalized: { label: "Finalized", className: "bg-success/15 text-success" },
+  paid: { label: "Paid", className: "bg-success/15 text-success" },
+  failed: { label: "Failed", className: "bg-destructive/15 text-destructive" },
 };
 
 export default function PayrollPage() {

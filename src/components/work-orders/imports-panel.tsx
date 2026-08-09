@@ -49,7 +49,7 @@ interface GroupedImport {
 
 function getStatusBadge(status: string) {
   const s = status.trim().toLowerCase();
-  if (s === "active") return <Badge className="bg-green-100 text-green-700 border-green-200 capitalize">Active</Badge>;
+  if (s === "active") return <Badge className="bg-success/15 text-success border-success/30 capitalize">Active</Badge>;
   if (s === "cancelled") return <Badge variant="destructive" className="capitalize">Cancelled</Badge>;
   return <Badge variant="outline" className="capitalize">{s || "Active"}</Badge>;
 }
@@ -68,7 +68,7 @@ function ImportCard({ record, isExpanded, onToggle }: { record: GroupedImport; i
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 capitalize">
+            <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30 capitalize">
               {record.rowCount} work orders
             </Badge>
             <Button variant="ghost" size="sm" onClick={onToggle} className="gap-1.5 px-2">
@@ -121,7 +121,7 @@ function ImportCard({ record, isExpanded, onToggle }: { record: GroupedImport; i
                       <TableCell className="text-xs text-center font-medium">{wo.maleGuardsRequired ?? 0}</TableCell>
                       <TableCell className="text-xs text-center font-medium">{wo.femaleGuardsRequired ?? 0}</TableCell>
                       <TableCell className="text-xs text-center">
-                        <span className={assigned >= required ? "text-green-600" : assigned > 0 ? "text-amber-600" : "text-muted-foreground"}>
+                        <span className={assigned >= required ? "text-success" : assigned > 0 ? "text-warning-strong" : "text-muted-foreground"}>
                           {assigned}/{required}
                         </span>
                       </TableCell>

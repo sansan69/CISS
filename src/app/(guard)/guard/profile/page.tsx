@@ -230,12 +230,12 @@ export default function GuardProfilePage() {
   if (error) {
     return (
       <div className="p-4">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-          <p className="text-red-600 text-sm font-medium">Failed to load</p>
-          <p className="text-red-500 text-xs mt-1">{error}</p>
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-center">
+          <p className="text-destructive text-sm font-medium">Failed to load</p>
+          <p className="text-destructive text-xs mt-1">{error}</p>
           <button
             onClick={fetchProfile}
-            className="mt-3 text-xs font-semibold text-red-600 underline"
+            className="mt-3 text-xs font-semibold text-destructive underline"
           >
             Retry
           </button>
@@ -251,7 +251,7 @@ export default function GuardProfilePage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         {data.profilePhotoUrl ? (
-          <div className="relative h-16 w-16 rounded-full overflow-hidden ring-2 ring-white shadow-md shrink-0">
+          <div className="relative h-16 w-16 rounded-full overflow-hidden ring-2 ring-white shadow-brand-md shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={data.profilePhotoUrl}
@@ -288,7 +288,7 @@ export default function GuardProfilePage() {
       </div>
 
       {/* Details Card */}
-      <Card className="rounded-xl shadow-sm border-0">
+      <Card className="rounded-xl shadow-brand-sm border-0">
         <CardContent className="p-2">
           <InfoRow
             icon={Phone}

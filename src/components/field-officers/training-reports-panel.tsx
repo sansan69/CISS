@@ -27,11 +27,11 @@ import { districtMatches } from "@/lib/districts";
 type Tab = "all" | "draft" | "submitted" | "acknowledged";
 
 const STATUS_CONFIG: Record<TrainingReportStatus, { label: string; className: string }> = {
-  draft:        { label: "Draft",        className: "bg-gray-100 text-gray-600" },
-  submitted:    { label: "Submitted",    className: "bg-amber-100 text-amber-700" },
-  acknowledged: { label: "Acknowledged", className: "bg-green-100 text-green-700" },
-  superseded:   { label: "Superseded",   className: "bg-slate-100 text-slate-600" },
-  archived:     { label: "Archived",     className: "bg-slate-100 text-slate-600" },
+  draft:        { label: "Draft",        className: "bg-muted text-muted-foreground" },
+  submitted:    { label: "Submitted",    className: "bg-warning/15 text-warning-strong" },
+  acknowledged: { label: "Acknowledged", className: "bg-success/15 text-success" },
+  superseded:   { label: "Superseded",   className: "bg-muted text-muted-foreground" },
+  archived:     { label: "Archived",     className: "bg-muted text-muted-foreground" },
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -330,7 +330,7 @@ export function TrainingReportsPanel() {
           {reports.map((report) => {
             const sc = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.submitted;
             return (
-              <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
+              <Card key={report.id} className="overflow-hidden cursor-pointer hover:shadow-brand-md transition-shadow">
                 <CardContent className="p-4" onClick={() => void openDetail(report)}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">

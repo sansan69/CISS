@@ -358,7 +358,7 @@ const IdNumberInput = ({
                             <Input placeholder={`Enter ${label}`} {...field} />
                         </FormControl>
                         <div className="absolute inset-y-0 right-3 flex items-center">
-                            {isValid === true && <CheckCircleIcon className="h-5 w-5 text-green-500" />}
+                            {isValid === true && <CheckCircleIcon className="h-5 w-5 text-success" />}
                             {isValid === false && <X className="h-5 w-5 text-destructive" />}
                         </div>
                     </div>
@@ -840,7 +840,7 @@ export default function EnrollEmployeePage() {
       toast({
         title: "Registration Successful!",
         description: `${data.fullNameInput || `${data.firstName || ""} ${data.lastName || ""}`.trim()}'s registration (ID: ${responseBody.employeeId}) has been saved.`,
-        action: <Check className="h-5 w-5 text-green-500" />,
+        action: <Check className="h-5 w-5 text-success" />,
       });
       form.reset();
       // Reset all previews
@@ -889,7 +889,7 @@ export default function EnrollEmployeePage() {
         </Link>
       </div>
 
-      <Card className="shadow-xl">
+      <Card className="shadow-brand-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Employee Registration</CardTitle>
           <CardDescription>Complete your employee profile with accurate information</CardDescription>
@@ -1347,8 +1347,8 @@ export default function EnrollEmployeePage() {
                     <FormItem>
                         <div className="flex justify-between items-center">
                             <FormLabel>Full Address <span className="text-destructive">*</span></FormLabel>
-                            {pinStatus === 'found' && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
-                            {pinStatus === 'not_found' && <span className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
+                            {pinStatus === 'found' && <span className="text-xs text-success flex items-center gap-1"><CheckCircleIcon className="h-3 w-3" /> PIN Code Detected</span>}
+                            {pinStatus === 'not_found' && <span className="text-xs text-warning-strong flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> PIN Code Missing?</span>}
                         </div>
                         <FormControl><Textarea placeholder="Enter your complete residential address" {...field} /></FormControl>
                         <FormDescription>Include house number, street, area, and PIN code</FormDescription>
@@ -1406,7 +1406,7 @@ export default function EnrollEmployeePage() {
               </section>
 
               <div className="flex justify-end pt-6">
-                <Button type="submit" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 text-base" disabled={isLoading || form.formState.isSubmitting}>
+                <Button type="submit" size="lg" className="w-full md:w-auto" disabled={isLoading || form.formState.isSubmitting}>
                   {isLoading || form.formState.isSubmitting ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
                   ) : "Complete Registration"}

@@ -113,7 +113,7 @@ export default function GuardQuizPage() {
   if (!quiz) {
     return (
       <div className="p-4">
-        <Card><CardContent className="py-10 text-center text-sm text-gray-600">Quiz unavailable.</CardContent></Card>
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Quiz unavailable.</CardContent></Card>
       </div>
     );
   }
@@ -121,16 +121,16 @@ export default function GuardQuizPage() {
   if (result) {
     return (
       <div className="p-4">
-        <Card className="border-0 shadow-sm">
+        <Card className="border-0 shadow-brand-sm">
           <CardContent className="space-y-4 py-8 text-center">
             {result.passed ? (
-              <CheckCircle2 className="mx-auto h-12 w-12 text-green-600" />
+              <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
             ) : (
-              <XCircle className="mx-auto h-12 w-12 text-red-600" />
+              <XCircle className="mx-auto h-12 w-12 text-destructive" />
             )}
             <div>
               <p className="text-2xl font-bold">{result.score}%</p>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 {result.passed ? "Passed" : "Did not pass"} · Passing {result.passingScore}%
               </p>
             </div>
@@ -154,14 +154,14 @@ export default function GuardQuizPage() {
           <p className="text-sm font-semibold">Question {current + 1} / {quiz.questions.length}</p>
         </div>
         {remainingSec !== null && (
-          <div className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium">
+          <div className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-medium">
             <Timer className="h-3.5 w-3.5" />
             {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, "0")}
           </div>
         )}
       </div>
 
-      <Card className="rounded-2xl border-0 shadow-sm">
+      <Card className="rounded-2xl border-0 shadow-brand-sm">
         <CardContent className="space-y-3 p-4">
           <p className="text-base font-medium">{q.prompt}</p>
           <div className="space-y-2">
@@ -173,7 +173,7 @@ export default function GuardQuizPage() {
                   type="button"
                   onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))}
                   className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
-                    selected ? "border-primary bg-primary/5 font-medium text-primary" : "border-border bg-white hover:bg-muted/50"
+                    selected ? "border-primary bg-primary/5 font-medium text-primary" : "border-border bg-card hover:bg-muted/50"
                   }`}
                 >
                   <span className="mr-2 font-semibold">{String.fromCharCode(65 + i)}.</span>

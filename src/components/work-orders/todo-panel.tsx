@@ -20,17 +20,17 @@ import { authorizedFetch } from "@/lib/api-client";
 import type { WorkOrderTodo, WorkOrderTodoPriority, WorkOrderTodoStatus } from "@/types/work-orders";
 
 const STATUS_CONFIG: Record<WorkOrderTodoStatus, { label: string; icon: React.ElementType; color: string }> = {
-  pending: { label: "Pending", icon: Circle, color: "bg-slate-100 text-slate-700 border-slate-200" },
-  "in-progress": { label: "In Progress", icon: Clock, color: "bg-blue-100 text-blue-700 border-blue-200" },
-  completed: { label: "Completed", icon: CheckCircle2, color: "bg-green-100 text-green-700 border-green-200" },
-  cancelled: { label: "Cancelled", icon: X, color: "bg-gray-100 text-gray-500 border-gray-200" },
+  pending: { label: "Pending", icon: Circle, color: "bg-muted text-muted-foreground border-border" },
+  "in-progress": { label: "In Progress", icon: Clock, color: "bg-primary/15 text-primary border-primary/30" },
+  completed: { label: "Completed", icon: CheckCircle2, color: "bg-success/15 text-success border-success/30" },
+  cancelled: { label: "Cancelled", icon: X, color: "bg-muted text-muted-foreground border-border" },
 };
 
 const PRIORITY_CONFIG: Record<WorkOrderTodoPriority, { label: string; color: string }> = {
-  low: { label: "Low", color: "bg-slate-100 text-slate-600" },
-  medium: { label: "Medium", color: "bg-amber-100 text-amber-700" },
-  high: { label: "High", color: "bg-orange-100 text-orange-700" },
-  urgent: { label: "Urgent", color: "bg-red-100 text-red-700" },
+  low: { label: "Low", color: "bg-muted text-muted-foreground" },
+  medium: { label: "Medium", color: "bg-warning/15 text-warning-strong" },
+  high: { label: "High", color: "bg-warning/15 text-warning-strong" },
+  urgent: { label: "Urgent", color: "bg-destructive/15 text-destructive" },
 };
 
 interface WorkOrderTodoPanelProps {
@@ -175,16 +175,16 @@ export default function WorkOrderTodoPanel({
           <p className="text-lg font-bold leading-none">{stats.total}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">Total</p>
         </div>
-        <div className="rounded-md border bg-slate-50 px-2 py-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-slate-700">{stats.pending}</p>
+        <div className="rounded-md border bg-muted/60 px-2 py-1.5 text-center">
+          <p className="text-lg font-bold leading-none text-muted-foreground">{stats.pending}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">Pending</p>
         </div>
-        <div className="rounded-md border bg-blue-50 px-2 py-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-blue-700">{stats.inProgress}</p>
+        <div className="rounded-md border bg-primary/10 px-2 py-1.5 text-center">
+          <p className="text-lg font-bold leading-none text-primary">{stats.inProgress}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">In Progress</p>
         </div>
-        <div className="rounded-md border bg-green-50 px-2 py-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-green-700">{stats.completed}</p>
+        <div className="rounded-md border bg-success/10 px-2 py-1.5 text-center">
+          <p className="text-lg font-bold leading-none text-success">{stats.completed}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">Done</p>
         </div>
       </div>
@@ -353,7 +353,7 @@ export default function WorkOrderTodoPanel({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        className="h-6 text-[10px] px-2 text-success hover:text-success hover:bg-success/10"
                         onClick={() => handleStatusChange(todo.id, "completed")}
                       >
                         <CheckCircle2 className="mr-1 h-3 w-3" />

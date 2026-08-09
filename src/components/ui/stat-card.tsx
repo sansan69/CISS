@@ -14,7 +14,7 @@ interface StatCardProps {
   subtitle?: string;
   /** Icon component */
   icon: React.ElementType;
-  /** Tailwind bg class for the icon bubble, e.g. "bg-blue-100 text-blue-600" */
+  /** Tailwind bg class for the icon bubble, e.g. "bg-primary/10 text-primary" */
   iconColor?: string;
   /** Whether the card is in a loading state */
   isLoading?: boolean;
@@ -45,8 +45,8 @@ export function StatCard({
   delayClass,
 }: StatCardProps) {
   const trendColor =
-    trend === "up"   ? "text-green-600"  :
-    trend === "down" ? "text-red-500"    :
+    trend === "up"   ? "text-success"  :
+    trend === "down" ? "text-destructive"    :
                        "text-muted-foreground";
 
   const TrendIcon =

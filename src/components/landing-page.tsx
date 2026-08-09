@@ -137,7 +137,7 @@ export default function LandingPage({
   if (portalContext?.isClientPortal) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
-        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-brand-sm">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
           <div>
             <p className="text-sm font-semibold text-foreground">Opening client portal</p>
@@ -636,7 +636,7 @@ export default function LandingPage({
             href="/admin-login"
             className="group flex min-h-14 items-center gap-3 rounded-xl bg-muted/55 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background text-primary shadow-sm">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background text-primary shadow-brand-sm">
               <Building2 className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">

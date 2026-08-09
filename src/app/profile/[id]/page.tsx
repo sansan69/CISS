@@ -631,7 +631,7 @@ export default function PublicEmployeeProfilePage() {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4">
-            <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
+            <Avatar className="h-24 w-24 border-4 border-primary shadow-brand-md">
               <AvatarImage src={employee.profilePictureUrl} alt={employee.fullName || 'Employee profile picture'} />
               <AvatarFallback className="text-3xl">
                 {employee.fullName?.split(' ').map(n => n[0]).join('') || 'U'}
@@ -739,7 +739,7 @@ export default function PublicEmployeeProfilePage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <CardTitle className="mb-4">Employee QR Code</CardTitle>
-                        <div className="flex flex-col items-center p-4 border rounded-md shadow-sm bg-muted/20">
+                        <div className="flex flex-col items-center p-4 border rounded-md shadow-brand-sm bg-muted/20">
                             {employee.qrCodeUrl ? (
                                 <Image src={employee.qrCodeUrl} alt="Employee QR Code" width={200} height={200} data-ai-hint="qr code employee"/>
                             ) : (

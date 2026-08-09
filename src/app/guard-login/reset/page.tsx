@@ -18,13 +18,13 @@ export default function GuardResetPinPage() {
             height={72}
             className="mx-auto mb-4"
           />
-          <p className="text-xs uppercase tracking-[0.28em] text-sky-200/80">Guard Portal</p>
+          <p className="text-xs uppercase tracking-[0.28em] text-primary-foreground/80">Guard Portal</p>
           <h1 className="mt-2 text-3xl font-bold text-white">Forgot PIN</h1>
         </header>
 
-        <Card className="border-white/10 bg-white/95 text-slate-950 shadow-2xl">
+        <Card className="border-white/10 bg-white/95 text-foreground shadow-brand-lg">
           <CardHeader>
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <ShieldCheck className="h-6 w-6" />
             </div>
             <CardTitle>Ask an administrator to reset your PIN</CardTitle>
@@ -33,7 +33,7 @@ export default function GuardResetPinPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+            <div className="rounded-xl border border-border bg-muted/60 p-4 text-sm leading-6 text-muted-foreground">
               Contact your CISS administrator and provide your employee ID. The administrator
               will verify your identity, reset the PIN, and the action will be recorded.
             </div>
@@ -43,7 +43,7 @@ export default function GuardResetPinPage() {
                 Return to guard login
               </Link>
             </Button>
-            <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <KeyRound className="h-3.5 w-3.5" />
               First-time PIN setup remains available for guards without a PIN.
             </div>

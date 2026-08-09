@@ -38,6 +38,7 @@ import { resolveAppUser } from '@/lib/auth/roles';
 import { PageHeader } from '@/components/layout/page-header';
 import { useAppAuth } from '@/context/auth-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { VisitReportsPanel } from '@/components/field-officers/visit-reports-panel';
 import { TrainingReportsPanel } from '@/components/field-officers/training-reports-panel';
 import { WorkOrdersPanel } from '@/components/field-officers/work-orders-panel';
@@ -49,6 +50,7 @@ import {
   mergeDistrictOptions,
   normalizeDistrictName,
 } from '@/lib/districts';
+import { PageLoading } from "@/components/common/page-loading";
 
 
 interface FieldOfficer {
@@ -283,22 +285,24 @@ const OfficerForm: React.FC<{
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
                 <Label htmlFor="user-select">Select User</Label>
-                 <select
-                    id="user-select"
+                <Select
                     value={selectedUser?.uid || ''}
-                    onChange={(e) => {
-                        const user = availableUsers.find(u => u.uid === e.target.value);
+                    onValueChange={(value) => {
+                        const user = availableUsers.find(u => u.uid === value);
                         setSelectedUser(user);
                         if (user?.name) setName(user.name);
                     }}
-                    className="w-full p-2 border rounded-md bg-background"
                     disabled={isEditing}
                 >
-                    <option value="" disabled>{isEditing ? selectedUser?.email : "Select a user account"}</option>
-                    {!isEditing && availableUsers.map(u => (
-                         <option key={u.uid} value={u.uid}>{u.email}</option>
-                    ))}
-                </select>
+                    <SelectTrigger id="user-select" className="w-full">
+                        <SelectValue placeholder={isEditing ? selectedUser?.email : "Select a user account"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {!isEditing && availableUsers.map(u => (
+                            <SelectItem key={u.uid} value={u.uid}>{u.email}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 {isEditing && <p className="text-xs text-muted-foreground">User account cannot be changed after creation.</p>}
             </div>
             {!isEditing && (
@@ -666,9 +670,7 @@ export default function FieldOfficersPage() {
 
   if (authStatus === 'loading' || (canManageOfficers && isLoading)) {
        return (
-        <div className="flex justify-center items-center h-40">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <PageLoading />
        )
   }
 
@@ -770,7 +772,7 @@ export default function FieldOfficersPage() {
                   ) : (
                     <div className="space-y-4">
                       {officers.map((officer) => (
-                        <div key={officer.id} className="flex flex-col gap-3 rounded-lg border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div key={officer.id} className="flex flex-col gap-3 rounded-lg border p-4 shadow-brand-sm sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex-1 mb-3 sm:mb-0">
                             <h3 className="text-lg font-semibold">{officer.name}</h3>
                             <p className="text-sm text-muted-foreground">{officer.email}</p>

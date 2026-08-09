@@ -1798,7 +1798,7 @@ export default function AttendancePage() {
 
             <div className="space-y-3 rounded-2xl border p-4">
               <div className="flex items-start gap-3">
-                <MapPin className={`mt-0.5 h-5 w-5 ${locationCoords ? 'text-green-600' : locationError ? 'text-destructive' : 'text-muted-foreground'}`} />
+                <MapPin className={`mt-0.5 h-5 w-5 ${locationCoords ? 'text-success' : locationError ? 'text-destructive' : 'text-muted-foreground'}`} />
                 <div className="min-w-0">
                   <p className="font-medium">Location status</p>
                   <p className="text-sm text-muted-foreground">
@@ -2002,7 +2002,7 @@ export default function AttendancePage() {
               {dutyPointOptions.length > 0 && (
                 <Alert
                   variant={selectedDutyPoint ? 'default' : 'destructive'}
-                  className={`mt-4 ${selectedDutyPoint ? 'border-amber-200 bg-amber-50/70 text-amber-950' : ''}`}
+                  className={`mt-4 ${selectedDutyPoint ? 'border-warning/30 bg-warning/10 text-warning-strong' : ''}`}
                 >
                   <Badge className="mb-2 w-fit" variant={selectedDutyPoint ? 'secondary' : 'destructive'}>
                     Required
@@ -2163,15 +2163,15 @@ export default function AttendancePage() {
                                       <div className="flex flex-col items-end gap-1 shrink-0">
                                         {distLabel && (
                                           <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
-                                            withinFence ? 'bg-emerald-100 text-emerald-700'
-                                              : nearby ? 'bg-amber-100 text-amber-700'
+                                            withinFence ? 'bg-success/15 text-success'
+                                              : nearby ? 'bg-warning/15 text-warning-strong'
                                               : 'bg-muted text-muted-foreground'
                                           }`}>
                                             {distLabel}
                                           </span>
                                         )}
                                         {withinFence && (
-                                          <span className="text-[10px] text-emerald-600 font-medium">In range</span>
+                                          <span className="text-[10px] text-success font-medium">In range</span>
                                         )}
                                       </div>
                                     </div>
@@ -2227,11 +2227,11 @@ export default function AttendancePage() {
               <div className="mt-3 flex items-center gap-3">
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold ${
                   selectedStatus === 'In'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-amber-100 text-amber-800'
+                    ? 'bg-success/15 text-success'
+                    : 'bg-warning/15 text-warning-strong'
                 }`}>
                   <span className={`h-2 w-2 rounded-full ${
-                    selectedStatus === 'In' ? 'bg-green-600' : 'bg-amber-600'
+                    selectedStatus === 'In' ? 'bg-success' : 'bg-warning'
                   }`} />
                   {selectedStatus === 'In' ? 'CHECK IN' : 'CHECK OUT'}
                 </span>
@@ -2386,13 +2386,13 @@ export default function AttendancePage() {
       )}
 
       {workflowStep === 'done' && lastSubmitted && (
-        <Card className="rounded-3xl border-green-200 bg-green-50/50">
+        <Card className="rounded-3xl border-success/30 bg-success/5">
           <CardContent className="space-y-5 p-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
               <CheckCircle className="h-8 w-8" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-semibold text-green-800">
+              <h2 className="text-xl font-semibold text-success">
                 {lastSubmitted.status === 'In' ? 'IN Recorded' : 'OUT Recorded'}
               </h2>
               <p className="text-lg font-medium">{lastSubmitted.name}</p>
@@ -2400,8 +2400,8 @@ export default function AttendancePage() {
                 {lastSubmitted.status} at {lastSubmitted.time}
               </p>
             </div>
-            <div className="rounded-2xl border border-green-200 bg-white p-4 text-left text-sm">
-              <p className="font-medium text-green-700">Attendance submitted successfully</p>
+            <div className="rounded-2xl border border-success/30 bg-card p-4 text-left text-sm">
+              <p className="font-medium text-success">Attendance submitted successfully</p>
               <p className="mt-1 text-muted-foreground">
                 {lastSubmitted.status === 'In'
                   ? 'Guard is now clocked IN. Mark OUT when the shift ends.'
@@ -2423,15 +2423,15 @@ export default function AttendancePage() {
       )}
 
       {queuedAttendance.length > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="flex items-center gap-2 p-3 bg-warning/10 border border-warning/30 rounded-lg">
           {syncStatus === 'syncing' ? (
-            <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+            <Loader2 className="h-4 w-4 animate-spin text-warning-strong" />
           ) : syncStatus === 'error' ? (
-            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTriangle className="h-4 w-4 text-destructive" />
           ) : (
-            <Clock className="h-4 w-4 text-amber-600" />
+            <Clock className="h-4 w-4 text-warning-strong" />
           )}
-          <span className="text-sm text-amber-800">
+          <span className="text-sm text-warning-strong">
             {syncStatus === 'syncing' 
               ? 'Syncing...' 
               : `${queuedAttendance.length} attendance(s) pending sync`

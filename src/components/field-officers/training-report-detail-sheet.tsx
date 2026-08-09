@@ -15,11 +15,11 @@ import { CheckCircle as CheckCircle2, PencilSimple as Edit3, FileText, ImageIcon
 import type { FoTrainingReport, TrainingReportStatus } from "@/types/branch";
 
 const STATUS_CONFIG: Record<TrainingReportStatus, { label: string; className: string }> = {
-  draft:        { label: "Draft",        className: "bg-gray-100 text-gray-600" },
-  submitted:    { label: "Submitted",    className: "bg-amber-100 text-amber-700" },
-  acknowledged: { label: "Acknowledged", className: "bg-green-100 text-green-700" },
-  superseded:   { label: "Superseded",   className: "bg-slate-100 text-slate-600" },
-  archived:     { label: "Archived",     className: "bg-slate-100 text-slate-600" },
+  draft:        { label: "Draft",        className: "bg-muted text-muted-foreground" },
+  submitted:    { label: "Submitted",    className: "bg-warning/15 text-warning-strong" },
+  acknowledged: { label: "Acknowledged", className: "bg-success/15 text-success" },
+  superseded:   { label: "Superseded",   className: "bg-muted text-muted-foreground" },
+  archived:     { label: "Archived",     className: "bg-muted text-muted-foreground" },
 };
 
 function fmt(ts: { seconds: number } | string | null | undefined): string {
@@ -474,8 +474,8 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
 
           {/* Acknowledged Info */}
           {(report.status === "acknowledged" || report.reviewStatus === "reviewed") && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-              <div className="flex items-center gap-1.5 text-xs text-green-700 font-medium uppercase tracking-wide mb-2">
+            <div className="rounded-lg border border-success/30 bg-success/10 p-4">
+              <div className="flex items-center gap-1.5 text-xs text-success font-medium uppercase tracking-wide mb-2">
                 <Shield className="h-3.5 w-3.5" />Reviewed
               </div>
               {report.acknowledgedBy && <p className="text-sm">By: {report.acknowledgedBy}</p>}
@@ -486,7 +486,7 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
           {/* Review actions do not gate client publication. */}
           {canAcknowledge && !editing && (
             <div className="grid grid-cols-2 gap-2">
-              <Button onClick={handleAcknowledge} disabled={acknowledging} className="bg-green-600 hover:bg-green-700">
+              <Button onClick={handleAcknowledge} disabled={acknowledging} className="bg-success hover:bg-success/90">
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 {acknowledging ? "Saving..." : "Mark reviewed"}
               </Button>
@@ -497,7 +497,7 @@ export function TrainingReportDetailSheet({ open, onOpenChange, report, onUpdate
           )}
 
           {report.reviewStatus === "revision_requested" && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning-strong">
               <p className="font-semibold">Revision requested</p>
               {report.reviewNotes && <p className="mt-1 whitespace-pre-wrap">{report.reviewNotes}</p>}
             </div>

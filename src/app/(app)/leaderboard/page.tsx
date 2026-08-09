@@ -13,20 +13,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { SpinnerGap as Loader2, Trophy, Medal, Star, Medal as Award, TrendUp as TrendingUp, TrendDown as TrendingDown, Minus, ShieldCheck, GraduationCap } from "@phosphor-icons/react";
+import { SpinnerGap as Loader2, Trophy, Medal, Star, CheckCircle, TrendUp as TrendingUp, TrendDown as TrendingDown, Minus, ShieldCheck, GraduationCap } from "@phosphor-icons/react";
 import { format } from "date-fns";
 import { resolveAppUser } from "@/lib/auth/roles";
 import { dedupeClientOptions } from "@/lib/client-options";
 import type { GuardScore, Award as AwardType } from "@/types/evaluation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PageLoading } from "@/components/common/page-loading";
 
 const CURRENT_PERIOD = format(new Date(), "yyyy-MM");
 
 const BADGE_LABELS: Record<string, string> = {
-  best_guard_monthly: "🏆 Best Guard",
-  best_guard_quarterly: "🥇 Quarterly Champion",
-  training_star: "⭐ Training Star",
-  attendance_champion: "✅ Attendance Champion",
+  best_guard_monthly: "Best Guard",
+  best_guard_quarterly: "Quarterly Champion",
+  training_star: "Training Star",
+  attendance_champion: "Attendance Champion",
 };
 
 export default function LeaderboardPage() {
@@ -121,7 +122,7 @@ export default function LeaderboardPage() {
         }),
       });
       if (!res.ok) throw new Error();
-      toast({ title: `🏆 ${awardTarget.employeeName} awarded Best Guard for ${format(new Date(CURRENT_PERIOD + "-01"), "MMMM yyyy")}!` });
+      toast({ title: `${awardTarget.employeeName} awarded Best Guard for ${format(new Date(CURRENT_PERIOD + "-01"), "MMMM yyyy")}!` });
       setAwardDialogOpen(false);
       fetchData();
     } catch {
@@ -165,9 +166,7 @@ export default function LeaderboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-        </div>
+        <PageLoading />
       ) : scores.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4 text-center">
@@ -228,13 +227,15 @@ export default function LeaderboardPage() {
               </h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {recentAwards.slice(0, 6).map((award) => (
-                  <Card key={award.id} className="bg-amber-50 border-amber-200">
+                  <Card key={award.id} className="bg-warning/10 border-warning/30">
                     <CardContent className="p-4 flex items-center gap-3">
-                      <div className="text-2xl">🏆</div>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/15">
+                        <Trophy className="h-5 w-5 text-warning-strong" weight="fill" />
+                      </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-sm truncate">{award.employeeName}</p>
                         <p className="text-xs text-muted-foreground">{BADGE_LABELS[award.type] ?? award.type}</p>
-                        <p className="text-xs text-amber-700">{format(new Date(award.period + "-01"), "MMM yyyy")} · Score: {award.score}</p>
+                        <p className="text-xs text-warning-strong">{format(new Date(award.period + "-01"), "MMM yyyy")} · Score: {award.score}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -253,8 +254,10 @@ export default function LeaderboardPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             {awardTarget && (
-              <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="text-3xl">🏆</div>
+              <div className="flex items-center gap-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/15">
+                  <Trophy className="h-5 w-5 text-warning-strong" weight="fill" />
+                </div>
                 <div>
                   <p className="font-bold">{awardTarget.employeeName}</p>
                   <p className="text-sm text-muted-foreground">{awardTarget.clientName} · Score: {awardTarget.currentMonthScore}/100</p>
@@ -270,7 +273,8 @@ export default function LeaderboardPage() {
             <Button variant="outline" onClick={() => setAwardDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleAward} disabled={awarding} className="bg-brand-gold hover:bg-brand-gold-light text-white">
               {awarding && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              🏆 Award
+              <Trophy className="mr-2 h-4 w-4" weight="fill" />
+              Award
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -281,9 +285,9 @@ export default function LeaderboardPage() {
 
 function PodiumCard({ guard, rank, isAdmin, onAward }: { guard: GuardScore; rank: number; isAdmin: boolean; onAward: (g: GuardScore) => void }) {
   const rankConfig = [
-    { bg: "bg-amber-50 border-amber-300", icon: "🥇", label: "1st Place", textColor: "text-amber-700" },
-    { bg: "bg-gray-50 border-gray-300", icon: "🥈", label: "2nd Place", textColor: "text-gray-600" },
-    { bg: "bg-orange-50 border-orange-300", icon: "🥉", label: "3rd Place", textColor: "text-orange-700" },
+    { bg: "bg-warning/10 border-warning/40", icon: <Medal className="h-8 w-8 text-warning-strong" weight="fill" />, label: "1st Place", textColor: "text-warning-strong" },
+    { bg: "bg-muted/60 border-border", icon: <Medal className="h-8 w-8 text-muted-foreground" weight="fill" />, label: "2nd Place", textColor: "text-muted-foreground" },
+    { bg: "bg-warning/10 border-warning/40", icon: <Medal className="h-8 w-8 text-warning-strong" weight="fill" />, label: "3rd Place", textColor: "text-warning-strong" },
   ][rank - 1] ?? { bg: "", icon: `#${rank}`, label: `${rank}th`, textColor: "text-foreground" };
 
   const trend = guard.currentMonthScore - (guard.previousMonthScore ?? guard.currentMonthScore);
@@ -308,7 +312,7 @@ function PodiumCard({ guard, rank, isAdmin, onAward }: { guard: GuardScore; rank
           <span className="text-sm font-normal text-muted-foreground">/100</span>
         </div>
         {/* Trend */}
-        <div className={`flex items-center gap-1 text-xs font-medium ${trend > 0 ? "text-green-600" : trend < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+        <div className={`flex items-center gap-1 text-xs font-medium ${trend > 0 ? "text-success" : trend < 0 ? "text-destructive" : "text-muted-foreground"}`}>
           {trend > 0 ? <TrendingUp className="h-3 w-3" /> : trend < 0 ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
           {trend !== 0 ? `${trend > 0 ? "+" : ""}${trend} from last month` : "Same as last month"}
         </div>
@@ -321,8 +325,9 @@ function PodiumCard({ guard, rank, isAdmin, onAward }: { guard: GuardScore; rank
         {guard.badges?.length > 0 && (
           <div className="flex flex-wrap justify-center gap-1">
             {guard.badges.slice(0, 2).map((b) => (
-              <Badge key={b} className="text-[10px] bg-brand-gold/20 text-amber-800 border-amber-300">
-                {b.includes("best_guard") ? "🏆" : b.includes("training") ? "⭐" : "✅"}
+              <Badge key={b} className="gap-1 text-[10px] bg-brand-gold/20 text-warning-strong border-warning/40">
+                {b.includes("best_guard") ? <Trophy className="h-3 w-3" weight="fill" /> : b.includes("training") ? <Star className="h-3 w-3" weight="fill" /> : <CheckCircle className="h-3 w-3" weight="fill" />}
+                {BADGE_LABELS[b] ?? b}
               </Badge>
             ))}
           </div>
@@ -333,7 +338,7 @@ function PodiumCard({ guard, rank, isAdmin, onAward }: { guard: GuardScore; rank
             className="w-full bg-brand-gold hover:bg-brand-gold-light text-white text-xs"
             onClick={() => onAward(guard)}
           >
-            🏆 Award Best Guard
+            <Trophy className="mr-1 h-3.5 w-3.5" weight="fill" /> Award Best Guard
           </Button>
         )}
       </CardContent>
@@ -342,8 +347,8 @@ function PodiumCard({ guard, rank, isAdmin, onAward }: { guard: GuardScore; rank
 }
 
 function RankingRow({ guard, rank, isAdmin, onAward }: { guard: GuardScore; rank: number; isAdmin: boolean; onAward: (g: GuardScore) => void }) {
-  const rankIcon = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
-  const scoreColor = guard.currentMonthScore >= 80 ? "text-green-600" : guard.currentMonthScore >= 60 ? "text-amber-600" : "text-red-500";
+  const rankIcon = rank === 1 ? <Medal className="h-4 w-4 text-warning-strong" weight="fill" /> : rank === 2 ? <Medal className="h-4 w-4 text-muted-foreground" weight="fill" /> : rank === 3 ? <Medal className="h-4 w-4 text-warning-strong" weight="fill" /> : null;
+  const scoreColor = guard.currentMonthScore >= 80 ? "text-success" : guard.currentMonthScore >= 60 ? "text-warning-strong" : "text-destructive";
 
   return (
     <Card>
