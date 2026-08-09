@@ -441,7 +441,7 @@ export default function LandingPage({
                     <h2 id="attendance-title" className="mt-2 font-exo2 text-2xl font-bold tracking-tight lg:text-[2rem]">
                       Your duty starts here
                     </h2>
-                    <p className="mt-1 max-w-md text-sm leading-5 text-white/70 lg:leading-6 lg:text-white/62">
+                    <p className="mt-1 max-w-md text-sm leading-5 text-white/70 lg:leading-6 lg:text-white/75">
                       Mark attendance, enrol as a new guard, and access duty services securely.
                     </p>
                   </div>
@@ -472,7 +472,7 @@ export default function LandingPage({
                       onChange={(event) =>
                         setPhoneNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
                       }
-                      className="h-14 rounded-xl bg-background/65 pl-12 pr-4 text-base shadow-inner focus-visible:border-accent focus-visible:ring-accent/25 dark:bg-background/45"
+                      className="h-14 md:h-14 rounded-xl bg-background/65 pl-12 pr-4 text-base shadow-inner focus-visible:border-accent focus-visible:ring-accent/25 dark:bg-background/45"
                       maxLength={10}
                       disabled={isLoading}
                       onKeyDown={(event) => {
@@ -493,7 +493,7 @@ export default function LandingPage({
                 <Button
                   variant="brand"
                   onClick={handleContinue}
-                  className="mt-4 h-14 w-full rounded-xl text-sm font-bold sm:text-base"
+                  className="mt-4 h-14 md:h-14 md:min-h-14 w-full rounded-xl text-sm font-bold sm:text-base"
                   disabled={isLoading || normalizedPhone.length < 10}
                 >
                   {isLoading ? (
