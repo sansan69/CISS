@@ -18,7 +18,61 @@ export async function PATCH(
     const body = (await request.json()) as {
       name?: string;
       assignedDistricts?: string[];
+      password?: string;
     };
+
+    // Only admins can reach this route (requireAdmin above). Passwords are
+    // updated on the Firebase Auth user only — never stored in Firestore.
+    const nextPassword = String(body.password ?? "").trim();
+    if (nextPassword && nextPassword.length < 6) {
+      return NextResponse.json(
+        { error: "Password must be at least 6 characters long." },
+        { status: 400 }
+      );
+    }
+
+    // Apply the auth password change before touching Firestore so a failed
+    // auth update never leaves a half-applied officer edit behind.
+    if (nextPassword) {
+      const officerSnap = await adminDb.collection("fieldOfficers").doc(id).get();
+      if (!officerSnap.exists) {
+        return NextResponse.json({ error: "Field officer not found." }, { status: 404 });
+      }
+      const officerData = officerSnap.data() as { uid?: string } | undefined;
+      if (!officerData?.uid) {
+        return NextResponse.json(
+          { error: "This field officer has no linked auth user to update." },
+          { status: 400 }
+        );
+      }
+      await adminAuth.updateUser(officerData.uid, { password: nextPassword });
+    }
+
+    const auditEvents = [
+      buildServerAuditEvent(
+        "field_officer_updated",
+        {
+          uid: adminUser.uid,
+          email: adminUser.email,
+        },
+        {
+          assignedDistricts: body.assignedDistricts ?? null,
+          name: body.name?.trim() ?? null,
+        },
+      ),
+    ];
+    if (nextPassword) {
+      auditEvents.push(
+        buildServerAuditEvent(
+          "field_officer_password_updated",
+          {
+            uid: adminUser.uid,
+            email: adminUser.email,
+          },
+          { passwordUpdated: true },
+        ),
+      );
+    }
 
     await adminDb.collection("fieldOfficers").doc(id).update({
       ...(body.name ? { name: body.name.trim() } : {}),
@@ -27,19 +81,7 @@ export async function PATCH(
         uid: adminUser.uid,
         email: adminUser.email,
       }),
-      auditTrail: FieldValue.arrayUnion(
-        buildServerAuditEvent(
-          "field_officer_updated",
-          {
-            uid: adminUser.uid,
-            email: adminUser.email,
-          },
-          {
-            assignedDistricts: body.assignedDistricts ?? null,
-            name: body.name?.trim() ?? null,
-          },
-        ),
-      ),
+      auditTrail: FieldValue.arrayUnion(...auditEvents),
     });
 
     // Sync assignedDistricts to Firebase Auth custom claims so the security

@@ -129,6 +129,8 @@ const OfficerForm: React.FC<{
     const [nameError, setNameError] = useState<string | null>(null);
     const [emailInput, setEmailInput] = useState<string>("");
     const [passwordInput, setPasswordInput] = useState<string>("");
+    const [confirmPasswordInput, setConfirmPasswordInput] = useState<string>("");
+    const [passwordError, setPasswordError] = useState<string | null>(null);
     const [customDistrict, setCustomDistrict] = useState("");
     const [isVerifyingUser, setIsVerifyingUser] = useState(false);
     const { toast } = useToast();
@@ -167,6 +169,7 @@ const OfficerForm: React.FC<{
     const validate = () => {
         let isValid = true;
         setNameError(null);
+        setPasswordError(null);
 
         if (!name.trim()) {
             setNameError('Officer name cannot be empty.');
@@ -176,7 +179,20 @@ const OfficerForm: React.FC<{
         if (!isEditing && !selectedUser && !(emailInput && passwordInput)) {
             isValid = false;
         }
-        
+
+        if (isEditing) {
+            if (passwordInput && passwordInput.length < 6) {
+                setPasswordError('Password must be at least 6 characters long.');
+                isValid = false;
+            } else if (passwordInput && passwordInput !== confirmPasswordInput) {
+                setPasswordError('Passwords do not match.');
+                isValid = false;
+            } else if (!passwordInput && confirmPasswordInput) {
+                setPasswordError('Enter a new password to confirm.');
+                isValid = false;
+            }
+        }
+
         return isValid;
     };
 
@@ -219,8 +235,15 @@ const OfficerForm: React.FC<{
           assignedDistricts,
           email: userForOfficer?.email,
           uid: userForOfficer?.uid,
-          ...(isEditing && { id: officer?.id })
+          ...(isEditing && {
+            id: officer?.id,
+            password: passwordInput || undefined,
+          })
         };
+        
+        setPasswordInput("");
+        setConfirmPasswordInput("");
+        setPasswordError(null);
         
         onSave({ officerData, isEditing });
     };
@@ -309,6 +332,27 @@ const OfficerForm: React.FC<{
                 />
                 {nameError && <p className="text-sm text-destructive">{nameError}</p>}
             </div>
+            {isEditing && (
+                <div className="grid gap-2 rounded-md border p-3">
+                    <Label>Reset Password</Label>
+                    <Input
+                        type="password"
+                        placeholder="New password (min 6 characters)"
+                        value={passwordInput}
+                        onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
+                        className={passwordError ? 'border-destructive' : ''}
+                    />
+                    <Input
+                        type="password"
+                        placeholder="Confirm new password"
+                        value={confirmPasswordInput}
+                        onChange={(e) => { setConfirmPasswordInput(e.target.value); setPasswordError(null); }}
+                        className={passwordError ? 'border-destructive' : ''}
+                    />
+                    {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+                    <p className="text-xs text-muted-foreground">Leave blank to keep the current password.</p>
+                </div>
+            )}
             <div className="grid gap-2">
                 <Label>Assign Districts</Label>
                 <div className="flex flex-col gap-2 rounded-md border p-3">
@@ -507,6 +551,7 @@ export default function FieldOfficersPage() {
             body: JSON.stringify({
                 name: officerData.name,
                 assignedDistricts: officerData.assignedDistricts,
+                ...(officerData.password ? { password: officerData.password } : {}),
             }),
         });
         const data = await response.json().catch(() => ({}));
