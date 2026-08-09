@@ -57,7 +57,8 @@ One brand blue + one gold accent. No purple/blue neon, no pure black.
 
 - **Curves:** Emil Kowalski set — `--ease-out` cubic-bezier(0.23,1,0.32,1), `ease-spring` cubic-bezier(0.16,1,0.3,1), `ease-drawer` for sheets. No linear easing
 - **Reveals:** `animate-slide-down` page headers, `animate-slide-up` stat cards with `.stagger-1..4` cascades, `animate-scale-in`/`scale-bounce` dialogs
-- **Perpetual micro-loops:** live status pulse dots (`animate-ping` on the PageLoading badge, `status-dot` colors), shimmer skeletons. Restrained — no decorative looping elsewhere
+- **Perpetual micro-loops:** live status pulse dots (`animate-ping` on the PageLoading badge, `status-dot` colors, `LiveClock`'s green pulse), shimmer skeletons, and the ticking `LiveClock` in the top bar + dashboard header (IST, `Asia/Kolkata`). Restrained — no decorative looping elsewhere
+- **Command palette:** global ⌘K / Ctrl+K palette (`components/common/command-palette.tsx`) — keyboard-driven navigation over role-visible pages, settings, and actions; ↑/↓ + Enter selection; Esc close. Trigger affordance in the desktop top bar (Search… ⌘K) and mobile header search icon
 - **Interactions:** `card-interactive` hover lift (border tint + shadow), `press-scale`/`active:scale-[0.97]` tactile presses, `transition-colors duration-150` on links
 - **Performance:** transform/opacity animations only; `prefers-reduced-motion` globally disables animation; hover transforms gated off touch devices
 - **Icons:** Phosphor family everywhere; icon + short label pattern on buttons; inline icon bubbles `stat-icon` (h-10 w-10 rounded-xl)
