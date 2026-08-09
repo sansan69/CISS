@@ -242,7 +242,7 @@ describe("field officer guards route", () => {
     ]);
   });
 
-  it("orders the employee list by enrollment date descending across current and legacy timestamps", async () => {
+  it("orders the employee list by enrollment date descending (newest first) and exposes createdAt", async () => {
     const db = new FakeFirestore();
     db.seed("fieldOfficers", "fo-1", {
       uid: "fo-1",
@@ -285,9 +285,14 @@ describe("field officer guards route", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toEqual([
-      "G-OLD",
-      "G-MIDDLE",
       "G-NEW",
+      "G-MIDDLE",
+      "G-OLD",
+    ]);
+    expect(payload.guards).toEqual([
+      expect.objectContaining({ employeeId: "G-NEW", createdAt: "2026-08-05T08:00:00.000Z" }),
+      expect.objectContaining({ employeeId: "G-MIDDLE", createdAt: "2026-07-15T08:00:00.000Z" }),
+      expect.objectContaining({ employeeId: "G-OLD", createdAt: "2026-01-01T00:00:00.000Z" }),
     ]);
   });
 });

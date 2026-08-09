@@ -75,6 +75,7 @@ export function serializeGuardProfileView(
     jobDesignation: normalizeText(data.jobDesignation || data.lngJobDesignation),
     district: resolveEmployeeDistrict(data),
     joiningDate: serializeDate(data.joiningDate),
+    createdAt: serializeDate(data.createdAt),
     exitDate: serializeDate(data.exitDate),
     status: normalizeText(data.status || "Active") || "Active",
     phoneNumber: normalizeText(data.phoneNumber || data.mobileNumber || data.phone),

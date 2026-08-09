@@ -182,20 +182,24 @@ export async function GET(request: Request) {
         return employeeMatchesAnyDistrict(employee, districtScope);
       })
       .sort((left, right) => {
+        // Newest enrolled guard first; name breaks ties for same-moment records.
+        const byEnrollment = right.enrollmentTime - left.enrollmentTime;
+        if (byEnrollment !== 0) return byEnrollment;
         const byName = normalizeText(left.employee.fullName).localeCompare(
           normalizeText(right.employee.fullName),
         );
         if (byName !== 0) return byName;
-        const byEnrollment = right.enrollmentTime - left.enrollmentTime;
-        if (byEnrollment !== 0) return byEnrollment;
         return left.doc.id.localeCompare(right.doc.id);
       })
-      .map(({ employee }) => {
+      .map(({ employee, enrollmentTime }) => {
         const profile = serializeGuardProfileView(String(employee.id), employee);
         return {
           ...profile,
           district: resolveEmployeeDistrict(employee),
           joiningDate: profile.joiningDate || "",
+          // ISO string so the roster can render "Enrolled <date>"; falls back to
+          // document creation time for legacy records without a stored timestamp.
+          createdAt: new Date(enrollmentTime).toISOString(),
         };
       });
     const limitedGuards = guards.slice(0, resultLimit);
