@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
-import { dedupeClientOptions } from "@/lib/client-options";
+import { dedupeClientOptions, isClientPortalEnabled } from "@/lib/client-options";
 import { resolveClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
 
 export const runtime = "nodejs";
@@ -40,7 +40,9 @@ export async function GET() {
     });
 
     const clients = dedupeClientOptions(
-      clientSnapshot.docs.map((doc) => mapClient(doc.id, doc.data() as Record<string, unknown>)),
+      clientSnapshot.docs
+        .filter((doc) => isClientPortalEnabled(doc.data()))
+        .map((doc) => mapClient(doc.id, doc.data() as Record<string, unknown>)),
     );
 
     clients.sort((a, b) => {

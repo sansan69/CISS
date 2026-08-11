@@ -5,6 +5,7 @@ import {
 import {
   assertAadhaarSourceOwnership,
   documentCompletionFromEmployee,
+  getAadhaarFileExtension,
   restrictedAadhaarDocument,
   restrictedAadhaarPaths,
   validateAadhaarNumber,
@@ -38,6 +39,12 @@ describe("Aadhaar restricted access", () => {
   it("performs syntax validation without claiming Aadhaar verification", () => {
     expect(validateAadhaarNumber("1234 5678 9012")).toBe("123456789012");
     expect(() => validateAadhaarNumber("1234")).toThrow();
+  });
+
+  it("accepts the WebP format produced by browser enrollment uploads", () => {
+    expect(getAadhaarFileExtension("image/webp")).toBe("webp");
+    expect(getAadhaarFileExtension("image/jpeg")).toBe("jpg");
+    expect(getAadhaarFileExtension("image/svg+xml")).toBeNull();
   });
 
   it("only accepts Aadhaar files from the active draft or admin staging session", () => {

@@ -16,8 +16,16 @@ const MAX_AADHAAR_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
+  // The enrollment form compresses browser-selected images to WebP before
+  // upload. Keep the restricted-storage validator in sync with that client
+  // contract instead of rejecting every public enrollment at final save.
+  ["image/webp", "webp"],
   ["application/pdf", "pdf"],
 ]);
+
+export function getAadhaarFileExtension(contentType: string | undefined) {
+  return contentType ? ALLOWED_FILE_TYPES.get(contentType) ?? null : null;
+}
 
 export class AadhaarSourceOwnershipError extends Error {
   constructor() {
@@ -139,9 +147,9 @@ async function validateAadhaarFile(buffer: Buffer) {
     throw new Error("Aadhaar copy must be a non-empty file no larger than 5 MB.");
   }
   const detected = await fileTypeFromBuffer(buffer);
-  const extension = detected && ALLOWED_FILE_TYPES.get(detected.mime);
+  const extension = detected && getAadhaarFileExtension(detected.mime);
   if (!detected || !extension) {
-    throw new Error("Aadhaar copy must be a JPEG, PNG, or PDF file.");
+    throw new Error("Aadhaar copy must be a JPEG, PNG, WebP, or PDF file.");
   }
   return { contentType: detected.mime, extension };
 }

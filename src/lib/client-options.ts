@@ -3,6 +3,10 @@ export interface BasicClientOption {
   name: string;
 }
 
+export function isClientPortalEnabled(client: { portalEnabled?: unknown }) {
+  return client.portalEnabled !== false;
+}
+
 export function dedupeClientOptions<T extends BasicClientOption>(clients: T[]): T[] {
   const seenNames = new Set<string>();
 
