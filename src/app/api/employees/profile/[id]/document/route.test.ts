@@ -211,6 +211,40 @@ describe("GET /api/employees/profile/[id]/document", () => {
     expect(await response.text()).toBe("service-book");
   });
 
+  it("always returns the highest qualification certificate as a PDF", async () => {
+    const db = new FakeDb();
+    db.seedEmployee("guard-qualification", {
+      employeeId: "G-QUAL",
+      clientName: "TCS",
+      district: "Ernakulam",
+      qualificationCertificateUrl: "employees/guard-qualification/qualificationCertificates/highest-qualification.png",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({
+      db,
+      storage: {
+        bucket: () => ({
+          name: "test-bucket",
+          file: () => ({
+            download: async () => [Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")],
+            getMetadata: async () => [{ contentType: "image/png" }],
+          }),
+        }),
+      },
+    }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "admin-user", role: "admin" });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/employees/profile/guard-qualification/document?category=qualification-certificate&download=true"),
+      { params: Promise.resolve({ id: "guard-qualification" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/pdf");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="highest-qualification.pdf"');
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
   it("does not expose bank documents to client accounts", async () => {
     const db = new FakeDb();
     verifyRequestAuthMock.mockResolvedValue({ uid: "client-user", role: "client" });

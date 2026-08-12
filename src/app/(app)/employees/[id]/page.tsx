@@ -259,7 +259,8 @@ const DocumentItem: React.FC<{
   type?: string;
   onView?: () => void;
   onDownload?: () => void;
-}> = ({ name, url, type, onView, onDownload }) => (
+  downloadLabel?: string;
+}> = ({ name, url, type, onView, onDownload, downloadLabel = "Download" }) => (
     <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center gap-3">
             <FileUp className="h-5 w-5 text-primary" />
@@ -276,16 +277,22 @@ const DocumentItem: React.FC<{
                 </Button>
                 {onDownload && (
                   <Button variant="outline" size="sm" onClick={onDownload}>
-                    <Download className="mr-2 h-4 w-4" /> Download
+                    <Download className="mr-2 h-4 w-4" /> {downloadLabel}
                   </Button>
                 )}
               </div>
             ) : (
-              <Button variant="outline" size="sm" asChild>
-                  <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
-                      <Download className="mr-2 h-4 w-4" /> View/Download
-                  </a>
-              </Button>
+              onDownload ? (
+                <Button variant="outline" size="sm" onClick={onDownload}>
+                  <Download className="mr-2 h-4 w-4" /> {downloadLabel}
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" asChild>
+                    <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
+                        <Download className="mr-2 h-4 w-4" /> View/Download
+                    </a>
+                </Button>
+              )
             )
         ) : (
             <Badge variant="outline">Not Uploaded</Badge>
@@ -2097,7 +2104,7 @@ export default function AdminEmployeeProfilePage() {
                             {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Arms License" url={isAdminView ? employee.armsLicenseDocumentUrl : undefined} onView={isFieldOfficerView && hasArmsLicenseDocument ? () => void viewGuardDocument("arms-license") : undefined} onDownload={isFieldOfficerView && hasArmsLicenseDocument ? () => void downloadGuardDocument("arms-license") : undefined} type="Arms License" />}
                             {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Passport Copy" url={isAdminView ? employee.passportDocumentUrl : undefined} onView={isFieldOfficerView && hasPassportDocument ? () => void viewGuardDocument("passport") : undefined} onDownload={isFieldOfficerView && hasPassportDocument ? () => void downloadGuardDocument("passport") : undefined} type="Passport" />}
                             {canViewOperationalDetails && <DocumentItem name="Police Clearance Certificate" url={isAdminView ? employee.policeClearanceCertificateUrl : undefined} onView={isFieldOfficerView && hasPoliceClearanceDocument ? () => void viewGuardDocument("police-clearance") : undefined} onDownload={isFieldOfficerView && hasPoliceClearanceDocument ? () => void downloadGuardDocument("police-clearance") : undefined} type="Police Verification" />}
-                            <DocumentItem name="Highest Qualification Certificate" url={isAdminView ? employee.qualificationCertificateUrl : undefined} onView={!isAdminView && hasQualificationCertificate ? () => void viewGuardDocument("qualification-certificate") : undefined} onDownload={!isAdminView && hasQualificationCertificate ? () => void downloadGuardDocument("qualification-certificate") : undefined} type={employee.qualificationName || "Education Certificate"} />
+                            <DocumentItem name="Highest Qualification Certificate" onView={!isAdminView && hasQualificationCertificate ? () => void viewGuardDocument("qualification-certificate") : undefined} onDownload={hasQualificationCertificate ? () => void downloadGuardDocument("qualification-certificate") : undefined} downloadLabel="Download PDF" type={employee.qualificationName || "Education Certificate"} />
                         </div>
                     </div>
                   </div>
