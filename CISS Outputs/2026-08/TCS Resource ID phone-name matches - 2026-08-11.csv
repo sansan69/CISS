@@ -1,0 +1,5 @@
+category,employeeId,name,phone,district,currentResourceId,proposedResourceId,matchType,sourceVia,sourceName,candidateIds,sourceNameCount,sourceKinds,reason
+applied_phone_full_name,CISS/TCS/2025-26/618,ANJANA  P,7034079006,Kannur,424265,424245,phone+full_name,email_raw_biometric,ANJANA P,424245,1,email_raw_biometric,Unique phone and full-name match; verified after resourceIdNumber-only update
+applied_phone_full_name,CISS/TCS/2025-26/677,SYAMJITH M S,9995562368,Thrissur,219552,219252,phone+full_name,email_raw_biometric,SYAMJITH MS,219252,1,email_raw_biometric,Unique phone and full-name match; verified after resourceIdNumber-only update
+applied_phone_full_name,CISS/TCS/2026-27/009,GOWTHAM KRISHNAN,9526315817,Kannur,00,568309,phone+full_name,email_raw_biometric,Gowtham Krishnan | GOWTHAM KRISHNAN,568309,1,email_raw_biometric,Unique phone and full-name match; verified after resourceIdNumber-only update
+applied_phone_full_name,CISS/TCS/2026-27/621,ASWANTH K,8590089530,Kannur,00,568310,phone+full_name,email_raw_biometric,aswanth k,568310,1,email_raw_biometric,Unique phone and full-name match; verified after resourceIdNumber-only update

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { fileTypeFromBuffer } from "file-type";
+import sharp from "sharp";
 import { adminApp, storage } from "@/lib/firebaseAdmin";
 import {
   AADHAAR_CONSENT_TEXT,
@@ -16,10 +17,15 @@ const MAX_AADHAAR_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_FILE_TYPES = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
-  // The enrollment form compresses browser-selected images to WebP before
-  // upload. Keep the restricted-storage validator in sync with that client
-  // contract instead of rejecting every public enrollment at final save.
+  ["image/avif", "png"],
+  ["image/bmp", "png"],
+  ["image/gif", "png"],
+  ["image/heic", "png"],
+  ["image/heif", "png"],
+  ["image/jxl", "png"],
   ["image/webp", "webp"],
+  ["image/tiff", "png"],
+  ["image/svg+xml", "png"],
   ["application/pdf", "pdf"],
 ]);
 
@@ -147,11 +153,19 @@ async function validateAadhaarFile(buffer: Buffer) {
     throw new Error("Aadhaar copy must be a non-empty file no larger than 5 MB.");
   }
   const detected = await fileTypeFromBuffer(buffer);
-  const extension = detected && getAadhaarFileExtension(detected.mime);
-  if (!detected || !extension) {
-    throw new Error("Aadhaar copy must be a JPEG, PNG, WebP, or PDF file.");
+  if (detected?.mime === "application/pdf" || buffer.subarray(0, 1024).includes(Buffer.from("%PDF-"))) {
+    return { buffer, contentType: "application/pdf", extension: "pdf" };
   }
-  return { contentType: detected.mime, extension };
+
+  // Decode and normalize every raster/vector image format supported by
+  // sharp. Restricted Aadhaar storage receives a predictable PNG regardless
+  // of the source format, while PDFs remain byte-for-byte unchanged.
+  try {
+    const normalized = await sharp(buffer).rotate().png().toBuffer();
+    return { buffer: normalized, contentType: "image/png", extension: "png" };
+  } catch {
+    throw new Error("Aadhaar copy must be a valid image file or PDF.");
+  }
 }
 
 function resolveSameBucketPath(source: string) {
@@ -212,7 +226,7 @@ export async function saveAadhaarStagingBuffer(args: {
   }
   const validated = await validateAadhaarFile(args.buffer);
   const storagePath = `restrictedAadhaarStaging/${args.uploaderUid}/${crypto.randomUUID()}.${validated.extension}`;
-  await storage.bucket().file(storagePath).save(args.buffer, {
+  await storage.bucket().file(storagePath).save(validated.buffer, {
     resumable: false,
     metadata: {
       contentType: validated.contentType,
@@ -234,7 +248,7 @@ export async function saveRestrictedAadhaarBuffer(args: {
   const validated = await validateAadhaarFile(args.buffer);
   const documentId = crypto.randomUUID();
   const storagePath = `restrictedEmployeeAadhaar/${args.employeeDocId}/${documentId}.${validated.extension}`;
-  await storage.bucket().file(storagePath).save(args.buffer, {
+  await storage.bucket().file(storagePath).save(validated.buffer, {
     resumable: false,
     metadata: {
       contentType: validated.contentType,

@@ -154,4 +154,49 @@ describe("public attendance identification", () => {
     expect(body.verificationToken).toBeNull();
     expect(body.employee.id).toBe("employee-doc-1");
   });
+
+  it("identifies a guard by resource ID and issues a signed proof", async () => {
+    vi.stubEnv("ATTENDANCE_VERIFICATION_SECRET", "test-secret");
+    const db = createFirestore([
+      {
+        id: "employee-doc-2",
+        data: {
+          employeeId: "CISS/TEST/002",
+          resourceIdNumber: "RES-002",
+          fullName: "Resource Guard",
+          status: "Active",
+        },
+      },
+    ]);
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    vi.doMock("@/lib/server/rate-limit", () => ({
+      getClientIp: vi.fn(() => "127.0.0.1"),
+      buildRateLimitKey: vi.fn(() => "key"),
+      checkRateLimit: vi.fn(async () => ({ allowed: true })),
+    }));
+    vi.doMock("@/lib/server/guard-auth", () => ({
+      requireGuard: vi.fn(),
+    }));
+
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("https://example.test/api/public/attendance/identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "resourceId",
+          value: "RES-002",
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.employee).toMatchObject({
+      id: "employee-doc-2",
+      employeeCode: "CISS/TEST/002",
+      fullName: "Resource Guard",
+    });
+    expect(body.verificationToken).toEqual(expect.any(String));
+  });
 });

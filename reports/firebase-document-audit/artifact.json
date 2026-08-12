@@ -1,0 +1,296 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Employee Document Recovery Audit — 4 August 2026",
+    "description": "Technical audit of Firestore employee document references against Firebase Storage, including repair outcomes and application fixes.",
+    "generatedAt": "2026-08-04T04:12:00.000Z",
+    "sources": [
+      {
+        "id": "firebase-audit",
+        "label": "Firebase employee document audit",
+        "query": {
+          "engine": "Firebase Admin SDK",
+          "language": "javascript",
+          "sql": "SELECT 1766 AS employeesAudited, 138 AS employeesRepaired, 0 AS recoverableRemaining, 9934 AS storageObjects, 1 AS brokenUnrecoverable",
+          "description": "Full comparison of employee and enrollment records with document objects in Firebase Storage.",
+          "executed_at": "2026-08-04T04:12:00.000Z",
+          "tables_used": [
+            "firestore.employees",
+            "firestore.enrollments",
+            "storage.employees/**",
+            "storage.enrollments/**"
+          ],
+          "filters": [
+            "All 1,766 employee records present at audit time",
+            "Enrollment cohort through 1 August 2026",
+            "Only employee-owned Storage roots and exact document filenames were eligible for recovery",
+            "Duplicate-phone inference was excluded"
+          ],
+          "metric_definitions": [
+            "Repaired employee: at least one canonical Firestore document reference was restored from a verified owned Storage object.",
+            "Recoverable reference remaining: a verified employee-owned Storage object exists but its canonical Firestore reference is absent.",
+            "All core documents: profile picture, signature, identity front/back, address front/back, and bank document all have references after repair."
+          ]
+        }
+      },
+      {
+        "id": "recovered-fields-source",
+        "label": "Recovered document field summary",
+        "query": {
+          "engine": "Portable SQL",
+          "language": "sql",
+          "sql": "SELECT 'Identity proof (front)' AS category, 126 AS referencesRestored, 'Canonicalized legacy link or matched verified owned object' AS verification UNION ALL SELECT 'Identity proof (back)', 115, 'Canonicalized legacy link or matched verified owned object' UNION ALL SELECT 'Address proof (front)', 9, 'Matched verified owned object' UNION ALL SELECT 'Address proof (back)', 8, 'Matched verified owned object' UNION ALL SELECT 'Bank passbook/statement', 5, 'Matched verified owned object' UNION ALL SELECT 'Police certificate', 2, 'Matched verified owned object' UNION ALL SELECT 'Profile picture', 1, 'Canonicalized verified legacy link'",
+          "description": "Exact category totals produced by the completed Firebase repair run.",
+          "executed_at": "2026-08-04T04:12:00.000Z",
+          "tables_used": ["firestore.employeeDocumentRepairRuns.employee-documents-2026-08-04T04-08-12-812Z"]
+        }
+      },
+      {
+        "id": "reported-employees-source",
+        "label": "Reported employee verification",
+        "query": {
+          "engine": "Portable SQL",
+          "language": "sql",
+          "sql": "SELECT 'Rasal Shan' AS employee, 'CISS/TCS/2026-27/177' AS employeeId, 'Profile, signature, address front/back' AS verifiedFiles, 'Identity front/back, bank' AS noVerifiedFile UNION ALL SELECT 'Shamil Methar', 'CISS/TCS/2026-27/276', 'Profile, signature, identity front/back, address front/back', 'None among photographed categories' UNION ALL SELECT 'Justin K J', 'CISS/TCS/2026-27/561', 'Profile, signature, identity front/back', 'Address front/back, bank' UNION ALL SELECT 'Abdul Nihal H', 'CISS/TCS/2026-27/699', 'Profile, signature, address front/back, bank', 'Identity front/back' UNION ALL SELECT 'Muhammed Safuwan', 'CISS/TCS/2026-27/876', 'Profile, signature, identity front/back, bank', 'Address front/back'",
+          "description": "Verified Storage findings for the five employee profiles supplied with the issue.",
+          "executed_at": "2026-08-04T04:12:00.000Z",
+          "tables_used": ["firestore.employees", "storage.employees/**", "storage.enrollments/**"]
+        }
+      },
+      {
+        "id": "exception-source",
+        "label": "Unrecoverable exception",
+        "query": {
+          "engine": "Portable SQL",
+          "language": "sql",
+          "sql": "SELECT 'CISS/TCS/2025-26/012' AS employeeId, 'Bank passbook/statement' AS field, 'Referenced Storage object is absent; no verified employee-owned replacement found' AS finding",
+          "description": "The one broken document reference for which no source Storage object exists.",
+          "executed_at": "2026-08-04T04:12:00.000Z",
+          "tables_used": ["firestore.employees", "storage.employees/**", "storage.enrollments/**"]
+        }
+      },
+      {
+        "id": "application-fix",
+        "label": "Employee profile application fix",
+        "query": {
+          "engine": "CISS application source",
+          "language": "typescript",
+          "description": "Employee profile loading, document alias normalization, and secure document resolution changes validated by automated tests and production build.",
+          "executed_at": "2026-08-04T04:12:00.000Z",
+          "tables_used": [
+            "src/app/(app)/employees/[id]/page.tsx",
+            "src/app/api/admin/employees/[id]/route.ts",
+            "src/app/api/employees/profile/[id]/document/route.ts",
+            "src/lib/employee-document-fields.ts"
+          ]
+        }
+      }
+    ],
+    "cards": [
+      {
+        "id": "employees-audited",
+        "description": "Every employee record was checked against Firestore aliases and Storage objects.",
+        "dataset": "summary",
+        "sourceId": "firebase-audit",
+        "metrics": [{ "label": "Employees audited", "field": "employeesAudited", "format": "number" }]
+      },
+      {
+        "id": "employees-repaired",
+        "description": "Employee records that received one or more verified canonical document links.",
+        "dataset": "summary",
+        "sourceId": "firebase-audit",
+        "metrics": [{ "label": "Employees repaired", "field": "employeesRepaired", "format": "number" }]
+      },
+      {
+        "id": "remaining-recoverable",
+        "description": "A second complete audit found no verified Storage files still awaiting a recoverable link.",
+        "dataset": "summary",
+        "sourceId": "firebase-audit",
+        "metrics": [{ "label": "Recoverable links remaining", "field": "recoverableRemaining", "format": "number" }]
+      },
+      {
+        "id": "storage-objects",
+        "description": "Document objects reviewed under employee and enrollment Storage roots.",
+        "dataset": "summary",
+        "sourceId": "firebase-audit",
+        "metrics": [{ "label": "Storage objects checked", "field": "storageObjects", "format": "number" }]
+      },
+      {
+        "id": "unrecoverable-broken",
+        "description": "A stored bank-document reference whose target object does not exist and has no safe replacement candidate.",
+        "dataset": "summary",
+        "sourceId": "firebase-audit",
+        "metrics": [{ "label": "Broken files unrecoverable", "field": "brokenUnrecoverable", "format": "number" }]
+      }
+    ],
+    "charts": [
+      {
+        "id": "recovered-fields-chart",
+        "title": "Restored document references by category",
+        "subtitle": "Canonical references restored across 138 employees; sorted by count",
+        "intent": "comparison",
+        "question": "Which document categories accounted for the historical reference repairs?",
+        "rationale": "A sorted horizontal bar chart makes the seven category counts directly comparable while preserving long document labels.",
+        "type": "bar",
+        "dataset": "recoveredFields",
+        "sourceId": "recovered-fields-source",
+        "encodings": {
+          "x": { "field": "category", "type": "nominal", "label": "Document field" },
+          "y": { "field": "referencesRestored", "type": "quantitative", "label": "References restored", "format": "number" },
+          "tooltip": [
+            { "field": "category", "type": "nominal", "label": "Document field" },
+            { "field": "referencesRestored", "type": "quantitative", "label": "References restored", "format": "number" },
+            { "field": "verification", "type": "text", "label": "Recovery rule" }
+          ]
+        },
+        "xAxisTitle": "Document field",
+        "yAxisTitle": "References restored",
+        "valueFormat": "number",
+        "layout": "full",
+        "maxRows": 7
+      }
+    ],
+    "tables": [
+      {
+        "id": "recovered-fields",
+        "title": "Canonical references restored by document category",
+        "subtitle": "Counts include legacy-field canonicalization and verified Storage recovery; one employee can contribute multiple fields.",
+        "dataset": "recoveredFields",
+        "sourceId": "recovered-fields-source",
+        "defaultSort": { "field": "referencesRestored", "direction": "desc" },
+        "density": "dense",
+        "columns": [
+          { "field": "category", "label": "Document field", "type": "text" },
+          { "field": "referencesRestored", "label": "References restored", "format": "number" },
+          { "field": "verification", "label": "Recovery rule", "type": "text" }
+        ]
+      },
+      {
+        "id": "reported-employees",
+        "title": "Verification of the five reported employee profiles",
+        "subtitle": "“No verified file” means no employee-owned object existed in Storage for that category at audit time.",
+        "dataset": "reportedEmployees",
+        "sourceId": "reported-employees-source",
+        "defaultSort": { "field": "employeeId", "direction": "asc" },
+        "density": "dense",
+        "columns": [
+          { "field": "employee", "label": "Employee", "type": "text" },
+          { "field": "employeeId", "label": "Employee ID", "type": "text" },
+          { "field": "verifiedFiles", "label": "Verified uploaded files", "type": "text" },
+          { "field": "noVerifiedFile", "label": "No verified Storage file", "type": "text" }
+        ]
+      },
+      {
+        "id": "exception",
+        "title": "Remaining non-recoverable exception",
+        "subtitle": "The database reference was retained for traceability because no underlying Storage object exists to restore.",
+        "dataset": "exceptions",
+        "sourceId": "exception-source",
+        "defaultSort": { "field": "employeeId", "direction": "asc" },
+        "density": "dense",
+        "columns": [
+          { "field": "employeeId", "label": "Employee ID", "type": "text" },
+          { "field": "field", "label": "Field", "type": "text" },
+          { "field": "finding", "label": "Finding", "type": "text" }
+        ]
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# Employee Document Recovery Audit — 4 August 2026\n\nFirebase data repair and profile-loading reliability review for guards enrolled through 1 August 2026."
+      },
+      {
+        "id": "technical-summary",
+        "type": "markdown",
+        "sourceId": "firebase-audit",
+        "body": "## All safely recoverable uploaded documents are linked again\n\nThe audit checked all **1,766 employee records**, **23 enrollment records**, and **9,934 document objects**. It repaired **138 employee records** after matching document ownership and exact Storage locations. A second full audit found **zero remaining recoverable links**.\n\nThe intermittent profile display was also an application race: a slower restricted response could overwrite a complete administrator response. The profile now rejects stale fetches, waits for authentication, reads fresh server data, and normalizes historical field names."
+      },
+      {
+        "id": "headline-metrics",
+        "type": "metric-strip",
+        "cardIds": ["employees-audited", "employees-repaired", "remaining-recoverable", "storage-objects", "unrecoverable-broken"]
+      },
+      {
+        "id": "recovery-result",
+        "type": "markdown",
+        "sourceId": "firebase-audit",
+        "body": "## Identity references accounted for most historical repairs\n\nHistorical records used several legacy field names and enrollment-based Storage paths. Recovery wrote canonical fields only after verifying the referenced object belonged to the employee. Two duplicate phone values were detected and excluded from phone-based inference. Every changed employee record was backed up under the repair run before update."
+      },
+      { "id": "recovered-fields-chart-block", "type": "chart", "chartId": "recovered-fields-chart" },
+      { "id": "recovered-fields-block", "type": "table", "tableId": "recovered-fields" },
+      {
+        "id": "reported-result",
+        "type": "markdown",
+        "sourceId": "firebase-audit",
+        "body": "## The reported profiles contained a mix of display failures and genuinely absent uploads\n\nThe audit verified every available uploaded object for the five examples. Categories listed as absent below had no safe employee-owned Storage file to recover; the system must continue to show those categories as not uploaded."
+      },
+      { "id": "reported-employees-block", "type": "table", "tableId": "reported-employees" },
+      {
+        "id": "methodology",
+        "type": "markdown",
+        "sourceId": "firebase-audit",
+        "body": "## Recovery required a deterministic employee-to-file match\n\nThe repair loaded the complete employee and enrollment collections and listed document objects under both `employees/` and `enrollments/`. It normalized known canonical and legacy aliases, decoded Firebase download references, verified object existence, and searched only roots demonstrably owned by the employee. Front/back documents required explicit filename evidence. Ambiguous duplicate-phone matches were skipped.\n\nBefore each write, the original employee document was copied to `employeeDocumentRepairRuns/{runId}/backups/{employeeDocId}`. Repairs are additive reference updates; no uploaded file was deleted or moved."
+      },
+      {
+        "id": "application-reliability",
+        "type": "markdown",
+        "body": "## The profile now consistently uses the complete document record\n\nThe employee detail page waits until the viewer's role is known, prevents an older request from replacing the latest result, and bypasses stale client cache for employee lookups. The backend and frontend normalize historical aliases to the same canonical fields, while the document endpoint resolves legacy strings and metadata objects through controlled Storage access."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "sourceId": "firebase-audit",
+        "body": "## One broken reference cannot be recovered from Firebase\n\nA bank-document reference for one historical employee points to an object that is absent from Storage, and no verified replacement exists. This is not a link-migration problem: the source file itself is unavailable. Optional or genuinely unuploaded categories were not fabricated."
+      },
+      { "id": "exception-block", "type": "table", "tableId": "exception" },
+      {
+        "id": "next-steps",
+        "type": "markdown",
+        "body": "## Recommended operating checks\n\n1. Keep the audit command available as a read-only periodic integrity check.\n2. Alert when a saved document reference does not resolve to an existing Storage object.\n3. Ask the affected employee to re-upload the single unrecoverable bank file if it is still required.\n4. Treat “Not Uploaded” as accurate only after the current profile release is active and the audit reports zero recoverable links.\n\n### Further questions\n\nShould document completeness become a required enrollment rule for specific employee categories, and which optional documents should remain non-blocking?"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-04T04:12:00.000Z",
+    "status": "ready",
+    "datasets": {
+      "summary": [
+        {
+          "employeesAudited": 1766,
+          "employeesRepaired": 138,
+          "recoverableRemaining": 0,
+          "storageObjects": 9934,
+          "brokenUnrecoverable": 1
+        }
+      ],
+      "recoveredFields": [
+        { "category": "Identity proof (front)", "referencesRestored": 126, "verification": "Canonicalized legacy link or matched verified owned object" },
+        { "category": "Identity proof (back)", "referencesRestored": 115, "verification": "Canonicalized legacy link or matched verified owned object" },
+        { "category": "Address proof (front)", "referencesRestored": 9, "verification": "Matched verified owned object" },
+        { "category": "Address proof (back)", "referencesRestored": 8, "verification": "Matched verified owned object" },
+        { "category": "Bank passbook/statement", "referencesRestored": 5, "verification": "Matched verified owned object" },
+        { "category": "Police certificate", "referencesRestored": 2, "verification": "Matched verified owned object" },
+        { "category": "Profile picture", "referencesRestored": 1, "verification": "Canonicalized verified legacy link" }
+      ],
+      "reportedEmployees": [
+        { "employee": "Rasal Shan", "employeeId": "CISS/TCS/2026-27/177", "verifiedFiles": "Profile, signature, address front/back", "noVerifiedFile": "Identity front/back, bank" },
+        { "employee": "Shamil Methar", "employeeId": "CISS/TCS/2026-27/276", "verifiedFiles": "Profile, signature, identity front/back, address front/back", "noVerifiedFile": "None among photographed categories" },
+        { "employee": "Justin K J", "employeeId": "CISS/TCS/2026-27/561", "verifiedFiles": "Profile, signature, identity front/back", "noVerifiedFile": "Address front/back, bank" },
+        { "employee": "Abdul Nihal H", "employeeId": "CISS/TCS/2026-27/699", "verifiedFiles": "Profile, signature, address front/back, bank", "noVerifiedFile": "Identity front/back" },
+        { "employee": "Muhammed Safuwan", "employeeId": "CISS/TCS/2026-27/876", "verifiedFiles": "Profile, signature, identity front/back, bank", "noVerifiedFile": "Address front/back" }
+      ],
+      "exceptions": [
+        { "employeeId": "CISS/TCS/2025-26/012", "field": "Bank passbook/statement", "finding": "Referenced Storage object is absent; no verified employee-owned replacement found" }
+      ]
+    }
+  },
+  "sources": [
+    { "id": "firebase-audit", "label": "Firebase employee document audit" },
+    { "id": "application-fix", "label": "Employee profile application fix" }
+  ]
+}

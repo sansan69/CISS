@@ -1,0 +1,144 @@
+category,employeeId,name,phone,district,currentResourceId,proposedResourceId,matchType,sourceVia,sourceName,candidateIds,sourceNameCount,sourceKinds,reason
+applied,CISS/TCS/2026-27/810,BASIL P,9168086118,Malappuram,000000,565772,exact_name,phone,BASIL P,565772,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1019,AKSHAY  K A,8590859743,Thrissur,282433,292433,exact_name,phone,AKSHAY  K A,292433,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/892,ATHUL  SHANKAR S ,8330859626,Alappuzha,751754,451754,exact_name,name,ATHUL  SHANKAR S ,451754,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/519,SUCHITHRA S,7306320235,Kottayam,565353 ,565353,exact_name,phone,SUCHITHRA S,565353,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/981,SANKEERTH  EV,8075100106,Kannur,424265,404803,exact_name,name,SANKEERTH  EV,404803,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/485,RIZWAN  FARIZ,9633869898,Ernakulam, 461457,461457,exact_name,name,RIZWAN  FARIZ,461457,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/822,LEKHA LEKSHMI,8086666429,Alappuzha, 459174,459174,exact_name,name,LEKHA LEKSHMI,459174,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/359,ATHEENA G NATH,7510335422,Kannur,000,566147,exact_name,name,ATHEENA G NATH,566147,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/312,ATHIRA  M S,6282465561,Pathanamthitta,346722,451380,exact_name,name,ATHIRA  M S,451380,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/961,AKSHIMA U M,7736276245,Thiruvananthapuram, 464837,464837,exact_name,name,AKSHIMA U M,464837,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1081,ANAGHA SURESH ,6238645219,Thrissur, 459894,459894,exact_name,name,ANAGHA SURESH ,459894,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1088,SHYNI V. A,8075301486,Kozhikode, 533289,533289,exact_name,name,SHYNI V. A,533289,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/730,ARUN A S,9846881849,Thiruvananthapuram,568618 ,568618,exact_name,name,ARUN A S,568618,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/745,PRAVEEN C S,8547769542,Thrissur,558660 ,558660,exact_name,name,PRAVEEN C S,558660,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/291,ASWIN SANAL,8921619230,Kollam, 461039,461039,exact_name,name,ASWIN SANAL,461039,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/866,KANNAN V S,9995835180,Thiruvananthapuram,0000,206979,exact_name,name,KANNAN V S,206979,1,legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/987,ATHULKRISHNA P G,8590542311,Thrissur,451991,461961,exact_name,name,ATHULKRISHNA P G,461961,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/956,ASHA P,9995049181,Kasaragod,559512 ,559512,exact_name,name,ASHA P,559512 | 633,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/367,SEEMA K,9446622737,Kannur,413455,308798,exact_name,name,SEEMA K,308798 | 783,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/164,SUGUNAN  O,9961653910,Kozhikode,00,522647,exact_name,phone,SUGUNAN  O,522647,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/392,ADITHYAN P N,8714360396,Thrissur,000000,565784,exact_name,name,ADITHYAN P N,565784,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/790,BHUVANENTH BASANTH,8547017925,Kottayam, 548516,548516,exact_name,name,BHUVANENTH BASANTH,548516,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/145,AJSAL T,7356411960,Malappuram,00000,528426,exact_name,name,AJSAL T,528426,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1112,KESAV  S SAJAY ,7736081484,Thiruvananthapuram,,436016,exact_name,name,KESAV  S SAJAY ,436016,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1178,ANAGHA T.P,6235132003,Wayanad, 421279,421279,exact_name,name,ANAGHA T.P,168 | 177 | 421279 | 554,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1113,SARANG S B,7907023103,Kozhikode, 506131,506131,exact_name,name,SARANG S B,168 | 506131,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1182,FATHIMA MS,8590545012,Ernakulam,242190,215827,exact_name,name,FATHIMA MS,215827 | 783,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/222,AGINSANTH A G,9744941633,Thiruvananthapuram, 490280,490280,exact_name,name,AGINSANTH A G,453 | 490280,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/772,MUHAMMED FOUZ M.A,8129669235,Kottayam, 546732,546732,exact_name,name,MUHAMMED FOUZ M.A,546732,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/178,ASHIN  M,9567983437,Thiruvananthapuram, 552867,552867,exact_name,phone,ASHIN  M,552867,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/845,Benaseer  Noushad,8157884606,Kottayam,TCS195783,195783,phone,phone,BENASEER,195783,3,biometric | legacy | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/936,RAVI RAGHAVAN,9656298586,Alappuzha,218152,219152,phone,name,RAVI R,219152 | 501,1,biometric | legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/869,RAJESWARY R,8086646831,Thrissur,565346 ,565346,exact_name,name,RAJESWARY R,565346,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/891,STEPHINA  HS,7306647578,Thiruvananthapuram, 499850,499850,exact_name,name,STEPHINA  HS,499850,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/842,HARI KRISHNAN,9349455566,Thrissur,000000,425161,exact_name,name,HARI KRISHNAN,425161,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/574,NISHA SUBASH,7736213204,Kottayam,TCS324433,324433,exact_name,name,NISHA SUBASH,324433,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1223,SUDARSH A K,8139804018,Malappuram,000000,514443,exact_name,name,SUDARSH A K,514443,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1227,MONISHA M,7306201771,Malappuram, 530071,530071,exact_name,name,MONISHA M,530071,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/080,ANEETTA S. R,9846112490,Thiruvananthapuram,563221 ,563221,exact_name,name,ANEETTA S. R,563221,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/663,FATHIMA RAZANA  K S,7907803809,Ernakulam,276906 ,276906,exact_name,phone,FATHIMA RAZANA  K S,276906,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1162,ADHIIL P,9061601768,Thrissur,00,460334,exact_name,name,ADHIIL P,460334,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1236,SUBASH  KUMAR NG,9747959598,Alappuzha,451467,236484,exact_name,name,SUBASH  KUMAR NG,236484,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/629,HAREESH KA,9207968685,Wayanad,00,516478,exact_name,name,HAREESH KA,516478,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/327,POOJA SURESH,9633721426,Thrissur,559578 ,559578,exact_name,name,POOJA SURESH,559578,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/508,SANA  MP,9745995401,Malappuram,309108,309105,exact_name,name,SANA  MP,309105,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1159,RAMANI R,9072738677,Palakkad,TCS ,441039,exact_name,name,RAMANI R,441039,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/275,KISHAN PRAKASH P,8289981889,Thrissur, 460345,460345,exact_name,name,KISHAN PRAKASH P,405 | 460345,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/637,ATHIRA SHANMUGHAN,9207848378,Kozhikode, 503837,503837,exact_name,name,ATHIRA SHANMUGHAN,503837,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/338,ABHINAV TM,9961593847,Thrissur, 460318,460318,exact_name,name,ABHINAV TM,460318,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/032,ANEESH G,9633849391,Kollam,TCS146442,146442,phone,name,G Aneesh,146442,1,biometric | legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/290,THEJASI  K,7012705244,Kannur,152545,568311,exact_name,phone,THEJASI  K,568311,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1191,GANGADEVI  P C,9072027691,Kozhikode,00,530411,exact_name,name,GANGADEVI  P C,530411,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/474,MINIMOL C C,8156994313,Kottayam,TCS452253,452253,exact_name,name,MINIMOL C C,452253,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/647,ASWAJITH. R R,9745316113,Thiruvananthapuram, 554386,554386,phone,phone,Aswajith R,554386,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1257,SAM  V MATHEW,7045205599,Alappuzha,207939,207937,exact_name,name,SAM  V MATHEW,207937,1,biometric | legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/743,SANAL S S,9656582610,Thrissur, 459852,459852,exact_name,name,SANAL S S,168 | 405 | 459852,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/638,ADITH ASHOK,9567852578,Thrissur,00000,506514,exact_name,name,ADITH ASHOK,506514,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/830,FATHIMA PA,6235985603,Ernakulam,,231669,exact_name,name,FATHIMA PA,231669,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/163,NIJISHA P J,7356072282,Thrissur,574304 ,150966,exact_name,name,NIJISHA P J,150966,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/728,Vidhya  Madhu,9947283681,Kottayam,TCS436561,436561,exact_name,name,Vidhya  Madhu,436561,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/089,LIBIN  B,8590344114,Thiruvananthapuram, 464911,464911,exact_name,name,LIBIN  B,464911,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/097,Johnmary Fredy,8714981258,Thiruvananthapuram,,146059,phone,name,JOHN MARY,146059 | 148,3,biometric | legacy | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/181,Vishnu.  S. B.,9946235785,Thiruvananthapuram,TCS340084,340084,exact_name,name,Vishnu.  S. B.,340084,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1220,PRADEEP  A R,9544560871,Thrissur, 476561,476561,exact_name,name,PRADEEP  A R,476561,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1063,VISHNU  S,7994762482,Kollam,506223,145990,exact_name,name,VISHNU  S,145990,1,biometric | legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/173,SREENATH K,9495068991,Kannur,563220 ,563220,exact_name,phone,SREENATH K,563220,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/810,NISHU  EMMANUEL ,6282253764,Kottayam,TCS98302,98302,exact_name,phone,NISHU  EMMANUEL ,98302,1,biometric | legacy | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/250,ANJALI P,8129625873,Kannur,426962 ,426962,exact_name,name,ANJALI P,426962,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/469,JAYASUDHA KM,7902477870,Kannur,000000,218743,exact_name,name,JAYASUDHA KM,218743,1,biometric | legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/939,RIDIYA M V,9037991410,Kannur,000,566146,exact_name,name,RIDIYA M V,566146,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/582,SHYMA KV,9446387625,Kannur, 505532,505532,exact_name,name,SHYMA KV,168 | 505532,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1098,SANDRA MADHAVAN A S,9961560458,Palakkad, 505541,505541,exact_name,phone,SANDRA MADHAVAN A S,505541,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/670,TIJOMOL  M D,9961920310,Kottayam, 533222,533222,exact_name,phone,TIJOMOL  M D,533222,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1234,SALAHUDDEEN  P S,9895149959,Kasaragod,TCS443069,443069,exact_name,name,SALAHUDDEEN  P S,443069,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/639,GOPIKRISHNAN K,7907694680,Thiruvananthapuram,559513 ,559513,exact_name,name,GOPIKRISHNAN K,559513,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/278,ABHINESH M.R,7902860433,Thiruvananthapuram, 490112,465074,exact_name,name,ABHINESH M.R,465074,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/863,SIJI PK,7034050611,Malappuram, 505542,505542,exact_name,name,SIJI PK,168 | 505542,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/790,REGY THOMAS,9495212183,Alappuzha,2079442,207942,exact_name,name,REGY THOMAS,207942,1,biometric | legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1082,MANOJKUMAR C,8606342049,Kozhikode,382427,381427,exact_name,phone,MANOJKUMAR C,381427,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/296,ADARSH KT,9526208586,Kozhikode, 503728,503728,exact_name,name,ADARSH KT,503728,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1213,VIGNESH M,9746861383,Thiruvananthapuram,000000,520009,exact_name,name,VIGNESH M,520009,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/396,Ashwin  John,8943029781,Kannur,TCS228359,228359,exact_name,name,Ashwin  John,228359,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/549,ASHLEY SURESH,9207527363,Kannur,358222,411616,exact_name,name,ASHLEY SURESH,411616,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/602,JAFRIYA MOL K,9539909054,Malappuram,568532 ,568532,exact_name,phone,JAFRIYA MOL K,568532,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1341,BINDHU T ,9605451755,Kollam,451755,530408,exact_name,name,BINDHU T ,530408,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/509,AKASH  K E,8921371695,Kannur,229222,258538,exact_name,phone,AKASH  K E,258538,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/227,JOSEPH C.M,9744578144,Kottayam,452223,296880,exact_name,name,JOSEPH C.M,296880,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/409,SHREYA ZEN K R,8289967316,Thrissur, 499410,499410,exact_name,name,SHREYA ZEN K R,148 | 499410 | 783,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/761,ARYA MURUKAN,9048703762,Kollam,558852 ,558852,exact_name,name,ARYA MURUKAN,558852,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/902,ANEESH S S,9946877060,Thiruvananthapuram,TCS451668,451668,exact_name,name,ANEESH S S,451668,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1231,ATHIRA  A S,7356248991,Kollam, 493908,493908,exact_name,name,ATHIRA  A S,493908,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1389,AKHIL. A.R,9656918166,Kollam, 493306,493306,exact_name,name,AKHIL. A.R,493306,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1163,JAISON  GEORGE,9747932588,Kottayam, 466075,466075,exact_name,name,JAISON  GEORGE,466075,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/460,KURIAN MK,9778386523,Pathanamthitta,282359,285329,exact_name,phone,KURIAN MK,285329,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/541,SRIVALSAN P,7902416355,Kasaragod,559525 ,559525,exact_name,name,SRIVALSAN P,559525,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/916,MUZBIDHAH  NISNI ,8078538994,Lakshadweep, 503838,503838,exact_name,phone,MUZBIDHAH  NISNI ,503838,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/191,FEMINA  C M,8089624781,Ernakulam, 460396,460396,exact_name,phone,FEMINA  C M,460396,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1288,AMRUTHA MOL K. P,9605168373,Kasaragod,00,410648,exact_name,name,AMRUTHA MOL K. P,410648,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/425,DHANANJAY S.V,8281849663,Thrissur,,451643,exact_name,name,DHANANJAY S.V,451643,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/641,ABHIRAJ N S,7012458460,Ernakulam, 460432,460432,exact_name,phone,ABHIRAJ N S,460432,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/933,ABHIN  S U,9567051325,Thrissur, 494766,494766,exact_name,name,ABHIN  S U,494766,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/412,ABHINAV ET,8157871928,Kozhikode, 546727,546727,exact_name,name,ABHINAV ET,546727,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/940,ASWIN C JAYAN,6238826575,Thrissur, 458958,458958,exact_name,name,ASWIN C JAYAN,405 | 458958,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1353,GAYATHRI  DEVI,7012404017,Kollam,876448,386690,exact_name,name,GAYATHRI  DEVI,386690,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1373,ABHILASH  K,7907511670,Thrissur, 552884,552884,exact_name,name,ABHILASH  K,552884,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/452,ARON ANTO,8891666751,Thrissur, 490471,490471,exact_name,name,ARON ANTO,490471,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1397,NANDANA  T,8848365010,Palakkad,00000000,508700,exact_name,name,NANDANA  T,508700,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/690,ARCHANA T,7593013739,Malappuram,444614,444616,exact_name,name,ARCHANA T,444616,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/929,SUNDERSAN M C,9495513090,Pathanamthitta,565454 ,565454,phone,phone,SUNDARESAN M C,565454,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1248,MAJEEDA BEEGUM,8330019447,Lakshadweep,000000,527595,phone,phone,Majeeda Beegum C,527595,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1360,SILGY ALI,9207026795,Ernakulam,FMVPA0248A,441012,exact_name,name,SILGY ALI,441012 | 554,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1275,NABEESATH  PKC,9747913496,Kasaragod, 499866,499866,exact_name,name,NABEESATH  PKC,499866,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/714,ADHARSH R R,8138890561,Thrissur,000000,565781,exact_name,name,ADHARSH R R,565781,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1281,BABU RAJ,8589867948,Palakkad,518755,194897,exact_name,name,BABU RAJ,194897,1,legacy,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/475,K T SEBASTIAN,8078665967,Alappuzha,558651 ,558651,exact_name,phone,K T SEBASTIAN,558651,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/353,REJANI R,9526770287,Kollam,691014,193955,phone,phone,Rajani R,193955,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/817,VIPIN  K,9809729259,Palakkad,0000,287698,exact_name,phone,VIPIN  K,287698,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/921,Anila Francis ,9778183452,Thrissur,TCS451961,451961,exact_name,name,Anila Francis ,451961,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1079,SREEHARI S K,7592091553,Thiruvananthapuram,240260,250460,exact_name,name,SREEHARI S K,250460,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/580,RASHMI MV,9961403897,Kannur,,324013,exact_name,name,RASHMI MV,324013,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1218,ANOOP  C THOMAS,7510107371,Ernakulam, 460411,460411,exact_name,name,ANOOP  C THOMAS,460411,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1215,HASNA  P,8921739097,Malappuram, 505548,505548,exact_name,name,HASNA  P,168 | 505548,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1420,ANITHA KRISHNAN R,8589957878,Thiruvananthapuram, 538771,538771,exact_name,name,ANITHA KRISHNAN R,538771,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/023,VIJIL P V,9995664896,Thrissur,563218 ,563218,exact_name,name,VIJIL P V,563218,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/058,SHEEJA  M P,8078547452,Malappuram,482239,217771,exact_name,name,SHEEJA  M P,217771,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1002,ABHIRANJ P,9074025418,Kozhikode, 495777,495777,exact_name,name,ABHIRANJ P,495777,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1125,DEVADATHAN  S,8590687308,Thiruvananthapuram,0000,527217,exact_name,name,DEVADATHAN  S,527217,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1187,NITHIN ANTONY A,7736254023,Thiruvananthapuram,427084,427082,exact_name,name,NITHIN ANTONY A,427082,2,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/025,SREETHIN K,8592079382,Kozhikode,557261 ,557261,exact_name,name,SREETHIN K,557261,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/123,SANEER P B,9072135719,Thrissur, 487475,487475,exact_name,name,SANEER P B,487475,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1042,RAJEEV RAGHAVAN,9995067371,Alappuzha,324359,267803,phone,name,rajeev r,148 | 267803,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/1395,ANIJA REJI,9074452048,Pathanamthitta,215657,217657,exact_name,phone,ANIJA REJI,217657,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/652,ASHA K,9778250477,Wayanad, 534596,534596,exact_name,phone,ASHA K,534596,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/539,SAJEENA  V.H,8714547278,Thrissur, 530894,530894,exact_name,phone,SAJEENA  V.H,530894,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/636,LEKHA  K,8943877412,Pathanamthitta, 459175,459175,exact_name,name,LEKHA  K,459175,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/700,SHAHAR BANU,8129443800,Malappuram,568531 ,568531,exact_name,phone,SHAHAR BANU,568531,2,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/448,ARJUN B S,8606072047,Thiruvananthapuram, 505536,505536,exact_name,phone,ARJUN B S,505536,1,biometric | official,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2026-27/123,GOKULAN M,9605331562,Kozhikode, 544978,544978,exact_name,name,GOKULAN M,544978,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/085,SREEREJ NK,8921488975,Kannur, 490110,490110,exact_name,name,SREEREJ NK,490110,1,biometric,Verified after resourceIdNumber-only update
+applied,CISS/TCS/2025-26/618,ANJANA  P,7034079006,Kannur,424265,424245,phone+full_name,email_raw_biometric,ANJANA P,424245,1,email_raw_biometric,Verified after exact phone-and-full-name match from raw mailbox biometric data
+applied,CISS/TCS/2025-26/677,SYAMJITH M S,9995562368,Thrissur,219552,219252,phone+full_name,email_raw_biometric,SYAMJITH MS,219252,1,email_raw_biometric,Verified after exact phone-and-full-name match from raw mailbox biometric data
+applied,CISS/TCS/2026-27/009,GOWTHAM KRISHNAN,9526315817,Kannur,00,568309,phone+full_name,email_raw_biometric,Gowtham Krishnan | GOWTHAM KRISHNAN,568309,1,email_raw_biometric,Verified after exact phone-and-full-name match from raw mailbox biometric data
+applied,CISS/TCS/2026-27/621,ASWANTH K,8590089530,Kannur,00,568310,phone+full_name,email_raw_biometric,aswanth k,568310,1,email_raw_biometric,Verified after exact phone-and-full-name match from raw mailbox biometric data

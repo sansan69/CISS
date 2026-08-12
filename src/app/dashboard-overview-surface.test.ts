@@ -34,8 +34,11 @@ describe("dashboard operations overview", () => {
   it("keeps quick actions compact, descriptive, and keyboard accessible", () => {
     expect(actionsSource).toContain('aria-label="Quick access"');
     expect(actionsSource).toContain("Common operational tasks");
+    expect(actionsSource).toContain('label: "Attendance", description: "Review daily records", href: "/attendance-logs"');
+    expect(actionsSource).not.toContain('label: "Attendance", description: "Review daily records", href: "/attendance"');
     expect(actionsSource).toContain("focus-visible:ring-2");
-    expect(actionsSource).toContain("min-h-[76px]");
-    expect(actionsSource).not.toContain("min-h-[116px]");
+    expect(actionsSource).toContain("min-h-[112px]");
+    expect(actionsSource).toContain("grid-cols-1 gap-3");
+    expect(actionsSource).not.toContain("overflow-hidden rounded-2xl border border-border/70 bg-card");
   });
 });

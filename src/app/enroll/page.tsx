@@ -1430,7 +1430,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       if (file.type.startsWith("image/") || file.type === "application/pdf") {
          applySelectedFile(fieldName as CameraField, file);
       } else {
-        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP, HEIC, HEIF or PDF." });
+        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use any image format or PDF." });
         setPreview(null);
       }
     } else {
@@ -2255,14 +2255,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         <FormField control={form.control} name="aadharCardDocument" render={({ field }) => (
                           <FormItem className="text-center">
                             <FormLabel className="block mb-2">Upload your Aadhaar front side <span className="text-destructive">*</span></FormLabel>
-                            <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="JPEG, PNG or PDF." />
+                            <ImagePreviewAndUpload fieldName="aadharCardDocument" preview={aadharCardPreview} setPreview={setAadharCardPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Any image format or PDF." />
                             <FormMessage />
                           </FormItem>
                         )} />
                         <FormField control={form.control} name="aadharCardDocumentBack" render={({ field }) => (
                           <FormItem className="text-center">
                             <FormLabel className="block mb-2">Upload your Aadhaar back side <span className="text-destructive">*</span></FormLabel>
-                            <ImagePreviewAndUpload fieldName="aadharCardDocumentBack" preview={aadharCardBackPreview} setPreview={setAadharCardBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="JPEG, PNG or PDF." />
+                            <ImagePreviewAndUpload fieldName="aadharCardDocumentBack" preview={aadharCardBackPreview} setPreview={setAadharCardBackPreview} handleFileChange={handleFileChange} openCamera={openCamera} helperText="Any image format or PDF." />
                             <FormMessage />
                           </FormItem>
                         )} />

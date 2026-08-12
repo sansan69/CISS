@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/downloads/ciss-workforce-latest.apk",
+      "destination": "/downloads/ciss-workforce-1.0.21.apk"
+    },
+    {
+      "source": "/downloads/ciss-mobile.apk",
+      "destination": "/downloads/ciss-workforce-1.0.21.apk"
+    }
+  ],
   "headers": [
     {
       "source": "/downloads/ciss-workforce-android.json",

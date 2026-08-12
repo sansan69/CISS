@@ -1,9 +1,5 @@
-# Exclude large folders from Vercel deployment
-node_modules/
-.next/
-.git/
-functions/node_modules/
-*.md
-docs/
-.idea/
-.vscode/
+# Keep the public deployment focused on the current Android release. Historical
+# APKs remain in the repository for release records but are not uploaded to
+# every deployment.
+public/downloads/*.apk
+!public/downloads/ciss-workforce-1.0.21.apk

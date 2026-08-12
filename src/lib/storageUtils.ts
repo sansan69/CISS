@@ -7,30 +7,32 @@ const DEFAULT_IMAGE_COMPRESSION_OPTIONS = {
   maxHeight: 1024,
   quality: 0.7,
   // WebP is broadly supported by the portal and is substantially smaller
-  // than the camera JPEG/PNG files guards commonly upload. Keep PDFs and
-  // unsupported image formats unchanged below.
+  // than the camera JPEG/PNG files guards commonly upload. Every image MIME
+  // type is offered to the browser compressor; formats a browser cannot
+  // decode fall back to the original file below.
   targetMimeType: "image/webp",
 } as const;
 
-const COMPRESSIBLE_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-]);
-
 const MIME_TYPE_TO_EXTENSION: Record<string, string> = {
   "application/pdf": "pdf",
+  "image/avif": "avif",
+  "image/apng": "png",
+  "image/bmp": "bmp",
+  "image/gif": "gif",
   "image/heic": "heic",
   "image/heif": "heif",
   "image/jpeg": "jpg",
   "image/jpg": "jpg",
+  "image/jxl": "jxl",
   "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/tiff": "tiff",
   "image/webp": "webp",
+  "image/x-icon": "ico",
+  "image/vnd.microsoft.icon": "ico",
 };
 
-export const ENROLLMENT_IMAGE_ACCEPT =
-  "image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif";
+export const ENROLLMENT_IMAGE_ACCEPT = "image/*";
 
 export const ENROLLMENT_DOCUMENT_ACCEPT = `${ENROLLMENT_IMAGE_ACCEPT},application/pdf,.pdf`;
 
@@ -136,11 +138,6 @@ export async function prepareFileForUpload(
   options: Partial<typeof DEFAULT_IMAGE_COMPRESSION_OPTIONS> = {}
 ): Promise<File> {
   if (!file.type.startsWith("image/")) {
-    return file;
-  }
-
-  const normalizedMimeType = file.type.toLowerCase();
-  if (!COMPRESSIBLE_IMAGE_TYPES.has(normalizedMimeType)) {
     return file;
   }
 

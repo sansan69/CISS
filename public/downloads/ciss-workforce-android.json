@@ -1,17 +1,18 @@
 {
   "platform": "android",
   "packageName": "co.in.ciss.ciss_mobile",
-  "latestVersionName": "1.0.19",
-  "latestVersionCode": 19,
+  "latestVersionName": "1.0.21",
+  "latestVersionCode": 21,
   "minimumSupportedVersionCode": 13,
-  "apkPath": "/downloads/ciss-workforce-1.0.19.apk",
-  "sha256": "7dfb1ef43e58bd98cec4d69b6a7daf0ba8152f58029c87972b22ca2cc21b6ab1",
-  "sizeBytes": 84910968,
-  "releaseDate": "2026-08-01",
+  "apkPath": "/downloads/ciss-workforce-1.0.21.apk",
+  "sha256": "9819487575e173384507a9133b36eda5919e2a5ab35603d0d262ccc2817a304f",
+  "sizeBytes": 85945160,
+  "releaseDate": "2026-08-10",
   "releaseNotes": [
-    "Fixes field-officer attendance synchronization and missing-index failures.",
-    "Fixes the attendance screen layout and startup sync-status crash.",
-    "Includes the latest Android stability and responsive layout fixes."
+    "Adds separate Field Officer menus for Orders, Guards, Attendance, Reports, and More.",
+    "Unifies CISS branding and headers across Guard and Field Officer pages.",
+    "Improves live tracking, attendance synchronization, authentication, and network recovery.",
+    "Adds attendance maps, working-site location markers, and detailed attendance evidence."
   ],
   "mandatory": false
 }

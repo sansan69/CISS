@@ -24,6 +24,11 @@ const requestSchema = z.discriminatedUnion("method", [
   z.object({
     method: z.literal("employeeId"),
     value: z.string().trim().min(1).max(160),
+    phoneNumber: z.string().trim().max(32).optional(),
+  }),
+  z.object({
+    method: z.literal("resourceId"),
+    value: z.string().trim().min(1).max(160),
   }),
   z.object({ method: z.literal("authenticated") }),
 ]);
@@ -64,6 +69,14 @@ async function findByPhone(phoneInput: string) {
     for (const doc of snapshot.docs) results.set(doc.id, doc);
   }
   return Array.from(results.values());
+}
+
+async function findByResourceId(resourceId: string) {
+  return db
+    .collection("employees")
+    .where("resourceIdNumber", "==", resourceId.trim())
+    .limit(2)
+    .get();
 }
 
 function attendanceHint(state: Record<string, unknown> | undefined) {
@@ -183,8 +196,20 @@ export async function POST(request: Request) {
 
     if (input.method === "employeeId") {
       matches = await findByEmployeeId(input.value);
+      if (input.phoneNumber) {
+        const normalizedPhone = digits(input.phoneNumber);
+        matches = matches.filter((doc) => {
+          const data = doc.data() as Record<string, unknown>;
+          return [data.phoneNumber, data.phone, data.mobile].some(
+            (value) => digits(value) === normalizedPhone,
+          );
+        });
+      }
     } else if (input.method === "phone") {
       matches = await findByPhone(input.value);
+    } else if (input.method === "resourceId") {
+      const snapshot = await findByResourceId(input.value);
+      matches = snapshot.docs;
     } else {
       const qr = parseQrContent(input.value);
       if (!qr.employeeId) {

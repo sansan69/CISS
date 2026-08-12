@@ -1,0 +1,114 @@
+category,employeeId,name,phone,district,currentResourceId,proposedResourceId,matchType,sourceVia,sourceName,candidateIds,sourceNameCount,sourceKinds,reason
+held,CISS/TCS/2026-27/953,AISWARYA B,7736844032,Palakkad,590530,145821,fuzzy_name,name,AISWARYA S,145821,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/489,Goutham  Krishna ,8606405112,Ernakulam,676544,405,exact_name,name,Goutham  Krishna ,405,16,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/193,Mohamed Irfan,7025302494,Thrissur,000000,29,fuzzy_name,name,MUHAMMED IRFAN,29,361,official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/012,ABHIMANYU  E,6235826275,Kozhikode,661986560675,168,exact_name,name,ABHIMANYU  E,168,65,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1071,ANANDHU S,9496810191,Kollam,724378,250820,exact_name,name,ANANDHU S,250820 | 441126,1,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/100,SAKEENA MK,8547632001,Malappuram,No,308792,fuzzy_name,name,SAKEENA K,308792,2,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/006,MOHQMMED ALI,9207678483,Kollam,441140,511885,fuzzy_name,name,MOHAMMED ALI,511885,2,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/368,ASHIK A,7560800864,Palakkad,000000,168,exact_name,name,ASHIK A,168,65,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/309,SHAJI N R,9847417641,Ernakulam,000000,201656,fuzzy_name,name,SHAJI R,201656,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/431,Arun  ks,8137098036,Alappuzha,888889,568618,fuzzy_name,name,ARUN A S,568618,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/156,AMAL S,9496645573,Thiruvananthapuram,912191,148,fuzzy_name,name,Amal V S,148,41,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/730,സുരേഷ് BABU M,8086187020,Malappuram,00000,482515,phone,phone,Suresh Babu,482515,1,biometric | official,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/335,VYSHAKH  EK,7306469795,Kozhikode,518762,148,exact_name,name,VYSHAKH  EK,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/417,MUHAMMED FAYAS C.M,9074155044,Ernakulam,00000,431712,fuzzy_name,name,MUHAMMED FAYIS CM,431712,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1126,ABHIJITH M,6238236071,Thrissur,451556,148,exact_name,name,ABHIJITH M,148 | 168 | 177 | 211 | 451556 | 501,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/627,AMAL THOMAS,9061128365,Kottayam,556321,340798,fuzzy_name,name,AMALU THOMAS,340798,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1139,SREEJA E,7034007789,Kozhikode, 462386,453,exact_name,name,SREEJA E,453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/058,ABOOBECKER AMEEN,7902938315,Kasaragod,559522 ,559522,fuzzy_name,name,aboobecker ameen am,559522,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1145,AKSHAY  L,9567458062,Thiruvananthapuram,000000,554,fuzzy_name,name,AKSHAY,554,23,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/760,MUHAMMED  RASHID,8943605062,Malappuram,000000,168,exact_name,name,MUHAMMED  RASHID,168,65,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/965,RAJANI KK,9605359114,Kannur, 285699,145468,exact_name,name,RAJANI KK,145468 | 285199,2,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2026-27/082,SREELAKSHMI J S,9747486157,Thiruvananthapuram,568529 ,308849,fuzzy_name,name,SREE LAKSHMI M S,308849 | 606,1,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2026-27/761,SREELAKSHMI M,8921324577,Kasaragod,586416,308849,fuzzy_name,name,SREE LAKSHMI M S,308849 | 606,1,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1194,VISHNAV  SURESH ,7902349703,Palakkad,000000,177,exact_name,name,VISHNAV  SURESH ,177,10,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/362,PARTHIP JANARDANAN,9447424199,Kannur,565349 ,565349,fuzzy_name,name,Parthip Janardanan P,565349,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/965,SHEMEER M,9656127112,Kollam,555525,146401,fuzzy_name,name,SHEMEER,146401,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1118,SUJATHA NG,9061643798,Alappuzha,986436,285775,fuzzy_name,name,sujatha v g,285775,2,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1018,SIVAPRASAD  MB,7994575827,Thiruvananthapuram,,558,fuzzy_name,name,sivaprasad,558,16,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/138,RAHUL VB,9061111327,Palakkad,0000,206975,fuzzy_name,name,Rahul S B,206975,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/904,ANJANA RS,6235248065,Kollam,6235248065,424681,fuzzy_name,name,ANJANA MS,424681,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1250,AMALRAJ AK,7558835025,Kannur,145625,148,exact_name,name,AMALRAJ AK,145625 | 148 | 168,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1011,ANITHA R,9349761830,Thiruvananthapuram,505553,145474,exact_name,name,ANITHA R,145474 | 168 | 177 | 453,3,biometric | legacy,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/633,THOMAS K V,9746232675,Kottayam,,131315,fuzzy_name,name,Thomas CV,131315,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1193,SREELAKSHMI S,9562864004,Thrissur,000000,308849,fuzzy_name,name,SREE LAKSHMI M S,308849,1,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1267,AGHILNATH KOROTH,9645856431,Kozhikode,522579,148,phone,name,AGHILNATH,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/798,FEBIYANO PRINCE,9995731987,Ernakulam,00,148,exact_name,name,FEBIYANO PRINCE,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1046,NISHA P,6238377023,Palakkad,251994,558,exact_name,name,NISHA P,168 | 251994 | 558 | 633,16,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1069,YADHUKRISHNA MS,8848026626,Ernakulam,00,148,phone,name,YADHU KRISHNA,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1305,PUSHPALATHA TK,8594014312,Malappuram,,411321,fuzzy_name,name,PUSHPALATHA,411321,2,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1307,SARITHA N,9562236261,Thiruvananthapuram, 503817,291791,fuzzy_name,name,SARITHA T,291791 | 862,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/318,MAHIMA MADHU,7594087795,Ernakulam,458415,405,exact_name,name,MAHIMA MADHU,405,16,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/745,BALAKRISHNAN P,9846734051,Kozhikode,461501,453,exact_name,name,BALAKRISHNAN P,453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/905,Sasikumar S,7012806900,Thiruvananthapuram,145451,145474,exact_name,name,Sasikumar S,145451 | 145474,3,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1314,NISHA  P,9846081583,Palakkad,251994,558,exact_name,name,NISHA  P,168 | 251994 | 558 | 633,16,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/572,SATHEESH KUMAR S,8547563171,Kollam,123456,537877,fuzzy_name,name,SATHEESH KUMAR N P,537877,1,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1221,ANASWARA N S,8921580540,Thiruvananthapuram,,145610,fuzzy_name,name,Anaswar A S,145610,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1325,SAN STEPHEN ,8547171550,Thrissur, 499885,558,exact_name,name,SAN STEPHEN ,558,16,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/126,GOKUL DAS,7736970180,Thrissur,556353,437605,exact_name,name,GOKUL DAS,437605,2,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2026-27/274,NIMISHA P,6238769244,Palakkad,000000,124817,fuzzy_name,name,NIMISHA PJ,124817,1,biometric | legacy | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/592,AKSHAY SHAJI,7994041306,Ernakulam,514646464,546514,fuzzy_name,name,AKSHAI SHAJI,546514,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/418,AKASH JS,8891479588,Thiruvananthapuram,00000000000000,493308,fuzzy_name,name,AKASH S,177672 | 493308,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/515,Reshma E,9539819580,Kannur,TCS145522,145522,exact_name,phone,Reshma E,145522,3,biometric | official,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/410,NAVANEETH R,7306642728,Thiruvananthapuram,,148,exact_name,name,NAVANEETH R,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/239,SINIYA JOSEPH,8129106779,Thrissur,000000,464836,fuzzy_name,name,Saniya joseph,464836,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/288,RAKESH RATHEESH,6235314917,Pathanamthitta,565393 ,316299,fuzzy_name,name,RAKESH RATHESH,316299,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/659,DEEPTHI H G,8075499242,Kasaragod,563426 ,558,exact_name,name,DEEPTHI H G,558,16,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1336,BINDU  AK,6238382265,Kozhikode,1,420609,fuzzy_name,name,Bindu K,420609,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/650,NANDANA R.K,8589003363,Kannur,000,324562,fuzzy_name,name,Nandana K,324562,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1012,MEENAKSHI  VIJAY,9188338495,Kozhikode,00,148,exact_name,name,MEENAKSHI  VIJAY,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/217,AKSHITHA  U M,7356030951,Thiruvananthapuram,517499,148,exact_name,name,AKSHITHA  U M,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/168,SANDEEP S,9074966348,Kollam,00,461035,exact_name,name,SANDEEP S,461035,2,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2026-27/269,MIDHUN C,9778066637,Kasaragod,559518 ,257386,fuzzy_name,name,MIDHUN,257386,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/286,DEVIKA P S,6282525289,Thrissur,000000,416914,fuzzy_name,name,DEVIKA S,416914,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/179,KIRAN S,9746590120,Thiruvananthapuram,553805,633,exact_name,name,KIRAN S,633,15,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1010,SANDHYA  P G,9539969710,Ernakulam,123,432990,fuzzy_name,name,SANDHYA P,432990,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/473,ASHA SEBASTIAN,8590563878,Kottayam,666666,558652,fuzzy_name,name,ASHWN SEBASTIAN,558652,2,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/433,FATHIMA K S,9447680914,Thrissur,565402 ,324382,exact_name,name,FATHIMA K S,324382,2,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/978,SANDHYA  GOPI,9847272129,Ernakulam,468501,453,exact_name,name,SANDHYA  GOPI,453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/118,SOORAJ S KUMAR,9061377309,Palakkad,000000,409384,exact_name,name,SOORAJ S KUMAR,322 | 409384 | 453 | 606 | 862,1,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2026-27/814,SREELAKSHMI  J. P,6282612281,Thiruvananthapuram,,308849,fuzzy_name,name,SREE LAKSHMI M S,308849 | 606,1,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1387,VAISHNAVI  R S,9995701553,Thiruvananthapuram,000000,453,exact_name,name,VAISHNAVI  R S,453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/200,ARJUN KC,9188176344,Kannur,557270 ,196650,fuzzy_name,name,Arjun C,196650,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/544,BHANU V S,8589029878,Palakkad,291206,242047,exact_name,name,BHANU V S,168 | 242047 | 554,5,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1075,AISWARYA  N S,9744961019,Thrissur,00,145821,fuzzy_name,name,AISWARYA S,145821,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/248,BINU VARGHESE ,9074409232,Pathanamthitta,453657,324584,fuzzy_name,name,Biju Varghese,324584 | 453,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/059,athul bs,7736990169,Pathanamthitta,162737,403973,fuzzy_name,name,ATHUL TS,403973,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/742,Midhin  Mohan,8590783103,Pathanamthitta,123456,453,exact_name,name,Midhin  Mohan,405 | 453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1115,ARYA .S,7012153985,Palakkad,00000,439680,exact_name,name,ARYA .S,439680,1,biometric | official,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/611,SALIHA M ANWAR,8086415410,Ernakulam,000000,148,exact_name,name,SALIHA M ANWAR,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/764,ASHIK  A,8921513870,Palakkad,000000,168,exact_name,name,ASHIK  A,168,65,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/445,SANOOP CA,8606295506,Palakkad,0000,453,exact_name,name,SANOOP CA,453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/026,SIJITH  P,9947011144,Kozhikode,510019,145817,fuzzy_name,name,SUJITH P,145817,1,legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/541,ADITHYA J.K,9526705778,Thiruvananthapuram,00000,300912,fuzzy_name,name,ADITHYAN K,242127 | 300912,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/389,KRISHNA  ANIL,9037386435,Kollam,808000,439662,exact_name,name,KRISHNA  ANIL,439662,2,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/922,MINI  MOL A,8547933527,Kollam,808000,439662,exact_name,name,MINI  MOL A,439662,2,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/447,Sunil  Kumar,9953843181,Alappuzha,123456,453,exact_name,name,Sunil  Kumar,405 | 453,25,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1287,FAYIS  M,9061416476,Malappuram,505544,168,exact_name,name,FAYIS  M,168,65,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1247,ASWIN RAJU,8075733037,Kottayam,648492,285178,fuzzy_name,name,aswinraj,285178,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/039,DHANUSH S,9633870539,Alappuzha,702569,490281,fuzzy_name,name,DHANUSH M,453 | 490281,1,biometric,Fuzzy-name-only match
+held,CISS/CSIR/2025-26/554,SUNEERA M,9846714014,Kozhikode,,148,exact_name,name,SUNEERA M,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/497,DEVI  CHANDHNA ,8590978506,Thiruvananthapuram, 541888,541888,fuzzy_name,name,DEVI CHANDANA B,541888,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1394,JOSHUA  JOHN,8590762060,Ernakulam,149399,149299,fuzzy_name,name,Joshua k john,149299,1,biometric | legacy,Fuzzy-name-only match
+held,CISS/TCS/2025-26/526,SAHALU RAHMAN PK,8281957077,Thrissur, 460392,460392,fuzzy_name,name,sahalu rahman,460392,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1403,MOHAMMED RIZWAN,7559891771,Palakkad,000000,451655,fuzzy_name,name,MOHAMMED RIZWAN PS,451655,1,biometric | official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/853,ANJANA P,7902830819,Malappuram,536489,29,exact_name,name,ANJANA P,168 | 29 | 424245,361,official,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/589,SOORYA   S,8921324629,Thiruvananthapuram,545407,317654,exact_name,name,SOORYA   S,317654,1,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/1332,SHEEJA TP,8943254547,Kozhikode,00 ,217771,fuzzy_name,name,SHEEJA MP,217771,2,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/482,KARTHIK ANIL P,8943788669,Kasaragod,0000,633,exact_name,name,KARTHIK ANIL P,633,15,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/1304,DONA SUNNY,8547068650,Idukki,45678,437462,fuzzy_name,name,DONA K SUNNY,437462,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/147,manu manikandan,9633120071,Pathanamthitta,374788,177,exact_name,name,manu manikandan,177,10,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/630,AVINKRISHNA TK,8590081447,Kasaragod,0000,633,exact_name,name,AVINKRISHNA TK,633,15,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/669,ADITH P,9400218120,Kannur,565354 ,565354,exact_name,name,ADITH P,565354,1,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2025-26/194,KADEEJA SHAFNAS A A,7907690042,Ernakulam,000000,148,exact_name,name,KADEEJA SHAFNAS A A,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/937,MUHAMMED  ARFAD,8301835384,Malappuram,515464,29,fuzzy_name,name,MUHAMMED IRFAN,29,361,official,Fuzzy-name-only match
+held,CISS/TCS/2025-26/1371,AMAL V.S,8137873657,Thiruvananthapuram,517501,148,exact_name,name,AMAL V.S,148,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/678,ANANTHAKRISHNAN  P R,9895560369,Thrissur,563215,538771,fuzzy_name,name,ANITHA KRISHNAN R,538771,2,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/571,VAISHNAV SHINE,9645357396,Thiruvananthapuram,584720,231270,fuzzy_name,name,Vaishnav Shibu,231270,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2026-27/052,MUHAMMAD MUHSIN,9539451952,Malappuram,296561 ,508595,fuzzy_name,name,Muhammad muhzin,508595,2,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/459,ANAGHA  M,9037393943,Kozhikode,503729,370446,fuzzy_name,name,ANAGHA V,370446,1,biometric,Fuzzy-name-only match
+held,CISS/TCS/2025-26/321,JURAIR M,7559942610,Malappuram,505543,168,exact_name,name,JURAIR M,168,65,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2025-26/722,ARATHI KRISHNA P,8086171093,Kozhikode,00,148,exact_name,name,ARATHI KRISHNA P,148 | 168,41,biometric,Source ID reused across multiple source names
+held,CISS/TCS/2026-27/756,ADITH P,6235718120,Kannur,****,565354,exact_name,name,ADITH P,565354,1,biometric,Proposed ID conflicts with another live assignment
+held,CISS/TCS/2026-27/112,DILJITH D K,8848881601,Thrissur,574353 ,380815,fuzzy_name,name,DILJITH D R,380815,1,biometric,Fuzzy-name-only match

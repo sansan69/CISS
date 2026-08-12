@@ -41,10 +41,13 @@ describe("Aadhaar restricted access", () => {
     expect(() => validateAadhaarNumber("1234")).toThrow();
   });
 
-  it("accepts the WebP format produced by browser enrollment uploads", () => {
+  it("recognizes common image formats accepted by registration uploads", () => {
     expect(getAadhaarFileExtension("image/webp")).toBe("webp");
     expect(getAadhaarFileExtension("image/jpeg")).toBe("jpg");
-    expect(getAadhaarFileExtension("image/svg+xml")).toBeNull();
+    expect(getAadhaarFileExtension("image/heic")).toBe("png");
+    expect(getAadhaarFileExtension("image/avif")).toBe("png");
+    expect(getAadhaarFileExtension("image/tiff")).toBe("png");
+    expect(getAadhaarFileExtension("image/svg+xml")).toBe("png");
   });
 
   it("only accepts Aadhaar files from the active draft or admin staging session", () => {

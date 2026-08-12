@@ -624,7 +624,7 @@ export default function EnrollEmployeePage() {
              setPreview("/pdf-icon.png"); 
          }
       } else {
-        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use JPG, PNG, WEBP, HEIC, HEIF or PDF." });
+        form.setError(fieldName, { type: "manual", message: "Invalid file type. Use any image format or PDF." });
         setPreview(null);
       }
     } else {
@@ -1001,7 +1001,7 @@ export default function EnrollEmployeePage() {
                             onChange={(e) => handleFileChange(e, "profilePicture", setProfilePicPreview)}
                           />
                         </FormControl>
-                         <FormDescription>Upload or take a clear passport-sized photo (JPG, PNG, WEBP. Max 5MB).</FormDescription>
+                         <FormDescription>Upload or take a clear passport-sized photo in any image format. Max 15MB before compression.</FormDescription>
                         <FormMessage />
                        </div>
                     </FormItem>
@@ -1333,7 +1333,7 @@ export default function EnrollEmployeePage() {
                        <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         <ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
-                        <FormDescription>Upload or take photo of bank document (JPG, PNG, WEBP, PDF. Max 5MB).</FormDescription>
+                        <FormDescription>Upload or take a photo of the bank document in any image format, or upload a PDF. Max 15MB for images or 5MB for PDFs.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

@@ -1,0 +1,5 @@
+category,employeeId,name,phone,district,currentResourceId,proposedResourceId,matchType,sourceVia,sourceName,candidateIds,sourceNameCount,sourceKinds,reason
+ambiguous,CISS/TCS/2025-26/1327,AKASH MANI,6235769428,Ernakulam,425163,,exact_name,name,AKASH MANI,317834 | 425163,,,Multiple source IDs remain; no unique assignment
+ambiguous,CISS/TCS/2025-26/1095,DEVADASAN  C,9809681896,Malappuram,505545,,fuzzy_name,name,DEVADASAN,168 | 505545,,,Multiple source IDs remain; no unique assignment
+ambiguous,CISS/TCS/2025-26/909,ABHINAV BP,9605967067,Malappuram,536488,,exact_name,name,ABHINAV BP,536488 | 633,,,Multiple source IDs remain; no unique assignment
+ambiguous,CISS/CSIR/2025-26/933,SREEHARI  JAYAKUMAR ,7025410069,Thiruvananthapuram,,,exact_name,name,SREEHARI  JAYAKUMAR ,148 | 520016,,,Multiple source IDs remain; no unique assignment

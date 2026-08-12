@@ -5,6 +5,7 @@ const DEVELOPMENT_SECRET = "ciss-attendance-verification-development-only";
 export type AttendanceIdentificationMethod =
   | "qr"
   | "phone"
+  | "resourceId"
   | "employeeId"
   | "authenticated";
 
@@ -81,7 +82,7 @@ export function verifyAttendanceVerificationToken(
     if (
       typeof payload.employeeDocId !== "string" ||
       !payload.employeeDocId ||
-      !["qr", "phone", "employeeId"].includes(String(payload.method)) ||
+      !["qr", "phone", "resourceId", "employeeId"].includes(String(payload.method)) ||
       typeof payload.nonce !== "string" ||
       !payload.nonce ||
       typeof payload.iat !== "number" ||

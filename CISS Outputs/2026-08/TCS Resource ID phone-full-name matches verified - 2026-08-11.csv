@@ -1,0 +1,5 @@
+category,employeeId,name,phone,district,currentResourceId,proposedResourceId,matchType,sourceVia,sourceName,candidateIds,sourceNameCount,sourceKinds,reason
+verified_unchanged,CISS/TCS/2025-26/680,AMEENA KP,8594073883,Malappuram,509235,509235,phone+full_name,email_raw_biometric,Ameena K P,509235,1,email_raw_biometric,Exact phone and full-name match; existing resource ID already correct
+verified_unchanged,CISS/TCS/2025-26/1357,FATHAHUDHEEN  AP,7736427901,Lakshadweep,511881,511881,phone+full_name,email_raw_biometric,FATHAHUDHEEN A P,511881,1,email_raw_biometric,Exact phone and full-name match; existing resource ID already correct
+applied_phone_full_name,CISS/TCS/2026-27/009,GOWTHAM KRISHNAN,9526315817,Kannur,00,568309,phone+full_name,email_raw_biometric,Gowtham Krishnan | GOWTHAM KRISHNAN,568309,1,email_raw_biometric,Exact phone and full-name match; updated resourceIdNumber only
+applied_phone_full_name,CISS/TCS/2026-27/621,ASWANTH K,8590089530,Kannur,00,568310,phone+full_name,email_raw_biometric,aswanth k,568310,1,email_raw_biometric,Exact phone and full-name match; updated resourceIdNumber only

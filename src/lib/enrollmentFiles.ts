@@ -25,7 +25,7 @@ export function getEnrollmentFileSelectionError(file: File): string | null {
     return null;
   }
 
-  return "Invalid file type. Use JPG, PNG, WEBP, HEIC, HEIF or PDF.";
+  return "Invalid file type. Use any image format or PDF.";
 }
 
 export function isEnrollmentFileSelectionValid(file: File): boolean {
