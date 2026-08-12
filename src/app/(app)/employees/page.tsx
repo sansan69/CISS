@@ -109,7 +109,8 @@ export default function EmployeeDirectoryPage() {
 
     // Component state for data and pagination
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const { clients } = useClients();
+    const shouldRankClientOptions = ['admin', 'hr', 'accounts', 'compliance'].includes(userRole ?? '');
+    const { clients } = useClients({ sortByActiveGuardCount: shouldRankClientOptions });
     const [regions, setRegions] = useState<RegionRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

@@ -3,6 +3,10 @@ export interface BasicClientOption {
   name: string;
 }
 
+export interface ClientOptionWithGuardCount extends BasicClientOption {
+  activeGuardCount?: number;
+}
+
 export function isClientPortalEnabled(client: { portalEnabled?: unknown }) {
   return client.portalEnabled !== false;
 }
@@ -23,5 +27,18 @@ export function dedupeClientOptions<T extends BasicClientOption>(clients: T[]): 
 
     seenNames.add(key);
     return [{ ...client, name: normalizedName }];
+  });
+}
+
+export function sortClientOptionsByActiveGuardCount<T extends ClientOptionWithGuardCount>(
+  clients: T[],
+): T[] {
+  return [...clients].sort((a, b) => {
+    const countDifference = (b.activeGuardCount ?? 0) - (a.activeGuardCount ?? 0);
+    if (countDifference !== 0) {
+      return countDifference;
+    }
+
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   });
 }
