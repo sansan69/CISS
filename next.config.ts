@@ -20,6 +20,10 @@ if (missingFirebaseVars.length > 0) {
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+  },
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
   poweredByHeader: false,
   async headers() {
     return [

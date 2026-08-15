@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAadhaarAdministrator } from "@/lib/server/auth";
-import {
-  findEmployeeById,
-  requireRecentAuthentication,
-} from "@/lib/server/employee-document-access";
+import { findEmployeeById } from "@/lib/server/employee-document-access";
 import { restrictedAadhaarDocument } from "@/lib/server/aadhaar";
+import { documentToJpeg } from "@/lib/server/document-image-converter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const admin = requireRecentAuthentication(await requireAadhaarAdministrator(request));
+    const admin = await requireAadhaarAdministrator(request);
     const { id } = await params;
     const { db, storage } = await import("@/lib/firebaseAdmin");
     const employee = await findEmployeeById(db, id);
@@ -27,8 +25,10 @@ export async function GET(
       return NextResponse.json({ error: "Aadhaar copy is not on file." }, { status: 404 });
     }
     const [buffer] = await storage.bucket().file(document.documentStoragePath).download();
+    const jpegBuffer = await documentToJpeg(buffer, document.contentType);
+    const download = new URL(request.url).searchParams.get("download") === "true";
     await db.collection("sensitiveDocumentAuditLogs").add({
-      action: "aadhaar_document_viewed",
+      action: download ? "aadhaar_document_downloaded" : "aadhaar_document_viewed",
       employeeDocId: employee.id,
       category: "aadhaar",
       side,
@@ -37,10 +37,10 @@ export async function GET(
       actorType: "admin",
       at: new Date(),
     });
-    return new NextResponse(buffer, {
+    return new NextResponse(jpegBuffer, {
       headers: {
-        "Content-Type": document.contentType || "application/octet-stream",
-        "Content-Disposition": "inline",
+        "Content-Type": "image/jpeg",
+        "Content-Disposition": `${download ? "attachment" : "inline"}; filename="aadhaar-${side}.jpg"`,
         "Cache-Control": "no-store, private, max-age=0",
         "X-Content-Type-Options": "nosniff",
       },

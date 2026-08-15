@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { PDFDocument } from "pdf-lib";
-import sharp from "sharp";
 import { hasAdminAccess, hasClientAccess, hasFieldOfficerAccess, verifyRequestAuth } from "@/lib/server/auth";
 import { findEmployeeById } from "@/lib/server/employee-document-access";
 import { assertGuardProfileScope } from "@/lib/server/guard-profile-view";
 import { documentReference, normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
+import { documentToJpeg } from "@/lib/server/document-image-converter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -128,35 +127,9 @@ function resolveStoragePath(source: string, bucketName: string) {
   return validatePath(pathStyleMatch[2]!);
 }
 
-function isPdfDocument(buffer: Buffer) {
-  return buffer.subarray(0, 1024).includes(Buffer.from("%PDF-"));
-}
-
-function pdfFilename(filename: string) {
+function jpegFilename(filename: string) {
   const withoutExtension = filename.replace(/\.[^.]+$/, "");
-  return `${withoutExtension || "qualification-certificate"}.pdf`;
-}
-
-async function imageToPdf(buffer: Buffer) {
-  const pngBuffer = await sharp(buffer).rotate().png().toBuffer();
-  const pdf = await PDFDocument.create();
-  const image = await pdf.embedPng(pngBuffer);
-  const [a4Width, a4Height] = image.width >= image.height ? [841.89, 595.28] : [595.28, 841.89];
-  const margin = 36;
-  const scale = Math.min(
-    (a4Width - margin * 2) / image.width,
-    (a4Height - margin * 2) / image.height,
-  );
-  const width = image.width * scale;
-  const height = image.height * scale;
-  const page = pdf.addPage([a4Width, a4Height]);
-  page.drawImage(image, {
-    x: (a4Width - width) / 2,
-    y: (a4Height - height) / 2,
-    width,
-    height,
-  });
-  return Buffer.from(await pdf.save());
+  return `${withoutExtension || "document"}.jpg`;
 }
 
 export async function GET(
@@ -220,15 +193,11 @@ export async function GET(
 
     const rawFilename = path.split("/").pop() || `${category}-document`;
     const filename = rawFilename.replace(/[^A-Za-z0-9._-]/g, "_");
-    const isQualificationCertificate = category === "qualification-certificate";
-    const outputBuffer = isQualificationCertificate && !isPdfDocument(buffer)
-      ? await imageToPdf(buffer)
-      : buffer;
-    const outputContentType = isQualificationCertificate ? "application/pdf" : contentType;
-    const outputFilename = isQualificationCertificate ? pdfFilename(filename) : filename;
+    const outputBuffer = await documentToJpeg(buffer, contentType);
+    const outputFilename = jpegFilename(filename);
     return new NextResponse(outputBuffer, {
       headers: {
-        "Content-Type": outputContentType,
+        "Content-Type": "image/jpeg",
         "Content-Disposition": `${shouldDownload ? "attachment" : "inline"}; filename="${outputFilename}"`,
         "Cache-Control": "no-store, private, max-age=0",
         "X-Content-Type-Options": "nosniff",

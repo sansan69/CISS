@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PDFDocument } from "pdf-lib";
 
 const verifyRequestAuthMock = vi.fn();
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
+async function createTestPdf() {
+  const pdf = await PDFDocument.create();
+  pdf.addPage([100, 100]);
+  return Buffer.from(await pdf.save());
+}
 
 vi.mock("@/lib/server/auth", () => ({
   hasAdminAccess: (token: { role?: string; admin?: boolean }) =>
@@ -76,7 +87,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
         bucket: () => ({
           name: "test-bucket",
           file: () => ({
-            download: async () => [Buffer.from("proof")],
+            download: async () => [TINY_PNG],
             getMetadata: async () => [{ contentType: "image/png" }],
           }),
         }),
@@ -92,7 +103,8 @@ describe("GET /api/employees/profile/[id]/document", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
-    expect(await response.text()).toBe("proof");
+    expect(response.headers.get("content-type")).toContain("image/jpeg");
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString("hex")).toBe("ffd8");
   });
 
   it("streams legacy document references saved as metadata objects", async () => {
@@ -112,7 +124,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
         bucket: () => ({
           name: "test-bucket",
           file: () => ({
-            download: async () => [Buffer.from("legacy-proof")],
+            download: async () => [TINY_PNG],
             getMetadata: async () => [{ contentType: "image/png" }],
           }),
         }),
@@ -127,7 +139,8 @@ describe("GET /api/employees/profile/[id]/document", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toBe("legacy-proof");
+    expect(response.headers.get("content-type")).toContain("image/jpeg");
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString("hex")).toBe("ffd8");
   });
 
   it("streams documents saved as a bucket URI", async () => {
@@ -145,7 +158,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
         bucket: () => ({
           name: "test-bucket",
           file: () => ({
-            download: async () => [Buffer.from("storage-proof")],
+            download: async () => [TINY_PNG],
             getMetadata: async () => [{ contentType: "image/png" }],
           }),
         }),
@@ -160,7 +173,8 @@ describe("GET /api/employees/profile/[id]/document", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toBe("storage-proof");
+    expect(response.headers.get("content-type")).toContain("image/jpeg");
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString("hex")).toBe("ffd8");
   });
 
   it("rejects an unsupported document category", async () => {
@@ -179,6 +193,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
 
   it("downloads an assigned guard service book for a field officer", async () => {
     const db = new FakeDb();
+    const pdfBuffer = await createTestPdf();
     db.seedFieldOfficer("fo-record", { uid: "fo-1", assignedDistricts: ["Ernakulam"] });
     db.seedEmployee("guard-lng", {
       employeeId: "G-LNG",
@@ -192,7 +207,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
         bucket: () => ({
           name: "test-bucket",
           file: () => ({
-            download: async () => [Buffer.from("service-book")],
+            download: async () => [pdfBuffer],
             getMetadata: async () => [{ contentType: "application/pdf" }],
           }),
         }),
@@ -207,8 +222,9 @@ describe("GET /api/employees/profile/[id]/document", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-disposition")).toBe('attachment; filename="service-book.pdf"');
-    expect(await response.text()).toBe("service-book");
+    expect(response.headers.get("content-type")).toContain("image/jpeg");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="service-book.jpg"');
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString("hex")).toBe("ffd8");
   });
 
   it("always returns the highest qualification certificate as a PDF", async () => {
@@ -225,7 +241,7 @@ describe("GET /api/employees/profile/[id]/document", () => {
         bucket: () => ({
           name: "test-bucket",
           file: () => ({
-            download: async () => [Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")],
+            download: async () => [TINY_PNG],
             getMetadata: async () => [{ contentType: "image/png" }],
           }),
         }),
@@ -240,9 +256,9 @@ describe("GET /api/employees/profile/[id]/document", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("application/pdf");
-    expect(response.headers.get("content-disposition")).toBe('attachment; filename="highest-qualification.pdf"');
-    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    expect(response.headers.get("content-type")).toContain("image/jpeg");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="highest-qualification.jpg"');
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString("hex")).toBe("ffd8");
   });
 
   it("does not expose bank documents to client accounts", async () => {
