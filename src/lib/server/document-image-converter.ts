@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { PDFDocument } from "pdf-lib";
 import sharp from "sharp";
 
 const PDF_SIGNATURE = Buffer.from("%PDF-");
@@ -87,4 +88,33 @@ export async function documentToJpeg(buffer: Buffer, contentType?: string) {
     .rotate()
     .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
     .toBuffer();
+}
+
+export async function documentToPdf(buffer: Buffer, contentType?: string) {
+  const normalizedContentType = contentType?.toLowerCase().split(";", 1)[0];
+  if (normalizedContentType === "application/pdf" || isPdfBuffer(buffer)) {
+    return buffer;
+  }
+
+  const pngBuffer = await sharp(buffer).rotate().png().toBuffer();
+  const pdf = await PDFDocument.create();
+  const image = await pdf.embedPng(pngBuffer);
+  const [a4Width, a4Height] = image.width >= image.height
+    ? [841.89, 595.28]
+    : [595.28, 841.89];
+  const margin = 36;
+  const scale = Math.min(
+    (a4Width - margin * 2) / image.width,
+    (a4Height - margin * 2) / image.height,
+  );
+  const width = image.width * scale;
+  const height = image.height * scale;
+  const page = pdf.addPage([a4Width, a4Height]);
+  page.drawImage(image, {
+    x: (a4Width - width) / 2,
+    y: (a4Height - height) / 2,
+    width,
+    height,
+  });
+  return Buffer.from(await pdf.save());
 }

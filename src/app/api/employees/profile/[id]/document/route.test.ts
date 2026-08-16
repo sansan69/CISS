@@ -256,9 +256,9 @@ describe("GET /api/employees/profile/[id]/document", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("image/jpeg");
-    expect(response.headers.get("content-disposition")).toBe('attachment; filename="highest-qualification.jpg"');
-    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString("hex")).toBe("ffd8");
+    expect(response.headers.get("content-type")).toContain("application/pdf");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="highest-qualification.pdf"');
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString("ascii")).toBe("%PDF-");
   });
 
   it("does not expose bank documents to client accounts", async () => {

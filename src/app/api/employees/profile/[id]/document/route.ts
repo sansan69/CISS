@@ -3,7 +3,7 @@ import { hasAdminAccess, hasClientAccess, hasFieldOfficerAccess, verifyRequestAu
 import { findEmployeeById } from "@/lib/server/employee-document-access";
 import { assertGuardProfileScope } from "@/lib/server/guard-profile-view";
 import { documentReference, normalizeEmployeeDocumentFields } from "@/lib/employee-document-fields";
-import { documentToJpeg } from "@/lib/server/document-image-converter";
+import { documentToJpeg, documentToPdf } from "@/lib/server/document-image-converter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -132,6 +132,11 @@ function jpegFilename(filename: string) {
   return `${withoutExtension || "document"}.jpg`;
 }
 
+function pdfFilename(filename: string) {
+  const withoutExtension = filename.replace(/\.[^.]+$/, "");
+  return `${withoutExtension || "qualification-certificate"}.pdf`;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -193,11 +198,15 @@ export async function GET(
 
     const rawFilename = path.split("/").pop() || `${category}-document`;
     const filename = rawFilename.replace(/[^A-Za-z0-9._-]/g, "_");
-    const outputBuffer = await documentToJpeg(buffer, contentType);
-    const outputFilename = jpegFilename(filename);
+    const isQualificationCertificate = category === "qualification-certificate";
+    const outputBuffer = isQualificationCertificate
+      ? await documentToPdf(buffer, contentType)
+      : await documentToJpeg(buffer, contentType);
+    const outputContentType = isQualificationCertificate ? "application/pdf" : "image/jpeg";
+    const outputFilename = isQualificationCertificate ? pdfFilename(filename) : jpegFilename(filename);
     return new NextResponse(outputBuffer, {
       headers: {
-        "Content-Type": "image/jpeg",
+        "Content-Type": outputContentType,
         "Content-Disposition": `${shouldDownload ? "attachment" : "inline"}; filename="${outputFilename}"`,
         "Cache-Control": "no-store, private, max-age=0",
         "X-Content-Type-Options": "nosniff",
