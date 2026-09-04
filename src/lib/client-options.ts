@@ -11,6 +11,13 @@ export function isClientPortalEnabled(client: { portalEnabled?: unknown }) {
   return client.portalEnabled !== false;
 }
 
+export function isClientEnrollmentEnabled(client: {
+  portalEnabled?: unknown;
+  enrollmentEnabled?: unknown;
+}) {
+  return isClientPortalEnabled(client) && client.enrollmentEnabled !== false;
+}
+
 export function dedupeClientOptions<T extends BasicClientOption>(clients: T[]): T[] {
   const seenNames = new Set<string>();
 

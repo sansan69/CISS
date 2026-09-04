@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isClientEnrollmentEnabled,
   isClientPortalEnabled,
   sortClientOptionsByActiveGuardCount,
 } from "./client-options";
@@ -12,6 +13,12 @@ describe("client enrollment availability", () => {
 
   it("hides clients explicitly disabled by the admin", () => {
     expect(isClientPortalEnabled({ portalEnabled: false })).toBe(false);
+  });
+
+  it("keeps portal access separate from guard registration availability", () => {
+    expect(isClientEnrollmentEnabled({ portalEnabled: true })).toBe(true);
+    expect(isClientEnrollmentEnabled({ portalEnabled: true, enrollmentEnabled: false })).toBe(false);
+    expect(isClientEnrollmentEnabled({ portalEnabled: false, enrollmentEnabled: true })).toBe(false);
   });
 
   it("ranks clients by active guard count and leaves inactive clients at the end", () => {
