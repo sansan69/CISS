@@ -160,44 +160,44 @@ export function ClientOperationsDashboard() {
     <div className="space-y-5">
       {modules.summary && (
         <>
-          <div className="overflow-hidden rounded-3xl border border-brand-blue/20 bg-brand-blue-darker p-5 text-white shadow-brand-md">
+          <div className="overflow-hidden rounded-3xl border border-brand-blue/20 bg-card shadow-brand-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">
-                  <ShieldCheck className="h-3.5 w-3.5" />
+              <div className="space-y-3 p-5 sm:p-6">
+                <div className="inline-flex items-center gap-2 rounded-md bg-brand-blue/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-brand-blue">
+                  <ShieldCheck className="h-3.5 w-3.5" weight="duotone" />
                   Client Operations
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold tracking-tight">{summary.clientName}</h2>
-                  <p className="mt-1 max-w-2xl text-sm text-white/78">
-                    Live view of attendance, deployment coverage, field activity, and training follow-up for your sites.
+                  <h2 className="font-exo2 text-2xl font-bold tracking-[-0.025em] text-foreground">{summary.clientName}</h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Live attendance, deployment coverage, field activity, and training follow-up for your sites.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 lg:min-w-[360px]">
-                <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">Sites Covered</p>
-                  <p className="mt-2 text-3xl font-bold">{summary.sitesCovered}</p>
+              <div className="grid grid-cols-2 gap-3 border-t border-border/70 bg-muted/35 p-5 sm:p-6 lg:min-w-[360px] lg:border-l lg:border-t-0">
+                <div className="rounded-xl bg-background px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Sites covered</p>
+                  <p className="mt-2 font-exo2 text-3xl font-bold text-foreground">{summary.sitesCovered}</p>
                 </div>
-                <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">Active Guards</p>
-                  <p className="mt-2 text-3xl font-bold">{summary.activeGuards}</p>
+                <div className="rounded-xl bg-background px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Active guards</p>
+                  <p className="mt-2 font-exo2 text-3xl font-bold text-foreground">{summary.activeGuards}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
             {summaryCards.map((card) => {
               const Icon = card.icon;
               const value = summary[card.key];
               return (
                 <Card key={card.key} className="rounded-2xl border-border/60 shadow-card">
-                  <CardContent className="flex items-start justify-between gap-4 p-5">
+                  <CardContent className="flex items-start justify-between gap-4 p-4 sm:p-5">
                     <div>
-                      <p className="text-sm text-muted-foreground">{card.label}</p>
-                      <p className="mt-2 text-3xl font-bold tabular-nums">{value.toLocaleString()}</p>
+                      <p className="max-w-[12ch] text-xs leading-5 text-muted-foreground">{card.label}</p>
+                      <p className="mt-2 font-exo2 text-3xl font-bold tabular-nums">{value.toLocaleString()}</p>
                     </div>
                     <div className={cn("flex h-11 w-11 items-center justify-center rounded-2xl", card.color)}>
                       <Icon className="h-5 w-5" />

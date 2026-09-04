@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => {
 
   return {
     addedEmployees,
+    enrollmentEnabled: true,
+    clientName: "TCS",
     generateEmployeeId: vi.fn(() => "CISS/TCS/2026-27/001"),
     generateQrCodeDataUrl: vi.fn(() => Promise.resolve("data:image/png;base64,qr")),
     encryptAadhaarNumber: vi.fn(async () => ({
@@ -57,6 +59,15 @@ class FakeCollection {
   }
 
   async get() {
+    if (this.name === "clients") {
+      return {
+        empty: false,
+        docs: [{
+          id: "client-document",
+          data: () => ({ name: mocks.clientName, portalEnabled: true, enrollmentEnabled: mocks.enrollmentEnabled }),
+        }],
+      };
+    }
     return { empty: true, docs: [] };
   }
 
@@ -98,6 +109,17 @@ class FakeCollection {
         create: vi.fn(),
         update: vi.fn(),
         set: vi.fn((ref: { path?: string }, payload: Record<string, unknown>) => {
+          const hasUndefinedValue = (value: unknown): boolean => {
+            if (value === undefined) return true;
+            if (Array.isArray(value)) return value.some(hasUndefinedValue);
+            if (value && typeof value === "object") {
+              return Object.values(value).some(hasUndefinedValue);
+            }
+            return false;
+          };
+          if (hasUndefinedValue(payload)) {
+            throw new Error("Cannot use undefined as a Firestore value");
+          }
           if (/^employees\/[^/]+$/.test(ref?.path || "")) employeePayload = payload;
         }),
         commit: vi.fn(async () => {
@@ -190,6 +212,8 @@ function buildStandardPayload(overrides: Record<string, unknown> = {}) {
 describe("POST /api/employees/enroll", () => {
   beforeEach(() => {
     mocks.addedEmployees.length = 0;
+    mocks.enrollmentEnabled = true;
+    mocks.clientName = "TCS";
     mocks.generateEmployeeId.mockClear();
     mocks.generateQrCodeDataUrl.mockClear();
     mocks.verifyIdToken.mockClear();
@@ -227,15 +251,59 @@ describe("POST /api/employees/enroll", () => {
       emailAddress: "standard.guard@example.com",
       phoneNumber: "9012345690",
       district: "Ernakulam",
-      status: "Active",
+      status: "PendingReview",
       publicProfile: {
         fullName: "STANDARD GUARD",
         employeeId: "CISS/TCS/2026-27/001",
         clientName: "TCS",
         profilePictureUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FprofilePictures%2Fprofile.png?alt=media&token=test",
-        status: "Active",
+        status: "PendingReview",
       },
     });
+  });
+
+  it("saves an LNG enrollment without writing undefined optional fields", async () => {
+    mocks.clientName = "LNG Petronet";
+    const { POST } = await import("./route");
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(
+          buildStandardPayload({
+            clientName: "LNG Petronet",
+            firstName: "LNG",
+            lastName: "Guard",
+            fullNameInput: "LNG Guard",
+            resourceIdNumber: undefined,
+            qualificationName: undefined,
+            qualificationCertificateUrl: undefined,
+            lngJobDesignation: "Lady Security Guard",
+            jobDesignation: "Lady Security Guard",
+            identificationMark: "Small scar on right forearm",
+            nationality: "Indian",
+            heightCm: 172,
+            weightKg: 68,
+            branchName: "Kochi",
+            panNumber: "AABCT1234C",
+            panCardDocumentUrl: "https://firebasestorage.googleapis.com/v0/b/test-bucket/o/enrollments%2Fdraft-test-123%2FpanCards%2Fpan.png?alt=media&token=test",
+            legacyUniqueId: "LNG-2026-001",
+          }),
+        ),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      id: "employee-doc-1",
+      employeeId: "LNG-2026-001",
+    });
+    expect(mocks.addedEmployees[0]).toMatchObject({
+      clientName: "LNG Petronet",
+      lngJobDesignation: "Lady Security Guard",
+      legacyUniqueId: "LNG-2026-001",
+    });
+    expect(mocks.addedEmployees[0]).not.toHaveProperty("qualificationName");
   });
 
   it.each([undefined, "", "not-an-email"])(
@@ -293,6 +361,51 @@ describe("POST /api/employees/enroll", () => {
     expect(response.status).toBe(200);
     expect(mocks.verifyIdToken).toHaveBeenCalledWith("valid-admin-token", true);
     expect(mocks.addedEmployees).toHaveLength(1);
+    expect(mocks.addedEmployees[0]).toMatchObject({ status: "Active" });
+  });
+
+  it("rejects an authenticated user who is not the designated Aadhaar administrator", async () => {
+    mocks.verifyIdToken.mockResolvedValueOnce({
+      uid: "hr-user",
+      role: "hr",
+      email: "hr@cisskerala.app",
+      email_verified: true,
+    });
+    const { POST } = await import("./route");
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(buildStandardPayload()),
+        headers: {
+          Authorization: "Bearer hr-token",
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "The designated Aadhaar administrator account is required.",
+    });
+    expect(mocks.addedEmployees).toHaveLength(0);
+  });
+
+  it("rejects registration for a client that has paused enrolment", async () => {
+    mocks.enrollmentEnabled = false;
+    const { POST } = await import("./route");
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(buildStandardPayload()),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "This client is not accepting guard registrations. Please ask CISS HR to confirm the correct client.",
+    });
+    expect(mocks.addedEmployees).toHaveLength(0);
   });
 
   it("still requires an upload session for an unauthenticated public submission", async () => {
@@ -336,6 +449,27 @@ describe("POST /api/employees/enroll", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Enrollment security service is temporarily unavailable. Your documents are preserved; please retry shortly.",
       retryable: true,
+    });
+    expect(mocks.addedEmployees).toHaveLength(0);
+  });
+
+  it("surfaces a document-reference problem instead of masking it as a generic 500", async () => {
+    const { POST } = await import("./route");
+    // The signature points to an external host, so the reference cannot be
+    // resolved to this enrollment session and the reference validation fails.
+    const response = await POST(
+      new NextRequest("https://example.com/api/employees/enroll", {
+        method: "POST",
+        body: JSON.stringify(
+          buildStandardPayload({ signatureUrl: "https://example.com/signature.png" }),
+        ),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Signature must be uploaded through the enrollment form.",
     });
     expect(mocks.addedEmployees).toHaveLength(0);
   });

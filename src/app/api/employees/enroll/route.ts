@@ -11,7 +11,8 @@ import {
 } from "@/lib/enrollment-config";
 import { generateQrCodeDataUrl } from "@/lib/qr";
 import { REGION_CODE } from "@/lib/runtime-config";
-import { isLngClientName, LNG_CLIENT_NAME } from "@/lib/constants";
+import { isLngClientName, LNG_CLIENT_NAME, normalizeClientNameKey } from "@/lib/constants";
+import { isClientEnrollmentEnabled } from "@/lib/client-options";
 import {
   buildEmployeeIdRegistryRecord,
   employeeIdExists,
@@ -167,8 +168,32 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    const isLngEnrollment = isLngClientName(payload.clientName);
-    const canonicalClientName = isLngEnrollment ? LNG_CLIENT_NAME : payload.clientName;
+    const clientSnapshot = await adminDb.collection("clients").get();
+    const requestedClientKey = normalizeClientNameKey(payload.clientName);
+    const clientDocument = clientSnapshot.docs.find((doc) => {
+      const data = doc.data() as Record<string, unknown>;
+      const storedName =
+        (typeof data.name === "string" && data.name) ||
+        (typeof data.clientName === "string" && data.clientName) ||
+        "";
+      return (
+        normalizeClientNameKey(storedName) === requestedClientKey ||
+        (isLngClientName(storedName) && isLngClientName(payload.clientName))
+      );
+    });
+    const clientData = clientDocument?.data() as Record<string, unknown> | undefined;
+    if (!clientDocument || !clientData || !isClientEnrollmentEnabled(clientData)) {
+      return NextResponse.json(
+        { error: "This client is not accepting guard registrations. Please ask CISS HR to confirm the correct client." },
+        { status: 400 },
+      );
+    }
+    const storedClientName =
+      (typeof clientData.name === "string" && clientData.name.trim()) ||
+      (typeof clientData.clientName === "string" && clientData.clientName.trim()) ||
+      payload.clientName;
+    const isLngEnrollment = isLngClientName(storedClientName);
+    const canonicalClientName = isLngEnrollment ? LNG_CLIENT_NAME : storedClientName;
     const normalizedEmail = payload.emailAddress.trim().toLowerCase();
     const normalizedFullNameInput = payload.fullNameInput?.trim() || "";
     const enrollmentConfig = await fetchEnrollmentConfig(adminDb);
@@ -278,6 +303,7 @@ export async function POST(request: NextRequest) {
     });
     movedAadhaarDocuments.push(restrictedAadhaarBack);
 
+    const employeeStatus = isAdminSubmission ? "Active" : "PendingReview";
     const employeeData = {
       employeeId,
       qrCodeUrl,
@@ -301,13 +327,12 @@ export async function POST(request: NextRequest) {
       gender: payload.gender,
       maritalStatus: payload.maritalStatus,
       educationalQualification: payload.educationalQualification,
-      qualificationName: payload.qualificationName,
       district,
       fullAddress: payload.fullAddress.toUpperCase(),
       emailAddress: normalizedEmail,
       phoneNumber: normalizedPhone,
       stateCode: REGION_CODE,
-      status: "Active",
+      status: employeeStatus,
       createdAt: now,
       updatedAt: now,
       enrollmentPolicy: {
@@ -342,7 +367,7 @@ export async function POST(request: NextRequest) {
         employeeId,
         clientName: canonicalClientName,
         profilePictureUrl: payload.profilePictureUrl,
-        status: "Active",
+        status: employeeStatus,
       },
       ...(payload.bankAccountNumber && {
         bankAccountNumber: payload.bankAccountNumber,
@@ -355,6 +380,9 @@ export async function POST(request: NextRequest) {
       }),
       ...(payload.qualificationCertificateUrl && {
         qualificationCertificateUrl: payload.qualificationCertificateUrl,
+      }),
+      ...(payload.qualificationName && {
+        qualificationName: payload.qualificationName,
       }),
       ...(payload.resourceIdNumber && { resourceIdNumber: payload.resourceIdNumber }),
       ...(payload.spouseName && {
@@ -412,7 +440,7 @@ export async function POST(request: NextRequest) {
         employeeDocId: docRef.id,
         employeeId,
         clientName: canonicalClientName,
-        status: "Active",
+        status: employeeStatus,
         source: "employee_enrollment",
         timestamp: now,
       }),
@@ -560,6 +588,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (error?.name === "AadhaarSourceOwnershipError") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (
+      error?.name === "EnrollmentDocumentReferenceError" ||
+      error?.name === "AadhaarProcessingError"
+    ) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 

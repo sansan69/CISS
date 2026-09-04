@@ -31,7 +31,7 @@ import {
   Timestamp, orderBy, limit, onSnapshot, type Query,
 } from "firebase/firestore";
 import type { Employee } from "@/types/employee";
-import { format, subMonths, startOfMonth, startOfToday, addDays, endOfDay } from 'date-fns';
+import { format, subMonths, subDays, startOfMonth, startOfToday, addDays, endOfDay } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,6 +47,9 @@ import { LiveClock } from "@/components/common/live-clock";
 import type { RegionOverviewCard, SuperAdminOverviewSummary } from "@/types/region";
 import { DashboardStats } from "@/components/dashboard/stats";
 import { DashboardActions } from "@/components/dashboard/actions";
+import { RoleSpotlight } from "@/components/dashboard/role-spotlight";
+import { isDesignatedAadhaarAdministrator } from "@/lib/aadhaar-admin-policy";
+import { AttentionPanel } from "@/components/dashboard/attention-panel";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 
 // Keep charts, maps, and the client dashboard out of the initial dashboard
@@ -529,6 +532,7 @@ export default function DashboardPage() {
   // Intermediate state for admin coverage — combined via useMemo
   const [clientGuardMap, setClientGuardMap] = useState<Map<string, { total: number; active: number; districts: Set<string> }> | null>(null);
   const [todayAttendanceDocs, setTodayAttendanceDocs] = useState<any[]>([]);
+  const [yesterdayCheckedIn, setYesterdayCheckedIn] = useState<number | null>(null);
   const [superAdminSummary, setSuperAdminSummary] = useState<SuperAdminOverviewSummary | null>(null);
   const [superAdminRegions, setSuperAdminRegions] = useState<RegionOverviewCard[]>([]);
   const [superAdminLoading, setSuperAdminLoading] = useState(false);
@@ -537,6 +541,11 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
   const { user: currentUser, userRole, assignedDistricts, isSuperAdmin } = useAppAuth();
+  const canEnroll = isDesignatedAadhaarAdministrator({
+    email: currentUser?.email,
+    emailVerified: currentUser?.emailVerified,
+    role: userRole,
+  });
   const canViewLiveGuards =
     userRole === 'admin' ||
     userRole === 'superAdmin' ||
@@ -605,6 +614,43 @@ export default function DashboardPage() {
     coverage.sort((a, b) => b.totalGuards - a.totalGuards);
     return coverage;
   }, [clientGuardMap, todayAttendanceDocs]);
+
+  // Attendance snapshot: unique guards currently checked in + freshness time
+  const attendanceSnapshot = useMemo(() => {
+    let checkedInUnique = 0;
+    let latestMillis = 0;
+    const latestByEmployee = new Map<string, any>();
+    todayAttendanceDocs.forEach((log) => {
+      const employeeKey = log.employeeDocId || log.employeeId;
+      if (!employeeKey) return;
+      const currentTime =
+        log.reportedAt?.toMillis?.() ??
+        log.reportedAt?.toDate?.()?.getTime?.() ??
+        log.createdAt?.toMillis?.() ??
+        log.createdAt?.toDate?.()?.getTime?.() ??
+        0;
+      const previous = latestByEmployee.get(employeeKey);
+      const previousTime =
+        previous?.reportedAt?.toMillis?.() ??
+        previous?.reportedAt?.toDate?.()?.getTime?.() ??
+        previous?.createdAt?.toMillis?.() ??
+        previous?.createdAt?.toDate?.()?.getTime?.() ??
+        0;
+      if (!previous || currentTime >= previousTime) {
+        latestByEmployee.set(employeeKey, log);
+      }
+      if (currentTime > latestMillis) latestMillis = currentTime;
+    });
+    latestByEmployee.forEach((log) => {
+      if (log.status === 'In') checkedInUnique++;
+    });
+    return { checkedInUnique, latestMillis };
+  }, [todayAttendanceDocs]);
+
+  const reportingClientCount = useMemo(
+    () => clientCoverage.filter((client) => client.totalGuards > 0).length,
+    [clientCoverage],
+  );
 
   // Real-time data subscriptions — fire from IndexedDB cache instantly, then sync from server
   useEffect(() => {
@@ -829,6 +875,56 @@ export default function DashboardPage() {
       cleanups.push(unsub3);
     }
 
+    // ── Yesterday's attendance (trend baseline for admin stats) ─────────────
+    if (includeCharts) {
+      const yesterdayDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+      }).format(subDays(new Date(), 1));
+      const unsub4 = onSnapshot(
+        query(
+          collection(db, 'attendanceLogs'),
+          where('attendanceDate', '==', yesterdayDate),
+          orderBy('reportedAt', 'desc'),
+          limit(2000)
+        ),
+        (snap) => {
+          // Unique employees whose latest entry yesterday was a check-in
+          const latestByEmployee = new Map<string, any>();
+          snap.docs.forEach((d) => {
+            const log = d.data() as any;
+            const employeeKey = log.employeeDocId || log.employeeId;
+            if (!employeeKey) return;
+            const currentTime =
+              log.reportedAt?.toMillis?.() ??
+              log.reportedAt?.toDate?.()?.getTime?.() ??
+              log.createdAt?.toMillis?.() ??
+              log.createdAt?.toDate?.()?.getTime?.() ??
+              0;
+            const previous = latestByEmployee.get(employeeKey);
+            const previousTime =
+              previous?.reportedAt?.toMillis?.() ??
+              previous?.reportedAt?.toDate?.()?.getTime?.() ??
+              previous?.createdAt?.toMillis?.() ??
+              previous?.createdAt?.toDate?.()?.getTime?.() ??
+              0;
+            if (!previous || currentTime >= previousTime) {
+              latestByEmployee.set(employeeKey, log);
+            }
+          });
+          let checkedIn = 0;
+          latestByEmployee.forEach((log) => {
+            if (log.status === 'In') checkedIn++;
+          });
+          setYesterdayCheckedIn(checkedIn);
+        },
+        (error) => {
+          console.error("[dashboard] yesterday attendance listener failed:", error);
+          setYesterdayCheckedIn(null);
+        }
+      );
+      cleanups.push(unsub4);
+    }
+
     return () => cleanups.forEach(u => u());
   }, [userRole, assignedDistricts, isSuperAdmin]);
 
@@ -885,6 +981,16 @@ export default function DashboardPage() {
   }
 
   const userName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'there';
+  const dashboardKicker = userRole === 'fieldOfficer'
+    ? 'Field operations'
+    : userRole === 'client'
+      ? 'Service overview'
+      : 'Operations overview';
+  const dashboardDescription = userRole === 'fieldOfficer'
+    ? 'District coverage, upcoming duties, and guard activity in one place.'
+    : userRole === 'client'
+      ? 'A clear view of attendance, coverage, and reports for your sites.'
+      : 'Live workforce status and the next operational decisions in one place.';
 
   if (isSuperAdmin) {
     return (
@@ -906,14 +1012,14 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-              Operations overview
+              {dashboardKicker}
             </p>
           </div>
           <h1 className="mt-2 font-exo2 text-2xl font-bold leading-tight tracking-[-0.025em] text-foreground sm:text-3xl">
-            {getGreeting()}, <span className="capitalize">{userName}</span>
+            {userRole === 'client' ? 'Your operations desk' : <>{getGreeting()}, <span className="capitalize">{userName}</span></>}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-            Workforce status and frequently used tools in one place.
+            {dashboardDescription}
           </p>
         </div>
         <div className="w-fit rounded-full border border-border/70 bg-card px-3 py-1.5 shadow-brand-xs">
@@ -941,12 +1047,58 @@ export default function DashboardPage() {
         <DashboardStats 
           role={userRole as any} 
           stats={stats}
-          roleSpecific={{ checkedIn: todayAttendanceDocs.length }}
+          roleSpecific={
+            userRole === 'fieldOfficer'
+              ? {
+                  checkedIn: todayAttendanceDocs.length,
+                  onDutyPct: stats.active > 0
+                    ? Math.round((todayAttendanceDocs.length / stats.active) * 100)
+                    : 0,
+                  lastUpdated: attendanceSnapshot.latestMillis > 0
+                    ? new Date(attendanceSnapshot.latestMillis)
+                    : undefined,
+                }
+              : {
+                  checkedIn: attendanceSnapshot.checkedInUnique,
+                  onDutyPct: stats.active > 0
+                    ? Math.round((attendanceSnapshot.checkedInUnique / stats.active) * 100)
+                    : 0,
+                  lastUpdated: attendanceSnapshot.latestMillis > 0
+                    ? new Date(attendanceSnapshot.latestMillis)
+                    : undefined,
+                  checkedInDelta: yesterdayCheckedIn === null
+                    ? undefined
+                    : attendanceSnapshot.checkedInUnique - yesterdayCheckedIn,
+                }
+          }
+        />
+      )}
+
+      {stats && (userRole === 'admin' || userRole === 'fieldOfficer') && (
+        <RoleSpotlight
+          role={userRole}
+          checkedInToday={userRole === 'fieldOfficer' ? todayAttendanceDocs.length : attendanceSnapshot.checkedInUnique}
+          activeCount={stats.active}
+          onDutyPct={stats.active > 0
+            ? Math.round(((userRole === 'fieldOfficer' ? todayAttendanceDocs.length : attendanceSnapshot.checkedInUnique) / stats.active) * 100)
+            : 0}
+          assignedDistricts={userRole === 'fieldOfficer' ? assignedDistricts : undefined}
+          upcomingDuty={userRole === 'fieldOfficer' ? upcomingDuties[0] : undefined}
+          clientCount={userRole === 'admin' ? reportingClientCount : undefined}
+        />
+      )}
+
+      {/* ── Needs Attention (admin + staff) ──────────────────────────────── */}
+      {userRole !== 'fieldOfficer' && userRole !== 'client' && stats && (
+        <AttentionPanel
+          coverage={clientCoverage}
+          onDutyNow={attendanceSnapshot.checkedInUnique}
+          totalActive={stats.active}
         />
       )}
 
       {/* ── Quick Actions (admin + FO) ────────────────────────────────────── */}
-      {userRole !== 'client' && <DashboardActions role={userRole as any} />}
+      {userRole !== 'client' && <DashboardActions role={userRole as any} canEnroll={canEnroll} />}
 
       {/* ── Live Guard Locations (admin + FO) ────────────────────────────── */}
       {canViewLiveGuards && (
