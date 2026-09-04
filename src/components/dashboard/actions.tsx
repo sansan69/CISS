@@ -50,7 +50,6 @@ const roleActions: Record<UserRole, QuickAction[]> = {
     { label: "Run payroll", description: "Process monthly payroll", href: "/payroll/run", icon: CurrencyInr },
   ],
   hr: [
-    { label: "Enroll employee", description: "Add a new employee", href: "/employees/enroll", icon: UserPlus },
     { label: "Training", description: "Manage training", href: "/training", icon: FileText },
   ],
   compliance: [],
@@ -62,10 +61,16 @@ const roleActions: Record<UserRole, QuickAction[]> = {
 
 interface DashboardActionsProps {
   role: UserRole;
+  canEnroll?: boolean;
 }
 
-export function DashboardActions({ role }: DashboardActionsProps) {
-  const actions = roleActions[role] || roleActions.admin;
+export function DashboardActions({ role, canEnroll = false }: DashboardActionsProps) {
+  const actions = [
+    ...(canEnroll
+      ? [{ label: "Enroll employee", description: "Add a verified employee", href: "/employees/enroll", icon: UserPlus }]
+      : []),
+    ...(roleActions[role] || roleActions.admin),
+  ];
   if (actions.length === 0) return null;
 
   return (
