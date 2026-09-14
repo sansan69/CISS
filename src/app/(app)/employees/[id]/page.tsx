@@ -270,30 +270,27 @@ const DocumentItem: React.FC<{
             </div>
         </div>
         {url || onView || onDownload ? (
-            onView ? (
-              <div className="flex flex-wrap justify-end gap-2">
+            // View and Download are independent actions: a document that can be
+            // downloaded must still offer its view option, and vice versa. The
+            // audited streaming view (onView) wins over a stored direct link.
+            <div className="flex flex-wrap justify-end gap-2">
+              {onView ? (
                 <Button variant="outline" size="sm" onClick={onView} data-ai-hint={`${type || 'document'} document`}>
                   View
                 </Button>
-                {onDownload && (
-                  <Button variant="outline" size="sm" onClick={onDownload}>
-                    <Download className="mr-2 h-4 w-4" /> {downloadLabel}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              onDownload ? (
+              ) : url ? (
+                <Button variant="outline" size="sm" asChild>
+                    <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
+                        View
+                    </a>
+                </Button>
+              ) : null}
+              {onDownload && (
                 <Button variant="outline" size="sm" onClick={onDownload}>
                   <Download className="mr-2 h-4 w-4" /> {downloadLabel}
                 </Button>
-              ) : (
-                <Button variant="outline" size="sm" asChild>
-                    <a href={url} target="_blank" rel="noopener noreferrer" data-ai-hint={`${type || 'document'} document`}>
-                        <Download className="mr-2 h-4 w-4" /> View/Download
-                    </a>
-                </Button>
-              )
-            )
+              )}
+            </div>
         ) : (
             <Badge variant="outline">Not Uploaded</Badge>
         )}
@@ -519,7 +516,11 @@ export default function AdminEmployeeProfilePage() {
 
   const isAdminView = !isAuthLoading && (userRole === "admin" || userRole === "superAdmin");
   const isFieldOfficerView = !isAuthLoading && userRole === "fieldOfficer";
+  const isClientView = !isAuthLoading && userRole === "client";
   const canViewOperationalDetails = isAdminView || isFieldOfficerView;
+  // Mirrors CLIENT_DOCUMENT_CATEGORIES in the document streaming route: client
+  // accounts may only stream identity, address and qualification documents.
+  const canStreamProfilePicture = !isClientView;
   const isReadOnlyViewer = !isAdminView;
   // These documents belong to the LNG Petronet workflow. Do not expose
   // stale LNG fields on profiles currently assigned to another client.
@@ -579,6 +580,34 @@ export default function AdminEmployeeProfilePage() {
       setRevealedAadhaar(body.aadhaarNumber);
     } catch (aadhaarError) {
       toast({ variant: 'destructive', title: 'Aadhaar access denied', description: aadhaarError instanceof Error ? aadhaarError.message : 'Could not reveal Aadhaar.' });
+    } finally {
+      setIsAadhaarBusy(false);
+    }
+  };
+
+  const viewAadhaarDocument = async (side: 'front' | 'back') => {
+    // Open the tab synchronously so the click stays a trusted browser gesture.
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) {
+      toast({ variant: 'destructive', title: 'Popup blocked', description: 'Allow popups to view the Aadhaar copy.' });
+      return;
+    }
+    setIsAadhaarBusy(true);
+    try {
+      popup.document.title = "Loading Aadhaar copy…";
+      const response = await authorizedFetch(
+        `/api/admin/employees/${encodeURIComponent(employeeIdFromUrl)}/aadhaar/document?side=${side}`,
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `Could not open Aadhaar ${side} side.`);
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      popup.location.href = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (aadhaarError) {
+      popup.close();
+      toast({ variant: 'destructive', title: 'Aadhaar view unavailable', description: aadhaarError instanceof Error ? aadhaarError.message : `Could not open Aadhaar ${side} side.` });
     } finally {
       setIsAadhaarBusy(false);
     }
@@ -2003,11 +2032,17 @@ export default function AdminEmployeeProfilePage() {
                             <Input type="password" autoComplete="current-password" value={aadhaarPassword} onChange={(event) => setAadhaarPassword(event.target.value)} placeholder="Admin password (only to reveal number)" />
                             <div className="flex flex-wrap gap-2">
                               <Button type="button" size="sm" variant="outline" onClick={() => void revealAadhaar()} disabled={isAadhaarBusy}>Reveal Aadhaar</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => void viewAadhaarDocument('front')} disabled={isAadhaarBusy}>View Aadhaar front</Button>
                               <Button type="button" size="sm" variant="outline" onClick={() => void downloadAadhaarDocument('front')} disabled={isAadhaarBusy}>Download Aadhaar front (JPEG)</Button>
-                              {aadhaarHasBackDocument ? <Button type="button" size="sm" variant="outline" onClick={() => void downloadAadhaarDocument('back')} disabled={isAadhaarBusy}>Download Aadhaar back (JPEG)</Button> : <Badge variant="outline">Back side missing</Badge>}
+                              {aadhaarHasBackDocument ? (
+                                <>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => void viewAadhaarDocument('back')} disabled={isAadhaarBusy}>View Aadhaar back</Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => void downloadAadhaarDocument('back')} disabled={isAadhaarBusy}>Download Aadhaar back (JPEG)</Button>
+                                </>
+                              ) : <Badge variant="outline">Back side missing</Badge>}
                               {revealedAadhaar && <Button type="button" size="sm" variant="ghost" onClick={() => setRevealedAadhaar(null)}>Hide</Button>}
                             </div>
-                            <p className="text-xs text-muted-foreground">Aadhaar document downloads are immediate. Password re-entry is only needed to reveal the Aadhaar number.</p>
+                            <p className="text-xs text-muted-foreground">Aadhaar copies open in a new tab for viewing and download immediately. Password re-entry is only needed to reveal the Aadhaar number.</p>
                             {revealedAadhaar && <p className="font-mono text-lg tracking-wider" aria-live="polite">{revealedAadhaar}</p>}
                             {aadhaarCorrectionRequest && (
                               <form className="space-y-3 rounded-lg border p-3" onSubmit={(event) => void uploadAdminAadhaar(event)}>
@@ -2068,7 +2103,7 @@ export default function AdminEmployeeProfilePage() {
                     <div>
                         <CardTitle className="mb-4">Uploaded Documents</CardTitle>
                         <div className="space-y-3">
-                            <DocumentItem name="Profile Picture" url={isFieldOfficerView ? undefined : employee.profilePictureUrl} onView={isFieldOfficerView && hasProfilePictureDocument ? () => void viewGuardDocument("profile-picture") : undefined} onDownload={hasProfilePictureDocument ? () => void downloadGuardDocument("profile-picture") : undefined} type="Employee Photo" />
+                            <DocumentItem name="Profile Picture" url={isFieldOfficerView ? undefined : employee.profilePictureUrl} onView={isFieldOfficerView && hasProfilePictureDocument ? () => void viewGuardDocument("profile-picture") : undefined} onDownload={canStreamProfilePicture && hasProfilePictureDocument ? () => void downloadGuardDocument("profile-picture") : undefined} type="Employee Photo" />
                             {canViewOperationalDetails && <DocumentItem
                               name="Signature"
                               url={isAdminView ? employee.signatureUrl : undefined}
@@ -2110,7 +2145,7 @@ export default function AdminEmployeeProfilePage() {
                             {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Arms License" url={isAdminView ? employee.armsLicenseDocumentUrl : undefined} onView={isFieldOfficerView && hasArmsLicenseDocument ? () => void viewGuardDocument("arms-license") : undefined} onDownload={hasArmsLicenseDocument ? () => void downloadGuardDocument("arms-license") : undefined} type="Arms License" />}
                             {canViewOperationalDetails && showLngPetronetDocuments && <DocumentItem name="Passport Copy" url={isAdminView ? employee.passportDocumentUrl : undefined} onView={isFieldOfficerView && hasPassportDocument ? () => void viewGuardDocument("passport") : undefined} onDownload={hasPassportDocument ? () => void downloadGuardDocument("passport") : undefined} type="Passport" />}
                             {canViewOperationalDetails && <DocumentItem name="Police Clearance Certificate" url={isAdminView ? employee.policeClearanceCertificateUrl : undefined} onView={isFieldOfficerView && hasPoliceClearanceDocument ? () => void viewGuardDocument("police-clearance") : undefined} onDownload={hasPoliceClearanceDocument ? () => void downloadGuardDocument("police-clearance") : undefined} type="Police Verification" />}
-                            <DocumentItem name="Highest Qualification Certificate" onView={!isAdminView && hasQualificationCertificate ? () => void viewGuardDocument("qualification-certificate") : undefined} onDownload={hasQualificationCertificate ? () => void downloadGuardDocument("qualification-certificate") : undefined} downloadLabel="Download PDF" type={employee.qualificationName || "Education Certificate"} />
+                            <DocumentItem name="Highest Qualification Certificate" onView={hasQualificationCertificate ? () => void viewGuardDocument("qualification-certificate") : undefined} onDownload={hasQualificationCertificate ? () => void downloadGuardDocument("qualification-certificate") : undefined} downloadLabel="Download PDF" type={employee.qualificationName || "Education Certificate"} />
                         </div>
                     </div>
                   </div>
