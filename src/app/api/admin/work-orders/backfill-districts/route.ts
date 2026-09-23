@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       newDistrict: string;
       source: string;
     }[] = [];
+    const workOrderUpdates: { id: string; oldDistrict: string; newDistrict: string }[] = [];
 
     const siteDistrictById = new Map<string, string>();
     const tcsSiteIds: string[] = [];
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       const site: SiteDoc = {
         id: doc.id,
         siteName: String(data.siteName ?? ""),
-        district: normalizeStoredDistrict(data.district),
+        district: typeof data.district === "string" ? data.district.trim() : "",
         clientName,
         siteAddress: typeof data.siteAddress === "string" ? data.siteAddress : "",
       };
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const finalDistrict = newDistrict || site.district;
+      const finalDistrict = newDistrict || normalizeStoredDistrict(site.district);
       siteDistrictById.set(site.id, finalDistrict);
 
       if (newDistrict && newDistrict !== site.district) {
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Pass 2: align workOrders.district to the resolved site district
-    if (!dryRun && tcsSiteIds.length > 0) {
+    if (tcsSiteIds.length > 0) {
       let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
       let hasMore = true;
       while (hasMore) {
@@ -180,21 +181,26 @@ export async function POST(request: NextRequest) {
           if (!siteId) return;
           const expectedDistrict = siteDistrictById.get(siteId);
           if (!expectedDistrict) return;
-          const currentDistrict = normalizeStoredDistrict(data.district);
+          const currentDistrict = typeof data.district === "string" ? data.district.trim() : "";
           if (currentDistrict === expectedDistrict) return;
           if (!isCanonicalKeralaDistrict(expectedDistrict)) return;
-          batch.update(doc.ref, {
-            district: expectedDistrict,
-            ...buildServerUpdateAudit({
-              uid: "system",
-              email: "backfill-districts@system",
-            }),
-          });
+          if (workOrderUpdates.length < 200) {
+            workOrderUpdates.push({ id: doc.id, oldDistrict: currentDistrict, newDistrict: expectedDistrict });
+          }
+          if (!dryRun) {
+            batch.update(doc.ref, {
+              district: expectedDistrict,
+              ...buildServerUpdateAudit({
+                uid: "system",
+                email: "backfill-districts@system",
+              }),
+            });
+          }
           batchCount++;
         });
 
         if (batchCount > 0) {
-          await batch.commit();
+          if (!dryRun) await batch.commit();
           workOrdersUpdated += batchCount;
         }
 
@@ -212,6 +218,7 @@ export async function POST(request: NextRequest) {
       sitesNeedingManual: sitesNeedingManual.slice(0, 200),
       sitesNeedingManualCount: sitesNeedingManual.length,
       updates: updates.slice(0, 200),
+      workOrderUpdates,
     });
   } catch (error: any) {
     if (error?.message?.includes("access required")) {

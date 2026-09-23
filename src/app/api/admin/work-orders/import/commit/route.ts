@@ -13,12 +13,12 @@ import { buildTcsExamContentHash } from "@/lib/work-orders/tcs-exam-hash";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import {
   buildSiteLookupMaps,
+  isCompatibleSiteCodeMatch,
   resolveParsedRowSiteIds,
 } from "@/lib/work-orders/tcs-site-resolver";
 import {
   canonicalizeDistrictName,
   districtKey,
-  districtMatches,
   isCanonicalKeralaDistrict,
   normalizeOperationalZoneLabel,
 } from "@/lib/districts";
@@ -453,6 +453,27 @@ async function resolveCommitRows(
     .get();
   const tcsClientId = clientSnap.docs[0]?.id ?? null;
   const sites = await fetchSites(adminDb, tcsClientId);
+  const sitesById = new Map(
+    [...sites.byCodeDistrict.values(), ...sites.byFallback.values(), ...sites.byCode.values(), ...sites.byName.values()]
+      .map((site) => [site.id, site] as const),
+  );
+  const updatedSiteIds = new Set<string>();
+  const updateSiteDistrict = (site: SiteRecord | undefined, row: TcsExamSourceRow) => {
+    if (!site || !row.district || site.district === row.district || updatedSiteIds.has(site.id)) return;
+    writes.push({
+      ref: adminDb.collection("sites").doc(site.id),
+      data: {
+        district: row.district,
+        clientName: OPERATIONAL_CLIENT_NAME,
+        clientId: tcsClientId,
+        locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
+        ...buildServerUpdateAudit({ uid: adminUser.uid, email: adminUser.email ?? undefined }),
+      },
+      merge: true,
+    });
+    site.district = row.district;
+    updatedSiteIds.add(site.id);
+  };
 
   let createdSites = 0;
   const resolvedRows: TcsExamSourceRow[] = [];
@@ -460,6 +481,7 @@ async function resolveCommitRows(
   for (const row of rows) {
     const existing = findMatchingExistingRow(row, existingRows);
     if (existing?.siteId) {
+      updateSiteDistrict(sitesById.get(existing.siteId), row);
       resolvedRows.push({
         ...row,
         siteId: existing.siteId,
@@ -474,29 +496,17 @@ async function resolveCommitRows(
     const codeKey = buildSiteCodeKey(row.siteId);
     const nameKey = buildSiteNameKey(row.siteName);
 
+    const codeDistrictSite = codeDistrictKey ? sites.byCodeDistrict.get(codeDistrictKey) : undefined;
+    const codeOnlySite = codeKey ? sites.byCode.get(codeKey) : undefined;
     let site =
-      (codeDistrictKey && sites.byCodeDistrict.get(codeDistrictKey)) ||
+      (codeDistrictSite && isCompatibleSiteCodeMatch(row.siteId, row.siteName, codeDistrictSite.siteName)
+        ? codeDistrictSite : undefined) ||
       sites.byFallback.get(fallbackKey) ||
-      (codeKey ? sites.byCode.get(codeKey) : undefined) ||
+      (codeOnlySite && isCompatibleSiteCodeMatch(row.siteId, row.siteName, codeOnlySite.siteName)
+        ? codeOnlySite : undefined) ||
       (nameKey ? sites.byName.get(nameKey) : undefined);
 
-    if (site && row.district && !districtMatches(row.district, site.district)) {
-      writes.push({
-        ref: adminDb.collection("sites").doc(site.id),
-        data: {
-          district: row.district,
-          clientName: OPERATIONAL_CLIENT_NAME,
-          clientId: tcsClientId,
-          locationKey: buildLocationIdentity([OPERATIONAL_CLIENT_NAME, row.siteName, row.district]),
-          ...buildServerUpdateAudit({
-            uid: adminUser.uid,
-            email: adminUser.email ?? undefined,
-          }),
-        },
-        merge: true,
-      });
-      site.district = row.district;
-    }
+    updateSiteDistrict(site, row);
 
     if (!site) {
       const siteRef = adminDb.collection("sites").doc();

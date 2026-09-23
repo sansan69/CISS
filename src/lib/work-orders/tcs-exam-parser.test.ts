@@ -6,6 +6,16 @@ function workbookFromRows(rows: unknown[][]) {
 }
 
 describe("parseTcsExamWorkbook", () => {
+  it("reads a misspelled district from an uploaded work order as the canonical district", () => {
+    const result = parseTcsExamWorkbook(workbookFromRows([
+      ["Exam Name: TCS Exam", "16 Apr 2026"],
+      ["District", "Site", "Male", "Female"],
+      ["THIRUVANATHAPURAM", "College near Kollam Road", 2, 1],
+    ]), "TCS Exam.xlsx");
+
+    expect(result.rows[0]?.district).toBe("Thiruvananthapuram");
+  });
+
   it("parses legacy single-exam sheets with a title row and male/female columns", () => {
     const workbook = workbookFromRows([
       ["Exam Name:- Central Bank of India SO Rect Exam", "16 Apr 2023"],

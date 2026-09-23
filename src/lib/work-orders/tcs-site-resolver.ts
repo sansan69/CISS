@@ -11,7 +11,7 @@
 
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { buildLocationIdentity } from "@/lib/location-utils";
-import { districtKey, districtMatches } from "@/lib/districts";
+import { canonicalizeDistrictName, districtKey, districtMatches } from "@/lib/districts";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import type { TcsExamSourceRow } from "@/types/work-orders";
 
@@ -67,6 +67,17 @@ function buildSiteCodeKey(siteId: string | null | undefined): string {
 function buildSiteNameKey(siteName: string): string {
   const nameKey = normalizeSegment(siteName);
   return nameKey ? `name:${nameKey}` : "";
+}
+
+export function isCompatibleSiteCodeMatch(
+  siteCode: string | null | undefined,
+  rowSiteName: string,
+  existingSiteName: string,
+): boolean {
+  // Text-only labels such as "College" are sometimes reused for unrelated
+  // venues in different workbooks. Require the name too for these labels.
+  return /\d/.test(siteCode ?? "") ||
+    normalizeSegment(rowSiteName) === normalizeSegment(existingSiteName);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,10 +167,14 @@ export function resolveOneSiteId(
   const cKey = buildSiteCodeKey(row.siteId);
   const nKey = buildSiteNameKey(row.siteName);
 
+  const codeDistrictSite = cdKey ? maps.byCodeDistrict.get(cdKey) : undefined;
+  const codeOnlySite = cKey ? maps.byCode.get(cKey) : undefined;
   const site =
-    (cdKey && maps.byCodeDistrict.get(cdKey)) ||
+    (codeDistrictSite && isCompatibleSiteCodeMatch(row.siteId, row.siteName, codeDistrictSite.siteName)
+      ? codeDistrictSite : undefined) ||
     maps.byFallback.get(fbKey) ||
-    (cKey ? maps.byCode.get(cKey) : undefined) ||
+    (codeOnlySite && isCompatibleSiteCodeMatch(row.siteId, row.siteName, codeOnlySite.siteName)
+      ? codeOnlySite : undefined) ||
     (nKey ? maps.byName.get(nKey) : undefined);
 
   return site ?? null;
@@ -184,9 +199,10 @@ export function resolveParsedRowSiteIds(
     return {
       ...row,
       siteId: site.id,
-      // Keep the "better" name/district from Firestore when available
+      // Keep the uploaded district as the source of truth; old site records
+      // can contain a casing variant or a typo.
       siteName: site.siteName || row.siteName,
-      district: site.district || row.district,
+      district: canonicalizeDistrictName(row.district || site.district),
     };
   });
 }

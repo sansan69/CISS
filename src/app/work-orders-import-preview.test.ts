@@ -379,14 +379,18 @@ vi.mock("@/lib/districts", () => ({
   canonicalizeDistrictList: vi.fn((values: string[]) => values),
   districtKey: vi.fn((value: string) => {
     const normalized = String(value ?? "").trim().toLowerCase();
-    return ["trivandrum", "tvm", "trivandrum district"].includes(normalized)
+    return ["trivandrum", "tvm", "trivandrum district", "thiruvanathapuram"].includes(normalized)
       ? "thiruvananthapuram"
       : normalized;
   }),
   districtMatches: districtMatchesMock,
   normalizeDistrictName: vi.fn((value: string) => value),
   normalizeOperationalZoneLabel: vi.fn((value: string) => value),
-  canonicalizeDistrictName: vi.fn((value: string) => value),
+  canonicalizeDistrictName: vi.fn((value: string) =>
+    ["trivandrum", "tvm", "thiruvanathapuram"].includes(String(value).toLowerCase())
+      ? "Thiruvananthapuram"
+      : value,
+  ),
   inferKeralaDistrictFromText: vi.fn(() => ""),
   isCanonicalKeralaDistrict: vi.fn(() => true),
   resolveKeralaDistrictFromRow: vi.fn((values: unknown[]) => String(values.find(Boolean) ?? "")),
@@ -1618,7 +1622,7 @@ describe("TCS exam work order import server slice", () => {
     adminDb.seed("sites", "marian-tvm", {
       siteId: "MARIAN",
       siteName: "Marian Engineering College",
-      district: "Thiruvananthapuram",
+      district: "THIRUVANATHAPURAM",
       clientName: "TCS",
     });
 
@@ -1678,6 +1682,88 @@ describe("TCS exam work order import server slice", () => {
     const workOrders = adminDb.listDocs("workOrders");
     expect(workOrders.some(({ data }) => data.siteId === "marian-tvm")).toBe(true);
     expect(workOrders.some(({ data }) => data.siteId === "marian-kochi")).toBe(false);
+    expect(adminDb.getDoc("sites", "marian-tvm")?.district).toBe("Thiruvananthapuram");
+  });
+
+  it("previews legacy district spelling repairs without writing live records", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "tvm-site", {
+      siteName: "College A",
+      district: "THIRUVANATHAPURAM",
+      clientName: "TCS",
+    });
+    adminDb.seed("workOrders", "tvm-order", {
+      siteId: "tvm-site",
+      siteName: "College A",
+      district: "THIRUVANATHAPURAM",
+      clientName: "TCS",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db: adminDb }));
+
+    const { POST } = await import("./api/admin/work-orders/backfill-districts/route");
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/backfill-districts?dryRun=true", {
+      method: "POST",
+      headers: { authorization: "Bearer token" },
+    }) as never);
+    const result = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({ dryRun: true, sitesUpdated: 1, workOrdersUpdated: 1 });
+    expect(adminDb.getDoc("sites", "tvm-site")?.district).toBe("THIRUVANATHAPURAM");
+    expect(adminDb.getDoc("workOrders", "tvm-order")?.district).toBe("THIRUVANATHAPURAM");
+  });
+
+  it("creates a separate site when a text TC code belongs to another venue", async () => {
+    const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "rajagiri", {
+      siteId: "College",
+      siteName: "Rajagiri School of Engineering",
+      district: "Ernakulam",
+      clientName: "TCS",
+    });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db: adminDb }));
+    buildDiffMock.mockReturnValue([{
+      key: "site-id:college|date:2026-09-18|exam:tcs-exam",
+      siteId: "College",
+      siteName: "Mar Athanasius College of Engineering",
+      district: "Ernakulam",
+      date: "2026-09-18",
+      examCode: "tcs-exam",
+      maleGuardsRequired: 2,
+      femaleGuardsRequired: 1,
+      totalManpower: 3,
+      status: "added",
+    }]);
+    const { POST } = await import("./api/admin/work-orders/import/commit/route");
+    const response = await POST(new Request("http://localhost/api/admin/work-orders/import/commit", {
+      method: "POST",
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({
+        mode: "new",
+        fileName: "tcs-exam.xlsx",
+        parserMode: "legacy-sheet",
+        examName: "TCS Exam",
+        examCode: "tcs-exam",
+        binaryFileHash: "binary-hash-1",
+        contentHash: "content-hash-1",
+        rows: [{
+          siteId: "College",
+          siteName: "Mar Athanasius College of Engineering",
+          district: "Ernakulam",
+          date: "2026-09-18",
+          examName: "TCS Exam",
+          examCode: "tcs-exam",
+          maleGuardsRequired: 2,
+          femaleGuardsRequired: 1,
+          sourceSheetName: "Sheet1",
+          sourceRowNumber: 3,
+        }],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(adminDb.listDocs("sites")).toHaveLength(2);
+    expect(adminDb.listDocs("workOrders")[0]?.data.siteId).not.toBe("rajagiri");
   });
 
   it("matches attendance assignments across legacy string, uid, and employeeId shapes", async () => {

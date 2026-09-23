@@ -3,6 +3,7 @@ import { requireAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerCreateAudit, buildServerUpdateAudit, buildServerAuditEvent } from "@/lib/server/audit";
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { formatDateLabel, normalizeText, serializeDate, sortByDateDesc, toInt } from "@/lib/server/mobile-api-utils";
+import { canonicalizeDistrictName } from "@/lib/districts";
 export const runtime = "nodejs";
 
 function normalizeWorkOrderDate(value: unknown) {
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
           clientName: normalizeText(data.clientName),
           siteId: normalizeText(data.siteId),
           siteName: normalizeText(data.siteName || "Site"),
-          district: normalizeText(data.district),
+          district: canonicalizeDistrictName(normalizeText(data.district)),
           date: serializeDate(data.date),
           dateLabel: formatDateLabel(data.date),
           assignedCount: assignedGuards.length,
@@ -105,6 +106,9 @@ export async function POST(request: Request) {
 
     if ("date" in filtered) {
       filtered.date = normalizeWorkOrderDate(filtered.date);
+    }
+    if ("district" in filtered) {
+      filtered.district = canonicalizeDistrictName(normalizeText(filtered.district));
     }
 
     if (Object.keys(filtered).length === 0) {

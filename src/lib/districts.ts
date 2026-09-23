@@ -35,7 +35,7 @@ export interface KeralaDistrictEntry {
 export const KERALA_DISTRICT_INDEX: KeralaDistrictEntry[] = [
   {
     canonical: "Thiruvananthapuram",
-    aliases: ["thiruvananthapuram", "trivandrum", "tvm", "trivandrum district"],
+    aliases: ["thiruvananthapuram", "thiruvananthapu", "trivandrum", "tvm", "trivandrum district"],
     searchTerms: ["Trivandrum", "TVM"],
     keywords: ["thiruvananthapuram", "trivandrum", "tvm", "vellayambalam", "kazhakkoottam", "neyyattinkara", "attingal"],
   },
@@ -71,7 +71,7 @@ export const KERALA_DISTRICT_INDEX: KeralaDistrictEntry[] = [
   },
   {
     canonical: "Ernakulam",
-    aliases: ["ernakulam", "cochin", "kochi"],
+    aliases: ["ernakulam", "cochin", "kochi", "kothamangalam"],
     searchTerms: ["Cochin", "Kochi"],
     keywords: [
       "ernakulam",
@@ -84,6 +84,7 @@ export const KERALA_DISTRICT_INDEX: KeralaDistrictEntry[] = [
       "perumbavoor",
       "angamaly",
       "muvattupuzha",
+      "kothamangalam",
       "thrippunithura",
       "tripunithura",
       "fort kochi",
@@ -233,7 +234,47 @@ function resolveDistrictAlias(value?: string | null) {
     if (aliased) return aliased;
   }
 
+  // Work-order spreadsheets often contain a one or two character typo in an
+  // otherwise recognizable district. Only accept a unique close match; free
+  // text and short abbreviations need an explicit alias instead.
+  for (const candidate of candidates) {
+    const spelling = candidate.toLowerCase();
+    if (!/^[a-z]{6,}$/.test(spelling)) continue;
+    const maxDistance = spelling.length >= 10 ? 2 : 1;
+    let bestDistance = maxDistance + 1;
+    let bestDistrict = "";
+    let ambiguous = false;
+    for (const [alias, canonical] of DISTRICT_ALIASES) {
+      if (!/^[a-z]{6,}$/.test(alias) || Math.abs(alias.length - spelling.length) > maxDistance) continue;
+      const distance = editDistance(spelling, alias);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestDistrict = canonical;
+        ambiguous = false;
+      } else if (distance === bestDistance && canonical !== bestDistrict) {
+        ambiguous = true;
+      }
+    }
+    if (bestDistance <= maxDistance && !ambiguous) return bestDistrict;
+  }
+
   return candidates[0];
+}
+
+function editDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const next = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      next[rightIndex] = Math.min(
+        next[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous = next;
+  }
+  return previous[right.length];
 }
 
 export function districtKey(value?: string | null) {
@@ -299,6 +340,10 @@ export function canonicalizeDistrictList(
         .filter(Boolean),
     ),
   );
+}
+
+export function resolveWorkOrderDistrict(workOrderDistrict?: string | null, siteDistrict?: string | null) {
+  return canonicalizeDistrictName(normalizeDistrictName(workOrderDistrict) || siteDistrict);
 }
 
 export function expandDistrictQueryValues(
@@ -388,6 +433,12 @@ export function resolveKeralaDistrictFromRow(
   row: Iterable<unknown>,
 ): string {
   const zoneNormalized = normalizeOperationalZoneLabel(rawDistrict as string | null | undefined);
+  if (zoneNormalized !== normalizeDistrictName(rawDistrict as string | null | undefined)) {
+    for (const cell of row) {
+      const inferred = inferKeralaDistrictFromText(cell);
+      if (inferred) return inferred;
+    }
+  }
   if (zoneNormalized && isCanonicalKeralaDistrict(zoneNormalized)) {
     return canonicalizeDistrictName(zoneNormalized) || zoneNormalized;
   }
@@ -408,7 +459,7 @@ export function mergeDistrictOptions(
       const normalized = normalizeDistrictName(raw);
       const key = districtKey(normalized);
       if (!normalized || !key || deduped.has(key)) continue;
-      deduped.set(key, normalized);
+      deduped.set(key, canonicalizeDistrictName(normalized));
     }
   }
 

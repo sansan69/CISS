@@ -42,7 +42,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { OPERATIONAL_CLIENT_NAME } from '@/lib/constants';
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { buildTcsExamContentHashBrowser } from '@/lib/work-orders/tcs-exam-hash-browser';
-import { districtKey, districtMatches } from '@/lib/districts';
+import { districtKey, districtMatches, resolveWorkOrderDistrict } from '@/lib/districts';
 import { PageHeader } from '@/components/layout/page-header';
 import { AssignedGuardsExportPanel } from '@/components/work-orders/assigned-guards-export-panel';
 import { WorkOrderRevisionNotices } from '@/components/work-orders/revision-notices';
@@ -488,7 +488,7 @@ export default function WorkOrderPage() {
                 return orders
                     .filter((order) => !pendingDeleteIds.has(order.id))
                     .map((order) => {
-                        const district = siteDistricts[siteId] || order.district || '';
+                        const district = resolveWorkOrderDistrict(order.district, siteDistricts[siteId]);
                         if (
                             userRole === 'fieldOfficer' &&
                             assignedDistricts.length > 0 &&

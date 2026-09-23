@@ -38,7 +38,7 @@ import { useAppAuth } from '@/context/auth-context';
 import { startOfToday } from 'date-fns';
 import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from '@/lib/work-orders';
 import { PageHeader } from '@/components/layout/page-header';
-import { districtMatches } from '@/lib/districts';
+import { canonicalizeDistrictName, districtMatches, resolveWorkOrderDistrict } from '@/lib/districts';
 import { fetchActiveGuardsForDistricts } from '@/lib/work-orders/available-guards';
 import {
     countGuardAssignments,
@@ -565,7 +565,7 @@ export default function AssignGuardsPage() {
                     });
                 } else {
                     const siteData = { id: siteDoc.id, ...siteDoc.data() } as Site;
-                    resolvedDistrict = siteData.district || siteData.districtName || "";
+                    resolvedDistrict = canonicalizeDistrictName(siteData.district || siteData.districtName || "");
                     districtFilter = resolvedDistrict;
                     if (!isOperationalWorkOrderClientName((siteData as { clientName?: string }).clientName)) {
                         throw new Error("Work orders are only available for TCS sites.");
@@ -626,7 +626,7 @@ export default function AssignGuardsPage() {
         setIsAssignDialogOpen(true);
         setIsLoadingGuards(true);
         try {
-            const resolvedDistrict = (site?.district || site?.districtName || workOrder.district || '').trim();
+            const resolvedDistrict = resolveWorkOrderDistrict(workOrder.district, site?.district || site?.districtName);
             // Admin: when the site/work-order has no usable district (legacy
             // import without a district column), fetch every active guard so
             // the dialog never silently shows "no guards to map". Toast a
