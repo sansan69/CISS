@@ -7,10 +7,40 @@ import {
 } from "@/lib/districts";
 import { employeeMatchesAnyDistrict, resolveEmployeeDistrict } from "@/lib/employees/visibility";
 import { serializeGuardProfileView } from "@/lib/server/guard-profile-view";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+// Firestore `in` queries only return a bounded page, ordered by document id.
+// A district roster that exceeds one page would silently drop the guards that
+// sort last (this is what hid an Ernakulam guard past the 300th document and
+// made her impossible to assign). Page through the cursor until the scoped
+// roster is exhausted, with a high safety ceiling.
+const GUARD_PAGE_SIZE = 300;
+const MAX_GUARD_RESULTS = 5000;
+
+async function fetchAllDocs(
+  buildQuery: () => FirebaseFirestore.Query,
+  maxDocs: number,
+): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+  const docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+  while (docs.length < maxDocs) {
+    const pageSize = Math.min(GUARD_PAGE_SIZE, maxDocs - docs.length);
+    let query = buildQuery().limit(pageSize);
+    if (cursor) {
+      query = query.startAfter(cursor);
+    }
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    docs.push(...snapshot.docs);
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < pageSize) break;
+  }
+  return docs;
 }
 
 type TimestampLike = {
@@ -81,24 +111,7 @@ async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!foSnapshot.empty) {
-    const foData = foSnapshot.docs[0].data();
-    if (Array.isArray(foData.assignedDistricts)) {
-      return canonicalizeDistrictList(
-        foData.assignedDistricts.filter((district): district is string => typeof district === "string"),
-      );
-    }
-  }
-
-  return Array.isArray(decoded.assignedDistricts)
-    ? canonicalizeDistrictList(decoded.assignedDistricts.filter((district): district is string => typeof district === "string"))
-    : [];
+  return (await requireActiveFieldOfficerProfile(adminDb, decoded)).assignedDistricts;
 }
 
 export async function GET(request: Request) {
@@ -110,16 +123,20 @@ export async function GET(request: Request) {
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { searchParams } = new URL(request.url);
-    const resultLimit = Math.min(
-      Math.max(Number.parseInt(searchParams.get("limit") || "300", 10) || 300, 1),
-      500,
-    );
+    // Only honor an explicit `limit`. Callers that scope by district without a
+    // limit (the work-order assignment dialog) must receive the whole roster,
+    // otherwise guards beyond the first page can never be selected.
+    const limitParam = searchParams.get("limit");
+    const parsedLimit = limitParam === null ? NaN : Number.parseInt(limitParam, 10);
+    const resultLimit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), MAX_GUARD_RESULTS)
+      : MAX_GUARD_RESULTS;
     const requestedDistricts = searchParams
       .getAll("district")
       .map(normalizeText)
       .filter(Boolean);
-    const assignedDistricts = await getAssignedDistricts(adminDb, decoded);
     const isAdmin = hasAdminAccess(decoded);
+    const assignedDistricts = isAdmin ? [] : await getAssignedDistricts(adminDb, decoded);
     const includeInactive = new URL(request.url).searchParams.get("includeInactive") === "true";
     const districtScope = requestedDistricts.length > 0
       ? requestedDistricts.filter((district) =>
@@ -135,8 +152,8 @@ export async function GET(request: Request) {
 
     const employeeDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
     if (isAdmin && districtScope.length === 0) {
-      const snapshot = await adminDb.collection("employees").limit(resultLimit).get();
-      snapshot.docs.forEach((doc) => employeeDocs.set(doc.id, doc));
+      const docs = await fetchAllDocs(() => adminDb.collection("employees"), resultLimit);
+      docs.forEach((doc) => employeeDocs.set(doc.id, doc));
     } else {
       // Firestore supports at most 30 values in an `in` query. Query only the
       // officer's canonical district scope and merge chunks by document ID.
@@ -156,15 +173,18 @@ export async function GET(request: Request) {
         "locationDistrict",
         "city",
       ];
-      const snapshots = await Promise.all(
+      const results = await Promise.all(
         districtFields.flatMap((field) =>
           chunks.map((districts) =>
-            adminDb.collection("employees").where(field, "in", districts).limit(resultLimit).get(),
+            fetchAllDocs(
+              () => adminDb.collection("employees").where(field, "in", districts),
+              resultLimit,
+            ),
           ),
         ),
       );
-      snapshots.forEach((snapshot) => {
-        snapshot.docs.forEach((doc) => employeeDocs.set(doc.id, doc));
+      results.forEach((docs) => {
+        docs.forEach((doc) => employeeDocs.set(doc.id, doc));
       });
     }
 

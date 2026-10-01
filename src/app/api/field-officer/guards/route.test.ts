@@ -19,6 +19,7 @@ class FakeQuery {
     private readonly collectionName: string,
     private readonly filters: Array<{ field: string; value: unknown }> = [],
     private readonly limitCount?: number,
+    private readonly afterId?: string,
   ) {}
 
   where(field: string, op: "==" | "in", value: unknown) {
@@ -27,15 +28,20 @@ class FakeQuery {
       this.collectionName,
       [...this.filters, { field, value: op === "in" ? { in: value } : value }],
       this.limitCount,
+      this.afterId,
     );
   }
 
   limit(value: number) {
-    return new FakeQuery(this.store, this.collectionName, this.filters, value);
+    return new FakeQuery(this.store, this.collectionName, this.filters, value, this.afterId);
+  }
+
+  startAfter(doc: { id?: string }) {
+    return new FakeQuery(this.store, this.collectionName, this.filters, this.limitCount, doc?.id);
   }
 
   async get() {
-    const docs = this.store
+    let docs = this.store
       .listDocs(this.collectionName)
       .filter(({ data }) =>
         this.filters.every((filter) => {
@@ -56,6 +62,10 @@ class FakeQuery {
           ? { toMillis: () => Date.parse(data.__createTime as string) }
           : undefined,
       }));
+    if (this.afterId) {
+      const cursor = docs.findIndex((doc) => doc.id === this.afterId);
+      if (cursor >= 0) docs = docs.slice(cursor + 1);
+    }
     return new FakeSnapshot(typeof this.limitCount === "number" ? docs.slice(0, this.limitCount) : docs);
   }
 }
@@ -294,5 +304,34 @@ describe("field officer guards route", () => {
       expect.objectContaining({ employeeId: "G-MIDDLE", createdAt: "2026-07-15T08:00:00.000Z" }),
       expect.objectContaining({ employeeId: "G-OLD", createdAt: "2026-01-01T00:00:00.000Z" }),
     ]);
+  });
+
+  it("returns every guard in the district even when the roster exceeds one page", async () => {
+    const db = new FakeFirestore();
+    const total = 309;
+    for (let index = 0; index < total; index += 1) {
+      db.seed("employees", `guard-${String(index).padStart(3, "0")}`, {
+        fullName: `Ernakulam Guard ${index}`,
+        employeeId: `G-${String(index).padStart(3, "0")}`,
+        clientName: "TCS",
+        district: "Ernakulam",
+        gender: index % 2 === 0 ? "Male" : "Female",
+        phoneNumber: `99999${String(index).padStart(5, "0")}`,
+        status: "Active",
+      });
+    }
+
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "admin-1", role: "admin" });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("http://localhost/api/field-officer/guards?district=Ernakulam"),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.guards).toHaveLength(total);
+    expect(payload.guards.map((guard: { employeeId: string }) => guard.employeeId)).toContain("G-308");
   });
 });
