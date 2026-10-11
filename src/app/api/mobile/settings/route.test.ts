@@ -25,6 +25,7 @@ class FakeSettingsDb {
 function mockDependencies(options: {
   db: FakeSettingsDb;
   session?: Record<string, unknown> | null;
+  sessionError?: Error;
   release?: Record<string, unknown>;
 }) {
   vi.doMock("@/lib/firebaseAdmin", () => ({ db: options.db }));
@@ -34,11 +35,12 @@ function mockDependencies(options: {
       Response.json({ error: message }, { status }),
   }));
   vi.doMock("@/lib/server/mobile-session", () => ({
-    resolveMobileSession: vi.fn(async () =>
-      options.session === undefined
+    resolveMobileSession: vi.fn(async () => {
+      if (options.sessionError) throw options.sessionError;
+      return options.session === undefined
         ? { role: "guard", uid: "guard-uid-1", stateCode: "KL" }
-        : options.session,
-    ),
+        : options.session;
+    }),
   }));
   vi.doMock("@/lib/android-release", () => ({
     getAndroidRelease: vi.fn(async () =>
@@ -144,6 +146,24 @@ describe("GET /api/mobile/settings", () => {
     const body = await response.json();
 
     expect(body.data.app.forceUpdate).toBe(true);
+  });
+
+  it("returns 500 without leaking internals when config loading fails", async () => {
+    const db = new FakeSettingsDb(new Map());
+    mockDependencies({
+      db,
+      sessionError: new Error("firestore failed at internal/secret/path"),
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET(
+      new Request("https://example.test/api/mobile/settings"),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Could not load mobile settings.",
+    });
   });
 
   it("rejects accounts that are not linked to a mobile profile", async () => {

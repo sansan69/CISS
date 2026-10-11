@@ -140,6 +140,47 @@ export function parseCapturedAt(
   return driftMs <= maxDriftMs ? capturedAt : null;
 }
 
+/** Coerce a stored Firestore/JS timestamp value to epoch millis. */
+function toMillisValue(value: unknown): number | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.getTime();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === "object") {
+    const candidate = value as {
+      toDate?: () => Date;
+      seconds?: number;
+      _seconds?: number;
+    };
+    if (typeof candidate.toDate === "function") {
+      const date = candidate.toDate();
+      return Number.isNaN(date.getTime()) ? null : date.getTime();
+    }
+    const seconds = candidate.seconds ?? candidate._seconds;
+    if (typeof seconds === "number") return seconds * 1000;
+  }
+  return null;
+}
+
+/**
+ * Read the timestamp a stored `guardLocations` "current" document was last
+ * written at, preferring the explicit epoch field and falling back to the
+ * client capture time. Returns `null` when the doc predates this field.
+ */
+function readStoredTimestampMs(
+  data: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!data) return null;
+  const direct = data.sampleCapturedAtMs;
+  if (typeof direct === "number" && Number.isFinite(direct)) return direct;
+  return toMillisValue(data.clientCapturedAt);
+}
+
 /** AMS-named tracking fields accepted alongside the legacy heartbeat shape. */
 export const guardLocationAmsFieldsSchema = {
   activity: z.string().trim().max(64).nullable().optional(),
@@ -478,10 +519,30 @@ export async function persistGuardLocationSample({
   locationData.clientCapturedAt = capturedAt
     ? Timestamp.fromDate(capturedAt)
     : null;
+  // Monotonic sort key for the live "current" pin. When the sample carries no
+  // usable client timestamp we fall back to server-now (the prior behaviour:
+  // heartbeat samples always win), so a live sample never regresses the pin.
+  const sampleTimestampMs = capturedAt
+    ? capturedAt.getTime()
+    : nowDate.getTime();
+  locationData.sampleCapturedAtMs = sampleTimestampMs;
 
   const guardLocRef = db.collection("guardLocations").doc(guard.employeeDocId);
+  const currentSnapshot = await guardLocRef.get();
+  const storedTimestampMs = readStoredTimestampMs(
+    currentSnapshot.exists
+      ? (currentSnapshot.data() as Record<string, unknown>)
+      : null,
+  );
+  // Only advance the live pin forwards. Queued samples that are older than the
+  // stored sample are written to history only.
+  const shouldUpdateCurrent =
+    storedTimestampMs === null || sampleTimestampMs >= storedTimestampMs;
+
   const batch = db.batch();
-  batch.set(guardLocRef, locationData, { merge: true });
+  if (shouldUpdateCurrent) {
+    batch.set(guardLocRef, locationData, { merge: true });
+  }
   batch.set(
     guardLocRef
       .collection("locationHistory")
@@ -513,6 +574,7 @@ export async function persistGuardLocationSample({
       bearing: sample.bearing ?? null,
       locationAccuracy: sample.locationAccuracy ?? null,
       clientCapturedAt: locationData.clientCapturedAt,
+      sampleCapturedAtMs: sampleTimestampMs,
       recordedAt: now,
       expiresAt: Timestamp.fromDate(buildLocationHistoryExpiry(historyAt)),
     },

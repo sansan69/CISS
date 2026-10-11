@@ -137,8 +137,16 @@ function resolveVersion(data: Record<string, unknown>) {
 }
 
 export async function GET(request: Request) {
+  let decoded: Awaited<ReturnType<typeof verifyRequestAuth>>;
   try {
-    const decoded = await verifyRequestAuth(request);
+    decoded = await verifyRequestAuth(request);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unauthorized.";
+    return unauthorizedResponse(message, 401);
+  }
+
+  try {
     const session = await resolveMobileSession(decoded);
 
     if (!session) {
@@ -203,8 +211,10 @@ export async function GET(request: Request) {
       },
     });
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Could not load mobile settings.";
-    return unauthorizedResponse(message, 401);
+    console.error("[mobile/settings]", error);
+    return NextResponse.json(
+      { error: "Could not load mobile settings." },
+      { status: 500 },
+    );
   }
 }

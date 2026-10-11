@@ -272,6 +272,89 @@ describe("POST /api/mobile/tracking/batch", () => {
     expect(await response.json()).toEqual({ accepted: 0, rejected: 1 });
   });
 
+  it("does not regress the current pin with a stale queued sample", async () => {
+    const db = new FakeFirestore();
+    seedActiveSession(db);
+    const newerStored = Date.now();
+    db.seed("guardLocations/employee-doc-1", {
+      sampleCapturedAtMs: newerStored,
+      lat: 1.111,
+      lng: 2.222,
+      activity: "still",
+    });
+    mockSharedDependencies(db);
+
+    const { POST } = await import("./route");
+    const response = await POST(
+      createRequest({
+        samples: [
+          {
+            siteId: "site-1",
+            latitude: 10.5,
+            longitude: 76.5,
+            accuracy: 12,
+            activity: "walking",
+            capturedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accepted: 1, rejected: 0 });
+
+    const current = db.get("guardLocations/employee-doc-1");
+    expect(current).toMatchObject({
+      lat: 1.111,
+      lng: 2.222,
+      activity: "still",
+      sampleCapturedAtMs: newerStored,
+    });
+
+    const historyPath = db
+      .paths("guardLocations/employee-doc-1/locationHistory/")
+      .at(0);
+    expect(historyPath).toBeDefined();
+    expect(db.get(historyPath!)).toMatchObject({
+      lat: 10.5,
+      activity: "walking",
+    });
+  });
+
+  it("advances the current pin when the sample is newer than the stored one", async () => {
+    const db = new FakeFirestore();
+    seedActiveSession(db);
+    db.seed("guardLocations/employee-doc-1", {
+      sampleCapturedAtMs: Date.now() - 60 * 60 * 1000,
+      lat: 1.111,
+      activity: "still",
+    });
+    mockSharedDependencies(db);
+
+    const { POST } = await import("./route");
+    const response = await POST(
+      createRequest({
+        samples: [
+          {
+            siteId: "site-1",
+            latitude: 10.5,
+            longitude: 76.5,
+            accuracy: 12,
+            activity: "walking",
+            capturedAt: new Date().toISOString(),
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accepted: 1, rejected: 0 });
+    expect(db.get("guardLocations/employee-doc-1")).toMatchObject({
+      lat: 10.5,
+      activity: "walking",
+    });
+  });
+
   it("trims batches beyond 200 samples", async () => {
     const db = new FakeFirestore();
     seedActiveSession(db);
