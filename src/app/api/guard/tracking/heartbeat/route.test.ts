@@ -174,9 +174,16 @@ describe("guard tracking heartbeat", () => {
         lng: 76,
         accuracy: 12,
         batteryLevel: 0.73,
+        batteryPercentage: 73,
         speed: 4.2,
         wifiConnected: true,
         networkType: "wifi",
+        activity: "walking",
+        isMock: false,
+        isGPSOn: true,
+        altitude: 14,
+        bearing: 90,
+        locationAccuracy: 12,
         capturedAt: new Date().toISOString(),
       }),
     );
@@ -199,9 +206,16 @@ describe("guard tracking heartbeat", () => {
       zoneStatus: "out_of_zone",
       isOutOfZone: true,
       batteryLevel: 0.73,
+      batteryPercentage: 73,
       speed: 4.2,
       wifiConnected: true,
       networkType: "wifi",
+      activity: "walking",
+      isMock: false,
+      isGPSOn: true,
+      altitude: 14,
+      bearing: 90,
+      locationAccuracy: 12,
     });
 
     const history = [...db.writes.entries()].find(([path]) =>
@@ -214,9 +228,16 @@ describe("guard tracking heartbeat", () => {
       district: "Ernakulam",
       attendanceSessionId: "session-1",
       batteryLevel: 0.73,
+      batteryPercentage: 73,
       speed: 4.2,
       wifiConnected: true,
       networkType: "wifi",
+      activity: "walking",
+      isMock: false,
+      isGPSOn: true,
+      altitude: 14,
+      bearing: 90,
+      locationAccuracy: 12,
     });
   });
 });
