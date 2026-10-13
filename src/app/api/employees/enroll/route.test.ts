@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import crypto from "node:crypto";
+import { LNG_JOB_DESIGNATIONS, requiresLngServiceBook, requiresLngArmsLicense } from "@/lib/constants";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -8,6 +9,9 @@ const mocks = vi.hoisted(() => {
   return {
     addedEmployees,
     enrollmentEnabled: true,
+    draftStatus: "draft",
+    commitError: null as { code: number } | null,
+    deleteStorageObjectIfPresent: vi.fn(async () => undefined),
     clientName: "TCS",
     generateEmployeeId: vi.fn(() => "CISS/TCS/2026-27/001"),
     generateQrCodeDataUrl: vi.fn(() => Promise.resolve("data:image/png;base64,qr")),
@@ -79,8 +83,12 @@ class FakeCollection {
         if (ref.path === "enrollments/draft-test-123") {
           return {
             exists: true,
+            updateTime: FakeTimestamp.now(),
             data: () => ({
-              status: "draft",
+              status: mocks.draftStatus,
+              completionTokenHash: mocks.draftStatus === "completed" ? crypto.createHash("sha256").update("test-upload-token").digest("hex") : undefined,
+              employeeDocId: "employee-doc-1",
+              employeeId: "CISS/TCS/2026-27/001",
               phoneNumber: "9012345690",
               tokenHash: crypto.createHash("sha256").update("test-upload-token").digest("hex"),
               expiresAt: { toMillis: () => Date.now() + 60_000 },
@@ -123,6 +131,7 @@ class FakeCollection {
           if (/^employees\/[^/]+$/.test(ref?.path || "")) employeePayload = payload;
         }),
         commit: vi.fn(async () => {
+          if (mocks.commitError) throw mocks.commitError;
           if (employeePayload) mocks.addedEmployees.push(employeePayload);
         }),
       };
@@ -162,7 +171,7 @@ vi.mock("@/lib/server/aadhaar", () => ({
     contentType: "application/pdf",
     sourcePath: source,
   })),
-  deleteStorageObjectIfPresent: vi.fn(async () => undefined),
+  deleteStorageObjectIfPresent: mocks.deleteStorageObjectIfPresent,
 }));
 
 function buildStandardPayload(overrides: Record<string, unknown> = {}) {
@@ -213,6 +222,9 @@ describe("POST /api/employees/enroll", () => {
   beforeEach(() => {
     mocks.addedEmployees.length = 0;
     mocks.enrollmentEnabled = true;
+    mocks.draftStatus = "draft";
+    mocks.commitError = null;
+    mocks.deleteStorageObjectIfPresent.mockClear();
     mocks.clientName = "TCS";
     mocks.generateEmployeeId.mockClear();
     mocks.generateQrCodeDataUrl.mockClear();
@@ -304,6 +316,58 @@ describe("POST /api/employees/enroll", () => {
       legacyUniqueId: "LNG-2026-001",
     });
     expect(mocks.addedEmployees[0]).not.toHaveProperty("qualificationName");
+  });
+
+  it.each(LNG_JOB_DESIGNATIONS)("saves the complete LNG %s profile", async (designation) => {
+    mocks.clientName = "LNG Petronet";
+    const url = (folder: string) => `https://firebasestorage.googleapis.com/v0/b/test-bucket/o/${encodeURIComponent(`enrollments/draft-test-123/${folder}/document.pdf`)}?alt=media&token=test`;
+    const { POST } = await import("./route");
+    const response = await POST(new NextRequest("https://example.com/api/employees/enroll", {
+      method: "POST",
+      body: JSON.stringify(buildStandardPayload({
+        clientName: "Petronet LNG Limited", fullNameInput: "Test LNG Guard",
+        resourceIdNumber: undefined, qualificationName: undefined, qualificationCertificateUrl: undefined,
+        lngJobDesignation: designation, nationality: "Indian", identificationMark: "Scar on forearm",
+        heightCm: 170, weightKg: 70, branchName: "Kochi", panNumber: "AABCT1234C",
+        panCardDocumentUrl: url("panCards"),
+        ...(requiresLngServiceBook(designation) ? {serviceBookNumber: "SB-123", serviceBookDocumentUrl: url("serviceBooks")} : {}),
+        ...(requiresLngArmsLicense(designation) ? {armsLicenseNumber: "AR-123", armsLicenseDocumentUrl: url("armsLicenses")} : {}),
+      })),
+    }));
+    expect(response.status).toBe(200);
+    expect(mocks.addedEmployees[0]).toMatchObject({clientName: "LNG Petronet", lngJobDesignation: designation});
+  });
+
+  it("returns the original receipt for an authenticated completed-draft retry", async () => {
+    mocks.draftStatus = "completed";
+    const { POST } = await import("./route");
+    const response = await POST(new NextRequest("https://example.com/api/employees/enroll", {
+      method: "POST", body: JSON.stringify(buildStandardPayload()),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({id: "employee-doc-1", employeeId: "CISS/TCS/2026-27/001"});
+    expect(mocks.addedEmployees).toHaveLength(0);
+    expect(mocks.encryptAadhaarNumber).not.toHaveBeenCalled();
+  });
+
+  it("does not disclose a completed receipt with the wrong token", async () => {
+    mocks.draftStatus = "completed";
+    const { POST } = await import("./route");
+    const response = await POST(new NextRequest("https://example.com/api/employees/enroll", {
+      method: "POST", body: JSON.stringify(buildStandardPayload({enrollmentUploadToken: "wrong"})),
+    }));
+    expect(response.status).toBe(403);
+  });
+
+  it.each([6, 4])("preserves documents when commit fails with code %s", async (code) => {
+    mocks.commitError = {code};
+    const { POST } = await import("./route");
+    const response = await POST(new NextRequest("https://example.com/api/employees/enroll", {
+      method: "POST", body: JSON.stringify(buildStandardPayload()),
+    }));
+    expect(response.status).toBe(code === 6 ? 409 : 503);
+    expect(mocks.deleteStorageObjectIfPresent).not.toHaveBeenCalled();
+    expect(mocks.addedEmployees).toHaveLength(0);
   });
 
   it.each([undefined, "", "not-an-email"])(

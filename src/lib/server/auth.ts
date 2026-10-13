@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
+import {
+  isDesignatedAadhaarAdministrator,
+} from "@/lib/aadhaar-admin-policy";
+
+export { AADHAAR_ADMIN_EMAIL } from "@/lib/aadhaar-admin-policy";
 
 export type AppDecodedToken = DecodedIdToken & {
   admin?: boolean;
@@ -61,22 +66,17 @@ export async function requireAdmin(request: Request) {
   return requireAdminLike(decodedToken);
 }
 
-export const AADHAAR_ADMIN_EMAIL = "admin@cisskerala.app";
-
 /**
  * Aadhaar access is intentionally narrower than ordinary administrator access.
  * Keep this check server-side: client-side role or email checks are UX only.
  */
 export function requireAadhaarAdministratorToken(decodedToken: AppDecodedToken) {
-  const normalizedEmail = decodedToken.email?.trim().toLowerCase();
-  const hasAdministratorClaim =
-    decodedToken.admin === true || decodedToken.role === "admin";
-
-  if (
-    normalizedEmail !== AADHAAR_ADMIN_EMAIL ||
-    decodedToken.email_verified !== true ||
-    !hasAdministratorClaim
-  ) {
+  if (!isDesignatedAadhaarAdministrator({
+    email: decodedToken.email,
+    emailVerified: decodedToken.email_verified,
+    role: decodedToken.role,
+    admin: decodedToken.admin,
+  })) {
     throw new Error("Aadhaar administrator access required.");
   }
 

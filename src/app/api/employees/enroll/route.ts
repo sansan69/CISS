@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   canonicalizeDistrictName,
@@ -44,6 +45,7 @@ import {
   GUARD_UNDERTAKING_VERSION,
 } from "@/lib/server/enrollment-consents";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type RestrictedEnrollmentAadhaar = Awaited<ReturnType<typeof moveAadhaarSourceToRestrictedStorage>>;
 
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
 
     const normalizedPhone = payload.phoneNumber.replace(/\D/g, "");
     let draftRef: FirebaseFirestore.DocumentReference | null = null;
+    let draftUpdateTime: FirebaseFirestore.Timestamp | undefined;
 
     if (!isAdminSubmission) {
       draftRef = adminDb.collection("enrollments").doc(draftId);
@@ -153,8 +156,21 @@ export async function POST(request: NextRequest) {
         status?: string;
         phoneNumber?: string;
         tokenHash?: string;
+        completionTokenHash?: string;
+        employeeDocId?: string;
+        employeeId?: string;
         expiresAt?: { toMillis?: () => number };
       } | undefined;
+      // A lost response must not turn a successful registration into an error.
+      if (
+        draftData?.status === "completed" &&
+        draftData.phoneNumber === normalizedPhone &&
+        enrollmentDraftTokenMatches(draftToken, draftData.completionTokenHash) &&
+        draftData.employeeDocId && draftData.employeeId
+      ) {
+        return NextResponse.json({ id: draftData.employeeDocId, employeeId: draftData.employeeId });
+      }
+      draftUpdateTime = draftSnap.updateTime;
       if (
         !draftSnap.exists ||
         draftData?.status !== "draft" ||
@@ -206,7 +222,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Enrollment form requirements are not satisfied.",
-          details: configErrors,
+          details: { formErrors: configErrors, fieldErrors: {} },
         },
         { status: 400 },
       );
@@ -434,6 +450,17 @@ export async function POST(request: NextRequest) {
     };
 
     const batch = adminDb.batch();
+    // Atomic create reservations close the race between the duplicate queries
+    // above and this final save. A later registration using the same value then
+    // receives an already-exists response instead of creating a duplicate.
+    for (const [kind, value] of [["phone", normalizedPhone], ["email", normalizedEmail]]) {
+      const key = crypto.createHash("sha256").update(`${kind}:${value}`).digest("hex");
+      batch.create(adminDb.collection("enrollmentIdentities").doc(key), {
+        employeeDocId: docRef.id,
+        kind,
+        createdAt: now,
+      });
+    }
     batch.create(
       employeeIdRegistryRef(adminDb, employeeId),
       buildEmployeeIdRegistryRecord({
@@ -558,12 +585,23 @@ export async function POST(request: NextRequest) {
         employeeId,
         completedAt: now,
         tokenHash: null,
-      });
+        completionTokenHash: crypto.createHash("sha256").update(draftToken).digest("hex"),
+      }, { lastUpdateTime: draftUpdateTime! });
     }
     try {
       await batch.commit();
-    } catch (error) {
-      await Promise.all(movedAadhaarDocuments.map((document) => deleteStorageObjectIfPresent(document.documentStoragePath)));
+    } catch (error: any) {
+      // Reconcile a concurrent retry (or uncertain commit) before reporting failure.
+      if (draftRef) {
+        const completed = (await draftRef.get()).data();
+        if (completed?.status === "completed" &&
+            enrollmentDraftTokenMatches(draftToken, completed.completionTokenHash)) {
+          return NextResponse.json({ id: completed.employeeDocId, employeeId: completed.employeeId });
+        }
+      }
+      if (error?.code === 6 || error?.code === "already-exists" || error?.code === 9 || error?.code === "failed-precondition") {
+        return NextResponse.json({ error: "Another registration or upload changed this session. Please retry; if the error continues, ask CISS HR to check the phone, email, and employee ID." }, { status: 409 });
+      }
       throw error;
     }
     await Promise.allSettled(movedAadhaarDocuments.map((document) => deleteStorageObjectIfPresent(document.sourcePath)));
@@ -574,9 +612,16 @@ export async function POST(request: NextRequest) {
       employeeId,
     });
   } catch (error: any) {
-    await Promise.all(
-      movedAadhaarDocuments.map((document) => deleteStorageObjectIfPresent(document.documentStoragePath)),
-    );
+    // Preserve documents on failure: a network error can leave commit status uncertain.
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: "Invalid enrollment request. Please reload the form and try again." }, { status: 400 });
+    }
+    if ([4, 8, 10, 14, "deadline-exceeded", "resource-exhausted", "aborted", "unavailable"].includes(error?.code)) {
+      return NextResponse.json({
+        error: "The registration service is temporarily unavailable. Your documents are preserved; please retry shortly.",
+        retryable: true,
+      }, { status: 503 });
+    }
     if (error?.name === "ZodError") {
       return NextResponse.json(
         {

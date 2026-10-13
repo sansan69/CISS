@@ -23,8 +23,15 @@ export async function PATCH(
 
     // Only admins can reach this route (requireAdmin above). Passwords are
     // updated on the Firebase Auth user only — never stored in Firestore.
-    const nextPassword = String(body.password ?? "").trim();
-    if (nextPassword && nextPassword.length < 6) {
+    const passwordProvided = Object.hasOwn(body, "password");
+    if (passwordProvided && typeof body.password !== "string") {
+      return NextResponse.json(
+        { error: "Password must be a string." },
+        { status: 400 },
+      );
+    }
+    const nextPassword = body.password;
+    if (typeof nextPassword === "string" && nextPassword.length < 6) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters long." },
         { status: 400 }
@@ -33,7 +40,7 @@ export async function PATCH(
 
     // Apply the auth password change before touching Firestore so a failed
     // auth update never leaves a half-applied officer edit behind.
-    if (nextPassword) {
+    if (typeof nextPassword === "string") {
       const officerSnap = await adminDb.collection("fieldOfficers").doc(id).get();
       if (!officerSnap.exists) {
         return NextResponse.json({ error: "Field officer not found." }, { status: 404 });
@@ -61,7 +68,7 @@ export async function PATCH(
         },
       ),
     ];
-    if (nextPassword) {
+    if (typeof nextPassword === "string") {
       auditEvents.push(
         buildServerAuditEvent(
           "field_officer_password_updated",

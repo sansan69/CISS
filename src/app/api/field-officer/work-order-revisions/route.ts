@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import {
   hasAdminAccess,
-  hasFieldOfficerAccess,
   unauthorizedResponse,
   verifyRequestAuth,
   type AppDecodedToken,
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 
 export const runtime = "nodejs";
 
@@ -27,24 +27,7 @@ async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  const snapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-  if (!snapshot.empty) {
-    const districts = snapshot.docs[0].data().assignedDistricts;
-    if (Array.isArray(districts)) {
-      return canonicalizeDistrictList(
-        districts.filter((district): district is string => typeof district === "string"),
-      );
-    }
-  }
-  return canonicalizeDistrictList(
-    Array.isArray(decoded.assignedDistricts)
-      ? decoded.assignedDistricts.filter((district): district is string => typeof district === "string")
-      : [],
-  );
+  return (await requireActiveFieldOfficerProfile(adminDb, decoded)).assignedDistricts;
 }
 
 function canAccessDistrict(
@@ -62,9 +45,6 @@ function canAccessDistrict(
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
-    if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
-      return unauthorizedResponse("Field officer or admin access required.", 403);
-    }
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const isAdmin = hasAdminAccess(decoded);
     const assignedDistricts = isAdmin ? [] : await getAssignedDistricts(adminDb, decoded);
@@ -112,9 +92,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
-    if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
-      return unauthorizedResponse("Field officer or admin access required.", 403);
-    }
     const body = await request.json();
     const eventId = normalizeText(body.eventId);
     if (!eventId) {

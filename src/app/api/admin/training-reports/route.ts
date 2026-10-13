@@ -113,10 +113,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
-    if (!hasFieldOfficerAccess(decoded)) {
-      return unauthorizedResponse("Field officer access required.", 403);
-    }
-
     const parsed = trainingReportInputSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: firstZodError(parsed.error) }, { status: 400 });

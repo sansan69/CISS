@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { Label } from '@/components/ui/label';
 import { useAppAuth } from '@/context/auth-context';
+import { isDesignatedAadhaarAdministrator } from '@/lib/aadhaar-admin-policy';
 import { buildFirestoreAuditEvent, buildFirestoreUpdateAudit } from '@/lib/firestore-audit';
 import { PageHeader } from '@/components/layout/page-header';
 import { useClients } from '@/lib/hooks/use-clients';
@@ -32,12 +33,13 @@ import type { RegionRecord } from '@/types/region';
 import { KERALA_DISTRICTS } from '@/lib/districts';
 import { employeeMatchesAnyDistrict } from '@/lib/employees/visibility';
 import { normalizeEmployeeDocumentFields } from '@/lib/employee-document-fields';
+import { getEmployeeStatusLabel } from '@/lib/constants';
 
 // Keep the first render useful without downloading an entire directory.
 const ITEMS_PER_PAGE = 25;
 interface ClientOption { id: string; name: string; }
 
-const statuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
+const statuses = ['PendingReview', 'Active', 'Inactive', 'OnLeave', 'Exited'];
 
 function employeeFromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData>): Employee {
     const data = snapshot.data() as Record<string, unknown>;
@@ -93,7 +95,12 @@ export default function EmployeeDirectoryPage() {
     const searchParams = useSearchParams();
 
     // User auth state
-    const { userRole, assignedDistricts, clientInfo } = useAppAuth();
+    const { user, userRole, assignedDistricts, clientInfo } = useAppAuth();
+    const canEnroll = isDesignatedAadhaarAdministrator({
+      email: user?.email,
+      emailVerified: user?.emailVerified,
+      role: userRole,
+    });
     const isClientView = userRole === 'client';
     const isReadOnlyDirectory = isClientView || userRole === 'fieldOfficer';
     
@@ -540,7 +547,7 @@ export default function EmployeeDirectoryPage() {
                 { label: "Employees" },
               ]}
               actions={
-                userRole === 'admin' || userRole === 'superAdmin' ? (
+                canEnroll ? (
                   <Button asChild className="w-full sm:w-auto">
                     <Link href="/employees/enroll">
                       <UserPlus className="mr-2 h-4 w-4" />
@@ -601,7 +608,7 @@ export default function EmployeeDirectoryPage() {
                     </div>
                     <div>
                         <Label htmlFor="status-filter" className="sr-only">Status</Label>
-                        <Select value={status} onValueChange={(val) => handleFilterChange('status', val)}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                        <Select value={status} onValueChange={(val) => handleFilterChange('status', val)}><SelectTrigger id="status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{statuses.map(s => <SelectItem key={s} value={s}>{getEmployeeStatusLabel(s)}</SelectItem>)}</SelectContent></Select>
                     </div>
                 </CardContent>
             </Card>
@@ -652,7 +659,7 @@ export default function EmployeeDirectoryPage() {
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                                     <div className="break-words font-medium">{emp.fullName}</div>
-                                                    <Badge variant={getStatusBadgeVariant(emp.status)} className="w-fit shrink-0">{emp.status}</Badge>
+                                                    <Badge variant={getStatusBadgeVariant(emp.status)} className="w-fit shrink-0">{getEmployeeStatusLabel(emp.status)}</Badge>
                                                 </div>
                                                 <div className="mt-1 break-words text-xs text-muted-foreground">
                                                     {[emp.regionName, emp.clientName, emp.employeeId, emp.district].filter(Boolean).join(' • ')}
@@ -745,7 +752,7 @@ export default function EmployeeDirectoryPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="hidden md:table-cell font-mono text-xs">{emp.employeeId}</TableCell>
-                                                <TableCell><Badge variant={getStatusBadgeVariant(emp.status)}>{emp.status}</Badge></TableCell>
+                                                <TableCell><Badge variant={getStatusBadgeVariant(emp.status)}>{getEmployeeStatusLabel(emp.status)}</Badge></TableCell>
                                                 <TableCell className="hidden lg:table-cell">
                                                     {emp.createdAt ? (() => {
                                                         const d = emp.createdAt?.toDate ? emp.createdAt.toDate() : new Date(emp.createdAt);
@@ -828,7 +835,7 @@ export default function EmployeeDirectoryPage() {
                         <AlertDialogHeader>
                             <AlertDialogTitle>Update Status for {selectedEmployeeForStatusChange.fullName}</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Changing status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{newStatus}</Badge>. 
+                                Changing status to <Badge variant={getStatusBadgeVariant(newStatus as Employee['status'])}>{getEmployeeStatusLabel(newStatus)}</Badge>.
                                 {newStatus === 'Exited' && " Please provide the exit date."}
                             </AlertDialogDescription>
                         </AlertDialogHeader>

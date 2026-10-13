@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { parseDate, resolvePatrolSettings, toGuardPatrolActivityRow } from "@/lib/patrol";
 import {
   hasAdminAccess,
-  hasFieldOfficerAccess,
   unauthorizedResponse,
   verifyRequestAuth,
   type AppDecodedToken,
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
@@ -19,41 +19,13 @@ async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!foSnapshot.empty) {
-    const foData = foSnapshot.docs[0].data();
-    if (Array.isArray(foData.assignedDistricts)) {
-      return canonicalizeDistrictList(
-        foData.assignedDistricts.filter(
-          (district): district is string => typeof district === "string",
-        ),
-      );
-    }
-  }
-
-  return Array.isArray(decoded.assignedDistricts)
-    ? canonicalizeDistrictList(
-        decoded.assignedDistricts.filter(
-          (district): district is string => typeof district === "string",
-        ),
-      )
-    : [];
+  return (await requireActiveFieldOfficerProfile(adminDb, decoded)).assignedDistricts;
 }
 
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
     const isAdmin = hasAdminAccess(decoded);
-    const isFieldOfficer = hasFieldOfficerAccess(decoded);
-    if (!isAdmin && !isFieldOfficer) {
-      return unauthorizedResponse("Admin or field officer access required.", 403);
-    }
-
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { searchParams } = new URL(request.url);
     const clientId = normalizeText(searchParams.get("clientId"));

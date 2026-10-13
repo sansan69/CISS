@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
+import { unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 
 export const runtime = "nodejs";
 const text = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
@@ -9,11 +10,9 @@ const date = (value: unknown) => value && typeof value === "object" && typeof (v
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
-    if (!hasFieldOfficerAccess(decoded)) return unauthorizedResponse("Field officer access required.", 403);
     const { db } = await import("@/lib/firebaseAdmin");
-    const officer = await db.collection("fieldOfficers").where("uid", "==", decoded.uid).limit(1).get();
-    const rawDistricts = officer.empty ? decoded.assignedDistricts ?? [] : officer.docs[0].data().assignedDistricts ?? [];
-    const districts = canonicalizeDistrictList(Array.isArray(rawDistricts) ? rawDistricts.filter((item): item is string => typeof item === "string") : []);
+    const officer = await requireActiveFieldOfficerProfile(db, decoded);
+    const districts = canonicalizeDistrictList(officer.assignedDistricts);
     if (!districts.length) return NextResponse.json({ incidents: [] });
     const snapshot = await db.collection("incidents").limit(500).get();
     const incidents = snapshot.docs.map((doc) => {

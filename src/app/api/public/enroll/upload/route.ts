@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { FieldValue } from "firebase-admin/firestore";
 import { assertEnrollmentUploadSize, getEnrollmentFileSelectionError } from "@/lib/enrollmentFiles";
 import { storage, db } from "@/lib/firebaseAdmin";
 import {
@@ -86,7 +87,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: selectionError }, { status: 400 });
     }
 
-    assertEnrollmentUploadSize(file);
+    try {
+      assertEnrollmentUploadSize(file);
+    } catch (error) {
+      return NextResponse.json({ error: (error as Error).message }, { status: 413 });
+    }
 
     const bucket = storage.bucket();
     const storageFile = bucket.file(path);
@@ -108,7 +113,7 @@ export async function POST(request: NextRequest) {
       },
     });
     await enrollmentSnap.ref.update({
-      uploadCount: (enrollmentData.uploadCount ?? 0) + 1,
+      uploadCount: FieldValue.increment(1),
     });
 
     return NextResponse.json({

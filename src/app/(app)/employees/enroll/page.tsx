@@ -1,6 +1,7 @@
 
 "use client";
 
+import { enrollmentErrorFormField } from "@/lib/enrollment-errors";
 import { authorizedFetch } from "@/lib/api-client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
@@ -37,7 +38,6 @@ import Image from "next/image";
 import { collection, query, orderBy, onSnapshot, getDocs } from "firebase/firestore";
 import {
   dataURLtoFile,
-  deleteFileFromStorage,
   ENROLLMENT_DOCUMENT_ACCEPT,
   ENROLLMENT_IMAGE_ACCEPT,
   getUploadFileExtension,
@@ -67,10 +67,12 @@ import {
 } from "@/lib/districts";
 import { REGION_CODE } from "@/lib/runtime-config";
 import type { ClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
+import { useAppAuth } from "@/context/auth-context";
+import { isDesignatedAadhaarAdministrator } from "@/lib/aadhaar-admin-policy";
 
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
-  .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 5MB are allowed.");
+  .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 4MB are allowed.");
 
 const optionalFileSchema = fileSchema.optional();
 
@@ -311,7 +313,7 @@ function buildEnrollmentStoragePath(
   file: File,
 ): string {
   const extension = getUploadFileExtension(file, "bin");
-  return `employees/${phoneNumber}/${folder}/${Date.now()}_${fileStem}.${extension}`;
+  return `employees/${phoneNumber}/${folder}/${fileStem}.${extension}`;
 }
 
 
@@ -373,6 +375,12 @@ const IdNumberInput = ({
 export default function EnrollEmployeePage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { user, userRole } = useAppAuth();
+  const canEnroll = isDesignatedAadhaarAdministrator({
+    email: user?.email,
+    emailVerified: user?.emailVerified,
+    role: userRole,
+  });
 
   const [profilePicPreview, setProfilePicPreview] = React.useState<string | null>(null);
   const [identityProofUrlFrontPreview, setIdentityProofUrlFrontPreview] = React.useState<string | null>(null);
@@ -536,8 +544,14 @@ export default function EnrollEmployeePage() {
         setCameraStream(stream);
       } catch (err) {
         console.error("Error accessing camera:", err);
-        setCameraError("Could not access camera. Please ensure permission is granted in your browser settings.");
-        toast({ variant: "destructive", title: "Camera Error", description: "Could not access camera." });
+        const errorName = err instanceof DOMException ? err.name : "";
+        const message = errorName === "NotAllowedError"
+          ? "Camera access is blocked. Allow camera access in the browser address bar, or close this message and use Upload instead."
+          : errorName === "NotFoundError"
+            ? "No camera was found on this device. Close this message and use Upload instead."
+            : "The camera could not start. Close this message and use Upload, or check the device camera settings.";
+        setCameraError(message);
+        toast({ variant: "destructive", title: "Camera unavailable", description: message });
         setIsCameraDialogOpen(false); // Close dialog if camera access fails
         setCameraStream(null);
       }
@@ -813,7 +827,7 @@ export default function EnrollEmployeePage() {
               continue;
             }
 
-            form.setError(fieldName as keyof EnrollmentFormValues, {
+            form.setError(enrollmentErrorFormField(fieldName) as keyof EnrollmentFormValues, {
               type: "server",
               message: firstMessage,
             });
@@ -859,11 +873,7 @@ export default function EnrollEmployeePage() {
       router.push(`/employees/${responseBody.id}`);
 
     } catch (error: any) {
-      await Promise.allSettled(
-        Object.values(uploadedUrls)
-          .filter((url): url is string => Boolean(url))
-          .map((url) => deleteFileFromStorage(url)),
-      );
+      // Preserve uploads when the save response is uncertain.
       console.error("Registration or Upload Error: ", error);
       toast({
         variant: "destructive",
@@ -880,6 +890,25 @@ export default function EnrollEmployeePage() {
   const toYear = new Date().getFullYear() - 18;
   const defaultCalendarMonth = new Date();
   defaultCalendarMonth.setFullYear(toYear - 10);
+
+  if (!canEnroll) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Assisted enrolment is restricted</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>Only the designated, verified Aadhaar administrator can use this form because it handles sensitive identity documents.</p>
+            <p>Ask the guard to use public registration, or contact the designated administrator for assistance.</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button asChild size="sm"><Link href="/enroll">Open public registration</Link></Button>
+              <Button asChild size="sm" variant="outline"><Link href="/employees">Back to employees</Link></Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -1045,11 +1074,11 @@ export default function EnrollEmployeePage() {
                               fromYear={fromYear}
                               toYear={toYear}
                               defaultMonth={defaultCalendarMonth}
-                              disabled={(date) => date > addYears(new Date(), -18) || date < addYears(new Date(), -65)}
+                              disabled={(date) => date > addYears(new Date(), -18) || date <= addYears(new Date(), -65)}
                             />
                           </PopoverContent>
                         </Popover>
-                        <FormDescription>Your date of birth (Age must be between 18 and 65).</FormDescription>
+                        <FormDescription>You must be at least 18 and under 65 on the registration date.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1310,7 +1339,7 @@ export default function EnrollEmployeePage() {
                         <FormItem className="text-center">
                             <FormLabel className="block mb-2">Police Clearance Certificate</FormLabel>
                             <ImagePreviewAndUpload fieldName="policeClearanceCertificate" preview={policeCertPreview} setPreview={setPoliceCertPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
-                            <FormDescription>PCC document (optional). Max 5MB.</FormDescription>
+                            <FormDescription>PCC document (optional). PDFs up to 4MB; images up to 15MB before compression.</FormDescription>
                             <FormMessage />
                         </FormItem>
                         )}
@@ -1333,7 +1362,7 @@ export default function EnrollEmployeePage() {
                        <FormItem className="mt-6 text-center">
                         <FormLabel className="block mb-2">Bank Passbook / Statement <span className="text-destructive">*</span></FormLabel>
                         <ImagePreviewAndUpload fieldName="bankPassbookStatement" preview={bankPassbookPreview} setPreview={setBankPassbookPreview} handleFileChange={handleFileChange} openCamera={openCamera} />
-                        <FormDescription>Upload or take a photo of the bank document in any image format, or upload a PDF. Max 15MB for images or 5MB for PDFs.</FormDescription>
+                        <FormDescription>Upload or take a photo of the bank document in any image format, or upload a PDF. Max 15MB for images or 4MB for PDFs.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

@@ -1,6 +1,7 @@
 
 "use client";
 
+import { enrollmentErrorFormField } from "@/lib/enrollment-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import * as z from "zod";
@@ -26,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WarningCircle as AlertCircle, ArrowLeft, ArrowRight, Camera, CheckCircle as CheckCircleIcon, Warning as AlertTriangle, CaretDown as ChevronDown, CaretUp as ChevronUp, FileArrowUp as FileUp, SpinnerGap as Loader2, Upload, UserCircle as UserCircle2, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { addDays, format, subYears } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import React, { Suspense, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
@@ -48,8 +49,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useRouter } from 'next/navigation';
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, Key as KeyRound } from "@phosphor-icons/react";
-import type { PDFFont } from 'pdf-lib';
+import { Download } from "@phosphor-icons/react";
 import {
   EDUCATION_OPTIONS,
   IDENTITY_PROOF_TYPES,
@@ -83,7 +83,7 @@ import type { EnrollmentFormConfig } from "@/types/region";
 import type { ClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
 
 const fileSchema = z.instanceof(File, { message: "This field is required." })
-  .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 5MB are allowed.");
+  .refine(isEnrollmentFileSelectionValid, "Images up to 15MB and PDF files up to 4MB are allowed.");
 
 const optionalFileSchema = fileSchema.optional();
 
@@ -762,7 +762,9 @@ function buildEnrollmentStoragePath(
   file: File,
 ): string {
   const extension = getUploadFileExtension(file, "bin");
-  return `enrollments/${draftId}/${folder}/${Date.now()}_${fileStem}.${extension}`;
+  // Keep each field's path stable so a lost upload response can be retried
+  // safely without accumulating orphaned files in the draft.
+  return `enrollments/${draftId}/${folder}/${fileStem}.${extension}`;
 }
 
 type EnrollmentUploadUrls = {
@@ -914,6 +916,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [isDraftReady, setIsDraftReady] = useState(false);
   const [isMobileHeaderOpen, setIsMobileHeaderOpen] = useState(false);
+  const [isTextEntryFocused, setIsTextEntryFocused] = useState(false);
   const [completionState, setCompletionState] = useState<{
     id: string;
     employeeId: string;
@@ -1065,7 +1068,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     submissionSessionRef.current = null;
 
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem(ENROLLMENT_DRAFT_STORAGE_KEY);
+      try {
+        window.localStorage.removeItem(ENROLLMENT_DRAFT_STORAGE_KEY);
+      } catch {
+        // Browser storage restrictions must not turn a successful save into failure.
+      }
     }
 
     try {
@@ -1121,7 +1128,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       // Header
       const headerY = height - margin - 30;
       page.drawText("CISS SERVICES LTD", { x: margin, y: headerY, font: helveticaBoldFont, size: 18, color: rgb(0.05, 0.2, 0.45) });
-      page.drawText("EMPLOYEE PROFILE", { x: margin, y: headerY - 20, font: helveticaFont, size: 12, color: rgb(0.3, 0.3, 0.3) });
+      page.drawText("REGISTRATION RECEIPT", { x: margin, y: headerY - 20, font: helveticaFont, size: 12, color: rgb(0.3, 0.3, 0.3) });
 
       // Employee details
       const nameY = headerY - 60;
@@ -1129,7 +1136,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       page.drawText(completionState.fullName, { x: margin + 60, y: nameY, font: helveticaFont, size: 12 });
 
       const idY = nameY - 20;
-      page.drawText("Employee ID:", { x: margin, y: idY, font: helveticaBoldFont, size: 12 });
+      page.drawText("Reference ID:", { x: margin, y: idY, font: helveticaBoldFont, size: 12 });
       page.drawText(completionState.employeeId, { x: margin + 90, y: idY, font: helveticaFont, size: 12 });
 
       if (completionState.clientName) {
@@ -1150,11 +1157,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         page.drawText(completionState.joiningDate, { x: margin + 100, y: joinY, font: helveticaFont, size: 12 });
       }
 
-      // QR Code placeholder - would need full employee data for real QR
-      const qrY = margin + 100;
-      page.drawText("QR Code for Attendance:", { x: margin, y: qrY, font: helveticaBoldFont, size: 10 });
-      page.drawRectangle({ x: margin, y: qrY - 80, width: 80, height: 80, borderColor: rgb(0.8, 0.8, 0.8), borderWidth: 1 });
-      page.drawText("Scan to mark attendance", { x: margin, y: qrY - 95, font: helveticaFont, size: 8, color: rgb(0.5, 0.5, 0.5) });
+      const statusY = margin + 100;
+      page.drawText("Status: Pending CISS review", { x: margin, y: statusY, font: helveticaBoldFont, size: 11 });
+      page.drawText("Duty access and PIN setup become available after approval.", { x: margin, y: statusY - 20, font: helveticaFont, size: 9, color: rgb(0.3, 0.3, 0.3) });
 
       // Footer
       page.drawText("Generated on " + new Date().toLocaleDateString("en-IN"), { x: margin, y: margin, font: helveticaFont, size: 8, color: rgb(0.5, 0.5, 0.5) });
@@ -1164,7 +1169,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Profile_${completionState.employeeId}.pdf`;
+      link.download = `Registration_${completionState.employeeId.replaceAll("/", "-")}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -1360,14 +1365,14 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         setCameraStream(stream);
       } catch (err) {
         console.error("Error accessing camera:", err);
-        let errorMessage = "Could not access camera. Please ensure permission is granted in your browser settings.";
+        let errorMessage = "The camera could not start. Close this message and use Upload, or check the device camera settings.";
         if (err instanceof Error && err.name === "NotAllowedError") {
-            errorMessage = "Camera access was denied. Please enable camera permissions in your browser settings.";
+            errorMessage = "Camera access is blocked. Allow it in the browser address bar, or close this message and use Upload instead.";
         } else if (err instanceof Error && err.name === "NotFoundError") {
-            errorMessage = "No camera found. Please ensure a camera is connected and enabled.";
+            errorMessage = "No camera was found on this device. Close this message and use Upload instead.";
         }
         setCameraError(errorMessage);
-        toast({ variant: "destructive", title: "Camera Error", description: errorMessage });
+        toast({ variant: "destructive", title: "Camera unavailable", description: errorMessage });
         setIsCameraDialogOpen(false);
         setCameraStream(null);
       }
@@ -1517,7 +1522,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         ];
 
         for (const { name, file, folder, fileStem, key } of filesToUpload) {
-            if (!file) continue;
+            if (!file) {
+              uploadedUrls[key] = null;
+              delete session.fileFingerprints[key];
+              continue;
+            }
             const fingerprint = enrollmentFileFingerprint(file);
             if (
               uploadedUrls[key] &&
@@ -1630,7 +1639,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 continue;
               }
 
-              form.setError(fieldName as keyof EnrollmentFormValues, {
+              form.setError(enrollmentErrorFormField(fieldName) as keyof EnrollmentFormValues, {
                 type: "server",
                 message: firstMessage,
               });
@@ -1638,6 +1647,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             }
           }
 
+          if (highlightedFieldCount > 0) handleInvalidSubmission();
           const formErrors = Array.isArray(responseBody?.details?.formErrors)
             ? responseBody.details.formErrors
             : [];
@@ -1655,8 +1665,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         }
 
         toast({
-            title: "Registration Successful!",
-            description: `${normalizedLngFullName || `${derivedNameParts.firstName} ${derivedNameParts.lastName}`.trim()}'s profile has been created. ID: ${responseBody.employeeId}`,
+            title: "Registration submitted",
+            description: `CISS will review the details before duty access is activated. Reference ID: ${responseBody.employeeId}`,
             duration: 7000,
         });
 
@@ -1706,7 +1716,10 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
     return issues;
   })();
   const applicableRequiredFields = (() => {
-    let fields = configuredFields ? Array.from(configuredFields.required) : [...BASE_REQUIRED_FIELDS];
+    let fields = [
+      ...BASE_REQUIRED_FIELDS,
+      ...(configuredFields ? Array.from(configuredFields.required) : []),
+    ];
 
     if (isLngClientName(formValues.clientName)) {
       fields = fields.filter(
@@ -1742,6 +1755,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         "fullNameInput",
         "lngJobDesignation",
         "aadharNumber",
+        "panNumber",
+        "panCardDocument",
         "nationality",
         "identificationMark",
         "heightCm",
@@ -1762,7 +1777,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
       fields.push("otherQualification");
     }
 
-    return Array.from(new Set(fields)).filter((fieldName) => !configuredFields || configuredFields.enabled.has(fieldName));
+    // The current UI renders these fields for every applicable client profile,
+    // so step validation must match what the guard can actually see and fill.
+    return Array.from(new Set(fields));
   })();
   const completedRequiredCount = applicableRequiredFields.filter(
     (fieldName) =>
@@ -1788,7 +1805,6 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
   const getStepIssues = () =>
     ENROLLMENT_STEPS.map((step, stepIndex) => {
       const fields = step.fields
-        .filter((fieldName) => !configuredFields || configuredFields.enabled.has(fieldName))
         .filter((fieldName) => Boolean(form.getFieldState(fieldName).error))
         .map((fieldName) => FIELD_LABELS[fieldName] || getEnrollmentFieldLabel(fieldName) || step.title);
 
@@ -1828,6 +1844,22 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
 
   const goToNextStep = async () => {
     setSubmissionIssues([]);
+    const currentFields = ENROLLMENT_STEPS[currentStep].fields.filter((fieldName) =>
+      applicableRequiredFields.includes(fieldName),
+    );
+    const isStepValid = await form.trigger(currentFields, { shouldFocus: true });
+    if (!isStepValid) {
+      const issue = getStepIssues().find((item) => item.stepIndex === currentStep);
+      if (issue) setSubmissionIssues([issue]);
+      toast({
+        variant: "destructive",
+        title: `Complete ${ENROLLMENT_STEPS[currentStep].title}`,
+        description: issue?.fields.length
+          ? `Please add or correct: ${issue.fields.slice(0, 3).join(", ")}${issue.fields.length > 3 ? "…" : ""}.`
+          : "Please correct the highlighted information before continuing.",
+      });
+      return;
+    }
     setCurrentStep((current) => Math.min(current + 1, ENROLLMENT_STEPS.length - 1));
     collapseHeaderOnMobile();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1854,11 +1886,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
             <CheckCircleIcon className="w-10 h-10 text-success" />
           </div>
 
-          <h1 className="mb-2 text-2xl font-bold text-foreground">Registration complete</h1>
-          <p className="mb-6 text-muted-foreground">Your profile has been created successfully.</p>
+          <h1 className="mb-2 text-2xl font-bold text-foreground">Registration submitted</h1>
+          <p className="mb-6 text-muted-foreground">CISS will review your details before activating duty access.</p>
 
           <div className="mb-6 rounded-xl bg-muted/50 p-4">
-            <p className="mb-1 text-sm text-muted-foreground">Your Employee ID</p>
+            <p className="mb-1 text-sm text-muted-foreground">Your reference ID</p>
             <p className="text-3xl font-bold text-primary font-mono">{completionState.employeeId}</p>
           </div>
 
@@ -1874,16 +1906,13 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
               ) : (
                 <Download className="mr-2 h-4 w-4" />
               )}
-              Download Profile Kit
+              Download Registration Receipt
             </Button>
 
-            <a
-              href="/guard-login/setup"
-              className="flex w-full items-center justify-center rounded-xl border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted"
-            >
-              <KeyRound className="mr-2 h-4 w-4" />
-              Set up PIN to access your profile
-            </a>
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-left text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">What happens next</p>
+              <p className="mt-1">CISS reviews the documents and client details. After approval, use this reference ID to set up your PIN.</p>
+            </div>
 
             <Button
               variant="ghost"
@@ -1898,7 +1927,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
           </div>
 
           <p className="text-xs text-muted-foreground mt-6">
-            Save your Employee ID. You will need it to log in.
+            Save this reference ID. CISS may ask for it while reviewing your registration.
           </p>
         </div>
       </div>
@@ -1915,7 +1944,27 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
         </CardHeader>
         <CardContent className="px-0 pb-8 sm:px-8 lg:px-10">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)} autoComplete="off" className="space-y-8 pb-28 sm:pb-32">
+            <form
+              onSubmit={form.handleSubmit(onSubmit, handleInvalidSubmission)}
+              autoComplete="off"
+              className="space-y-8 pb-28 sm:pb-32"
+              onFocusCapture={(event) => {
+                const target = event.target;
+                const opensKeyboard =
+                  target instanceof HTMLTextAreaElement ||
+                  (target instanceof HTMLInputElement && !["button", "checkbox", "file", "radio", "submit"].includes(target.type));
+                if (opensKeyboard) setIsTextEntryFocused(true);
+              }}
+              onBlurCapture={() => {
+                window.requestAnimationFrame(() => {
+                  const target = document.activeElement;
+                  const remainsOpen =
+                    target instanceof HTMLTextAreaElement ||
+                    (target instanceof HTMLInputElement && !["button", "checkbox", "file", "radio", "submit"].includes(target.type));
+                  setIsTextEntryFocused(remainsOpen);
+                });
+              }}
+            >
               <div className="rounded-[20px] border bg-muted/10 p-3 sm:p-4">
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -1938,6 +1987,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       size="sm"
                       className="h-9 shrink-0 rounded-full px-3 text-xs font-medium sm:hidden"
                       aria-expanded={isMobileHeaderOpen}
+                      aria-controls="mobile-enrollment-sections"
                       aria-label={isMobileHeaderOpen ? "Collapse enrollment sections" : "Expand enrollment sections"}
                       onClick={() => setIsMobileHeaderOpen((current) => !current)}
                     >
@@ -1967,11 +2017,8 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 </div>
 
                 <div
-                  className={cn(
-                    "overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out",
-                    isMobileHeaderOpen ? "mt-3 max-h-[28rem] opacity-100" : "max-h-0 opacity-0 sm:mt-3",
-                    "sm:max-h-none sm:opacity-100",
-                  )}
+                  id="mobile-enrollment-sections"
+                  className={cn("mt-3 sm:hidden", !isMobileHeaderOpen && "hidden")}
                 >
                   <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
                   {ENROLLMENT_STEPS.map((step, index) => {
@@ -2010,6 +2057,38 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       </button>
                     );
                   })}
+                  </div>
+                </div>
+                <div className="mt-3 hidden sm:block">
+                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-5">
+                    {ENROLLMENT_STEPS.map((step, index) => {
+                      const isActive = index === currentStep;
+                      const applicableStepFields = step.fields.filter((fieldName) => applicableRequiredFields.includes(fieldName));
+                      const stepErrorCount = applicableStepFields.filter((fieldName) => validationIssuesByField.has(fieldName)).length;
+                      const completedStepCount = applicableStepFields.filter(
+                        (fieldName) => !validationIssuesByField.has(fieldName) && hasMeaningfulValue(formValues[fieldName]),
+                      ).length;
+                      const isComplete = applicableStepFields.length > 0 && completedStepCount === applicableStepFields.length;
+                      return (
+                        <button
+                          key={`desktop-${step.key}`}
+                          type="button"
+                          className={cn(
+                            "min-w-0 rounded-lg border px-2.5 py-2 text-left transition",
+                            isActive && "border-primary bg-primary text-primary-foreground shadow-brand-sm",
+                            isComplete && "border-primary/30 bg-primary/10 text-primary",
+                            stepErrorCount > 0 && !isActive && "border-warning/40 bg-warning/10 text-warning-strong",
+                            !isActive && !isComplete && stepErrorCount === 0 && "bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                          )}
+                          onClick={() => void goToStep(index)}
+                        >
+                          <span className="block text-[11px] uppercase tracking-[0.16em] opacity-80">
+                            {isComplete ? "Done" : stepErrorCount > 0 ? `${stepErrorCount} missing` : isActive ? "Current" : `${completedStepCount}/${applicableStepFields.length || step.fields.length}`}
+                          </span>
+                          <span className="mt-1 block text-sm font-semibold leading-tight">{step.title}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2115,9 +2194,9 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                       control={form.control}
                       name="dateOfBirth"
                       label="Date of Birth"
-                      min={format(new Date(new Date().getFullYear() - 65, 0, 1), "yyyy-MM-dd")}
-                      max={format(new Date(new Date().getFullYear() - 18, 11, 31), "yyyy-MM-dd")}
-                      description="Age must be between 18 and 65."
+                      min={format(addDays(subYears(new Date(), 65), 1), "yyyy-MM-dd")}
+                      max={format(subYears(new Date(), 18), "yyyy-MM-dd")}
+                      description="You must be at least 18 and under 65 on the registration date."
                     />
                     <FormField control={form.control} name="gender" render={({ field }) => (
                         <FormItem><FormLabel>Gender <span className="text-destructive">*</span></FormLabel>
@@ -2343,7 +2422,7 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                       <FormField control={form.control} name="emailAddress" render={({ field }) => (<FormItem><FormLabel>Email Address <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" autoComplete="email" required placeholder="yourname@example.com" {...field} value={field.value ?? ""} /></FormControl><FormDescription>Required for enrollment updates and official communication.</FormDescription><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "(Pre-filled from login)" : "This is used for your employee profile and document folder."}</FormDescription><FormMessage /></FormItem>)}/>
+                      <FormField control={form.control} name="phoneNumber" render={({ field }) => (<FormItem><FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel><FormControl><Input type="tel" inputMode="numeric" autoComplete="tel" placeholder="10-digit mobile number" {...field} disabled={isPhoneNumberPrefilled} /></FormControl><FormDescription>{isPhoneNumberPrefilled ? "Pre-filled from your verified mobile number." : "Used for registration updates and your employee record."}</FormDescription><FormMessage /></FormItem>)}/>
                     </div>
                   </FormSection>
                 </>
@@ -2458,7 +2537,10 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                 </FormSection>
               )}
 
-              <div className="sticky bottom-3 z-10 rounded-2xl border border-border/80 bg-card/95 px-4 py-4 shadow-brand-lg backdrop-blur sm:px-5 lg:px-6">
+              <div className={cn(
+                "z-10 rounded-2xl border border-border/80 bg-card/95 px-4 py-4 shadow-brand-lg backdrop-blur sm:sticky sm:bottom-3 sm:px-5 lg:px-6",
+                isTextEntryFocused ? "static" : "sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))]",
+              )}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">{draftStatusLabel}</p>

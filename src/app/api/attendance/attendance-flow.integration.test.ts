@@ -443,6 +443,10 @@ describe("attendance flow integration", () => {
   it("writes and reads a 12-hour overnight attendance cycle consistently", async () => {
     vi.useFakeTimers();
     const db = new FakeFirestore();
+    db.seed("fieldOfficers", "field-officer-1", {
+      uid: "fieldOfficer-uid",
+      assignedDistricts: ["Ernakulam"],
+    });
 
     db.seed("employees", "emp-1", {
       employeeId: "CISS/ACME/2026-27/001",
@@ -755,6 +759,10 @@ describe("attendance flow integration", () => {
   it("writes and reads a 3-shift night attendance cycle consistently", async () => {
     vi.useFakeTimers();
     const db = new FakeFirestore();
+    db.seed("fieldOfficers", "field-officer-1", {
+      uid: "fieldOfficer-uid",
+      assignedDistricts: ["Ernakulam"],
+    });
 
     db.seed("employees", "emp-2", {
       employeeId: "CISS/ACME/2026-27/002",

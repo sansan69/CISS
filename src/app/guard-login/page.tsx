@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -22,16 +21,21 @@ import {
 } from "@phosphor-icons/react";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
-import { parseEmployeeIdFromQrText, parseEmployeeQrText } from "@/lib/qr/employee-qr";
+import {
+  parseEmployeeIdFromQrText,
+  parseEmployeeQrText,
+} from "@/lib/qr/employee-qr";
 import { normalizeScannerError } from "@/lib/qr/scanner-support";
 import { startSafeHybridQrScanner } from "@/lib/qr/scanner-engine";
-import type { QrScannerErrorCode, QrScannerSession } from "@/lib/qr/scanner-types";
+import type {
+  QrScannerErrorCode,
+  QrScannerSession,
+} from "@/lib/qr/scanner-types";
 import { signInWithCustomToken } from "firebase/auth";
 
 type PhoneStep = "phone" | "pin";
 
 export default function GuardLoginPage() {
-  const router = useRouter();
   const { toast } = useToast();
 
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -42,14 +46,13 @@ export default function GuardLoginPage() {
   const pinInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    const saved = localStorage.getItem('guard_remembered_phone');
+    const saved = localStorage.getItem("guard_remembered_phone");
     if (saved) setPhoneNumber(saved);
   }, []);
 
   const [qrStep, setQrStep] = useState<"scan" | "pin">("scan");
   const [scannedEmployeeId, setScannedEmployeeId] = useState("");
   const [scannedQrText, setScannedQrText] = useState("");
-  const [scannedEmployeeName, setScannedEmployeeName] = useState("");
   const [qrPin, setQrPin] = useState("");
   const [isQrLoading, setIsQrLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -61,36 +64,8 @@ export default function GuardLoginPage() {
 
   const handlePhoneContinue = async () => {
     if (phoneNumber.replace(/\D/g, "").length < 10) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/guard/auth/pin-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber }),
-      });
-      const data = await res.json();
-
-      if (!data.found) {
-        toast({
-          variant: "destructive",
-          title: "Not Registered",
-          description: "No employee found with this phone number. Please contact your administrator.",
-        });
-        return;
-      }
-
-      if (!data.hasPin) {
-        router.push("/guard-login/setup");
-        return;
-      }
-
-      setPhoneStep("pin");
-      setTimeout(() => pinInputRef.current?.focus(), 100);
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not verify phone number." });
-    } finally {
-      setIsLoading(false);
-    }
+    setPhoneStep("pin");
+    setTimeout(() => pinInputRef.current?.focus(), 100);
   };
 
   const handleLogin = async () => {
@@ -104,31 +79,44 @@ export default function GuardLoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast({ variant: "destructive", title: "Login Failed", description: data.error ?? "Could not sign in." });
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: data.error ?? "Could not sign in.",
+        });
         return;
       }
       await signInWithCustomToken(auth, data.token as string);
 
       if (rememberPhone) {
-        localStorage.setItem('guard_remembered_phone', phoneNumber.replace(/\D/g, ''));
+        localStorage.setItem(
+          "guard_remembered_phone",
+          phoneNumber.replace(/\D/g, ""),
+        );
       } else {
-        localStorage.removeItem('guard_remembered_phone');
+        localStorage.removeItem("guard_remembered_phone");
       }
 
       if (auth.currentUser) {
         const uid = auth.currentUser.uid;
-        void import('@/lib/fcm').then(async ({ requestNotificationPermission, registerFCMToken }) => {
-          const token = await requestNotificationPermission();
-          if (token) await registerFCMToken(uid, token);
-        }).catch(() => {
-          // FCM registration optional — non-fatal
-        });
+        void import("@/lib/fcm")
+          .then(async ({ requestNotificationPermission, registerFCMToken }) => {
+            const token = await requestNotificationPermission();
+            if (token) await registerFCMToken(uid, token);
+          })
+          .catch(() => {
+            // FCM registration optional — non-fatal
+          });
       }
 
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
       window.location.replace("/guard/dashboard");
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -142,24 +130,29 @@ export default function GuardLoginPage() {
     setIsScanning(false);
   }, []);
 
-  const handleScannerError = useCallback((errorCode: QrScannerErrorCode) => {
-    scannerErrorHandledRef.current = true;
+  const handleScannerError = useCallback(
+    (errorCode: QrScannerErrorCode) => {
+      scannerErrorHandledRef.current = true;
 
-    const descriptions: Record<string, string> = {
-      "permission-denied": "Could not access camera. Please allow camera permission.",
-      "no-camera": "No camera was found on this device.",
-      "camera-unavailable": "The camera is currently unavailable. Please try again.",
-      "unsupported": "Your browser does not support QR scanning.",
-      "invalid-payload": "The scanned QR code is not valid.",
-      unknown: "Could not start the QR scanner.",
-    };
+      const descriptions: Record<string, string> = {
+        "permission-denied":
+          "Could not access camera. Please allow camera permission.",
+        "no-camera": "No camera was found on this device.",
+        "camera-unavailable":
+          "The camera is currently unavailable. Please try again.",
+        unsupported: "Your browser does not support QR scanning.",
+        "invalid-payload": "The scanned QR code is not valid.",
+        unknown: "Could not start the QR scanner.",
+      };
 
-    toast({
-      variant: "destructive",
-      title: "Camera error",
-      description: descriptions[errorCode] ?? descriptions.unknown,
-    });
-  }, [toast]);
+      toast({
+        variant: "destructive",
+        title: "Camera error",
+        description: descriptions[errorCode] ?? descriptions.unknown,
+      });
+    },
+    [toast],
+  );
 
   const startScanner = useCallback(async () => {
     if (isScanning || scannerSessionRef.current) return;
@@ -183,14 +176,14 @@ export default function GuardLoginPage() {
 
           scannerGenerationRef.current += 1;
           session.stop();
-        if (scannerSessionRef.current === session) {
-          scannerSessionRef.current = null;
-        }
-        setIsScanning(false);
-        setScannedQrText(text);
-        setScannedEmployeeId(parseEmployeeIdFromQrText(text) ?? text.trim());
-        setQrStep("pin");
-      },
+          if (scannerSessionRef.current === session) {
+            scannerSessionRef.current = null;
+          }
+          setIsScanning(false);
+          setScannedQrText(text);
+          setScannedEmployeeId(parseEmployeeIdFromQrText(text) ?? text.trim());
+          setQrStep("pin");
+        },
         onError: handleScannerError,
       });
 
@@ -226,53 +219,8 @@ export default function GuardLoginPage() {
     setQrStep("scan");
     setScannedEmployeeId("");
     setScannedQrText("");
-    setScannedEmployeeName("");
     setQrPin("");
   }, [stopScanner]);
-
-  const handleQrPinStep = useCallback(async () => {
-    if (!scannedEmployeeId && !scannedQrText) return;
-    setIsQrLoading(true);
-    try {
-      const parsedQr = parseEmployeeQrText(scannedQrText || scannedEmployeeId);
-      const employeeId = parsedQr.employeeId ?? scannedEmployeeId;
-      const res = await fetch("/api/guard/auth/pin-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId,
-          ...(parsedQr.phoneNumber ? { phoneNumber: parsedQr.phoneNumber } : {}),
-        }),
-      });
-      const data = await res.json();
-
-      if (!data.found) {
-        toast({
-          variant: "destructive",
-          title: "Not Registered",
-          description: "No employee found for this QR code.",
-        });
-        resetQrFlow();
-        return;
-      }
-
-      if (!data.hasPin) {
-        toast({
-          title: "PIN Not Set",
-          description: "Please set up your PIN first before logging in.",
-        });
-        router.push("/guard-login/setup");
-        return;
-      }
-
-      setScannedEmployeeName(data.employeeName ?? "");
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not verify employee." });
-      resetQrFlow();
-    } finally {
-      setIsQrLoading(false);
-    }
-  }, [resetQrFlow, router, scannedEmployeeId, scannedQrText, toast]);
 
   const handleQrLogin = async () => {
     if ((!scannedEmployeeId && !scannedQrText) || qrPin.length < 4) return;
@@ -285,59 +233,75 @@ export default function GuardLoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employeeId,
-          ...(parsedQr.phoneNumber ? { phoneNumber: parsedQr.phoneNumber } : {}),
+          ...(parsedQr.phoneNumber
+            ? { phoneNumber: parsedQr.phoneNumber }
+            : {}),
           pin: qrPin,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        toast({ variant: "destructive", title: "Login Failed", description: data.error ?? "Could not sign in." });
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: data.error ?? "Could not sign in.",
+        });
         return;
       }
       await signInWithCustomToken(auth, data.token as string);
       toast({ title: `Welcome, ${data.employeeName ?? "Guard"}!` });
       window.location.replace("/guard/dashboard");
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "An unexpected error occurred." });
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred.",
+      });
     } finally {
       setIsQrLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (qrStep === "pin" && scannedEmployeeId && !scannedEmployeeName) {
-      handleQrPinStep();
-    }
-  }, [handleQrPinStep, qrStep, scannedEmployeeId, scannedEmployeeName]);
-
   return (
-    <div
-      className="flex min-h-[100dvh] w-full flex-col bg-brand-blue-darker text-foreground md:flex-row"
-    >
+    <div className="flex min-h-[100dvh] w-full flex-col bg-brand-blue-darker text-foreground md:flex-row">
       {/* Desktop brand panel — hidden on mobile */}
       <aside className="hidden md:flex md:flex-1 md:flex-col md:justify-between md:p-12 lg:p-16 text-white relative overflow-hidden">
         <div className="absolute top-5 right-5">
-          <Link href="/" className="flex items-center justify-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+          <Link
+            href="/"
+            className="flex items-center justify-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+          >
             <Home className="h-5 w-5 text-white" />
           </Link>
         </div>
         <div className="relative flex items-center gap-3 animate-slide-up">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15 inset-highlight">
-            <Image src="/ciss-logo.png" alt="CISS Logo" width={40} height={40} data-ai-hint="company logo" />
+            <Image
+              src="/ciss-logo.png"
+              alt="CISS Logo"
+              width={40}
+              height={40}
+              data-ai-hint="company logo"
+            />
           </div>
           <div>
-            <p className="text-base font-bold font-exo2 tracking-tight">CISS Workforce</p>
+            <p className="text-base font-bold font-exo2 tracking-tight">
+              CISS Workforce
+            </p>
             <p className="text-xs text-white/60">Kerala security operations</p>
           </div>
         </div>
 
         <div className="relative max-w-md animate-slide-up stagger-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent mb-3">Guard Portal</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent mb-3">
+            Guard Portal
+          </p>
           <h1 className="text-4xl lg:text-5xl font-bold font-exo2 tracking-tight leading-[1.1]">
             Sign in to start your duty.
           </h1>
           <p className="mt-4 text-base text-white/70 leading-relaxed">
-            Mark attendance, check your schedule, and stay connected with your team.
+            Mark attendance, check your schedule, and stay connected with your
+            team.
           </p>
 
           <div className="mt-8 space-y-3">
@@ -364,18 +328,24 @@ export default function GuardLoginPage() {
       {/* Login panel */}
       <main className="flex-1 flex flex-col md:items-center md:justify-center md:p-10">
         <div className="flex-1 flex flex-col w-full md:flex-none md:max-w-md">
-
           {/* Brand header — mobile only */}
           <div className="flex flex-col items-center justify-center pt-14 pb-7 px-6 md:hidden animate-slide-up">
             <div className="absolute top-5 right-5">
-              <Link href="/" className="flex items-center justify-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+              <Link
+                href="/"
+                className="flex items-center justify-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+              >
                 <Home className="h-5 w-5 text-white" />
               </Link>
             </div>
-            <div
-              className="flex h-20 w-20 items-center justify-center rounded-[22px] mb-5 bg-white/10 ring-1 ring-white/15 inset-highlight"
-            >
-              <Image src="/ciss-logo.png" alt="CISS Logo" width={50} height={50} data-ai-hint="company logo" />
+            <div className="flex h-20 w-20 items-center justify-center rounded-[22px] mb-5 bg-white/10 ring-1 ring-white/15 inset-highlight">
+              <Image
+                src="/ciss-logo.png"
+                alt="CISS Logo"
+                width={50}
+                height={50}
+                data-ai-hint="company logo"
+              />
             </div>
             <h1 className="text-2xl font-bold text-white font-exo2 tracking-tight">
               Guard Portal
@@ -387,11 +357,11 @@ export default function GuardLoginPage() {
 
           {/* Card — bottom-sheet on mobile, centered card on desktop */}
           <div className="flex-1 flex flex-col md:flex-none animate-slide-up stagger-2">
-            <div
-            className="flex-1 rounded-t-[28px] rounded-b-none border border-white/10 bg-white/[0.06] px-6 pb-[max(env(safe-area-inset-bottom,0px),2rem)] pt-7 text-white sm:px-8 md:flex-none md:rounded-3xl md:p-10"
-            >
+            <div className="flex-1 rounded-t-[28px] rounded-b-none border border-white/10 bg-white/[0.06] px-6 pb-[max(env(safe-area-inset-bottom,0px),2rem)] pt-7 text-white sm:px-8 md:flex-none md:rounded-3xl md:p-10">
               <div className="text-center md:text-left mb-6">
-                <h2 className="text-2xl font-bold font-exo2 tracking-tight">Welcome back</h2>
+                <h2 className="text-2xl font-bold font-exo2 tracking-tight">
+                  Welcome back
+                </h2>
                 <p className="text-base text-white/60 mt-1">
                   Sign in to continue.
                 </p>
@@ -399,11 +369,17 @@ export default function GuardLoginPage() {
 
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="w-full h-12 p-1 mb-6 bg-white/10 border border-white/10">
-                  <TabsTrigger value="phone" className="flex-1 gap-2 h-10 text-sm font-semibold data-[state=active]:bg-brand-gold data-[state=active]:text-black">
+                  <TabsTrigger
+                    value="phone"
+                    className="flex-1 gap-2 h-10 text-sm font-semibold data-[state=active]:bg-brand-gold data-[state=active]:text-black"
+                  >
                     <Phone className="h-4 w-4" />
                     Phone + PIN
                   </TabsTrigger>
-                  <TabsTrigger value="qr" className="flex-1 gap-2 h-10 text-sm font-semibold data-[state=active]:bg-brand-gold data-[state=active]:text-black">
+                  <TabsTrigger
+                    value="qr"
+                    className="flex-1 gap-2 h-10 text-sm font-semibold data-[state=active]:bg-brand-gold data-[state=active]:text-black"
+                  >
                     <QrCode className="h-4 w-4" />
                     QR Login
                   </TabsTrigger>
@@ -414,24 +390,35 @@ export default function GuardLoginPage() {
                   {phoneStep === "phone" ? (
                     <>
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-white" htmlFor="guard-phone">
+                        <label
+                          className="text-sm font-semibold text-white"
+                          htmlFor="guard-phone"
+                        >
                           Phone Number
                         </label>
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 text-base font-medium select-none">+91</span>
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 text-base font-medium select-none">
+                            +91
+                          </span>
                           <Input
                             id="guard-phone"
                             type="tel"
                             inputMode="tel"
                             autoComplete="tel"
                             value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                            onChange={(e) =>
+                              setPhoneNumber(
+                                e.target.value.replace(/\D/g, "").slice(0, 10),
+                              )
+                            }
                             maxLength={10}
                             disabled={isLoading}
                             className="h-14 text-lg pl-14 tracking-wide bg-white text-foreground"
                             placeholder="10-digit mobile"
                             autoFocus
-                            onKeyDown={(e) => { if (e.key === "Enter") handlePhoneContinue(); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handlePhoneContinue();
+                            }}
                           />
                         </div>
                         <p className="text-xs text-white/50">
@@ -443,10 +430,15 @@ export default function GuardLoginPage() {
                         <Checkbox
                           id="remember-phone"
                           checked={rememberPhone}
-                          onCheckedChange={(checked) => setRememberPhone(checked === true)}
+                          onCheckedChange={(checked) =>
+                            setRememberPhone(checked === true)
+                          }
                           className="border-white/30 data-[state=checked]:bg-brand-gold data-[state=checked]:border-brand-gold"
                         />
-                        <label htmlFor="remember-phone" className="text-sm text-white/60 cursor-pointer select-none">
+                        <label
+                          htmlFor="remember-phone"
+                          className="text-sm text-white/60 cursor-pointer select-none"
+                        >
                           Remember phone
                         </label>
                       </div>
@@ -454,9 +446,21 @@ export default function GuardLoginPage() {
                       <Button
                         className="w-full h-14 text-base font-semibold rounded-xl bg-brand-gold text-black hover:bg-brand-gold-dark"
                         onClick={handlePhoneContinue}
-                        disabled={isLoading || phoneNumber.replace(/\D/g, "").length < 10}
+                        disabled={
+                          isLoading ||
+                          phoneNumber.replace(/\D/g, "").length < 10
+                        }
                       >
-                        {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying...</> : <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>}
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                            Verifying...
+                          </>
+                        ) : (
+                          <>
+                            Continue <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
                       </Button>
                     </>
                   ) : (
@@ -464,13 +468,18 @@ export default function GuardLoginPage() {
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between">
                         <div>
                           <p className="text-xs text-white/50">Signing in as</p>
-                          <p className="text-base font-semibold tabular-nums text-white">+91 {phoneNumber}</p>
+                          <p className="text-base font-semibold tabular-nums text-white">
+                            +91 {phoneNumber}
+                          </p>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-9 text-xs"
-                          onClick={() => { setPhoneStep("phone"); setPin(""); }}
+                          onClick={() => {
+                            setPhoneStep("phone");
+                            setPin("");
+                          }}
                           disabled={isLoading}
                         >
                           <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Change
@@ -478,7 +487,10 @@ export default function GuardLoginPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-white" htmlFor="guard-pin">
+                        <label
+                          className="text-sm font-semibold text-white"
+                          htmlFor="guard-pin"
+                        >
                           Enter PIN
                         </label>
                         <Input
@@ -488,17 +500,28 @@ export default function GuardLoginPage() {
                           inputMode="numeric"
                           autoComplete="one-time-code"
                           value={pin}
-                          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          onChange={(e) =>
+                            setPin(
+                              e.target.value.replace(/\D/g, "").slice(0, 6),
+                            )
+                          }
                           maxLength={6}
                           disabled={isLoading}
                           className="h-14 text-2xl text-center tracking-[0.5em] font-semibold bg-white text-foreground"
                           placeholder="••••"
                           autoFocus
-                          onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleLogin();
+                          }}
                         />
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-white/50">4 to 6 digit PIN</p>
-                          <Link href="/guard-login/reset" className="text-xs font-medium text-brand-gold hover:underline">
+                          <p className="text-xs text-white/50">
+                            4 to 6 digit PIN
+                          </p>
+                          <Link
+                            href="/guard-login/reset"
+                            className="text-xs font-medium text-brand-gold hover:underline"
+                          >
                             Forgot PIN?
                           </Link>
                         </div>
@@ -509,7 +532,16 @@ export default function GuardLoginPage() {
                         onClick={handleLogin}
                         disabled={isLoading || pin.length < 4}
                       >
-                        {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in...</> : <>Sign In <ArrowRight className="ml-2 h-4 w-4" /></>}
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                            Signing in...
+                          </>
+                        ) : (
+                          <>
+                            Sign In <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
                       </Button>
                     </>
                   )}
@@ -536,7 +568,9 @@ export default function GuardLoginPage() {
                         {!isScanning && (
                           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 text-white/80">
                             <QrCode className="h-14 w-14" />
-                            <p className="text-sm">Tap below to start scanning</p>
+                            <p className="text-sm">
+                              Tap below to start scanning
+                            </p>
                           </div>
                         )}
                       </div>
@@ -546,9 +580,16 @@ export default function GuardLoginPage() {
                         onClick={startScanner}
                         disabled={isScanning}
                       >
-                        {isScanning
-                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scanning…</>
-                          : <><QrCode className="mr-2 h-4 w-4" /> Scan QR Card</>}
+                        {isScanning ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                            Scanning…
+                          </>
+                        ) : (
+                          <>
+                            <QrCode className="mr-2 h-4 w-4" /> Scan QR Card
+                          </>
+                        )}
                       </Button>
                       <p className="text-xs text-center text-white/50">
                         Hold your CISS QR card in front of the camera
@@ -559,15 +600,15 @@ export default function GuardLoginPage() {
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <p className="text-xs text-white/50">Employee</p>
                         <p className="text-base font-semibold truncate text-white">
-                          {scannedEmployeeName || scannedEmployeeId}
+                          {scannedEmployeeId}
                         </p>
-                        {scannedEmployeeName && (
-                          <p className="text-xs text-white/50 mt-0.5 tabular-nums">{scannedEmployeeId}</p>
-                        )}
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-semibold text-white" htmlFor="qr-pin">
+                        <label
+                          className="text-sm font-semibold text-white"
+                          htmlFor="qr-pin"
+                        >
                           Enter your PIN
                         </label>
                         <Input
@@ -576,15 +617,23 @@ export default function GuardLoginPage() {
                           inputMode="numeric"
                           autoComplete="one-time-code"
                           value={qrPin}
-                          onChange={(e) => setQrPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          onChange={(e) =>
+                            setQrPin(
+                              e.target.value.replace(/\D/g, "").slice(0, 6),
+                            )
+                          }
                           maxLength={6}
                           disabled={isQrLoading}
                           className="h-14 text-2xl text-center tracking-[0.5em] font-semibold bg-white text-foreground"
                           placeholder="••••"
                           autoFocus
-                          onKeyDown={(e) => { if (e.key === "Enter") handleQrLogin(); }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleQrLogin();
+                          }}
                         />
-                        <p className="text-xs text-white/50">4 to 6 digit PIN</p>
+                        <p className="text-xs text-white/50">
+                          4 to 6 digit PIN
+                        </p>
                       </div>
 
                       <Button
@@ -592,7 +641,16 @@ export default function GuardLoginPage() {
                         onClick={handleQrLogin}
                         disabled={isQrLoading || qrPin.length < 4}
                       >
-                        {isQrLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…</> : <>Sign In <ArrowRight className="ml-2 h-4 w-4" /></>}
+                        {isQrLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                            Signing in…
+                          </>
+                        ) : (
+                          <>
+                            Sign In <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
                       </Button>
 
                       <Button
@@ -601,7 +659,8 @@ export default function GuardLoginPage() {
                         onClick={resetQrFlow}
                         disabled={isQrLoading}
                       >
-                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Scan a different QR
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Scan a
+                        different QR
                       </Button>
                     </div>
                   )}

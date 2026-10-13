@@ -1,5 +1,19 @@
 const SAFE_PATH = /^[A-Za-z0-9._-]+$/;
 
+/**
+ * A document reference supplied by the client could not be validated: it is
+ * missing, does not belong to this enrollment session, or no longer exists in
+ * storage. Every such failure is user-actionable (re-upload the document), so
+ * the enrollment route surfaces the underlying message instead of collapsing
+ * it into a generic 500.
+ */
+export class EnrollmentDocumentReferenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EnrollmentDocumentReferenceError";
+  }
+}
+
 type EnrollmentDocumentContext = {
   bucketName: string;
   flow: "public" | "admin";
@@ -16,8 +30,12 @@ function decodeFirebaseStorageUrl(reference: string, bucketName: string) {
   }
   if (url.protocol !== "https:" || url.hostname !== "firebasestorage.googleapis.com") return null;
   const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/([^/]+)$/);
-  if (!match || decodeURIComponent(match[1]!) !== bucketName) return null;
-  return decodeURIComponent(match[2]!);
+  if (!match || match[1] !== encodeURIComponent(bucketName)) return null;
+  try {
+    return decodeURIComponent(match[2]!);
+  } catch {
+    return null;
+  }
 }
 
 export function resolveEnrollmentStoragePath(reference: string, bucketName: string) {
@@ -47,13 +65,13 @@ export async function assertEnrollmentStorageFile(
   context: EnrollmentDocumentContext,
   bucket: { file: (path: string) => { exists: () => Promise<[boolean]> } },
 ) {
-  if (typeof reference !== "string") throw new Error(`${label} is required.`);
+  if (typeof reference !== "string") throw new EnrollmentDocumentReferenceError(`${label} is required.`);
   const path = resolveEnrollmentStoragePath(reference, context.bucketName);
   if (!path || !isAllowedEnrollmentStoragePath(path, folder, context)) {
-    throw new Error(`${label} must be uploaded through the enrollment form.`);
+    throw new EnrollmentDocumentReferenceError(`${label} must be uploaded through the enrollment form.`);
   }
   const [exists] = await bucket.file(path).exists();
-  if (!exists) throw new Error(`${label} could not be found. Upload it again.`);
+  if (!exists) throw new EnrollmentDocumentReferenceError(`${label} could not be found. Upload it again.`);
   return path;
 }
 
@@ -71,10 +89,6 @@ export async function assertEnrollmentDocumentReferences(
     ["signatureUrl", "Signature", "signatures"],
     ["bankPassbookStatementUrl", "Bank document", "bankDocuments"],
   ] as const;
-  for (const [key, label, folder] of required) {
-    await assertEnrollmentStorageFile(payload[key], label, folder, context, bucket);
-  }
-
   const optional = [
     ["serviceBookDocumentUrl", "Service book document", "serviceBooks"],
     ["armsLicenseDocumentUrl", "Arms license document", "armsLicenses"],
@@ -83,9 +97,16 @@ export async function assertEnrollmentDocumentReferences(
     ["policeClearanceCertificateUrl", "Police clearance certificate", "policeCertificates"],
     ["qualificationCertificateUrl", "Highest qualification certificate", "qualificationCertificates"],
   ] as const;
-  for (const [key, label, folder] of optional) {
-    if (payload[key] !== undefined && payload[key] !== null && payload[key] !== "") {
-      await assertEnrollmentStorageFile(payload[key], label, folder, context, bucket);
-    }
-  }
+  const checks = [
+    ...required.map(([key, label, folder]) =>
+      assertEnrollmentStorageFile(payload[key], label, folder, context, bucket)),
+    ...optional.filter(([key]) => payload[key] !== undefined && payload[key] !== null && payload[key] !== "")
+      .map(([key, label, folder]) =>
+        assertEnrollmentStorageFile(payload[key], label, folder, context, bucket)),
+  ];
+  const results = await Promise.allSettled(checks);
+  const firstFailure = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (firstFailure) throw firstFailure.reason;
 }

@@ -1,11 +1,18 @@
 export { KERALA_DISTRICTS } from "./districts";
 
 export const EMPLOYEE_STATUSES = [
+  "PendingReview",
   "Active",
   "Inactive",
   "OnLeave",
   "Exited",
 ] as const;
+
+export function getEmployeeStatusLabel(status: string | null | undefined) {
+  if (status === "PendingReview") return "Pending review";
+  if (status === "OnLeave") return "On leave";
+  return status || "Unknown";
+}
 
 export const PROOF_TYPES = [
   "Aadhar Card",

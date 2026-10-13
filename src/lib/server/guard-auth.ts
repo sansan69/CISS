@@ -1,14 +1,11 @@
 import { verifyRequestAuth } from "@/lib/server/auth";
+import { resolveActiveGuardProfile } from "@/lib/server/linked-profiles";
 
 type GuardIdentity = {
   uid: string;
   employeeId: string;
   employeeDocId: string;
 };
-
-function claimAsString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
 
 export async function requireGuard(
   request: Request
@@ -19,63 +16,15 @@ export async function requireGuard(
     throw new Error("Guard access required.");
   }
 
-  const employeeId = claimAsString(decodedToken.employeeId);
-  const employeeDocId = claimAsString(decodedToken.employeeDocId);
-
   const { db: adminDb } = await import("@/lib/firebaseAdmin");
-
-  let employeeSnap;
-  if (employeeDocId) {
-    const employeeDoc = await adminDb.collection("employees").doc(employeeDocId).get();
-    employeeSnap = {
-      empty: !employeeDoc.exists,
-      docs: employeeDoc.exists ? [employeeDoc] : [],
-    };
-  } else {
-    employeeSnap = await adminDb
-      .collection("employees")
-      .where("guardAuthUid", "==", decodedToken.uid)
-      .limit(1)
-      .get();
-  }
-
-  if (employeeSnap.empty && employeeId) {
-    employeeSnap = await adminDb
-      .collection("employees")
-      .where("employeeId", "==", employeeId)
-      .limit(1)
-      .get();
-  }
-
-  if (employeeSnap.empty && employeeId) {
-    employeeSnap = await adminDb
-      .collection("employees")
-      .where("employeeCode", "==", employeeId)
-      .limit(1)
-      .get();
-  }
-
-  const employeeDoc = employeeSnap.docs[0];
-  if (!employeeDoc) {
+  const profile = await resolveActiveGuardProfile(adminDb, decodedToken);
+  if (!profile) {
     throw new Error("Guard employee record not found.");
-  }
-
-  const employeeData = employeeDoc.data() as Record<string, unknown>;
-  if (claimAsString(employeeData.status || "Active").toLowerCase() !== "active") {
-    throw new Error("Guard account is inactive.");
-  }
-  const resolvedEmployeeId =
-    employeeId ||
-    claimAsString(employeeData.employeeId) ||
-    claimAsString(employeeData.employeeCode);
-
-  if (!resolvedEmployeeId) {
-    throw new Error("Guard employee ID is missing.");
   }
 
   return {
     uid: decodedToken.uid,
-    employeeId: resolvedEmployeeId,
-    employeeDocId: employeeDocId || employeeDoc.id,
+    employeeId: profile.employeeId,
+    employeeDocId: profile.employeeDocId,
   };
 }

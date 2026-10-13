@@ -189,7 +189,7 @@ export interface Employee {
   policeClearanceCertificateUrl?: string;
   legacyUniqueId?: string;
   joiningDate: any;
-  status: "Active" | "Inactive" | "OnLeave" | "Exited";
+  status: "PendingReview" | "Active" | "Inactive" | "OnLeave" | "Exited";
   qrCodeUrl?: string;
   exitDate?: any;
   createdAt: any;
@@ -200,7 +200,7 @@ export interface Employee {
     employeeId: string;
     clientName: string;
     profilePictureUrl?: string;
-    status: "Active" | "Inactive" | "OnLeave" | "Exited";
+    status: "PendingReview" | "Active" | "Inactive" | "OnLeave" | "Exited";
   };
   department?: string;
   documentCompletion?: {

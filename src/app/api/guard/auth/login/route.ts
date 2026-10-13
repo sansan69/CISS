@@ -1,11 +1,56 @@
 import { NextResponse } from "next/server";
-import { normalizeGuardPhone } from "@/lib/guard/identity-utils";
-import { validatePinFormat, verifyPin } from "@/lib/guard/pin-utils";
-import { checkRateLimit, getClientIp, buildRateLimitKey } from "@/lib/server/rate-limit";
+import {
+  parseGuardEmployeeIdInput,
+  parseGuardPhoneInput,
+} from "@/lib/guard/identity-utils";
+import { buildFailedPinAttemptUpdate } from "@/lib/guard/login-attempt-utils";
+import {
+  hashPin,
+  validatePinFormat,
+  verifyDummyPin,
+  verifyPinWithMetadata,
+} from "@/lib/guard/pin-utils";
+import {
+  checkRateLimit,
+  getClientIp,
+  buildRateLimitKey,
+} from "@/lib/server/rate-limit";
+import crypto from "node:crypto";
 export const runtime = "nodejs";
 
-function normalizePhone(phone: string): string {
-  return normalizeGuardPhone(phone);
+const AUTH_FAILURE_MESSAGE = "Invalid sign-in details. Please try again.";
+const IDENTIFIER_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const IDENTIFIER_RATE_LIMIT_MAX = 10;
+
+function identifierFingerprint(identifier: string) {
+  return crypto
+    .createHash("sha256")
+    .update(identifier)
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function authenticationFailure() {
+  return NextResponse.json({ error: AUTH_FAILURE_MESSAGE }, { status: 401 });
+}
+
+function getLockoutUntil(value: unknown): number | null {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (value && typeof value === "object" && "toMillis" in value) {
+    const toMillis = (value as { toMillis?: unknown }).toMillis;
+    if (typeof toMillis === "function") {
+      return toMillis.call(value) as number;
+    }
+  }
+
+  return null;
 }
 
 function isLocalHost(host: string | null): boolean {
@@ -58,7 +103,7 @@ export async function POST(request: Request) {
     const ipRateResult = await checkRateLimit(ipRateKey, {
       maxRequests: 20,
       windowMs: 60 * 1000, // 20 requests per minute per IP
-      failClosed: true,     // Fail closed for security-critical endpoint
+      failClosed: true, // Fail closed for security-critical endpoint
     });
     if (!ipRateResult.allowed) {
       return NextResponse.json(
@@ -73,168 +118,174 @@ export async function POST(request: Request) {
       employeeId?: string;
       pin?: string;
     };
-    const normalizedPhone = normalizePhone(String(phoneNumber ?? ""));
-    const normalizedEmployeeId = String(employeeId ?? "").trim();
+    const suppliedPhone = typeof phoneNumber === "string" ? phoneNumber : "";
+    const suppliedEmployeeId =
+      typeof employeeId === "string" ? employeeId : "";
+    const normalizedPhone = suppliedPhone.trim()
+      ? parseGuardPhoneInput(suppliedPhone)
+      : "";
+    const normalizedEmployeeId = suppliedEmployeeId.trim()
+      ? parseGuardEmployeeIdInput(suppliedEmployeeId)
+      : "";
     const normalizedPin = String(pin ?? "").trim();
 
-    if ((!normalizedPhone && !normalizedEmployeeId) || !normalizedPin) {
+    if (
+      (suppliedPhone.trim() && !normalizedPhone) ||
+      (suppliedEmployeeId.trim() && !normalizedEmployeeId) ||
+      (!normalizedPhone && !normalizedEmployeeId) ||
+      !normalizedPin
+    ) {
       return NextResponse.json(
         { error: "phoneNumber or employeeId, and pin are required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!validatePinFormat(normalizedPin)) {
       return NextResponse.json(
         { error: "PIN must be 4 to 6 digits." },
-        { status: 400 }
+        { status: 400 },
       );
+    }
+
+    const identifiers = [
+      ...(normalizedEmployeeId ? [`employee:${normalizedEmployeeId}`] : []),
+      ...(normalizedPhone ? [`phone:${normalizedPhone}`] : []),
+    ];
+    for (const identifier of identifiers) {
+      const identifierRateResult = await checkRateLimit(
+        buildRateLimitKey(
+          "guard-login-identifier",
+          identifierFingerprint(identifier),
+        ),
+        {
+          maxRequests: IDENTIFIER_RATE_LIMIT_MAX,
+          windowMs: IDENTIFIER_RATE_LIMIT_WINDOW_MS,
+          failClosed: true,
+        },
+      );
+      if (!identifierRateResult.allowed) {
+        return NextResponse.json(
+          { error: "Too many login attempts. Please wait and try again." },
+          { status: 429 },
+        );
+      }
     }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
     const now = Date.now();
 
-    // Find employee by phone number or employeeId
+    // Resolve supplied identifiers independently. A request that includes both
+    // must refer to one employee; selecting by either would permit identity mixups.
     const employeesRef = adminDb.collection("employees");
-    let empQuery;
+    let employeeIdQuery;
 
     if (normalizedEmployeeId) {
-      empQuery = await employeesRef
+      employeeIdQuery = await employeesRef
         .where("employeeId", "==", normalizedEmployeeId)
         .limit(1)
         .get();
 
-      if (empQuery.empty) {
-        empQuery = await employeesRef
+      if (employeeIdQuery.empty) {
+        employeeIdQuery = await employeesRef
           .where("legacyUniqueId", "==", normalizedEmployeeId)
           .limit(1)
           .get();
       }
-    } else {
-      empQuery = await employeesRef
+    }
+
+    let phoneQuery;
+    if (normalizedPhone) {
+      phoneQuery = await employeesRef
         .where("phoneNumber", "==", normalizedPhone)
         .limit(1)
         .get();
     }
 
-    if (empQuery.empty && normalizedPhone) {
-      empQuery = await employeesRef
-        .where("phoneNumber", "==", normalizedPhone)
-        .limit(1)
-        .get();
+    if (
+      employeeIdQuery &&
+      phoneQuery &&
+      (!employeeIdQuery.empty && !phoneQuery.empty
+        ? employeeIdQuery.docs[0].id !== phoneQuery.docs[0].id
+        : employeeIdQuery.empty !== phoneQuery.empty)
+    ) {
+      await verifyDummyPin(normalizedPin);
+      return authenticationFailure();
     }
 
-    if (empQuery.empty) {
-      const rateLimitKey = normalizedPhone || `eid_${normalizedEmployeeId}`;
-      const rateLimitRef = adminDb.doc(`rateLimits/login_unknown_${rateLimitKey}`);
-      const rateLimitSnap = await rateLimitRef.get();
-      const windowMs = 5 * 60 * 1000;
-
-      if (!rateLimitSnap.exists) {
-        await rateLimitRef.set({ windowStart: now, attempts: 1 });
-      } else {
-        const data = rateLimitSnap.data()!;
-        const windowStart: number = data.windowStart ?? 0;
-        const attempts: number = data.attempts ?? 0;
-        const withinWindow = now - windowStart < windowMs;
-        const nextAttempts = withinWindow ? attempts + 1 : 1;
-
-        await rateLimitRef.set(
-          {
-            windowStart: withinWindow ? windowStart : now,
-            attempts: nextAttempts,
-          },
-          { merge: true },
-        );
-
-        if (withinWindow && nextAttempts >= 5) {
-          return NextResponse.json(
-            { error: "Too many login attempts. Please wait 5 minutes." },
-            { status: 429 }
-          );
-        }
-      }
-
-      return NextResponse.json(
-        { error: "Employee not found." },
-        { status: 404 }
-      );
+    const empQuery = employeeIdQuery ?? phoneQuery;
+    if (!empQuery || empQuery.empty) {
+      await verifyDummyPin(normalizedPin);
+      return authenticationFailure();
     }
 
     const empDoc = empQuery.docs[0];
-    const empData = empDoc.data();
-    const employeeStatus = String(empData.status ?? "Active").trim().toLowerCase();
-    if (employeeStatus !== "active") {
-      return NextResponse.json(
-        { error: "This guard account is inactive. Please contact an administrator." },
-        { status: 403 },
-      );
-    }
+    const loginResult = await adminDb.runTransaction(async (transaction) => {
+      const currentSnapshot = await transaction.get(empDoc.ref);
+      if (!currentSnapshot.exists) {
+        return { authenticated: false, useDummyKdf: true };
+      }
 
-    // Check lockout
-    if (empData.guardLockoutUntil) {
-      const lockoutUntil =
-        empData.guardLockoutUntil?.toMillis?.() ??
-        Number(empData.guardLockoutUntil);
-      if (now < lockoutUntil) {
-        const secondsRemaining = Math.ceil((lockoutUntil - now) / 1000);
-        return NextResponse.json(
-          {
-            error: `Account locked. Try again in ${secondsRemaining} seconds.`,
-            lockedUntil: lockoutUntil,
-          },
-          { status: 429 }
+      const currentData = currentSnapshot.data() as Record<string, unknown>;
+      const employeeStatus = String(currentData.status ?? "Active")
+        .trim()
+        .toLowerCase();
+      const lockoutUntil = getLockoutUntil(currentData.guardLockoutUntil);
+      if (
+        employeeStatus !== "active" ||
+        (lockoutUntil !== null && now < lockoutUntil) ||
+        typeof currentData.guardPin !== "string" ||
+        !currentData.guardAuthUid
+      ) {
+        return { authenticated: false, useDummyKdf: true };
+      }
+
+      const verification = await verifyPinWithMetadata(
+        normalizedPin,
+        currentData.guardPin,
+      );
+      if (!verification.valid) {
+        transaction.update(
+          empDoc.ref,
+          buildFailedPinAttemptUpdate(currentData.guardFailedAttempts, now),
         );
-      }
-    }
-
-    // Check PIN is set
-    if (!empData.guardPin || !empData.guardAuthUid) {
-      return NextResponse.json(
-        { error: "PIN not set. Please complete setup first." },
-        { status: 400 }
-      );
-    }
-
-    // Verify PIN
-    const pinValid = await verifyPin(normalizedPin, empData.guardPin as string);
-
-    if (!pinValid) {
-      // Increment failed attempts
-      const failedAttempts = ((empData.guardFailedAttempts as number) ?? 0) + 1;
-      const updates: Record<string, unknown> = {
-        guardFailedAttempts: failedAttempts,
-      };
-
-      if (failedAttempts >= 10) {
-        // Lock for 15 minutes
-        const lockUntil = new Date(now + 15 * 60 * 1000);
-        updates.guardLockoutUntil = lockUntil;
+        return {
+          authenticated: false,
+          useDummyKdf: !verification.performedMemoryHardWork,
+        };
       }
 
-      await empDoc.ref.update(updates);
-
-      return NextResponse.json({ error: "Incorrect PIN." }, { status: 401 });
-    }
-
-    // Success — reset failed attempts
-    await empDoc.ref.update({
-      guardFailedAttempts: 0,
-      guardLastLogin: FieldValue.serverTimestamp(),
-      guardLockoutUntil: FieldValue.delete(),
+      const migratedPin = verification.needsMigration
+        ? await hashPin(normalizedPin)
+        : undefined;
+      transaction.update(empDoc.ref, {
+        guardFailedAttempts: 0,
+        guardLastLogin: FieldValue.serverTimestamp(),
+        guardLockoutUntil: FieldValue.delete(),
+        ...(migratedPin ? { guardPin: migratedPin } : {}),
+      });
+      return { authenticated: true, data: currentData };
     });
 
+    if (!loginResult.authenticated || !loginResult.data) {
+      if (loginResult.useDummyKdf) {
+        await verifyDummyPin(normalizedPin);
+      }
+      return authenticationFailure();
+    }
+
     // Create custom token
-    const { auth: adminAuth, customTokenAuth } = await import("@/lib/firebaseAdmin");
+    const { auth: adminAuth, customTokenAuth } =
+      await import("@/lib/firebaseAdmin");
     const tokenIssuer = customTokenAuth ?? adminAuth;
     const customToken = await tokenIssuer.createCustomToken(
-      empData.guardAuthUid as string,
+      loginResult.data.guardAuthUid as string,
       {
         role: "guard",
-        employeeId: empData.employeeId,
+        employeeId: loginResult.data.employeeId,
         employeeDocId: empDoc.id,
-      }
+      },
     );
 
     if (isLocalHost(request.headers.get("host"))) {
@@ -246,17 +297,21 @@ export async function POST(request: Request) {
           pin: normalizedPin,
         });
         const fallbackData = await fallbackResponse.json();
-        return NextResponse.json(fallbackData, { status: fallbackResponse.status });
+        return NextResponse.json(fallbackData, {
+          status: fallbackResponse.status,
+        });
       }
     }
 
     return NextResponse.json({
       token: customToken,
-      employeeName: empData.name ?? "",
+      employeeName: loginResult.data.name ?? "",
     });
   } catch (err: unknown) {
     console.error("[guard/login]", err);
-    const msg = err instanceof Error ? err.message : "Internal server error.";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not complete sign-in." },
+      { status: 500 },
+    );
   }
 }

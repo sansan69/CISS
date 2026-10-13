@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { verifyPin, hashPin, validatePinFormat } from "@/lib/guard/pin-utils";
+import {
+  hashPin,
+  validatePinFormat,
+  verifyDummyPin,
+  verifyPinWithMetadata,
+} from "@/lib/guard/pin-utils";
 import { requireGuard } from "@/lib/server/guard-auth";
 export const runtime = "nodejs";
 
@@ -48,8 +53,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const currentValid = await verifyPin(normalizedCurrentPin, empData.guardPin as string);
-    if (!currentValid) {
+    const verification = await verifyPinWithMetadata(
+      normalizedCurrentPin,
+      empData.guardPin as string,
+    );
+    if (!verification.valid) {
+      if (!verification.performedMemoryHardWork) {
+        await verifyDummyPin(normalizedCurrentPin);
+      }
       const rateLimitSnap = await rateLimitRef.get();
       const windowMs = 5 * 60 * 1000;
       const rlData = rateLimitSnap.exists ? rateLimitSnap.data()! : {};

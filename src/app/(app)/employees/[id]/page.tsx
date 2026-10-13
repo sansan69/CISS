@@ -38,7 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { PDFFont } from 'pdf-lib';
-import { EDUCATION_OPTIONS, getAddressProofTypesForIdentity, IDENTITY_PROOF_TYPES, isLngClientName } from "@/lib/constants";
+import { EDUCATION_OPTIONS, getAddressProofTypesForIdentity, getEmployeeStatusLabel, IDENTITY_PROOF_TYPES, isLngClientName } from "@/lib/constants";
 import { dedupeClientOptions } from "@/lib/client-options";
 import { useAppAuth } from "@/context/auth-context";
 import { districtMatches } from "@/lib/districts";
@@ -124,7 +124,7 @@ const keralaDistricts = [
 const idProofOptions = [...IDENTITY_PROOF_TYPES];
 const maritalStatuses = ["Married", "Unmarried"];
 const genderOptions = ["Male", "Female", "Other"];
-const employeeStatuses = ['Active', 'Inactive', 'OnLeave', 'Exited'];
+const employeeStatuses = ['PendingReview', 'Active', 'Inactive', 'OnLeave', 'Exited'];
 const educationOptions = [...EDUCATION_OPTIONS];
 interface ClientOption { id: string; name: string; }
 type CameraField = "profilePicture" | "identityProofUrlFront" | "identityProofUrlBack" | "addressProofUrlFront" | "addressProofUrlBack" | "signatureUrl" | "bankPassbookStatement" | "policeClearanceCertificate" | "qualificationCertificate";
@@ -172,7 +172,7 @@ const employeeUpdateSchema = z.object({
   clientName: z.string().min(1, "Client name is required."),
   resourceIdNumber: z.string().optional(),
   joiningDate: z.date({ required_error: "Joining date is required." }),
-  status: z.enum(['Active', 'Inactive', 'OnLeave', 'Exited']),
+  status: z.enum(['PendingReview', 'Active', 'Inactive', 'OnLeave', 'Exited']),
   exitDate: z.date().optional().nullable(),
   bankName: z.string().optional().or(z.literal('')),
   bankAccountNumber: z.string().optional().or(z.literal('')),
@@ -1841,7 +1841,7 @@ export default function AdminEmployeeProfilePage() {
               <h1 className="font-exo2 text-2xl sm:text-3xl font-bold leading-tight tracking-[-0.035em]">{toTitleCase(employee.fullName)}</h1>
               <p className="text-muted-foreground">{employee.employeeId} - {employee.clientName || "N/A"}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Badge variant={getStatusBadgeVariant(employee.status)}>{employee.status}</Badge>
+                <Badge variant={getStatusBadgeVariant(employee.status)}>{getEmployeeStatusLabel(employee.status)}</Badge>
                 {employee.phoneNumber && (
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
                     <Phone size={10} /> {employee.phoneNumber}
@@ -1981,7 +1981,7 @@ export default function AdminEmployeeProfilePage() {
                     {employee.jobDesignation && <DetailItem label="Job Designation" value={employee.jobDesignation} />}
                     {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}
                     <DetailItem label="Joining Date" value={employee.joiningDate} isDate />
-                    <DetailItem label="Status" value={employee.status} />
+                    <DetailItem label="Status" value={getEmployeeStatusLabel(employee.status)} />
                     {employee.status === 'Exited' && employee.exitDate && (
                         <DetailItem label="Exit Date" value={employee.exitDate} isDate />
                     )}
@@ -2278,7 +2278,7 @@ export default function AdminEmployeeProfilePage() {
                               <FormMessage />
                           </FormItem>
                       )} />
-                      <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{employeeStatuses.map(s => <SelectItem key={s} value={s}>{getEmployeeStatusLabel(s)}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                       {watchStatus === 'Exited' && <FormField control={form.control} name="exitDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Exit Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full justify-start", !field.value && "text-muted-foreground")}>{field.value ? format(field.value, "dd-MM-yyyy") : <span>Pick exit date</span>}<CalendarIcon className="ml-auto h-4 w-4" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)} />}
                     </div>
                   </section>

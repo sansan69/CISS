@@ -3,6 +3,7 @@ import {
   requireAadhaarAdministratorToken,
 } from "./auth";
 import {
+  AadhaarProcessingError,
   assertAadhaarSourceOwnership,
   documentCompletionFromEmployee,
   getAadhaarFileExtension,
@@ -38,7 +39,7 @@ describe("Aadhaar restricted access", () => {
 
   it("performs syntax validation without claiming Aadhaar verification", () => {
     expect(validateAadhaarNumber("1234 5678 9012")).toBe("123456789012");
-    expect(() => validateAadhaarNumber("1234")).toThrow();
+    expect(() => validateAadhaarNumber("1234")).toThrow(AadhaarProcessingError);
   });
 
   it("recognizes common image formats accepted by registration uploads", () => {
@@ -63,6 +64,13 @@ describe("Aadhaar restricted access", () => {
       "restrictedAadhaarStaging/admin-uid/front.pdf",
       { flow: "admin", adminUid: "admin-uid" },
     )).toBe("restrictedAadhaarStaging/admin-uid/front.pdf");
+  });
+
+  it("surfaces an invalid Aadhaar reference as a user-actionable error", () => {
+    expect(() => assertAadhaarSourceOwnership(
+      "not-a-valid-reference",
+      { flow: "public", draftId: "draft-123" },
+    )).toThrow(AadhaarProcessingError);
   });
 
   it("grandfathers missing legacy documents and recognizes legacy field names", () => {

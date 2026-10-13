@@ -17,6 +17,7 @@ export async function PATCH(
       name?: string;
       portalSubdomain?: string;
       portalEnabled?: boolean;
+      enrollmentEnabled?: boolean;
       nationalHolidayList?: string[];
       uniformAllowanceMonthly?: number;
       fieldAllowanceMonthly?: number;
@@ -75,6 +76,9 @@ export async function PATCH(
     if (typeof body.portalEnabled === "boolean") {
       updateData.portalEnabled = body.portalEnabled;
     }
+    if (typeof body.enrollmentEnabled === "boolean") {
+      updateData.enrollmentEnabled = body.enrollmentEnabled;
+    }
     if (Array.isArray(body.nationalHolidayList)) {
       updateData.nationalHolidayList = body.nationalHolidayList.filter(Boolean);
     }
@@ -102,6 +106,10 @@ export async function PATCH(
         typeof body.portalEnabled === "boolean"
           ? body.portalEnabled
           : existing.portalEnabled !== false,
+      enrollmentEnabled:
+        typeof body.enrollmentEnabled === "boolean"
+          ? body.enrollmentEnabled
+          : existing.enrollmentEnabled !== false,
       portalUrl: buildClientPortalUrl(portalSubdomain),
     });
   } catch (error: any) {

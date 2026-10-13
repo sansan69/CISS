@@ -10,12 +10,12 @@ export async function GET(request: Request) {
     const session = await resolveMobileSession(decoded);
 
     if (!session) {
-      return unauthorizedResponse("This Firebase account is not linked to a mobile guard or field officer profile.", 403);
+      return unauthorizedResponse("Unauthorized.", 401);
     }
 
     return NextResponse.json(session);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Could not resolve mobile session.";
-    return unauthorizedResponse(message, 401);
+    console.error("[mobile/session]", error);
+    return unauthorizedResponse("Unauthorized.", 401);
   }
 }

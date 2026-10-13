@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertEnrollmentStorageFile,
+  EnrollmentDocumentReferenceError,
   resolveEnrollmentStoragePath,
 } from "./enrollment-documents";
 
@@ -90,5 +91,24 @@ describe("enrollment document references", () => {
         "test-bucket",
       ),
     ).toBeNull();
+  });
+
+  it("raises a user-actionable EnrollmentDocumentReferenceError", async () => {
+    const context = {
+      bucketName: "test-bucket",
+      flow: "public" as const,
+      draftId: "draft-abc-123",
+      phoneNumber: "9012345690",
+    };
+
+    // Missing required landmark.
+    await expect(
+      assertEnrollmentStorageFile(undefined as unknown as string, "Profile picture", "profilePictures", context, bucket),
+    ).rejects.toBeInstanceOf(EnrollmentDocumentReferenceError);
+
+    // External / wrong-session reference.
+    await expect(
+      assertEnrollmentStorageFile("https://example.com/id-front.png", "Identity proof front", "idProofs", context, bucket),
+    ).rejects.toBeInstanceOf(EnrollmentDocumentReferenceError);
   });
 });

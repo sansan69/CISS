@@ -108,7 +108,7 @@ export default async function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            __html: `(function(){var d=document.documentElement;var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){var dark=m.matches;d.classList.toggle('dark',dark);d.dataset.theme=dark?'dark':'light';d.style.colorScheme=dark?'dark':'light'}s();if(m.addEventListener)m.addEventListener('change',s);else if(m.addListener)m.addListener(s)})();`,
+            __html: `(function(){var d=document.documentElement;var k='ciss-theme';var p='system';try{var v=localStorage.getItem(k);if(v==='light'||v==='dark'||v==='system')p=v}catch(e){}var m=window.matchMedia('(prefers-color-scheme: dark)');function s(){var dark=p==='dark'||(p==='system'&&m.matches);d.classList.toggle('dark',dark);d.dataset.theme=dark?'dark':'light';d.style.colorScheme=dark?'dark':'light'}s();if(m.addEventListener)m.addEventListener('change',s);else if(m.addListener)m.addListener(s)})();`,
           }}
         />
       </head>

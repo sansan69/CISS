@@ -2,6 +2,7 @@ import type FirebaseFirestore from "@google-cloud/firestore";
 
 import { districtMatches } from "@/lib/districts";
 import type { AppDecodedToken } from "@/lib/server/auth";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 
 export type FieldOfficerReportProfile = {
   name: string;
@@ -58,26 +59,12 @@ export async function getFieldOfficerReportProfile(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ): Promise<FieldOfficerReportProfile> {
-  let name = decoded.name ?? decoded.email ?? "";
-  let stateCode = decoded.stateCode ?? "KL";
-  let assignedDistricts = Array.isArray(decoded.assignedDistricts) ? decoded.assignedDistricts : [];
-
-  const snapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!snapshot.empty) {
-    const data = snapshot.docs[0].data();
-    name = typeof data.name === "string" ? data.name : name;
-    stateCode = typeof data.stateCode === "string" ? data.stateCode : stateCode;
-    assignedDistricts = Array.isArray(data.assignedDistricts)
-      ? data.assignedDistricts.filter((value): value is string => typeof value === "string")
-      : assignedDistricts;
-  }
-
-  return { name, stateCode, assignedDistricts };
+  const profile = await requireActiveFieldOfficerProfile(adminDb, decoded);
+  return {
+    name: profile.name,
+    stateCode: profile.stateCode,
+    assignedDistricts: profile.assignedDistricts,
+  };
 }
 
 function finiteNumber(value: unknown) {

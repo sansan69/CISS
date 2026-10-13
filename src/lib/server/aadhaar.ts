@@ -40,6 +40,19 @@ export class AadhaarSourceOwnershipError extends Error {
   }
 }
 
+/**
+ * An error in the Aadhaar file or storage reference that is user-actionable
+ * (the source is invalid/unreadable, missing from storage, or over the size
+ * limit). These are surfaced to the client so the guard can correct them rather
+ * than being masked as an opaque 500.
+ */
+export class AadhaarProcessingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AadhaarProcessingError";
+  }
+}
+
 type KmsEnvelope = {
   aadhaarNumberEncrypted: string;
   encryptionIv: string;
@@ -91,7 +104,7 @@ async function kmsRequest(operation: "encrypt" | "decrypt", body: Record<string,
 export function validateAadhaarNumber(value: string) {
   const normalized = value.replace(/\s+/g, "");
   if (!/^\d{12}$/.test(normalized)) {
-    throw new Error("Aadhaar number must contain exactly 12 digits.");
+    throw new AadhaarProcessingError("Aadhaar number must contain exactly 12 digits.");
   }
   return normalized;
 }
@@ -150,7 +163,7 @@ export async function decryptAadhaarNumber(record: KmsEnvelope) {
 
 async function validateAadhaarFile(buffer: Buffer) {
   if (buffer.length === 0 || buffer.length > MAX_AADHAAR_FILE_BYTES) {
-    throw new Error("Aadhaar copy must be a non-empty file no larger than 5 MB.");
+    throw new AadhaarProcessingError("Aadhaar copy must be a non-empty file no larger than 5 MB.");
   }
   const detected = await fileTypeFromBuffer(buffer);
   if (detected?.mime === "application/pdf" || buffer.subarray(0, 1024).includes(Buffer.from("%PDF-"))) {
@@ -164,7 +177,7 @@ async function validateAadhaarFile(buffer: Buffer) {
     const normalized = await sharp(buffer).rotate().png().toBuffer();
     return { buffer: normalized, contentType: "image/png", extension: "png" };
   } catch {
-    throw new Error("Aadhaar copy must be a valid image file or PDF.");
+    throw new AadhaarProcessingError("Aadhaar copy must be a valid image file or PDF.");
   }
 }
 
@@ -180,23 +193,23 @@ function resolveSameBucketPath(source: string) {
   try {
     url = new URL(trimmed);
   } catch {
-    throw new Error("Invalid Aadhaar source reference.");
+    throw new AadhaarProcessingError("Invalid Aadhaar source reference.");
   }
   if (url.protocol !== "https:" || url.hostname !== "firebasestorage.googleapis.com") {
-    throw new Error("Aadhaar source must belong to the configured Firebase Storage bucket.");
+    throw new AadhaarProcessingError("Aadhaar source must belong to the configured Firebase Storage bucket.");
   }
   const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/([^/]+)$/);
-  if (!match) throw new Error("Invalid Firebase Storage Aadhaar reference.");
+  if (!match) throw new AadhaarProcessingError("Invalid Firebase Storage Aadhaar reference.");
   const bucket = storage.bucket();
   if (decodeURIComponent(match[1]!) !== bucket.name) {
-    throw new Error("Aadhaar source belongs to a different storage bucket.");
+    throw new AadhaarProcessingError("Aadhaar source belongs to a different storage bucket.");
   }
   const path = decodeURIComponent(match[2]!);
   if (
     !/^(enrollments|employees)\/[A-Za-z0-9_-]+\/aadharCards\/[A-Za-z0-9._-]+$/.test(path) &&
     !/^restrictedAadhaarStaging\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(path)
   ) {
-    throw new Error("Aadhaar source path is not allowed.");
+    throw new AadhaarProcessingError("Aadhaar source path is not allowed.");
   }
   return path;
 }
@@ -222,7 +235,7 @@ export async function saveAadhaarStagingBuffer(args: {
   buffer: Buffer;
 }) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(args.uploaderUid)) {
-    throw new Error("Invalid uploader ID.");
+    throw new AadhaarProcessingError("Invalid uploader ID.");
   }
   const validated = await validateAadhaarFile(args.buffer);
   const storagePath = `restrictedAadhaarStaging/${args.uploaderUid}/${crypto.randomUUID()}.${validated.extension}`;
@@ -243,7 +256,7 @@ export async function saveRestrictedAadhaarBuffer(args: {
   originalFileName: string;
 }) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(args.employeeDocId)) {
-    throw new Error("Invalid employee document ID.");
+    throw new AadhaarProcessingError("Invalid employee document ID.");
   }
   const validated = await validateAadhaarFile(args.buffer);
   const documentId = crypto.randomUUID();
@@ -319,7 +332,7 @@ export async function moveAadhaarSourceToRestrictedStorage(args: {
   const sourcePath = resolveSameBucketPath(args.source);
   const sourceFile = storage.bucket().file(sourcePath);
   const [exists] = await sourceFile.exists();
-  if (!exists) throw new Error("Uploaded Aadhaar copy could not be found.");
+  if (!exists) throw new AadhaarProcessingError("Uploaded Aadhaar copy could not be found.");
   const [metadata] = await sourceFile.getMetadata();
   const [buffer] = await sourceFile.download();
   const saved = await saveRestrictedAadhaarBuffer({

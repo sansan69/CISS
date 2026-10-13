@@ -118,6 +118,7 @@ interface ClientDoc {
   name: string;
   portalSubdomain?: string;
   portalEnabled?: boolean;
+  enrollmentEnabled?: boolean;
   uniformAllowanceMonthly?: number;
   fieldAllowanceMonthly?: number;
   nationalHolidayList?: string[];
@@ -325,7 +326,12 @@ export default function ClientDashboardPage() {
   const [deleteLocationTarget, setDeleteLocationTarget] = useState<LocationDoc | null>(null);
 
   const [clientEditDialog, setClientEditDialog] = useState(false);
-  const [clientForm, setClientForm] = useState({ name: "", portalSubdomain: "", portalEnabled: true });
+  const [clientForm, setClientForm] = useState({
+    name: "",
+    portalSubdomain: "",
+    portalEnabled: true,
+    enrollmentEnabled: true,
+  });
   const [savingClient, setSavingClient] = useState(false);
   const [deleteClientDialog, setDeleteClientDialog] = useState(false);
   const [runningGpsRepair, setRunningGpsRepair] = useState(false);
@@ -421,6 +427,7 @@ export default function ClientDashboardPage() {
       name: client.name,
       portalSubdomain: client.portalSubdomain || "",
       portalEnabled: client.portalEnabled !== false,
+      enrollmentEnabled: client.enrollmentEnabled !== false,
     });
     setClientEditDialog(true);
   };
@@ -1482,6 +1489,17 @@ export default function ClientDashboardPage() {
               <Switch
                 checked={clientForm.portalEnabled}
                 onCheckedChange={(checked) => setClientForm((form) => ({ ...form, portalEnabled: checked }))}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3">
+              <div className="pr-4">
+                <p className="text-sm font-medium">Guard registration</p>
+                <p className="text-xs text-muted-foreground">Show this client in public enrolment and accept new guard registrations.</p>
+              </div>
+              <Switch
+                checked={clientForm.enrollmentEnabled}
+                onCheckedChange={(checked) => setClientForm((form) => ({ ...form, enrollmentEnabled: checked }))}
+                aria-label="Accept guard registrations"
               />
             </div>
             <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3">

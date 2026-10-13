@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -51,33 +52,8 @@ async function getFieldOfficerProfile(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ): Promise<FieldOfficerProfile> {
-  let name = decoded.name ?? decoded.email ?? "Field Officer";
-  let stateCode = decoded.stateCode ?? "KL";
-  let assignedDistricts = Array.isArray(decoded.assignedDistricts)
-    ? decoded.assignedDistricts
-    : [];
-
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!foSnapshot.empty) {
-    const foData = foSnapshot.docs[0].data();
-    name = typeof foData.name === "string" ? foData.name : name;
-    stateCode =
-      typeof foData.stateCode === "string" ? foData.stateCode : stateCode;
-    assignedDistricts = Array.isArray(foData.assignedDistricts)
-      ? canonicalizeDistrictList(
-          foData.assignedDistricts.filter(
-            (district): district is string => typeof district === "string",
-          ),
-        )
-      : assignedDistricts;
-  }
-
-  return { name, stateCode, assignedDistricts };
+  const profile = await requireActiveFieldOfficerProfile(adminDb, decoded);
+  return profile;
 }
 
 export async function GET(request: Request) {

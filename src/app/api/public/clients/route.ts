@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
-import { dedupeClientOptions, isClientPortalEnabled } from "@/lib/client-options";
+import { dedupeClientOptions, isClientEnrollmentEnabled } from "@/lib/client-options";
 import { resolveClientEnrollmentProfile } from "@/lib/client-enrollment-profile";
 
 export const runtime = "nodejs";
@@ -20,30 +20,27 @@ function mapClient(id: string, data: Record<string, unknown>) {
 
 export async function GET() {
   try {
-    // Fetch clients (name-ordered) and the active-guard count per client in parallel.
-    // The client dropdown is ordered by "most guards enrolled" so the busiest client
-    // is the first, easiest option when enrolling a guard.
-    const [clientSnapshot, employeeSnapshot] = await Promise.all([
-      db.collection("clients").orderBy("name", "asc").get(),
-      db.collection("employees").where("status", "==", "Active").select("clientName").get(),
-    ]);
-
-    const guardCountByClient = new Map<string, number>();
-    employeeSnapshot.forEach((doc) => {
-      const clientName = doc.get("clientName");
-      if (typeof clientName === "string" && clientName.trim()) {
-        guardCountByClient.set(
-          clientName,
-          (guardCountByClient.get(clientName) ?? 0) + 1,
-        );
-      }
-    });
-
+    const clientSnapshot = await db.collection("clients").orderBy("name", "asc").get();
     const clients = dedupeClientOptions(
       clientSnapshot.docs
-        .filter((doc) => isClientPortalEnabled(doc.data()))
+        .filter((doc) => isClientEnrollmentEnabled(doc.data()))
         .map((doc) => mapClient(doc.id, doc.data() as Record<string, unknown>)),
     );
+
+    // Aggregation queries avoid downloading every active employee document just
+    // to order a small dropdown. CDN caching then serves repeat visits directly.
+    const counts = await Promise.all(
+      clients.map(async (client) => {
+        const snapshot = await db
+          .collection("employees")
+          .where("status", "==", "Active")
+          .where("clientName", "==", client.name)
+          .count()
+          .get();
+        return [client.name, snapshot.data().count] as const;
+      }),
+    );
+    const guardCountByClient = new Map(counts);
 
     clients.sort((a, b) => {
       const countDiff = (guardCountByClient.get(b.name) ?? 0) - (guardCountByClient.get(a.name) ?? 0);
@@ -51,7 +48,14 @@ export async function GET() {
       return a.name.localeCompare(b.name);
     });
 
-    return NextResponse.json({ clients });
+    return NextResponse.json(
+      { clients },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        },
+      },
+    );
   } catch (error) {
     console.error("[public/clients]", error);
     return NextResponse.json(

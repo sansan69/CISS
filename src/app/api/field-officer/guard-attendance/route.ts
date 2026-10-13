@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
 import {
   hasAdminAccess,
   hasFieldOfficerAccess,
@@ -7,14 +6,14 @@ import {
   verifyRequestAuth,
   type AppDecodedToken,
 } from "@/lib/server/auth";
-import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { districtMatches } from "@/lib/districts";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
+import { aggregateGuardAttendance } from "@/lib/attendance/guard-attendance";
 export const runtime = "nodejs";
 
 type FieldOfficerProfile = {
   assignedDistricts: string[];
 };
-
-type AttendanceLog = Record<string, unknown> & { id: string };
 
 function normalizeText(value: unknown) {
   return String(value ?? "")
@@ -22,71 +21,11 @@ function normalizeText(value: unknown) {
     .trim();
 }
 
-function toMillis(value: unknown) {
-  if (!value) return 0;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(value).getTime();
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-  if (typeof (value as { toDate?: unknown }).toDate === "function") {
-    return (value as { toDate(): Date }).toDate().getTime();
-  }
-  if (typeof (value as { seconds?: unknown }).seconds === "number") {
-    return (value as { seconds: number }).seconds * 1000;
-  }
-  return 0;
-}
-
-function toTimeLabel(value: unknown) {
-  const millis = toMillis(value);
-  if (!millis) return null;
-  return new Date(millis).toLocaleTimeString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
 async function getFieldOfficerProfile(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ): Promise<FieldOfficerProfile> {
-  let assignedDistricts = Array.isArray(decoded.assignedDistricts)
-    ? decoded.assignedDistricts
-    : [];
-
-  const snapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!snapshot.empty) {
-    const data = snapshot.docs[0].data();
-    assignedDistricts = Array.isArray(data.assignedDistricts)
-      ? data.assignedDistricts.filter(
-          (district): district is string => typeof district === "string",
-        )
-      : assignedDistricts;
-  }
-
-  return {
-    assignedDistricts: canonicalizeDistrictList(assignedDistricts),
-  };
-}
-
-function employeeKey(log: AttendanceLog) {
-  // Use employeeDocId as the unique grouping key. Falls back to employeeId
-  // for legacy logs. Never falls back to name (names are not unique).
-  const docId = normalizeText(log.employeeDocId);
-  if (docId) return docId;
-  const empId = normalizeText(log.employeeId);
-  if (empId) return empId;
-  // Last resort: use the log's own document ID so different guards
-  // are never incorrectly merged
-  return log.id || `unknown-${Math.random().toString(36).slice(2, 8)}`;
+  return requireActiveFieldOfficerProfile(adminDb, decoded);
 }
 
 export async function GET(request: Request) {
@@ -139,340 +78,13 @@ export async function GET(request: Request) {
       );
     }
 
-    let attendanceQuery: FirebaseFirestore.Query = adminDb
-      .collection("attendanceLogs")
-      .where("attendanceDate", "==", date);
-    if (requestedDistrict) {
-      attendanceQuery = attendanceQuery.where(
-        "district",
-        "==",
-        requestedDistrict,
-      );
-    } else if (!isAdmin) {
-      attendanceQuery = attendanceQuery.where(
-        "district",
-        "in",
-        profile.assignedDistricts.slice(0, 30),
-      );
-    }
-    const dayStart = new Date(`${date}T00:00:00+05:30`);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
-    const [snapshot, workOrdersSnapshot] = await Promise.all([
-      attendanceQuery.limit(5000).get(),
-      adminDb
-        .collection("workOrders")
-        .where("date", ">=", Timestamp.fromDate(dayStart))
-        .where("date", "<", Timestamp.fromDate(dayEnd))
-        .orderBy("date", "asc")
-        .limit(2000)
-        .get(),
-    ]);
-
-    const logs = snapshot.docs
-      .map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...(doc.data() as Record<string, unknown>),
-          }) as AttendanceLog,
-      )
-      .filter((log) => {
-        const district = normalizeText(log.district);
-        if (
-          requestedDistrict &&
-          !districtMatches(district, requestedDistrict)
-        ) {
-          return false;
-        }
-        if (isAdmin) {
-          return true;
-        }
-        return profile.assignedDistricts.some((assigned) =>
-          districtMatches(assigned, district),
-        );
-      })
-      // Keep this endpoint independent of a direction-specific composite
-      // index. Firestore's result order is unspecified without orderBy, so
-      // restore the chronological order before grouping check-in/out events.
-      .sort((left, right) => {
-        const leftMillis = Math.max(
-          toMillis(left.reportedAt),
-          toMillis(left.createdAt),
-          toMillis(left.reportedAtClient),
-        );
-        const rightMillis = Math.max(
-          toMillis(right.reportedAt),
-          toMillis(right.createdAt),
-          toMillis(right.reportedAtClient),
-        );
-        return leftMillis - rightMillis;
-      });
-
-    const grouped = new Map<
-      string,
-      {
-        guardName: string;
-        guardId: string;
-        employeeId: string;
-        siteName: string;
-        clientName: string;
-        district: string;
-        dutyPointName: string;
-        shiftLabel: string;
-        photoUrl: string | null;
-        locationCoords: { lat: number; lon: number } | null;
-        distanceMeters: number | null;
-        gpsAccuracyMeters: number | null;
-        geofenceRadiusAtTime: number | null;
-        isMockLocationSuspected: boolean;
-        mockLocationReason: string | null;
-        photoCompliance: Record<string, unknown> | null;
-        reviewStatus: string | null;
-        requiresAdminReview: boolean;
-        checkIn: string | null;
-        checkOut: string | null;
-        lastMillis: number;
-      }
-    >();
-
-    for (const log of logs) {
-      const employee = employeeKey(log);
-      const sessionId = normalizeText(log.attendanceSessionId);
-      const key = sessionId ? `${employee}:${sessionId}` : employee;
-      if (!key) continue;
-      const millis = Math.max(
-        toMillis(log.reportedAt),
-        toMillis(log.createdAt),
-        toMillis(log.reportedAtClient),
-      );
-      const status = normalizeText(log.status).toLowerCase();
-      const current = grouped.get(key) ?? {
-        guardName: normalizeText(log.employeeName) || "Guard",
-        guardId: normalizeText(log.employeeId),
-        employeeId: normalizeText(log.employeeId),
-        siteName: normalizeText(log.siteName),
-        clientName: normalizeText(log.clientName),
-        district: normalizeText(log.district),
-        dutyPointName: normalizeText(log.dutyPointName),
-        shiftLabel: normalizeText(log.shiftLabel),
-        photoUrl:
-          typeof log.photoUrl === "string" && log.photoUrl.trim().length > 0
-            ? log.photoUrl
-            : null,
-        locationCoords:
-          log.locationCoords && typeof log.locationCoords === "object"
-            ? {
-                lat: Number((log.locationCoords as { lat?: unknown }).lat ?? 0),
-                lon: Number((log.locationCoords as { lon?: unknown }).lon ?? 0),
-              }
-            : null,
-        distanceMeters:
-          typeof log.distanceMeters === "number" ? log.distanceMeters : null,
-        gpsAccuracyMeters:
-          typeof log.gpsAccuracyMeters === "number"
-            ? log.gpsAccuracyMeters
-            : null,
-        geofenceRadiusAtTime:
-          typeof log.geofenceRadiusAtTime === "number"
-            ? log.geofenceRadiusAtTime
-            : null,
-        isMockLocationSuspected: log.isMockLocationSuspected === true,
-        mockLocationReason: normalizeText(log.mockLocationReason) || null,
-        photoCompliance:
-          log.photoCompliance && typeof log.photoCompliance === "object"
-            ? (log.photoCompliance as Record<string, unknown>)
-            : null,
-        reviewStatus: normalizeText(log.reviewStatus) || null,
-        requiresAdminReview: log.requiresAdminReview === true,
-        checkIn: null,
-        checkOut: null,
-        lastMillis: 0,
-      };
-
-      if (status === "in" && !current.checkIn) {
-        current.checkIn = toTimeLabel(log.reportedAt || log.createdAt);
-      }
-      if (status === "out" && !current.checkOut) {
-        current.checkOut = toTimeLabel(log.reportedAt || log.createdAt);
-      }
-
-      if (millis >= current.lastMillis) {
-        current.guardName =
-          normalizeText(log.employeeName) || current.guardName;
-        current.guardId = normalizeText(log.employeeId) || current.guardId;
-        current.employeeId =
-          normalizeText(log.employeeId) || current.employeeId;
-        current.siteName = normalizeText(log.siteName) || current.siteName;
-        current.clientName =
-          normalizeText(log.clientName) || current.clientName;
-        current.district = normalizeText(log.district) || current.district;
-        current.dutyPointName =
-          normalizeText(log.dutyPointName) || current.dutyPointName;
-        current.shiftLabel =
-          normalizeText(log.shiftLabel) || current.shiftLabel;
-        current.photoUrl =
-          (typeof log.photoUrl === "string" && log.photoUrl.trim().length > 0
-            ? log.photoUrl
-            : current.photoUrl) || null;
-        if (log.locationCoords && typeof log.locationCoords === "object") {
-          current.locationCoords = {
-            lat: Number((log.locationCoords as { lat?: unknown }).lat ?? 0),
-            lon: Number((log.locationCoords as { lon?: unknown }).lon ?? 0),
-          };
-        }
-        current.distanceMeters =
-          typeof log.distanceMeters === "number"
-            ? log.distanceMeters
-            : current.distanceMeters;
-        current.gpsAccuracyMeters =
-          typeof log.gpsAccuracyMeters === "number"
-            ? log.gpsAccuracyMeters
-            : current.gpsAccuracyMeters;
-        current.geofenceRadiusAtTime =
-          typeof log.geofenceRadiusAtTime === "number"
-            ? log.geofenceRadiusAtTime
-            : current.geofenceRadiusAtTime;
-        current.isMockLocationSuspected =
-          log.isMockLocationSuspected === true ||
-          current.isMockLocationSuspected;
-        current.mockLocationReason =
-          normalizeText(log.mockLocationReason) || current.mockLocationReason;
-        if (log.photoCompliance && typeof log.photoCompliance === "object") {
-          current.photoCompliance = log.photoCompliance as Record<
-            string,
-            unknown
-          >;
-        }
-        current.reviewStatus =
-          normalizeText(log.reviewStatus) || current.reviewStatus;
-        current.requiresAdminReview =
-          log.requiresAdminReview === true || current.requiresAdminReview;
-        current.lastMillis = millis;
-      }
-
-      grouped.set(key, current);
-    }
-
-    const attendance = Array.from(grouped.entries())
-      .map(([key, value]) => ({
-        id: key,
-        guardName: value.guardName,
-        guardId: value.guardId,
-        employeeId: value.employeeId,
-        siteName: value.siteName,
-        clientName: value.clientName,
-        district: value.district,
-        date,
-        checkIn: value.checkIn,
-        checkOut: value.checkOut,
-        dutyPointName: value.dutyPointName,
-        shiftLabel: value.shiftLabel,
-        status:
-          value.checkOut != null
-            ? "Checked out"
-            : value.checkIn != null
-              ? "Present"
-              : "Absent",
-        photoUrl: value.photoUrl,
-        locationCoords: value.locationCoords,
-        distanceMeters: value.distanceMeters,
-        gpsAccuracyMeters: value.gpsAccuracyMeters,
-        geofenceRadiusAtTime: value.geofenceRadiusAtTime,
-        isMockLocationSuspected: value.isMockLocationSuspected,
-        mockLocationReason: value.mockLocationReason,
-        photoCompliance: value.photoCompliance,
-        reviewStatus: value.reviewStatus,
-        requiresAdminReview: value.requiresAdminReview,
-      }))
-      .sort((left, right) => {
-        const statusOrder = (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
-        if (statusOrder != 0) return statusOrder;
-        return left.guardName.localeCompare(right.guardName);
-      });
-
-    const attendedAssignments = new Set<string>();
-    for (const log of logs) {
-      const employee = employeeKey(log);
-      const site = normalizeText(log.siteId || log.siteName);
-      attendedAssignments.add(`${employee}:${site}`);
-      const employeeId = normalizeText(log.employeeId);
-      if (employeeId) attendedAssignments.add(`${employeeId}:${site}`);
-    }
-
-    const absentAssignments = new Map<string, (typeof attendance)[number]>();
-    for (const document of workOrdersSnapshot.docs) {
-      const workOrder = document.data() as Record<string, unknown>;
-      const district = normalizeText(workOrder.district);
-      if (requestedDistrict && !districtMatches(district, requestedDistrict)) {
-        continue;
-      }
-      if (
-        !isAdmin &&
-        !profile.assignedDistricts.some((assigned) =>
-          districtMatches(assigned, district),
-        )
-      ) {
-        continue;
-      }
-      if (
-        normalizeText(workOrder.recordStatus || "active").toLowerCase() !==
-        "active"
-      ) {
-        continue;
-      }
-      const siteId = normalizeText(workOrder.siteId);
-      const siteName = normalizeText(workOrder.siteName);
-      const siteKey = siteId || siteName;
-      const assignedGuards = Array.isArray(workOrder.assignedGuards)
-        ? workOrder.assignedGuards
-        : [];
-      for (const assigned of assignedGuards) {
-        if (!assigned || typeof assigned !== "object") continue;
-        const guard = assigned as Record<string, unknown>;
-        const guardKey = normalizeText(guard.uid || guard.employeeId);
-        if (!guardKey) continue;
-        const employeeId = normalizeText(guard.employeeId);
-        if (
-          attendedAssignments.has(`${guardKey}:${siteKey}`) ||
-          (employeeId && attendedAssignments.has(`${employeeId}:${siteKey}`))
-        ) {
-          continue;
-        }
-        const key = `${document.id}:${guardKey}`;
-        absentAssignments.set(key, {
-          id: `absent:${key}`,
-          guardName: normalizeText(guard.name) || "Guard",
-          guardId: employeeId,
-          employeeId,
-          siteName,
-          clientName: normalizeText(workOrder.clientName),
-          district,
-          date,
-          checkIn: null,
-          checkOut: null,
-          dutyPointName: "",
-          shiftLabel: normalizeText(workOrder.shiftLabel),
-          status: "Absent",
-          photoUrl: null,
-          locationCoords: null,
-          distanceMeters: null,
-          gpsAccuracyMeters: null,
-          geofenceRadiusAtTime: null,
-          isMockLocationSuspected: false,
-          mockLocationReason: null,
-          photoCompliance: null,
-          reviewStatus: null,
-          requiresAdminReview: false,
-        });
-      }
-    }
-
-    attendance.push(...absentAssignments.values());
-    attendance.sort((left, right) => {
-      const statusOrder = (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
-      if (statusOrder !== 0) return statusOrder;
-      return left.guardName.localeCompare(right.guardName);
+    const attendance = await aggregateGuardAttendance({
+      adminDb,
+      isAdmin,
+      assignedDistricts: profile.assignedDistricts,
+      requestedDistrict: requestedDistrict || null,
+      startDate: date,
+      endDate: date,
     });
 
     return NextResponse.json({ attendance });

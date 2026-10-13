@@ -1,7 +1,7 @@
 const MB = 1024 * 1024;
 
 export const MAX_ENROLLMENT_IMAGE_INPUT_SIZE_MB = 15;
-export const MAX_ENROLLMENT_DOCUMENT_SIZE_MB = 5;
+export const MAX_ENROLLMENT_DOCUMENT_SIZE_MB = 4;
 
 export const MAX_ENROLLMENT_IMAGE_INPUT_SIZE_BYTES =
   MAX_ENROLLMENT_IMAGE_INPUT_SIZE_MB * MB;
@@ -33,16 +33,10 @@ export function isEnrollmentFileSelectionValid(file: File): boolean {
 }
 
 export function assertEnrollmentUploadSize(file: File): void {
-  const limit = file.type.startsWith("image/")
-    ? MAX_ENROLLMENT_IMAGE_INPUT_SIZE_BYTES
-    : MAX_ENROLLMENT_DOCUMENT_SIZE_BYTES;
-
-  if (file.size > limit) {
-    const limitMb = file.type.startsWith("image/")
-      ? MAX_ENROLLMENT_IMAGE_INPUT_SIZE_MB
-      : MAX_ENROLLMENT_DOCUMENT_SIZE_MB;
+  // Leave room for multipart headers below Vercel's 4.5 MB request limit.
+  if (file.size > MAX_ENROLLMENT_DOCUMENT_SIZE_BYTES) {
     throw new Error(
-      `Prepared file is too large to upload. Please use a smaller file or retake the photo. Max ${limitMb}MB.`,
+      "Prepared file is too large to upload. Use a PDF or image under 4MB, or retake the photo as JPEG.",
     );
   }
 }

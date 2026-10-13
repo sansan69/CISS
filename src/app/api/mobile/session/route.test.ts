@@ -109,7 +109,7 @@ afterEach(() => {
 });
 
 describe("GET /api/mobile/session", () => {
-  it("resolves a field officer from Firestore and repairs missing claims", async () => {
+  it("resolves a field officer from Firestore without repairing claims", async () => {
     const adminDb = new FakeFirestore();
     adminDb.seed("fieldOfficers", "fo-1", {
       uid: "fo-uid-1",
@@ -151,16 +151,12 @@ describe("GET /api/mobile/session", () => {
       uid: "fo-uid-1",
       assignedDistricts: ["Ernakulam", "Thrissur"],
       stateCode: "KL",
-      claimsRepaired: true,
+      claimsRepaired: false,
     });
-    expect(setCustomUserClaims).toHaveBeenCalledWith("fo-uid-1", {
-      role: "fieldOfficer",
-      stateCode: "KL",
-      assignedDistricts: ["Ernakulam", "Thrissur"],
-    });
+    expect(setCustomUserClaims).not.toHaveBeenCalled();
   });
 
-  it("resolves a guard from employee linkage when claims are missing", async () => {
+  it("resolves a guard from employee linkage without repairing claims", async () => {
     const adminDb = new FakeFirestore();
     adminDb.seed("employees", "emp-99", {
       guardAuthUid: "guard-uid-99",
@@ -202,16 +198,88 @@ describe("GET /api/mobile/session", () => {
       uid: "guard-uid-99",
       employeeDocId: "emp-99",
       clientName: "Client A",
-      claimsRepaired: true,
+      claimsRepaired: false,
     });
-    expect(setCustomUserClaims).toHaveBeenCalledWith(
-      "guard-uid-99",
-      expect.objectContaining({
-        role: "guard",
-        employeeId: "EMP099",
-        employeeDocId: "emp-99",
-        clientName: "Client A",
-      }),
-    );
+    expect(setCustomUserClaims).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "a field officer claim with no linked profile",
+      { uid: "missing-fo", email: "missing-fo@example.com", role: "fieldOfficer" },
+      undefined,
+    ],
+    [
+      "a guard claim with no linked profile",
+      { uid: "missing-guard", email: "missing-guard@example.com", role: "guard" },
+      undefined,
+    ],
+    [
+      "a deprovisioned field officer profile",
+      { uid: "deprovisioned-fo", email: "fo@example.com", role: "fieldOfficer" },
+      {
+        collection: "fieldOfficers",
+        id: "fo-deprovisioned",
+        data: { uid: "deprovisioned-fo", status: "Deprovisioned" },
+      },
+    ],
+    [
+      "an inactive guard profile",
+      { uid: "inactive-guard", email: "guard@example.com", role: "guard" },
+      {
+        collection: "employees",
+        id: "guard-inactive",
+        data: {
+          guardAuthUid: "inactive-guard",
+          employeeId: "EMP-INACTIVE",
+          status: "Inactive",
+        },
+      },
+    ],
+    [
+      "a guard claim pointing at another guard's profile",
+      {
+        uid: "unlinked-guard",
+        email: "guard@example.com",
+        role: "guard",
+        employeeDocId: "other-guard",
+      },
+      {
+        collection: "employees",
+        id: "other-guard",
+        data: { guardAuthUid: "different-guard", employeeId: "EMP-OTHER" },
+      },
+    ],
+  ])(
+    "returns neutral unauthorized for %s instead of authorizing from claims",
+    async (_name, decoded, profile) => {
+      const adminDb = new FakeFirestore();
+      if (profile) {
+        adminDb.seed(profile.collection, profile.id, profile.data);
+      }
+      const setCustomUserClaims = vi.fn();
+
+      vi.doMock("@/lib/server/auth", () => ({
+        verifyRequestAuth: vi.fn().mockResolvedValue(decoded),
+        unauthorizedResponse: (message: string, status = 401) =>
+          Response.json({ error: message }, { status }),
+      }));
+      vi.doMock("@/lib/firebaseAdmin", () => ({
+        db: adminDb,
+        auth: {
+          getUser: vi.fn(),
+          setCustomUserClaims,
+        },
+      }));
+
+      const { GET } = await import("./route");
+      const response = await GET(
+        new Request("https://cisskerala.site/api/mobile/session"),
+      );
+
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toEqual({ error: "Unauthorized." });
+      expect(setCustomUserClaims).not.toHaveBeenCalled();
+    },
+  );
 });

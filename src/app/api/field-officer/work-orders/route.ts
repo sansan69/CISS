@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { startOfToday } from "date-fns";
-import { hasAdminAccess, hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
+import { hasAdminAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 export const runtime = "nodejs";
 
@@ -14,35 +15,15 @@ async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (!foSnapshot.empty) {
-    const foData = foSnapshot.docs[0].data();
-    if (Array.isArray(foData.assignedDistricts)) {
-      return canonicalizeDistrictList(
-        foData.assignedDistricts.filter((district): district is string => typeof district === "string"),
-      );
-    }
-  }
-
-  return Array.isArray(decoded.assignedDistricts)
-    ? canonicalizeDistrictList(decoded.assignedDistricts.filter((district): district is string => typeof district === "string"))
-    : [];
+  return (await requireActiveFieldOfficerProfile(adminDb, decoded)).assignedDistricts;
 }
 
 export async function GET(request: Request) {
   try {
     const decoded = await verifyRequestAuth(request);
-    if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
-      return unauthorizedResponse("Field officer or admin access required.", 403);
-    }
-
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const assignedDistricts = await getAssignedDistricts(adminDb, decoded);
+    const isAdmin = hasAdminAccess(decoded);
+    const assignedDistricts = isAdmin ? [] : await getAssignedDistricts(adminDb, decoded);
     const todayTimestamp = Timestamp.fromDate(startOfToday());
     // Only pull upcoming, active TCS work orders. Avoid an unbounded
     // `.limit(N)` without ordering — that silently hides recently-imported
@@ -129,8 +110,8 @@ export async function GET(request: Request) {
         return { row, resolvedDistrict, siteIdString };
       })
       .filter(({ resolvedDistrict }) => {
-        if (!hasAdminAccess(decoded) && assignedDistricts.length === 0) return false;
-        if (hasAdminAccess(decoded) && assignedDistricts.length === 0) return true;
+        if (!isAdmin && assignedDistricts.length === 0) return false;
+        if (isAdmin && assignedDistricts.length === 0) return true;
         return assignedDistricts.some((district) => districtMatches(district, resolvedDistrict));
       })
       .map(({ row, resolvedDistrict, siteIdString }) => ({

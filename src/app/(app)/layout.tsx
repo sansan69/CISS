@@ -44,6 +44,8 @@ import { toast } from '@/hooks/use-toast';
 import { PageTransition } from '@/components/motion/page-transition';
 import { CommandPalette } from '@/components/common/command-palette';
 import { LiveClock } from '@/components/common/live-clock';
+import { NotificationBell } from '@/components/common/notification-bell';
+import { ThemeToggle } from '@/components/common/theme-toggle';
 import {
   bottomNavItems,
   getVisibleGroups,
@@ -611,6 +613,8 @@ function MobileHeader({
         >
           <MagnifyingGlass className="h-5 w-5" weight="bold" />
         </button>
+        <ThemeToggle />
+        <NotificationBell />
         {isSettingsPage && (
           <Button
             variant="ghost"
@@ -742,6 +746,9 @@ function DesktopTopBar({
         </button>
 
         <LiveClock showDate className="hidden lg:flex" />
+
+        <ThemeToggle />
+        <NotificationBell />
 
         <DropdownMenu>
         <DropdownMenuTrigger asChild>

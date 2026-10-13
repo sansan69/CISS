@@ -1,7 +1,8 @@
-import type { UserRecord } from "firebase-admin/auth";
-
 import type { AppDecodedToken } from "@/lib/server/auth";
-import { canonicalizeDistrictList } from "@/lib/districts";
+import {
+  resolveActiveFieldOfficerProfile,
+  resolveActiveGuardProfile,
+} from "@/lib/server/linked-profiles";
 
 export type MobileSessionPayload = {
   role: "guard" | "fieldOfficer";
@@ -18,47 +19,20 @@ export type MobileSessionPayload = {
   claimsRepaired: boolean;
 };
 
-function normalizeText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 async function readFieldOfficerProfile(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  const foSnapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-
-  if (foSnapshot.empty) {
-    return null;
-  }
-
-  const doc = foSnapshot.docs[0];
-  const data = doc.data();
+  const profile = await resolveActiveFieldOfficerProfile(adminDb, decoded);
+  if (!profile) return null;
 
   return {
-    displayName:
-      normalizeText(data.name) ||
-      normalizeText(decoded.name) ||
-      normalizeText(decoded.email) ||
-      "Field Officer",
+    displayName: profile.name,
     primaryId: decoded.uid,
     uid: decoded.uid,
-    email: normalizeText(decoded.email) || null,
-    assignedDistricts: Array.isArray(data.assignedDistricts)
-      ? canonicalizeDistrictList(
-          data.assignedDistricts.filter((district): district is string => typeof district === "string"),
-        )
-      : Array.isArray(decoded.assignedDistricts)
-        ? canonicalizeDistrictList(
-            decoded.assignedDistricts.filter((district): district is string => typeof district === "string"),
-          )
-        : [],
-    stateCode:
-      normalizeText(data.stateCode) || normalizeText(decoded.stateCode) || "KL",
+    email: typeof decoded.email === "string" && decoded.email ? decoded.email : null,
+    assignedDistricts: profile.assignedDistricts,
+    stateCode: profile.stateCode,
   };
 }
 
@@ -66,164 +40,49 @@ async function readGuardProfile(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  let guardSnapshot;
+  const profile = await resolveActiveGuardProfile(adminDb, decoded);
+  if (!profile) return null;
+  const data = profile.data;
 
-  const employeeDocId = normalizeText(decoded.employeeDocId);
-  if (employeeDocId) {
-    const employeeDoc = await adminDb.collection("employees").doc(employeeDocId).get();
-    if (employeeDoc.exists) {
-      guardSnapshot = {
-        id: employeeDoc.id,
-        data: () => employeeDoc.data() as Record<string, unknown>,
-      };
-    }
-  }
-
-  if (!guardSnapshot) {
-    const byUid = await adminDb
-      .collection("employees")
-      .where("guardAuthUid", "==", decoded.uid)
-      .limit(1)
-      .get();
-
-    if (byUid.empty) {
-      return null;
-    }
-
-    guardSnapshot = byUid.docs[0];
-  }
-
-  const data = guardSnapshot.data();
+  const clientId = typeof data.clientId === "string" ? data.clientId.trim() : "";
+  const clientName = typeof data.clientName === "string" ? data.clientName.trim() : "";
+  const district = typeof data.district === "string" ? data.district.trim() : "";
+  const stateCode = typeof data.stateCode === "string" ? data.stateCode.trim() : "";
 
   return {
-    displayName:
-      normalizeText(data.name) ||
-      normalizeText(decoded.name) ||
-      normalizeText(decoded.email) ||
-      "Guard",
-    primaryId:
-      normalizeText(data.employeeId) || normalizeText(decoded.employeeId) || decoded.uid,
+    displayName: typeof data.name === "string" && data.name.trim() ? data.name.trim() : "Guard",
+    primaryId: profile.employeeId,
     uid: decoded.uid,
-    email: normalizeText(decoded.email) || null,
-    employeeDocId: guardSnapshot.id,
-    clientId: normalizeText(data.clientId) || null,
-    clientName: normalizeText(data.clientName) || null,
-    district: normalizeText(data.district) || null,
-    stateCode:
-      normalizeText(data.stateCode) || normalizeText(decoded.stateCode) || null,
+    email: typeof decoded.email === "string" && decoded.email ? decoded.email : null,
+    employeeDocId: profile.employeeDocId,
+    clientId: clientId || null,
+    clientName: clientName || null,
+    district: district || null,
+    stateCode: stateCode || null,
   };
-}
-
-async function repairClaims(
-  adminAuth: {
-    getUser(uid: string): Promise<UserRecord>;
-    setCustomUserClaims(uid: string, claims: Record<string, unknown>): Promise<unknown>;
-  },
-  uid: string,
-  patch: Record<string, unknown>,
-) {
-  const userRecord = await adminAuth.getUser(uid);
-  const currentClaims = userRecord.customClaims || {};
-  let changed = false;
-
-  for (const [key, value] of Object.entries(patch)) {
-    if (Array.isArray(value)) {
-      const currentValue = Array.isArray(currentClaims[key]) ? currentClaims[key] : [];
-      if (JSON.stringify(currentValue) !== JSON.stringify(value)) {
-        changed = true;
-        break;
-      }
-      continue;
-    }
-
-    if (currentClaims[key] !== value) {
-      changed = true;
-      break;
-    }
-  }
-
-  if (!changed) {
-    return false;
-  }
-
-  await adminAuth.setCustomUserClaims(uid, {
-    ...currentClaims,
-    ...patch,
-  });
-
-  return true;
 }
 
 export async function resolveMobileSession(
   decoded: AppDecodedToken,
 ): Promise<MobileSessionPayload | null> {
-  const { auth: adminAuth, db: adminDb } = await import("@/lib/firebaseAdmin");
+  const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
   const fieldOfficer = await readFieldOfficerProfile(adminDb, decoded);
   if (fieldOfficer) {
-    const claimsRepaired = await repairClaims(adminAuth, decoded.uid, {
-      role: "fieldOfficer",
-      stateCode: fieldOfficer.stateCode,
-      assignedDistricts: fieldOfficer.assignedDistricts,
-    });
-
     return {
       role: "fieldOfficer",
-      claimsRepaired,
+      claimsRepaired: false,
       ...fieldOfficer,
     };
   }
 
   const guard = await readGuardProfile(adminDb, decoded);
   if (guard) {
-    const claimsRepaired = await repairClaims(adminAuth, decoded.uid, {
-      role: "guard",
-      employeeId: guard.primaryId,
-      employeeDocId: guard.employeeDocId,
-      clientId: guard.clientId,
-      clientName: guard.clientName,
-      district: guard.district,
-    });
-
     return {
       role: "guard",
       assignedDistricts: [],
-      claimsRepaired,
+      claimsRepaired: false,
       ...guard,
-    };
-  }
-
-  if (decoded.role === "fieldOfficer") {
-    return {
-      role: "fieldOfficer",
-      displayName: normalizeText(decoded.name) || normalizeText(decoded.email) || "Field Officer",
-      primaryId: decoded.uid,
-      uid: decoded.uid,
-      email: normalizeText(decoded.email) || null,
-      assignedDistricts: Array.isArray(decoded.assignedDistricts)
-        ? canonicalizeDistrictList(
-            decoded.assignedDistricts.filter((district): district is string => typeof district === "string"),
-          )
-        : [],
-      stateCode: normalizeText(decoded.stateCode) || null,
-      claimsRepaired: false,
-    };
-  }
-
-  if (decoded.role === "guard") {
-    return {
-      role: "guard",
-      displayName: normalizeText(decoded.name) || normalizeText(decoded.email) || "Guard",
-      primaryId: normalizeText(decoded.employeeId) || decoded.uid,
-      uid: decoded.uid,
-      email: normalizeText(decoded.email) || null,
-      employeeDocId: normalizeText(decoded.employeeDocId) || null,
-      assignedDistricts: [],
-      clientId: normalizeText(decoded.clientId) || null,
-      clientName: normalizeText(decoded.clientName) || null,
-      district: normalizeText(decoded.district) || null,
-      stateCode: normalizeText(decoded.stateCode) || null,
-      claimsRepaired: false,
     };
   }
 
