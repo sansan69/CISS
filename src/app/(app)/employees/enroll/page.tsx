@@ -1,6 +1,8 @@
 
 "use client";
 
+import { parseTcsCategory } from "@/lib/tcs-category";
+
 import { enrollmentErrorFormField } from "@/lib/enrollment-errors";
 import { authorizedFetch } from "@/lib/api-client";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -980,6 +982,11 @@ export default function EnrollEmployeePage() {
                       </FormItem>
                     )}
                   />
+                  {parseTcsCategory(watchClientName, "adhoc") && (
+                    <p className="text-sm text-muted-foreground md:col-span-2">
+                      TCS category: Adhoc — admin can update after enrollment.
+                    </p>
+                  )}
                   {watchClientName === "TCS" && (
                     <FormField 
                       control={form.control} 

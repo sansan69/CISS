@@ -14,13 +14,16 @@ import {
 } from "@/lib/server/audit";
 import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cleanup";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
+import { resolveDutySupervisor, recheckSupervisor, transactionSite, resolveDutySite, assertDistrict } from "@/lib/server/duties/scope";
+import { requestId, version, documentId, receiptRef, fingerprint, replayReceipt, assertVersion, DutyError, dutyErrorResponse, hash, readJson } from "@/lib/server/duties/requests";
+import { buildExamRosterNotificationWrites, transactionNotificationReader, dispatchDutyNotifications } from "@/lib/server/duties/notifications";
 import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 import { isAssignedGuardMatch } from "@/lib/work-orders/assignment-match";
 export const runtime = "nodejs";
 
 class WorkOrderAssignmentError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code: string = status === 403 ? "wrong_scope" : status === 404 ? "duty_not_found" : status === 400 ? "invalid_body" : "roster_conflict") {
     super(message);
   }
 }
@@ -40,24 +43,8 @@ async function getAssignedDistricts(
   adminDb: FirebaseFirestore.Firestore,
   decoded: AppDecodedToken,
 ) {
-  const snapshot = await adminDb
-    .collection("fieldOfficers")
-    .where("uid", "==", decoded.uid)
-    .limit(1)
-    .get();
-  if (!snapshot.empty) {
-    const districts = snapshot.docs[0].data().assignedDistricts;
-    if (Array.isArray(districts)) {
-      return canonicalizeDistrictList(
-        districts.filter((district): district is string => typeof district === "string"),
-      );
-    }
-  }
-  return canonicalizeDistrictList(
-    Array.isArray(decoded.assignedDistricts)
-      ? decoded.assignedDistricts.filter((district): district is string => typeof district === "string")
-      : [],
-  );
+  const { requireActiveFieldOfficerProfile } = await import("@/lib/server/linked-profiles");
+  return (await requireActiveFieldOfficerProfile(adminDb, decoded)).assignedDistricts;
 }
 
 function getRequestedGuardIds(value: unknown): string[] {
@@ -68,7 +55,7 @@ function getRequestedGuardIds(value: unknown): string[] {
     if (!guard || typeof guard !== "object") {
       throw new WorkOrderAssignmentError("Every assigned guard must contain a valid uid.", 400);
     }
-    return normalizeText((guard as { uid?: unknown }).uid);
+    return documentId(normalizeText((guard as { uid?: unknown }).uid));
   });
   if (ids.some((id) => !id)) {
     throw new WorkOrderAssignmentError("Every assigned guard must contain a valid uid.", 400);
@@ -79,41 +66,18 @@ function getRequestedGuardIds(value: unknown): string[] {
   return ids;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request:Request,{params}:{params:Promise<{id:string}>}) {
   try {
-    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
-    const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const { id } = await params;
-
-    const snapshot = await adminDb.collection("workOrders").doc(id).get();
-    if (!snapshot.exists) {
-      return NextResponse.json({ error: "Work order not found" }, { status: 404 });
-    }
-    const data = snapshot.data() ?? {};
-    if (hasFieldOfficerAccess(decoded)) {
-      const assignedDistricts = await getAssignedDistricts(adminDb, decoded);
-      const district = normalizeText(data.district);
-      if (
-        assignedDistricts.length === 0 ||
-        !assignedDistricts.some((assigned) => districtMatches(assigned, district))
-      ) {
-        return unauthorizedResponse("This work order is outside your assigned districts.", 403);
-      }
-    }
-
-    return NextResponse.json({ id, ...data });
-  } catch (error: any) {
-    if (error?.message?.includes("access required")) {
-      return unauthorizedResponse(error.message, 403);
-    }
-    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
-      return unauthorizedResponse(error.message, 401);
-    }
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
-  }
+    const supervisor=await resolveDutySupervisor(request);
+    const {db:adminDb}=await import("@/lib/firebaseAdmin");
+    const {id}=await params;
+    documentId(id);
+    const snapshot=await adminDb.collection("workOrders").doc(id).get();
+    if(!snapshot.exists)throw new DutyError(404,"duty_not_found","Work order not found.");
+    const data=snapshot.data()!;
+    if(!supervisor.isAdmin) assertDistrict(supervisor,(await resolveDutySite(adminDb,normalizeText(data.siteId))).district);
+    return NextResponse.json({id,...data});
+  } catch(error) { return dutyErrorResponse(error); }
 }
 
 export async function PATCH(
@@ -121,17 +85,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const decoded = requireAdminOrFieldOfficer(await verifyRequestAuth(request));
+    const decoded = await verifyRequestAuth(request,true);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { id } = await params;
-    const body = await request.json();
-    const isAdmin = hasAdminAccess(decoded);
+    documentId(id);
+    const body = await readJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new DutyError(400,"invalid_body","Invalid work-order body.");
+    const supervisor = await resolveDutySupervisor(request);
+    const isAdmin = supervisor.isAdmin;
+    if (body.clientRequestId !== undefined) requestId(body.clientRequestId);
+    if (body.expectedVersion !== undefined) version(body.expectedVersion);
+    let notificationIds: string[] = [];
 
     if ("assignmentHistory" in body) {
-      return NextResponse.json(
-        { error: "assignmentHistory cannot be updated via this route." },
-        { status: 400 }
-      );
+      throw new DutyError(400,"invalid_body","assignmentHistory cannot be updated via this route.");
     }
 
     const validTopLevel = [
@@ -141,8 +108,8 @@ export async function PATCH(
       "assignedGuards",
       "examName",
     ];
-    if (!isAdmin && Object.keys(body).some((key) => key !== "assignedGuards")) {
-      return unauthorizedResponse("Field officers can update guard assignments only.", 403);
+    if (!isAdmin && Object.keys(body).some((key) => !["assignedGuards", "clientRequestId", "expectedVersion"].includes(key))) {
+      throw new DutyError(403,"wrong_role","Field officers can update guard assignments only.");
     }
 
     const filtered: Record<string, unknown> = {};
@@ -161,35 +128,42 @@ export async function PATCH(
     }
 
     if (Object.keys(filtered).length === 0) {
-      return NextResponse.json(
-        { error: "No valid fields to update." },
-        { status: 400 }
-      );
+      throw new DutyError(400,"invalid_body","No valid fields to update.");
     }
 
     if ("assignedGuards" in filtered) {
       const requestedGuardIds = getRequestedGuardIds(filtered.assignedGuards);
-      const assignedDistricts = isAdmin ? [] : await getAssignedDistricts(adminDb, decoded);
+      const assignedDistricts = supervisor.assignedDistricts;
+      const receipt = body.clientRequestId ? receiptRef(adminDb,"exam_roster",decoded.uid,id,body.clientRequestId) : null;
+      const payloadFingerprint = fingerprint(body);
       const eventRef = adminDb.collection("workOrderAssignmentEvents").doc();
 
-      await adminDb.runTransaction(async (transaction) => {
+      notificationIds = await adminDb.runTransaction(async (transaction) => {
+        const currentSupervisor = await recheckSupervisor(transaction, supervisor);
         const workOrderRef = adminDb.collection("workOrders").doc(id);
         const workOrderSnapshot = await transaction.get(workOrderRef);
         if (!workOrderSnapshot.exists) {
           throw new WorkOrderAssignmentError("Work order not found.", 404);
         }
         const workOrder = workOrderSnapshot.data() ?? {};
-        const district = normalizeText(workOrder.district);
+        const site = await transactionSite(transaction, normalizeText(workOrder.siteId));
+        const district = site.district;
+        assertDistrict(currentSupervisor, district);
         if (!isOperationalWorkOrderClientName(normalizeText(workOrder.clientName))) {
           throw new WorkOrderAssignmentError("Only TCS ad-hoc work orders can be assigned here.", 400);
         }
         if (normalizeText(workOrder.recordStatus || "active").toLowerCase() !== "active") {
-          throw new WorkOrderAssignmentError("This work order is no longer active.", 409);
+          throw new WorkOrderAssignmentError("This work order is no longer active.", 409, "duty_cancelled");
         }
+        if (receipt) {
+          const replay = replayReceipt(await transaction.get(receipt), payloadFingerprint);
+          if (replay) return replay.eventIds ?? [];
+        }
+        if (body.expectedVersion !== undefined) assertVersion(body.expectedVersion,Number(workOrder.assignmentVersion ?? 0),{assignmentVersion:Number(workOrder.assignmentVersion ?? 0)});
         if (
           !isAdmin &&
-          (assignedDistricts.length === 0 ||
-            !assignedDistricts.some((assigned) => districtMatches(assigned, district)))
+          (currentSupervisor.assignedDistricts.length === 0 ||
+            !currentSupervisor.assignedDistricts.some((assigned) => districtMatches(assigned, district)))
         ) {
           throw new WorkOrderAssignmentError(
             "This work order is outside your assigned districts.",
@@ -207,7 +181,7 @@ export async function PATCH(
             throw new WorkOrderAssignmentError("One or more selected guards no longer exist.", 409);
           }
           const employee = employeeSnapshot.data() ?? {};
-          if (normalizeText(employee.status || "active").toLowerCase() !== "active") {
+          if (employee.active === false || employee.deprovisioned === true || normalizeText(employee.status || "active").toLowerCase() !== "active") {
             throw new WorkOrderAssignmentError(
               `${normalizeText(employee.fullName || employee.employeeId || "A selected guard")} is not active.`,
               409,
@@ -261,9 +235,32 @@ export async function PATCH(
         const previousGuards = Array.isArray(workOrder.assignedGuards)
           ? workOrder.assignedGuards
           : [];
+        const sameRoster = hash(previousGuards.slice().sort((a: any,b: any)=>String(a.uid).localeCompare(String(b.uid)))) === hash(canonicalGuards.slice().sort((a,b)=>a.uid.localeCompare(b.uid)));
+        if (sameRoster) {
+          if (receipt) transaction.create(receipt,{fingerprint:payloadFingerprint,eventIds:[],createdAt:new Date()});
+          return [];
+        }
+        // Keep removed membership in this work order's own authoritative data so a
+        // removed guard's own cancelled duty stays visible; reassignment clears it.
+        const assignedGuardIds = new Set(canonicalGuards.map((guard) => guard.uid));
+        const cancelledGuards = new Map<string, unknown>();
+        const cancelledRoster = Array.isArray(workOrder.cancelledAssignedGuards)
+          ? workOrder.cancelledAssignedGuards
+          : [];
+        for (const guard of [...cancelledRoster, ...previousGuards]) {
+          const uid =
+            guard && typeof guard === "object"
+              ? normalizeText((guard as { uid?: unknown }).uid)
+              : normalizeText(guard);
+          if (!uid || assignedGuardIds.has(uid)) continue;
+          cancelledGuards.set(uid, guard && typeof guard === "object" ? guard : { uid });
+        }
+        const cancelledAssignedGuards = [...cancelledGuards.values()];
         const assignmentVersion = Number(workOrder.assignmentVersion ?? 0) + 1;
+        const notifications = await buildExamRosterNotificationWrites(transactionNotificationReader(transaction),id,{...workOrder,district},{...workOrder,district,assignedGuards:canonicalGuards},assignmentVersion);
         transaction.update(workOrderRef, {
           assignedGuards: canonicalGuards,
+          cancelledAssignedGuards,
           assignmentVersion,
           assignmentReviewRequired: false,
           assignmentStatus:
@@ -298,29 +295,29 @@ export async function PATCH(
             email: decoded.email,
           }),
         });
+        for (const notification of notifications) transaction.create(notification.ref,notification.data);
+        if (receipt) transaction.create(receipt,{fingerprint:payloadFingerprint,eventIds:notifications.map(n=>n.ref.id),createdAt:new Date()});
+        return notifications.map(n=>n.ref.id);
       });
     } else {
-      await adminDb.collection("workOrders").doc(id).update({
-        ...filtered,
-        ...buildServerUpdateAudit({
-          uid: decoded.uid,
-          email: decoded.email,
-        }),
+      notificationIds = await adminDb.runTransaction(async (transaction) => {
+        const ref = adminDb.collection("workOrders").doc(id);
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) throw new DutyError(404,"duty_not_found","Work order not found.");
+        const previous = snapshot.data()!;
+        const assignmentVersion = Number(previous.assignmentVersion ?? 0) + 1;
+        const notifications = await buildExamRosterNotificationWrites(transactionNotificationReader(transaction),id,previous,{...previous,...filtered},assignmentVersion);
+        transaction.update(ref,{...filtered,assignmentVersion,...buildServerUpdateAudit({uid:decoded.uid,email:decoded.email})});
+        for (const notification of notifications) transaction.create(notification.ref,notification.data);
+        return notifications.map(n=>n.ref.id);
       });
     }
 
+    await dispatchDutyNotifications(notificationIds);
     return NextResponse.json({ id });
   } catch (error: any) {
-    if (error instanceof WorkOrderAssignmentError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    if (error?.message?.includes("access required")) {
-      return unauthorizedResponse(error.message, 403);
-    }
-    if (error?.message?.includes("Missing bearer") || error?.message?.includes("token")) {
-      return unauthorizedResponse(error.message, 401);
-    }
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+    if (error instanceof WorkOrderAssignmentError) return NextResponse.json({error:error.message,code:error.code},{status:error.status});
+    return dutyErrorResponse(error);
   }
 }
 

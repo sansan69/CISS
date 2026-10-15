@@ -2,6 +2,8 @@
 
 "use client";
 
+import { parseTcsCategory, withTcsCategoryClientCleanup, type TcsCategory } from "@/lib/tcs-category";
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
@@ -447,6 +449,8 @@ export default function AdminEmployeeProfilePage() {
   
   const [isEditing, setIsEditing] = useState(false);
   const [isRegeneratingQr, setIsRegeneratingQr] = useState(false);
+  const [isSavingTcsCategory, setIsSavingTcsCategory] = useState(false);
+  const [selectedTcsCategory, setSelectedTcsCategory] = useState<TcsCategory | "">("");
   const [isRegeneratingId, setIsRegeneratingId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -513,6 +517,10 @@ export default function AdminEmployeeProfilePage() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    setSelectedTcsCategory(parseTcsCategory(employee?.clientName, employee?.tcsCategory) ?? "");
+  }, [employee?.id, employee?.clientName, employee?.tcsCategory]);
 
   const isAdminView = !isAuthLoading && (userRole === "admin" || userRole === "superAdmin");
   const isFieldOfficerView = !isAuthLoading && userRole === "fieldOfficer";
@@ -995,6 +1003,26 @@ export default function AdminEmployeeProfilePage() {
   };
 
 
+  async function handleSaveTcsCategory() {
+    if (!isAdminView || !employee || !selectedTcsCategory || isSavingTcsCategory) return;
+    setIsSavingTcsCategory(true);
+    try {
+      const response = await authorizedFetch(`/api/admin/employees/${encodeURIComponent(employee.id)}/tcs-category`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tcsCategory: selectedTcsCategory }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Could not update TCS category.");
+      await fetchEmployee();
+      toast({ title: "TCS category updated" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Category update failed", description: error instanceof Error ? error.message : "Try again." });
+    } finally {
+      setIsSavingTcsCategory(false);
+    }
+  }
+
   async function handleSaveChanges(data: EmployeeUpdateValues) {
     if (!employee) return;
     const legacy = employee as any;
@@ -1089,7 +1117,9 @@ export default function AdminEmployeeProfilePage() {
             formPayload.otherQualification = "";
         }
 
-        const finalPayload: Record<string, any> = { ...formPayload, ...updatedUrls };
+        const finalPayload: Record<string, any> = withTcsCategoryClientCleanup(
+            employee.clientName, { ...formPayload, ...updatedUrls }, deleteField(),
+        );
 
         if (newIdentityProofUrlFront) {
             finalPayload['documentCompletion.identity'] = 'complete';
@@ -1977,6 +2007,22 @@ export default function AdminEmployeeProfilePage() {
                         </span>
                     </div>
                     <DetailItem label="Client Name" value={employee.clientName} isName />
+                    {parseTcsCategory(employee.clientName, "adhoc") && (
+                      <div className="space-y-2 py-1.5 md:col-span-2">
+                        <DetailItem label="TCS category" value={parseTcsCategory(employee.clientName, employee.tcsCategory) === "adhoc" ? "Adhoc" : parseTcsCategory(employee.clientName, employee.tcsCategory) === "permanent" ? "Permanent" : "Category not set"} />
+                        {isAdminView && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Select value={selectedTcsCategory} onValueChange={(value) => setSelectedTcsCategory(value as TcsCategory)} disabled={isSavingTcsCategory}>
+                              <SelectTrigger className="w-44" aria-label="TCS category"><SelectValue placeholder="Select category" /></SelectTrigger>
+                              <SelectContent><SelectItem value="adhoc">Adhoc</SelectItem><SelectItem value="permanent">Permanent</SelectItem></SelectContent>
+                            </Select>
+                            <Button variant="outline" onClick={handleSaveTcsCategory} disabled={isSavingTcsCategory || !selectedTcsCategory || selectedTcsCategory === parseTcsCategory(employee.clientName, employee.tcsCategory)}>
+                              {isSavingTcsCategory ? "Saving…" : "Save category"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {employee.legacyUniqueId && <DetailItem label="Legacy Unique ID" value={employee.legacyUniqueId} />}
                     {employee.jobDesignation && <DetailItem label="Job Designation" value={employee.jobDesignation} />}
                     {employee.resourceIdNumber && <DetailItem label="Resource ID" value={employee.resourceIdNumber} />}

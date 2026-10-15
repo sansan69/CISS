@@ -1,3 +1,4 @@
+import { parseTcsCategory } from "@/lib/tcs-category";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
 import { resolveEmployeeDistrict } from "@/lib/employees/visibility";
 import { canonicalizeDistrictList } from "@/lib/districts";
@@ -71,6 +72,7 @@ export function serializeGuardProfileView(
     heightCm: typeof data.heightCm === "number" ? data.heightCm : null,
     weightKg: typeof data.weightKg === "number" ? data.weightKg : null,
     clientName: normalizeText(data.clientName),
+    tcsCategory: parseTcsCategory(data.clientName, data.tcsCategory),
     resourceIdNumber: normalizeText(data.resourceIdNumber),
     jobDesignation: normalizeText(data.jobDesignation || data.lngJobDesignation),
     district: resolveEmployeeDistrict(data),

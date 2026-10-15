@@ -30,6 +30,7 @@ import type {
   WorkOrderImportMode,
 } from "@/types/work-orders";
 import { GeoPoint } from "firebase-admin/firestore";
+import { buildExamRosterNotificationWrites, dispatchDutyNotifications } from "@/lib/server/duties/notifications";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -47,6 +48,7 @@ type FirestoreTimestampLike = {
 type ExistingWorkOrderRecord = TcsExamExistingWorkOrder & {
   clientName?: string;
   assignedGuards?: unknown[];
+  cancelledAssignedGuards?: unknown[];
   sourceFileName?: string;
   sourceSheetName?: string;
   binaryFileHash?: string;
@@ -143,6 +145,36 @@ function normalizeSegment(value: string | number | undefined | null): string {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+function normalizeGuardId(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * `cancelledAssignedGuards` is accumulated cancellation history, not a
+ * snapshot of the roster being cancelled: the manual roster route adds every
+ * removed guard to it so a removed guard's own cancelled duty stays visible.
+ * A whole-order importer cancellation must therefore union the roster it
+ * removes with the history already on the work order (by canonical employee
+ * document ID), otherwise an already removed guard drops out of the history
+ * and their own cancelled duty disappears from the feed before the duty date.
+ */
+function mergeCancelledGuardHistory(previous: unknown, removed: unknown): unknown[] {
+  const guards = new Map<string, unknown>();
+  for (const guard of [
+    ...(Array.isArray(previous) ? previous : []),
+    ...(Array.isArray(removed) ? removed : []),
+  ]) {
+    const uid = normalizeGuardId(
+      guard && typeof guard === "object" ? (guard as { uid?: unknown }).uid : guard,
+    );
+    if (!uid) continue;
+    guards.set(uid, guard && typeof guard === "object" ? guard : { uid });
+  }
+  return [...guards.values()];
 }
 
 function normalizeTcsDistrict(value: unknown): string {
@@ -345,6 +377,9 @@ async function fetchExistingRows(
           totalManpower: Number(data.totalManpower ?? 0),
           recordStatus: normalizeRecordStatus(data.recordStatus),
           assignedGuards: Array.isArray(data.assignedGuards) ? data.assignedGuards : [],
+          cancelledAssignedGuards: Array.isArray(data.cancelledAssignedGuards)
+            ? data.cancelledAssignedGuards
+            : [],
           sourceFileName: typeof data.sourceFileName === "string" ? data.sourceFileName : undefined,
           sourceSheetName: typeof data.sourceSheetName === "string" ? data.sourceSheetName : undefined,
           binaryFileHash: typeof data.binaryFileHash === "string" ? data.binaryFileHash : undefined,
@@ -616,13 +651,17 @@ function buildWorkOrderWrites(
       if (!existing) continue;
       cancelledRows += 1;
       const assignedGuards = Array.isArray(existing.assignedGuards) ? existing.assignedGuards : [];
+      const cancelledAssignedGuards = mergeCancelledGuardHistory(
+        existing.cancelledAssignedGuards,
+        assignedGuards,
+      );
       const revisionEventRef = adminDb.collection("workOrderRevisionEvents").doc();
       writes.push({
         ref: adminDb.collection("workOrders").doc(existing.id),
         data: {
           recordStatus: "cancelled",
           cancelledByImportId: importId,
-          cancelledAssignedGuards: assignedGuards,
+          cancelledAssignedGuards,
           assignedGuards: [],
           assignmentStatus: "unassigned",
           assignmentReviewRequired: assignedGuards.length > 0,
@@ -1024,7 +1063,17 @@ export async function POST(request: Request) {
       },
     };
 
-    const operationalWrites = [...siteWrites, ...woWrites];
+    // Add recipient-owned duty inbox events to the existing write plan. Nothing
+    // is delivered from preview; FCM follows successful persistence below.
+    const dutyWrites: WriteOp[] = [];
+    for (const write of woWrites) {
+      if (!("recordStatus" in write.data)) continue;
+      const previous = existingRows.find(row=>row.id===write.ref.id);
+      if (!previous) continue;
+      const notifications = await buildExamRosterNotificationWrites(adminDb,write.ref.id,previous,{...previous,...write.data},revisionNumber,"exam_import");
+      dutyWrites.push(...notifications);
+    }
+    const operationalWrites = [...siteWrites, ...woWrites, ...dutyWrites];
     const allWrites = [...operationalWrites, importDocWrite];
     if (allWrites.length <= BATCH_MAX_OPS) {
       // Normal imports are fully atomic: sites, work orders, revision events,
@@ -1056,6 +1105,8 @@ export async function POST(request: Request) {
         throw commitError;
       }
     }
+
+    await dispatchDutyNotifications(dutyWrites.map(write=>write.ref.id));
 
     return NextResponse.json({
       importId,

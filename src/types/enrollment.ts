@@ -29,6 +29,7 @@ export const enrollmentSubmissionSchema = z
   .object({
     joiningDate: z.string().datetime(),
     clientName: z.string().trim().min(1),
+    // Category is intentionally absent: enrollment always derives the server default.
     resourceIdNumber: z.string().trim().optional(),
     profilePictureUrl: z.string().url(),
     fullNameInput: z.string().trim().optional(),

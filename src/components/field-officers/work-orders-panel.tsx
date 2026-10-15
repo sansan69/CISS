@@ -1,18 +1,14 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  query,
-  where,
-  onSnapshot,
-  getDocs,
-  orderBy,
-} from "firebase/firestore";
-import { startOfToday } from "date-fns";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import {Timestamp} from 'firebase/firestore';
+import {WorkOrderWillingness} from './work-order-willingness';
+import {GuardAssignmentsPanel} from './guard-assignments-panel';
+import {useDutySchedulingEnabled,useScopedDutyOrders} from './use-duty-scheduling';
+import {loadWorkOrderRoster,retainedRosterMutation,submitRosterRequest,type DutyMutation,type WorkOrderRoster} from './duty-scheduling';
 import { useAppAuth } from "@/context/auth-context";
 import { authorizedFetch } from "@/lib/api-client";
+import { formatIstDate, formatIstDutyDateLabel } from "@/lib/ist-date";
 import { useToast } from "@/hooks/use-toast";
 import { useHaptics } from "@/hooks/use-haptics";
 import type { Employee } from "@/types/employee";
@@ -40,20 +36,23 @@ import {
   MagnifyingGlass as Search,
   X,
   CheckCircle as CheckCircle2,
-  ClipboardText as ClipboardList,
   Users,
   CaretDown as ChevronDown,
   CaretRight as ChevronRight,
 } from "@phosphor-icons/react";
 import type { WorkOrder } from "@/types/work-orders";
-import { isOperationalWorkOrderClientName, isWorkOrderAdminRole } from "@/lib/work-orders";
-import { districtMatches } from "@/lib/districts";
+import { isWorkOrderAdminRole } from "@/lib/work-orders";
 import { fetchActiveGuardsForDistricts } from "@/lib/work-orders/available-guards";
 import {
   countGuardAssignments,
   getGuardAssignmentCapacityIssue,
 } from "@/lib/work-orders/guard-assignment-capacity";
 import { WorkOrderRevisionNotices } from "@/components/work-orders/revision-notices";
+import {
+  canDismissManualRoster,
+  isCurrentRosterRead,
+  isManualRosterSelectionLocked,
+} from "./manual-roster-lifecycle";
 
 type WorkOrderExamFields = Pick<
   WorkOrder,
@@ -73,9 +72,9 @@ function getInitials(name?: string, employeeId?: string) {
 
 function formatDate(ts: any): string {
   try {
-    return ts
-      .toDate()
-      .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    // The duty date is canonical IST; formatting it in the browser's own zone
+    // would show the previous day for an IST-midnight duty.
+    return formatIstDutyDateLabel(ts.toDate());
   } catch {
     return "—";
   }
@@ -97,13 +96,48 @@ const AssignGuardsDialog: React.FC<{
     Array.isArray(workOrder.assignedGuards) ? workOrder.assignedGuards : [],
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [roster, setRoster] = useState<WorkOrderRoster | null>(null);
+  const [isLoadingRoster, setIsLoadingRoster] = useState(false);
+  const [rosterError, setRosterError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [uncertain, setUncertain] = useState(false);
+  const pendingSave = useRef<DutyMutation | null>(null);
+  const rosterReadId = useRef(0);
 
+  const loadRoster = useCallback(async () => {
+    const requestId = ++rosterReadId.current;
+    setIsLoadingRoster(true);
+    setRosterError("");
+    setRoster(null);
+    try {
+      const current = await loadWorkOrderRoster(workOrder.id, authorizedFetch);
+      if (!isCurrentRosterRead(requestId, rosterReadId.current)) return;
+      setRoster(current);
+      // Show the authoritative roster so a save can only be built from the
+      // version the supervisor actually sees.
+      setSelectedGuards(current.assignedGuards);
+      setSearchTerm("");
+    } catch (error) {
+      if (!isCurrentRosterRead(requestId, rosterReadId.current)) return;
+      setRoster(null);
+      setRosterError(
+        error instanceof Error ? error.message : "Could not load the current roster.",
+      );
+    } finally {
+      if (isCurrentRosterRead(requestId, rosterReadId.current)) {
+        setIsLoadingRoster(false);
+      }
+    }
+  }, [workOrder.id]);
+
+  // Read the current roster and assignmentVersion whenever the manual editor opens.
   useEffect(() => {
-    setSelectedGuards(
-      Array.isArray(workOrder.assignedGuards) ? workOrder.assignedGuards : [],
-    );
-    setSearchTerm("");
-  }, [workOrder]);
+    if (!isOpen) return;
+    pendingSave.current = null;
+    setSaveError("");
+    setUncertain(false);
+    void loadRoster();
+  }, [isOpen, loadRoster]);
 
   const filteredGuards = useMemo(() => {
     if (!searchTerm) return availableGuards;
@@ -115,7 +149,27 @@ const AssignGuardsDialog: React.FC<{
     );
   }, [searchTerm, availableGuards]);
 
+  // While a save is in flight or unconfirmed the selector must keep showing the
+  // roster that the retained receipt was built from.
+  const lifecycleState = {
+    isSaving,
+    isUnconfirmed: uncertain,
+    isLoadingRoster,
+    hasAuthoritativeRoster: roster !== null,
+  };
+  const selectionLocked = isManualRosterSelectionLocked(lifecycleState);
+  const canDismiss = canDismissManualRoster(lifecycleState);
+  const handleOpenChange = (open: boolean) => {
+    if (!open && canDismiss) onClose();
+  };
+
+  const removeGuard = (uid: string) => {
+    if (selectionLocked) return;
+    setSelectedGuards((prev) => prev.filter((g) => g.uid !== uid));
+  };
+
   const handleToggle = (guard: Employee) => {
+    if (selectionLocked) return;
     haptic("selection");
     const isSelected = selectedGuards.some((g) => g.uid === guard.id);
     if (!isSelected) {
@@ -149,25 +203,48 @@ const AssignGuardsDialog: React.FC<{
   };
 
   const handleSave = async () => {
+    if (!roster) {
+      setSaveError("Reload the current roster before saving assignments.");
+      return;
+    }
     setIsSaving(true);
+    setSaveError("");
     try {
-      const res = await authorizedFetch(`/api/admin/work-orders/${workOrder.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          assignedGuards: selectedGuards,
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Could not save assignments.");
-      haptic("success");
-      toast({ title: "Saved", description: "Guard assignments updated." });
-      onClose();
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Assignment not saved",
-        description: error instanceof Error ? error.message : "Could not save assignments.",
-      });
+      // One request, one receipt: an unconfirmed retry re-issues this exact
+      // body and version instead of overwriting whatever landed meanwhile.
+      const request = retainedRosterMutation(
+        pendingSave.current,
+        workOrder.id,
+        selectedGuards,
+        roster.assignmentVersion,
+        () => crypto.randomUUID(),
+      );
+      pendingSave.current = request;
+      const outcome = await submitRosterRequest(request, authorizedFetch);
+      if (outcome.status === "saved") {
+        pendingSave.current = null;
+        setUncertain(false);
+        haptic("success");
+        toast({ title: "Saved", description: "Guard assignments updated." });
+        onClose();
+        return;
+      }
+      pendingSave.current = outcome.retryable ? request : null;
+      setUncertain(outcome.retryable);
+      setSaveError(
+        outcome.versionConflict
+          ? `${outcome.message} Reload the current roster and reselect the guards before saving.`
+          : outcome.message,
+      );
+      // A newer roster is authoritative: refresh it and require reselection.
+      if (outcome.versionConflict) await loadRoster();
+      if (!outcome.retryable) {
+        toast({
+          variant: "destructive",
+          title: "Assignment not saved",
+          description: outcome.message,
+        });
+      }
     } finally {
       setIsSaving(false);
     }
@@ -177,8 +254,13 @@ const AssignGuardsDialog: React.FC<{
     countGuardAssignments(selectedGuards);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="flex h-[min(92dvh,56rem)] w-[calc(100vw-1rem)] max-w-full flex-col gap-0 overflow-hidden p-0 sm:h-[85vh] sm:w-[90vw] md:max-w-4xl">
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent
+        closeDisabled={!canDismiss}
+        onEscapeKeyDown={(event) => { if (!canDismiss) event.preventDefault(); }}
+        onPointerDownOutside={(event) => { if (!canDismiss) event.preventDefault(); }}
+        className="flex h-[min(92dvh,56rem)] w-[calc(100vw-1rem)] max-w-full flex-col gap-0 overflow-hidden p-0 sm:h-[85vh] sm:w-[90vw] md:max-w-4xl"
+      >
         <DialogHeader className="flex-shrink-0 border-b px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-6">
           <DialogTitle className="pr-8 text-base leading-tight sm:text-xl">
             Assign Guards — {workOrder.siteName}
@@ -187,6 +269,20 @@ const AssignGuardsDialog: React.FC<{
             {formatDate(workOrder.date)} · {workOrder.district}
           </DialogDescription>
         </DialogHeader>
+
+        {isLoadingRoster && (
+          <p role="status" className="flex-shrink-0 px-4 pt-3 text-sm text-muted-foreground sm:px-6">
+            Loading the current roster…
+          </p>
+        )}
+        {rosterError && (
+          <div role="alert" className="flex-shrink-0 px-4 pt-3 sm:px-6">
+            <p className="text-sm text-destructive">{rosterError}</p>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => void loadRoster()}>
+              Reload roster
+            </Button>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col md:flex-row">
@@ -254,6 +350,7 @@ const AssignGuardsDialog: React.FC<{
                             key={guard.id}
                             type="button"
                             onClick={() => handleToggle(guard)}
+                            disabled={selectionLocked}
                             className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-all active:brightness-[0.92] ${
                               isSelected ? "bg-primary/5 border-primary/30" : "bg-card border-border"
                             }`}
@@ -323,7 +420,7 @@ const AssignGuardsDialog: React.FC<{
                             <p className="text-xs text-muted-foreground">{guard.employeeId}</p>
                           </div>
                           <Badge variant="outline" className="text-[10px] flex-shrink-0">{guard.gender}</Badge>
-                          <Button size="sm" variant="ghost" onClick={() => setSelectedGuards((prev) => prev.filter((g) => g.uid !== guard.uid))} className="flex-shrink-0 h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground">
+                          <Button size="sm" variant="ghost" disabled={selectionLocked} onClick={() => removeGuard(guard.uid)} className="flex-shrink-0 h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground">
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
@@ -367,6 +464,7 @@ const AssignGuardsDialog: React.FC<{
                           key={guard.id}
                           type="button"
                           onClick={() => handleToggle(guard)}
+                          disabled={selectionLocked}
                           className={`w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all ${isSelected ? "bg-primary/5 border-primary/30" : "hover:bg-muted/50"}`}
                         >
                           <Avatar className="h-9 w-9 flex-shrink-0">
@@ -428,7 +526,7 @@ const AssignGuardsDialog: React.FC<{
                           <p className="font-medium text-xs truncate">{guard.name}</p>
                           <p className="text-[10px] text-muted-foreground">{guard.employeeId}</p>
                         </div>
-                        <Button size="sm" variant="ghost" onClick={() => setSelectedGuards((prev) => prev.filter((g) => g.uid !== guard.uid))} className="h-7 w-7 p-0 hover:bg-destructive hover:text-destructive-foreground flex-shrink-0">
+                        <Button size="sm" variant="ghost" disabled={selectionLocked} onClick={() => removeGuard(guard.uid)} className="h-7 w-7 p-0 hover:bg-destructive hover:text-destructive-foreground flex-shrink-0">
                           <X className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -440,11 +538,21 @@ const AssignGuardsDialog: React.FC<{
           </div>
         </div>
 
+        {saveError && (
+          <div role="alert" className="flex-shrink-0 border-t px-4 py-3 sm:px-6">
+            <p className="text-sm text-destructive">{saveError}</p>
+            {uncertain && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Retry sends this same request with the same receipt.
+              </p>
+            )}
+          </div>
+        )}
         <DialogFooter className="flex-shrink-0 border-t bg-background px-4 sm:px-6 py-3 sm:py-4 gap-2">
-          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
-          <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
+          <Button variant="outline" onClick={onClose} disabled={!canDismiss} className="w-full sm:w-auto">Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving || isLoadingRoster || !!rosterError} className="w-full sm:w-auto">
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Assignments
+            {uncertain ? "Retry assignments" : "Save Assignments"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -455,101 +563,19 @@ const AssignGuardsDialog: React.FC<{
 // ── WorkOrdersPanel ────────────────────────────────────────────────────────────
 
 export function WorkOrdersPanel() {
-  const { userRole, assignedDistricts } = useAppAuth();
+  const { userRole } = useAppAuth();
   const { toast } = useToast();
   const isAdmin = isWorkOrderAdminRole(userRole);
 
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [siteDistricts, setSiteDistricts] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(true);
-
+  const enabled=useDutySchedulingEnabled();
+  const {orders:scopedOrders,loading:isLoading,error:loadError,reload}=useScopedDutyOrders(enabled);
+  const workOrders=useMemo(()=>scopedOrders.map(order=>({...order,date:Timestamp.fromDate(new Date(order.date)),recordStatus:'active'} as WorkOrder)),[scopedOrders]);
+  const siteDistricts=useMemo(()=>Object.fromEntries(scopedOrders.map(order=>[order.siteId,order.district])),[scopedOrders]);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
   const [availableGuards, setAvailableGuards] = useState<Employee[]>([]);
   const [isLoadingGuards, setIsLoadingGuards] = useState(false);
   const [collapsedDateKeys, setCollapsedDateKeys] = useState<Set<string>>(new Set());
-
-  const activeWorkOrders = useMemo(
-    () =>
-      workOrders.filter((order) => {
-        if ((order.recordStatus ?? "active").trim().toLowerCase() !== "active") {
-          return false;
-        }
-
-        if (isAdmin) {
-          return true;
-        }
-
-        const resolvedDistrict = siteDistricts[order.siteId] || order.district || "";
-        return assignedDistricts.some((district) => districtMatches(district, resolvedDistrict));
-      }),
-    [assignedDistricts, isAdmin, siteDistricts, workOrders],
-  );
-
-  // ── Fetch work orders ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isAdmin && assignedDistricts.length === 0) {
-      setIsLoading(false);
-      return;
-    }
-
-    const today = startOfToday();
-
-    const q = isAdmin
-      ? query(
-          collection(db, "workOrders"),
-          where("date", ">=", today),
-          orderBy("date", "asc"),
-        )
-      : query(
-          collection(db, "workOrders"),
-          where("district", "in", assignedDistricts.slice(0, 30)),
-          where("date", ">=", today),
-          orderBy("date", "asc"),
-        );
-
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const orders = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as WorkOrder))
-          .filter((order) => isOperationalWorkOrderClientName(order.clientName));
-        setWorkOrders(orders);
-        setIsLoading(false);
-      },
-      () => {
-        toast({ variant: "destructive", title: "Error", description: "Could not load work orders." });
-        setIsLoading(false);
-      },
-    );
-
-    return () => unsub();
-  }, [isAdmin, assignedDistricts, toast]);
-
-  useEffect(() => {
-    const siteIds = Array.from(new Set(workOrders.map((order) => order.siteId).filter(Boolean)));
-    if (siteIds.length === 0) {
-      setSiteDistricts({});
-      return;
-    }
-
-    const fetchSiteDistricts = async () => {
-      const mapping: Record<string, string> = {};
-      const chunkSize = 30;
-      for (let i = 0; i < siteIds.length; i += chunkSize) {
-        const chunk = siteIds.slice(i, i + chunkSize);
-        const snap = await getDocs(query(collection(db, "sites"), where("__name__", "in", chunk)));
-        snap.docs.forEach((doc) => {
-          const data = doc.data() as { district?: string; districtName?: string };
-          mapping[doc.id] = data.district || data.districtName || "";
-        });
-      }
-      setSiteDistricts(mapping);
-    };
-
-    fetchSiteDistricts().catch((error) => {
-      console.error("Error fetching site districts:", error);
-    });
-  }, [workOrders]);
+  const activeWorkOrders = useMemo(()=>workOrders.filter(order=>(order.recordStatus ?? "active").trim().toLowerCase()==='active'),[workOrders]);
 
   // ── Group by duty date ─────────────────────────────────────────────────────
   const ordersByDate = useMemo(() => {
@@ -558,7 +584,7 @@ export function WorkOrdersPanel() {
       const dateLabel = formatDate(order.date);
       const dateKey = (() => {
         try {
-          return order.date.toDate().toISOString().slice(0, 10);
+          return formatIstDate(order.date.toDate());
         } catch {
           return dateLabel;
         }
@@ -617,7 +643,7 @@ export function WorkOrdersPanel() {
           });
         }
       } else {
-        scope = assignedDistricts;
+        scope = districtScope ? [districtScope] : [];
       }
       const guards = await fetchActiveGuardsForDistricts(scope, { allowEmptyScope: isAdmin });
       setAvailableGuards(guards);
@@ -626,7 +652,7 @@ export function WorkOrdersPanel() {
     } finally {
       setIsLoadingGuards(false);
     }
-  }, [assignedDistricts, isAdmin, siteDistricts, toast]);
+  }, [isAdmin, siteDistricts, toast]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -646,27 +672,17 @@ export function WorkOrdersPanel() {
     );
   }
 
-  if (!isAdmin && assignedDistricts.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground text-sm">
-        No districts assigned to your account.
-      </div>
-    );
-  }
-
+  if(!enabled) return <p className="text-sm text-muted-foreground">Work orders are currently unavailable.</p>;
+  if(loadError) return <div role="alert" className="space-y-3"><p className="text-sm text-destructive">{loadError}</p><Button variant="outline" onClick={reload}>Retry</Button></div>;
   if (ordersByDate.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed p-10 text-center">
-        <ClipboardList className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">No upcoming work orders for your districts.</p>
-      </div>
-    );
+    return <div className="space-y-4"><GuardAssignmentsPanel enabled={enabled}/><div className="rounded-xl border border-dashed p-10 text-center"><p className="text-sm text-muted-foreground">No upcoming exam work orders for your districts.</p></div></div>;
   }
 
   return (
     <>
       <div className="space-y-4">
         <WorkOrderRevisionNotices />
+        <GuardAssignmentsPanel enabled={enabled}/>
         {ordersByDate.map(({ dateKey, dateLabel, orders }) => {
           const dateTotalRequired = orders.reduce((sum, order) => sum + (order.totalManpower || (order.maleGuardsRequired + order.femaleGuardsRequired)), 0);
           const dateAssignedCount = orders.reduce((sum, order) => {
@@ -836,6 +852,7 @@ export function WorkOrdersPanel() {
                             </div>
                           )}
 
+                          <div className="mb-3"><WorkOrderWillingness workOrderId={order.id} siteName={order.siteName} enabled={enabled} counts={scopedOrders.find(o=>o.id===order.id)} onSaved={reload}/></div>
                           <Button
                             size="sm"
                             variant={isUnassigned || needsAssignmentReview ? "default" : "outline"}
@@ -864,7 +881,7 @@ export function WorkOrdersPanel() {
         <AssignGuardsDialog
           workOrder={selectedWorkOrder}
           isOpen={!!selectedWorkOrder}
-          onClose={() => setSelectedWorkOrder(null)}
+          onClose={() => {setSelectedWorkOrder(null);reload();}}
           availableGuards={availableGuards}
           isLoadingGuards={isLoadingGuards}
         />

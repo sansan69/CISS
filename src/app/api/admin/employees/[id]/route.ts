@@ -1,3 +1,4 @@
+import { parseTcsCategory } from "@/lib/tcs-category";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
@@ -82,6 +83,7 @@ function _serializeEmployee(
     email: normalizeText(data.email || data.emailAddress),
     clientId: normalizeText(data.clientId),
     clientName: normalizeText(data.clientName),
+    tcsCategory: parseTcsCategory(data.clientName, data.tcsCategory),
     district: normalizeText(data.district),
     siteName: normalizeText(data.siteName || data.assignedSiteName),
     status: normalizeText(data.status) || "Active",

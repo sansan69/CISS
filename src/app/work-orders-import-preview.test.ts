@@ -165,6 +165,8 @@ class FakeTransaction {
   set(ref: FakeDocRef, value: Record<string, unknown>) {
     return ref.set(value);
   }
+
+  create(ref: FakeDocRef,value:Record<string,unknown>) { return ref.set(value); }
 }
 
 class FakeFirestore {
@@ -928,6 +930,7 @@ describe("TCS exam work order import server slice", () => {
 
   it("commits active rows, cancels missing rows, and records import metadata", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("employees", "guard-1", {guardAuthUid:"recipient-auth",status:"Active"});
     adminDb.seed("workOrders", "existing-row", {
       siteId: "site-old",
       siteName: "Old Site",
@@ -1060,10 +1063,12 @@ describe("TCS exam work order import server slice", () => {
         cancelledRows: 1,
       }),
     );
+    expect(adminDb.listDocs("notifications").map(row=>row.data)).toEqual([expect.objectContaining({type:"duty_cancelled",recipientUid:"recipient-auth",dutyEvent:true})]);
   });
 
   it("replaces matching active work orders during a duplicate re-upload", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("employees", "guard-1", {guardAuthUid:"recipient-auth",status:"Active"});
     adminDb.seed("sites", "site-a", {
       id: "site-a",
       siteId: "site-a",
@@ -1156,10 +1161,19 @@ describe("TCS exam work order import server slice", () => {
       }),
     );
     expect(updated?.assignedGuards).toEqual([{ uid: "guard-1" }]);
+    expect(adminDb.listDocs("notifications").map(row=>row.data)).toEqual([expect.objectContaining({type:"duty_changed",recipientUid:"recipient-auth",dutyEvent:true})]);
+    const notificationId=adminDb.listDocs("notifications")[0]!.id;
+    await adminDb.collection("notifications").doc(notificationId).update({read:true});
+    buildDiffMock.mockReturnValue([{key:"site-id:site-a|date:2026-04-21|exam:tcs-exam",siteId:"site-a",siteName:"Alpha Site",district:"Ernakulam",date:"2026-04-21",examCode:"tcs-exam",maleGuardsRequired:5,femaleGuardsRequired:2,totalManpower:7,status:"unchanged"}]);
+    const replay=await POST(new Request("http://localhost/api/admin/work-orders/import/commit",{method:"POST",headers:{authorization:"Bearer token","content-type":"application/json"},body:JSON.stringify({mode:"new",duplicateResolution:"replace",fileName:"reupload.xlsx",parserMode:"legacy-sheet",examName:"TCS Exam",examCode:"tcs-exam",binaryFileHash:"binary-hash-1",contentHash:"content-hash-1",rows:[{siteId:"site-a",siteName:"Alpha Site",district:"Ernakulam",date:"2026-04-21",examName:"TCS Exam",examCode:"tcs-exam",maleGuardsRequired:5,femaleGuardsRequired:2,sourceSheetName:"Sheet1",sourceRowNumber:4}]})}));
+    expect(replay.status).toBe(200);
+    expect(adminDb.listDocs("notifications")).toHaveLength(1);
+    expect(adminDb.getDoc("notifications",notificationId)?.read).toBe(true);
   });
 
   it("omits matching active work orders during a duplicate re-upload", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("employees", "guard-1", {guardAuthUid:"recipient-auth",status:"Active"});
     adminDb.seed("workOrders", "existing-row", {
       siteId: "site-a",
       siteName: "Alpha Site",
@@ -1244,6 +1258,7 @@ describe("TCS exam work order import server slice", () => {
         sourceFileName: "old.xlsx",
       }),
     );
+    expect(adminDb.listDocs("notifications")).toHaveLength(0);
   });
 
   it("prefers updating the active duplicate instead of a cancelled duplicate doc", async () => {
@@ -1843,6 +1858,7 @@ describe("TCS exam work order import server slice", () => {
 
   it("validates and canonicalizes guard assignments in a transaction", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "site-a", {siteName:"Authoritative centre",clientName:"TCS",district:"Ernakulam",status:"Active"});
     adminDb.seed("workOrders", "wo-assign", {
       siteId: "site-a",
       siteName: "Alpha Site",
@@ -1903,6 +1919,7 @@ describe("TCS exam work order import server slice", () => {
 
   it("saves a valid partial assignment while other required positions remain open", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "site-a", {siteName:"Authoritative centre",clientName:"TCS",district:"Ernakulam",status:"Active"});
     adminDb.seed("workOrders", "wo-partial", {
       siteId: "site-a",
       siteName: "Alpha Site",
@@ -1959,6 +1976,7 @@ describe("TCS exam work order import server slice", () => {
 
   it("allows assignments above the male and female minimum requirements", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "site-a", {siteName:"Authoritative centre",clientName:"TCS",district:"Ernakulam",status:"Active"});
     adminDb.seed("workOrders", "wo-surplus", {
       siteId: "site-a",
       siteName: "Alpha Site",
@@ -2039,6 +2057,7 @@ describe("TCS exam work order import server slice", () => {
 
   it("rejects same-date double assignment of a guard", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "site-target", {siteName:"Authoritative centre",clientName:"TCS",district:"Ernakulam",status:"Active"});
     const dutyDate = new Date("2026-04-21T00:00:00.000Z");
     adminDb.seed("workOrders", "wo-existing", {
       siteId: "site-existing",
@@ -2095,6 +2114,7 @@ describe("TCS exam work order import server slice", () => {
 
   it("rejects field-officer assignment outside their district", async () => {
     const adminDb = new FakeFirestore();
+    adminDb.seed("sites", "site-a", {siteName:"Authoritative centre",clientName:"TCS",district:"Ernakulam",status:"Active"});
     adminDb.seed("fieldOfficers", "fo-1", {
       uid: "field-officer-1",
       assignedDistricts: ["Kollam"],

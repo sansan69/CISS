@@ -259,6 +259,7 @@ describe("POST /api/employees/enroll", () => {
     expect(mocks.addedEmployees[0]).toMatchObject({
       employeeId: "CISS/TCS/2026-27/001",
       clientName: "TCS",
+      tcsCategory: "adhoc",
       fullName: "STANDARD GUARD",
       emailAddress: "standard.guard@example.com",
       phoneNumber: "9012345690",
@@ -272,6 +273,16 @@ describe("POST /api/employees/enroll", () => {
         status: "PendingReview",
       },
     });
+  });
+
+  it("derives adhoc from the canonical client and ignores forged permanent", async () => {
+    mocks.clientName = " tCs ";
+    const { POST } = await import("./route");
+    const response = await POST(new NextRequest("https://example.com/api/employees/enroll", {
+      method: "POST", body: JSON.stringify(buildStandardPayload({ tcsCategory: "permanent" })),
+    }));
+    expect(response.status).toBe(200);
+    expect(mocks.addedEmployees[0]).toMatchObject({ clientName: "tCs", tcsCategory: "adhoc" });
   });
 
   it("saves an LNG enrollment without writing undefined optional fields", async () => {
@@ -316,6 +327,7 @@ describe("POST /api/employees/enroll", () => {
       legacyUniqueId: "LNG-2026-001",
     });
     expect(mocks.addedEmployees[0]).not.toHaveProperty("qualificationName");
+    expect(mocks.addedEmployees[0]).not.toHaveProperty("tcsCategory");
   });
 
   it.each(LNG_JOB_DESIGNATIONS)("saves the complete LNG %s profile", async (designation) => {
@@ -425,7 +437,7 @@ describe("POST /api/employees/enroll", () => {
     expect(response.status).toBe(200);
     expect(mocks.verifyIdToken).toHaveBeenCalledWith("valid-admin-token", true);
     expect(mocks.addedEmployees).toHaveLength(1);
-    expect(mocks.addedEmployees[0]).toMatchObject({ status: "Active" });
+    expect(mocks.addedEmployees[0]).toMatchObject({ status: "Active", tcsCategory: "adhoc" });
   });
 
   it("rejects an authenticated user who is not the designated Aadhaar administrator", async () => {

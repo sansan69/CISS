@@ -5,8 +5,24 @@ const IST_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
+const IST_DUTY_DATE_LABEL_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Kolkata",
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
 export function formatIstDate(value: Date = new Date()) {
   return IST_DATE_FORMATTER.format(value);
+}
+
+/**
+ * Short duty-date heading (`Tue 20 Oct`) for the canonical IST duty date. An
+ * IST-midnight duty carries a UTC timestamp on the previous day, so a heading
+ * formatted in the browser's own time zone can disagree with the duty date.
+ */
+export function formatIstDutyDateLabel(value: Date) {
+  return IST_DUTY_DATE_LABEL_FORMATTER.format(value);
 }
 
 export function getIstYearMonth(value: Date = new Date()) {

@@ -2,7 +2,7 @@ import { Timestamp } from "firebase/firestore";
 
 export interface AppNotification {
   id?: string;
-  type: "work_order" | "attendance_marked" | "leave_approved" | "training_assigned" | "broadcast" | "report_review";
+  type: "work_order" | "attendance_marked" | "leave_approved" | "training_assigned" | "broadcast" | "report_review" | "duty_assigned" | "duty_changed" | "duty_cancelled" | "duty_willingness";
   title: string;
   body: string;
   recipientUid?: string;       // single user

@@ -5,6 +5,7 @@ import { canonicalizeDistrictList, canonicalizeDistrictName, districtMatches } f
 import { db } from "@/lib/firebaseAdmin";
 import { unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { resolveMobileSession } from "@/lib/server/mobile-session";
+import { retryPendingDutyNotifications } from "@/lib/server/duties/notifications";
 export const runtime = "nodejs";
 
 type NotificationAudience = "guard" | "fieldOfficer" | "all";
@@ -211,6 +212,9 @@ export async function GET(request: Request) {
     }
 
     const payload = await readVisibleNotifications(session);
+    // Recovery is best effort after the durable inbox is readable. A delivery
+    // outage must not prevent the recipient from seeing their saved duty event.
+    await retryPendingDutyNotifications(session.uid).catch(() => undefined);
     return NextResponse.json(payload);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Could not load notifications.";

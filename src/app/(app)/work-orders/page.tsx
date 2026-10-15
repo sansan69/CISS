@@ -68,6 +68,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {WorkOrderWillingness} from '@/components/field-officers/work-order-willingness';
+import {GuardAssignmentsPanel} from '@/components/field-officers/guard-assignments-panel';
+import {useDutySchedulingEnabled,useScopedDutyOrders} from '@/components/field-officers/use-duty-scheduling';
 import { PageLoading } from "@/components/common/page-loading";
 
 type WorkspaceTab = 'assignments' | 'assigned-guards-export';
@@ -170,6 +173,9 @@ export default function WorkOrderPage() {
     const { userRole, assignedDistricts, clientInfo } = useAppAuth();
     const canAdminWorkOrders = isWorkOrderAdminRole(userRole);
     const isClientView = userRole === 'client';
+    const schedulingEnabled=useDutySchedulingEnabled();
+    const {orders:scopedDutyOrders,error:responseCountsError,reload:reloadDutyCounts}=useScopedDutyOrders(schedulingEnabled && !isClientView);
+    const dutyCounts=useMemo(()=>new Map(scopedDutyOrders.map(order=>[order.id,order])),[scopedDutyOrders]);
     const activeTab = useMemo(
         () => resolveWorkspaceTab(searchParams.get('tab'), userRole),
         [searchParams, userRole],
@@ -993,6 +999,8 @@ export default function WorkOrderPage() {
                 </TabsList>
 
                 <TabsContent value="assignments" className="mt-0 flex flex-col gap-4 sm:gap-6">
+                    {!isClientView && <GuardAssignmentsPanel enabled={schedulingEnabled}/>}
+                    {!isClientView && schedulingEnabled && responseCountsError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p className="text-destructive">Response counts: {responseCountsError}</p><Button variant="outline" size="sm" onClick={reloadDutyCounts}>Retry counts</Button></div>}
                     {!isClientView && <WorkOrderRevisionNotices />}
                     {canAdminWorkOrders && (
                         <Card>
@@ -1543,6 +1551,7 @@ export default function WorkOrderPage() {
                                                             </div>
 
                                                             <div className="flex flex-wrap gap-2 lg:justify-end">
+                                                                {!isClientView && row.orders.map(order=><WorkOrderWillingness key={order.id} workOrderId={order.id} siteName={`${row.siteName} · ${order.examName || order.examCode || 'Exam duty'}`} enabled={schedulingEnabled} counts={dutyCounts.get(order.id)} onSaved={reloadDutyCounts}/>)}
                                                                 {canAdminWorkOrders && (
                                                                     <Button size="sm" variant="outline" asChild className="h-8 text-xs">
                                                                         <Link href={siteHref(row.siteId)}>
@@ -1551,7 +1560,7 @@ export default function WorkOrderPage() {
                                                                         </Link>
                                                                     </Button>
                                                                 )}
-                                                                {!isClientView && (
+                                                                {!isClientView && schedulingEnabled && (
                                                                     <Button size="sm" asChild className="h-8 text-xs">
                                                                         <Link href={siteHref(row.siteId)}>
                                                                             <UserPlus className="mr-1.5 h-3.5 w-3.5" />

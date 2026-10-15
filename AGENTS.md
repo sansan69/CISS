@@ -39,3 +39,14 @@ memory — lives in the **SANJAY BACKUP workspace**:
   new regime — see `src/lib/payroll/defaults.ts`.
 - Deploys to Vercel on push to `main`. Firebase rules: `firebase deploy --only firestore:rules,indexes,storage:rules`.
 - This AGENTS.md is a local convenience pointer — not part of the app build.
+
+## Preferred project workflow
+
+- For multi-step project work, load relevant skills/plugins, write a concise plan, use an isolated worktree when practical, make meaningful test-first changes, and run focused regression checks. Preserve existing behavior and inspect the final diff.
+- Match model effort to task complexity: routine planning uses GPT-6 Luna low; use GPT-6 Astra only for complex planning. Use GPT-6 Luna low for simple implementation and medium for moderate implementation. Use DeepSeek V4.1 Flash (`ccs-deepseek/deepseek-flash`) at its documented high reasoning effort for reviews by default; medium maps to high, and low is optional only if later selected. Use GPT-6.1 Sol medium only for complex reviews.
+- If the requested model or route is unavailable, state that before using a fallback; never silently substitute. Instructions here do not switch the model in a chat that is already running.
+- If DeepSeek V4.1 Flash is unavailable or fails to respond reliably, automatically fall back to GPT-6 Luna (`gpt-6-luna`) at medium effort; use high effort when the review needs deeper reasoning. This fallback is pre-authorized: briefly disclose the reason and selected effort, then continue without asking for confirmation. Keep GPT-6.1 Sol medium for complex reviews as specified above.
+- Give reviewers compact fresh-context handoffs with the approved plan, relevant diffs/files, and focused checks. Ask them to identify actionable defects and missing requirements. Avoid repetitive context, passing-check reruns, and mandatory agent ceremony for trivial non-code work.
+- Fix actionable review findings with GPT-6 Luna at the effort appropriate to the fix, then request a targeted re-review. Repeat until no actionable issues remain and required checks pass. Preserve protocol-required reasoning and tool history, and follow vendor tool instructions; do not impose hard output caps or falsify context-window details.
+- Report what changed, verification results, review findings and fixes, and remaining uncertainty. Do not promise literal perfection.
+- Do not commit, push, merge, deploy, or change live data unless the user has authorized that specific action.

@@ -28,6 +28,7 @@ export const employeeSchema = z.object({
   regionName: z.string().optional(),
   employeeId: z.string(),
   clientName: z.string(),
+  tcsCategory: z.enum(["adhoc", "permanent"]).nullable().optional(),
   resourceIdNumber: z.string().optional(),
   firstName: z.string(),
   lastName: z.string(),
@@ -119,6 +120,7 @@ export interface Employee {
   regionName?: string;
   employeeId: string;
   clientName: string;
+  tcsCategory?: "adhoc" | "permanent" | null;
   resourceIdNumber?: string;
   firstName: string;
   lastName: string;

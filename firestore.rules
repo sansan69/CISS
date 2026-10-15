@@ -184,6 +184,15 @@ service cloud.firestore {
     // restricted to employees in their assigned districts; guards can read
     // only their own record; client users can read their mapped client.
 
+    // Category changes are constrained independently of general employee edits.
+    // Unchanged legacy invalid values may survive unrelated edits until curated.
+    function validTcsCategory(data) {
+      return !('tcsCategory' in data) ||
+        (data.tcsCategory in ['adhoc', 'permanent'] &&
+          'clientName' in data && data.clientName is string &&
+          data.clientName.matches('(?i)^\\s*TCS\\s*$'));
+    }
+
     match /employees/{employeeId} {
       allow read: if readStateMatches() && (isAdmin() || isHR() || isAccounts() || isCompliance() ||
         isFieldOfficerForEmployee() ||
@@ -192,7 +201,10 @@ service cloud.firestore {
           resource.data.employeeId == guardEmployeeId()
         )) ||
         isOwnClientDoc('clientName'));
-      allow create, update: if isAdmin() && writeStateMatches();
+      allow create: if isAdmin() && writeStateMatches() && validTcsCategory(request.resource.data);
+      allow update: if isAdmin() && writeStateMatches() &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['tcsCategory', 'clientName']) ||
+          validTcsCategory(request.resource.data));
       allow delete: if isAdmin() && readStateMatches();
     }
 
@@ -447,6 +459,12 @@ service cloud.firestore {
       allow delete: if isAdmin() && readStateMatches();
     }
 
+    // Duty state, CAS receipts and duplicate-slot locks are exclusively API-owned.
+    match /dutyWillingness/{id} { allow read, write: if false; }
+    match /dutyRequests/{id} { allow read, write: if false; }
+    match /guardAssignments/{id} { allow read, write: if false; }
+    match /guardAssignmentSlots/{id} { allow read, write: if false; }
+
     // ── notifications (push + web) ─────────────────────────────────────────
 
     match /notifications/{notifId} {
@@ -455,13 +473,13 @@ service cloud.firestore {
         (isSignedIn() && resource.data.recipientUid == request.auth.uid));
       // Restrict create to admins only — prevents FO/others from writing arbitrary notifications.
       // Use server-side API for targeted notification dispatch.
-      allow create: if isAdmin() && writeStateMatches();
-      allow update: if (isAdmin() && readStateMatches() && writeStateMatches()) ||
+      allow create: if isAdmin() && writeStateMatches() && !('dutyEvent' in request.resource.data);
+      allow update: if (!(('dutyEvent' in resource.data) && resource.data.dutyEvent == true) && !('dutyEvent' in request.resource.data) && isAdmin() && readStateMatches() && writeStateMatches()) ||
         (isSignedIn() && resource.data.recipientUid == request.auth.uid &&
          readStateMatches() &&
          writeStateMatches() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']));
-      allow delete: if isAdmin() && readStateMatches();
+      allow delete: if isAdmin() && readStateMatches() && !('dutyEvent' in resource.data);
     }
 
     // ── resetOtps (PIN recovery) ───────────────────────────────────────────

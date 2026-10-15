@@ -1,3 +1,4 @@
+import { parseTcsCategory } from "@/lib/tcs-category";
 import { NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
       fullName: empData.fullName ?? empData.name ?? "",
       employeeId: guard.employeeId,
       clientName: empData.clientName ?? "",
+      tcsCategory: parseTcsCategory(empData.clientName, empData.tcsCategory),
       district: empData.district ?? "",
       phoneNumber: empData.phoneNumber ?? "",
       status: empData.status ?? "",

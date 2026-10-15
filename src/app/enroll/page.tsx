@@ -1,6 +1,8 @@
 
 "use client";
 
+import { parseTcsCategory } from "@/lib/tcs-category";
+
 import { enrollmentErrorFormField } from "@/lib/enrollment-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
@@ -2145,6 +2147,11 @@ function ActualEnrollmentForm({ initialPhoneNumberFromQuery }: ActualEnrollmentF
                         </FormItem>
                       )}
                     />
+                  {parseTcsCategory(watchClientName, "adhoc") && (
+                    <p className="text-sm text-muted-foreground md:col-span-2">
+                      TCS category: Adhoc — admin can update after enrollment.
+                    </p>
+                  )}
                     {watchClientName === "TCS" && (
                       <FormField control={form.control} name="resourceIdNumber" render={({ field }) => (
                           <FormItem className="md:col-span-2"><FormLabel>Resource ID Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Enter Resource ID Number" {...field} /></FormControl><FormMessage /></FormItem>

@@ -34,10 +34,12 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     /** Hide the default close button (e.g. command palette) */
     hideClose?: boolean;
+    /** Disable the default close button while a controlled dialog must stay mounted */
+    closeDisabled?: boolean;
     /** Remove default padding for full-bleed content */
     noPadding?: boolean;
   }
->(({ className, children, hideClose = false, noPadding = false, ...props }, ref) => (
+>(({ className, children, hideClose = false, closeDisabled = false, noPadding = false, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -51,7 +53,7 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {!hideClose && (
-        <DialogPrimitive.Close className="absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-card/90 opacity-75 transition-[transform,background-color,opacity] duration-200 ease-spring hover:bg-muted hover:opacity-100 focus:outline-none focus:ring-4 focus:ring-primary/10 active:scale-[0.98] disabled:pointer-events-none data-[state=open]:text-muted-foreground sm:right-3 sm:top-3">
+        <DialogPrimitive.Close disabled={closeDisabled} className="absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-card/90 opacity-75 transition-[transform,background-color,opacity] duration-200 ease-spring hover:bg-muted hover:opacity-100 focus:outline-none focus:ring-4 focus:ring-primary/10 active:scale-[0.98] disabled:pointer-events-none data-[state=open]:text-muted-foreground sm:right-3 sm:top-3">
           <X className="h-5 w-5" weight="bold" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

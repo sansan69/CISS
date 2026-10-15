@@ -1,3 +1,4 @@
+import { parseTcsCategory } from "@/lib/tcs-category";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/server/auth";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
           guardId?: string;
           clientId?: string;
           clientName?: string;
+          tcsCategory?: unknown;
           district?: string;
           status?: string;
           phoneNumber?: string;
@@ -55,6 +57,7 @@ export async function GET(request: Request) {
           phoneNumber: normalizeText(data.phoneNumber || data.mobileNumber || data.phone),
           clientId: normalizeText(data.clientId),
           clientName: normalizeText(data.clientName),
+          tcsCategory: parseTcsCategory(data.clientName, data.tcsCategory),
           district: normalizeText(data.district),
           siteName: normalizeText(data.siteName || data.assignedSiteName),
           status: normalizeText(data.status),

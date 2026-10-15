@@ -1,3 +1,4 @@
+import { parseTcsCategory } from "@/lib/tcs-category";
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -333,6 +334,7 @@ export async function POST(request: NextRequest) {
         employeeId,
       ),
       clientName: canonicalClientName,
+      ...(parseTcsCategory(canonicalClientName, "adhoc") ? { tcsCategory: "adhoc" as const } : {}),
       firstName: nameParts.firstName.toUpperCase(),
       lastName: nameParts.lastName.toUpperCase(),
       fullName,

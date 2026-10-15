@@ -1,4 +1,3 @@
-import { Timestamp } from "firebase-admin/firestore";
 import { districtMatches } from "@/lib/districts";
 
 export type GuardAttendanceEntry = {
@@ -62,17 +61,6 @@ function toTimeLabel(value: unknown): string | null {
   });
 }
 
-function toIstDateString(value: unknown): string {
-  const millis = toMillis(value);
-  if (!millis) return "";
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(millis));
-}
-
 /**
  * Grouping key for an attendance log. Uses employeeDocId as the unique key,
  * falling back to employeeId for legacy logs and finally to the log's own
@@ -100,9 +88,8 @@ export type GuardAttendanceRangeInput = {
 
 /**
  * Aggregates guard attendance for a date range in a single server-side pass,
- * grouping check-in/out events per employee per day and appending absent
- * entries derived from active work orders. Shared by the single-day and range
- * field-officer endpoints.
+ * grouping persisted check-in/out events per employee per day. Shared by the
+ * single-day and range field-officer endpoints.
  *
  * The caller validates date format/order and the requested-district
  * authorization; this function scopes its Firestore queries by district so the
@@ -121,8 +108,8 @@ export async function aggregateGuardAttendance(
     endDate,
   } = input;
 
-  let attendanceQuery: FirebaseFirestore.Query = adminDb
-    .collection("attendanceLogs");
+  let attendanceQuery: FirebaseFirestore.Query =
+    adminDb.collection("attendanceLogs");
   if (startDate === endDate) {
     // Single-day path keeps the original exact-match query (and its
     // index-free behavior) when start === end.
@@ -146,19 +133,7 @@ export async function aggregateGuardAttendance(
     );
   }
 
-  const rangeStart = new Date(`${startDate}T00:00:00+05:30`);
-  const rangeEnd = new Date(`${endDate}T23:59:59+05:30`);
-
-  const [snapshot, workOrdersSnapshot] = await Promise.all([
-    attendanceQuery.limit(8000).get(),
-    adminDb
-      .collection("workOrders")
-      .where("date", ">=", Timestamp.fromDate(rangeStart))
-      .where("date", "<=", Timestamp.fromDate(rangeEnd))
-      .orderBy("date", "asc")
-      .limit(2000)
-      .get(),
-  ]);
+  const snapshot = await attendanceQuery.limit(8000).get();
 
   const logs = snapshot.docs
     .map(
@@ -196,6 +171,10 @@ export async function aggregateGuardAttendance(
   const grouped = new Map<string, InternalEntry>();
 
   for (const log of logs) {
+    const status = normalizeText(log.status).toLowerCase();
+    if (status !== "in" && status !== "out") continue;
+    const punchTime = toTimeLabel(log.reportedAt || log.createdAt);
+    if (!punchTime) continue;
     const employee = employeeKey(log);
     const sessionId = normalizeText(log.attendanceSessionId);
     const date = normalizeText(log.attendanceDate) || startDate;
@@ -207,7 +186,6 @@ export async function aggregateGuardAttendance(
       toMillis(log.createdAt),
       toMillis(log.reportedAtClient),
     );
-    const status = normalizeText(log.status).toLowerCase();
 
     let current = grouped.get(key);
     if (!current) {
@@ -260,17 +238,16 @@ export async function aggregateGuardAttendance(
     }
 
     if (status === "in" && !current.checkIn) {
-      current.checkIn = toTimeLabel(log.reportedAt || log.createdAt);
+      current.checkIn = punchTime;
     }
     if (status === "out" && !current.checkOut) {
-      current.checkOut = toTimeLabel(log.reportedAt || log.createdAt);
+      current.checkOut = punchTime;
     }
 
     if (millis >= current._last) {
       current.guardName = normalizeText(log.employeeName) || current.guardName;
       current.guardId = normalizeText(log.employeeId) || current.guardId;
-      current.employeeId =
-        normalizeText(log.employeeId) || current.employeeId;
+      current.employeeId = normalizeText(log.employeeId) || current.employeeId;
       current.siteName = normalizeText(log.siteName) || current.siteName;
       current.clientName = normalizeText(log.clientName) || current.clientName;
       current.district = normalizeText(log.district) || current.district;
@@ -300,8 +277,7 @@ export async function aggregateGuardAttendance(
           ? log.geofenceRadiusAtTime
           : current.geofenceRadiusAtTime;
       current.isMockLocationSuspected =
-        log.isMockLocationSuspected === true ||
-        current.isMockLocationSuspected;
+        log.isMockLocationSuspected === true || current.isMockLocationSuspected;
       current.mockLocationReason =
         normalizeText(log.mockLocationReason) || current.mockLocationReason;
       if (log.photoCompliance && typeof log.photoCompliance === "object") {
@@ -327,91 +303,10 @@ export async function aggregateGuardAttendance(
           : "Absent";
   }
 
-  const attendedAssignments = new Set<string>();
-  for (const log of logs) {
-    const employee = employeeKey(log);
-    const site = normalizeText(log.siteId || log.siteName);
-    attendedAssignments.add(`${employee}:${site}`);
-    const employeeId = normalizeText(log.employeeId);
-    if (employeeId) attendedAssignments.add(`${employeeId}:${site}`);
-  }
-
   const attendance: GuardAttendanceEntry[] = Array.from(grouped.values());
-  const absentAssignments = new Map<string, GuardAttendanceEntry>();
-  for (const document of workOrdersSnapshot.docs) {
-    const workOrder = document.data() as Record<string, unknown>;
-    const district = normalizeText(workOrder.district);
-    if (requestedDistrict && !districtMatches(district, requestedDistrict)) {
-      continue;
-    }
-    if (
-      !isAdmin &&
-      !assignedDistricts.some((assigned) =>
-        districtMatches(assigned, district),
-      )
-    ) {
-      continue;
-    }
-    if (
-      normalizeText(workOrder.recordStatus || "active").toLowerCase() !==
-      "active"
-    ) {
-      continue;
-    }
-    const siteId = normalizeText(workOrder.siteId);
-    const siteName = normalizeText(workOrder.siteName);
-    const siteKey = siteId || siteName;
-    const orderDate = toIstDateString(workOrder.date) || startDate;
-    const assignedGuards = Array.isArray(workOrder.assignedGuards)
-      ? workOrder.assignedGuards
-      : [];
-    for (const assigned of assignedGuards) {
-      if (!assigned || typeof assigned !== "object") continue;
-      const guard = assigned as Record<string, unknown>;
-      const guardKey = normalizeText(guard.uid || guard.employeeId);
-      if (!guardKey) continue;
-      const employeeId = normalizeText(guard.employeeId);
-      if (
-        attendedAssignments.has(`${guardKey}:${siteKey}`) ||
-        (employeeId && attendedAssignments.has(`${employeeId}:${siteKey}`))
-      ) {
-        continue;
-      }
-      const key = `${document.id}:${guardKey}:${orderDate}`;
-      absentAssignments.set(key, {
-        id: `absent:${key}`,
-        guardName: normalizeText(guard.name) || "Guard",
-        guardId: employeeId,
-        employeeId,
-        siteName,
-        clientName: normalizeText(workOrder.clientName),
-        district,
-        date: orderDate,
-        checkIn: null,
-        checkOut: null,
-        dutyPointName: "",
-        shiftLabel: normalizeText(workOrder.shiftLabel),
-        status: "Absent",
-        photoUrl: null,
-        locationCoords: null,
-        distanceMeters: null,
-        gpsAccuracyMeters: null,
-        geofenceRadiusAtTime: null,
-        isMockLocationSuspected: false,
-        mockLocationReason: null,
-        photoCompliance: null,
-        reviewStatus: null,
-        requiresAdminReview: false,
-      });
-    }
-  }
-
-  attendance.push(...absentAssignments.values());
   attendance.sort((left, right) => {
     const dateCmp = right.date.localeCompare(left.date);
     if (dateCmp !== 0) return dateCmp;
-    const statusOrder = (right.checkIn ? 1 : 0) - (left.checkIn ? 1 : 0);
-    if (statusOrder !== 0) return statusOrder;
     return left.guardName.localeCompare(right.guardName);
   });
 

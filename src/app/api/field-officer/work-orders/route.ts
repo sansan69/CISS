@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
-import { startOfToday } from "date-fns";
+import { resolveDutySupervisor, istToday } from "@/lib/server/duties/scope";
+import { tallyWorkOrderWillingness } from "@/lib/server/duties/willingness";
+import { dutyErrorResponse, dutyJson } from "@/lib/server/duties/requests";
 import { hasAdminAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
@@ -20,11 +22,11 @@ async function getAssignedDistricts(
 
 export async function GET(request: Request) {
   try {
-    const decoded = await verifyRequestAuth(request);
+    const supervisor = await resolveDutySupervisor(request);
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
-    const isAdmin = hasAdminAccess(decoded);
-    const assignedDistricts = isAdmin ? [] : await getAssignedDistricts(adminDb, decoded);
-    const todayTimestamp = Timestamp.fromDate(startOfToday());
+    const isAdmin = supervisor.isAdmin;
+    const assignedDistricts = supervisor.assignedDistricts;
+    const todayTimestamp = Timestamp.fromDate(new Date(`${istToday()}T00:00:00+05:30`));
     // Only pull upcoming, active TCS work orders. Avoid an unbounded
     // `.limit(N)` without ordering — that silently hides recently-imported
     // sites once the collection grows past the cap.
@@ -106,10 +108,11 @@ export async function GET(request: Request) {
       .map((row) => {
         const siteIdString = normalizeText(row.siteId);
         const resolvedDistrict =
-          siteDistrictById.get(siteIdString) || normalizeText(row.district);
+          siteDistrictById.get(siteIdString) || "";
         return { row, resolvedDistrict, siteIdString };
       })
       .filter(({ resolvedDistrict }) => {
+        if (!resolvedDistrict) return false;
         if (!isAdmin && assignedDistricts.length === 0) return false;
         if (isAdmin && assignedDistricts.length === 0) return true;
         return assignedDistricts.some((district) => districtMatches(district, resolvedDistrict));
@@ -144,9 +147,9 @@ export async function GET(request: Request) {
       }))
       .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
 
-    return NextResponse.json({ workOrders });
+    const enriched = await Promise.all(workOrders.map(async row=> {const counts=await tallyWorkOrderWillingness(row.id); return {...row,willingCount:counts.willingCount,unavailableCount:counts.unavailableCount};}));
+    return dutyJson({ workOrders: enriched });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Could not load work orders.";
-    return unauthorizedResponse(message, 401);
+    return dutyErrorResponse(error);
   }
 }

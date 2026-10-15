@@ -8,6 +8,8 @@ import {
 } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
+import { resolveDutySupervisor } from "@/lib/server/duties/scope";
+import { dutyErrorResponse } from "@/lib/server/duties/requests";
 export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
@@ -27,7 +29,8 @@ function coordinateFrom(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const decoded = await verifyRequestAuth(request);
+    const supervisor = await resolveDutySupervisor(request);
+    const decoded = {role: supervisor.isAdmin ? "admin" : "fieldOfficer"};
     if (!hasAdminAccess(decoded) && !hasFieldOfficerAccess(decoded)) {
       return unauthorizedResponse(
         "Field officer or admin access required.",
@@ -42,7 +45,7 @@ export async function GET(request: Request) {
       .getAll("district")
       .map(normalizeText)
       .filter(Boolean);
-    const assignedDistricts = await getAssignedDistricts(adminDb, decoded);
+    const assignedDistricts = supervisor.assignedDistricts;
     const districtScope = requestedDistricts.length > 0
       ? requestedDistricts.filter((district) =>
           isAdmin ||
@@ -58,6 +61,7 @@ export async function GET(request: Request) {
     const sites = snapshot.docs
       .map((doc) => {
         const data = doc.data() as {
+          shiftTemplates?: unknown[];
           clientId?: string;
           clientName?: string;
           siteName?: string;
@@ -84,6 +88,7 @@ export async function GET(request: Request) {
 
         return {
           siteId: doc.id,
+          shiftTemplates: Array.isArray(data.shiftTemplates) ? data.shiftTemplates.map((s:any)=>({code:normalizeText(s.code),label:normalizeText(s.label),startTime:normalizeText(s.startTime),endTime:normalizeText(s.endTime),crossesMidnight:s.crossesMidnight===true})) : [],
           clientId: normalizeText(data.clientId),
           clientName: normalizeText(data.clientName),
           siteName: normalizeText(data.siteName || doc.id),
@@ -106,15 +111,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ sites });
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Could not load sites.";
-    if (
-      message.includes("Missing bearer token") ||
-      message.includes("access required")
-    ) {
-      return unauthorizedResponse(message, 401);
-    }
-    console.error("[field-officer/sites]", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return dutyErrorResponse(error);
   }
 }

@@ -4,6 +4,8 @@ import { buildServerCreateAudit, buildServerUpdateAudit, buildServerAuditEvent }
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { formatDateLabel, normalizeText, serializeDate, sortByDateDesc, toInt } from "@/lib/server/mobile-api-utils";
 import { canonicalizeDistrictName } from "@/lib/districts";
+import { tallyWorkOrderWillingness } from "@/lib/server/duties/willingness";
+import { DutyError } from "@/lib/server/duties/requests";
 export const runtime = "nodejs";
 
 function normalizeWorkOrderDate(value: unknown) {
@@ -55,7 +57,11 @@ export async function GET(request: Request) {
       (row) => row.date,
     );
 
-    return NextResponse.json({ workOrders });
+    const enriched = await Promise.all(workOrders.map(async row=> {
+      try { const counts=await tallyWorkOrderWillingness(row.id); return {...row,willingCount:counts.willingCount,unavailableCount:counts.unavailableCount}; }
+      catch(e) { if(e instanceof DutyError && [403,404,409].includes(e.status)) return {...row,willingCount:0,unavailableCount:0}; throw e; }
+    }));
+    return NextResponse.json({ workOrders: enriched });
   } catch (error: any) {
     if (error?.message?.includes("access required")) {
       return unauthorizedResponse(error.message, 403);
