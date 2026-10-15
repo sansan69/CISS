@@ -139,6 +139,18 @@ service cloud.firestore {
         );
     }
 
+    // Firestore evaluates a list rule against the query, not against the
+    // documents it returns, so a condition that reads a field on the returned
+    // locationHistory document can never authorize the officer's breadcrumb
+    // query. Resolving the district from the parent guardLocations document
+    // makes the condition document-independent and therefore provable.
+    function officerOwnsGuardLocation(employeeId) {
+      return isFieldOfficer() &&
+        request.auth.token.assignedDistricts != null &&
+        get(/databases/$(database)/documents/guardLocations/$(employeeId)).data.district
+          in request.auth.token.assignedDistricts;
+    }
+
     // ── Client-user scoping helpers ─────────────────────────────────────────
 
     // True when the document belongs to the signed-in client user's organization
@@ -604,6 +616,38 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /_diagnostics/{docId} {
+      allow read, write: if false;
+    }
+
+    match /appConfig/{docId} {
+      allow read, write: if false;
+    }
+
+    match /config/{docId} {
+      allow read, write: if false;
+    }
+
+    match /enrollmentIdentities/{docId} {
+      allow read, write: if false;
+    }
+
+    match /guardPinResetEvents/{docId} {
+      allow read, write: if false;
+    }
+
+    match /qrCodes/{docId} {
+      allow read, write: if false;
+    }
+
+    match /workOrderAssignmentEvents/{docId} {
+      allow read, write: if false;
+    }
+
+    match /workOrderRevisionEvents/{docId} {
+      allow read, write: if false;
+    }
+
     // ── guardLocations — live GPS tracking heartbeat ─────────────────────────
     // Live locations are written only through trusted server APIs. This keeps
     // attendance-session, site, distance and GPS checks authoritative.
@@ -627,9 +671,7 @@ service cloud.firestore {
       // ── guardLocations/{docId}/locationHistory — immutable breadcrumb trail ─
       match /locationHistory/{historyId} {
         allow read: if readStateMatches() && (isAdmin() || isHR() || isAccounts() || isCompliance() ||
-          (isFieldOfficer() &&
-            request.auth.token.assignedDistricts != null &&
-            resource.data.district in request.auth.token.assignedDistricts) ||
+          officerOwnsGuardLocation(employeeId) ||
           (isClientUser() &&
             clientUserClientName() != null &&
             resource.data.clientName == clientUserClientName()));

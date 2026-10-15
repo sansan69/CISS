@@ -45,6 +45,24 @@ describe("database access configuration", () => {
 
     const expected: FirestoreIndex[] = [
       {
+        collectionGroup: "attendanceLogs",
+        queryScope: "COLLECTION",
+        fields: [
+          { fieldPath: "clientName", order: "ASCENDING" },
+          { fieldPath: "reportedAt", order: "DESCENDING" },
+          { fieldPath: "__name__", order: "DESCENDING" },
+        ],
+      },
+      {
+        collectionGroup: "attendanceLogs",
+        queryScope: "COLLECTION",
+        fields: [
+          { fieldPath: "employeeClientName", order: "ASCENDING" },
+          { fieldPath: "reportedAt", order: "DESCENDING" },
+          { fieldPath: "__name__", order: "DESCENDING" },
+        ],
+      },
+      {
         collectionGroup: "workOrders",
         queryScope: "COLLECTION",
         fields: [
@@ -90,22 +108,30 @@ describe("database access configuration", () => {
     );
 
     for (const collection of [
+      "_diagnostics",
+      "appConfig",
+      "config",
+      "enrollmentIdentities",
       "employeeAadhaarPrivate",
       "awards",
       "employeeIds",
       "enrollments",
       "evaluations",
+      "guardPinResetEvents",
       "guardScores",
       "guardPatrolActivities",
       "incidents",
       "leaveRequests",
       "notificationReadStates",
       "questionBanks",
+      "qrCodes",
       "quizAttempts",
       "regionAutomationJobs",
       "trainingAssignments",
       "trainingModules",
+      "workOrderAssignmentEvents",
       "workOrderImports",
+      "workOrderRevisionEvents",
       "sensitiveDocumentAuditLogs",
     ]) {
       expect(rules).toMatch(
@@ -114,6 +140,19 @@ describe("database access configuration", () => {
         ),
       );
     }
+  });
+
+  it("resolves the guard-location district from the parent document so a field officer can list breadcrumbs", () => {
+    const rules = read("firestore.rules");
+
+    // A list query cannot be authorized from a field on the returned history
+    // document, so the condition must read the parent guardLocations doc.
+    expect(rules).toMatch(
+      /function officerOwnsGuardLocation\(employeeId\)[\s\S]*?get\(\/databases\/\$\(database\)\/documents\/guardLocations\/\$\(employeeId\)\)\.data\.district[\s\S]*?in request\.auth\.token\.assignedDistricts;/,
+    );
+    expect(rules).toMatch(
+      /match \/locationHistory\/\{historyId\}[\s\S]*?officerOwnsGuardLocation\(employeeId\)/,
+    );
   });
 
   it("validates replacement uploads and keeps enrollment uploads server-only", () => {
