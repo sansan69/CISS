@@ -18,6 +18,7 @@ export const runtime = "nodejs";
 
 const heartbeatSchema = z.object({
   siteId: z.string().trim().min(1).max(160),
+  attendanceSessionId: z.string().trim().min(1).max(160).optional(),
   lat: z.number().finite().min(-90).max(90),
   lng: z.number().finite().min(-180).max(180),
   accuracy: z.number().finite().positive().max(5_000),
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
 
     const sample: GuardLocationSample = {
       siteId: body.siteId,
+      attendanceSessionId: body.attendanceSessionId,
       lat: body.lat,
       lng: body.lng,
       accuracy: body.accuracy,

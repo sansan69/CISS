@@ -94,6 +94,39 @@ describe("aggregateGuardAttendance recorded events", () => {
       status: "Checked out",
     });
   });
+  it("returns exact punch timestamps and persisted shift bounds", async () => {
+    const result = await aggregateGuardAttendance(
+      input(
+        fakeDb([
+          {
+            id: "in",
+            data: {
+              ...base,
+              status: "In",
+              shiftStartsAt: new Date("2026-07-31T07:30:00Z"),
+              shiftEndsAt: new Date("2026-07-31T15:30:00Z"),
+            },
+          },
+          {
+            id: "out",
+            data: {
+              ...base,
+              status: "Out",
+              reportedAt: new Date("2026-07-31T17:00:00Z"),
+              shiftStartsAt: new Date("2026-07-31T07:30:00Z"),
+              shiftEndsAt: new Date("2026-07-31T15:30:00Z"),
+            },
+          },
+        ]),
+      ),
+    );
+    expect(result[0]).toMatchObject({
+      checkInAt: "2026-07-31T08:00:00.000Z",
+      checkOutAt: "2026-07-31T17:00:00.000Z",
+      shiftStartsAt: "2026-07-31T07:30:00.000Z",
+      shiftEndsAt: "2026-07-31T15:30:00.000Z",
+    });
+  });
   it("retains an out-only recorded session", async () => {
     const result = await aggregateGuardAttendance(
       input(fakeDb([{ id: "out", data: { ...base, status: "Out" } }])),

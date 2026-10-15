@@ -11,6 +11,10 @@ export type GuardAttendanceEntry = {
   date: string;
   checkIn: string | null;
   checkOut: string | null;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  shiftStartsAt: string | null;
+  shiftEndsAt: string | null;
   dutyPointName: string;
   shiftLabel: string;
   status: string;
@@ -59,6 +63,11 @@ function toTimeLabel(value: unknown): string | null {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function toIsoTimestamp(value: unknown): string | null {
+  const millis = toMillis(value);
+  return millis ? new Date(millis).toISOString() : null;
 }
 
 /**
@@ -200,6 +209,10 @@ export async function aggregateGuardAttendance(
         date,
         checkIn: null,
         checkOut: null,
+        checkInAt: null,
+        checkOutAt: null,
+        shiftStartsAt: toIsoTimestamp(log.shiftStartsAt),
+        shiftEndsAt: toIsoTimestamp(log.shiftEndsAt),
         dutyPointName: normalizeText(log.dutyPointName),
         shiftLabel: normalizeText(log.shiftLabel),
         status: "Absent",
@@ -239,10 +252,14 @@ export async function aggregateGuardAttendance(
 
     if (status === "in" && !current.checkIn) {
       current.checkIn = punchTime;
+      current.checkInAt = toIsoTimestamp(log.reportedAt || log.createdAt);
     }
     if (status === "out" && !current.checkOut) {
       current.checkOut = punchTime;
+      current.checkOutAt = toIsoTimestamp(log.reportedAt || log.createdAt);
     }
+    current.shiftStartsAt ??= toIsoTimestamp(log.shiftStartsAt);
+    current.shiftEndsAt ??= toIsoTimestamp(log.shiftEndsAt);
 
     if (millis >= current._last) {
       current.guardName = normalizeText(log.employeeName) || current.guardName;

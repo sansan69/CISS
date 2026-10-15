@@ -89,31 +89,48 @@ export async function GET(request: Request) {
         .get();
     }
 
-    const rawLogs = attendanceSnap.docs.map((d) => {
-      const data = d.data() as {
-        attendanceDate?: string;
-        status?: string;
-        siteName?: string;
-        dutyPointName?: string;
-        reportedAt?: FirebaseFirestore.Timestamp;
-        distanceMeters?: number;
-        shiftLabel?: string;
-        createdAt?: FirebaseFirestore.Timestamp;
-        photoUrl?: string;
-      };
-      return {
-        id: d.id,
-        date: data.attendanceDate ?? "",
-        status: (data.status ?? "In") as "In" | "Out",
-        siteName: data.siteName ?? "",
-        dutyPointName: data.dutyPointName ?? "",
-        time: toISTTimeString(data.reportedAt ?? data.createdAt),
-        distanceMeters: data.distanceMeters,
-        shiftLabel: data.shiftLabel,
-        photoUrl: data.photoUrl ?? null,
-        reportedAtMillis: timestampToMillis(data.reportedAt ?? data.createdAt),
-      };
-    }).sort((left, right) => {
+    const rawLogs = attendanceSnap.docs
+      .map((d) => {
+        const data = d.data() as {
+          attendanceDate?: string;
+          status?: string;
+          siteName?: string;
+          dutyPointName?: string;
+          reportedAt?: FirebaseFirestore.Timestamp;
+          shiftStartsAt?: FirebaseFirestore.Timestamp;
+          shiftEndsAt?: FirebaseFirestore.Timestamp;
+          distanceMeters?: number;
+          shiftLabel?: string;
+          createdAt?: FirebaseFirestore.Timestamp;
+          photoUrl?: string;
+        };
+        return {
+          id: d.id,
+          date: data.attendanceDate ?? "",
+          status: (data.status ?? "In") as "In" | "Out",
+          siteName: data.siteName ?? "",
+          dutyPointName: data.dutyPointName ?? "",
+          time: toISTTimeString(data.reportedAt ?? data.createdAt),
+          reportedAt: timestampToMillis(data.reportedAt ?? data.createdAt)
+            ? new Date(
+                timestampToMillis(data.reportedAt ?? data.createdAt),
+              ).toISOString()
+            : null,
+          shiftStartsAt: timestampToMillis(data.shiftStartsAt)
+            ? new Date(timestampToMillis(data.shiftStartsAt)).toISOString()
+            : null,
+          shiftEndsAt: timestampToMillis(data.shiftEndsAt)
+            ? new Date(timestampToMillis(data.shiftEndsAt)).toISOString()
+            : null,
+          distanceMeters: data.distanceMeters,
+          shiftLabel: data.shiftLabel,
+          photoUrl: data.photoUrl ?? null,
+          reportedAtMillis: timestampToMillis(
+            data.reportedAt ?? data.createdAt,
+          ),
+        };
+      })
+      .sort((left, right) => {
         const dateOrder = right.date.localeCompare(left.date);
         if (dateOrder !== 0) return dateOrder;
         return right.reportedAtMillis - left.reportedAtMillis;

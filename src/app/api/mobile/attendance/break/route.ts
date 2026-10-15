@@ -109,74 +109,86 @@ export async function POST(request: Request) {
       );
     }
 
-    const storedBreakSeconds = toNonNegativeInt(session.breakSeconds);
-    const storedStartedMs = toMillis(session.breakStartedAt);
-    const wasOnBreak = storedStartedMs !== null || session.onBreak === true;
-
-    const now = Timestamp.now();
-    const nowMs = now.toDate().getTime();
-
-    let onBreak: boolean;
-    let breakStartedAt: Date | null;
-    let breakSeconds = storedBreakSeconds;
-
-    if (action === "start") {
-      onBreak = true;
-      breakStartedAt =
-        storedStartedMs !== null ? new Date(storedStartedMs) : now.toDate();
-    } else if (wasOnBreak) {
-      const startMs = storedStartedMs ?? nowMs;
-      breakSeconds =
-        storedBreakSeconds + Math.max(0, Math.round((nowMs - startMs) / 1000));
-      onBreak = false;
-      breakStartedAt = null;
-    } else {
-      // Stop when not on a break — idempotent no-op.
-      onBreak = false;
-      breakStartedAt = null;
-    }
-
-    const breakStartedAtValue = breakStartedAt
-      ? Timestamp.fromDate(breakStartedAt)
-      : null;
     const locationPatch =
       typeof lat === "number" && typeof lng === "number"
         ? { lastBreakLocation: { lat, lng, accuracy: accuracy ?? null } }
         : {};
+    const result = await db.runTransaction(async (transaction) => {
+      const [currentStateDoc, currentSessionDoc] = await Promise.all([
+        transaction.get(attendanceStateRef),
+        transaction.get(sessionRef),
+      ]);
+      const currentState = currentStateDoc.exists
+        ? currentStateDoc.data() as Record<string, unknown>
+        : {};
+      const currentSession = currentSessionDoc.exists
+        ? currentSessionDoc.data() as Record<string, unknown>
+        : {};
+      if (
+        normalizeText(currentState.lastStatus) !== "In" ||
+        normalizeText(currentState.openSessionId) !== openSessionId ||
+        normalizeText(currentSession.status) !== "open" ||
+        normalizeText(currentSession.employeeDocId) !== guard.employeeDocId
+      ) {
+        return { ok: false as const };
+      }
 
-    const batch = db.batch();
-    batch.set(
-      sessionRef,
-      {
+      const storedBreakSeconds = toNonNegativeInt(currentSession.breakSeconds);
+      const storedStartedMs = toMillis(currentSession.breakStartedAt);
+      const wasOnBreak = storedStartedMs !== null || currentSession.onBreak === true;
+      const now = Timestamp.now();
+      const nowMs = now.toDate().getTime();
+      let onBreak: boolean;
+      let breakStartedAt: Date | null;
+      let breakSeconds = storedBreakSeconds;
+
+      if (action === "start") {
+        onBreak = true;
+        breakStartedAt = storedStartedMs !== null ? new Date(storedStartedMs) : now.toDate();
+      } else if (wasOnBreak) {
+        const startMs = storedStartedMs ?? nowMs;
+        breakSeconds = storedBreakSeconds + Math.max(0, Math.round((nowMs - startMs) / 1000));
+        onBreak = false;
+        breakStartedAt = null;
+      } else {
+        // Stop when not on a break — idempotent no-op.
+        onBreak = false;
+        breakStartedAt = null;
+      }
+
+      const breakStartedAtValue = breakStartedAt
+        ? Timestamp.fromDate(breakStartedAt)
+        : null;
+      const patch = {
         onBreak,
         breakStartedAt: breakStartedAtValue,
         breakSeconds,
         breakUpdatedAt: now,
-        ...locationPatch,
         updatedAt: now,
-      },
-      { merge: true },
-    );
-    batch.set(
-      attendanceStateRef,
-      {
+      };
+      transaction.set(sessionRef, { ...patch, ...locationPatch }, { merge: true });
+      transaction.set(attendanceStateRef, patch, { merge: true });
+      return {
+        ok: true as const,
         onBreak,
-        breakStartedAt: breakStartedAtValue,
+        breakStartedAt,
         breakSeconds,
-        breakUpdatedAt: now,
-        updatedAt: now,
-      },
-      { merge: true },
-    );
-    await batch.commit();
+      };
+    });
 
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "The active attendance session is no longer valid." },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({
-      onBreak,
-      ...(onBreak && breakStartedAt
-        ? { breakStartedAt: breakStartedAt.toISOString() }
+      onBreak: result.onBreak,
+      ...(result.onBreak && result.breakStartedAt
+        ? { breakStartedAt: result.breakStartedAt.toISOString() }
         : {}),
-      breakSeconds,
-      canCheckOut: !onBreak,
+      breakSeconds: result.breakSeconds,
+      canCheckOut: !result.onBreak,
     });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {

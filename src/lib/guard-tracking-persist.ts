@@ -29,6 +29,7 @@ export type GuardIdentity = {
 
 export type GuardLocationSample = {
   siteId: string;
+  attendanceSessionId?: string;
   lat: number;
   lng: number;
   accuracy: number;
@@ -59,6 +60,8 @@ export type GuardTrackingSessionContext = {
   sourceCollection: "sites" | "clientLocations";
   geofenceRadius: number;
   accuracyLimit: number;
+  startedAtMs: number | null;
+  endedAtMs: number | null;
 };
 
 export type GuardTrackingContext = GuardTrackingIdentity &
@@ -85,6 +88,20 @@ export type GuardTrackingSessionResult =
   | PersistFailure;
 
 const DEFAULT_CAPTURE_DRIFT_MS = 10 * 60 * 1000;
+
+/**
+ * Allowance applied to the attendance-session window when judging a sample's
+ * capture time.
+ *
+ * A session's `startedAt`/`endedAt` may be stamped from the server clock (the
+ * guard check-in payload does not send `reportedAtClient`) while a sample
+ * carries the handset clock, so the two are not guaranteed to share a time
+ * domain. Without an allowance a handset running a few seconds behind loses the
+ * breadcrumbs it captured immediately after checking in. This tolerance is far
+ * smaller than the practical gap between sessions, so a sample from an earlier
+ * session is still rejected.
+ */
+const SESSION_BOUND_SKEW_MS = 5 * 60 * 1000;
 
 export function normalizeText(value: unknown) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -200,6 +217,7 @@ export const guardLocationAmsFieldsSchema = {
 
 const guardLocationSampleSchema = z.object({
   siteId: z.string().trim().min(1).max(160),
+  attendanceSessionId: z.string().trim().min(1).max(160).optional(),
   lat: z.number().finite().min(-90).max(90).optional(),
   latitude: z.number().finite().min(-90).max(90).optional(),
   lng: z.number().finite().min(-180).max(180).optional(),
@@ -235,6 +253,7 @@ export function toGuardLocationSample(value: unknown): GuardLocationSample | nul
 
   return {
     siteId: data.siteId,
+    attendanceSessionId: data.attendanceSessionId,
     lat,
     lng,
     accuracy: data.accuracy,
@@ -393,7 +412,15 @@ export async function resolveGuardTrackingSession(
 
   return {
     ok: true,
-    value: { site, siteCoords, sourceCollection, geofenceRadius, accuracyLimit },
+    value: {
+      site,
+      siteCoords,
+      sourceCollection,
+      geofenceRadius,
+      accuracyLimit,
+      startedAtMs: toMillisValue(session.startedAt),
+      endedAtMs: toMillisValue(session.endedAt),
+    },
   };
 }
 
@@ -456,6 +483,41 @@ export async function persistGuardLocationSample({
     };
   }
 
+  if (
+    sample.attendanceSessionId &&
+    sample.attendanceSessionId !== ctx.openSessionId
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: "The tracking sample belongs to a different attendance session.",
+    };
+  }
+
+  const suppliedCaptureTime = typeof sample.capturedAt === "string" && !!sample.capturedAt;
+  const capturedAt = parseCapturedAt(sample.capturedAt, captureDriftMs);
+  if (suppliedCaptureTime && !capturedAt) {
+    return {
+      ok: false,
+      status: 409,
+      error: "The tracking sample capture time is invalid or outside the accepted window.",
+    };
+  }
+  const capturedAtMs = capturedAt?.getTime() ?? null;
+  if (
+    capturedAtMs !== null &&
+    ((ctx.startedAtMs !== null &&
+      capturedAtMs < ctx.startedAtMs - SESSION_BOUND_SKEW_MS) ||
+      (ctx.endedAtMs !== null &&
+        capturedAtMs > ctx.endedAtMs + SESSION_BOUND_SKEW_MS))
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: "The tracking sample was captured outside the active attendance session.",
+    };
+  }
+
   const { employee, site, siteCoords, geofenceRadius, accuracyLimit } = ctx;
 
   const resolved = resolveLiveLocation({
@@ -515,7 +577,6 @@ export async function persistGuardLocationSample({
   const historyAt = bucketAt ?? nowDate;
   locationData.updatedAt = now;
   locationData.serverReceivedAt = now;
-  const capturedAt = parseCapturedAt(sample.capturedAt, captureDriftMs);
   locationData.clientCapturedAt = capturedAt
     ? Timestamp.fromDate(capturedAt)
     : null;
@@ -528,25 +589,56 @@ export async function persistGuardLocationSample({
   locationData.sampleCapturedAtMs = sampleTimestampMs;
 
   const guardLocRef = db.collection("guardLocations").doc(guard.employeeDocId);
-  const currentSnapshot = await guardLocRef.get();
-  const storedTimestampMs = readStoredTimestampMs(
-    currentSnapshot.exists
-      ? (currentSnapshot.data() as Record<string, unknown>)
-      : null,
-  );
-  // Only advance the live pin forwards. Queued samples that are older than the
-  // stored sample are written to history only.
-  const shouldUpdateCurrent =
-    storedTimestampMs === null || sampleTimestampMs >= storedTimestampMs;
+  const attendanceStateRef = db.collection("attendanceState").doc(guard.employeeDocId);
+  const sessionRef = db.collection("attendanceSessions").doc(ctx.openSessionId);
+  const samplePersisted = await db.runTransaction(async (transaction) => {
+    // Read lifecycle and current-pin state together so concurrent queued
+    // samples cannot regress the pin or resurrect a checked-out guard.
+    const attendanceStateDoc = await transaction.get(attendanceStateRef);
+    const sessionDoc = await transaction.get(sessionRef);
+    const currentSnapshot = await transaction.get(guardLocRef);
+    const attendanceState = attendanceStateDoc.exists
+      ? attendanceStateDoc.data() as Record<string, unknown>
+      : {};
+    const session = sessionDoc.exists
+      ? sessionDoc.data() as Record<string, unknown>
+      : {};
+    const sessionStartedAtMs = toMillisValue(session.startedAt);
+    const sessionEndedAtMs = toMillisValue(session.endedAt);
+    const sampleStillBelongsToSession =
+      sessionDoc.exists &&
+      normalizeText(session.employeeDocId) === guard.employeeDocId &&
+      normalizeText(session.siteId) === ctx.activeSiteId &&
+      (capturedAtMs === null ||
+        ((sessionStartedAtMs === null ||
+          capturedAtMs >= sessionStartedAtMs - SESSION_BOUND_SKEW_MS) &&
+          (sessionEndedAtMs === null ||
+            capturedAtMs <= sessionEndedAtMs + SESSION_BOUND_SKEW_MS)));
+    if (!sampleStillBelongsToSession) return false;
 
-  const batch = db.batch();
-  if (shouldUpdateCurrent) {
-    batch.set(guardLocRef, locationData, { merge: true });
-  }
-  batch.set(
-    guardLocRef
-      .collection("locationHistory")
-      .doc(buildLocationHistoryBucketId(ctx.openSessionId, historyAt)),
+    const sessionStillActive =
+      normalizeText(attendanceState.lastStatus) === "In" &&
+      normalizeText(attendanceState.openSessionId) === ctx.openSessionId &&
+      normalizeText(attendanceState.lastSiteId) === ctx.activeSiteId &&
+      normalizeText(session.status) === "open";
+
+    const storedTimestampMs = readStoredTimestampMs(
+      currentSnapshot.exists
+        ? currentSnapshot.data() as Record<string, unknown>
+        : null,
+    );
+    if (
+      sessionStillActive &&
+      (storedTimestampMs === null || sampleTimestampMs >= storedTimestampMs)
+    ) {
+      transaction.set(guardLocRef, locationData, { merge: true });
+    }
+    // The sample was accepted against this session before the race. Keep its
+    // useful historical record even if checkout won before this transaction.
+    transaction.set(
+      guardLocRef
+        .collection("locationHistory")
+        .doc(buildLocationHistoryBucketId(ctx.openSessionId, historyAt)),
     {
       employeeDocId: guard.employeeDocId,
       employeeId: guard.employeeId,
@@ -578,9 +670,18 @@ export async function persistGuardLocationSample({
       recordedAt: now,
       expiresAt: Timestamp.fromDate(buildLocationHistoryExpiry(historyAt)),
     },
-    { merge: true },
-  );
-  await batch.commit();
+      { merge: true },
+    );
+    return true;
+  });
+
+  if (!samplePersisted) {
+    return {
+      ok: false,
+      status: 409,
+      error: "The tracking sample does not belong to the active attendance session.",
+    };
+  }
 
   return {
     ok: true,

@@ -55,6 +55,23 @@ function createDb(seed: Record<string, Record<string, unknown>> = {}) {
         },
       };
     },
+    async runTransaction(callback: (transaction: {
+      get(ref: { path: string }): Promise<StoredDocument>;
+      set(ref: { path: string }, data: Record<string, unknown>): void;
+    }) => Promise<unknown>) {
+      const pending: Array<{ path: string; data: Record<string, unknown> }> = [];
+      const result = await callback({
+        async get(ref) {
+          const value = seed[ref.path] ?? writes.get(ref.path);
+          return { exists: Boolean(value), data: () => value ?? {} };
+        },
+        set(ref, data) {
+          pending.push({ path: ref.path, data });
+        },
+      });
+      for (const item of pending) writes.set(item.path, item.data);
+      return result;
+    },
   };
 }
 

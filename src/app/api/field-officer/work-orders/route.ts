@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { resolveDutySupervisor, istToday } from "@/lib/server/duties/scope";
 import { tallyWorkOrderWillingness } from "@/lib/server/duties/willingness";
-import { dutyErrorResponse, dutyJson } from "@/lib/server/duties/requests";
+import { DutyError, dutyErrorResponse, dutyJson } from "@/lib/server/duties/requests";
 import { hasAdminAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { requireActiveFieldOfficerProfile } from "@/lib/server/linked-profiles";
@@ -147,7 +147,20 @@ export async function GET(request: Request) {
       }))
       .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
 
-    const enriched = await Promise.all(workOrders.map(async row=> {const counts=await tallyWorkOrderWillingness(row.id); return {...row,willingCount:counts.willingCount,unavailableCount:counts.unavailableCount};}));
+    const enriched = await Promise.all(workOrders.map(async (row) => {
+      try {
+        const counts = await tallyWorkOrderWillingness(row.id);
+        return { ...row, willingCount: counts.willingCount, unavailableCount: counts.unavailableCount };
+      } catch (error) {
+        // A single stale/inactive site should not hide the rest of the list.
+        // Preserve visibility of its order with zero current responses while
+        // allowing unexpected storage/backend failures to fail the request.
+        if (error instanceof DutyError && error.code === "inactive_site") {
+          return { ...row, willingCount: 0, unavailableCount: 0 };
+        }
+        throw error;
+      }
+    }));
     return dutyJson({ workOrders: enriched });
   } catch (error: unknown) {
     return dutyErrorResponse(error);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { hasClientAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
+import { hasClientAccess, isAuthFailure, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { normalizeText } from "@/lib/server/mobile-api-utils";
 import { serializeGuardProfileView } from "@/lib/server/guard-profile-view";
@@ -55,6 +55,8 @@ export async function GET(request: Request) {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to load guards.";
+    // An unauthenticated read is a caller problem, not a server fault.
+    if (isAuthFailure(error)) return unauthorizedResponse("Invalid session.");
     return NextResponse.json({ error: message }, { status: message.includes("access required") ? 403 : 500 });
   }
 }

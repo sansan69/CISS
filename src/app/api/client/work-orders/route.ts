@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { OPERATIONAL_CLIENT_NAME } from "@/lib/constants";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
-import { hasClientAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
+import { hasClientAccess, isAuthFailure, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { formatDateLabel, normalizeText, serializeDate, sortByDateDesc, toInt } from "@/lib/server/mobile-api-utils";
 export const runtime = "nodejs";
@@ -74,6 +74,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ workOrders });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to load work orders.";
+    // An unauthenticated read is a caller problem, not a server fault.
+    if (isAuthFailure(error)) return unauthorizedResponse("Invalid session.");
     return NextResponse.json({ error: message }, { status: message.includes("access required") ? 403 : 500 });
   }
 }

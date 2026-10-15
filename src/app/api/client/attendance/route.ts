@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { hasClientAccess, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
+import { hasClientAccess, isAuthFailure, unauthorizedResponse, verifyRequestAuth } from "@/lib/server/auth";
 import { matchesClientScope, resolveClientScope } from "@/lib/server/client-access";
 import { normalizeText, serializeDate, sortByDateDesc } from "@/lib/server/mobile-api-utils";
 export const runtime = "nodejs";
@@ -71,6 +71,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ attendance });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to load attendance.";
+    // An unauthenticated read is a caller problem, not a server fault.
+    if (isAuthFailure(error)) return unauthorizedResponse("Invalid session.");
     return NextResponse.json({ error: message }, { status: message.includes("access required") ? 403 : 500 });
   }
 }

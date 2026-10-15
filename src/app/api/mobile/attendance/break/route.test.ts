@@ -64,6 +64,7 @@ class FakeBatch {
 
 class FakeFirestore {
   private readonly docs = new Map<string, DocValue>();
+  private transactionTail: Promise<unknown> = Promise.resolve();
 
   collection(name: string) {
     return new FakeCollectionRef(this, name);
@@ -71,6 +72,26 @@ class FakeFirestore {
 
   batch() {
     return new FakeBatch(this);
+  }
+
+  runTransaction<T>(callback: (transaction: {
+    get: (ref: FakeDocRef) => Promise<FakeDocSnapshot>;
+    set: (ref: FakeDocRef, value: DocValue, options?: { merge?: boolean }) => void;
+  }) => Promise<T>) {
+    const operation = this.transactionTail.then(async () => {
+      const writes: Array<() => void> = [];
+      const transaction = {
+        get: (ref: FakeDocRef) => ref.get(),
+        set: (ref: FakeDocRef, value: DocValue, options?: { merge?: boolean }) => {
+          writes.push(() => this.set(ref.path, value, options));
+        },
+      };
+      const result = await callback(transaction);
+      writes.forEach((write) => write());
+      return result;
+    });
+    this.transactionTail = operation.catch(() => undefined);
+    return operation;
   }
 
   seed(path: string, value: DocValue) {
@@ -241,5 +262,35 @@ describe("POST /api/mobile/attendance/break", () => {
     const response = await POST(createRequest({ action: "pause" }));
 
     expect(response.status).toBe(400);
+  });
+
+  it("does not start a break after checkout closes the session", async () => {
+    const db = new FakeFirestore();
+    seedOpenSession(db);
+    mockDependencies(db);
+
+    const originalRunTransaction = db.runTransaction.bind(db);
+    let releaseValidation!: () => void;
+    let announceTransaction!: () => void;
+    const transactionWaiting = new Promise<void>((resolve) => { announceTransaction = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseValidation = resolve; });
+    vi.spyOn(db, "runTransaction").mockImplementation((callback: any) => {
+      announceTransaction();
+      return gate.then(() => originalRunTransaction(callback));
+    });
+
+    const { POST } = await import("./route");
+    const responsePromise = POST(createRequest({ action: "start" }));
+    await transactionWaiting;
+    db.set("attendanceState/employee-doc-1", {
+      lastStatus: "Out", openSessionId: null, onBreak: false,
+    }, { merge: true });
+    db.set("attendanceSessions/session-1", { status: "closed", onBreak: false }, { merge: true });
+    releaseValidation();
+    const response = await responsePromise;
+
+    expect(response.status).toBe(409);
+    expect(db.get("attendanceSessions/session-1")?.onBreak).toBe(false);
+    expect(db.get("attendanceState/employee-doc-1")?.onBreak).toBe(false);
   });
 });

@@ -107,6 +107,39 @@ it('FO and admin list count current eligible responses using current site scope'
       }]
   });
 });
+it('inactive site on one work order does not hide healthy work orders', async () => {
+  store.row('sites', 'site')!.status = 'inactive';
+  store.seed('sites', 'healthy-site', {
+    siteName: 'Healthy centre',
+    clientName: 'TCS',
+    district: 'Ernakulam',
+    status: 'active'
+  });
+  store.seed('workOrders', 'healthy-order', {
+    siteId: 'healthy-site',
+    clientName: 'TCS',
+    district: 'Ernakulam',
+    date: new Date('2026-10-14T06:30:00Z'),
+    recordStatus: 'active'
+  });
+
+  const { GET } = await import('@/app/api/field-officer/work-orders/route');
+  const response = await GET(request());
+
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.workOrders).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'healthy-order', willingCount: 0 }),
+    expect.objectContaining({ id: 'exam', willingCount: 0 }),
+  ]));
+});
+it('work-order listing still fails on a backend tally error', async () => {
+  vi.doMock('@/lib/server/duties/willingness', () => ({
+    tallyWorkOrderWillingness: vi.fn().mockRejectedValue(new Error('backend outage'))
+  }));
+  const { GET } = await import('@/app/api/field-officer/work-orders/route');
+  expect((await GET(request())).status).toBe(500);
+});
 it('missing/inactive linked FO does not fall back to claims and is 403', async () => {
   store.row('fieldOfficers', 'linked')!.status = 'inactive';
   const { GET } = await import('@/app/api/field-officer/work-orders/route');

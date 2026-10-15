@@ -113,3 +113,28 @@ export async function requireScopedAdmin(request: Request) {
 export function unauthorizedResponse(message: string, status = 401) {
   return NextResponse.json({ error: message }, { status });
 }
+
+/**
+ * Firebase Admin error codes that mean the caller's session is unusable rather
+ * than the request being faulty.
+ */
+const sessionErrorCodes = new Set([
+  "auth/argument-error",
+  "auth/invalid-id-token",
+  "auth/id-token-expired",
+  "auth/id-token-revoked",
+  "auth/user-disabled",
+  "auth/user-not-found",
+]);
+
+/**
+ * True when [error] came from a missing or invalid caller session. Routes use
+ * this to answer 401 instead of reporting a server fault (500) for what is
+ * simply an unauthenticated request.
+ */
+export function isAuthFailure(error: unknown): boolean {
+  const candidate = error as { message?: unknown; code?: unknown } | null;
+  const message = typeof candidate?.message === "string" ? candidate.message : "";
+  const code = typeof candidate?.code === "string" ? candidate.code : "";
+  return message.includes("Missing bearer token") || sessionErrorCodes.has(code);
+}

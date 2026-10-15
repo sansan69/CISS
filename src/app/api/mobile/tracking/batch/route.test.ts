@@ -67,6 +67,7 @@ class FakeBatch {
 
 class FakeFirestore {
   private readonly docs = new Map<string, DocValue>();
+  private transactionTail: Promise<unknown> = Promise.resolve();
 
   collection(name: string) {
     return new FakeCollectionRef(this, name);
@@ -74,6 +75,26 @@ class FakeFirestore {
 
   batch() {
     return new FakeBatch(this);
+  }
+
+  runTransaction<T>(callback: (transaction: {
+    get: (ref: FakeDocRef) => Promise<FakeDocSnapshot>;
+    set: (ref: FakeDocRef, value: DocValue, options?: { merge?: boolean }) => void;
+  }) => Promise<T>) {
+    const operation = this.transactionTail.then(async () => {
+      const writes: Array<() => void> = [];
+      const transaction = {
+        get: (ref: FakeDocRef) => ref.get(),
+        set: (ref: FakeDocRef, value: DocValue, options?: { merge?: boolean }) => {
+          writes.push(() => this.set(ref.path, value, options));
+        },
+      };
+      const result = await callback(transaction);
+      writes.forEach((write) => write());
+      return result;
+    });
+    this.transactionTail = operation.catch(() => undefined);
+    return operation;
   }
 
   seed(path: string, value: DocValue) {
@@ -321,6 +342,51 @@ describe("POST /api/mobile/tracking/batch", () => {
     });
   });
 
+  it("rejects buffered samples captured before the active session started", async () => {
+    const db = new FakeFirestore();
+    const now = Date.now();
+    seedActiveSession(db);
+    db.set("attendanceSessions/session-1", {
+      startedAt: new Date(now - 60_000),
+    }, { merge: true });
+    mockSharedDependencies(db);
+
+    const { POST } = await import("./route");
+    const response = await POST(createRequest({ samples: [{
+      siteId: "site-1", lat: 10, lng: 76, accuracy: 8,
+      capturedAt: new Date(now - 60 * 60_000).toISOString(),
+    }] }));
+
+    expect(await response.json()).toEqual({ accepted: 0, rejected: 1 });
+    expect(db.paths("guardLocations/")).toHaveLength(0);
+  });
+
+  it("tolerates a device clock slightly behind a server-stamped session start", async () => {
+    // The guard check-in flow does not send reportedAtClient, so
+    // attendanceSessions.startedAt is stamped from the server clock while the
+    // samples carry the handset clock. A handset running 30s behind must not
+    // lose the breadcrumbs it captured just after checking in.
+    const db = new FakeFirestore();
+    const now = Date.now();
+    seedActiveSession(db);
+    db.set("attendanceSessions/session-1", {
+      startedAt: new Date(now - 60_000),
+    }, { merge: true });
+    mockSharedDependencies(db);
+
+    const { POST } = await import("./route");
+    const response = await POST(createRequest({ samples: [{
+      siteId: "site-1", lat: 10, lng: 76, accuracy: 8,
+      capturedAt: new Date(now - 90_000).toISOString(),
+    }] }));
+
+    expect(await response.json()).toEqual({ accepted: 1, rejected: 0 });
+    expect(db.get("guardLocations/employee-doc-1")).toBeDefined();
+    expect(
+      db.paths("guardLocations/employee-doc-1/locationHistory/"),
+    ).toHaveLength(1);
+  });
+
   it("advances the current pin when the sample is newer than the stored one", async () => {
     const db = new FakeFirestore();
     seedActiveSession(db);
@@ -375,5 +441,73 @@ describe("POST /api/mobile/tracking/batch", () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({ accepted: 200, rejected: 5 });
+  });
+
+  it("keeps the newest live pin when an older queued batch commits later", async () => {
+    const db = new FakeFirestore();
+    seedActiveSession(db);
+    mockSharedDependencies(db);
+
+    const originalRunTransaction = db.runTransaction.bind(db);
+    let releaseOlder!: () => void;
+    let announceOlder!: () => void;
+    const olderWaiting = new Promise<void>((resolve) => { announceOlder = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseOlder = resolve; });
+    let transactionCount = 0;
+    vi.spyOn(db, "runTransaction").mockImplementation((callback: any) => {
+      if (++transactionCount !== 1) return originalRunTransaction(callback);
+      announceOlder();
+      return gate.then(() => originalRunTransaction(callback));
+    });
+
+    const { POST } = await import("./route");
+    const now = Date.now();
+    const olderRequest = POST(createRequest({ samples: [{
+      siteId: "site-1", lat: 10, lng: 76, accuracy: 8,
+      capturedAt: new Date(now - 6 * 60_000).toISOString(),
+    }] }));
+    await olderWaiting;
+    const newerResponse = await POST(createRequest({ samples: [{
+      siteId: "site-1", lat: 10.001, lng: 76, accuracy: 8,
+      capturedAt: new Date(now).toISOString(),
+    }] }));
+    expect(newerResponse.status).toBe(200);
+    releaseOlder();
+    expect((await olderRequest).status).toBe(200);
+
+    expect(db.get("guardLocations/employee-doc-1")?.sampleCapturedAtMs).toBe(now);
+    expect(db.paths("guardLocations/employee-doc-1/locationHistory/")).toHaveLength(2);
+  });
+
+  it("keeps accepted sample history without restoring a pin after checkout", async () => {
+    const db = new FakeFirestore();
+    seedActiveSession(db);
+    mockSharedDependencies(db);
+
+    const originalRunTransaction = db.runTransaction.bind(db);
+    let releaseAfterCheckout!: () => void;
+    let announceTransaction!: () => void;
+    const transactionWaiting = new Promise<void>((resolve) => { announceTransaction = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseAfterCheckout = resolve; });
+    vi.spyOn(db, "runTransaction").mockImplementation((callback: any) => {
+      announceTransaction();
+      return gate.then(() => originalRunTransaction(callback));
+    });
+
+    const { POST } = await import("./route");
+    const responsePromise = POST(createRequest({ samples: [{
+      siteId: "site-1", lat: 10, lng: 76, accuracy: 8,
+      capturedAt: new Date().toISOString(),
+    }] }));
+    await transactionWaiting;
+    db.set("attendanceState/employee-doc-1", {
+      lastStatus: "Out", openSessionId: null,
+    }, { merge: true });
+    db.set("attendanceSessions/session-1", { status: "closed" }, { merge: true });
+    releaseAfterCheckout();
+
+    expect((await responsePromise).status).toBe(200);
+    expect(db.get("guardLocations/employee-doc-1")).toBeUndefined();
+    expect(db.paths("guardLocations/employee-doc-1/locationHistory/")).toHaveLength(1);
   });
 });
