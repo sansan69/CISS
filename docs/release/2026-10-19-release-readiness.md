@@ -54,3 +54,8 @@ Remaining uncertainty: authenticated production journeys, actual handset permiss
 ## Authorized rollout — 19 October 2026
 
 After the audit, the user authorized the index creation, production backend rollout and commits/pushes to both main branches. The new attendanceSessions(employeeDocId ASC, endedAt DESC) index `CICAgLio7JkK` is deployed in ciss-workforce and confirmed READY. No audit TTL, rules or business-data changes were applied. Fresh pre-push test runs passed: mobile 587 and web/backend 767 (35 emulator-only tests skipped; the earlier dedicated emulator run passed all 35). The web main push triggers the existing production Vercel integration; mobile follows confirmed backend deployment. This addendum supersedes the earlier pre-rollout index/deployment status.
+
+
+### Production CI timezone follow-up
+
+The first production push exposed an inherited patrol-clock dependency in UTC CI: night eligibility and hour bucket keys used the host clock. Both now use explicit Asia/Kolkata hours and minutes. Added inclusive-start/exclusive-end and IST-midnight bucket regressions; focused checks passed under UTC and America/Los_Angeles. The full Node 22 UTC run passed 769 tests (35 emulator-only skipped), TypeScript checking and ESLint. Production deployment and CI are tracked against the follow-up main commit.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildPatrolActivityPayload,
   computeHourlyNightPatrolState,
+  isWithinNightWindow,
   normalizePatrolPoints,
   resolvePatrolSettings,
 } from "@/lib/patrol";
@@ -41,6 +43,37 @@ describe("patrol helpers", () => {
     expect(state.enabled).toBe(true);
     expect(state.dueNow).toBe(true);
     expect(state.overdueMinutes).toBe(1);
+  });
+
+  it("uses inclusive night-window start and exclusive end in IST", () => {
+    const settings = resolvePatrolSettings({
+      nightWindowStart: "20:00",
+      nightWindowEnd: "06:00",
+    });
+
+    expect(isWithinNightWindow(new Date("2026-05-07T14:30:00.000Z"), settings)).toBe(true); // 20:00 IST
+    expect(isWithinNightWindow(new Date("2026-05-07T14:29:00.000Z"), settings)).toBe(false); // 19:59 IST
+    expect(isWithinNightWindow(new Date("2026-05-08T00:29:00.000Z"), settings)).toBe(true); // 05:59 IST
+    expect(isWithinNightWindow(new Date("2026-05-08T00:30:00.000Z"), settings)).toBe(false); // 06:00 IST
+  });
+
+  it("uses the IST date and hour for activity hour buckets across midnight", () => {
+    const payload = buildPatrolActivityPayload({
+      type: "hourly_photo",
+      clientId: "client",
+      clientName: "Client",
+      siteId: "site",
+      siteName: "Site",
+      district: "District",
+      employeeId: "employee",
+      employeeDocId: "employee-doc",
+      guardName: "Guard",
+      source: "test",
+      activityAt: new Date("2026-05-07T18:45:00.000Z"), // 00:15 IST on May 8
+    });
+
+    expect(payload.activityDate).toBe("2026-05-08");
+    expect(payload.hourBucketKey).toBe("2026-05-08-00");
   });
 
   it("normalizes only active patrol points", () => {

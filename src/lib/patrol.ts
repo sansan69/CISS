@@ -23,6 +23,18 @@ function dateToIstKey(value: Date) {
   }).format(value);
 }
 
+function dateToIstMinutes(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  return hour * 60 + minute;
+}
+
 export function resolvePatrolSettings(value: unknown): PatrolSettings {
   return patrolSettingsSchema.parse(value ?? {});
 }
@@ -97,7 +109,7 @@ export function isNightShiftTemplate(shift?: Partial<ShiftTemplate> | null) {
 }
 
 export function isWithinNightWindow(at: Date, settings: PatrolSettings) {
-  const totalMinutes = at.getHours() * 60 + at.getMinutes();
+  const totalMinutes = dateToIstMinutes(at);
   const start = parseTimeToMinutes(settings.nightWindowStart);
   const end = parseTimeToMinutes(settings.nightWindowEnd);
   if (start == null || end == null) return false;
@@ -227,6 +239,8 @@ export function buildPatrolActivityPayload(args: {
     source: normalizeText(args.source) || "unknown",
     activityAt,
     activityDate: dateToIstKey(activityAt),
-    hourBucketKey: `${dateToIstKey(activityAt)}-${String(activityAt.getHours()).padStart(2, "0")}`,
+    hourBucketKey: `${dateToIstKey(activityAt)}-${String(
+      Math.floor(dateToIstMinutes(activityAt) / 60),
+    ).padStart(2, "0")}`,
   };
 }
