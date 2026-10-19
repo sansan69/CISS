@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { OFFLINE_ATTENDANCE_MAX_AGE_HOURS } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
@@ -9,10 +11,12 @@ export const runtime = "nodejs";
 
 const breakSchema = z.object({
   action: z.enum(["start", "stop"]),
-  lat: z.number().finite().min(-90).max(90).optional(),
-  lng: z.number().finite().min(-180).max(180).optional(),
-  accuracy: z.number().finite().positive().max(5_000).optional(),
+  lat: z.number().finite().min(-90).max(90).nullish().transform(v => v ?? undefined),
+  lng: z.number().finite().min(-180).max(180).nullish().transform(v => v ?? undefined),
+  accuracy: z.number().finite().positive().max(5_000).nullish().transform(v => v ?? undefined),
   capturedAt: z.string().datetime().optional(),
+  sessionId: z.string().min(1).max(256).refine(v => !v.includes("/")).optional(),
+  clientRequestId: z.string().uuid().optional(),
 });
 
 function normalizeText(value: unknown) {
@@ -65,131 +69,70 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const { action, lat, lng, accuracy } = parsed.data;
-
-    const attendanceStateRef = db
-      .collection("attendanceState")
-      .doc(guard.employeeDocId);
-    const attendanceStateDoc = await attendanceStateRef.get();
-    if (!attendanceStateDoc.exists) {
-      return NextResponse.json(
-        { error: "Mark IN before starting a break." },
-        { status: 409 },
-      );
-    }
-
-    const attendanceState = attendanceStateDoc.data() as Record<string, unknown>;
-    const openSessionId = normalizeText(attendanceState.openSessionId);
-    if (
-      normalizeText(attendanceState.lastStatus) !== "In" ||
-      !openSessionId
-    ) {
-      return NextResponse.json(
-        { error: "Break requires an open IN session." },
-        { status: 409 },
-      );
-    }
-
-    const sessionRef = db.collection("attendanceSessions").doc(openSessionId);
-    const sessionDoc = await sessionRef.get();
-    if (!sessionDoc.exists) {
-      return NextResponse.json(
-        { error: "The open attendance session could not be verified." },
-        { status: 409 },
-      );
-    }
-    const session = sessionDoc.data() as Record<string, unknown>;
-    if (
-      normalizeText(session.status) !== "open" ||
-      normalizeText(session.employeeDocId) !== guard.employeeDocId
-    ) {
-      return NextResponse.json(
-        { error: "The active attendance session is no longer valid." },
-        { status: 409 },
-      );
-    }
-
-    const locationPatch =
-      typeof lat === "number" && typeof lng === "number"
-        ? { lastBreakLocation: { lat, lng, accuracy: accuracy ?? null } }
-        : {};
-    const result = await db.runTransaction(async (transaction) => {
-      const [currentStateDoc, currentSessionDoc] = await Promise.all([
-        transaction.get(attendanceStateRef),
-        transaction.get(sessionRef),
-      ]);
-      const currentState = currentStateDoc.exists
-        ? currentStateDoc.data() as Record<string, unknown>
-        : {};
-      const currentSession = currentSessionDoc.exists
-        ? currentSessionDoc.data() as Record<string, unknown>
-        : {};
-      if (
-        normalizeText(currentState.lastStatus) !== "In" ||
-        normalizeText(currentState.openSessionId) !== openSessionId ||
-        normalizeText(currentSession.status) !== "open" ||
-        normalizeText(currentSession.employeeDocId) !== guard.employeeDocId
-      ) {
-        return { ok: false as const };
+    const payload = parsed.data;
+    const {action, lat, lng, accuracy, capturedAt, clientRequestId} = payload;
+    const fingerprint = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    const stateRef = db.collection('attendanceState').doc(guard.employeeDocId);
+    const receiptRef = clientRequestId ? db.collection('attendanceBreakReceipts').doc(`${guard.employeeDocId}_${clientRequestId}`) : null;
+    const result = await db.runTransaction(async transaction => {
+      if (receiptRef) {
+        const receipt = await transaction.get(receiptRef);
+        if (receipt.exists) {
+          const data = receipt.data()!;
+          if (data.ownerUid !== guard.uid || data.fingerprint !== fingerprint) {
+            return {ok:false as const, status:409, error:'Break request identity does not match the saved operation.'};
+          }
+          return {ok:true as const, response:{...data.result, replayed:true}};
+        }
       }
-
-      const storedBreakSeconds = toNonNegativeInt(currentSession.breakSeconds);
-      const storedStartedMs = toMillis(currentSession.breakStartedAt);
-      const wasOnBreak = storedStartedMs !== null || currentSession.onBreak === true;
+      const currentStateDoc = await transaction.get(stateRef);
+      const currentState = currentStateDoc.exists ? currentStateDoc.data() as Record<string, unknown> : {};
+      const openSessionId = normalizeText(currentState.openSessionId);
+      if (normalizeText(currentState.lastStatus) !== 'In' || !openSessionId || (payload.sessionId && payload.sessionId !== openSessionId)) {
+        return {ok:false as const, status:409, error:'Break requires an open IN session matching this capture.'};
+      }
+      const sessionRef = db.collection('attendanceSessions').doc(openSessionId);
+      const sessionDoc = await transaction.get(sessionRef);
+      const session = sessionDoc.exists ? sessionDoc.data() as Record<string,unknown> : {};
+      if (normalizeText(session.status) !== 'open' || normalizeText(session.employeeDocId) !== guard.employeeDocId) {
+        return {ok:false as const, status:409, error:'The active attendance session is no longer valid.'};
+      }
       const now = Timestamp.now();
-      const nowMs = now.toDate().getTime();
-      let onBreak: boolean;
-      let breakStartedAt: Date | null;
-      let breakSeconds = storedBreakSeconds;
-
-      if (action === "start") {
-        onBreak = true;
-        breakStartedAt = storedStartedMs !== null ? new Date(storedStartedMs) : now.toDate();
-      } else if (wasOnBreak) {
-        const startMs = storedStartedMs ?? nowMs;
-        breakSeconds = storedBreakSeconds + Math.max(0, Math.round((nowMs - startMs) / 1000));
-        onBreak = false;
-        breakStartedAt = null;
-      } else {
-        // Stop when not on a break — idempotent no-op.
-        onBreak = false;
-        breakStartedAt = null;
+      const nowMs = now.toMillis();
+      const eventMs = capturedAt ? Date.parse(capturedAt) : nowMs;
+      if (eventMs > nowMs + 5 * 60_000 || nowMs - eventMs > OFFLINE_ATTENDANCE_MAX_AGE_HOURS * 3600000) {
+        return {ok:false as const, status:400, error:'Break capture time is outside the allowed offline window.'};
       }
-
-      const breakStartedAtValue = breakStartedAt
-        ? Timestamp.fromDate(breakStartedAt)
-        : null;
-      const patch = {
-        onBreak,
-        breakStartedAt: breakStartedAtValue,
-        breakSeconds,
-        breakUpdatedAt: now,
-        updatedAt: now,
-      };
-      transaction.set(sessionRef, { ...patch, ...locationPatch }, { merge: true });
-      transaction.set(attendanceStateRef, patch, { merge: true });
-      return {
-        ok: true as const,
-        onBreak,
-        breakStartedAt,
-        breakSeconds,
-      };
+      const sessionStart = toMillis(session.startedAt) ?? toMillis(currentState.openSessionStartedAt);
+      if (sessionStart !== null && eventMs < sessionStart) {
+        return {ok:false as const, status:409, error:'This break belongs to an earlier attendance session.'};
+      }
+      const lastEvent = toMillis(session.breakLastEventAt);
+      if (lastEvent !== null && eventMs < lastEvent) {
+        return {ok:false as const, status:409, error:'A newer break action has already been recorded.'};
+      }
+      const storedBreakSeconds = toNonNegativeInt(session.breakSeconds);
+      const storedStartedMs = toMillis(session.breakStartedAt);
+      const wasOnBreak = storedStartedMs !== null || session.onBreak === true;
+      const onBreak = action === 'start';
+      const breakStartedAt = onBreak ? new Date(storedStartedMs ?? eventMs) : null;
+      if (action === 'stop' && storedStartedMs !== null && eventMs < storedStartedMs) {
+        return {ok:false as const, status:409, error:'Break end must follow its start.'};
+      }
+      const breakSeconds = action === 'stop' && wasOnBreak
+        ? storedBreakSeconds + Math.max(0, Math.round((eventMs - (storedStartedMs ?? eventMs)) / 1000))
+        : storedBreakSeconds;
+      const patch = {onBreak, breakStartedAt:breakStartedAt ? Timestamp.fromDate(breakStartedAt) : null, breakSeconds, breakLastEventAt:Timestamp.fromMillis(eventMs), breakUpdatedAt:now, updatedAt:now};
+      const locationPatch = typeof lat === 'number' && typeof lng === 'number' ? {lastBreakLocation:{lat,lng,accuracy:accuracy ?? null}} : {};
+      const response = {onBreak, ...(breakStartedAt ? {breakStartedAt:breakStartedAt.toISOString()} : {}), breakSeconds, canCheckOut:!onBreak, sessionId:openSessionId};
+      transaction.set(sessionRef,{...patch,...locationPatch},{merge:true});
+      transaction.set(stateRef,patch,{merge:true});
+      if (receiptRef) transaction.set(receiptRef,{ownerUid:guard.uid, employeeDocId:guard.employeeDocId, sessionId:openSessionId, fingerprint, result:response, createdAt:now});
+      return {ok:true as const,response};
     });
+    if (!result.ok) return NextResponse.json({error:result.error},{status:result.status});
+    return NextResponse.json(result.response);
 
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: "The active attendance session is no longer valid." },
-        { status: 409 },
-      );
-    }
-    return NextResponse.json({
-      onBreak: result.onBreak,
-      ...(result.onBreak && result.breakStartedAt
-        ? { breakStartedAt: result.breakStartedAt.toISOString() }
-        : {}),
-      breakSeconds: result.breakSeconds,
-      canCheckOut: !result.onBreak,
-    });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -2,7 +2,14 @@
 
 > Historical tracking note (2026-04-11): several items listed below have since shipped in partial or full form, especially `superAdmin`/region tooling, training surfaces, payroll surfaces, leave flows, and branch operations. Treat [docs/app-context.md](/Users/mymac/Documents/CISS/docs/app-context.md) as the current-state reference before using this roadmap.
 
-Last updated: 2026-03-16
+Status clarified: 2026-10-18. The checklists below are a historical March
+roadmap, not a current backlog. Training, evaluations, payroll/payslip and regional
+administration pages already exist. Guard leave now has a web page and protected
+API. For this continuation see the mobile `2026-10-18-continuation.md` report and
+`docs/privacy-retention.md`. Validate remaining historical entries against source
+before treating them as pending.
+
+Original roadmap date: 2026-03-16
 
 ## Current Baseline
 
@@ -28,7 +35,7 @@ Last updated: 2026-03-16
 - Attendance hardening is partly done, but not all GPS/spoofing/offline rules from the target plan are present.
 - Client/location management is stronger, but payroll-linked client configuration is not present yet.
 
-### Not Started
+### Historical “Not Started” labels (superseded)
 - Multi-state `stateCode` architecture
 - `superAdmin` role and state management
 - Training & Evaluation system

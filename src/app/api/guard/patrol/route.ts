@@ -17,7 +17,9 @@ export const runtime = "nodejs";
 type AttendanceRecord = Record<string, unknown> & { id: string };
 
 function normalizeText(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isActiveEmployee(employee: Record<string, unknown>) {
@@ -48,20 +50,38 @@ async function loadGuardContext(request: Request) {
   const guard = await requireGuard(request);
   const { db: adminDb } = await import("@/lib/firebaseAdmin");
 
-  const employeeDoc = await adminDb.collection("employees").doc(guard.employeeDocId).get();
+  const employeeDoc = await adminDb
+    .collection("employees")
+    .doc(guard.employeeDocId)
+    .get();
   if (!employeeDoc.exists) {
-    return { error: NextResponse.json({ error: "Employee not found." }, { status: 404 }) };
+    return {
+      error: NextResponse.json(
+        { error: "Employee not found." },
+        { status: 404 },
+      ),
+    };
   }
 
   const employee = employeeDoc.data() as Record<string, unknown>;
   if (!isActiveEmployee(employee)) {
-    return { error: NextResponse.json({ error: "Only active guards can submit patrol activity." }, { status: 403 }) };
+    return {
+      error: NextResponse.json(
+        { error: "Only active guards can submit patrol activity." },
+        { status: 403 },
+      ),
+    };
   }
 
   const clientId = normalizeText(employee.clientId);
   const clientName = normalizeText(employee.clientName);
   if (!clientName) {
-    return { error: NextResponse.json({ error: "Client assignment is missing." }, { status: 400 }) };
+    return {
+      error: NextResponse.json(
+        { error: "Client assignment is missing." },
+        { status: 400 },
+      ),
+    };
   }
 
   let clientDoc = clientId
@@ -95,14 +115,8 @@ export async function GET(request: Request) {
     const context = await loadGuardContext(request);
     if ("error" in context) return context.error;
 
-    const {
-      adminDb,
-      employee,
-      guard,
-      clientId,
-      clientName,
-      patrolSettings,
-    } = context;
+    const { adminDb, employee, guard, clientId, clientName, patrolSettings } =
+      context;
 
     let attendanceSnap = await adminDb
       .collection("attendanceLogs")
@@ -118,7 +132,10 @@ export async function GET(request: Request) {
     }
 
     const latestAttendance = attendanceSnap.docs
-      .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
+      .map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Record<string, unknown>),
+      }))
       .map((row) => row as AttendanceRecord)
       .sort((left, right) => {
         const leftAt =
@@ -134,11 +151,12 @@ export async function GET(request: Request) {
         return rightAt.getTime() - leftAt.getTime();
       })[0] as AttendanceRecord | undefined;
 
-    const guardName = normalizeText(
-      employee.fullName ||
-        employee.name ||
-        [employee.firstName, employee.lastName].filter(Boolean).join(" "),
-    ) || guard.employeeId;
+    const guardName =
+      normalizeText(
+        employee.fullName ||
+          employee.name ||
+          [employee.firstName, employee.lastName].filter(Boolean).join(" "),
+      ) || guard.employeeId;
 
     let activeDuty: {
       siteId: string;
@@ -160,7 +178,9 @@ export async function GET(request: Request) {
       const siteDoc = siteId
         ? await adminDb.collection("sites").doc(siteId).get()
         : null;
-      const siteData = siteDoc?.exists ? (siteDoc.data() as Record<string, unknown>) : null;
+      const siteData = siteDoc?.exists
+        ? (siteDoc.data() as Record<string, unknown>)
+        : null;
       const dutyPoints = resolveSiteDutyPoints(siteData ?? {});
       const dutyPoint = dutyPoints.find(
         (point) => point.id === normalizeText(latestAttendance.dutyPointId),
@@ -178,8 +198,12 @@ export async function GET(request: Request) {
 
       activeDuty = {
         siteId,
-        siteName: normalizeText(latestAttendance.siteName || siteData?.siteName),
-        district: normalizeText(latestAttendance.district || siteData?.district),
+        siteName: normalizeText(
+          latestAttendance.siteName || siteData?.siteName,
+        ),
+        district: normalizeText(
+          latestAttendance.district || siteData?.district,
+        ),
         dutyPointId: dutyPoint?.id,
         dutyPointName: dutyPoint?.name,
         shiftCode: normalizeText(latestAttendance.shiftCode) || shift?.code,
@@ -196,14 +220,20 @@ export async function GET(request: Request) {
       .get();
 
     const activities = activitiesSnapshot.docs
-      .map((doc) => toGuardPatrolActivityRow(doc.id, doc.data() as Record<string, unknown>))
+      .map((doc) =>
+        toGuardPatrolActivityRow(doc.id, doc.data() as Record<string, unknown>),
+      )
       .sort((left, right) => {
-        const leftAt = parseDate(left.activityAt ?? left.createdAt) ?? new Date(0);
-        const rightAt = parseDate(right.activityAt ?? right.createdAt) ?? new Date(0);
+        const leftAt =
+          parseDate(left.activityAt ?? left.createdAt) ?? new Date(0);
+        const rightAt =
+          parseDate(right.activityAt ?? right.createdAt) ?? new Date(0);
         return rightAt.getTime() - leftAt.getTime();
       });
 
-    const lastHourlyActivity = activities.find((item) => item.type === "hourly_photo");
+    const lastHourlyActivity = activities.find(
+      (item) => item.type === "hourly_photo",
+    );
     const hourlyRequirement = computeHourlyNightPatrolState({
       settings: patrolSettings,
       checkedInAt: parseDate(activeDuty?.checkedInAt),
@@ -225,14 +255,19 @@ export async function GET(request: Request) {
         dueNow: hourlyRequirement.dueNow,
         nextDueAt: hourlyRequirement.nextDueAt?.toISOString() ?? null,
         overdueMinutes: hourlyRequirement.overdueMinutes,
-        lastSubmittedAt: hourlyRequirement.lastSubmittedAt?.toISOString() ?? null,
+        lastSubmittedAt:
+          hourlyRequirement.lastSubmittedAt?.toISOString() ?? null,
         nightWindowLabel: `${patrolSettings.nightWindowStart} - ${patrolSettings.nightWindowEnd}`,
       },
       recentActivities: activities.slice(0, 12),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal server error.";
-    if (message.includes("Missing bearer token") || message.includes("Guard access required")) {
+    const message =
+      err instanceof Error ? err.message : "Internal server error.";
+    if (
+      message.includes("Missing bearer token") ||
+      message.includes("Guard access required")
+    ) {
       return unauthorizedResponse(message);
     }
     return NextResponse.json({ error: message }, { status: 500 });
@@ -244,9 +279,13 @@ export async function POST(request: Request) {
     const context = await loadGuardContext(request);
     if ("error" in context) return context.error;
 
-    const { adminDb, employee, guard, clientId, clientName, patrolSettings } = context;
+    const { adminDb, employee, guard, clientId, clientName, patrolSettings } =
+      context;
     if (!patrolSettings.enabled) {
-      return NextResponse.json({ error: "Patrol monitoring is not enabled for this client." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Patrol monitoring is not enabled for this client." },
+        { status: 403 },
+      );
     }
 
     const body = (await request.json()) as {
@@ -258,12 +297,28 @@ export async function POST(request: Request) {
       patrolPointId?: string;
       notes?: string;
       activityAt?: string;
+      clientRequestId?: string;
     };
+    if (
+      body.clientRequestId !== undefined &&
+      (typeof body.clientRequestId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          body.clientRequestId,
+        ))
+    ) {
+      return NextResponse.json(
+        { error: "clientRequestId must be a UUID." },
+        { status: 400 },
+      );
+    }
 
     const type = body.type === "hourly_photo" ? "hourly_photo" : "patrol";
     const siteId = normalizeText(body.siteId);
     if (!siteId) {
-      return NextResponse.json({ error: "Site selection is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Site selection is required." },
+        { status: 400 },
+      );
     }
 
     const siteDoc = await adminDb.collection("sites").doc(siteId).get();
@@ -272,16 +327,70 @@ export async function POST(request: Request) {
     }
     const site = siteDoc.data() as Record<string, unknown>;
     if (
-      (clientId && normalizeText(site.clientId) && normalizeText(site.clientId) !== clientId) ||
+      (clientId &&
+        normalizeText(site.clientId) &&
+        normalizeText(site.clientId) !== clientId) ||
       (!clientId && normalizeText(site.clientName) !== clientName)
     ) {
-      return NextResponse.json({ error: "This site is outside your client scope." }, { status: 403 });
+      return NextResponse.json(
+        { error: "This site is outside your client scope." },
+        { status: 403 },
+      );
+    }
+
+    const ownerId = `${guard.uid}:${guard.employeeDocId}`;
+    const idempotencyKey =
+      typeof body.clientRequestId === "string" ? body.clientRequestId : null;
+    const parsedReplayTime =
+      typeof body.activityAt === "string" ? new Date(body.activityAt) : null;
+    const replayFingerprint = {
+      type: body.type === "hourly_photo" ? "hourly_photo" : "patrol",
+      siteId,
+      dutyPointId: body.dutyPointId ?? null,
+      shiftCode: body.shiftCode ?? null,
+      patrolPointId: body.patrolPointId ?? null,
+      photoUrl: normalizeText(body.photoUrl),
+      notes: body.notes ?? null,
+      activityAt:
+        parsedReplayTime && !Number.isNaN(parsedReplayTime.getTime())
+          ? parsedReplayTime.toISOString()
+          : (body.activityAt ?? null),
+    };
+    const { findGuardSubmission } =
+      await import("@/lib/server/guard-submission-idempotency");
+    const replay = await findGuardSubmission({
+      db: adminDb,
+      collectionName: "guardPatrolActivities",
+      ownerId,
+      idempotencyKey,
+      fingerprintData: replayFingerprint,
+    });
+    if (replay?.conflict) {
+      return NextResponse.json(
+        {
+          error:
+            "This request ID was already used for different patrol activity.",
+          code: "idempotency_conflict",
+        },
+        { status: 409 },
+      );
+    }
+    if (replay) {
+      return NextResponse.json({
+        ok: true,
+        activityId: replay.id,
+        duplicate: true,
+      });
     }
 
     const dutyPoints = resolveSiteDutyPoints(site);
-    const dutyPoint = dutyPoints.find((point) => point.id === normalizeText(body.dutyPointId));
+    const dutyPoint = dutyPoints.find(
+      (point) => point.id === normalizeText(body.dutyPointId),
+    );
     const patrolPoints = resolveDutyPointPatrolPoints(dutyPoint);
-    const patrolPoint = patrolPoints.find((point) => point.id === normalizeText(body.patrolPointId));
+    const patrolPoint = patrolPoints.find(
+      (point) => point.id === normalizeText(body.patrolPointId),
+    );
     const shift = resolveShiftByCode(
       dutyPoint?.shiftMode,
       dutyPoint?.shiftTemplates,
@@ -289,16 +398,30 @@ export async function POST(request: Request) {
     );
 
     const photoUrl = normalizeText(body.photoUrl);
-    if ((type === "hourly_photo" || patrolSettings.photoRequiredForPatrol || patrolPoint?.requiresPhoto) && !photoUrl) {
-      return NextResponse.json({ error: "A photo is required for this submission." }, { status: 400 });
+    if (
+      (type === "hourly_photo" ||
+        patrolSettings.photoRequiredForPatrol ||
+        patrolPoint?.requiresPhoto) &&
+      !photoUrl
+    ) {
+      return NextResponse.json(
+        { error: "A photo is required for this submission." },
+        { status: 400 },
+      );
     }
     if (type === "patrol" && patrolPoints.length > 0 && !patrolPoint) {
-      return NextResponse.json({ error: "Select the patrol point you completed." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Select the patrol point you completed." },
+        { status: 400 },
+      );
     }
     const activityAt = resolveClientActivityAt(body.activityAt);
     if (!activityAt) {
       return NextResponse.json(
-        { error: "Patrol time is outside the allowed submission window. Please sync device time and retry." },
+        {
+          error:
+            "Patrol time is outside the allowed submission window. Please sync device time and retry.",
+        },
         { status: 400 },
       );
     }
@@ -313,7 +436,8 @@ export async function POST(request: Request) {
       employeeId: guard.employeeId,
       employeeDocId: guard.employeeDocId,
       guardName:
-        normalizeText(employee.fullName || employee.name || guard.employeeId) || guard.employeeId,
+        normalizeText(employee.fullName || employee.name || guard.employeeId) ||
+        guard.employeeId,
       dutyPointId: dutyPoint?.id,
       dutyPointName: dutyPoint?.name,
       shiftCode: normalizeText(body.shiftCode) || shift?.code,
@@ -327,21 +451,49 @@ export async function POST(request: Request) {
       activityAt,
     });
 
-    const docRef = await adminDb.collection("guardPatrolActivities").add({
-      ...payload,
-      ...buildServerCreateAudit({
-        uid: guard.uid,
-        email: typeof employee.emailAddress === "string" ? employee.emailAddress : null,
-      }),
+    const { createGuardSubmission } =
+      await import("@/lib/server/guard-submission-idempotency");
+    const result = await createGuardSubmission({
+      db: adminDb,
+      collectionName: "guardPatrolActivities",
+      ownerId,
+      idempotencyKey,
+      fingerprintData: replayFingerprint,
+      data: {
+        ...payload,
+        ...buildServerCreateAudit({
+          uid: guard.uid,
+          email:
+            typeof employee.emailAddress === "string"
+              ? employee.emailAddress
+              : null,
+        }),
+      },
     });
+
+    if (result.conflict) {
+      return NextResponse.json(
+        {
+          error:
+            "This request ID was already used for different patrol activity.",
+          code: "idempotency_conflict",
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      activityId: docRef.id,
+      activityId: result.id,
+      ...(result.created ? {} : { duplicate: true }),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal server error.";
-    if (message.includes("Missing bearer token") || message.includes("Guard access required")) {
+    const message =
+      err instanceof Error ? err.message : "Internal server error.";
+    if (
+      message.includes("Missing bearer token") ||
+      message.includes("Guard access required")
+    ) {
       return unauthorizedResponse(message);
     }
     return NextResponse.json({ error: message }, { status: 500 });

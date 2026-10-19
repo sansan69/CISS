@@ -7,6 +7,11 @@ import {
   persistGuardLocationSample,
   resolveGuardTrackingIdentity,
   resolveGuardTrackingSession,
+  resolveGuardTrackingSessionById,
+  resolveGuardTrackingSessionForCapture,
+  loadGuardTrackingSessionCandidates,
+  validateGuardTrackingSessionCapture,
+  type GuardTrackingSessionResult,
   toGuardLocationSample,
 } from "@/lib/guard-tracking-persist";
 import { requireGuard } from "@/lib/server/guard-auth";
@@ -73,8 +78,6 @@ export async function POST(request: Request) {
     const limited = rawSamples.slice(0, MAX_SAMPLES_PER_REQUEST);
     let rejected = rawSamples.length - limited.length;
 
-    // Verify the open IN session once for the whole batch; a missing session is
-    // a batch-level failure so the client keeps its buffered samples.
     const identityResult = await resolveGuardTrackingIdentity(guard);
     if (!identityResult.ok) {
       return NextResponse.json(
@@ -82,51 +85,116 @@ export async function POST(request: Request) {
         { status: identityResult.status },
       );
     }
-    const sessionResult = await resolveGuardTrackingSession(
-      guard,
-      identityResult.value,
-    );
-    if (!sessionResult.ok) {
-      return NextResponse.json(
-        { error: sessionResult.error },
-        { status: sessionResult.status },
+    const identity = identityResult.value;
+    const needsLegacyCandidates = limited.some((raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+      const sample = raw as Record<string, unknown>;
+      return !sample.attendanceSessionId && typeof sample.capturedAt === "string";
+    });
+    const sessionCandidates = needsLegacyCandidates
+      ? await loadGuardTrackingSessionCandidates(guard, identity)
+      : [];
+    const sessionContextCache = new Map<string, Promise<GuardTrackingSessionResult>>();
+    const resolveCachedSession = async (sessionId: string, siteId: string, capturedAtMs: number | null) => {
+      const key = `${sessionId}:${siteId}`;
+      let pending = sessionContextCache.get(key);
+      if (!pending) {
+        pending = resolveGuardTrackingSessionById(guard, identity, sessionId, siteId, capturedAtMs, nowDate.getTime());
+        sessionContextCache.set(key, pending);
+      }
+      const resolved = await pending;
+      if (!resolved.ok) {
+        sessionContextCache.delete(key);
+        return resolved;
+      }
+      const invalidCapture = validateGuardTrackingSessionCapture(
+        resolved.value,
+        sessionId === identity.openSessionId,
+        capturedAtMs,
+        nowDate.getTime(),
       );
-    }
-    const context = { ...identityResult.value, ...sessionResult.value };
+      return invalidCapture ?? resolved;
+    };
 
     const now = Timestamp.now();
     const nowDate = now.toDate();
     let accepted = 0;
+    // Per-sample outcomes so the client can retire a permanently rejected
+    // breadcrumb and keep retrying a transient one, instead of committing the
+    // whole chunk on any 2xx and silently losing the rejected rows.
+    const results: Array<{
+      index: number;
+      accepted: boolean;
+      code?: string;
+      retryable: boolean;
+    }> = [];
 
-    for (const raw of limited) {
+    for (let index = 0; index < limited.length; index++) {
+      const raw = limited[index];
       const sample = toGuardLocationSample(raw);
       if (!sample) {
         rejected += 1;
+        results.push({
+          index,
+          accepted: false,
+          code: "invalid_sample",
+          retryable: false,
+        });
         continue;
       }
 
-      const capturedAt = parseCapturedAt(
-        sample.capturedAt,
-        BATCH_MAX_CAPTURE_AGE_MS,
-      );
-      const result = await persistGuardLocationSample({
+      const capturedAt = parseCapturedAt(sample.capturedAt, BATCH_MAX_CAPTURE_AGE_MS);
+      let sessionId = sample.attendanceSessionId || identity.openSessionId;
+      let sessionResult;
+      if (sample.attendanceSessionId) {
+        sessionResult = await resolveCachedSession(sessionId, sample.siteId, capturedAt?.getTime() ?? null);
+      } else if (capturedAt) {
+        const inferred = await resolveGuardTrackingSessionForCapture(
+          guard, identity, sample.siteId, capturedAt.getTime(), sessionCandidates, nowDate.getTime(),
+        );
+        if (inferred.ok) {
+          sessionId = inferred.sessionId;
+          sessionResult = await resolveCachedSession(sessionId, sample.siteId, capturedAt.getTime());
+        } else {
+          sessionResult = inferred;
+        }
+      } else if (sessionId && identity.activeSiteId === sample.siteId) {
+        sessionResult = await resolveGuardTrackingSession(guard, identity);
+      } else {
+        sessionResult = { ok: false as const, status: 409, error: "Live location sharing requires an open IN session." };
+      }
+      const result = sessionResult.ok
+        ? await persistGuardLocationSample({
         guard,
         sample,
         now,
-        context,
+        context: {
+          ...identity,
+          activeSiteId: sample.siteId,
+          openSessionId: sessionId,
+          ...sessionResult.value,
+        },
         bucketAt: capturedAt ?? nowDate,
         trackingSource: "guard_batch",
         captureDriftMs: BATCH_MAX_CAPTURE_AGE_MS,
-      });
+      })
+        : sessionResult;
 
       if (result.ok) {
         accepted += 1;
+        results.push({ index, accepted: true, retryable: false });
       } else {
         rejected += 1;
+        results.push({
+          index,
+          accepted: false,
+          code: result.status >= 500 ? "transient" : "rejected_by_rule",
+          retryable: result.status >= 500,
+        });
       }
     }
 
-    return NextResponse.json({ accepted, rejected });
+    return NextResponse.json({ accepted, rejected, results });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

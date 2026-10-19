@@ -199,6 +199,14 @@ describe('guard willingness service', () => {
     });
     expect(store.row('dutyWillingness', 'exam_emp')?.response).toBe('unavailable');
   });
+  it.each(['closed', 'assigned'])('replays an acknowledged willingness request after duty becomes %s', async (change) => {
+    const { setDutyWillingness } = await import('./willingness');
+    await setDutyWillingness(req(), 'exam', body());
+    if (change === 'closed') store.row('workOrders', 'exam')!.recordStatus = 'closed';
+    else store.row('workOrders', 'exam')!.assignedGuards = [{ uid: 'emp' }];
+    expect(await setDutyWillingness(req(), 'exam', body())).toMatchObject({ replayed: true, willingness: { response: 'willing', version: 1 } });
+    await expect(setDutyWillingness(req(), 'exam', body('unavailable', 0, 2))).rejects.toMatchObject({ status: 409 });
+  });
   it('rejects reused key payload mismatch', async () => {
     const { setDutyWillingness } = await import('./willingness');
     await setDutyWillingness(req(), 'exam', body());

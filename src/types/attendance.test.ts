@@ -39,6 +39,11 @@ describe("attendanceSubmissionSchema", () => {
         "employees/emp-1/attendance/10000000-1000-4000-8000-100000000000/photo.jpg",
       photoCapturedAt: "2026-07-27T12:00:00.000Z",
       deviceInfo: { userAgent: "flutter-mobile" },
+      riskFlags: ["root", "debugger"],
+      attestationStatus: "not_configured",
+      raspStatus: "active",
+      deviceId: "handset",
+      punchDeviceChanged: true,
       clientRequestId: null,
       attendanceAttemptId: "10000000-1000-4000-8000-100000000000",
       overrideReason: null,
@@ -50,6 +55,8 @@ describe("attendanceSubmissionSchema", () => {
       status: "Out",
       siteId: "site-1",
     });
+    expect(parsed.riskFlags).toEqual(["root", "debugger"]);
+    expect(parsed.punchDeviceChanged).toBe(true);
     expect(parsed.dutyPointId).toBeUndefined();
     expect(parsed.clientRequestId).toBeUndefined();
   });

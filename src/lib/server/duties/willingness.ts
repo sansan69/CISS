@@ -36,9 +36,8 @@ export async function setDutyWillingness(request: Request, id: string, input: un
     const site = await transactionSite(tx, text(order.siteId));
     if (!districtMatches(employeeDistrict(employee), site.district))
       throw new DutyError(403, 'wrong_scope', 'Exam is outside your current district.');
-    assertOpenExam(order, site);
-    if (Array.isArray(order.assignedGuards) && order.assignedGuards.some(g => g?.uid === guard.employeeDocId))
-      throw new DutyError(409, 'already_assigned', 'You are already assigned to this exam duty.');
+    // Identity and current scope are authoritative; once they pass, an exact
+    // prior request must replay even if the duty has since closed or assigned.
     const priorReceipt = replayReceipt(await tx.get(receipt), fp);
     if (priorReceipt)
       return {
@@ -46,6 +45,9 @@ export async function setDutyWillingness(request: Request, id: string, input: un
         replayed: true,
         eventIds: priorReceipt.eventIds ?? []
       };
+    assertOpenExam(order, site);
+    if (Array.isArray(order.assignedGuards) && order.assignedGuards.some(g => g?.uid === guard.employeeDocId))
+      throw new DutyError(409, 'already_assigned', 'You are already assigned to this exam duty.');
     const ref = db.collection('dutyWillingness').doc(`${id}_${guard.employeeDocId}`);
     const prior = (await tx.get(ref)).data();
     const current = Number(prior?.version ?? 0);

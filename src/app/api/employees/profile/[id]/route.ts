@@ -1,3 +1,4 @@
+import { recordEmployeeAccess } from '@/lib/server/employee-access-audit';
 import { NextResponse } from "next/server";
 import {
   hasAdminAccess,
@@ -35,6 +36,8 @@ export async function GET(
 
     const data = employeeSnap.data() as Record<string, unknown>;
     await assertGuardProfileScope(adminDb, decoded, data);
+
+    await recordEmployeeAccess(adminDb, decoded.uid, employeeSnap.id);
 
     const profile = hasFieldOfficerAccess(decoded)
       ? serializeFieldOfficerGuardProfileView(employeeSnap.id, data)

@@ -2,88 +2,60 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin, unauthorizedResponse } from "@/lib/server/auth";
 import { buildServerAuditEvent } from "@/lib/server/audit";
 import { runChunked, buildSelfUrl } from "@/lib/server/self-queue";
+import {
+  buildClaimRepairPlanFromIndexes,
+  indexClaimRepairProfilesByUid,
+  type ClaimsRepairPlan,
+} from "@/lib/server/claims-repair";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type RepairItem = {
-  uid: string;
-  email?: string;
-  expectedRole: "fieldOfficer" | "client";
-  currentRole: string | null;
-  source: "fieldOfficers" | "clientUsersByUid";
-  claimPatch?: Record<string, unknown>;
-};
-
-function claimsToRole(claims: Record<string, unknown> | undefined) {
-  if (claims?.admin === true || claims?.role === "admin") return "admin";
-  if (claims?.role === "fieldOfficer") return "fieldOfficer";
-  if (claims?.role === "client") return "client";
-  return null;
-}
+type RepairItem = ClaimsRepairPlan;
 
 async function collectRepairItems() {
   const { auth: adminAuth, db: adminDb } = await import("@/lib/firebaseAdmin");
-  const listedUsers = await adminAuth.listUsers(1000);
-  const usersByUid = new Map(listedUsers.users.map((user) => [user.uid, user]));
+  const authUsers = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await adminAuth.listUsers(1000, pageToken);
+    authUsers.push(...page.users);
+    pageToken = page.pageToken;
+  } while (pageToken);
+  const usersByUid = new Map(authUsers.map((user) => [user.uid, user]));
   const fieldOfficerDocs = await adminDb.collection("fieldOfficers").get();
   const clientUserDocs = await adminDb.collection("clientUsersByUid").get();
-  const repairItems = new Map<string, RepairItem>();
+  const fieldOfficersByUid = indexClaimRepairProfilesByUid(
+    fieldOfficerDocs.docs.map((snapshot) => snapshot.data() as Record<string, unknown>),
+  );
+  const clientUsersByUid = indexClaimRepairProfilesByUid(
+    clientUserDocs.docs.map((snapshot) => snapshot.data() as Record<string, unknown>),
+  );
 
-  for (const snapshot of fieldOfficerDocs.docs) {
-    const data = snapshot.data() as {
-      uid?: string;
-      email?: string;
-      stateCode?: string;
-      assignedDistricts?: string[];
-    };
-    if (!data.uid) continue;
-    const authUser = usersByUid.get(data.uid);
-    const currentRole = claimsToRole(authUser?.customClaims);
-    if (currentRole !== "fieldOfficer") {
-      repairItems.set(data.uid, {
-        uid: data.uid,
-        email: authUser?.email || data.email,
-        expectedRole: "fieldOfficer",
-        currentRole,
-        source: "fieldOfficers",
-        claimPatch: {
-          stateCode: data.stateCode ?? "KL",
-          assignedDistricts: Array.isArray(data.assignedDistricts)
-            ? data.assignedDistricts
-            : [],
-        },
-      });
-    }
+  const repairItems: RepairItem[] = [];
+  const linkedUids = new Set([
+    ...fieldOfficersByUid.keys(),
+    ...clientUsersByUid.keys(),
+  ]);
+  for (const uid of linkedUids) {
+    const authUser = usersByUid.get(uid);
+    // An absent Auth user cannot be repaired by POST; the shared planner also
+    // rejects identities linked to both profile types.
+    if (!authUser) continue;
+    const profileEmail =
+      fieldOfficersByUid.get(uid)?.email ?? clientUsersByUid.get(uid)?.email;
+    const plan = buildClaimRepairPlanFromIndexes({
+      uid,
+      email:
+        authUser.email ||
+        (typeof profileEmail === "string" ? profileEmail : undefined),
+      fieldOfficersByUid,
+      clientUsersByUid,
+      claims: authUser.customClaims as Record<string, unknown> | undefined,
+    });
+    if (plan) repairItems.push(plan);
   }
 
-  for (const snapshot of clientUserDocs.docs) {
-    const data = snapshot.data() as {
-      uid?: string;
-      email?: string;
-      stateCode?: string;
-      clientId?: string;
-      clientName?: string;
-    };
-    if (!data.uid) continue;
-    const authUser = usersByUid.get(data.uid);
-    const currentRole = claimsToRole(authUser?.customClaims);
-    if (currentRole !== "client") {
-      repairItems.set(data.uid, {
-        uid: data.uid,
-        email: authUser?.email || data.email,
-        expectedRole: "client",
-        currentRole,
-        source: "clientUsersByUid",
-        claimPatch: {
-          stateCode: data.stateCode ?? "KL",
-          clientId: data.clientId ?? null,
-          clientName: data.clientName ?? null,
-        },
-      });
-    }
-  }
-
-  return Array.from(repairItems.values()).sort((a, b) =>
+  return repairItems.sort((a, b) =>
     (a.email || a.uid).localeCompare(b.email || b.uid),
   );
 }
@@ -112,17 +84,12 @@ export async function POST(request: Request) {
     const fieldOfficerDocs = await adminDb.collection("fieldOfficers").get();
     const clientUserDocs = await adminDb.collection("clientUsersByUid").get();
 
-    const fieldOfficersByUid = new Map<string, Record<string, any>>();
-    for (const doc of fieldOfficerDocs.docs) {
-      const data = doc.data();
-      if (data.uid) fieldOfficersByUid.set(data.uid, data);
-    }
-
-    const clientUsersByUid = new Map<string, Record<string, any>>();
-    for (const doc of clientUserDocs.docs) {
-      const data = doc.data();
-      if (data.uid) clientUsersByUid.set(data.uid, data);
-    }
+    const fieldOfficersByUid = indexClaimRepairProfilesByUid(
+      fieldOfficerDocs.docs.map((doc) => doc.data() as Record<string, unknown>),
+    );
+    const clientUsersByUid = indexClaimRepairProfilesByUid(
+      clientUserDocs.docs.map((doc) => doc.data() as Record<string, unknown>),
+    );
 
     const selfUrl = buildSelfUrl(request.url, "/api/admin/claims/repair");
     const cronSecret = process.env.CRON_SECRET || "";
@@ -151,40 +118,20 @@ export async function POST(request: Request) {
         let repaired = 0;
 
         for (const user of users) {
-          const foData = fieldOfficersByUid.get(user.uid);
-          const cuData = clientUsersByUid.get(user.uid);
-          let expectedRole: "fieldOfficer" | "client" | null = null;
-          let claimPatch: Record<string, unknown> | undefined;
-
-          if (foData) {
-            expectedRole = "fieldOfficer";
-            claimPatch = {
-              stateCode: foData.stateCode ?? "KL",
-              assignedDistricts: Array.isArray(foData.assignedDistricts)
-                ? foData.assignedDistricts
-                : [],
-            };
-          } else if (cuData) {
-            expectedRole = "client";
-            claimPatch = {
-              stateCode: cuData.stateCode ?? "KL",
-              clientId: cuData.clientId ?? null,
-              clientName: cuData.clientName ?? null,
-            };
-          }
-
-          if (!expectedRole) continue;
-
-          const currentRole = claimsToRole(
-            user.customClaims as Record<string, unknown> | undefined,
-          );
-          if (currentRole === expectedRole) continue;
+          const plan = buildClaimRepairPlanFromIndexes({
+            uid: user.uid,
+            email: user.email,
+            fieldOfficersByUid,
+            clientUsersByUid,
+            claims: user.customClaims as Record<string, unknown> | undefined,
+          });
+          if (!plan) continue;
 
           // Fix the claims
           const nextClaims = {
             ...(user.customClaims as Record<string, unknown>),
-            role: expectedRole,
-            ...(claimPatch ?? {}),
+            role: plan.expectedRole,
+            ...plan.claimPatch,
           };
 
           await adminAuth.setCustomUserClaims(user.uid, nextClaims);

@@ -809,6 +809,8 @@ export async function POST(request: NextRequest) {
         mockLocationReason: payload.mockLocationReason ?? null,
         requiresLocationReview: Boolean(locationReviewWarning),
         requiresAdminReview:
+          (payload.riskFlags?.length ?? 0) > 0 ||
+          Boolean(payload.punchDeviceChanged) ||
           attendanceReviewWarnings.length > 0 ||
           submissionWindow.requiresAdminReview ||
           Boolean(locationReviewWarning) ||
@@ -823,6 +825,11 @@ export async function POST(request: NextRequest) {
           ? mergePhotoCompliance(payload.photoCompliance, locationReviewWarning)
           : payload.photoCompliance ?? null,
         deviceInfo: payload.deviceInfo,
+        deviceId: payload.deviceId ?? null,
+        punchDeviceChanged: payload.punchDeviceChanged ?? false,
+        riskFlags: payload.riskFlags ?? [],
+        attestationStatus: payload.attestationStatus ?? "not_configured",
+        raspStatus: payload.raspStatus ?? "not_configured",
         attendanceDate,
         createdAt: now,
         submittedByUid: decoded?.uid ?? null,

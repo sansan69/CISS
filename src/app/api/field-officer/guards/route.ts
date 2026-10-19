@@ -1,7 +1,7 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { hasAdminAccess, hasFieldOfficerAccess, unauthorizedResponse, verifyRequestAuth, type AppDecodedToken } from "@/lib/server/auth";
 import {
-  canonicalizeDistrictList,
   districtMatches,
   getDistrictFirestoreQueryValues,
 } from "@/lib/districts";
@@ -148,6 +148,69 @@ export async function GET(request: Request) {
       return NextResponse.json({ guards: [] }, {
         headers: { "Cache-Control": "no-store, private" },
       });
+    }
+
+    // Explicitly paged clients use stable document-ID order; legacy callers
+    // retain the complete newest-enrollment roster used by assignment dialogs.
+    if (limitParam !== null || searchParams.has("after")) {
+      const pageLimit = Math.min(resultLimit, 200);
+      const scope = createHash("sha256").update(JSON.stringify({
+        uid: decoded.uid, districts: [...districtScope].sort(), includeInactive,
+      })).digest("hex");
+      let after = "";
+      const encoded = searchParams.get("after");
+      if (encoded) {
+        try {
+          if (encoded.length > 2048) throw new Error();
+          const cursor = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+          if (cursor.v !== 1 || cursor.scope !== scope || typeof cursor.id !== "string" || !cursor.id || cursor.id.includes("/")) throw new Error();
+          after = cursor.id;
+        } catch {
+          return NextResponse.json({ error: "Invalid or expired employee cursor." }, { status: 400 });
+        }
+      }
+      const builds: Array<() => FirebaseFirestore.Query> = [];
+      if (isAdmin && districtScope.length === 0) builds.push(() => adminDb.collection("employees"));
+      else {
+        const values = [...new Set(districtScope.flatMap(getDistrictFirestoreQueryValues))];
+        for (const field of ["district", "districtName", "currentDistrict", "permanentDistrict", "addressDistrict", "locationDistrict", "city"]) {
+          for (let i = 0; i < values.length; i += 30) {
+            const chunk = values.slice(i, i + 30);
+            builds.push(() => adminDb.collection("employees").where(field, "in", chunk));
+          }
+        }
+      }
+      const visible: Array<{ id: string; profile: ReturnType<typeof serializeGuardProfileView> & { district: string; createdAt: string } }> = [];
+      let scanned = 0;
+      while (visible.length <= pageLimit && scanned < MAX_GUARD_RESULTS) {
+        const pages = await Promise.all(builds.map(async (build) => {
+          let query = build().orderBy("__name__").limit(pageLimit + 1);
+          if (after) query = query.startAfter(after);
+          return (await query.get()).docs;
+        }));
+        const unique = new Map(pages.flat().map(doc => [doc.id, doc]));
+        const docs = [...unique.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+        if (!docs.length) break;
+        const batch = docs.slice(0, pageLimit + 1);
+        for (const doc of batch) {
+          scanned++;
+          after = doc.id;
+          const employee = doc.data() as Record<string, unknown>;
+          if (!includeInactive && normalizeText(employee.status || "Active").toLowerCase() !== "active") continue;
+          if (districtScope.length && !employeeMatchesAnyDistrict(employee, districtScope)) continue;
+          const profile = serializeGuardProfileView(doc.id, employee);
+          visible.push({ id: doc.id, profile: { ...profile, district: resolveEmployeeDistrict(employee), createdAt: new Date(enrollmentTime(doc, employee)).toISOString() } });
+          if (visible.length > pageLimit) break;
+        }
+        if (docs.length < pageLimit + 1) break;
+      }
+      const hasMore = visible.length > pageLimit || scanned >= MAX_GUARD_RESULTS;
+      // Use the last returned row, not a prefetched row, as the continuation.
+      const cursorId = visible[Math.min(visible.length, pageLimit) - 1]?.id ?? after;
+      return NextResponse.json({
+        guards: visible.slice(0, pageLimit).map(row => row.profile),
+        nextCursor: hasMore && cursorId ? Buffer.from(JSON.stringify({ v: 1, id: cursorId, scope })).toString("base64url") : null,
+      }, { headers: { "Cache-Control": "no-store, private" } });
     }
 
     const employeeDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();

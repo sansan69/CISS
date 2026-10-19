@@ -64,6 +64,8 @@ export type GuardTrackingSessionContext = {
   endedAtMs: number | null;
 };
 
+const HISTORICAL_TRACKING_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 export type GuardTrackingContext = GuardTrackingIdentity &
   GuardTrackingSessionContext;
 
@@ -318,23 +320,136 @@ export async function resolveGuardTrackingIdentity(
   const attendanceState = attendanceStateDoc.data() as Record<string, unknown>;
   const activeSiteId = normalizeText(attendanceState.lastSiteId);
   const openSessionId = normalizeText(attendanceState.openSessionId);
-  if (
-    normalizeText(attendanceState.lastStatus) !== "In" ||
-    !activeSiteId ||
-    !openSessionId
-  ) {
-    return {
-      ok: false,
-      status: 409,
-      error: "Live location sharing requires an open IN session.",
-    };
-  }
-
   const employee = employeeDoc.data() as Record<string, unknown>;
   return {
     ok: true,
-    value: { employee, attendanceState, activeSiteId, openSessionId },
+    value: {
+      employee,
+      attendanceState,
+      activeSiteId: normalizeText(attendanceState.lastStatus) === "In" ? activeSiteId : "",
+      openSessionId: normalizeText(attendanceState.lastStatus) === "In" ? openSessionId : "",
+    },
   };
+}
+
+/** Resolve a session explicitly named by an offline sample. */
+export async function resolveGuardTrackingSessionById(
+  guard: GuardIdentity,
+  identity: GuardTrackingIdentity,
+  sessionId: string,
+  sampleSiteId: string,
+  capturedAtMs: number | null,
+  nowMs = Date.now(),
+): Promise<GuardTrackingSessionResult> {
+  const [sessionDoc, attendanceLogDoc] = await Promise.all([
+    db.collection("attendanceSessions").doc(sessionId).get(),
+    db.collection("attendanceLogs").doc(sessionId).get(),
+  ]);
+  if (!sessionDoc.exists) return { ok: false, status: 409, error: "The tracking session could not be verified." };
+  const session = sessionDoc.data() as Record<string, unknown>;
+  const siteId = normalizeText(session.siteId);
+  const startedAtMs = toMillisValue(session.startedAt);
+  const endedAtMs = toMillisValue(session.endedAt);
+  const isCurrent = sessionId === identity.openSessionId && normalizeText(session.status) === "open";
+  if (
+    normalizeText(session.employeeDocId) !== guard.employeeDocId ||
+    siteId !== sampleSiteId ||
+    (!isCurrent && normalizeText(session.status) !== "closed") ||
+    (!isCurrent && capturedAtMs === null) ||
+    (!isCurrent && (!endedAtMs || endedAtMs < nowMs - HISTORICAL_TRACKING_RETENTION_MS)) ||
+    (capturedAtMs !== null && ((startedAtMs !== null && capturedAtMs < startedAtMs - SESSION_BOUND_SKEW_MS) || (endedAtMs !== null && capturedAtMs > endedAtMs + SESSION_BOUND_SKEW_MS)))
+  ) {
+    return { ok: false, status: 409, error: "The tracking sample does not belong to an eligible attendance session." };
+  }
+  const sourceCollection = normalizeText(session.sourceCollection) === "clientLocations" ? "clientLocations" : "sites";
+  const [siteDoc] = await Promise.all([
+    db.collection(sourceCollection).doc(siteId).get(),
+  ]);
+  if (!siteDoc.exists) return { ok: false, status: 404, error: "Site not found." };
+  const site = siteDoc.data() as Record<string, unknown>;
+  const attendanceLog = attendanceLogDoc.exists ? attendanceLogDoc.data() as Record<string, unknown> : {};
+  const siteCoords = parseCoordinates(attendanceLog.siteCoords as Record<string, unknown>) ?? parseCoordinates(site);
+  if (!siteCoords) return { ok: false, status: 409, error: "This duty site does not have verified coordinates. Contact your supervisor." };
+  return { ok: true, value: {
+    site, siteCoords, sourceCollection,
+    geofenceRadius: parseRadius(attendanceLog.geofenceRadiusAtTime ?? site.geofenceRadiusMeters ?? site.allowedRadiusMeters, 150),
+    accuracyLimit: parseRadius(process.env.GPS_ACCURACY_LIMIT_METERS, DEFAULT_LIVE_GPS_ACCURACY_LIMIT_METERS),
+    startedAtMs, endedAtMs,
+  } };
+}
+
+/** Load only sessions that closed within the accepted offline-upload window. */
+export async function loadGuardTrackingSessionCandidates(
+  guard: GuardIdentity,
+  identity: GuardTrackingIdentity,
+  nowMs = Date.now(),
+) {
+  const query = db.collection("attendanceSessions")
+    .where("employeeDocId", "==", guard.employeeDocId)
+    .where("endedAt", ">=", Timestamp.fromDate(new Date(nowMs - HISTORICAL_TRACKING_RETENTION_MS)))
+    .orderBy("endedAt", "desc");
+  const docs: Array<{ id: string; data: () => Record<string, unknown> }> = [];
+  let lastDoc: unknown;
+  while (true) {
+    let pageQuery = query.limit(500);
+    if (lastDoc) pageQuery = pageQuery.startAfter(lastDoc);
+    const page = await pageQuery.get();
+    docs.push(...page.docs.map((doc) => ({
+      id: doc.id,
+      data: () => doc.data() as Record<string, unknown>,
+    })));
+    if (page.docs.length < 500) break;
+    lastDoc = page.docs[page.docs.length - 1];
+  }
+  const currentSession = identity.openSessionId
+    ? await db.collection("attendanceSessions").doc(identity.openSessionId).get()
+    : null;
+  if (currentSession?.exists && !docs.some((doc) => doc.id === currentSession.id)) {
+    docs.push({
+      id: currentSession.id,
+      data: () => currentSession.data() as Record<string, unknown>,
+    });
+  }
+  return docs;
+}
+
+/** Infer a session for older mobile clients whose queued sample has no ID. */
+export async function resolveGuardTrackingSessionForCapture(
+  guard: GuardIdentity,
+  identity: GuardTrackingIdentity,
+  sampleSiteId: string,
+  capturedAtMs: number,
+  candidates: Array<{ id: string; data: () => Record<string, unknown> }>,
+  nowMs = Date.now(),
+): Promise<{ ok: true; sessionId: string } | PersistFailure> {
+  const matching = candidates.filter((doc) => {
+    const data = doc.data();
+    const start = toMillisValue(data.startedAt);
+    const end = toMillisValue(data.endedAt);
+    const current = doc.id === identity.openSessionId && normalizeText(data.status) === "open";
+    return normalizeText(data.siteId) === sampleSiteId &&
+      normalizeText(data.employeeDocId) === guard.employeeDocId &&
+      (current || (normalizeText(data.status) === "closed" && !!end && end >= nowMs - HISTORICAL_TRACKING_RETENTION_MS)) &&
+      (start === null || capturedAtMs >= start - SESSION_BOUND_SKEW_MS) &&
+      (end === null || capturedAtMs <= end + SESSION_BOUND_SKEW_MS);
+  });
+  if (matching.length !== 1) return { ok: false, status: 409, error: "The tracking sample does not match one eligible attendance session." };
+  return { ok: true, sessionId: matching[0].id };
+}
+
+export function validateGuardTrackingSessionCapture(
+  context: GuardTrackingSessionContext,
+  isCurrent: boolean,
+  capturedAtMs: number | null,
+  nowMs = Date.now(),
+): PersistFailure | null {
+  if ((!isCurrent && capturedAtMs === null) ||
+      (!isCurrent && (!context.endedAtMs || context.endedAtMs < nowMs - HISTORICAL_TRACKING_RETENTION_MS)) ||
+      (capturedAtMs !== null && ((context.startedAtMs !== null && capturedAtMs < context.startedAtMs - SESSION_BOUND_SKEW_MS) ||
+        (context.endedAtMs !== null && capturedAtMs > context.endedAtMs + SESSION_BOUND_SKEW_MS)))) {
+    return { ok: false, status: 409, error: "The tracking sample does not belong to an eligible attendance session." };
+  }
+  return null;
 }
 
 /**
@@ -460,6 +575,10 @@ export async function persistGuardLocationSample({
     const identityResult = await resolveGuardTrackingIdentity(guard);
     if (!identityResult.ok) return identityResult;
     const identity = identityResult.value;
+
+    if (!identity.openSessionId || !identity.activeSiteId) {
+      return { ok: false, status: 409, error: "Live location sharing requires an open IN session." };
+    }
 
     if (sample.siteId !== identity.activeSiteId) {
       return {
@@ -614,13 +733,12 @@ export async function persistGuardLocationSample({
           capturedAtMs >= sessionStartedAtMs - SESSION_BOUND_SKEW_MS) &&
           (sessionEndedAtMs === null ||
             capturedAtMs <= sessionEndedAtMs + SESSION_BOUND_SKEW_MS)));
-    if (!sampleStillBelongsToSession) return false;
-
     const sessionStillActive =
       normalizeText(attendanceState.lastStatus) === "In" &&
       normalizeText(attendanceState.openSessionId) === ctx.openSessionId &&
       normalizeText(attendanceState.lastSiteId) === ctx.activeSiteId &&
       normalizeText(session.status) === "open";
+    if (!sampleStillBelongsToSession || (capturedAtMs === null && !sessionStillActive)) return false;
 
     const storedTimestampMs = readStoredTimestampMs(
       currentSnapshot.exists

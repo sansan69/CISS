@@ -1,3 +1,4 @@
+import { guardLeaveSchema } from '@/lib/server/guard-leave-validation';
 import { NextRequest, NextResponse } from "next/server";
 import { requireGuard } from "@/lib/server/guard-auth";
 import { unauthorizedResponse } from "@/lib/server/auth";
@@ -64,22 +65,31 @@ export async function GET(request: Request) {
 export async function POST(request: NextRequest) {
   try {
     const guard = await requireGuard(request);
-    const body = await request.json();
+    const raw = await request.json();
+    const parsed = guardLeaveSchema.safeParse({...raw, type: raw.type || raw.leaveType || 'Annual'});
+    if (!parsed.success) return NextResponse.json({error:'Enter valid leave dates and a reason (up to 500 characters).'}, {status:400});
+    const body = parsed.data;
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
 
-    const docRef = await adminDb.collection("leaveRequests").add({
+    const collection = adminDb.collection("leaveRequests");
+    const docRef = body.clientRequestId ? collection.doc(`${guard.uid}_${body.clientRequestId}`) : collection.doc();
+    await adminDb.runTransaction(async transaction => {
+      const existing = await transaction.get(docRef);
+      if (existing.exists) return;
+      transaction.create(docRef, {
       employeeDocId: guard.employeeDocId,
       employeeId: guard.employeeId,
       guardAuthUid: guard.uid,
-      type: normalizeText(body.type || body.leaveType || "Annual"),
-      leaveType: normalizeText(body.type || body.leaveType || "Annual"),
-      startDate: body.startDate ? new Date(body.startDate) : null,
-      endDate: body.endDate ? new Date(body.endDate) : null,
+      type: body.type,
+      leaveType: body.type,
+      startDate: new Date(body.startDate),
+      endDate: new Date(body.endDate),
       reason: normalizeText(body.reason),
       status: "pending",
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      });
     });
 
     return NextResponse.json({ success: true, id: docRef.id });
@@ -101,7 +111,7 @@ export async function PATCH(request: NextRequest) {
     const guard = await requireGuard(request);
     const body = await request.json();
     const requestId = normalizeText(body.requestId);
-    if (!requestId) {
+    if (!requestId || requestId.includes("/") || requestId.length > 256) {
       return NextResponse.json(
         { error: "requestId is required." },
         { status: 400 },
@@ -111,28 +121,17 @@ export async function PATCH(request: NextRequest) {
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
     const ref = adminDb.collection("leaveRequests").doc(requestId);
-    const doc = await ref.get();
-
-    if (!doc.exists) {
-      return NextResponse.json(
-        { error: "Leave request not found." },
-        { status: 404 },
-      );
-    }
-
-    const data = doc.data()!;
-    if (data.employeeDocId !== guard.employeeDocId) {
-      return NextResponse.json(
-        { error: "You can only cancel your own leave requests." },
-        { status: 403 },
-      );
-    }
-
-    await ref.update({
-      status: "cancelled",
-      cancelledAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    const result = await adminDb.runTransaction(async transaction => {
+      const doc = await transaction.get(ref);
+      if (!doc.exists) return 404;
+      const data = doc.data()!;
+      if (data.employeeDocId !== guard.employeeDocId) return 403;
+      if (data.status === 'cancelled') return 200;
+      if (normalizeText(data.status).toLowerCase() !== 'pending') return 409;
+      transaction.update(ref, {status:'cancelled', cancelledAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp()});
+      return 200;
     });
+    if (result !== 200) return NextResponse.json({error: result === 409 ? 'Only pending requests can be cancelled.' : 'Leave request unavailable.'}, {status:result});
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

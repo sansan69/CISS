@@ -153,6 +153,39 @@ afterEach(() => {
 });
 
 describe("POST /api/mobile/attendance/break", () => {
+  it("uses bounded capture times for a delayed offline start/stop and replays receipts", async () => {
+    const db = new FakeFirestore();
+    const start = new Date(Date.now() - 30 * 60_000);
+    const stop = new Date(start.getTime() + 20 * 60_000);
+    seedOpenSession(db, {startedAt: Timestamp.fromDate(new Date(start.getTime() - 60_000))});
+    mockDependencies(db);
+    const {POST} = await import('./route');
+    const startBody = {action:'start', sessionId:'session-1', capturedAt:start.toISOString(), clientRequestId:'10000000-1000-4000-8000-100000000001'};
+    const stopBody = {action:'stop', sessionId:'session-1', capturedAt:stop.toISOString(), clientRequestId:'10000000-1000-4000-8000-100000000002'};
+    expect((await POST(createRequest(startBody))).status).toBe(200);
+    const response = await POST(createRequest(stopBody));
+    expect(response.status).toBe(200);
+    expect((await response.json()).breakSeconds).toBe(1200);
+    // Late delivery of the same start must not reopen a completed break.
+    expect((await POST(createRequest(startBody))).status).toBe(200);
+    expect(db.get('attendanceSessions/session-1')?.onBreak).toBe(false);
+    expect(db.get('attendanceSessions/session-1')?.breakSeconds).toBe(1200);
+  });
+  it("does not apply an earlier shift's break to a new session", async () => {
+    const db = new FakeFirestore();
+    seedOpenSession(db, {startedAt:Timestamp.fromDate(new Date(Date.now() - 60_000))});
+    mockDependencies(db); const {POST} = await import('./route');
+    const response = await POST(createRequest({action:'start',capturedAt:new Date(Date.now()-3600000).toISOString()}));
+    expect(response.status).toBe(409);
+    expect(db.get('attendanceSessions/session-1')?.onBreak).not.toBe(true);
+  });
+  it("rejects future capture time without changing state", async () => {
+    const db = new FakeFirestore(); seedOpenSession(db); mockDependencies(db);
+    const {POST}=await import('./route');
+    expect((await POST(createRequest({action:'start',capturedAt:new Date(Date.now()+3600000).toISOString()}))).status).toBe(400);
+    expect(db.get('attendanceSessions/session-1')?.onBreak).not.toBe(true);
+  });
+
   it("starts a break on the open session", async () => {
     const db = new FakeFirestore();
     seedOpenSession(db);

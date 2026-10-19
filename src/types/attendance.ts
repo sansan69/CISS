@@ -78,6 +78,12 @@ export const attendanceSubmissionSchema = z.object({
   deviceInfo: z.object({
     userAgent: z.string(),
   }),
+  // Advisory client signals, never an authenticated integrity verdict.
+  deviceId: z.string().min(1).max(256).optional(),
+  punchDeviceChanged: z.boolean().optional(),
+  riskFlags: z.array(z.enum(["root", "debugger", "hook"])).max(3).optional(),
+  attestationStatus: z.enum(["not_configured", "unavailable"]).optional(),
+  raspStatus: z.enum(["active", "not_configured", "unavailable"]).optional(),
   // Industry-standard idempotency key (UUID v4) — prevents duplicate submissions on retries
   clientRequestId: optionalUuidFromNull,
   attendanceAttemptId: z.string().uuid(),

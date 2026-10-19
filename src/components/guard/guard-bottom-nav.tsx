@@ -32,6 +32,7 @@ const navTabs: NavTab[] = [
 ];
 
 const moreItems = [
+  { href: "/guard/leave", label: "Leave", icon: CalendarCheck },
   { href: "/guard/training",    label: "Training",    icon: GraduationCap },
   { href: "/guard/evaluations", label: "Evaluations", icon: Star          },
   { href: "/guard/profile",     label: "Profile",     icon: User          },

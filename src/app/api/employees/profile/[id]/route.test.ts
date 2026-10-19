@@ -25,6 +25,11 @@ class FakeQuery {
     private readonly max?: number,
   ) {}
 
+  async add(value: RecordData) {
+    this.db.seed(this.collectionName, `audit-${this.db.rows(this.collectionName).length}`, value);
+    return {id: "audit"};
+  }
+
   where(field: string, _operator: "==" | "in", value: unknown) {
     return new FakeQuery(this.db, this.collectionName, [...this.filters, { field, value }], this.max);
   }

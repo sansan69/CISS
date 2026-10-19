@@ -4,7 +4,9 @@ import { unauthorizedResponse } from "@/lib/server/auth";
 export const runtime = "nodejs";
 
 function normalizeText(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isActiveEmployee(employee: Record<string, unknown>) {
@@ -12,7 +14,11 @@ function isActiveEmployee(employee: Record<string, unknown>) {
 }
 
 function serializeDate(value: unknown) {
-  if (value && typeof value === "object" && typeof (value as { toDate?: unknown }).toDate === "function") {
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  ) {
     return (value as { toDate: () => Date }).toDate().toISOString();
   }
   return "";
@@ -46,16 +52,25 @@ export async function GET(request: Request) {
           severity: normalizeText(data.severity),
           status: normalizeText(data.status || "open"),
           siteName: normalizeText(data.siteName),
-          reportedAt: serializeDate(data.reportedAt) || serializeDate(data.createdAt),
+          reportedAt:
+            serializeDate(data.reportedAt) || serializeDate(data.createdAt),
           description: normalizeText(data.description || data.summary),
         };
       })
-      .sort((left, right) => new Date(right.reportedAt).getTime() - new Date(left.reportedAt).getTime());
+      .sort(
+        (left, right) =>
+          new Date(right.reportedAt).getTime() -
+          new Date(left.reportedAt).getTime(),
+      );
 
     return NextResponse.json({ incidents });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Could not load incidents.";
-    if (message.includes("Missing bearer token") || message.includes("Guard access required")) {
+    const message =
+      error instanceof Error ? error.message : "Could not load incidents.";
+    if (
+      message.includes("Missing bearer token") ||
+      message.includes("Guard access required")
+    ) {
       return unauthorizedResponse(message);
     }
     return NextResponse.json({ error: message }, { status: 500 });
@@ -74,6 +89,7 @@ export async function POST(request: Request) {
       description?: string;
       locationText?: string;
       photoUrls?: string[];
+      clientRequestId?: string;
     };
 
     if (!body.category || !body.severity || !body.description) {
@@ -82,40 +98,101 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (
+      body.clientRequestId !== undefined &&
+      (typeof body.clientRequestId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          body.clientRequestId,
+        ))
+    ) {
+      return NextResponse.json(
+        { error: "clientRequestId must be a UUID." },
+        { status: 400 },
+      );
+    }
 
     const { db: adminDb } = await import("@/lib/firebaseAdmin");
     const { FieldValue } = await import("firebase-admin/firestore");
-    const empDoc = await adminDb.collection("employees").doc(guard.employeeDocId).get();
+    const empDoc = await adminDb
+      .collection("employees")
+      .doc(guard.employeeDocId)
+      .get();
     const employeeData = empDoc.data() ?? {};
     if (!empDoc.exists) {
-      return NextResponse.json({ error: "Employee not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Employee not found." },
+        { status: 404 },
+      );
     }
     if (!isActiveEmployee(employeeData)) {
-      return NextResponse.json({ error: "Only active guards can create incidents." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Only active guards can create incidents." },
+        { status: 403 },
+      );
     }
 
-    const ref = await adminDb.collection("incidents").add({
-      reporterEmployeeDocId: guard.employeeDocId,
-      reporterEmployeeId: guard.employeeId,
-      reporterName: employeeData.name ?? employeeData.fullName ?? "",
-      clientName: employeeData.clientName ?? "",
-      category: body.category,
-      severity: body.severity,
-      status: "open",
-      siteId: body.siteId || "mobile-unspecified",
-      siteName: body.siteName ?? employeeData.siteName ?? "Unspecified site",
-      district: body.district ?? employeeData.district ?? "",
-      description: body.description,
-      locationText: body.locationText ?? "",
-      photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    const { createGuardSubmission } =
+      await import("@/lib/server/guard-submission-idempotency");
+    const result = await createGuardSubmission({
+      db: adminDb,
+      collectionName: "incidents",
+      ownerId: `${guard.uid}:${guard.employeeDocId}`,
+      idempotencyKey:
+        typeof body.clientRequestId === "string" ? body.clientRequestId : null,
+      fingerprintData: {
+        category: body.category,
+        severity: body.severity,
+        siteId: body.siteId || "mobile-unspecified",
+        siteName: body.siteName ?? "Unspecified site",
+        district: body.district ?? "",
+        description: body.description,
+        locationText: body.locationText ?? "",
+        photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
+      },
+      data: {
+        reporterEmployeeDocId: guard.employeeDocId,
+        reporterEmployeeId: guard.employeeId,
+        reporterName: employeeData.name ?? employeeData.fullName ?? "",
+        clientName: employeeData.clientName ?? "",
+        category: body.category,
+        severity: body.severity,
+        status: "open",
+        siteId: body.siteId || "mobile-unspecified",
+        siteName: body.siteName ?? employeeData.siteName ?? "Unspecified site",
+        district: body.district ?? employeeData.district ?? "",
+        description: body.description,
+        locationText: body.locationText ?? "",
+        photoUrls: Array.isArray(body.photoUrls) ? body.photoUrls : [],
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
     });
 
-    return NextResponse.json({ id: ref.id, success: true }, { status: 201 });
+    if (result.conflict) {
+      return NextResponse.json(
+        {
+          error: "This request ID was already used for a different incident.",
+          code: "idempotency_conflict",
+        },
+        { status: 409 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        id: result.id,
+        success: true,
+        ...(result.created ? {} : { duplicate: true }),
+      },
+      { status: result.created ? 201 : 200 },
+    );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Could not create incident.";
-    if (message.includes("Missing bearer token") || message.includes("Guard access required")) {
+    const message =
+      error instanceof Error ? error.message : "Could not create incident.";
+    if (
+      message.includes("Missing bearer token") ||
+      message.includes("Guard access required")
+    ) {
       return unauthorizedResponse(message);
     }
     return NextResponse.json({ error: message }, { status: 500 });

@@ -32,12 +32,14 @@ class FakeQuery {
     );
   }
 
+  orderBy() { return this; }
+
   limit(value: number) {
     return new FakeQuery(this.store, this.collectionName, this.filters, value, this.afterId);
   }
 
-  startAfter(doc: { id?: string }) {
-    return new FakeQuery(this.store, this.collectionName, this.filters, this.limitCount, doc?.id);
+  startAfter(doc: { id?: string } | string) {
+    return new FakeQuery(this.store, this.collectionName, this.filters, this.limitCount, typeof doc === 'string' ? doc : doc?.id);
   }
 
   async get() {
@@ -62,9 +64,9 @@ class FakeQuery {
           ? { toMillis: () => Date.parse(data.__createTime as string) }
           : undefined,
       }));
+    docs.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     if (this.afterId) {
-      const cursor = docs.findIndex((doc) => doc.id === this.afterId);
-      if (cursor >= 0) docs = docs.slice(cursor + 1);
+      docs = docs.filter(doc => doc.id > this.afterId!);
     }
     return new FakeSnapshot(typeof this.limitCount === "number" ? docs.slice(0, this.limitCount) : docs);
   }
@@ -105,6 +107,27 @@ describe("field officer guards route", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+  });
+
+  it("pages deterministically across duplicate district fields without gaps", async () => {
+    const db = new FakeFirestore();
+    for (let i = 0; i < 7; i++) db.seed("employees", `g-${i}`, { fullName: `Guard ${i}`, employeeId: `E-${i}`, district: "Kollam", currentDistrict: "Kollam", status: i === 1 ? "Inactive" : "Active" });
+    vi.doMock("@/lib/firebaseAdmin", () => ({ db }));
+    verifyRequestAuthMock.mockResolvedValue({ uid: "admin", role: "admin" });
+    const { GET } = await import("./route");
+    const ids: string[] = [];
+    let after: string | null = null;
+    for (let page = 0; page < 4; page++) {
+      const response = await GET(new Request(`http://localhost/api/field-officer/guards?district=Kollam&limit=2${after ? `&after=${after}` : ""}`));
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      ids.push(...data.guards.map((g: { id: string }) => g.id));
+      after = data.nextCursor;
+      if (!after) break;
+    }
+    expect(ids).toEqual(["g-0", "g-2", "g-3", "g-4", "g-5", "g-6"]);
+    const invalid = await GET(new Request("http://localhost/api/field-officer/guards?limit=2&after=invalid"));
+    expect(invalid.status).toBe(400);
   });
 
   it("returns guards for the requested Marian district even when the site spelling varies", async () => {
