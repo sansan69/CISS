@@ -16,10 +16,11 @@ import { cleanupOrphanWorkOrderImports } from "@/lib/server/work-order-import-cl
 import { canonicalizeDistrictList, districtMatches } from "@/lib/districts";
 import { resolveDutySupervisor, recheckSupervisor, transactionSite, resolveDutySite, assertDistrict } from "@/lib/server/duties/scope";
 import { requestId, version, documentId, receiptRef, fingerprint, replayReceipt, assertVersion, DutyError, dutyErrorResponse, hash, readJson } from "@/lib/server/duties/requests";
+import { pickSameDateConflictCandidateIds, findRosterConflictGuard } from "@/lib/server/duties/roster-conflicts";
+import { retryOnContention } from "@/lib/server/duties/retry";
 import { buildExamRosterNotificationWrites, transactionNotificationReader, dispatchDutyNotifications } from "@/lib/server/duties/notifications";
 import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
-import { isAssignedGuardMatch } from "@/lib/work-orders/assignment-match";
 export const runtime = "nodejs";
 
 class WorkOrderAssignmentError extends Error {
@@ -138,7 +139,8 @@ export async function PATCH(
       const payloadFingerprint = fingerprint(body);
       const eventRef = adminDb.collection("workOrderAssignmentEvents").doc();
 
-      notificationIds = await adminDb.runTransaction(async (transaction) => {
+      // Lock contention is transient: retry instead of failing the save.
+      notificationIds = await retryOnContention(() => adminDb.runTransaction(async (transaction) => {
         const currentSupervisor = await recheckSupervisor(transaction, supervisor);
         const workOrderRef = adminDb.collection("workOrders").doc(id);
         const workOrderSnapshot = await transaction.get(workOrderRef);
@@ -213,21 +215,32 @@ export async function PATCH(
         const maleAssigned = canonicalGuards.filter((guard) => guard.gender === "Male").length;
         const femaleAssigned = canonicalGuards.filter((guard) => guard.gender === "Female").length;
         if (requestedGuardIds.length > 0 && workOrder.date) {
-          const sameDateSnapshot = await transaction.get(
-            adminDb.collection("workOrders").where("date", "==", workOrder.date),
-          );
-          for (const otherDoc of sameDateSnapshot.docs) {
-            if (otherDoc.id === id) continue;
-            const other = otherDoc.data();
-            if (normalizeText(other.recordStatus || "active").toLowerCase() !== "active") continue;
-            const conflictingGuard = canonicalGuards.find((guard) =>
-              isAssignedGuardMatch(other.assignedGuards, guard.uid, guard.employeeId),
-            );
-            if (conflictingGuard) {
-              throw new WorkOrderAssignmentError(
-                `${conflictingGuard.name} is already assigned to ${normalizeText(other.siteName || "another centre")} on this date.`,
-                409,
-              );
+          // A guard may hold one duty per date. Read the day's duties as a plain
+          // query and re-read only the ones that already mention these guards:
+          // a transactional query read would lock every duty on the date and make
+          // simultaneous saves in other centres abort each other.
+          const sameDateSnapshot = await adminDb
+            .collection("workOrders")
+            .where("date", "==", workOrder.date)
+            .get();
+          const conflictRefs = pickSameDateConflictCandidateIds(
+            sameDateSnapshot.docs,
+            id,
+            canonicalGuards,
+          ).map((conflictId) => adminDb.collection("workOrders").doc(conflictId));
+          if (conflictRefs.length > 0) {
+            const conflictedDuties = await transaction.getAll(...conflictRefs);
+            for (const otherDoc of conflictedDuties) {
+              if (otherDoc.id === id) continue;
+              const other = otherDoc.data() ?? {};
+              if (normalizeText(other.recordStatus || "active").toLowerCase() !== "active") continue;
+              const conflictingGuard = findRosterConflictGuard(other.assignedGuards, canonicalGuards);
+              if (conflictingGuard) {
+                throw new WorkOrderAssignmentError(
+                  `${conflictingGuard.name} is already assigned to ${normalizeText(other.siteName || "another centre")} on this date.`,
+                  409,
+                );
+              }
             }
           }
         }
@@ -298,7 +311,7 @@ export async function PATCH(
         for (const notification of notifications) transaction.create(notification.ref,notification.data);
         if (receipt) transaction.create(receipt,{fingerprint:payloadFingerprint,eventIds:notifications.map(n=>n.ref.id),createdAt:new Date()});
         return notifications.map(n=>n.ref.id);
-      });
+      }, { maxAttempts: 5 }));
     } else {
       notificationIds = await adminDb.runTransaction(async (transaction) => {
         const ref = adminDb.collection("workOrders").doc(id);

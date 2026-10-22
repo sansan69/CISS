@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { log } from '@/lib/server/log';
+import { isContentionError } from './retry';
 export class DutyError extends Error {
   constructor(readonly status: number, readonly code: string, message: string, readonly details: Record<string, unknown> = {}) {
     super(message);
@@ -84,6 +86,29 @@ export function dutyErrorResponse(error: unknown) {
         'Cache-Control': 'private, no-store'
       }
     });
+  // Contention is a "try again" condition, not a lost save: answer 503 with a
+  // retryable code so the console can re-issue the request instead of telling
+  // the supervisor the assignment failed.
+  if (isContentionError(error)) {
+    log('warn', 'duties', 'Duty request hit storage contention', {
+      code: e.code,
+      message: e.message
+    });
+    return NextResponse.json({
+      error: 'The duty roster is busy with another save. Try again in a moment.',
+      code: 'busy',
+      retryable: true
+    }, {
+      status: 503,
+      headers: {
+        'Cache-Control': 'private, no-store'
+      }
+    });
+  }
+  log('error', 'duties', 'Duty request failed', {
+    code: e.code,
+    message: e.message
+  });
   return NextResponse.json({
     error: 'Could not process duty request.',
     code: 'internal_error'

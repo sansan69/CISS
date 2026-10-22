@@ -38,7 +38,7 @@ jobs:
         run: >-
           npx --yes firebase-tools@15.34.0 emulators:exec
           --project demo-ciss-readiness --only firestore
-          'npm test -- src/guard-location-rules.emulator.test.ts src/tcs-category-rules.emulator.test.ts src/duty-rules.emulator.test.ts'
+          'npm test -- src/guard-location-rules.emulator.test.ts src/tcs-category-rules.emulator.test.ts src/duty-rules.emulator.test.ts src/duty-assignment-contention.emulator.test.ts'
 
       - name: Build
         run: npm run build

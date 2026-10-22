@@ -169,7 +169,10 @@ export async function buildExamRosterNotificationWrites(reader: Pick<FirebaseFir
   const before = new Set(roster(previous));
   const after = new Set(roster(next));
   const changed = hash(examMetadata(previous)) !== hash(examMetadata(next));
-  const writes: NotificationWrite[] = [];
+  // Two employee records can share one guard account (guardAuthUid), which would
+  // otherwise emit the same notification document twice and fail the whole
+  // transaction with ALREADY_EXISTS.
+  const writes = new Map<string, NotificationWrite>();
   for (const guardId of new Set([...before, ...after])) {
     const type = before.has(guardId) ? after.has(guardId) ? changed ? 'duty_changed' : null : 'duty_cancelled' : 'duty_assigned';
     if (!type)
@@ -178,7 +181,7 @@ export async function buildExamRosterNotificationWrites(reader: Pick<FirebaseFir
     const uid = employee.data()?.guardAuthUid;
     if (typeof uid !== 'string' || !uid)
       continue;
-    writes.push(...buildDutyNotificationWrites({
+    for (const write of buildDutyNotificationWrites({
       operation,
       entityId: id,
       version,
@@ -192,9 +195,11 @@ export async function buildExamRosterNotificationWrites(reader: Pick<FirebaseFir
         workOrderId: id,
         routeKind: 'guard_duties'
       }
-    }));
+    })) {
+      writes.set(write.ref.id, write);
+    }
   }
-  return writes;
+  return [...writes.values()];
 }
 export function transactionNotificationReader(tx: FirebaseFirestore.Transaction): Pick<FirebaseFirestore.Firestore, 'collection'> {
   return {
