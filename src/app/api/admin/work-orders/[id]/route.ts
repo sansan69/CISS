@@ -132,12 +132,15 @@ export async function PATCH(
       throw new DutyError(400,"invalid_body","No valid fields to update.");
     }
 
+    // Versions can restart when an imported duty is recreated under the same id.
+    // The audit event id is stable across transaction retries and unique to this
+    // mutation; receipt replay returns the original notification ids before writes.
+    const eventRef = adminDb.collection("workOrderAssignmentEvents").doc();
     if ("assignedGuards" in filtered) {
       const requestedGuardIds = getRequestedGuardIds(filtered.assignedGuards);
       const assignedDistricts = supervisor.assignedDistricts;
       const receipt = body.clientRequestId ? receiptRef(adminDb,"exam_roster",decoded.uid,id,body.clientRequestId) : null;
       const payloadFingerprint = fingerprint(body);
-      const eventRef = adminDb.collection("workOrderAssignmentEvents").doc();
 
       // Lock contention is transient: retry instead of failing the save.
       notificationIds = await retryOnContention(() => adminDb.runTransaction(async (transaction) => {
@@ -270,7 +273,7 @@ export async function PATCH(
         }
         const cancelledAssignedGuards = [...cancelledGuards.values()];
         const assignmentVersion = Number(workOrder.assignmentVersion ?? 0) + 1;
-        const notifications = await buildExamRosterNotificationWrites(transactionNotificationReader(transaction),id,{...workOrder,district},{...workOrder,district,assignedGuards:canonicalGuards},assignmentVersion);
+        const notifications = await buildExamRosterNotificationWrites(transactionNotificationReader(transaction),id,{...workOrder,district},{...workOrder,district,assignedGuards:canonicalGuards},`${assignmentVersion}:${eventRef.id}`);
         transaction.update(workOrderRef, {
           assignedGuards: canonicalGuards,
           cancelledAssignedGuards,
@@ -319,7 +322,7 @@ export async function PATCH(
         if (!snapshot.exists) throw new DutyError(404,"duty_not_found","Work order not found.");
         const previous = snapshot.data()!;
         const assignmentVersion = Number(previous.assignmentVersion ?? 0) + 1;
-        const notifications = await buildExamRosterNotificationWrites(transactionNotificationReader(transaction),id,previous,{...previous,...filtered},assignmentVersion);
+        const notifications = await buildExamRosterNotificationWrites(transactionNotificationReader(transaction),id,previous,{...previous,...filtered},`${assignmentVersion}:${eventRef.id}`);
         transaction.update(ref,{...filtered,assignmentVersion,...buildServerUpdateAudit({uid:decoded.uid,email:decoded.email})});
         for (const notification of notifications) transaction.create(notification.ref,notification.data);
         return notifications.map(n=>n.ref.id);

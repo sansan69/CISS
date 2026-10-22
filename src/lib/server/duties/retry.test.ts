@@ -52,3 +52,11 @@ it('rethrows the last contention error once the attempts are used up', async () 
   await expect(retryOnContention(run, { attempts: 3, sleep, random: () => 0 })).rejects.toMatchObject({ code: 10 });
   expect(run).toHaveBeenCalledTimes(3);
 });
+
+it('does not multiply deterministic duplicate-create failures wrapped as ABORTED', async () => {
+  const duplicate = Object.assign(new Error('Document already exists: projects/example/databases/(default)/documents/notifications/old'),{code:10});
+  expect(isContentionError(duplicate)).toBe(false);
+  let attempts=0;
+  await expect(retryOnContention(async () => {attempts++;throw duplicate;},{sleep:async()=>{}})).rejects.toBe(duplicate);
+  expect(attempts).toBe(1);
+});

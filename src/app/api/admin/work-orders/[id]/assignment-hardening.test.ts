@@ -19,6 +19,7 @@ class ContendedStore extends TestStore {
   abortsLeft: number;
   transactionReads: string[] = [];
   private depth = 0;
+  private autoId = 0;
 
   constructor(aborts = 0) {
     super();
@@ -54,7 +55,7 @@ class ContendedStore extends TestStore {
       update: (value: any) => ref.update(value),
     });
     const wrapQuery = (query: any): any => ({
-      doc: (id?: string) => wrapRef(query.doc(id)),
+      doc: (id?: string) => wrapRef(query.doc(id ?? `generated-${++this.autoId}`)),
       where: (field: string, op: string, value: any) => wrapQuery(query.where(field, op, value)),
       orderBy: (field: string, direction?: string) => wrapQuery(query.orderBy(field, direction)),
       limit: (n: number) => wrapQuery(query.limit(n)),
@@ -232,4 +233,40 @@ it('acknowledges the committed assignment without waiting for push delivery', as
     await deferred[0]();
     expect(store.list('notifications')[0].data().pushStatus).toBe('sent');
   } finally {release();vi.doUnmock('next/server');}
+});
+
+it('saves a recreated work order even when an earlier version-one notification still exists', async () => {
+  const {buildDutyNotificationWrites} = await import('@/lib/server/duties/notifications');
+  const historical = buildDutyNotificationWrites({
+    operation:'exam_roster',entityId:'exam',version:1,type:'duty_assigned',
+    recipientUid:'auth',recipientRole:'guard',district:'Ernakulam',
+    title:'Old duty',body:'Old assignment',data:{workOrderId:'exam',routeKind:'guard_duties'},
+  })[0];
+  const previous = {...historical.data,read:true,pushStatus:'sent'};
+  store.seed('notifications',historical.ref.id,previous);
+  const response = await patch({assignedGuards:[{uid:'emp'}],expectedVersion:0,clientRequestId:'11111111-1111-4111-8111-111111111111'});
+  expect(response.status).toBe(200);
+  expect(store.row('workOrders','exam')?.assignedGuards).toHaveLength(1);
+  expect(store.row('notifications',historical.ref.id)).toEqual(previous);
+  expect(store.list('notifications')).toHaveLength(2);
+});
+
+it('keeps new event identities unique across recreation and replays each saved receipt', async () => {
+  const initial = {...store.row('workOrders','exam')!};
+  const firstBody = {assignedGuards:[{uid:'emp'}],expectedVersion:0,clientRequestId:'11111111-1111-4111-8111-111111111111'};
+  expect((await patch(firstBody)).status).toBe(200);
+  const old = store.list('notifications')[0];
+  store.seed('notifications',old.id,{...old.data(),read:true,pushStatus:'sent'});
+  const preserved = {...store.row('notifications',old.id)!};
+  // Import/recreation starts a new roster at version zero under the same duty id.
+  store.seed('workOrders','exam',initial);
+  const secondBody = {...firstBody,clientRequestId:'22222222-2222-4222-8222-222222222222'};
+  expect((await patch(secondBody)).status).toBe(200);
+  const notifications = store.list('notifications');
+  expect(notifications).toHaveLength(2);
+  expect(store.row('notifications',old.id)).toEqual(preserved);
+  expect(store.row('workOrders','exam')?.assignmentVersion).toBe(1);
+  expect((await patch(secondBody)).status).toBe(200);
+  expect(store.list('notifications')).toHaveLength(2);
+  expect(store.row('workOrders','exam')?.assignmentVersion).toBe(1);
 });

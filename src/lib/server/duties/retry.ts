@@ -16,6 +16,9 @@ export function isContentionError(error: unknown): boolean {
   const candidate = error as { code?: unknown; message?: unknown } | null;
   const code = typeof candidate?.code === "string" ? candidate.code : typeof candidate?.code === "number" ? String(candidate.code) : "";
   const message = typeof candidate?.message === "string" ? candidate.message : "";
+  // Firestore can wrap a failed create precondition in ABORTED (10).
+  // Retrying an existing document id cannot succeed without changing the write.
+  if (/already[ _-]exists/i.test(message)) return false;
   if (CONTENTION_CODES.has(code)) return true;
   return CONTENTION_MESSAGE.test(message);
 }
