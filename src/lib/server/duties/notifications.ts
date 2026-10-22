@@ -1,3 +1,5 @@
+import { after } from 'next/server';
+import { log } from '@/lib/server/log';
 import { randomUUID } from 'node:crypto';
 import { db, messaging } from '@/lib/firebaseAdmin';
 import { canonicalizeDistrictList, districtMatches } from '@/lib/districts';
@@ -209,4 +211,19 @@ export function transactionNotificationReader(tx: FirebaseFirestore.Transaction)
       })
     }) as unknown as FirebaseFirestore.CollectionReference
   };
+}
+
+/** Inbox events already committed with the roster; push delivery must not delay its acknowledgement. */
+export function scheduleDutyNotifications(eventIds: string[]) {
+  if (!eventIds.length) return;
+  try {
+    after(async () => {
+      try { await dispatchDutyNotifications(eventIds); }
+      catch { log('warn', 'duties', 'Push delivery deferred; persisted inbox events remain pending.'); }
+    });
+  } catch {
+    // A missing request context must not turn an already committed save into a failure.
+    // Recipient polling retries the durable pending inbox events.
+    log('warn', 'duties', 'Push scheduling unavailable; persisted inbox events remain pending.');
+  }
 }

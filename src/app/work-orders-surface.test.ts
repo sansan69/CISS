@@ -144,9 +144,9 @@ describe("work orders operations surface", () => {
     expect(fieldOfficerWorkOrdersPanelSource).toContain("assignedGuards.slice(0, 4).map");
     expect(fieldOfficerWorkOrdersPanelSource).toContain('order.examName || order.examCode || "General Duty"');
     expect(fieldOfficerWorkOrdersPanelSource).toContain("getGuardAssignmentCapacityIssue(");
-    expect(workOrdersSitePageSource).toContain("getGuardAssignmentCapacityIssue(");
-    expect(workOrdersSitePageSource).toContain("payload?.error || 'Could not save assignments.'");
-    expect(workOrdersSitePageSource).toContain('title: "Assignment not saved"');
+    expect(workOrdersSitePageSource).toContain("import { AssignGuardsDialog } from '@/components/field-officers/work-orders-panel'");
+    expect(workOrdersSitePageSource).toContain("<AssignGuardsDialog");
+    expect(fieldOfficerWorkOrdersPanelSource).toContain('title: "Assignment not saved"');
     expect(workOrdersPageSource).toContain("recordStatus ?? 'active'");
     expect(workOrdersPageSource).toContain("getWorkOrderExamLabel(order) || 'General Duty'");
     expect(assignedGuardsExportPanelSource).toContain("/api/admin/work-orders/assigned-guards-export");

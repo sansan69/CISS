@@ -32,7 +32,28 @@ export function createOwnerBoundFetcher(fetcher:DutyFetcher, owner:DutyOwner|nul
     return fetcher(url,init);
   };
 }
+const DUTY_REQUEST_TIMEOUT_MS = 30000;
+/** Bound auth, transport and response parsing together; a timeout is never proof of failure. */
 export async function requestDutyJson<T>(url:string,init:RequestInit,fetcher:DutyFetcher):Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort(init.signal?.reason);
+  if (init.signal?.aborted) abort();
+  else init.signal?.addEventListener('abort', abort, {once:true});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new DutyRequestError('The request took too long to confirm. Your selection is kept. Retry to check the result.', 'timeout', true, 0));
+      controller.abort();
+    }, DUTY_REQUEST_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([readDutyJson<T>(url,{...init,signal:controller.signal},fetcher), deadline]);
+  } finally {
+    clearTimeout(timer);
+    init.signal?.removeEventListener('abort',abort);
+  }
+}
+async function readDutyJson<T>(url:string,init:RequestInit,fetcher:DutyFetcher):Promise<T> {
   let res:Response;
   try {res=await fetcher(url,{...init,cache:'no-store'});} catch(error) {
     if(error instanceof DutyOwnerChangedError) throw error;

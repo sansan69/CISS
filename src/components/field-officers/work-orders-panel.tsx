@@ -82,7 +82,7 @@ function formatDate(ts: any): string {
 
 // ── AssignGuardsDialog ────────────────────────────────────────────────────────
 
-const AssignGuardsDialog: React.FC<{
+export const AssignGuardsDialog: React.FC<{
   workOrder: WorkOrder;
   isOpen: boolean;
   onClose: () => void;

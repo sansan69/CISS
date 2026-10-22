@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   loadWorkOrderRoster,
   prepareManualRosterRequest,
@@ -75,4 +75,39 @@ describe('manual roster save contract', () => {
     await expect(submitRosterRequest(prepareManualRosterRequest('exam-fixture',[one],4,()=> 'fixture-receipt'),sameDay))
       .resolves.toMatchObject({status:'rejected',retryable:false,versionConflict:false,code:'roster_conflict'});
   });
+});
+
+it('returns an uncertain result when authentication or the save never responds', async () => {
+  vi.useFakeTimers();
+  try {
+    const mutation = prepareManualRosterRequest('exam-fixture',[one],4,()=> 'same-receipt');
+    const result = submitRosterRequest(mutation, async () => new Promise<Response>(() => {}));
+    let settled = false;
+    void result.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(30001);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({status:'uncertain',retryable:true,code:'timeout'});
+  } finally { vi.useRealTimers(); }
+});
+
+it('also bounds a stalled response body and preserves the receipt for retry', async () => {
+  vi.useFakeTimers();
+  try {
+    const mutation = prepareManualRosterRequest('exam-fixture',[one],4,()=> 'same-receipt');
+    const attempts:string[] = [];
+    const result = submitRosterRequest(mutation, async (_url, init) => {
+      attempts.push(String(init.body));
+      return new Response(new ReadableStream({start() {}}));
+    });
+    let settled = false;
+    void result.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(30001);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({status:'uncertain',retryable:true,code:'timeout'});
+    await expect(submitRosterRequest(mutation, async (_url, init) => {
+      attempts.push(String(init.body));
+      return Response.json({id:'exam-fixture'});
+    })).resolves.toMatchObject({status:'saved'});
+    expect(attempts[1]).toBe(attempts[0]);
+  } finally { vi.useRealTimers(); }
 });

@@ -204,3 +204,32 @@ it('saves when two employee records share one guard account', async () => {
   const notified = store.list('notifications').map((doc) => doc.data().recipientUid);
   expect(notified).toEqual(['auth']);
 });
+
+it('acknowledges the committed assignment without waiting for push delivery', async () => {
+  const deferred: Array<() => Promise<unknown>> = [];
+  vi.doMock('next/server', async (original) => ({
+    ...await original<typeof import('next/server')>(),
+    after: (task: () => Promise<unknown>) => deferred.push(task),
+  }));
+  store.seed('fcmTokens', 'token', {uid:'auth',token:'push-token'});
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  vi.doMock('@/lib/firebaseAdmin', () => ({
+    db: store,
+    messaging: {sendEachForMulticast: async () => {await blocked; return {failureCount:0};}},
+  }));
+  try {
+    let response: Response | undefined;
+    const save = patch({assignedGuards:[{uid:'emp'}]}).then((value) => {response = value;});
+    // A stuck push must not keep the HTTP save open after the roster committed.
+    for(let i=0;i<10;i++) await new Promise(resolve=>setTimeout(resolve,10));
+    expect(store.row('workOrders','exam')?.assignedGuards).toHaveLength(1);
+    expect(response?.status).toBe(200);
+    expect(deferred).toHaveLength(1);
+    expect(store.list('notifications')[0].data().pushStatus).toBe('pending');
+    release();
+    await save;
+    await deferred[0]();
+    expect(store.list('notifications')[0].data().pushStatus).toBe('sent');
+  } finally {release();vi.doUnmock('next/server');}
+});

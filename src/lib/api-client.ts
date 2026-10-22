@@ -27,13 +27,17 @@ export async function authorizedFetch(
   input: RequestInfo | URL,
   init: RequestInit = {}
 ) {
+  init.signal?.throwIfAborted();
   const currentUser = await waitForCurrentUser();
+  init.signal?.throwIfAborted();
   if (!currentUser) {
     throw new Error("You must be signed in to perform this action.");
   }
 
   const makeRequest = async (forceRefresh = false) => {
+    init.signal?.throwIfAborted();
     const token = await currentUser.getIdToken(forceRefresh);
+    init.signal?.throwIfAborted();
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${token}`);
 

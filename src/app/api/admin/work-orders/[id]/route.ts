@@ -18,7 +18,7 @@ import { resolveDutySupervisor, recheckSupervisor, transactionSite, resolveDutyS
 import { requestId, version, documentId, receiptRef, fingerprint, replayReceipt, assertVersion, DutyError, dutyErrorResponse, hash, readJson } from "@/lib/server/duties/requests";
 import { pickSameDateConflictCandidateIds, findRosterConflictGuard } from "@/lib/server/duties/roster-conflicts";
 import { retryOnContention } from "@/lib/server/duties/retry";
-import { buildExamRosterNotificationWrites, transactionNotificationReader, dispatchDutyNotifications } from "@/lib/server/duties/notifications";
+import { buildExamRosterNotificationWrites, transactionNotificationReader, scheduleDutyNotifications } from "@/lib/server/duties/notifications";
 import { employeeMatchesAnyDistrict } from "@/lib/employees/visibility";
 import { isOperationalWorkOrderClientName } from "@/lib/work-orders";
 export const runtime = "nodejs";
@@ -326,7 +326,7 @@ export async function PATCH(
       });
     }
 
-    await dispatchDutyNotifications(notificationIds);
+    scheduleDutyNotifications(notificationIds);
     return NextResponse.json({ id });
   } catch (error: any) {
     if (error instanceof WorkOrderAssignmentError) return NextResponse.json({error:error.message,code:error.code},{status:error.status});
